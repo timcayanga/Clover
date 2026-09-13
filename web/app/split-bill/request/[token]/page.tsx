@@ -65,7 +65,7 @@ export default function SplitBillPaymentRequestPage({ params }: { params: Promis
           </div>
         ) : <p>Ask the bill owner for their preferred payment method.</p>}
         {request.note ? <p>{request.note}</p> : null}
-        {request.status === "paid" ? <p className="split-bill-public-request__success">This payment has been confirmed.</p> : reported || request.status === "payment_reported" ? <p className="split-bill-public-request__success">Payment reported. The bill owner will confirm it.</p> : <button className="button button-primary" type="button" onClick={() => void reportPayment()}>I’ve paid</button>}
+        {request.status === "resolved" ? <p>This bill has been resolved. No payment is requested.</p> : request.status === "paid" ? <p className="split-bill-public-request__success">This payment has been confirmed.</p> : reported || request.status === "payment_reported" ? <p className="split-bill-public-request__success">Payment reported. The bill owner will confirm it.</p> : <button className="button button-primary" type="button" onClick={() => void reportPayment()}>I’ve paid</button>}
       </section>
     </main>
   );

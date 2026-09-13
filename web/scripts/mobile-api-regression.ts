@@ -44,7 +44,7 @@ async function main() {
   assert.equal(mobileOperation("GET", ["split-bills"]), "split-bills");
   assert.equal(mobileOperation("POST", ["split-bills"]), "split-bills");
   assert.equal(mobileOperation("GET", ["split-bills", "one"]), "split-bill");
-  assert.equal(mobileOperation("PATCH", ["split-bills", "one"]), null);
+  assert.equal(mobileOperation("PATCH", ["split-bills", "one"]), "split-bill");
   const circleInput = { name: "Our trip", type: "travel", description: "", color: "teal", currency: "PHP" };
   assert.equal(mobileCircleInput.safeParse(circleInput).success, true);
   for (const extra of [{ ownerUserId: "other" }, { role: "organizer" }, { members: [{ email: "unrequested@example.com" }] }, { avatarUrl: "unsafe" }]) assert.equal(mobileCircleInput.safeParse({ ...circleInput, ...extra }).success, false);
@@ -78,7 +78,7 @@ async function main() {
   assert.ok(routeSource.indexOf('if (operation === "budgets" && request.method === "GET")') > routeSource.indexOf('await assertWorkspaceAccess(userId, workspaceId)'));
   assert.equal(mobileOperation("GET", ["goals"]), "goals");
   assert.equal(mobileOperation("POST", ["goals"]), "goals");
-  assert.equal(mobileOperation("DELETE", ["goals"]), null);
+  assert.equal(mobileOperation("DELETE", ["goals"]), "goals");
   const goalInput = { goal: "save_more", targetAmount: 2000, currency: "PHP", goalPlan: { cadence: "monthly", purpose: "Travel" } };
   assert.equal(mobileGoalInput.safeParse(goalInput).success, true);
   for (const extra of [{ workspaceId: "other" }, { userId: "other" }, { targetAmount: -1 }, { goalPlan: { ...goalInput.goalPlan, workspaceId: "other" } }]) assert.equal(mobileGoalInput.safeParse({ ...goalInput, ...extra }).success, false);

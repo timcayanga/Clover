@@ -1,3 +1,4 @@
+import { SummaryCard } from "../../src/plan-ui";
 import { router, useFocusEffect, useLocalSearchParams } from "expo-router";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
@@ -24,6 +25,7 @@ import {
 export default function Transactions() {
   const { colors, styles, dark } = useTheme();
   const { demo, rows: samples, profileId, request } = useSession();
+  const [summary,setSummary] = useState<TransactionPage["summary"]>();
   const [filters, setFilters] = useState(false);
   const params = useLocalSearchParams<{ review?: string }>();
   const [review, setReview] = useState("");
@@ -82,6 +84,7 @@ export default function Transactions() {
                 ),
               ],
         );
+        setSummary(data.summary);
         setPage(next);
         setTotal(demo ? data.transactions.length : data.totalCount);
       } catch (e) {
@@ -165,6 +168,7 @@ export default function Transactions() {
         )}
       </View>
       <FlatList
+        ListHeaderComponent={summary?.currencyTotals ? <View style={{gap:12,marginBottom:16}}>{Object.entries(summary.currencyTotals).map(([currency,totals])=><View key={currency} style={{gap:8}}><Body>{currency} · all filtered transactions</Body><View style={{flexDirection:"row",gap:8}}><SummaryCard title="Income" value={money(String(totals.income),currency)}/><SummaryCard title="Spending" value={money(String(totals.spending),currency)}/><SummaryCard title="Net" value={money(String(totals.income-totals.spending),currency)}/></View></View>)}</View> : null}
         data={rows}
         keyExtractor={(row) => row.id}
         keyboardShouldPersistTaps="handled"

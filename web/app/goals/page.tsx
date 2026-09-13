@@ -1,3 +1,4 @@
+import { GoalDeleteButton } from "@/components/goal-delete-button";
 import { mobileGoals } from "@/lib/mobile-goals";
 import { PlanTabs } from "@/components/plan-tabs";
 import { CategoryBrandMark } from "@/components/category-brand-mark";
@@ -859,8 +860,8 @@ async function GoalsPageStream({ goalId }: { goalId?: string }) {
               {hasGoalTarget ? <p>{goalProgress.coachCopy}</p> : null}
               <p className="goals-coach-panel__action">{goalNextAction}</p>
               <div className="goals-coach-panel__links">
-                <Link className="button button-secondary button-small" href={supportDestination.href}>{supportDestination.label}</Link>
-                <Link className="button button-primary button-small" href="/adviser">Ask Adviser</Link>
+
+                <Link className="button button-primary button-small" href="/adviser">Ask Clover</Link>
               </div>
             </article>
           </section>
@@ -893,7 +894,7 @@ async function GoalsPageStream({ goalId }: { goalId?: string }) {
 </>}]} />
           {hasGoalSelection ? (
             <section className="goals-goal-actions">
-              <span>Want to change direction?</span>
+
               {savedGoal ? <Link className="pill-link pill-link--inline" href={`/goals/new?edit=${encodeURIComponent(savedGoal.id)}`}>Edit goal</Link> : <GoalsEditor
                 mobileBase="/goals/primary"
                 goals={GOAL_OPTIONS.filter((goal) => goal.value !== "track_spending")}
@@ -910,6 +911,7 @@ async function GoalsPageStream({ goalId }: { goalId?: string }) {
                 triggerLabel="Edit goal"
                 triggerClassName="pill-link pill-link--inline"
               />}
+              {savedGoal ? <GoalDeleteButton id={savedGoal.id}/> : null}
             </section>
           ) : null}
         </section>

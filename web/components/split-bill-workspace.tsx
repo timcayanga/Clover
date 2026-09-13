@@ -1,8 +1,10 @@
 "use client";
 
+import { hasSplitBillAllocationChanges } from "@/lib/split-bill";
 import { InterfaceIcon } from "@/components/interface-icon";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { previewSplitBillItems } from "@/lib/split-bill";
 import { useSearchParams } from "next/navigation";
 import { CloverShell } from "@/components/clover-shell";
 import { SplitBillEntityAvatar } from "@/components/split-bill-entity-avatar";
@@ -119,6 +121,15 @@ const getBillEditorValidationError = (
 
     if (item.participantIds.length > 0 && item.participantIds.some((participantId) => !participantIds.has(participantId))) {
       return `${label} has an invalid person selected.`;
+    }
+    if (item.splitMethod && item.splitMethod !== "equal") {
+      const selected = item.participantIds;
+      const allocations = item.allocations ?? [];
+      if (allocations.length !== selected.length || new Set(allocations.map(a=>a.participantId)).size !== selected.length || allocations.some(a=>!selected.includes(a.participantId) || !Number.isFinite(Number(a.value)) || Number(a.value)<0)) return `${label} needs an allocation for each selected person.`;
+      const sum = allocations.reduce((total,a)=>total+Number(a.value),0);
+      if (item.splitMethod === "percentage" && Math.abs(sum-100)>0.001) return `${label}: percentages must total 100%.`;
+      if (item.splitMethod === "exact" && Math.abs(sum-Number(item.amount))>0.005) return `${label}: allocations must match its amount.`;
+      if (item.splitMethod === "shares" && sum<=0) return `${label} needs at least one share.`;
     }
   }
 
@@ -790,11 +801,6 @@ export function SplitBillWorkspace({
     }
 
     const draft = buildBillEditorDraft(selectedBill);
-    const normalizedCurrentUserName = currentUserName.trim().toLowerCase();
-    if (normalizedCurrentUserName && !draft.participants.some((participant) => participant.name.trim().toLowerCase() === normalizedCurrentUserName)) {
-      draft.participants = [...draft.participants, { id: createSplitBillDraftId(), name: currentUserName.trim() }];
-    }
-
     setSelectedBillDraft(draft);
     setIsEditingBill(true);
     setBillEditError(null);
@@ -822,6 +828,8 @@ export function SplitBillWorkspace({
   const billEditorParticipants = selectedBillDraft?.participants ?? [];
   const billEditorItems = selectedBillDraft?.items ?? [];
   const billEditorPayments = selectedBillDraft?.payments ?? [];
+  const billPreview = selectedBill && selectedBillDraft ? { ...selectedBill, settlement: previewSplitBillItems({ ...selectedBill, rawPayload: { ...selectedBill.rawPayload, userItemAllocations: selectedBill.rawPayload?.userItemAllocations === true || hasSplitBillAllocationChanges(selectedBill, billEditorItems) }, participants:billEditorParticipants.map(p=>({id:p.id ?? "",name:p.name})), items:billEditorItems.map((item,index)=>({...item,id:item.id ?? "",sortOrder:index})), payments:billEditorPayments.map(p=>({...p,note:p.note ?? null})), tax:selectedBillDraft.tax ?? null, tip:selectedBillDraft.tip ?? null, discount:selectedBillDraft.discount ?? null }) } : selectedBill;
+
 
   const updateSelectedBillDraft = (updater: (draft: SplitBillDraft) => SplitBillDraft) => {
     setSelectedBillDraft((current) => {
@@ -1013,7 +1021,7 @@ export function SplitBillWorkspace({
           rounding: selectedBillDraft.rounding?.trim() || null,
           discount: selectedBillDraft.discount?.trim() || null,
           total: selectedBillDraft.total?.trim() || persistedTotals.total,
-          rawPayload: mergeSplitBillItemSplitMetadata(selectedBillDraft.rawPayload, items),
+          rawPayload: { ...mergeSplitBillItemSplitMetadata(selectedBillDraft.rawPayload, items), userItemAllocations:selectedBill.rawPayload?.userItemAllocations === true || hasSplitBillAllocationChanges(selectedBill, items) },
           participants,
           items,
           payments,
@@ -1089,34 +1097,7 @@ export function SplitBillWorkspace({
     </div>
   );
 
-  const renderBillRows = (targetBills: SplitBillSerializedBill[], participantName?: string) => (
-    <div className="split-bill-detail-modal__list">
-      {targetBills.length > 0 ? (
-        targetBills.map((bill) => (
-          <div key={bill.id} className="split-bill-detail-modal__list-row split-bill-detail-modal__list-row--split">
-            <button type="button" className="split-bill-detail-modal__list-main" onClick={() => openBill(bill.id)}>
-              <strong>{bill.title}</strong>
-              <span>{bill.total ? formatSplitBillAmount(Number(bill.total), bill.currency) : "No total"}</span>
-              <span className="split-bill-detail-modal__row-meta">
-                {participantName ? formatParticipantShare(bill, participantName) : formatPaymentContributions(bill)}
-              </span>
-              <span className="split-bill-detail-modal__row-meta">{formatSettlementTransfers(bill)}</span>
-            </button>
-            <div className="split-bill-detail-modal__row-actions">
-              <button className="button button-secondary button-small" type="button" onClick={() => openBill(bill.id)}>
-                Open
-              </button>
-              <button className="button button-danger button-small" type="button" onClick={() => void removeBill(bill.id)}>
-                Delete
-              </button>
-            </div>
-          </div>
-        ))
-      ) : (
-        <p className="split-bill-detail-modal__empty">No bills here yet.</p>
-      )}
-    </div>
-  );
+  const renderBillRows = (targetBills: SplitBillSerializedBill[], participantName?: string) => <div className="split-bill-table-scroll"><table aria-label="Related bills"><thead><tr><th>Bill</th><th>Date</th><th>Total</th><th>{participantName ? "Your share" : "Paid by"}</th><th>Status</th></tr></thead><tbody>{targetBills.map(bill=><tr key={bill.id}><td><button onClick={()=>openBill(bill.id)}>{bill.title}</button></td><td>{new Date(bill.billDate).toLocaleDateString("en-PH")}</td><td>{formatSplitBillAmount(Number(bill.total),bill.currency)}</td><td>{participantName?formatParticipantShare(bill,participantName):formatPaymentContributions(bill)}</td><td>{formatSplitBillSettlementStatus(bill.settlementStatus)}</td></tr>)}{!targetBills.length?<tr><td colSpan={5}>No bills here yet.</td></tr>:null}</tbody></table></div>;
 
   const renderSettlementBoard = (targetBills: SplitBillSerializedBill[], participantName?: string) => {
     const openBills = targetBills.filter((bill) =>
@@ -1233,6 +1214,7 @@ export function SplitBillWorkspace({
                         <button className="button button-secondary button-small" type="button" onClick={() => removeBillEditorItem(item.id ?? "")}>
                           Remove
                         </button>
+                        <label>Split method<select className="settings-input" value={item.splitMethod ?? "equal"} onChange={event => updateBillEditorItem(item.id ?? "", { splitMethod:event.target.value as "equal" | "exact" | "percentage" | "shares", allocations: [] })}><option value="equal">Split equally</option><option value="exact">By amount</option><option value="percentage">By percentage</option><option value="shares">By shares</option></select></label>
                       </div>
                     ) : (
                       <strong>{item.description}</strong>
@@ -1266,6 +1248,7 @@ export function SplitBillWorkspace({
                               onChange={() => toggleBillEditorItemParticipant(item.id ?? "", participant.id ?? "")}
                               aria-label={`${item.description || "Item"} for ${participant.name}`}
                             />
+                            {checked && item.splitMethod && item.splitMethod !== "equal" ? <input className="settings-input" aria-label={`${participant.name} ${item.splitMethod} allocation for ${item.description}`} inputMode="decimal" value={allocation?.value ?? ""} onChange={event => updateBillEditorItem(item.id ?? "", { allocations:[...(item.allocations ?? []).filter(a=>a.participantId!==participant.id), {participantId:participant.id ?? "",value:event.target.value}] })}/> : null}
                           </label>
                         ) : (
                           <span
@@ -1406,6 +1389,7 @@ export function SplitBillWorkspace({
                     Reset changes
                   </button>
                 </div>
+                {selectedBill.receiptText || selectedBill.receiptStorageKey ? <a className="button button-secondary" href={`/split-bill/${encodeURIComponent(selectedBill.id)}?source=1`}>View source details</a> : null}
                 {selectedBill.sourceType === "receipt" && (selectedBill.receiptConfidence < 80 || !selectedBill.total) ? (
                   <div className="split-bill-receipt-quality" role="status">
                     <strong>Review receipt details</strong>
@@ -1547,6 +1531,7 @@ export function SplitBillWorkspace({
                       </button>
                     </div>
                     {renderBillItemsTable(selectedBill, true)}
+                    {billPreview ? <><p>Preview · save changes to update the bill</p>{renderParticipantAllocationSummary(billPreview)}</> : null}
 
                     {billEditError ? <p className="split-bill-editor__error">{billEditError}</p> : null}
                     <div className="split-bill-detail-modal__list">
@@ -1639,6 +1624,8 @@ export function SplitBillWorkspace({
                     </div>
                   </>
                 )}
+                {!selectedBill.resolved ? <button className="button button-secondary" onClick={async()=>{if(!window.confirm("Resolve this bill and stop payment reminders? This will not record a payment."))return;const response=await fetch(`/api/split-bills/${selectedBill.id}/resolution`,{method:"POST"});const payload=await response.json();if(response.ok&&payload.bill){setBills(current=>current.map(b=>b.id===payload.bill.id?payload.bill:b));setSelectedBillDraft(buildBillEditorDraft(payload.bill));}else setBillEditError(payload.error??"Unable to resolve bill.");}}>Mark as resolved</button>:<p>Resolved · no payment recorded</p>}
+                {isEditingBill ? <SplitBillPaymentTools bill={selectedBill} onBillUpdated={updatedBill => {setBills(current=>current.map(b=>b.id===updatedBill.id?updatedBill:b));setSelectedBillDraft(buildBillEditorDraft(updatedBill));}}/> : null}
                 <div className="split-bill-detail-modal__actions">
                   <button className="button button-secondary button-small" type="button" onClick={() => window.print()}>
                     Print summary
@@ -1723,9 +1710,7 @@ export function SplitBillWorkspace({
                 {detailTab === "receipts" ? <SplitBillDetailTools bills={selectedGroupBills} label={selectedGroup.name} view="receipts" /> : null}
                 {detailTab === "activity" ? renderActivityList(selectedGroupActivity) : null}
                 <div className="split-bill-detail-modal__actions">
-                  <button className="button button-secondary button-small" type="button" onClick={() => void shareGroup(selectedGroup.id)}>
-                    Share group
-                  </button>
+                  <button className="button button-secondary button-small" type="button" onClick={() => {window.dispatchEvent(new CustomEvent("clover:open-split-bill-group",{detail:{groupId:selectedGroup.id}}));setSelected(null);}}>Edit group</button>
                   <button className="button button-secondary button-small" type="button" onClick={() => void archiveGroup(selectedGroup.id)}>
                     Archive group
                   </button>

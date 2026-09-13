@@ -16,6 +16,7 @@ export type Transaction = {
   tags?: { id: string; name: string }[];
 };
 export type TransactionPage = {
+  summary?: { currencyTotals?: Record<string,{income:number;spending:number;transfers:number}> };
   transactions: Transaction[];
   totalCount: number;
   page: number;

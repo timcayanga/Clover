@@ -1,3 +1,4 @@
+import { compactSummaryMoney } from "../../shared/summary-format";
 import { useEffect, useState } from "react";
 import { Image, Pressable, Text, View } from "react-native";
 import { router } from "expo-router";
@@ -15,6 +16,7 @@ import {
 } from "../src/ui";
 import {
   PlanAction,
+  SummaryCard,
   PlanHeader,
   PlanTabs,
   Progress,
@@ -244,34 +246,25 @@ export default function Investments() {
         <Notice>This section requires Clover Pro.</Notice>
       ) : tab === "Overview" ? (
         <>
-          <Card>
-            <Body>Estimated portfolio value · {selectedCurrency}</Body>
-            <Body muted={false}>{money(String(total), selectedCurrency)}</Body>
-          </Card>
-          <Card>
-            <Body>Unrealized gain / loss</Body>
-            <Text
-              style={{
-                fontSize: 24,
-                fontFamily: "Poppins-SemiBold",
-                color: gain >= 0 ? colors.teal : colors.danger,
-              }}
-            >
-              {known.length ? money(String(gain), selectedCurrency) : "—"}
-            </Text>
-          </Card>
-          <Card>
-            <Body>Return on recorded purchase value</Body>
-            <Text
-              style={{
-                fontSize: 24,
-                fontFamily: "Poppins-SemiBold",
-                color: gain >= 0 ? colors.teal : colors.danger,
-              }}
-            >
-              {cost > 0 ? `${((gain / cost) * 100).toFixed(2)}%` : "—"}
-            </Text>
-          </Card>
+          <View style={{ flexDirection: "row", gap: 8 }}>
+            <SummaryCard
+              title="Est. value"
+              value={compactSummaryMoney(total, selectedCurrency)}
+              detail={money(String(total), selectedCurrency)}
+            />
+            <SummaryCard
+              title="Gain/loss"
+              value={known.length ? compactSummaryMoney(gain, selectedCurrency) : "—"}
+              detail={known.length ? money(String(gain), selectedCurrency) : "No purchase value"}
+              color={gain >= 0 ? colors.teal : colors.danger}
+            />
+            <SummaryCard
+              title="Return"
+              detail="On cost"
+              value={cost > 0 ? `${((gain / cost) * 100).toFixed(2)}%` : "—"}
+              color={gain >= 0 ? colors.teal : colors.danger}
+            />
+          </View>
           <Body>
             Recorded values in {selectedCurrency}. Missing purchase values are
             excluded from returns. Check your provider for live valuations.

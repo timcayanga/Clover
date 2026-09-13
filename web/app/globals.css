@@ -49153,7 +49153,7 @@ html[data-theme="dark"] .goals-editor__purpose-chip {
 }
 
 .split-bill-pulse__metrics strong {
-  align-self: end;
+  align-self: center;
   font-size: 1.18rem;
 }
 
@@ -58900,18 +58900,11 @@ html[data-theme="dark"] .accounts-overview-grid {
 html[data-theme="dark"] .accounts-overview-card,
 html[data-theme="dark"] .summary-aligned-card,
 html[data-theme="dark"] .budget-summary-card.summary-aligned-card {
-  background: linear-gradient(145deg, #079fb8, #147f98) !important;
-  border-color: rgba(85, 214, 221, 0.28) !important;
-  color: #ffffff !important;
+  background: var(--surface) !important;
+  border-color: var(--stroke) !important;
+  color: var(--text) !important;
 }
 
-html[data-theme="dark"] .accounts-overview-card .eyebrow,
-html[data-theme="dark"] .accounts-overview-card__amount,
-html[data-theme="dark"] .accounts-overview-card__amount.is-good,
-html[data-theme="dark"] .accounts-overview-card__amount.is-danger,
-html[data-theme="dark"] .accounts-overview-card__amount.is-neutral {
-  color: #ffffff !important;
-}
 
 html[data-theme="dark"] .accounts-group__head strong,
 html[data-theme="dark"] .accounts-group__head span,
@@ -65564,8 +65557,8 @@ html[data-theme="dark"] :is(.transaction-creation-panel,.accounts-import-footer-
 }
 
 /* Understand & Plan — Figma refresh, September 2026. */
-:root { --plan-view-bg:#e9f2ff; --plan-view-fg:#1e5aa6; --plan-edit-bg:#fff1d6; --plan-edit-fg:#895000; --plan-ask-bg:#f0eaff; --plan-ask-fg:#6741a5; --plan-delete-bg:#fdeaea; --plan-delete-fg:#b83a3a; }
-[data-theme="dark"] { --plan-view-bg:#193b58; --plan-view-fg:#b8d9ff; --plan-edit-bg:#493718; --plan-edit-fg:#ffd68a; --plan-ask-bg:#36264f; --plan-ask-fg:#d8bdff; --plan-delete-bg:#49292d; --plan-delete-fg:#ffb6ba; }
+:root { --plan-view-bg:var(--surface); --plan-view-fg:var(--text); --plan-edit-bg:var(--surface); --plan-edit-fg:var(--text); --plan-ask-bg:linear-gradient(105deg,#03a8c0,#2ccfca); --plan-ask-fg:#fff; --plan-delete-bg:#fdeaea; --plan-delete-fg:#b83a3a; }
+[data-theme="dark"] { --plan-view-bg:var(--surface); --plan-view-fg:var(--text); --plan-edit-bg:var(--surface); --plan-edit-fg:var(--text); --plan-ask-bg:linear-gradient(105deg,#03a8c0,#2ccfca); --plan-ask-fg:#fff; --plan-delete-bg:#49292d; --plan-delete-fg:#ffb6ba; }
 .plan-action-view, .collection-card__view { background:var(--plan-view-bg)!important; color:var(--plan-view-fg)!important; }
 .plan-action-edit { background:var(--plan-edit-bg)!important; color:var(--plan-edit-fg)!important; }
 .plan-action-ask, .plan-action-ask button { background:var(--plan-ask-bg)!important; color:var(--plan-ask-fg)!important; border-radius:999px; }
@@ -65628,3 +65621,147 @@ html[data-theme="dark"] :is(.transaction-creation-panel,.accounts-import-footer-
  .reports-top-tabs .animated-tabs__tab {position:relative;}
  .reports-top-tabs .animated-tabs__badge {display:inline-flex;position:absolute;top:2px;right:2px;font-size:8px;line-height:1;padding:2px 4px;}
 }
+
+/* September 13 Figma: shared summary cards and action typography. */
+.button, .pill-link, .split-bill-icon-button {
+  font-family: var(--font-body);
+  font-size: 15px;
+  font-weight: 500;
+}
+.accounts-overview-card.glass,
+.reports-summary-grid .metric.glass,
+.transactions-footer-snapshot__metric,
+.split-bill-pulse__metrics > article,
+.clover-summary-card {
+  background: var(--surface);
+  background-image: none;
+  border: 1px solid var(--stroke);
+  border-radius: 16px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 16px 12px;
+  text-align: center;
+  min-width: 0;
+}
+.accounts-overview-card .eyebrow,
+.reports-summary-grid .metric__label,
+.transactions-footer-snapshot__metric-label,
+.split-bill-pulse__metrics > article > span,
+.clover-summary-card > span {
+  font: 600 16px/24px var(--font-body);
+  text-transform: none;
+  letter-spacing: normal;
+  text-align: center;
+  color: var(--muted);
+}
+.accounts-overview-card .accounts-overview-card__amount,
+.reports-summary-grid .metric > strong,
+.transactions-footer-snapshot__metric-value,
+.split-bill-pulse__metrics > article > strong,
+.clover-summary-card > strong { font: 600 22px/33px var(--font-body); text-align: center; overflow-wrap: anywhere; }
+.accounts-overview-card > small,
+.accounts-overview-card > p:not(.eyebrow),
+.reports-summary-grid .metric > p,
+.clover-summary-card > small { font: 400 13px/20px var(--font-body); text-align: center; }
+.plan-action-view, .plan-action-edit, .goals-goal-actions .pill-link {
+  background: var(--surface); color: var(--text); border: 1px solid var(--stroke);
+}
+.plan-action-ask .button, .plan-action-ask button, .goals-goal-actions .button-primary {
+  background: linear-gradient(105deg,#03a8c0,#2ccfca); color: white;
+}
+.portfolio-growth__period { margin-left: auto; }
+.portfolio-growth__period select { border: 1px solid var(--stroke); background: var(--surface); color: var(--text); border-radius: 22px; padding: 10px 16px; font: 500 15px var(--font-body); }
+.portfolio-growth__footnote { font: 400 13px/20px var(--font-body); color: var(--muted); }
+@media (max-width: 1100px) {
+  .investments-overview-metrics { grid-template-columns: repeat(3,minmax(0,1fr)); gap: 8px; }
+  .investments-overview-metrics .accounts-overview-card { padding: 12px 6px; }
+}
+.split-bill-home .split-bill-tabs { display: grid; grid-template-columns: repeat(4,minmax(0,1fr)); gap: 6px; }
+.split-bill-tabs button { min-height: 44px; display: flex; gap: 8px; align-items: center; justify-content: center; border: 1px solid var(--stroke); border-radius: 8px 8px 0 0; background: var(--surface); color: var(--text); font: 500 15px var(--font-body); }
+.split-bill-tabs button[aria-selected="true"] { border-bottom: 3px solid var(--accent); }
+.split-bill-home .split-bill-pulse__metrics { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 12px; }
+.split-bill-list-toolbar { display: flex; gap: 12px; align-items: center; }
+.split-bill-list-toolbar input { flex: 1; min-width: 0; border: 1px solid var(--stroke); border-radius: 24px; padding: 12px; background: var(--surface); color: var(--text); }
+.split-bill-list-filters { display: flex; flex-wrap: wrap; gap: 12px; padding: 12px; }
+.split-bill-table-scroll { overflow-x: auto; border: 1px solid var(--stroke); border-radius: 16px; background: var(--surface); }
+.split-bill-table-scroll table { width: 100%; border-collapse: collapse; font: 400 13px/20px var(--font-body); }
+.split-bill-table-scroll th { background: var(--surface-2); font-weight: 500; color: var(--muted); }
+.split-bill-table-scroll :is(th,td) { padding: 12px; text-align: left; border-bottom: 1px solid var(--stroke); }
+.split-bill-table-scroll td button { background: transparent; color: var(--text); border: 0; text-align: left; font: inherit; cursor: pointer; }
+.split-bill-table-scroll .amount { text-align: right; font-variant-numeric: tabular-nums; }
+.split-bill-group-grid { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 20px; }
+.split-bill-group-card { display: flex; flex-direction: column; align-items: flex-start; gap: 16px; padding: 20px; border: 1px solid var(--stroke); border-radius: 16px; background: var(--surface); }
+.split-bill-avatars { display: flex; align-items: center; gap: 6px; }
+.split-bill-home .button-secondary, .circles-page .button-secondary { background: var(--surface); color: var(--text); border: 1px solid var(--stroke); }
+.split-bill-home .button-primary, .split-bill-page-actions .button-primary { background: linear-gradient(105deg,#03a8c0,#2ccfca); color: white; }
+@media(max-width:700px) {
+ .split-bill-home .split-bill-tabs { grid-template-columns: repeat(2,minmax(0,1fr)); }
+ .split-bill-group-grid { grid-template-columns: minmax(0,1fr); }
+ .split-bill-table-scroll .desktop-column { display: none; }
+ .split-bill-table-scroll :is(th,td) { padding: 10px 8px; }
+}
+
+.goals-coach-panel__links .button-primary { background:linear-gradient(105deg,#03a8c0,#2ccfca);color:white; }
+.split-bill-import-modal button[aria-label="Choose files"], .split-bill-import-modal .split-bill-choose-file {background:#2276d2;color:white;}
+.split-bill-balance-dashboard > article {background:var(--surface);border:1px solid var(--stroke);border-radius:16px;text-align:center;padding:16px;gap:8px;}
+.split-bill-balance-dashboard > article > span {font:600 16px/24px var(--font-body);}
+.split-bill-balance-dashboard > article > strong {font:600 22px/33px var(--font-body);}
+
+.split-bill-page-actions .button, .split-bill-modal .button, .circles-page .button, .budgeting-page .button, .goals-goal-actions .button {font:500 15px/23px var(--font-body);}
+.split-bill-page-actions .button-secondary {color:var(--text);border-color:var(--stroke);background:var(--surface);}
+
+.content--investments .investments-overview-metrics { grid-template-columns:repeat(3,minmax(0,1fr)); }
+.content .accounts-page .accounts-overview-card {background:var(--surface);color:var(--text);align-items:center;justify-content:center;text-align:center;position:relative;box-shadow:none;}
+.content .accounts-page .accounts-overview-card .eyebrow {font:600 16px/24px var(--font-body);letter-spacing:normal;color:var(--muted);}
+.content .accounts-page .accounts-overview-card .accounts-overview-card__amount {font:600 22px/33px var(--font-body);text-align:center;white-space:normal;}
+.content .accounts-page .accounts-overview-card .summary-card-info {position:absolute;right:8px;top:8px;}
+.reports-summary-grid--highlights .metric__label span {font:600 16px/24px var(--font-body);}
+.reports-summary-grid--highlights .metric--highlight strong {font:600 22px/33px var(--font-body);}
+@media(max-width:1100px) {.content--investments .investments-overview-metrics__card {padding:28px 6px 12px;} .content--investments .investments-overview-metrics__card .eyebrow {overflow-wrap:anywhere;} }
+
+/* Keep investment filters in their menu so desktop tabs never overlap actions. */
+@media(min-width:1101px) {
+  .portfolio-filter-menu { display: block; position: relative; flex: 0 0 auto; }
+  .portfolio-filter-menu__trigger { display: inline-flex; width: 40px; height: 40px; position: relative; }
+  .portfolio-filter-menu__trigger svg { width: 20px; height: 20px; }
+  .portfolio-filter-menu__badge { position: absolute; top: 4px; right: 4px; width: 6px; height: 6px; border-radius: 50%; background: var(--accent); }
+  .portfolio-filter-menu__options { display: none; }
+  .portfolio-filter-menu[data-open="true"] .portfolio-filter-menu__options {
+    display: grid;
+    gap: 14px;
+    position: absolute;
+    top: calc(100% + 8px);
+    right: 0;
+    z-index: 40;
+    width: min(300px, calc(100vw - 40px));
+    max-height: 60dvh;
+    overflow-y: auto;
+    padding: 16px;
+    border: 1px solid var(--stroke);
+    border-radius: 16px;
+    background: var(--surface);
+    box-shadow: var(--shadow-soft);
+  }
+  .portfolio-filter-menu__options label { display: grid; gap: 6px; min-width: 0; }
+  .portfolio-filter-menu__options select { width: 100%; }
+  .portfolio-filter-menu__label { display: block; font-size: 12px; color: var(--muted); }
+  .portfolio-filter-menu__options .investments-portfolio-view-toggle { display: flex; flex-wrap: wrap; }
+}
+
+.summary-mobile-label {display:none;}
+@media(max-width:1100px) {
+ .summary-desktop-label {display:none;}
+ .summary-mobile-label {display:block;}
+ .content--investments .investments-overview-metrics__card {padding:12px 4px;gap:6px;min-height:127px;}
+ .content--investments .investments-overview-metrics__card .summary-card-info {display:none;}
+ .content--investments .investments-overview-metrics__card .eyebrow {white-space:nowrap;}
+ .content--investments .investments-overview-metrics__card .accounts-overview-card__amount {white-space:nowrap;}
+ .content--investments .investments-overview-metrics__card small {font:400 13px/20px var(--font-body);max-width:100%;overflow-wrap:anywhere;}
+}
+
+.circles-page .collection-card--circle {background:var(--surface);color:var(--text);border:1px solid var(--stroke);border-radius:16px;box-shadow:none;gap:16px;}
+.circles-page .collection-card--circle small {color:var(--muted);}
+.circles-page .collection-card--circle .collection-card__view {align-self:flex-start;background:var(--surface);color:var(--text);border:1px solid var(--stroke);}

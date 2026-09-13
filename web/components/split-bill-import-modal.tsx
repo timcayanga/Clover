@@ -381,7 +381,7 @@ export function SplitBillImportModal({ open, currentUserName, onClose, onSaved }
             <button className="button button-secondary button-small" type="button" onClick={openPhotoLibrary}>
               Choose photo
             </button>
-            <button className="button button-secondary button-small" type="button" onClick={openFilePicker}>
+            <button className="button button-secondary button-small split-bill-choose-file" type="button" onClick={openFilePicker}>
               Upload file
             </button>
           </div>

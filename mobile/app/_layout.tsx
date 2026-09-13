@@ -175,6 +175,8 @@ function AuthenticatedApp() {
 }
 export default function RootLayout() {
   const [fontsLoaded, fontError] = useFonts({
+    "Poppins-Medium": require("../assets/fonts/Poppins-Medium.ttf"),
+    "Poppins-Regular": require("../assets/fonts/Poppins-Regular.ttf"),
     "Poppins-SemiBold": require("../assets/fonts/Poppins-SemiBold.ttf"),
   });
   const key = process.env.EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY;

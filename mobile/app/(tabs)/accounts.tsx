@@ -3,6 +3,7 @@ import {
   useLocalSearchParams,
   useNavigation,
 } from "expo-router";
+import { SummaryCard } from "../../src/plan-ui";
 import { LinearGradient } from "expo-linear-gradient";
 import { useCallback, useEffect, useState } from "react";
 import { Pressable, Text, View } from "react-native";
@@ -205,40 +206,7 @@ function AccountsContent() {
       ) : (
         Array.from(groups, ([key, group]) => (
           <View key={key} style={{ gap: 12 }}>
-            <View style={{ gap: 6 }}>
-              <Text
-                accessibilityRole="header"
-                style={{
-                  color: colors.ink,
-                  fontFamily: "Poppins-SemiBold",
-                  fontSize: 16,
-                }}
-              >
-                {group.title}
-              </Text>
-              <Text
-                style={{
-                  color: colors.ink,
-                  fontFamily: "Poppins-SemiBold",
-                  fontSize: 16,
-                }}
-              >
-                {group.rows.some(
-                  (a) =>
-                    a.balance === null || !Number.isFinite(Number(a.balance)),
-                )
-                  ? "Balance not recorded"
-                  : money(
-                      String(
-                        group.rows.reduce(
-                          (sum, a) => sum + Number(a.balance),
-                          0,
-                        ),
-                      ),
-                      group.currency,
-                    )}
-              </Text>
-            </View>
+            <SummaryCard title={group.title} value={group.rows.some(a=>a.balance===null || !Number.isFinite(Number(a.balance))) ? "Balance not recorded" : money(String(group.rows.reduce((sum,a)=>sum+Number(a.balance),0)),group.currency)} detail={`${group.rows.length} accounts · ${group.currency}`}/>
             {group.rows.map((account) => (
               <Pressable
                 key={account.id}

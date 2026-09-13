@@ -1,8 +1,10 @@
+import { SplitGroupDetails, type SplitGroup } from "../src/split-group-details";
 import * as DocumentPicker from "expo-document-picker";
-import { Platform } from "react-native";
+import { BillDetails, type BillItem } from "../src/bill-details";
+import { Platform, View, Text, Pressable, Image } from "react-native";
 import { fileProblem, removeUploadCopy } from "../src/upload";
 import { useEffect, useRef, useState } from "react";
-import { router } from "expo-router";
+import { router, useLocalSearchParams } from "expo-router";
 import { useSession } from "../src/session";
 import {
   Body,
@@ -12,8 +14,15 @@ import {
   Notice,
   Screen,
   money,
+  useTheme,
 } from "../src/ui";
-import { PlanAction, PlanHeader, PlanTabs, usePlanData } from "../src/plan-ui";
+import {
+  PlanAction,
+  PlanHeader,
+  PlanTabs,
+  SummaryCard,
+  usePlanData,
+} from "../src/plan-ui";
 type Bill = {
   id: string;
   title: string;
@@ -22,7 +31,9 @@ type Bill = {
   currency: string;
   total: string;
   settlementStatus: string;
-  items?: { id: string; description: string; amount: string }[];
+  resolved?: boolean;
+  participants?: { id: string; name: string }[];
+  items?: BillItem[];
   settlement?: {
     participants: {
       id: string;
@@ -32,6 +43,8 @@ type Bill = {
       balance: number;
     }[];
     transfers: {
+      fromParticipantId: string;
+      toParticipantId: string;
       fromParticipantName: string;
       toParticipantName: string;
       amount: number;
@@ -53,20 +66,31 @@ const optionsSample = {
     provider: string;
     currency: string;
     accountName: string | null;
+    accountNumber: string | null;
+    qrImageData: string | null;
     isDefault: boolean;
   }[],
 };
 export default function SplitBills() {
+  const params=useLocalSearchParams<{billId?:string}>();
   const session = useSession();
+  const { colors } = useTheme();
+  const [statusFilter, setStatusFilter] = useState("All");
+  const [entity,setEntity] = useState<{group?:SplitGroup;person?:string}|null>(null);
   const [page, setPage] = useState(1);
   const { data, setData, error, reload } = usePlanData(
     `split-bills?page=${page}`,
     sample,
   );
   const options = usePlanData("together-options", optionsSample);
+  const [paymentDetail, setPaymentDetail] = useState<
+    (typeof optionsSample.profiles)[number] | null
+  >(null);
+  const [deletePayment, setDeletePayment] = useState(false);
+  const [paymentBusy, setPaymentBusy] = useState(false);
+  const [paymentError, setPaymentError] = useState("");
   const [tab, setTab] = useState("Bills");
   const [selected, setSelected] = useState<Bill | null>(null);
-  const [detailTab, setDetailTab] = useState("Overview");
   const [adding, setAdding] = useState(false);
   const [search, setSearch] = useState("");
   const [detailError, setDetailError] = useState("");
@@ -76,7 +100,12 @@ export default function SplitBills() {
     setSelected(null);
     setAdding(false);
     setSearch("");
+    setEntity(null);
+    setPaymentDetail(null);
+    setDeletePayment(false);
+    setPaymentError("");
   }, [session.profileId]);
+  useEffect(()=>{if(params.billId)setSelected({id:params.billId,title:"Bill",note:"",billDate:"",currency:"PHP",total:"0",settlementStatus:"open"});},[params.billId]);
   const selectedId = selected?.id;
   useEffect(() => {
     if (!selectedId || session.demo) return;
@@ -100,6 +129,7 @@ export default function SplitBills() {
       active = false;
     };
   }, [selectedId, session.demo, session.profileId, session.request]);
+  if(entity) return <SplitGroupDetails key={session.profileId} {...entity} onClose={()=>setEntity(null)} onChanged={()=>options.reload()} onBill={id=>{setEntity(null);setSelected({id,title:"Bill",note:"",billDate:"",currency:"PHP",total:"0",settlementStatus:"open"});}}/>;
   if (adding)
     return (
       <BillEditor
@@ -116,6 +146,74 @@ export default function SplitBills() {
         }}
       />
     );
+  if (paymentDetail)
+    return (
+      <Screen>
+        <PlanHeader
+          title="Payment Details"
+          back={() => {
+            setPaymentDetail(null);
+            setDeletePayment(false);
+          }}
+        />
+        <Card>
+          <Body muted={false}>{paymentDetail.label}</Body>
+          <Body>
+            {paymentDetail.provider} · {paymentDetail.currency}
+          </Body>
+          <Body>{paymentDetail.accountName}</Body>
+          <Body>{paymentDetail.accountNumber}</Body>
+          {paymentDetail.qrImageData ? (
+            <Image
+              source={{ uri: paymentDetail.qrImageData }}
+              accessibilityLabel="Payment QR code"
+              style={{ width: 200, height: 200, alignSelf: "center" }}
+              resizeMode="contain"
+            />
+          ) : null}
+        </Card>
+        {paymentError ? <Notice>{paymentError}</Notice> : null}
+        {deletePayment ? (
+          <>
+            <Body>Delete this payment option?</Body>
+            <PlanAction
+              title="Cancel deletion"
+              disabled={paymentBusy}
+              onPress={() => setDeletePayment(false)}
+            />
+          </>
+        ) : null}
+        <PlanAction
+          title={deletePayment ? "Confirm delete" : "Delete payment option"}
+          tone="delete"
+          disabled={paymentBusy}
+          onPress={async () => {
+            if (!deletePayment) {
+              setDeletePayment(true);
+              return;
+            }
+            setPaymentBusy(true);
+            try {
+              await session.request(
+                `split-bill-payment-profiles/${paymentDetail.id}?workspaceId=${encodeURIComponent(session.profileId)}`,
+                { method: "DELETE" },
+              );
+              setPaymentDetail(null);
+              setDeletePayment(false);
+              options.reload();
+            } catch (e) {
+              setPaymentError(
+                e instanceof Error
+                  ? e.message
+                  : "Unable to delete payment option.",
+              );
+            } finally {
+              setPaymentBusy(false);
+            }
+          }}
+        />
+      </Screen>
+    );
   return (
     <Screen>
       <PlanHeader
@@ -125,78 +223,23 @@ export default function SplitBills() {
       />
       {selected ? (
         <>
-          <Body muted={false}>{selected.title}</Body>
-          <PlanTabs
-            items={["Overview", "Items", "Payments", "Activity"]}
-            value={detailTab}
-            onChange={setDetailTab}
-          />
           {loading ? (
             <Body>Loading bill…</Body>
           ) : detailError ? (
             <Notice>{detailError}</Notice>
-          ) : detailTab === "Overview" ? (
-            <>
-              <Card>
-                <CategoryMark name="Food & Dining" size={36} />
-                <Body muted={false}>
-                  {money(selected.total, selected.currency)}
-                </Body>
-                <Body>
-                  {selected.billDate.slice(0, 10)} · {selected.settlementStatus}
-                </Body>
-                <Body>{selected.note}</Body>
-              </Card>
-              {selected.settlement?.transfers.map((transfer, index) => (
-                <Card key={index}>
-                  <Body muted={false}>
-                    {transfer.fromParticipantName} owes{" "}
-                    {transfer.toParticipantName}{" "}
-                    {money(String(transfer.amount), selected.currency)}
-                  </Body>
-                </Card>
-              ))}
-            </>
-          ) : detailTab === "Items" ? (
-            <>
-              {selected.items?.length ? (
-                selected.items.map((item) => (
-                  <Card key={item.id}>
-                    <Body muted={false}>{item.description}</Body>
-                    <Body>{money(item.amount, selected.currency)}</Body>
-                  </Card>
-                ))
-              ) : (
-                <Notice>No bill items recorded.</Notice>
-              )}
-            </>
-          ) : detailTab === "Payments" ? (
-            <>
-              {selected.settlement?.participants.map((person) => (
-                <Card key={person.id}>
-                  <Body muted={false}>{person.name}</Body>
-                  <Body>
-                    Paid {money(String(person.paid), selected.currency)}
-                  </Body>
-                  <Body>
-                    Share {money(String(person.owed), selected.currency)}
-                  </Body>
-                  <Body>
-                    {person.balance >= 0 ? "Owed" : "Owes"}{" "}
-                    {money(String(Math.abs(person.balance)), selected.currency)}
-                  </Body>
-                </Card>
-              ))}
-            </>
           ) : (
-            <Card>
-              <Body>
-                {selected.billDate.slice(0, 10)} · {selected.title}
-              </Body>
-              <Body>
-                Current settlement status: {selected.settlementStatus}
-              </Body>
-            </Card>
+            <BillDetails
+              key={`${selected.id}-${JSON.stringify(selected.items)}`}
+              bill={selected}
+              onSaved={(bill) => {
+                setSelected(bill as Bill);
+                reload();
+              }}
+              onDeleted={() => {
+                setSelected(null);
+                reload();
+              }}
+            />
           )}
         </>
       ) : (
@@ -222,28 +265,48 @@ export default function SplitBills() {
                     value={search}
                     onChangeText={setSearch}
                   />
+                  <PlanTabs
+                    items={["All", "Open", "Settled", "Resolved"]}
+                    value={statusFilter}
+                    onChange={setStatusFilter}
+                  />
                   {data.bills.length ? (
                     data.bills
-                      .filter((b) =>
-                        b.title.toLowerCase().includes(search.toLowerCase()),
+                      .filter(
+                        (b) =>
+                          b.title
+                            .toLowerCase()
+                            .includes(search.toLowerCase()) &&
+                          (statusFilter === "All" ||
+                            (statusFilter === "Resolved" && b.resolved) ||
+                            (!b.resolved && (statusFilter === "Settled" ? b.settlementStatus === "settled" : statusFilter === "Open" && b.settlementStatus !== "settled"))),
                       )
                       .map((bill) => (
-                        <Card key={bill.id}>
-                          <CategoryMark name="Food & Dining" size={32} />
-                          <Body muted={false}>{bill.title}</Body>
-                          <Body>{bill.billDate.slice(0, 10)}</Body>
-                          <Body muted={false}>
-                            {money(bill.total, bill.currency)}
-                          </Body>
-                          <Body>{bill.settlementStatus}</Body>
-                          <PlanAction
-                            title="View bill"
-                            onPress={() => {
-                              setSelected(bill);
-                              setDetailTab("Overview");
-                            }}
-                          />
-                        </Card>
+                        <Pressable
+                          key={bill.id}
+                          accessibilityRole="button"
+                          accessibilityLabel={`View ${bill.title}`}
+                          onPress={() => setSelected(bill)}
+                          style={{
+                            flexDirection: "row",
+                            gap: 12,
+                            alignItems: "center",
+                            paddingVertical: 14,
+                            borderBottomWidth: 1,
+                            borderColor: colors.line,
+                          }}
+                        >
+                          <View style={{ flex: 1 }}>
+                            <Body muted={false}>{bill.title}</Body>
+                            <Body>{bill.billDate.slice(0, 10)}</Body>
+                          </View>
+                          <View style={{ alignItems: "flex-end" }}>
+                            <Body muted={false}>
+                              {money(bill.total, bill.currency)}
+                            </Body>
+                            <Body>{bill.resolved ? "Resolved" : bill.settlementStatus}</Body>
+                          </View>
+                        </Pressable>
                       ))
                   ) : (
                     <>
@@ -290,10 +353,30 @@ export default function SplitBills() {
                 options.data.groups.map((group) => (
                   <Card key={group.id}>
                     <Body muted={false}>{group.name}</Body>
-                    <Body>{group._count.bills} bills</Body>
-                    <Body>
-                      {group.members.map((member) => member.name).join(", ")}
-                    </Body>
+                    <PlanAction title="View Group" onPress={()=>setEntity({group})}/>
+                    <View style={{ flexDirection: "row", gap: 6 }}>
+                      {group.members.slice(0, 5).map((member) => (
+                        <Text
+                          accessibilityLabel={member.name}
+                          key={member.id}
+                          style={{
+                            padding: 10,
+                            borderRadius: 20,
+                            backgroundColor: colors.bright,
+                            color: colors.ink,
+                          }}
+                        >
+                          {member.name
+                            .split(" ")
+                            .map((n) => n[0])
+                            .slice(0, 2)
+                            .join("")}
+                        </Text>
+                      ))}
+                      {group.members.length > 5 ? (
+                        <Body>+{group.members.length - 5}</Body>
+                      ) : null}
+                    </View>
                   </Card>
                 ))
               ) : (
@@ -306,6 +389,7 @@ export default function SplitBills() {
                 options.data.people.map((person) => (
                   <Card key={person.id}>
                     <Body muted={false}>{person.name}</Body>
+                    <PlanAction title="View person" onPress={()=>setEntity({person:person.name})}/>
                   </Card>
                 ))
               ) : (
@@ -325,6 +409,19 @@ export default function SplitBills() {
                       {profile.provider} · {profile.currency}
                     </Body>
                     <Body>{profile.accountName}</Body>
+                    <Body>{profile.accountNumber}</Body>
+                    {profile.qrImageData ? (
+                      <Image
+                        source={{ uri: profile.qrImageData }}
+                        accessibilityLabel={`${profile.label} QR code`}
+                        style={{ width: 120, height: 120 }}
+                        resizeMode="contain"
+                      />
+                    ) : null}
+                    <PlanAction
+                      title="View payment option"
+                      onPress={() => setPaymentDetail(profile)}
+                    />
                   </Card>
                 ))
               ) : (
@@ -487,6 +584,10 @@ function BillEditor({
         ? {
             bill: {
               ...payload,
+              participants: payload.participants.map((p, index) => ({
+                ...p,
+                id: `demo-person-${index}`,
+              })),
               id: `demo-${Date.now()}`,
               settlementStatus: "open",
             },

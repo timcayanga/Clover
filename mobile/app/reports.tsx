@@ -14,6 +14,7 @@ import {
 } from "../src/ui";
 import {
   PlanAction,
+  SummaryCard,
   PlanHeader,
   PlanTabs,
   Progress,
@@ -131,27 +132,24 @@ export default function Reports() {
               ["Spending", summary.expense],
               ["Net income", net],
             ].map(([label, value]) => (
-              <Card key={label} style={{ flexGrow: 1, flexBasis: "44%" }}>
-                <Body>{label}</Body>
-                <Text
-                  style={{
-                    fontFamily: "Poppins-SemiBold",
-                    fontSize: 20,
-                    color: label === "Spending" ? colors.danger : colors.ink,
-                  }}
-                >
-                  {money(String(value), currency)}
-                </Text>
-              </Card>
+              <View key={label} style={{ flexGrow: 1, flexBasis: "44%" }}>
+                <SummaryCard
+                  title={String(label)}
+                  value={money(String(value), currency)}
+                  color={label === "Spending" ? colors.danger : colors.ink}
+                />
+              </View>
             ))}
-            <Card style={{ flexGrow: 1, flexBasis: "44%" }}>
-              <Body>Savings rate</Body>
-              <Body muted={false}>
-                {summary.income
-                  ? `${((net / summary.income) * 100).toFixed(1)}%`
-                  : "N/A"}
-              </Body>
-            </Card>
+            <View style={{ flexGrow: 1, flexBasis: "44%" }}>
+              <SummaryCard
+                title="Savings rate"
+                value={
+                  summary.income
+                    ? `${((net / summary.income) * 100).toFixed(1)}%`
+                    : "N/A"
+                }
+              />
+            </View>
           </View>
           <Card>
             <Body muted={false}>Income and spending over time</Body>

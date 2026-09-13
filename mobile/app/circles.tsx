@@ -1,3 +1,5 @@
+import { SplitGroupDetails } from "../src/split-group-details";
+import { router } from "expo-router";
 import { useEffect, useState, useRef } from "react";
 import { Text, View } from "react-native";
 import { useSession } from "../src/session";
@@ -27,13 +29,14 @@ type Circle = {
   color: string;
   role: string;
   memberCount: number;
+  splitBillGroupId?: string | null;
   expenseTotalThisMonth: number;
   contributionTotalThisMonth: number;
   members?: { id: string; displayName: string; role: string; status: string }[];
   budgets?: {
     id: string;
     name: string;
-    actualAmount: number;
+    spentAmount: number;
     targetAmount: number;
     currency: string;
     progressPercent: number;
@@ -53,6 +56,7 @@ type Circle = {
     currency: string;
     date: string;
     visibility: string;
+    kind?: string;
   }[];
   activities?: { id: string; summary: string; createdAt: string }[];
 };
@@ -62,6 +66,7 @@ export default function Circles() {
   const { colors, dark } = useTheme();
   const { data, setData, error, reload } = usePlanData("circles", sample);
   const [selected, setSelected] = useState<Circle | null>(null);
+  const [memberDetail,setMemberDetail] = useState<string|null>(null);
   const [tab, setTab] = useState("Overview");
   const [search, setSearch] = useState("");
   const [editor, setEditor] = useState<{
@@ -102,6 +107,7 @@ export default function Circles() {
       active = false;
     };
   }, [selectedId, session.demo, session.profileId, session.request, revision]);
+  if(memberDetail && selected?.splitBillGroupId) return <SplitGroupDetails group={{id:selected.splitBillGroupId,name:selected.name,members:[]}} person={memberDetail} onClose={()=>setMemberDetail(null)} onBill={id=>{setMemberDetail(null);router.push({pathname:"/split-bills",params:{billId:id}});}} onChanged={reload}/>;
   if (editor)
     return (
       <CircleEditor
@@ -225,6 +231,7 @@ export default function Circles() {
                       {item.date.slice(0, 10)} ·{" "}
                       {item.visibility.replaceAll("_", " ")}
                     </Body>
+                    {item.kind === "split_bill" ? <PlanAction title="View bill" onPress={()=>router.push({pathname:"/split-bills",params:{billId:item.id}})}/> : null}
                   </Card>
                 ))
               ) : (
@@ -242,8 +249,8 @@ export default function Circles() {
                       <Body>
                         {money(
                           String(
-                            "actualAmount" in item
-                              ? item.actualAmount
+                            "spentAmount" in item
+                              ? item.spentAmount
                               : item.currentAmount,
                           ),
                           item.currency,
@@ -277,6 +284,7 @@ export default function Circles() {
               {selected.members?.map((member) => (
                 <Card key={member.id}>
                   <Body muted={false}>{member.displayName}</Body>
+                  {selected.splitBillGroupId ? <PlanAction title="View member balances" onPress={()=>setMemberDetail(member.displayName)}/> : null}
                   <Body>
                     {member.role} · {member.status}
                   </Body>
@@ -300,11 +308,7 @@ export default function Circles() {
               <Card
                 key={circle.id}
                 style={{
-                  backgroundColor: dark
-                    ? "#2d2a30"
-                    : circle.type === "household"
-                      ? "#f8eeee"
-                      : "#fff5eb",
+                  backgroundColor: colors.white,
                 }}
               >
                 <View
@@ -335,9 +339,29 @@ export default function Circles() {
                     {circle.name}
                   </Text>
                 </View>
-                <Body>
-                  {circle.type} · {circle.memberCount} people
-                </Body>
+                <View style={{ flexDirection: "row", gap: 6 }}>
+                  {(circle.members ?? []).slice(0, 5).map((member) => (
+                    <Text
+                      key={member.id}
+                      accessibilityLabel={member.displayName}
+                      style={{
+                        backgroundColor: colors.bright,
+                        borderRadius: 18,
+                        padding: 8,
+                        color: colors.ink,
+                      }}
+                    >
+                      {member.displayName
+                        .split(" ")
+                        .map((n) => n[0])
+                        .slice(0, 2)
+                        .join("")}
+                    </Text>
+                  ))}
+                  {circle.memberCount > 5 ? (
+                    <Body>+{circle.memberCount - 5}</Body>
+                  ) : null}
+                </View>
                 <Body muted={false}>
                   {money(
                     String(circle.expenseTotalThisMonth ?? 0),
@@ -346,7 +370,7 @@ export default function Circles() {
                 </Body>
                 <Body>Shared expenses this month</Body>
                 <PlanAction
-                  title="Open Circle"
+                  title="View Circle"
                   onPress={() => {
                     setSelected(circle);
                     setTab("Overview");

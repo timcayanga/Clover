@@ -86,6 +86,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ bil
       ...bill,
       transferSettlements,
     } as Parameters<typeof serializeSplitBillRecord>[0]);
+    if (serializedBill.resolved) throw new Error("This bill is resolved. No payment is requested.");
     const recipient = bill.participants.find((participant) => participant.id === body.recipientParticipantId);
     const payee = bill.participants.find((participant) => participant.id === body.payeeParticipantId);
     if (!recipient || !payee) {

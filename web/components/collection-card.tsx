@@ -35,7 +35,7 @@ export function CollectionCard({ name, subtitle, icon, children, color, editable
       <span className="collection-card__chevron" aria-hidden="true">›</span>
     </div>
     {children}
-    <button type="button" className="button plan-action-view collection-card__view" onClick={onOpen} disabled={saving}>Open {kind === "circle" ? "Circle" : kind}</button>
+    <button type="button" className="button plan-action-view collection-card__view" onClick={onOpen} disabled={saving}>{kind === "circle" ? "View Circle" : `Open ${kind}`}</button>
     {editing ? <form className="collection-card__editor" aria-label={`Edit ${kind}`} onKeyDown={(event) => { if (event.key === "Escape" && !saving) { event.preventDefault(); close(); } }} onSubmit={async (event) => {
       event.preventDefault();
       if (inFlight.current) return;

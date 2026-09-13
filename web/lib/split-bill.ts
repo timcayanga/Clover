@@ -1,3 +1,4 @@
+import { isSplitBillResolved } from "./split-bill-resolution";
 import type { Prisma } from "@prisma/client";
 
 const monthIndexByAbbr: Record<string, number> = {
@@ -207,6 +208,7 @@ export const splitBillItemOrderBy: Prisma.SplitBillItemOrderByWithRelationInput[
 ];
 
 export type SplitBillSerializedBill = {
+  resolved?: boolean;
   id: string;
   userId: string;
   transactionId: string | null;
@@ -2981,7 +2983,7 @@ const getImportedParticipantShareSettlementItems = (
   rawPayload: Record<string, unknown> | null | undefined,
   participants: Array<{ id: string; name: string }>
 ) => {
-  if (!rawPayload || rawPayload.source !== "digital_note_split_bill" || !Array.isArray(rawPayload.participantShares)) {
+  if (!rawPayload || rawPayload.userItemAllocations === true || rawPayload.source !== "digital_note_split_bill" || !Array.isArray(rawPayload.participantShares)) {
     return [];
   }
 
@@ -3623,5 +3625,33 @@ export const serializeSplitBillRecord = (bill: {
     activity: getSplitBillActivity(bill.rawPayload),
     settlement,
     settlementStatus,
+    resolved: isSplitBillResolved(bill.rawPayload),
   };
 };
+
+/** Description-only edits must not replace confirmed imported shares. */
+export function hasSplitBillAllocationChanges(bill: Pick<SplitBillSerializedBill, "items">, items: SplitBillItemDraft[]) {
+  const normalize = (item: SplitBillItemDraft) => JSON.stringify({
+    amount: Number(item.amount),
+    participants: [...item.participantIds].sort(),
+    method: item.splitMethod ?? "equal",
+    allocations: item.splitMethod && item.splitMethod !== "equal" ? (item.allocations ?? []).map(a => [a.participantId, Number(a.value)]).sort((a,b) => String(a[0]).localeCompare(String(b[0]))) : [],
+  });
+  return bill.items.length !== items.length || items.some(item => {
+    const original = bill.items.find(saved => saved.id === item.id);
+    return !original || normalize(original) !== normalize(item);
+  });
+}
+
+/** Read-only preview of user-edited line items using the saved settlement rules. */
+export function previewSplitBillItems(bill: SplitBillSerializedBill) {
+  const importedItems = getImportedParticipantShareSettlementItems(bill.rawPayload, bill.participants);
+  return applyTransferSettlementsToSettlement(buildSplitBillSettlement({
+    participants: bill.participants,
+    items: importedItems.length ? importedItems : bill.items,
+    payments: bill.payments,
+    serviceCharge: getReceiptSummaryFromRawPayload(bill.rawPayload)?.serviceCharge ?? getRawPayloadTextValue(bill.rawPayload, "serviceCharge"),
+    rounding: getReceiptSummaryFromRawPayload(bill.rawPayload)?.rounding ?? getRawPayloadTextValue(bill.rawPayload, "rounding"),
+    tax: bill.tax, tip: bill.tip, discount: bill.discount,
+  }), bill.transferSettlements ?? []);
+}

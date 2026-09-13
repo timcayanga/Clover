@@ -52,6 +52,10 @@ export default function Goals() {
   const session = useSession();
   const { colors, dark } = useTheme();
   const { data, setData, error, reload } = usePlanData("goals", sample);
+  const [deleteState, setDeleteState] = useState<"idle" | "confirm" | "busy">(
+    "idle",
+  );
+  const [deleteError, setDeleteError] = useState("");
   const [selected, setSelected] = useState<Goal | null>(null);
   const [editor, setEditor] = useState<{
     goal: Goal | null;
@@ -61,6 +65,8 @@ export default function Goals() {
   useEffect(() => {
     setSelected(null);
     setEditor(null);
+    setDeleteState("idle");
+    setDeleteError("");
   }, [session.profileId]);
   if (editor)
     return (
@@ -165,6 +171,64 @@ export default function Goals() {
                   tone="edit"
                   onPress={() => setEditor({ goal: selected })}
                 />
+              ) : null}
+              {!selected.legacy ? (
+                <>
+                  {deleteError ? <Notice>{deleteError}</Notice> : null}
+                  {deleteState !== "idle" ? (
+                    <>
+                      <Body>
+                        Delete this goal? Your accounts and transactions stay
+                        unchanged.
+                      </Body>
+                      <PlanAction
+                        title="Cancel deletion"
+                        disabled={deleteState === "busy"}
+                        onPress={() => setDeleteState("idle")}
+                      />
+                    </>
+                  ) : null}
+                  <PlanAction
+                    title={
+                      deleteState === "idle" ? "Delete Goal" : "Confirm delete"
+                    }
+                    tone="delete"
+                    disabled={deleteState === "busy"}
+                    onPress={async () => {
+                      if (deleteState === "idle") {
+                        setDeleteState("confirm");
+                        return;
+                      }
+                      setDeleteState("busy");
+                      setDeleteError("");
+                      try {
+                        if (!session.demo)
+                          await session.request(
+                            `goals?workspaceId=${encodeURIComponent(session.profileId)}`,
+                            {
+                              method: "DELETE",
+                              body: JSON.stringify({ id: selected.id }),
+                            },
+                          );
+                        setData((current) => ({
+                          goals: (current?.goals ?? []).filter(
+                            (g) => g.id !== selected.id,
+                          ),
+                        }));
+                        setSelected(null);
+                        reload();
+                        setDeleteState("idle");
+                      } catch (e) {
+                        setDeleteError(
+                          e instanceof Error
+                            ? e.message
+                            : "Unable to delete goal.",
+                        );
+                        setDeleteState("confirm");
+                      }
+                    }}
+                  />
+                </>
               ) : null}
               <PlanAction
                 title="Ask Clover about this goal"

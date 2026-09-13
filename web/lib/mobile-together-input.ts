@@ -132,3 +132,8 @@ export function mobileSplitBillPayload(
           ],
   };
 }
+
+export const mobileGroupInput = z.object({
+  name: z.string().trim().min(1).max(100),
+  members: z.array(z.object({name:z.string().trim().min(1).max(80)}).strict()).min(1).max(30),
+}).strict();

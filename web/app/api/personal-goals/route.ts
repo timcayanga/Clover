@@ -32,3 +32,20 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Unable to save goal. Please sign in and try again." }, { status: 400 });
   }
 }
+
+export async function DELETE(request: Request) {
+  try {
+    assertTrustedRequestOrigin(request);
+    await requireAuth();
+    const { workspaceId } = await resolveBudgetingWorkspace();
+    if (!workspaceId) return NextResponse.json({ error: "Profile unavailable." }, { status: 403 });
+    const body = await request.json();
+    if (typeof body.id !== "string" || !body.id || body.id.length > 240) return NextResponse.json({ error: "Choose a goal." }, { status: 400 });
+    const result = await prisma.personalGoal.deleteMany({ where: { id: body.id, workspaceId } });
+    if (!result.count) return NextResponse.json({ error: "Goal not found." }, { status: 404 });
+    invalidateWorkspaceSummaryCache(workspaceId);
+    return NextResponse.json({ deleted: true });
+  } catch {
+    return NextResponse.json({ error: "Unable to delete goal." }, { status: 400 });
+  }
+}

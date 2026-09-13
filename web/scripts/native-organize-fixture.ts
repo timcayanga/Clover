@@ -504,6 +504,79 @@ async function main() {
         n,
       );
     });
+
+
+    await test("Goal deletion is Profile scoped", async () => {
+      const goal=await prisma.personalGoal.create({data:{workspaceId:w.id,goalKey:"save_more",currency:"PHP",targetAmount:100,goalPlan:{}}});
+      assert.equal((await call("DELETE","goals",{id:goal.id},other.id)).status,404);
+      assert.equal((await call("DELETE","goals",{id:goal.id})).status,200);
+      assert.equal(await prisma.personalGoal.count({where:{id:goal.id}}),0);
+      assert.equal(await prisma.account.count({where:{id:foreign.id}}),1);
+    });
+    await test("Native bill edits preserve source data and payments; preview never saves", async () => {
+      const created=await call("POST","split-bills",{title:"Disposable edit QA",note:"",billDate:"2026-09-13",currency:"PHP",total:"100.00",participants:[{name:"QA One"},{name:"QA Two"}],paidByIndex:0});
+      assert.ok(created.status<300,JSON.stringify(created));
+      const id=created.data.bill.id;
+      try {
+        await prisma.splitBill.update({where:{id},data:{receiptText:"Original source total 100",rawPayload:{source:"digital_note_split_bill",originalTotal:"100.00",declaredTotal:"100.00",participantShares:[{participantName:"QA One",charged:"30.00"},{participantName:"QA Two",charged:"70.00"}]}}});
+        const before=(await call("GET",`split-bills/${id}`)).data.bill;
+        const descriptionOnly={title:"Renamed imported bill",items:before.items.map((i:any)=>({id:i.id,description:"Renamed item",amount:i.amount,participantIds:i.participantIds,splitMethod:i.splitMethod??"equal",allocations:i.allocations??[]}))};
+        const rename = await call("PATCH",`split-bills/${id}`,descriptionOnly);
+        assert.equal(rename.status,200,JSON.stringify(rename));
+        assert.deepEqual(rename.data.bill.settlement.participants.map((p:any)=>p.owed).sort((a:number,b:number)=>a-b),[30,70]);
+        const unchangedPreview = await call("POST",`split-bills/${id}/preview`,descriptionOnly);
+        assert.equal(unchangedPreview.status,200);
+        assert.deepEqual(unchangedPreview.data.settlement.participants.map((p:any)=>p.owed).sort((a:number,b:number)=>a-b),[30,70]);
+        const body={title:"Edited QA bill",items:before.items.map((i:any)=>({id:i.id,description:"Edited meal",amount:"200.00",participantIds:before.participants.map((p:any)=>p.id),splitMethod:"equal",allocations:[]}))};
+        const preview=await call("POST",`split-bills/${id}/preview`,body);
+        assert.equal(preview.status,200,JSON.stringify(preview));
+        assert.equal(preview.data.settlement.participants[0].owed,100);
+        assert.equal((await prisma.splitBill.findUniqueOrThrow({where:{id}})).total?.toString(),"100");
+        const saved=await call("PATCH",`split-bills/${id}`,body);
+        assert.equal(saved.status,200,JSON.stringify(saved));
+        assert.equal(Number(saved.data.bill.total),200);
+        const record=await prisma.splitBill.findUniqueOrThrow({where:{id},include:{payments:true}});
+        assert.equal(record.receiptText,"Original source total 100");
+        assert.equal((record.rawPayload as any).originalTotal,"100.00");
+        assert.equal(record.payments[0].amount.toString(),"100");
+        const invalid=[{...body,rawPayload:{tampered:true}},{...body,items:body.items.map((i:any)=>({...i,participantIds:["foreign"]}))},{...body,items:body.items.map((i:any)=>({...i,splitMethod:"percentage",allocations:i.participantIds.map((participantId:string)=>({participantId,value:"20"}))}))}];
+        for(const bad of invalid) assert.ok((await call("PATCH",`split-bills/${id}`,bad)).status>=400);
+        assert.equal((await call("PATCH",`split-bills/${id}`,body,w.id,"bad")).status,401);
+        const paymentCount = await prisma.splitBillPayment.count({where:{billId:id}});
+        const transferCount = await prisma.splitBillTransferSettlement.count({where:{billId:id}});
+        const { withMobileRequestContext } = await import("../lib/mobile-request-context");
+        const webBillRoute = await import("../app/api/split-bills/[billId]/route");
+        const billContext = {params:Promise.resolve({billId:id})};
+        const readRequest = new Request(`https://staging.clover.ph/api/split-bills/${id}`);
+        const fullBefore = await withMobileRequestContext(user.clerkUserId!,readRequest,()=>webBillRoute.GET(readRequest,billContext));
+        const staleBill = (await fullBefore.json()).bill;
+        const shareToken = `disposable-${id}`;
+        await prisma.splitBillPaymentRequest.create({data:{billId:id,recipientParticipantId:before.participants[1].id,payeeParticipantId:before.participants[0].id,recipientName:"QA Two",payeeName:"QA One",amount:100,currency:"PHP",shareToken}});
+        const resolved = await call("POST",`split-bills/${id}/resolution`);
+        assert.equal(resolved.status,200,JSON.stringify(resolved));
+        assert.equal(resolved.data.bill.resolved,true);
+        assert.equal(await prisma.splitBillPayment.count({where:{billId:id}}),paymentCount);
+        assert.equal(await prisma.splitBillTransferSettlement.count({where:{billId:id}}),transferCount);
+        assert.equal(Number(resolved.data.bill.total),200);
+        const publicRoute = await import("../app/api/split-bill-requests/[token]/route");
+        const publicContext = {params:Promise.resolve({token:shareToken})};
+        const publicRequest = new Request(`https://staging.clover.ph/api/split-bill-requests/${shareToken}`);
+        const publicRead = await publicRoute.GET(publicRequest,publicContext);
+        const publicData = await publicRead.json();
+        assert.equal(publicData.request.status,"resolved");
+        assert.equal(publicData.request.bill.rawPayload,undefined);
+        assert.equal((await publicRoute.POST(publicRequest,publicContext)).status,409);
+        const staleRequest = new Request(readRequest.url,{method:"PATCH",headers:{"content-type":"application/json",origin:"https://staging.clover.ph"},body:JSON.stringify({...staleBill,receiptText:null})});
+        const staleSave = await withMobileRequestContext(user.clerkUserId!,staleRequest,()=>webBillRoute.PATCH(staleRequest,billContext));
+        assert.equal(staleSave.status,200,await staleSave.clone().text());
+        const finalBill = await prisma.splitBill.findUniqueOrThrow({where:{id}});
+        assert.equal(finalBill.receiptText,"Original source total 100");
+        assert.ok((finalBill.rawPayload as any).billResolvedAt);
+        assert.ok((finalBill.rawPayload as any).splitBillActivity.some((event:any)=>event.message.includes("Bill resolved")));
+
+
+      } finally { await call("DELETE",`split-bills/${id}`); }
+    });
     console.log(`${count}/${count} isolated persistence checks passed.`);
   } finally {
     await prisma.workspace.deleteMany({

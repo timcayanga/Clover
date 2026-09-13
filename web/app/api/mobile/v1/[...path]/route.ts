@@ -160,7 +160,7 @@ async function handle(
       const [groups, people, profiles] = await Promise.all([
         prisma.splitBillGroup.findMany({ where:{ OR:[{userId:user.id},{collaborators:{some:{userId:user.id}}}], archivedAt:null }, select:{id:true,name:true,members:{select:{id:true,name:true}},_count:{select:{bills:true}}} }),
         prisma.splitBillPerson.findMany({where:{userId:user.id},select:{id:true,name:true}}),
-        prisma.splitBillPaymentProfile.findMany({where:{userId:user.id},select:{id:true,label:true,provider:true,currency:true,accountName:true,isDefault:true}}),
+        prisma.splitBillPaymentProfile.findMany({where:{userId:user.id},select:{id:true,label:true,provider:true,currency:true,accountName:true,accountNumber:true,qrImageData:true,isDefault:true}}),
       ]);
       return reply({groups,people,profiles});
     }
@@ -187,6 +187,14 @@ async function handle(
     if (operation === "goals") {
       const { mobileGoals, saveMobileGoal } = await import("@/lib/mobile-goals");
       if (request.method === "GET") return reply(await mobileGoals(workspaceId, user.id));
+      if (request.method === "DELETE") {
+        const { id } = z.object({ id: z.string().min(1).max(240) }).strict().parse(await request.json());
+        const result = await prisma.personalGoal.deleteMany({ where: { id, workspaceId } });
+        if (!result.count) return reply({ error: "Goal not found in this Profile." }, 404);
+        const { invalidateWorkspaceSummaryCache } = await import("@/lib/workspace-summary-cache");
+        invalidateWorkspaceSummaryCache(workspaceId);
+        return reply({ deleted: true });
+      }
       const text = await request.text();
       if (new TextEncoder().encode(text).length > 4096) return reply({ error: "Goal details are too large." }, 413);
       let input: unknown;
@@ -363,6 +371,13 @@ async function handle(
         body: safe,
       });
     }
+    if (operation === "split-group-create" || (operation === "split-group-edit" && request.method === "PATCH")) {
+      const text = await request.text();
+      if (new TextEncoder().encode(text).length > 10000) return reply({error:"Group details are too large."},413);
+      const { mobileGroupInput } = await import("@/lib/mobile-together-input");
+      const body = mobileGroupInput.parse(JSON.parse(text));
+      forwarded = new Request(request.url,{method:request.method,headers:request.headers,body:JSON.stringify(body)});
+    }
     const response = await withMobileRequestContext(
       userId,
       forwarded,
@@ -376,8 +391,42 @@ async function handle(
             return (await import("@/app/api/split-bill-receipts/preview/route")).POST(forwarded);
           case "split-bills":
             return request.method === "POST" ? (await import("@/app/api/split-bills/route")).POST(forwarded) : (await import("@/app/api/split-bills/route")).GET(forwarded);
-          case "split-bill":
-            return (await import("@/app/api/split-bills/[billId]/route")).GET(forwarded, { params: Promise.resolve({ billId: path[1] }) });
+          case "split-group-create":
+            return (await import("@/app/api/split-bill-groups/route")).POST(forwarded);
+          case "split-group-edit": {
+            const route=await import("@/app/api/split-bill-groups/[groupId]/route");
+            const params={params:Promise.resolve({groupId:path[1]})};
+            return request.method === "PATCH" ? route.PATCH(forwarded,params) : route.DELETE(forwarded,params);
+          }
+          case "resolution":
+            return (await import("@/app/api/split-bills/[billId]/resolution/route")).POST(forwarded,{params:Promise.resolve({billId:path[1]})});
+          case "payment-profile-delete":
+            return (await import("@/app/api/split-bill-payment-profiles/[profileId]/route")).DELETE(forwarded, { params: Promise.resolve({ profileId: path[1] }) });
+          case "payment-requests":
+            return (await import("@/app/api/split-bills/[billId]/payment-requests/route")).POST(forwarded, { params: Promise.resolve({ billId: path[1] }) });
+          case "transfer-settlements":
+            return (await import("@/app/api/split-bills/[billId]/transfer-settlements/route")).POST(forwarded, { params: Promise.resolve({ billId: path[1] }) });
+          case "preview":
+          case "split-bill": {
+            const route = await import("@/app/api/split-bills/[billId]/route");
+            const params = { params: Promise.resolve({ billId: path[1] }) };
+            if (request.method === "DELETE") return route.DELETE(forwarded, params);
+            if (request.method === "PATCH" || operation === "preview") {
+              const saved = await route.GET(forwarded,params);
+              if (!saved.ok) return saved;
+              const { bill } = await saved.json();
+              const text = await request.text();
+              if (new TextEncoder().encode(text).length > 200000) return reply({error:"Bill edit is too large."},413);
+              const { mergeMobileBillEdit } = await import("@/lib/mobile-split-bill-edit");
+              const body = mergeMobileBillEdit(bill,JSON.parse(text));
+              if (operation === "preview") {
+                const { previewSplitBillItems } = await import("@/lib/split-bill");
+                return reply({ settlement: previewSplitBillItems(body) });
+              }
+              return route.PATCH(new Request(request.url,{method:"PATCH",headers:request.headers,body:JSON.stringify(body)}),params);
+            }
+            return route.GET(forwarded,params);
+          }
           case "budgets":
             return (await import("@/app/api/budgets/route")).POST(forwarded);
           case "budget": {

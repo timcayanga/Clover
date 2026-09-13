@@ -1,3 +1,4 @@
+import { isSplitBillResolved } from "./split-bill-resolution";
 import { parseRecurringTracking } from "@/lib/recurring-tracking";
 import type { BillingSubscriptionStatus, CommitmentKind, ImportFileStatus } from "@prisma/client";
 import { formatCurrencyAmount } from "@/lib/currency-format";
@@ -211,7 +212,7 @@ export const buildInAppNotificationCandidates = async (
         recipientName: true,
         dueDate: true,
         updatedAt: true,
-        bill: { select: { id: true, title: true } },
+        bill: { select: { id: true, title: true, rawPayload:true } },
       },
       orderBy: { updatedAt: "desc" },
       take: 8,
@@ -462,6 +463,7 @@ export const buildInAppNotificationCandidates = async (
   });
 
   splitRequests.forEach((request) => {
+    if (isSplitBillResolved(request.bill.rawPayload) && request.status !== "paid") return;
     const statusCopy = request.status === "paid"
       ? { title: "Split bill settled", message: `${request.recipientName} marked ${formatCurrencyAmount(toAmount(request.amount), request.currency)} as paid.`, tone: "positive" as const, cta: null }
       : request.status === "payment_reported"

@@ -518,9 +518,13 @@ export async function GET(request: Request) {
     const user = await getSplitBillCurrentUser();
     const native = getMobileRequestContext()?.request === request && request !== undefined;
     const requestedPage = native ? Number(new URL(request.url).searchParams.get("page") ?? 1) : 1;
+    const groupFilter = native ? new URL(request.url).searchParams.get("groupId") : null;
+    const personFilter = native ? new URL(request.url).searchParams.get("person") : null;
     const page = Number.isInteger(requestedPage) && requestedPage > 0 && requestedPage < 100000 ? requestedPage : 1;
     const bills = await prisma.splitBill.findMany({
       where: {
+        ...(groupFilter ? {groupId:groupFilter} : {}),
+        ...(personFilter ? {participants:{some:{name:personFilter}}} : {}),
         OR: [
           { userId: user.id },
           { group: { collaborators: { some: { userId: user.id } } } },

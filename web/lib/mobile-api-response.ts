@@ -44,7 +44,7 @@ const rows = (value: unknown, fields: string[]) => Array.isArray(value) ? value.
 const circleSummary = (value: unknown) => {
   const circle = record(value);
   return {
-    ...pick(circle, ["id", "name", "type", "description", "color", "currency", "role", "isOwner", "memberCount", "pendingCount", "expenseTotalThisMonth", "contributionTotalThisMonth", "detailsLoaded"]),
+    ...pick(circle, ["id", "name", "type", "description", "color", "currency", "role", "isOwner", "memberCount", "pendingCount", "expenseTotalThisMonth", "contributionTotalThisMonth", "detailsLoaded", "splitBillGroupId"]),
     members: rows(circle.members, ["id", "displayName", "role", "status", "isOwner", "contributionTarget", "contributionCadence", "contributedThisMonth"]),
     budgets: rows(circle.budgets, ["id", "name", "targetAmount", "spentAmount", "currency", "cadence", "progressPercent", "isActive"]),
     goals: rows(circle.goals, ["id", "name", "targetAmount", "currentAmount", "currency", "targetDate", "progressPercent", "status", "estimateConfidence", "estimateReason", "estimatedCompletionDate"]),
@@ -56,21 +56,24 @@ const circleSummary = (value: unknown) => {
     insights: rows(circle.insights, ["id", "title", "detail", "confidence", "reason"]),
   };
 };
-const splitSummary = (value: unknown) => pick(value, ["id", "title", "note", "billDate", "currency", "sourceType", "total", "settlementStatus"]);
+const splitSummary = (value: unknown) => pick(value, ["id", "title", "note", "billDate", "currency", "sourceType", "total", "settlementStatus", "resolved"]);
 const splitDetail = (value: unknown) => {
   const bill = record(value), settlement = record(bill.settlement);
   return { ...splitSummary(bill),
-    items: rows(bill.items, ["id", "description", "amount"]),
+    participants: rows(bill.participants, ["id", "name"]),
+    items: rows(bill.items, ["id", "description", "amount", "participantIds", "splitMethod", "allocations"]),
     settlement: {
       ...pick(settlement, ["totalSpent", "totalPaid", "totalOwed"]),
       participants: rows(settlement.participants, ["id", "name", "paid", "owed", "balance"]),
-      transfers: rows(settlement.transfers, ["fromParticipantName", "toParticipantName", "amount"]),
+      transfers: rows(settlement.transfers, ["fromParticipantId", "toParticipantId", "fromParticipantName", "toParticipantName", "amount"]),
     },
   };
 };
 export function mobileApiResponse(operation: string, value: unknown) {
   const data = record(value);
   if (data.error) return pick(data, ["error"]);
+  if (operation === "split-group-create" || operation === "split-group-edit") return {group:pick(data.group,["id","name"]),...pick(data,["ok"])};
+  if (operation === "preview") return pick(data,["settlement"]);
   if (operation === "split-receipt-preview") return { receiptStorageKey: data.receiptStorageKey, preview: pick(data.preview, ["merchantName", "billDate", "currency", "total", "receiptText", "confidence", "requiresReview", "currencyWarning", "items"]) };
   if (operation === "adviser-chat") return {
     ...pick(data, ["reply", "degraded", "scopeRejected", "answerSource"]),
@@ -88,8 +91,10 @@ export function mobileApiResponse(operation: string, value: unknown) {
     const circles = Array.isArray(data.circles) ? data.circles.map(circleSummary) : [];
     return operation === "circles" ? { circles } : { circle: circles[0] ?? null };
   }
-  if (operation === "split-bills") return data.bill ? { bill: splitDetail(data.bill) } : { ...pick(data, ["page", "hasMore"]), bills: Array.isArray(data.bills) ? data.bills.map(splitSummary) : [] };
-  if (operation === "split-bill") return { bill: splitDetail(data.bill) };
+  if (operation === "split-bills") return data.bill ? { bill: splitDetail(data.bill) } : { ...pick(data, ["page", "hasMore"]), bills: Array.isArray(data.bills) ? data.bills.map(splitDetail) : [] };
+  if (operation === "split-bill" || operation === "transfer-settlements" || operation === "resolution") return data.bill ? { bill: splitDetail(data.bill) } : pick(data,["deleted","ok"]);
+  if (operation === "payment-profile-delete") return pick(data,["deleted","ok"]);
+  if (operation === "payment-requests") return { ...pick(data,["shareUrl"]), request: pick(data.request,["id","amount","currency","status","shareUrl"]) };
   if (operation === "budgets" || operation === "budget") return {
     budget: pick(data.budget, ["id"]),
     ...(data.history ? { history: pick(data.history, ["points", "recentTransactions"]) } : {}),
@@ -101,6 +106,7 @@ export function mobileApiResponse(operation: string, value: unknown) {
   if (operation === "transactions")
     return {
       ...pick(data, ["page", "totalCount"]),
+      ...(data.summary ? { summary: pick(data.summary,["currencyTotals"]) } : {}),
       transactions: Array.isArray(data.transactions)
         ? data.transactions.map((row) => ({ ...pick(row, transactionFields), ...lastFour(row) }))
         : [],

@@ -607,8 +607,8 @@ const makeStyles = (colors: typeof lightColors) =>
       borderColor: colors.line,
     },
     buttonText: {
-      fontSize: 16,
-      fontWeight: "600",
+      fontSize: 15,
+      fontFamily: "Poppins-Medium",
       color: "#FFFFFF",
       textAlign: "center",
     },

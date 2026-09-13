@@ -316,14 +316,15 @@ const buildBillPayload = async (userId: string, input: z.infer<typeof billSchema
       note: normalizeOptionalString(payment.note ?? null),
     };
   });
-  const resolvedRawPayload = await resolveReceiptAccountResolution(userId, input.rawPayload ?? null);
+  const existingSource = await prisma.splitBill.findFirst({
+    where: { id: billId, userId },
+    select: { receiptStorageKey: true, receiptText: true, rawPayload: true },
+  });
+  const existingRaw = existingSource?.rawPayload && typeof existingSource.rawPayload === "object" && !Array.isArray(existingSource.rawPayload) ? existingSource.rawPayload as Record<string, unknown> : {};
+  const preservedRaw = { ...existingRaw, ...input.rawPayload, ...(existingRaw.splitBillActivity ? { splitBillActivity: existingRaw.splitBillActivity } : {}), ...(existingRaw.billResolvedAt ? { billResolvedAt: existingRaw.billResolvedAt } : {}) };
+  const resolvedRawPayload = await resolveReceiptAccountResolution(userId, preservedRaw);
   const requestedReceiptStorageKey = normalizeOptionalString(input.receiptStorageKey ?? null);
-  const existingReceiptStorageKey = (
-    await prisma.splitBill.findFirst({
-      where: { id: billId, userId },
-      select: { receiptStorageKey: true },
-    })
-  )?.receiptStorageKey ?? null;
+  const existingReceiptStorageKey = existingSource?.receiptStorageKey ?? null;
   const receiptStorageKey = requestedReceiptStorageKey?.startsWith(`split-bill-receipts/${userId}/`)
     ? requestedReceiptStorageKey
     : existingReceiptStorageKey;
@@ -349,7 +350,8 @@ const buildBillPayload = async (userId: string, input: z.infer<typeof billSchema
       receiptFileName: normalizeOptionalString(input.receiptFileName ?? null),
       receiptMimeType: normalizeOptionalString(input.receiptMimeType ?? null),
       receiptStorageKey,
-      receiptText: normalizeOptionalString(input.receiptText ?? null),
+      // Receipt text is source evidence, not an editable bill field.
+      receiptText: existingSource?.receiptText ?? normalizeOptionalString(input.receiptText ?? null),
       receiptConfidence: input.receiptConfidence ?? 0,
       subtotal: normalizeOptionalDecimal(input.subtotal ?? null),
       tax: normalizeOptionalDecimal(input.tax ?? null),

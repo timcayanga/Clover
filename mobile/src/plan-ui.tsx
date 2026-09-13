@@ -154,11 +154,11 @@ export function PlanAction({
   tone?: "view" | "edit" | "ask" | "delete" | "primary";
   disabled?: boolean;
 }) {
-  const { dark } = useTheme();
+  const { dark, colors } = useTheme();
   const palette = {
-    view: dark ? ["#193b58", "#b8d9ff"] : ["#e9f2ff", "#1e5aa6"],
-    edit: dark ? ["#493718", "#ffd68a"] : ["#fff1d6", "#895000"],
-    ask: dark ? ["#36264f", "#d8bdff"] : ["#f0eaff", "#6741a5"],
+    view: [colors.white, colors.ink],
+    edit: [colors.white, colors.ink],
+    ask: ["#008fa3", "#fff"],
     delete: dark ? ["#49292d", "#ffb6ba"] : ["#fdeaea", "#b83a3a"],
     primary: ["#008fa3", "#fff"],
   }[tone];
@@ -170,6 +170,9 @@ export function PlanAction({
       onPress={onPress}
       style={{
         backgroundColor: palette[0],
+        borderWidth: 1,
+        borderColor:
+          tone === "view" || tone === "edit" ? colors.line : "transparent",
         borderRadius: 24,
         overflow: "hidden",
         alignItems: "stretch",
@@ -178,13 +181,23 @@ export function PlanAction({
     >
       <LinearGradient
         colors={
-          tone === "primary" ? ["#03a8c0", "#2ccfca"] : [palette[0], palette[0]]
+          tone === "primary" || tone === "ask"
+            ? ["#03a8c0", "#2ccfca"]
+            : [palette[0], palette[0]]
         }
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 0 }}
         style={{ padding: 13, alignItems: "center" }}
       >
-        <Text style={{ color: palette[1], fontWeight: "600" }}>{title}</Text>
+        <Text
+          style={{
+            color: palette[1],
+            fontFamily: "Poppins-Medium",
+            fontSize: 15,
+          }}
+        >
+          {title}
+        </Text>
       </LinearGradient>
     </Pressable>
   );
@@ -253,4 +266,74 @@ export function usePlanData<T>(path: string, sample: T) {
     ]),
   );
   return { data, setData, error, reload: () => setVersion((v) => v + 1) };
+}
+
+export function SummaryCard({
+  title,
+  value,
+  detail,
+  color,
+}: {
+  title: string;
+  value: string;
+  detail?: string;
+  color?: string;
+}) {
+  const { colors } = useTheme();
+  return (
+    <View
+      style={{
+        flex: 1,
+        minWidth: 0,
+        borderWidth: 1,
+        borderColor: colors.line,
+        backgroundColor: colors.white,
+        borderRadius: 16,
+        paddingVertical: 12,
+        paddingHorizontal: 4,
+        gap: 8,
+        justifyContent: "center",
+        alignItems: "center",
+      }}
+    >
+      <Text
+        style={{
+          fontFamily: "Poppins-SemiBold",
+          fontSize: 16,
+          lineHeight: 24,
+          textAlign: "center",
+          color: colors.muted,
+        }}
+      >
+        {title}
+      </Text>
+      <Text
+        style={{
+          fontFamily: "Poppins-SemiBold",
+          fontSize: 22,
+          lineHeight: 33,
+          textAlign: "center",
+          color: color ?? colors.ink,
+        }}
+        adjustsFontSizeToFit
+        numberOfLines={1}
+        minimumFontScale={0.6}
+      >
+        {value}
+      </Text>
+      {detail ? (
+        <Text
+          style={{
+            fontFamily: "Poppins-Regular",
+            fontSize: 13,
+            lineHeight: 20,
+            textAlign: "center",
+            color: colors.muted,
+          }}
+        >
+          {detail}
+        </Text>
+      ) : null}
+    </View>
+  );
 }

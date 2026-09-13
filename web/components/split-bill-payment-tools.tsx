@@ -84,7 +84,7 @@ export function SplitBillPaymentTools({ bill, onBillUpdated }: SplitBillPaymentT
     const handleProfilesChanged = () => void loadPaymentData();
     void loadPaymentData();
     window.addEventListener("clover:payment-options-changed", handleProfilesChanged);
-    return () => {
+  return () => {
       active = false;
       window.removeEventListener("clover:payment-options-changed", handleProfilesChanged);
     };
@@ -166,6 +166,7 @@ export function SplitBillPaymentTools({ bill, onBillUpdated }: SplitBillPaymentT
     }
   };
 
+  if (bill.resolved) return <p>Bill resolved. Payment reminders stopped; no payment was recorded.</p>;
   return (
     <section className="split-bill-payment-tools">
       <div className="split-bill-detail-modal__section-head">
