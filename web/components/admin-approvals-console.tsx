@@ -5,7 +5,7 @@ type Approval = {
   requesterId: string;
   reviewerId: string | null;
   targetUserId: string;
-  action: "wipe" | "delete" | "restore";
+  action: "wipe" | "delete" | "restore" | "delete_identity";
   parameters: {
     scope?: "transactions" | "accounts" | "all";
     reseedStarterWorkspace?: boolean;
@@ -73,15 +73,15 @@ export function AdminApprovalsConsole() {
       if (action === "execute") {
         if (typed !== "EXECUTE")
           throw new Error("Type EXECUTE to confirm the approved action.");
-        const base = `/api/admin/${item.action === "delete" ? "users" : "support"}/${encodeURIComponent(item.targetUserId)}`;
-        const path = `${base}/${item.action === "wipe" ? "wipe-data" : item.action === "delete" ? "data" : "restore"}`;
+        const base = `/api/admin/${(item.action === "delete" || item.action === "delete_identity") ? "users" : "support"}/${encodeURIComponent(item.targetUserId)}`;
+        const path = `${base}/${item.action === "delete_identity" ? "identity" : item.action === "wipe" ? "wipe-data" : item.action === "delete" ? "data" : "restore"}`;
         const phrase =
-          item.action === "wipe"
+          item.action === "delete_identity" ? "DELETE USER" : item.action === "wipe"
             ? "WIPE"
             : item.action === "restore"
               ? "RESTORE"
               : `DELETE ${item.parameters.scope === "all" ? "ALL DATA" : item.parameters.scope!.toUpperCase()}`;
-        await request(path, item.action === "delete" ? "DELETE" : "POST", {
+        await request(path, (item.action === "delete" || item.action === "delete_identity") ? "DELETE" : "POST", {
           ...item.parameters,
           confirmation: phrase,
           approvalId: item.id,
@@ -130,7 +130,7 @@ export function AdminApprovalsConsole() {
       {items.map((item) => (
         <section key={item.id} className="admin-governance__card">
           <h2>
-            {item.action === "delete"
+            {item.action === "delete_identity" ? "Permanently delete user and financial records" : item.action === "delete"
               ? `Delete ${item.parameters.scope}`
               : item.action === "wipe"
                 ? "Wipe user data"

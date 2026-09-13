@@ -3,6 +3,7 @@ import { prisma } from "./prisma";
 import { isConfiguredAdminEmail } from "./admin-access";
 import { getAdminDataEnvironment, isAdminUserId } from "./admin";
 export const approvalRequestSchema = z.discriminatedUnion("action", [
+  z.object({ action: z.literal("delete_identity"), targetUserId: z.string().min(1), reason: z.string().trim().min(10).max(1000), parameters: z.object({}).strict() }).strict(),
   z
     .object({
       action: z.literal("wipe"),

@@ -19,7 +19,8 @@ const loadClerkUser = unstable_cache(
   async (clerkUserId: string): Promise<SyncedClerkUser> => {
     const client = await clerkClient();
     const clerkUser = await client.users.getUser(clerkUserId);
-    const email = clerkUser.emailAddresses[0]?.emailAddress ?? `${clerkUserId}@placeholder.local`;
+    const primary = clerkUser.emailAddresses.find(entry => entry.id === clerkUser.primaryEmailAddressId) ?? clerkUser.emailAddresses[0];
+    const email = primary?.emailAddress ?? `${clerkUserId}@clerk-user.invalid`;
 
     return {
       clerkUserId,
@@ -28,7 +29,7 @@ const loadClerkUser = unstable_cache(
       firstName: clerkUser.firstName ?? null,
       lastName: clerkUser.lastName ?? null,
       imageUrl: clerkUser.imageUrl ?? null,
-      verified: clerkUser.emailAddresses.some((entry) => entry.verification?.status === "verified"),
+      verified: primary?.verification?.status === "verified",
       authoritative: true,
     };
   },

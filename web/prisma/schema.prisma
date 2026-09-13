@@ -2268,3 +2268,12 @@ model StoreAccess {
   verifiedAt DateTime
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
+
+// A non-financial tombstone prevents delayed events/session caches recreating deleted users.
+model ClerkIdentityDeletion {
+  clerkUserId String @id
+  environment String
+  completedAt DateTime?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}

@@ -333,7 +333,7 @@ const sidebarSearchPages: Array<{
     title: "User Management",
     href: "/admin/users",
     icon: "settings",
-    detail: "Production users, tiers, and limits.",
+    detail: "Users, tiers, and limits for this environment.",
     terms: ["user management", "users", "tiers", "limits", "admin users"],
   },
   {

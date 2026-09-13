@@ -174,7 +174,8 @@
     "dev:qa": "next dev --hostname localhost --port 4321",
     "qa:transaction-pagination:live": "tsx scripts/transactions-pagination-live-regression.ts",
     "predev:qa": "npm run predev",
-    "qa:session-fixes": "npm run qa:transactions-fixes && tsx scripts/onboarding-import-regression.ts && tsx scripts/onboarding-pricing-regression.ts && tsx --tsconfig scripts/tsconfig.qa.json scripts/onboarding-pricing-render.ts && tsx scripts/home-balance-precision-regression.ts && tsx scripts/recurring-date-regression.ts && tsx scripts/admin-tier-payload-regression.ts"
+    "qa:session-fixes": "npm run qa:transactions-fixes && tsx scripts/onboarding-import-regression.ts && tsx scripts/onboarding-pricing-regression.ts && tsx --tsconfig scripts/tsconfig.qa.json scripts/onboarding-pricing-render.ts && tsx scripts/home-balance-precision-regression.ts && tsx scripts/recurring-date-regression.ts && tsx scripts/admin-tier-payload-regression.ts",
+    "qa:clerk-identity": "NODE_ENV=production CLOVER_DEPLOYMENT_ENVIRONMENT=staging CLERK_SECRET_KEY=sk_test_disposable_fixture tsx --require ./scripts/clerk-identity-fixture-preload.cjs scripts/clerk-identity-fixture.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1095.0",

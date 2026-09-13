@@ -1,3 +1,4 @@
+import { prisma } from "@/lib/prisma";
 import { auth } from "@clerk/nextjs/server";
 import { clerkClient } from "@clerk/nextjs/server";
 import { headers } from "next/headers";
@@ -66,9 +67,13 @@ export const isLocalDevHost = async () => {
   return localDevHosts.has(hostname);
 };
 
+const assertIdentityActive = async (userId: string) => {
+  if (await prisma.clerkIdentityDeletion.findUnique({ where: { clerkUserId: userId }, select: { clerkUserId: true } })) throw new Error("UNAUTHORIZED");
+};
+
 export const getSessionContext = async () => {
   const mobile = getMobileRequestContext();
-  if (mobile) return { userId: mobile.userId, isGuest: false };
+  if (mobile) { await assertIdentityActive(mobile.userId); return { userId: mobile.userId, isGuest: false }; }
   const hostname = await getHostname();
   const localDevHost = localDevHosts.has(hostname);
   const stagingHost = isPreviewDeployment() || isKnownStagingHost(hostname);
@@ -83,6 +88,7 @@ export const getSessionContext = async () => {
     if (stagingHost) {
       const rememberedUserId = await resolveStagingUserIdFromRememberedSession();
       if (rememberedUserId) {
+        await assertIdentityActive(rememberedUserId);
         return { userId: rememberedUserId, isGuest: false };
       }
 
@@ -90,6 +96,8 @@ export const getSessionContext = async () => {
     }
     throw new Error("UNAUTHORIZED");
   }
+
+  await assertIdentityActive(session.userId);
 
   if (isAdminOnlyUserId(session.userId) || (await isConfiguredAdminEmail(session.userId)) || (await isAssignedAdmin(session.userId))) {
     throw new Error("ADMIN_ONLY");

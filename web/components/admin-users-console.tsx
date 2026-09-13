@@ -1,4 +1,5 @@
 "use client";
+import { AdminUserIdentityControls } from "@/components/admin-user-identity-controls";
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
@@ -618,6 +619,18 @@ export function AdminUsersConsole({
     })();
   };
 
+  const deleteIdentity = async (user: AdminUserListItem) => {
+    if (window.prompt(`Permanently erase ${user.email} from Clerk and Clover, including financial records and imported files? Type DELETE USER to request approval.`) !== "DELETE USER") return;
+    const reason = window.prompt("Reason for permanently deleting this user (at least 10 characters):");
+    if (!reason || reason.trim().length < 10) return;
+    try {
+      const response = await fetch("/api/admin/approvals", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "delete_identity", targetUserId: user.id, reason, parameters: {} }) });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error ?? "Unable to request deletion.");
+      setSaveMessage("Permanent user deletion requested. A different Owner must approve it in Admin Approvals before you execute it.");
+    } catch (error) { setSaveMessage(error instanceof Error ? error.message : "Unable to request deletion."); }
+  };
+
   const exportUsers = () => {
     const params = new URLSearchParams({
       planTier: planFilter,
@@ -853,6 +866,8 @@ export function AdminUsersConsole({
           </button>
         </div>
       </div>
+
+      <AdminUserIdentityControls onChange={() => setRefreshNonce(value => value + 1)} />
 
       {error ? (
         <div className="admin-users__notice admin-users__notice--error">
@@ -1094,6 +1109,7 @@ export function AdminUsersConsole({
                               >
                                 Delete All Data
                               </button>
+                              <button className="is-danger" type="button" disabled={busy} onClick={() => void deleteIdentity(user)}>Delete User Permanently</button>
                             </div>
                           </details>
                         </div>
@@ -1109,7 +1125,7 @@ export function AdminUsersConsole({
         <article className="admin-users__errors-panel table-panel">
           <div className="admin-users__table-head">
             <div>
-              <p className="eyebrow">Production errors</p>
+              <p className="eyebrow">Environment errors</p>
               <h3>Running error log</h3>
             </div>
             <p className="panel-muted">
@@ -1153,7 +1169,7 @@ export function AdminUsersConsole({
             <div className="empty-state">
               <strong>No error logs yet.</strong>
               <p>
-                When production errors are captured, they will appear here with
+                When errors are captured in this environment, they will appear here with
                 time, build, and request context.
               </p>
             </div>

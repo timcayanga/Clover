@@ -2,7 +2,13 @@ import { Prisma } from "@prisma/client";
 import { getAdminDataEnvironment } from "@/lib/admin";
 import { getAppBuildInfo } from "@/lib/build-info";
 
-const SYNTHETIC_EMAIL_SUFFIXES = ["@placeholder.local", "@example.com"] as const;
+const SYNTHETIC_EMAIL_SUFFIXES = [
+  "@placeholder.local",
+  "@example.com",
+] as const;
+const syntheticEmailSuffixes = () =>
+  getAdminDataEnvironment() === "staging" ? [] : SYNTHETIC_EMAIL_SUFFIXES;
+
 const SYNTHETIC_CLERK_USER_IDS = [
   "local-admin",
   "staging-guest",
@@ -18,7 +24,7 @@ export const isSyntheticAdminUserIdentity = ({
 }) => {
   const normalizedEmail = email.trim().toLowerCase();
   return (
-    SYNTHETIC_EMAIL_SUFFIXES.some((suffix) =>
+    syntheticEmailSuffixes().some((suffix) =>
       normalizedEmail.endsWith(suffix),
     ) || SYNTHETIC_CLERK_USER_IDS.includes(clerkUserId as never)
   );
@@ -27,7 +33,7 @@ export const isSyntheticAdminUserIdentity = ({
 export const getAdminRealUserWhere = (): Prisma.UserWhereInput => ({
   environment: getAdminDataEnvironment(),
   NOT: [
-    ...SYNTHETIC_EMAIL_SUFFIXES.map((suffix) => ({
+    ...syntheticEmailSuffixes().map((suffix) => ({
       email: { endsWith: suffix, mode: Prisma.QueryMode.insensitive },
     })),
     { clerkUserId: { in: [...SYNTHETIC_CLERK_USER_IDS] } },
@@ -38,39 +44,41 @@ export const getAdminRealWorkspaceWhere = (): Prisma.WorkspaceWhereInput => ({
   user: getAdminRealUserWhere(),
 });
 
-export const getCurrentDeploymentErrorWhere =
-  (since?: Date): Prisma.AppErrorLogWhereInput => {
-    const environment = getAdminDataEnvironment();
-    const build = getAppBuildInfo();
-    const deploymentScope = build.deploymentId
+export const getCurrentDeploymentErrorWhere = (
+  since?: Date,
+): Prisma.AppErrorLogWhereInput => {
+  const environment = getAdminDataEnvironment();
+  const build = getAppBuildInfo();
+  const deploymentScope = build.deploymentId
+    ? {
+        OR: [
+          { deploymentId: build.deploymentId },
+          { buildId: build.deploymentId },
+        ],
+      }
+    : build.gitSha
       ? {
-          OR: [
-            { deploymentId: build.deploymentId },
-            { buildId: build.deploymentId },
-          ],
+          OR: [{ deploymentId: build.gitSha }, { buildId: build.gitSha }],
         }
-      : build.gitSha
-        ? {
-            OR: [
-              { deploymentId: build.gitSha },
-              { buildId: build.gitSha },
-            ],
-          }
-        : {};
+      : {};
 
-    return {
-      environment,
-      ...(since ? { occurredAt: { gte: since } } : {}),
-      ...deploymentScope,
-    };
+  return {
+    environment,
+    ...(since ? { occurredAt: { gte: since } } : {}),
+    ...deploymentScope,
   };
+};
 
 export const adminRealUserSqlPredicate = (
   alias: string,
 ): Prisma.Sql => Prisma.sql`
   ${Prisma.raw(alias)}."environment" = ${getAdminDataEnvironment()}
-  AND LOWER(${Prisma.raw(alias)}."email") NOT LIKE '%@placeholder.local'
-  AND LOWER(${Prisma.raw(alias)}."email") NOT LIKE '%@example.com'
+  ${
+    getAdminDataEnvironment() === "staging"
+      ? Prisma.empty
+      : Prisma.sql`AND LOWER(${Prisma.raw(alias)}."email") NOT LIKE '%@placeholder.local'
+  AND LOWER(${Prisma.raw(alias)}."email") NOT LIKE '%@example.com'`
+  }
   AND ${Prisma.raw(alias)}."clerkUserId" NOT IN (${Prisma.join([
     ...SYNTHETIC_CLERK_USER_IDS,
   ])})

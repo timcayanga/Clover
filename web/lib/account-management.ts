@@ -1,7 +1,12 @@
+import { deleteImportObject } from "@/lib/s3-delete";
 import { prisma } from "@/lib/prisma";
 import { ensureStarterWorkspace } from "@/lib/starter-data";
 import { deleteWorkspaceTransactions } from "@/lib/account-deletion";
-import { BillingProvider, BillingSubscriptionStatus } from "@prisma/client";
+import {
+  BillingProvider,
+  BillingSubscriptionStatus,
+  type Prisma,
+} from "@prisma/client";
 import { cancelPayPalSubscription } from "@/lib/paypal-billing";
 import { cancelPaddleSubscription } from "@/lib/paddle-billing";
 
@@ -13,23 +18,29 @@ export const shouldCancelBillingSubscription = (
         status: BillingSubscriptionStatus;
       }
     | null
-    | undefined
+    | undefined,
 ) =>
   Boolean(
     subscription?.providerSubscriptionId &&
-      subscription.status !== BillingSubscriptionStatus.cancelled &&
-      subscription.status !== BillingSubscriptionStatus.expired
+    subscription.status !== BillingSubscriptionStatus.cancelled &&
+    subscription.status !== BillingSubscriptionStatus.expired,
   );
 
 export const wipeLocalUserData = async (
   clerkUserId: string,
   options?: {
     reseedStarterWorkspace?: boolean;
-  }
+  },
 ) => {
   const user = await prisma.user.findUnique({
     where: { clerkUserId },
-    select: { id: true, clerkUserId: true, email: true, verified: true, dataWipedAt: true },
+    select: {
+      id: true,
+      clerkUserId: true,
+      email: true,
+      verified: true,
+      dataWipedAt: true,
+    },
   });
 
   if (!user) {
@@ -41,7 +52,9 @@ export const wipeLocalUserData = async (
       where: { userId: user.id },
       select: { id: true },
     });
-    const workspaceIds = workspaces.map((workspace: { id: string }) => workspace.id);
+    const workspaceIds = workspaces.map(
+      (workspace: { id: string }) => workspace.id,
+    );
 
     if (workspaceIds.length > 0) {
       await deleteWorkspaceTransactions(tx, {
@@ -72,7 +85,8 @@ export const wipeLocalUserData = async (
     await tx.user.update({
       where: { id: user.id },
       data: {
-        dataWipedAt: options?.reseedStarterWorkspace !== false ? null : new Date(),
+        dataWipedAt:
+          options?.reseedStarterWorkspace !== false ? null : new Date(),
       },
     });
   });
@@ -84,7 +98,35 @@ export const wipeLocalUserData = async (
   return true;
 };
 
+export const assertUserErasureScope = async (
+  clerkUserId: string,
+  db: Pick<Prisma.TransactionClient, "user" | "circle"> = prisma,
+) => {
+  const user = await db.user.findUnique({
+    where: { clerkUserId },
+    select: { id: true },
+  });
+  if (!user) return;
+  const sharedCircle = await db.circle.findFirst({
+    where: {
+      ownerUserId: user.id,
+      OR: [
+        { memberships: { some: { userId: { not: user.id } } } },
+        { contributions: { some: { contributedByUserId: { not: user.id } } } },
+        { sharedTransactions: { some: { sharedByUserId: { not: user.id } } } },
+        { investmentShares: { some: { sharedByUserId: { not: user.id } } } },
+      ],
+    },
+    select: { id: true },
+  });
+  if (sharedCircle)
+    throw new Error(
+      "Transfer ownership of shared Circles before erasing this user; other members' financial records must be preserved.",
+    );
+};
+
 export const deleteLocalUserAccount = async (clerkUserId: string) => {
+  await assertUserErasureScope(clerkUserId);
   const user = await prisma.user.findUnique({
     where: { clerkUserId },
     select: {
@@ -111,8 +153,43 @@ export const deleteLocalUserAccount = async (clerkUserId: string) => {
     }
   }
 
-  await prisma.user.delete({
-    where: { id: user.id },
+  if (shouldCancelBillingSubscription(subscription)) {
+    await prisma.billingSubscription.updateMany({
+      where: { userId: user.id },
+      data: { status: BillingSubscriptionStatus.cancelled },
+    });
+  }
+
+  // Do not leave raw statements or restorable financial snapshots after erasure.
+  const files = await prisma.importFile.findMany({
+    where: { workspace: { userId: user.id }, storageKey: { not: "" } },
+    select: { id: true, storageKey: true },
+    orderBy: { id: "asc" },
+  });
+  for (const file of files) {
+    await deleteImportObject(file.storageKey);
+    // Persist progress so a function timeout on a large account resumes with remaining files.
+    await prisma.importFile.updateMany({ where: { id: file.id, storageKey: file.storageKey }, data: { storageKey: "" } });
+  }
+  await prisma.$transaction(async (tx) => {
+    await tx.$queryRaw`SELECT id FROM "User" WHERE id = ${user.id} FOR UPDATE`;
+    await tx.$queryRaw`SELECT id FROM "Circle" WHERE "ownerUserId" = ${user.id} FOR UPDATE`;
+    await assertUserErasureScope(clerkUserId, tx);
+    await tx.adminDataSnapshot.deleteMany({
+      where: { targetClerkUserId: clerkUserId },
+    });
+    await tx.billingEvent.deleteMany({ where: { userId: user.id } });
+    await tx.circleContribution.deleteMany({
+      where: {
+        OR: [
+          { contributedByUserId: user.id },
+          { sourceTransaction: { workspace: { userId: user.id } } },
+        ],
+      },
+    });
+    await tx.circleActivity.deleteMany({ where: { actorUserId: user.id } });
+    await tx.circleMembership.deleteMany({ where: { userId: user.id } });
+    await tx.user.deleteMany({ where: { id: user.id } });
   });
 
   return true;

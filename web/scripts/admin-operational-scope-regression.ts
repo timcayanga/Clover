@@ -20,8 +20,8 @@ assert.match(adminStyles, /overflow-x: auto/);
 
 const scopeSource = readSource("lib/admin-data-scope.ts");
 const adminSource = readSource("lib/admin.ts");
-assert.match(adminSource, /getAdminDataEnvironment = \(\) => "production" as const/);
-assert.doesNotMatch(adminSource, /VERCEL_ENV === "preview" \? "staging"/);
+assert.match(adminSource, /CLOVER_DEPLOYMENT_ENVIRONMENT === "staging"/);
+assert.match(adminSource, /VERCEL_ENV === "preview"/);
 assert.match(scopeSource, /@placeholder\.local/);
 assert.match(scopeSource, /@example\.com/);
 assert.match(scopeSource, /local-admin/);

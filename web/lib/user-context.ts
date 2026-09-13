@@ -26,14 +26,17 @@ export const getOrCreateCurrentUser = async (clerkUserId: string): Promise<User>
       currentEnvironment,
       existing?.environment
     );
-    const user = existing
+    const user = await prisma.$transaction(async (tx) => {
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`clerk-identity:${clerkUserId}`}))`;
+      if (await tx.clerkIdentityDeletion.findUnique({ where: { clerkUserId } })) throw new Error("UNAUTHORIZED");
+      return existing
       ? existing.email !== syncedEmail ||
           existing.firstName !== syncedFirstName ||
           existing.lastName !== syncedLastName ||
           existing.verified !== syncedVerified ||
           existing.environment !== resolvedEnvironment ||
           (applyLocalProOverride && existing.planTier !== "pro")
-        ? await prisma.user.update({
+        ? await tx.user.update({
             where: { id: existing.id },
             data: {
               email: syncedEmail,
@@ -45,7 +48,7 @@ export const getOrCreateCurrentUser = async (clerkUserId: string): Promise<User>
             },
           })
         : existing
-      : await prisma.user.create({
+      : await tx.user.create({
           data: {
             clerkUserId: clerkUser.clerkUserId,
             email: syncedEmail,
@@ -56,6 +59,8 @@ export const getOrCreateCurrentUser = async (clerkUserId: string): Promise<User>
             planTier: isLocalEnvironment ? "pro" : "free",
           },
         });
+
+    });
 
     if (!existing) {
       void capturePostHogServerEvent("signup_completed", clerkUser.clerkUserId, {

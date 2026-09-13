@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
-import { clerkClient } from "@clerk/nextjs/server";
 import { requireAuth } from "@/lib/auth";
-import { deleteLocalUserAccount } from "@/lib/account-management";
+import { deleteClerkIdentity } from "@/lib/clerk-identity-lifecycle";
 import { capturePostHogServerEvent } from "@/lib/analytics";
 import { assertTrustedRequestOrigin } from "@/lib/request-security";
 
@@ -16,10 +15,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Guest accounts cannot be deleted." }, { status: 403 });
     }
 
-    await deleteLocalUserAccount(userId);
-
-    const client = await clerkClient();
-    await client.users.deleteUser(userId);
+    await deleteClerkIdentity(userId);
 
     void capturePostHogServerEvent("account_deleted", userId, {
       account_scope: "full",

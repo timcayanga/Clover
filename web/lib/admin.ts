@@ -13,8 +13,10 @@ const normalizeList = (value: string | undefined) =>
 
 export const getAdminUserIds = () => new Set(normalizeList(getEnv().ADMIN_USER_IDS));
 
-// Admin is Clover's production control plane, even when opened from staging or local development.
-export const getAdminDataEnvironment = () => "production" as const;
+// Admin operates on the same isolated environment as the deployment.
+export const getAdminDataEnvironment = (): "production" | "staging" =>
+  process.env.CLOVER_DEPLOYMENT_ENVIRONMENT === "staging" || process.env.VERCEL_ENV === "preview"
+    ? "staging" : "production";
 
 export const isAdminUserId = (userId: string | null | undefined) => {
   if (!userId) {
@@ -34,6 +36,8 @@ export const requireAdminAuth = async (permission: AdminPermission = "read") => 
   if (!session?.userId) {
     throw new Error("UNAUTHORIZED");
   }
+
+  if (await prisma.clerkIdentityDeletion.findUnique({ where: { clerkUserId: session.userId }, select: { clerkUserId: true } })) throw new Error("UNAUTHORIZED");
 
   // Explicit assignments override bootstrap allowlists, including revocation.
   const member = await prisma.adminMember.findUnique({ where: { clerkUserId: session.userId } });
