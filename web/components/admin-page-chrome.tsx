@@ -3,6 +3,9 @@ import type { ReactNode } from "react";
 
 type AdminPageChromeProps = {
   active:
+    | "work-queue"
+    | "security"
+    | "approvals"
     | "home"
     | "content"
     | "campaigns"
@@ -24,11 +27,22 @@ type AdminPageChromeProps = {
 };
 
 const adminNavItems = [
+  { key: "work-queue", href: "/admin/work-queue", label: "Work queue" },
+  { key: "security", href: "/admin/security", label: "Security & access" },
+  { key: "approvals", href: "/admin/approvals", label: "Approvals" },
   { key: "home", href: "/admin", label: "Overview" },
   { key: "content", href: "/admin/content", label: "Content" },
   { key: "users", href: "/admin/users", label: "Users" },
-  { key: "campaigns", href: "/admin/campaigns", label: "Campaigns & Referrals" },
-  { key: "notifications", href: "/admin/notifications", label: "Notifications" },
+  {
+    key: "campaigns",
+    href: "/admin/campaigns",
+    label: "Campaigns & Referrals",
+  },
+  {
+    key: "notifications",
+    href: "/admin/notifications",
+    label: "Notifications",
+  },
   { key: "support", href: "/admin/support", label: "Support" },
   { key: "operations", href: "/admin/operations", label: "Import operations" },
   { key: "analytics", href: "/admin/analytics", label: "Analytics" },

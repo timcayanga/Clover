@@ -1,3 +1,4 @@
+import { assertTrustedRequestOrigin } from "@/lib/request-security";
 import { NextResponse } from "next/server";
 import { requireAdminAuth } from "@/lib/admin";
 import { getAdminUserDetail } from "@/lib/admin-users";
@@ -5,9 +6,10 @@ import { reconcileBillingPlanTier } from "@/lib/paypal-billing";
 
 export const dynamic = "force-dynamic";
 
-export async function POST(_request: Request, context: { params: Promise<{ userId: string }> }) {
+export async function POST(request: Request, context: { params: Promise<{ userId: string }> }) {
   try {
-    await requireAdminAuth();
+    assertTrustedRequestOrigin(request);
+    await requireAdminAuth("operate");
     const { userId } = await context.params;
     await reconcileBillingPlanTier(userId);
     const detail = await getAdminUserDetail(userId);

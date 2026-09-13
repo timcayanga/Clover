@@ -71,6 +71,7 @@ const splitDetail = (value: unknown) => {
 };
 export function mobileApiResponse(operation: string, value: unknown) {
   const data = record(value);
+  if (operation === "import-process" && !data.error) return { ...pick(data, ["ok", "status", "queued", "duplicate", "canonicalImportFileId", "confirmedTransactionsCount", "visibleImportComplete"]) };
   if (data.error) return pick(data, ["error"]);
   if (operation === "split-group-create" || operation === "split-group-edit") return {group:pick(data.group,["id","name"]),...pick(data,["ok"])};
   if (operation === "preview") return pick(data,["settlement"]);

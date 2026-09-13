@@ -60,7 +60,7 @@ export async function GET() {
 export async function POST(request: Request) {
   try {
     assertTrustedRequestOrigin(request);
-    const admin = await requireAdminAuth();
+    const admin = await requireAdminAuth("operate");
     const body = z
       .object({
         action: z.enum(["save", "status", "preview", "review"]),

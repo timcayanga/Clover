@@ -1,11 +1,11 @@
+import { disconnectStoreAccount } from "../src/store-billing";
 import { DisplayPreferences } from "../src/display-preferences";
 import { ClerkProvider, useAuth } from "@clerk/expo";
-import { useHostedAuth } from "@clerk/expo/hosted-auth";
-import { tokenCache } from "@clerk/expo/token-cache";
+import { authTokenCache } from "../src/auth-token-cache";
 import { Stack, usePathname, router } from "expo-router";
 import { useFonts } from "expo-font";
 import { StatusBar } from "expo-status-bar";
-import { useState, type ReactNode } from "react";
+import { useRef, useState, type ReactNode } from "react";
 import { AppState, Platform, StyleSheet, Text, View } from "react-native";
 import { useEffect } from "react";
 import { SafeAreaProvider, SafeAreaView } from "react-native-safe-area-context";
@@ -51,6 +51,20 @@ function Routes() {
   const { active } = useAccess();
   const path = usePathname();
   const session = useSession();
+  const landed = useRef(false);
+  useEffect(() => {
+    if (!active) {
+      landed.current = false;
+      return;
+    }
+    if (landed.current || !session.data || session.data.needsOnboarding) return;
+    landed.current = true;
+    if (!["/", "/welcome", "/auth"].includes(path)) return;
+    const page = session.data.preferences?.defaults.defaultLandingPage;
+    if (page === "transactions") router.replace("/(tabs)/transactions");
+    else if (page === "reports") router.replace("/reports");
+    else if (page === "accounts") router.replace("/(tabs)/accounts");
+  }, [active, session.data, path]);
   useEffect(() => {
     if (active && session.data?.needsOnboarding && path !== "/onboarding") {
       router.replace("/onboarding");
@@ -71,6 +85,7 @@ function Routes() {
       >
         <Stack.Protected guard={!active}>
           <Stack.Screen name="welcome" options={{ headerShown: false }} />
+          <Stack.Screen name="auth" options={{ headerShown: false }} />
         </Stack.Protected>
         <Stack.Protected guard={active}>
           <Stack.Screen
@@ -108,20 +123,21 @@ function Routes() {
           />
         </Stack.Protected>
       </Stack>
-      {active &&
-      (path.startsWith("/transaction/") ||
-        path.startsWith("/import/") ||
-        [
-          "/settings",
-          "/notifications",
-          "/onboarding",
-          "/budgeting",
-          "/goals",
-          "/investments",
-          "/circles",
-          "/split-bills",
-          "/reports",
-        ].includes(path)) ? (
+      {path === "/auth" ||
+      (active &&
+        (path.startsWith("/transaction/") ||
+          path.startsWith("/import/") ||
+          [
+            "/settings",
+            "/notifications",
+            "/onboarding",
+            "/budgeting",
+            "/goals",
+            "/investments",
+            "/circles",
+            "/split-bills",
+            "/reports",
+          ].includes(path))) ? (
         <DetailNavigation />
       ) : null}
     </PrivacyShield>
@@ -167,7 +183,10 @@ function AppSession({
         }}
       >
         <SafeAreaView
-          style={{ flex: 1, backgroundColor: active ? colors.white : "#f7fcfc" }}
+          style={{
+            flex: 1,
+            backgroundColor: active ? colors.white : "#f7fcfc",
+          }}
           edges={["top", "left", "right"]}
         >
           <Routes />
@@ -178,7 +197,6 @@ function AppSession({
 }
 function AuthenticatedApp() {
   const { isLoaded, userId, getToken, signOut } = useAuth();
-  const { startHostedAuth } = useHostedAuth();
   return (
     <AppSession
       configured
@@ -186,10 +204,14 @@ function AuthenticatedApp() {
       userId={userId}
       getToken={getToken}
       login={async (mode = "sign-in") => {
-        await startHostedAuth({ mode });
+        router.push({ pathname: "/auth", params: { mode } });
       }}
       logout={async () => {
-        await signOut();
+        try {
+          await disconnectStoreAccount();
+        } finally {
+          await signOut();
+        }
       }}
     />
   );
@@ -206,7 +228,10 @@ export default function RootLayout() {
     <SafeAreaProvider>
       <DisplayPreferences>
         {key ? (
-          <ClerkProvider publishableKey={key} tokenCache={tokenCache}>
+          <ClerkProvider
+            publishableKey={key}
+            tokenCache={Platform.OS === "web" ? undefined : authTokenCache}
+          >
             <AuthenticatedApp />
           </ClerkProvider>
         ) : (

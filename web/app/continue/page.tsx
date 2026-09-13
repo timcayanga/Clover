@@ -2,7 +2,7 @@ import { auth } from "@clerk/nextjs/server";
 import { redirect } from "next/navigation";
 import {
   isAdminOnlyUserId,
-  isConfiguredAdminEmail,
+  isConfiguredAdminEmail, isAssignedAdmin,
 } from "@/lib/admin-access";
 import { getOrCreateCurrentUser, hasCompletedOnboarding } from "@/lib/user-context";
 
@@ -19,7 +19,7 @@ export default async function ContinuePage() {
 
   const isAdmin =
     isAdminOnlyUserId(session.userId) ||
-    (await isConfiguredAdminEmail(session.userId));
+    (await isConfiguredAdminEmail(session.userId)) || (await isAssignedAdmin(session.userId));
 
   if (isAdmin) {
     redirect("/admin");

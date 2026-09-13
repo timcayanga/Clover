@@ -1,3 +1,4 @@
+import { useAccess } from "./access";
 import { useDisplayPreferences } from "./display-preferences";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { router } from "expo-router";
@@ -110,7 +111,12 @@ export function Button({
         (pressed || disabled) && { opacity: 0.6 },
       ]}
     >
-      <Text style={[styles.buttonText, secondary && { color: dark ? colors.bright : colors.teal }]}>
+      <Text
+        style={[
+          styles.buttonText,
+          secondary && { color: dark ? colors.bright : colors.teal },
+        ]}
+      >
         {title}
       </Text>
     </Pressable>
@@ -473,7 +479,10 @@ export function AppHeader({
                                 `notifications?workspaceId=${encodeURIComponent(profileId)}`,
                                 {
                                   method: "PATCH",
-                                  body: JSON.stringify({ ids: [item.id], action: "dismiss" }),
+                                  body: JSON.stringify({
+                                    ids: [item.id],
+                                    action: "dismiss",
+                                  }),
                                 },
                               )
                               .then((data) => {
@@ -700,7 +709,8 @@ export function AccountAvatar() {
     </View>
   );
 }
-export function DetailNavigation() {
+export function DetailNavigation({ onNavigate }: { onNavigate?: () => void } = {}) {
+  const access = useAccess();
   const { colors } = useTheme();
   return (
     <View
@@ -737,7 +747,14 @@ export function DetailNavigation() {
         <Pressable
           key={item.title}
           accessibilityRole="button"
-          onPress={() => router.navigate(item.route)}
+          accessibilityLabel={
+            access.active ? item.title : `${item.title}, log in required`
+          }
+          onPress={() => {
+            onNavigate?.();
+            if (access.active) router.navigate(item.route);
+            else void access.signIn();
+          }}
           style={{
             flex: 1,
             minHeight: 44,

@@ -1,15 +1,41 @@
 import { useEffect, useState } from "react";
-import { router } from "expo-router";
+import { router, useLocalSearchParams } from "expo-router";
 import { Text } from "react-native";
 import { useSession } from "../src/session";
 import { useDisplayPreferences } from "../src/display-preferences";
 import { Body, Button, Card, Field, Notice, Screen, useTheme } from "../src/ui";
+import { SettingsPreferences } from "../src/settings-preferences";
+import { SettingsPlan } from "../src/settings-plan";
+import { SettingsData } from "../src/settings-data";
+import { SettingsConnections } from "../src/settings-connections";
+import { SettingsPhoto } from "../src/settings-photo";
+import { SettingsSecurity } from "../src/settings-security";
+import { SettingsCategories } from "../src/settings-categories";
+import { SettingsProfiles } from "../src/settings-profiles";
 import { PlanHeader } from "../src/plan-ui";
 export default function Settings() {
   const session = useSession();
   const { colors } = useTheme();
   const display = useDisplayPreferences();
+  const params = useLocalSearchParams<{ section?: string }>();
   const [section, setSection] = useState("menu");
+  useEffect(() => {
+    if (
+      [
+        "account",
+        "profiles",
+        "display",
+        "region",
+        "categories",
+        "security",
+        "data",
+        "plan",
+        "review",
+        "notifications",
+      ].includes(params.section ?? "")
+    )
+      setSection(params.section!);
+  }, [params.section]);
   const [accountReady, setAccountReady] = useState(session.demo);
   const [regionReady, setRegionReady] = useState(session.demo);
   const [regional, setRegional] = useState({
@@ -118,7 +144,19 @@ export default function Settings() {
                 ? "Display"
                 : section === "region"
                   ? "Region"
-                  : "Profiles"
+                  : section === "notifications"
+                    ? "Notifications"
+                    : section === "review"
+                      ? "Review"
+                      : section === "plan"
+                        ? "Plan"
+                        : section === "data"
+                          ? "Data"
+                          : section === "security"
+                            ? "Security"
+                            : section === "categories"
+                              ? "Categories"
+                              : "Profiles"
         }
         back={() => (section === "menu" ? router.back() : setSection("menu"))}
       />
@@ -127,7 +165,11 @@ export default function Settings() {
           {(
             [
               ["account", "Account"],
+              ["security", "Security"],
+              ["data", "Data"],
+              ["review", "Review"],
               ["profiles", "Profiles"],
+              ["categories", "Categories"],
               ["display", "Display"],
               ["region", "Region"],
             ] as const
@@ -145,18 +187,15 @@ export default function Settings() {
           <Button
             title="Notifications"
             secondary
-            onPress={() => router.push("/notifications")}
+            onPress={() => setSection("notifications")}
           />
-          <Button
-            title="Plan"
-            secondary
-            onPress={() => router.push("/(tabs)/account")}
-          />
+          <Button title="Plan" secondary onPress={() => setSection("plan")} />
         </Card>
       ) : null}
       {section === "account" && !accountReady ? (
         <Body>Loading account details…</Body>
       ) : null}
+      {section === "account" ? <SettingsPhoto /> : null}
       {section === "account" ? (
         <Card style={{ borderRadius: 16 }}>
           <Text style={{ color: colors.ink, fontFamily: "Poppins-SemiBold" }}>
@@ -182,12 +221,18 @@ export default function Settings() {
           />
           <Body>Email: {account.email}</Body>
           <Button
+            title="Change password"
+            secondary
+            onPress={() => setSection("security")}
+          />
+          <Button
             title={busy ? "Saving…" : "Save changes"}
             disabled={busy || !accountReady}
             onPress={() => void save()}
           />
         </Card>
       ) : null}
+      {section === "account" ? <SettingsConnections /> : null}
       {section === "display" ? (
         <Card style={{ borderRadius: 16 }}>
           <Text style={{ color: colors.ink, fontFamily: "Poppins-SemiBold" }}>
@@ -211,18 +256,24 @@ export default function Settings() {
         </Card>
       ) : null}
       {section === "profiles" ? (
-        <Card style={{ borderRadius: 16 }}>
-          <Body>Each Profile keeps its own financial records.</Body>
-          {session.data?.profiles.map((profile) => (
-            <Button
-              key={profile.id}
-              title={`${profile.name}${session.profileId === profile.id ? " · Selected" : ""}`}
-              secondary={session.profileId !== profile.id}
-              onPress={() => session.setProfileId(profile.id)}
-            />
-          ))}
-        </Card>
+        <>
+          <SettingsProfiles />
+          <SettingsPreferences section="defaults" />
+        </>
       ) : null}
+      {section === "categories" ? <SettingsCategories /> : null}
+      {section === "security" ? <SettingsSecurity /> : null}
+      {section === "data" ? (
+        <>
+          <SettingsData />
+          <SettingsPreferences section="privacy" />
+        </>
+      ) : null}
+      {section === "review" || section === "notifications" ? (
+        <SettingsPreferences key={section} section={section} />
+      ) : null}
+      {section === "plan" ? <SettingsPlan /> : null}
+      {section === "account" ? <SettingsData accountOnly /> : null}
       {section === "region" && !regionReady ? (
         <Body>Loading regional preferences…</Body>
       ) : null}

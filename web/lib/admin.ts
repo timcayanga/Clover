@@ -1,3 +1,5 @@
+import { prisma } from "@/lib/prisma";
+import { canAdmin, type AdminPermission, type AdminRole } from "@/lib/admin-permissions";
 import { auth } from "@clerk/nextjs/server";
 import { isLocalDevHost } from "@/lib/auth";
 import { getEnv } from "@/lib/env";
@@ -22,9 +24,9 @@ export const isAdminUserId = (userId: string | null | undefined) => {
   return getAdminUserIds().has(userId);
 };
 
-export const requireAdminAuth = async () => {
+export const requireAdminAuth = async (permission: AdminPermission = "read") => {
   if (process.env.NODE_ENV !== "production" || (await isLocalDevHost())) {
-    return { userId: "local-admin" };
+    return { userId: "local-admin", role: "owner" as AdminRole };
   }
 
   const session = await auth().catch(() => null);
@@ -33,10 +35,11 @@ export const requireAdminAuth = async () => {
     throw new Error("UNAUTHORIZED");
   }
 
-  // Staging access only gates the app itself. It must never grant Admin privileges.
-  if (!isAdminUserId(session.userId) && !(await isConfiguredAdminEmail(session.userId))) {
-    throw new Error("FORBIDDEN");
-  }
-
-  return session;
+  // Explicit assignments override bootstrap allowlists, including revocation.
+  const member = await prisma.adminMember.findUnique({ where: { clerkUserId: session.userId } });
+  const role = member
+    ? (member.active ? member.role : null)
+    : (isAdminUserId(session.userId) || await isConfiguredAdminEmail(session.userId)) ? "owner" : null;
+  if (!role || !canAdmin(role, permission)) throw new Error("FORBIDDEN");
+  return { ...session, role: role as AdminRole };
 };

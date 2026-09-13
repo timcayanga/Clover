@@ -5,11 +5,23 @@ import { useAccess } from "../../src/access";
 import { useSession } from "../../src/session";
 import type { ImportStatus } from "../../src/types";
 import { removeUploadCopy } from "../../src/upload";
-import { Body, Button, Card, Field, Heading, Icon, Notice, Screen, useTheme } from "../../src/ui";
+import {
+  Body,
+  Button,
+  Card,
+  Field,
+  Heading,
+  Icon,
+  Notice,
+  Screen,
+  useTheme,
+} from "../../src/ui";
 export default function ImportDetail() {
   const { colors, styles, dark } = useTheme();
   const access = useAccess();
-  const { demo, profileId, request, uploads, markUploadStarted } = useSession();
+  const { demo, profileId, request, uploads, markUploadStarted, data } =
+    useSession();
+  const openedReview = useRef(false);
   const { id } = useLocalSearchParams<{ id: string }>();
   const selected = uploads[id];
   const { uri, name, mimeType: mime } = selected?.file ?? {};
@@ -27,6 +39,7 @@ export default function ImportDetail() {
         }
       : null,
   );
+  const [duplicateId, setDuplicateId] = useState<string | null>(null);
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [uploading, setUploading] = useState(false);
@@ -51,6 +64,32 @@ export default function ImportDetail() {
   const visibleRows = status?.confirmedTransactionsCount ?? 0;
   const reviewOnly =
     complete && visibleRows === 0 && (status?.parsedRowsCount ?? 0) > 0;
+  useEffect(() => {
+    if (
+      !demo &&
+      selected?.started &&
+      complete &&
+      visibleRows > 0 &&
+      correctProfile &&
+      data?.preferences?.review.openReviewAfterImport &&
+      !duplicateId &&
+      !openedReview.current
+    ) {
+      openedReview.current = true;
+      router.replace({
+        pathname: "/(tabs)/transactions",
+        params: { review: "pending_review" },
+      });
+    }
+  }, [
+    demo,
+    selected?.started,
+    complete,
+    visibleRows,
+    correctProfile,
+    duplicateId,
+    data?.preferences?.review.openReviewAfterImport,
+  ]);
   useEffect(() => {
     if (demo || !started || !access.active || !correctProfile || complete)
       return;
@@ -118,11 +157,18 @@ export default function ImportDetail() {
         type: mime ?? "application/pdf",
       } as unknown as Blob);
       if (password) form.append("password", password);
-      await request(`${endpoint}/process${scope}`, {
+      const result = await request<{
+        duplicate?: boolean;
+        canonicalImportFileId?: string;
+      }>(`${endpoint}/process${scope}`, {
         method: "POST",
         body: form,
       });
-      if (alive.current) setRevision((n) => n + 1);
+      if (alive.current) {
+        if (result.duplicate && result.canonicalImportFileId)
+          setDuplicateId(result.canonicalImportFileId);
+        setRevision((n) => n + 1);
+      }
     } catch (e) {
       if (alive.current) setError((e as Error).message);
     } finally {
@@ -156,6 +202,35 @@ export default function ImportDetail() {
       <Body>
         {status?.importFile.fileName ?? name ?? "Your financial record"}
       </Body>
+      {duplicateId ? (
+        <Card>
+          <Body>
+            This file was already imported. No duplicate transactions were
+            created.
+          </Body>
+          {data?.preferences?.review.duplicateHandling !== "skip" ? (
+            <>
+              <Body>Would you like to view the existing import?</Body>
+              <Button
+                title="View existing import"
+                onPress={() =>
+                  router.replace({
+                    pathname: "/import/[id]",
+                    params: { id: duplicateId },
+                  })
+                }
+              />
+            </>
+          ) : (
+            <Body>Skipped according to your duplicate preference.</Body>
+          )}
+          <Button
+            title="Back to transactions"
+            secondary
+            onPress={() => router.replace("/(tabs)/transactions")}
+          />
+        </Card>
+      ) : null}
       {!correctProfile ? (
         <Notice>Return to the original Profile to view this import.</Notice>
       ) : (

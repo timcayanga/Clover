@@ -1,3 +1,5 @@
+import { getAppPreferences } from "./app-preferences";
+import { notificationAllowed } from "../../shared/app-preferences";
 import { isSplitBillResolved } from "./split-bill-resolution";
 import { parseRecurringTracking } from "@/lib/recurring-tracking";
 import type { BillingSubscriptionStatus, CommitmentKind, ImportFileStatus } from "@prisma/client";
@@ -534,10 +536,20 @@ export const buildInAppNotificationCandidates = async (
     });
   }
 
+  const preferences = await getAppPreferences(user.id);
+  if (preferences.notifications.weeklySummary) {
+    // Previous complete Monday-Sunday week in Clover's reporting time zone.
+    const local = new Date(+now + 8 * 60 * 60 * 1000);
+    const start = new Date(Date.UTC(local.getUTCFullYear(), local.getUTCMonth(), local.getUTCDate() - ((local.getUTCDay() + 6) % 7)) - 8 * 60 * 60 * 1000);
+    const previous = new Date(+start - 7 * DAY_MS);
+    const count = await prisma.transaction.count({ where: { workspaceId, deletedAt: null, type: { not: "transfer" }, date: { gte: previous, lt: start } } });
+    if (count > 0) items.push({ id: `weekly-summary:${workspaceId}:${toDateKey(start)}`, product: "transactions", productLabel: "Reports", productHref: "/reports", title: "Your weekly summary", message: `${count} income and spending transactions were recorded last week. Open Reports to review your finances.`, tone: "neutral", priority: "low", createdAt: start.toISOString(), href: "/reports", ctaLabel: "View reports" });
+  }
   const configured = options.raw ? items : applyInAppTemplates(items, await loadRuntimeNotificationTemplates(
     (await prisma.user.findUnique({ where: { id: user.id }, select: { environment: true } }))?.environment ?? "local",
   ));
   return configured
+    .filter(item => notificationAllowed(item.id, preferences.notifications, options.raw ? "email" : "inApp"))
     .sort((left, right) => priorityRank[left.priority] - priorityRank[right.priority] || right.createdAt.localeCompare(left.createdAt))
     .slice(0, 40);
 };

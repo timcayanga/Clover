@@ -78,7 +78,7 @@ export async function POST(request: Request) {
   let admin;
   try {
     assertTrustedRequestOrigin(request);
-    admin = await requireAdminAuth();
+    admin = await requireAdminAuth("operate");
   } catch {
     return response(
       { error: "Admin access and a trusted origin are required." },

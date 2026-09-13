@@ -2,9 +2,17 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
-import { buildAdminUserPatch, mergeAdminUserDraft } from "@/lib/admin-user-payload";
+import {
+  buildAdminUserPatch,
+  mergeAdminUserDraft,
+} from "@/lib/admin-user-payload";
 import { formatCurrencyAmount } from "@/lib/currency-format";
-import type { AdminUserListItem, AdminUserListResponse, AdminUserOverview, AdminUserUpdateInput } from "@/lib/admin-users";
+import type {
+  AdminUserListItem,
+  AdminUserListResponse,
+  AdminUserOverview,
+  AdminUserUpdateInput,
+} from "@/lib/admin-users";
 import type { AdminErrorLogListResponse } from "@/lib/admin-error-logs";
 
 type AdminUserDraft = {
@@ -47,7 +55,8 @@ const EMPTY_OVERVIEW: AdminUserOverview = {
   signupsPrev7d: 0,
 };
 
-const limitToDraftValue = (value: number | null) => (value === null ? "" : String(value));
+const limitToDraftValue = (value: number | null) =>
+  value === null ? "" : String(value);
 
 const initialDraft = (user: AdminUserListItem): AdminUserDraft => ({
   firstName: user.firstName ?? "",
@@ -117,7 +126,9 @@ function formatTrendValue(current: number, previous: number) {
   const direction = delta > 0 ? "up" : delta < 0 ? "down" : "flat";
 
   if (percent === null) {
-    return delta === 0 ? "No change" : `${delta > 0 ? "+" : ""}${delta.toLocaleString()}`;
+    return delta === 0
+      ? "No change"
+      : `${delta > 0 ? "+" : ""}${delta.toLocaleString()}`;
   }
 
   return `${delta > 0 ? "+" : ""}${percent}% ${direction}`;
@@ -140,7 +151,8 @@ function isDirty(user: AdminUserListItem, draft: AdminUserDraft) {
     draft.email.trim() !== user.email ||
     draft.planTier !== user.planTier ||
     draft.accountLimit.trim() !== limitToDraftValue(user.accountLimit) ||
-    draft.monthlyUploadLimit.trim() !== limitToDraftValue(user.monthlyUploadLimit) ||
+    draft.monthlyUploadLimit.trim() !==
+      limitToDraftValue(user.monthlyUploadLimit) ||
     draft.transactionLimit.trim() !== limitToDraftValue(user.transactionLimit)
   );
 }
@@ -154,7 +166,10 @@ async function patchUser(userId: string, payload: AdminUserUpdateInput) {
     body: JSON.stringify(payload),
   });
 
-  const result = (await response.json()) as { user?: AdminUserListItem; error?: string };
+  const result = (await response.json()) as {
+    user?: AdminUserListItem;
+    error?: string;
+  };
 
   if (!response.ok || !result.user) {
     throw new Error(result.error ?? "Unable to update user.");
@@ -163,10 +178,15 @@ async function patchUser(userId: string, payload: AdminUserUpdateInput) {
   return result.user;
 }
 
-export function AdminUsersConsole({ initialData, initialErrorLogData }: AdminUsersConsoleProps) {
+export function AdminUsersConsole({
+  initialData,
+  initialErrorLogData,
+}: AdminUsersConsoleProps) {
   const skipInitialUsersLoad = useRef(Boolean(initialData));
   const skipInitialErrorsLoad = useRef(Boolean(initialErrorLogData));
-  const [data, setData] = useState<AdminUserListResponse>(initialData ?? emptyResponse());
+  const [data, setData] = useState<AdminUserListResponse>(
+    initialData ?? emptyResponse(),
+  );
   const [errorLogData, setErrorLogData] = useState<AdminErrorLogListResponse>(
     initialErrorLogData ?? {
       logs: [],
@@ -174,13 +194,17 @@ export function AdminUsersConsole({ initialData, initialErrorLogData }: AdminUse
       pageSize: 25,
       totalCount: 0,
       totalPages: 1,
-    }
+    },
   );
   const [queryInput, setQueryInput] = useState("");
   const [query, setQuery] = useState("");
   const [planFilter, setPlanFilter] = useState<"all" | "free" | "pro">("all");
-  const [verifiedFilter, setVerifiedFilter] = useState<"all" | "yes" | "no">("all");
-  const [lockedFilter, setLockedFilter] = useState<"all" | "locked" | "unlocked">("all");
+  const [verifiedFilter, setVerifiedFilter] = useState<"all" | "yes" | "no">(
+    "all",
+  );
+  const [lockedFilter, setLockedFilter] = useState<
+    "all" | "locked" | "unlocked"
+  >("all");
   const [savedView, setSavedView] = useState("all");
   const [errorQueryInput, setErrorQueryInput] = useState("");
   const [errorQuery, setErrorQuery] = useState("");
@@ -189,7 +213,9 @@ export function AdminUsersConsole({ initialData, initialErrorLogData }: AdminUse
   const [errorRefreshNonce, setErrorRefreshNonce] = useState(0);
   const [drafts, setDrafts] = useState<DraftMap>({});
   const [loading, setLoading] = useState(initialData ? false : true);
-  const [errorLoading, setErrorLoading] = useState(initialErrorLogData ? false : true);
+  const [errorLoading, setErrorLoading] = useState(
+    initialErrorLogData ? false : true,
+  );
   const [error, setError] = useState<string | null>(null);
   const [errorLogError, setErrorLogError] = useState<string | null>(null);
   const [saveMessage, setSaveMessage] = useState<string | null>(null);
@@ -243,11 +269,17 @@ export function AdminUsersConsole({ initialData, initialErrorLogData }: AdminUse
           return params;
         };
 
-        const firstResponse = await fetch(`/api/admin/users?${buildParams(1).toString()}`, {
-          signal: controller.signal,
-        });
+        const firstResponse = await fetch(
+          `/api/admin/users?${buildParams(1).toString()}`,
+          {
+            signal: controller.signal,
+          },
+        );
 
-        const firstPayload = (await firstResponse.json()) as AdminUserListResponse & { error?: string };
+        const firstPayload =
+          (await firstResponse.json()) as AdminUserListResponse & {
+            error?: string;
+          };
 
         if (!firstResponse.ok) {
           throw new Error(firstPayload.error ?? "Unable to load users.");
@@ -256,24 +288,35 @@ export function AdminUsersConsole({ initialData, initialErrorLogData }: AdminUse
         let allUsers = firstPayload.users;
 
         if (firstPayload.totalPages > 1) {
-          const remainingPages = Array.from({ length: firstPayload.totalPages - 1 }, (_, index) => index + 2);
+          const remainingPages = Array.from(
+            { length: firstPayload.totalPages - 1 },
+            (_, index) => index + 2,
+          );
           const remainingResponses = await Promise.all(
             remainingPages.map(async (pageNumber) => {
-              const response = await fetch(`/api/admin/users?${buildParams(pageNumber).toString()}`, {
-                signal: controller.signal,
-              });
+              const response = await fetch(
+                `/api/admin/users?${buildParams(pageNumber).toString()}`,
+                {
+                  signal: controller.signal,
+                },
+              );
 
-              const payload = (await response.json()) as AdminUserListResponse & { error?: string };
+              const payload =
+                (await response.json()) as AdminUserListResponse & {
+                  error?: string;
+                };
 
               if (!response.ok) {
                 throw new Error(payload.error ?? "Unable to load users.");
               }
 
               return payload;
-            })
+            }),
           );
 
-          allUsers = [firstPayload, ...remainingResponses].flatMap((payload) => payload.users);
+          allUsers = [firstPayload, ...remainingResponses].flatMap(
+            (payload) => payload.users,
+          );
         }
 
         setData({
@@ -287,7 +330,10 @@ export function AdminUsersConsole({ initialData, initialErrorLogData }: AdminUse
           const next = { ...current };
 
           for (const user of allUsers) {
-            next[user.id] = next[user.id] && isDirty(user, next[user.id]) ? next[user.id] : initialDraft(user);
+            next[user.id] =
+              next[user.id] && isDirty(user, next[user.id])
+                ? next[user.id]
+                : initialDraft(user);
           }
 
           return next;
@@ -297,7 +343,11 @@ export function AdminUsersConsole({ initialData, initialErrorLogData }: AdminUse
           return;
         }
 
-        setError(loadError instanceof Error ? loadError.message : "Unable to load users.");
+        setError(
+          loadError instanceof Error
+            ? loadError.message
+            : "Unable to load users.",
+        );
         setData(emptyResponse());
       } finally {
         if (!controller.signal.aborted) {
@@ -333,11 +383,16 @@ export function AdminUsersConsole({ initialData, initialErrorLogData }: AdminUse
           params.set("query", errorQuery);
         }
 
-        const response = await fetch(`/api/admin/error-logs?${params.toString()}`, {
-          signal: controller.signal,
-        });
+        const response = await fetch(
+          `/api/admin/error-logs?${params.toString()}`,
+          {
+            signal: controller.signal,
+          },
+        );
 
-        const payload = (await response.json()) as AdminErrorLogListResponse & { error?: string };
+        const payload = (await response.json()) as AdminErrorLogListResponse & {
+          error?: string;
+        };
 
         if (!response.ok) {
           throw new Error(payload.error ?? "Unable to load error logs.");
@@ -349,7 +404,11 @@ export function AdminUsersConsole({ initialData, initialErrorLogData }: AdminUse
           return;
         }
 
-        setErrorLogError(loadError instanceof Error ? loadError.message : "Unable to load error logs.");
+        setErrorLogError(
+          loadError instanceof Error
+            ? loadError.message
+            : "Unable to load error logs.",
+        );
         setErrorLogData({
           logs: [],
           page: 1,
@@ -390,7 +449,7 @@ export function AdminUsersConsole({ initialData, initialErrorLogData }: AdminUse
               blockedReason: entry.blockedReason,
               blockedAt: entry.blockedAt,
             }
-          : entry
+          : entry,
       ),
     }));
     setDrafts((current) => ({
@@ -405,8 +464,14 @@ export function AdminUsersConsole({ initialData, initialErrorLogData }: AdminUse
     const monthlyUploadLimit = parseLimitInput(draft.monthlyUploadLimit);
     const transactionLimit = parseLimitInput(draft.transactionLimit);
 
-    if (accountLimit === undefined || monthlyUploadLimit === undefined || transactionLimit === undefined) {
-      setSaveMessage("Limits must be whole numbers or blank for the plan default.");
+    if (
+      accountLimit === undefined ||
+      monthlyUploadLimit === undefined ||
+      transactionLimit === undefined
+    ) {
+      setSaveMessage(
+        "Limits must be whole numbers or blank for the plan default.",
+      );
       return;
     }
 
@@ -429,7 +494,11 @@ export function AdminUsersConsole({ initialData, initialErrorLogData }: AdminUse
         applyUpdatedUser(updatedUser);
         setSaveMessage(`Saved ${updatedUser.fullName || updatedUser.email}.`);
       } catch (saveError) {
-        setSaveMessage(saveError instanceof Error ? saveError.message : "Unable to save user.");
+        setSaveMessage(
+          saveError instanceof Error
+            ? saveError.message
+            : "Unable to save user.",
+        );
       } finally {
         setSavingUserId((current) => (current === user.id ? null : current));
       }
@@ -439,7 +508,10 @@ export function AdminUsersConsole({ initialData, initialErrorLogData }: AdminUse
   const changeUserAccess = (user: AdminUserListItem) => {
     const action = user.isBlocked ? "unblock" : "block";
     const reason = user.isBlocked
-      ? window.prompt(`Optional note for unblocking ${user.fullName || user.email}:`, "Access restored by Admin")
+      ? window.prompt(
+          `Optional note for unblocking ${user.fullName || user.email}:`,
+          "Access restored by Admin",
+        )
       : window.prompt(`Why should ${user.fullName || user.email} be blocked?`);
 
     if (reason === null || (action === "block" && reason.trim().length < 3)) {
@@ -463,17 +535,26 @@ export function AdminUsersConsole({ initialData, initialErrorLogData }: AdminUse
         if (!response.ok) {
           throw new Error(result.error ?? `Unable to ${action} user.`);
         }
-        setSaveMessage(`${action === "block" ? "Blocked" : "Unblocked"} ${user.fullName || user.email}.`);
+        setSaveMessage(
+          `${action === "block" ? "Blocked" : "Unblocked"} ${user.fullName || user.email}.`,
+        );
         setRefreshNonce((value) => value + 1);
       } catch (blockError) {
-        setSaveMessage(blockError instanceof Error ? blockError.message : `Unable to ${action} user.`);
+        setSaveMessage(
+          blockError instanceof Error
+            ? blockError.message
+            : `Unable to ${action} user.`,
+        );
       } finally {
         setBlockingUserId((current) => (current === user.id ? null : current));
       }
     })();
   };
 
-  const deleteUserData = (user: AdminUserListItem, scope: "transactions" | "accounts" | "all") => {
+  const deleteUserData = (
+    user: AdminUserListItem,
+    scope: "transactions" | "accounts" | "all",
+  ) => {
     const confirmation = {
       transactions: "DELETE TRANSACTIONS",
       accounts: "DELETE ACCOUNTS",
@@ -485,21 +566,33 @@ export function AdminUsersConsole({ initialData, initialErrorLogData }: AdminUse
       all: "all Clover data",
     }[scope];
     const entered = window.prompt(
-      `Delete ${label} for ${user.fullName || user.email}? Clover will create an audit snapshot first. Type ${confirmation} to continue.`
+      `Request approval to delete ${label} for ${user.fullName || user.email}? Type ${confirmation} to prepare the request.`,
     );
     if (entered !== confirmation) {
       return;
     }
 
+    const reason = window.prompt(
+      "Explain why this deletion is needed (at least 10 characters).",
+    );
+    if (!reason || reason.trim().length < 10) {
+      setSaveMessage("A reason of at least 10 characters is required.");
+      return;
+    }
     setDeletingUserId(user.id);
     setSaveMessage(null);
 
     void (async () => {
       try {
-        const response = await fetch(`/api/admin/users/${user.id}/data`, {
-          method: "DELETE",
+        const response = await fetch("/api/admin/approvals", {
+          method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ scope, confirmation }),
+          body: JSON.stringify({
+            action: "delete",
+            targetUserId: user.id,
+            reason,
+            parameters: { scope },
+          }),
         });
         const result = (await response.json()) as {
           error?: string;
@@ -510,11 +603,15 @@ export function AdminUsersConsole({ initialData, initialErrorLogData }: AdminUse
           throw new Error(result.error ?? `Unable to delete ${label}.`);
         }
         setSaveMessage(
-          `Deleted ${label} for ${user.fullName || user.email}. Snapshot saved; ${result.deletedAccounts ?? 0} accounts and ${result.deletedTransactions ?? 0} transactions removed.`
+          `Approval requested for ${user.fullName || user.email}. A different Owner must review it in Admin Approvals. No data was changed.`,
         );
         setRefreshNonce((value) => value + 1);
       } catch (deleteError) {
-        setSaveMessage(deleteError instanceof Error ? deleteError.message : `Unable to delete ${label}.`);
+        setSaveMessage(
+          deleteError instanceof Error
+            ? deleteError.message
+            : `Unable to delete ${label}.`,
+        );
       } finally {
         setDeletingUserId((current) => (current === user.id ? null : current));
       }
@@ -594,7 +691,8 @@ export function AdminUsersConsole({ initialData, initialErrorLogData }: AdminUse
             <p className="eyebrow">Internal admin</p>
             <h2>Command center</h2>
             <p className="panel-muted">
-              A compact user directory for plan edits, limits, and quick account actions.
+              A compact user directory for plan edits, limits, and quick account
+              actions.
             </p>
           </div>
           <div className="admin-users__stats">
@@ -611,7 +709,9 @@ export function AdminUsersConsole({ initialData, initialErrorLogData }: AdminUse
               <span>Verified</span>
             </div>
             <div className="admin-users__stat">
-              <strong>{data.overview.totalTransactionCount.toLocaleString()}</strong>
+              <strong>
+                {data.overview.totalTransactionCount.toLocaleString()}
+              </strong>
               <span>Transactions</span>
             </div>
             <div className="admin-users__stat">
@@ -619,7 +719,9 @@ export function AdminUsersConsole({ initialData, initialErrorLogData }: AdminUse
               <span>Tracked volume by currency</span>
             </div>
             <div className="admin-users__stat">
-              <strong>{data.overview.productionErrors7d.toLocaleString()}</strong>
+              <strong>
+                {data.overview.productionErrors7d.toLocaleString()}
+              </strong>
               <span>Current deploy errors</span>
             </div>
           </div>
@@ -629,22 +731,46 @@ export function AdminUsersConsole({ initialData, initialErrorLogData }: AdminUse
           <div className="admin-users__trend-card">
             <span>Active users</span>
             <strong>{data.overview.activeUsers7d.toLocaleString()}</strong>
-            <small>{formatTrendValue(data.overview.activeUsers7d, data.overview.activeUsersPrev7d)} vs previous 7d</small>
+            <small>
+              {formatTrendValue(
+                data.overview.activeUsers7d,
+                data.overview.activeUsersPrev7d,
+              )}{" "}
+              vs previous 7d
+            </small>
           </div>
           <div className="admin-users__trend-card">
             <span>Imports</span>
             <strong>{data.overview.imports7d.toLocaleString()}</strong>
-            <small>{formatTrendValue(data.overview.imports7d, data.overview.importsPrev7d)} vs previous 7d</small>
+            <small>
+              {formatTrendValue(
+                data.overview.imports7d,
+                data.overview.importsPrev7d,
+              )}{" "}
+              vs previous 7d
+            </small>
           </div>
           <div className="admin-users__trend-card">
             <span>Current deploy errors</span>
             <strong>{data.overview.productionErrors7d.toLocaleString()}</strong>
-            <small>{formatTrendValue(data.overview.productionErrors7d, data.overview.errorsPrev7d)} vs previous 7d</small>
+            <small>
+              {formatTrendValue(
+                data.overview.productionErrors7d,
+                data.overview.errorsPrev7d,
+              )}{" "}
+              vs previous 7d
+            </small>
           </div>
           <div className="admin-users__trend-card">
             <span>New signups</span>
             <strong>{data.overview.signups7d.toLocaleString()}</strong>
-            <small>{formatTrendValue(data.overview.signups7d, data.overview.signupsPrev7d)} vs previous 7d</small>
+            <small>
+              {formatTrendValue(
+                data.overview.signups7d,
+                data.overview.signupsPrev7d,
+              )}{" "}
+              vs previous 7d
+            </small>
           </div>
         </div>
 
@@ -661,7 +787,11 @@ export function AdminUsersConsole({ initialData, initialErrorLogData }: AdminUse
               }}
             />
           </label>
-          <select className="admin-users__inline-select" value={savedView} onChange={(event) => applySavedView(event.target.value)}>
+          <select
+            className="admin-users__inline-select"
+            value={savedView}
+            onChange={(event) => applySavedView(event.target.value)}
+          >
             <option value="all">Saved views</option>
             <option value="custom">Custom filters</option>
             <option value="attention">Attention review</option>
@@ -698,24 +828,40 @@ export function AdminUsersConsole({ initialData, initialErrorLogData }: AdminUse
             value={lockedFilter}
             onChange={(event) => {
               setSavedView("custom");
-              setLockedFilter(event.target.value as "all" | "locked" | "unlocked");
+              setLockedFilter(
+                event.target.value as "all" | "locked" | "unlocked",
+              );
             }}
           >
             <option value="all">All tier states</option>
             <option value="locked">Locked</option>
             <option value="unlocked">Billing synced</option>
           </select>
-          <button className="button button-secondary" type="button" onClick={exportUsers}>
+          <button
+            className="button button-secondary"
+            type="button"
+            onClick={exportUsers}
+          >
             Export CSV
           </button>
-          <button className="button button-secondary" type="button" onClick={() => setRefreshNonce((value) => value + 1)}>
+          <button
+            className="button button-secondary"
+            type="button"
+            onClick={() => setRefreshNonce((value) => value + 1)}
+          >
             Refresh
           </button>
         </div>
       </div>
 
-      {error ? <div className="admin-users__notice admin-users__notice--error">{error}</div> : null}
-      {saveMessage ? <div className="admin-users__notice">{saveMessage}</div> : null}
+      {error ? (
+        <div className="admin-users__notice admin-users__notice--error">
+          {error}
+        </div>
+      ) : null}
+      {saveMessage ? (
+        <div className="admin-users__notice">{saveMessage}</div>
+      ) : null}
 
       <article className="table-panel admin-users__table-panel">
         <div className="admin-users__table-head">
@@ -728,12 +874,19 @@ export function AdminUsersConsole({ initialData, initialErrorLogData }: AdminUse
           </p>
         </div>
 
-        {loading ? <div className="admin-users__loading" role="status">Loading users...</div> : null}
+        {loading ? (
+          <div className="admin-users__loading" role="status">
+            Loading users...
+          </div>
+        ) : null}
 
         {!loading && visibleUsers.length === 0 ? (
           <div className="empty-state">
             <strong>No users found.</strong>
-            <p>Try a different search term or clear the filter to see the full list.</p>
+            <p>
+              Try a different search term or clear the filter to see the full
+              list.
+            </p>
           </div>
         ) : null}
 
@@ -761,24 +914,39 @@ export function AdminUsersConsole({ initialData, initialErrorLogData }: AdminUse
                   const busy = saving || blocking || deleting;
 
                   return (
-                    <tr key={user.id} className={dirty ? "is-dirty" : undefined}>
+                    <tr
+                      key={user.id}
+                      className={dirty ? "is-dirty" : undefined}
+                    >
                       <td className="admin-users__user-cell">
                         <strong>{user.fullName || user.email}</strong>
-                        <small className="admin-users__cell-note">{user.email}</small>
-                        <small className="admin-users__cell-note admin-users__mono">{user.clerkUserId}</small>
+                        <small className="admin-users__cell-note">
+                          {user.email}
+                        </small>
+                        <small className="admin-users__cell-note admin-users__mono">
+                          {user.clerkUserId}
+                        </small>
                       </td>
                       <td className="admin-users__plan-cell">
                         <select
                           className="admin-users__inline-select"
                           value={draft.planTier}
-                          onChange={(event) => updateDraft(user.id, { planTier: event.target.value as "free" | "pro" })}
+                          onChange={(event) =>
+                            updateDraft(user.id, {
+                              planTier: event.target.value as "free" | "pro",
+                            })
+                          }
                           aria-label={`${user.email} plan tier`}
                         >
                           <option value="free">Free</option>
                           <option value="pro">Pro</option>
                         </select>
                         <small className="admin-users__cell-note">
-                          {user.planTierLocked ? "Locked manually" : "Billing synced"} · {user.billingSubscription?.status ?? "No billing row"}
+                          {user.planTierLocked
+                            ? "Locked manually"
+                            : "Billing synced"}{" "}
+                          ·{" "}
+                          {user.billingSubscription?.status ?? "No billing row"}
                         </small>
                       </td>
                       <td className="admin-users__limits-cell">
@@ -786,7 +954,11 @@ export function AdminUsersConsole({ initialData, initialErrorLogData }: AdminUse
                           className="admin-users__inline-input"
                           inputMode="numeric"
                           value={draft.accountLimit}
-                          onChange={(event) => updateDraft(user.id, { accountLimit: event.target.value })}
+                          onChange={(event) =>
+                            updateDraft(user.id, {
+                              accountLimit: event.target.value,
+                            })
+                          }
                           aria-label={`${user.email} account limit`}
                           placeholder="Accounts"
                         />
@@ -794,7 +966,11 @@ export function AdminUsersConsole({ initialData, initialErrorLogData }: AdminUse
                           className="admin-users__inline-input"
                           inputMode="numeric"
                           value={draft.monthlyUploadLimit}
-                          onChange={(event) => updateDraft(user.id, { monthlyUploadLimit: event.target.value })}
+                          onChange={(event) =>
+                            updateDraft(user.id, {
+                              monthlyUploadLimit: event.target.value,
+                            })
+                          }
                           aria-label={`${user.email} upload limit`}
                           placeholder="Uploads"
                         />
@@ -802,31 +978,60 @@ export function AdminUsersConsole({ initialData, initialErrorLogData }: AdminUse
                           className="admin-users__inline-input"
                           inputMode="numeric"
                           value={draft.transactionLimit}
-                          onChange={(event) => updateDraft(user.id, { transactionLimit: event.target.value })}
+                          onChange={(event) =>
+                            updateDraft(user.id, {
+                              transactionLimit: event.target.value,
+                            })
+                          }
                           aria-label={`${user.email} transaction limit`}
                           placeholder="Rows"
                         />
                       </td>
                       <td className="admin-users__status-cell">
-                        <span className={`admin-users__pill admin-users__pill--${user.planTier}`}>{user.planLabel}</span>
-                        <span className={`admin-users__pill ${user.verified ? "admin-users__pill--success" : "admin-users__pill--warn"}`}>
-                          {user.verified ? "Email verified" : "Email unverified"}
+                        <span
+                          className={`admin-users__pill admin-users__pill--${user.planTier}`}
+                        >
+                          {user.planLabel}
                         </span>
-                        {user.isBlocked ? <span className="admin-users__pill admin-users__pill--locked">Blocked</span> : null}
-                        {user.dataWipedAt ? <span className="admin-users__pill admin-users__pill--locked">Deleted</span> : null}
+                        <span
+                          className={`admin-users__pill ${user.verified ? "admin-users__pill--success" : "admin-users__pill--warn"}`}
+                        >
+                          {user.verified
+                            ? "Email verified"
+                            : "Email unverified"}
+                        </span>
                         {user.isBlocked ? (
-                          <small className="admin-users__cell-note" title={user.blockedReason ?? undefined}>
-                            {user.blockedReason ?? "No reason recorded"} · {formatDate(user.blockedAt)}
+                          <span className="admin-users__pill admin-users__pill--locked">
+                            Blocked
+                          </span>
+                        ) : null}
+                        {user.dataWipedAt ? (
+                          <span className="admin-users__pill admin-users__pill--locked">
+                            Deleted
+                          </span>
+                        ) : null}
+                        {user.isBlocked ? (
+                          <small
+                            className="admin-users__cell-note"
+                            title={user.blockedReason ?? undefined}
+                          >
+                            {user.blockedReason ?? "No reason recorded"} ·{" "}
+                            {formatDate(user.blockedAt)}
                           </small>
                         ) : null}
-                        {user.attentionLevel !== "low" ? <small className="admin-users__cell-note">{user.attentionFlags[0] ?? "Needs attention"}</small> : null}
+                        {user.attentionLevel !== "low" ? (
+                          <small className="admin-users__cell-note">
+                            {user.attentionFlags[0] ?? "Needs attention"}
+                          </small>
+                        ) : null}
                       </td>
                       <td className="admin-users__usage-cell">
                         <strong>
                           {user.workspaceCount} ws · {user.accountCount} acct
                         </strong>
                         <small className="admin-users__cell-note">
-                          {user.transactionCount.toLocaleString()} transactions · {user.monthlyUploads} uploads
+                          {user.transactionCount.toLocaleString()} transactions
+                          · {user.monthlyUploads} uploads
                         </small>
                       </td>
                       <td className="admin-users__activity-cell">
@@ -837,7 +1042,9 @@ export function AdminUsersConsole({ initialData, initialErrorLogData }: AdminUse
                       </td>
                       <td>
                         <div className="admin-users__row-actions">
-                          <Link href={`/admin/users/${user.id}/plan`}>Plan &amp; Access</Link>
+                          <Link href={`/admin/users/${user.id}/plan`}>
+                            Plan &amp; Access
+                          </Link>
                           <button
                             className={`button button-small ${dirty ? "button-primary" : "button-secondary"}`}
                             type="button"
@@ -852,20 +1059,39 @@ export function AdminUsersConsole({ initialData, initialErrorLogData }: AdminUse
                             onClick={() => changeUserAccess(user)}
                             disabled={busy}
                           >
-                            {blocking ? "Updating..." : user.isBlocked ? "Unblock" : "Block"}
+                            {blocking
+                              ? "Updating..."
+                              : user.isBlocked
+                                ? "Unblock"
+                                : "Block"}
                           </button>
                           <details className="admin-users__data-actions">
                             <summary className="button button-secondary button-small">
                               {deleting ? "Deleting..." : "Data"}
                             </summary>
                             <div className="admin-users__data-actions-menu">
-                              <button type="button" onClick={() => deleteUserData(user, "transactions")} disabled={busy}>
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  deleteUserData(user, "transactions")
+                                }
+                                disabled={busy}
+                              >
                                 Delete Transaction Data
                               </button>
-                              <button type="button" onClick={() => deleteUserData(user, "accounts")} disabled={busy}>
+                              <button
+                                type="button"
+                                onClick={() => deleteUserData(user, "accounts")}
+                                disabled={busy}
+                              >
                                 Delete Accounts
                               </button>
-                              <button className="is-danger" type="button" onClick={() => deleteUserData(user, "all")} disabled={busy}>
+                              <button
+                                className="is-danger"
+                                type="button"
+                                onClick={() => deleteUserData(user, "all")}
+                                disabled={busy}
+                              >
                                 Delete All Data
                               </button>
                             </div>
@@ -887,7 +1113,8 @@ export function AdminUsersConsole({ initialData, initialErrorLogData }: AdminUse
               <h3>Running error log</h3>
             </div>
             <p className="panel-muted">
-              {errorLogData.totalCount} captured error{errorLogData.totalCount === 1 ? "" : "s"}
+              {errorLogData.totalCount} captured error
+              {errorLogData.totalCount === 1 ? "" : "s"}
             </p>
           </div>
 
@@ -901,19 +1128,34 @@ export function AdminUsersConsole({ initialData, initialErrorLogData }: AdminUse
                 onChange={(event) => setErrorQueryInput(event.target.value)}
               />
             </label>
-            <button className="button button-secondary" type="button" onClick={() => setErrorRefreshNonce((value) => value + 1)}>
+            <button
+              className="button button-secondary"
+              type="button"
+              onClick={() => setErrorRefreshNonce((value) => value + 1)}
+            >
               Refresh logs
             </button>
           </div>
 
-          {errorLogError ? <div className="admin-users__notice admin-users__notice--error">{errorLogError}</div> : null}
+          {errorLogError ? (
+            <div className="admin-users__notice admin-users__notice--error">
+              {errorLogError}
+            </div>
+          ) : null}
 
-          {errorLoading ? <div className="admin-users__loading" role="status">Loading error logs...</div> : null}
+          {errorLoading ? (
+            <div className="admin-users__loading" role="status">
+              Loading error logs...
+            </div>
+          ) : null}
 
           {!errorLoading && errorLogData.logs.length === 0 ? (
             <div className="empty-state">
               <strong>No error logs yet.</strong>
-              <p>When production errors are captured, they will appear here with time, build, and request context.</p>
+              <p>
+                When production errors are captured, they will appear here with
+                time, build, and request context.
+              </p>
             </div>
           ) : null}
 
@@ -942,17 +1184,31 @@ export function AdminUsersConsole({ initialData, initialErrorLogData }: AdminUse
                       </td>
                       <td>
                         <strong>{log.message}</strong>
-                        {log.name ? <small className="admin-users__cell-note">{log.name}</small> : null}
+                        {log.name ? (
+                          <small className="admin-users__cell-note">
+                            {log.name}
+                          </small>
+                        ) : null}
                       </td>
                       <td>
-                        <strong className="admin-users__mono">{log.buildId}</strong>
-                        {log.deploymentId ? <small className="admin-users__mono">{log.deploymentId}</small> : null}
+                        <strong className="admin-users__mono">
+                          {log.buildId}
+                        </strong>
+                        {log.deploymentId ? (
+                          <small className="admin-users__mono">
+                            {log.deploymentId}
+                          </small>
+                        ) : null}
                       </td>
                       <td>{log.environment}</td>
                       <td>{log.source}</td>
                       <td>
                         <strong>{log.route ?? "—"}</strong>
-                        {log.method ? <small className="admin-users__cell-note">{log.method}</small> : null}
+                        {log.method ? (
+                          <small className="admin-users__cell-note">
+                            {log.method}
+                          </small>
+                        ) : null}
                       </td>
                       <td>{log.statusCode ?? "—"}</td>
                       <td>{log.userId ?? log.clerkUserId ?? "—"}</td>
@@ -985,7 +1241,11 @@ export function AdminUsersConsole({ initialData, initialErrorLogData }: AdminUse
             <button
               className="button button-secondary button-small"
               type="button"
-              onClick={() => setErrorPage((value) => Math.min(value + 1, errorLogData.totalPages))}
+              onClick={() =>
+                setErrorPage((value) =>
+                  Math.min(value + 1, errorLogData.totalPages),
+                )
+              }
               disabled={errorPage >= errorLogData.totalPages || errorLoading}
             >
               Next

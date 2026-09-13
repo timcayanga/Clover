@@ -1,3 +1,4 @@
+import { assertTrustedRequestOrigin } from "@/lib/request-security";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { Prisma } from "@prisma/client";
@@ -324,11 +325,11 @@ const buildParserImprovementFeedback = (params: {
   );
 };
 
-export async function GET(_request: Request, { params }: { params: Promise<{ runId: string }> }) {
+export async function GET(request: Request, { params }: { params: Promise<{ runId: string }> }) {
   try {
     await requireAdminAuth();
     const { runId } = await params;
-    const pdfJsBaseUrl = new URL(_request.url).origin;
+    const pdfJsBaseUrl = new URL(request.url).origin;
 
     const run = await prisma.dataQaRun.findFirst({
       where: getCurrentProductionRunWhere(runId),
@@ -480,7 +481,8 @@ export async function GET(_request: Request, { params }: { params: Promise<{ run
 
 export async function PATCH(request: Request, { params }: { params: Promise<{ runId: string }> }) {
   try {
-    await requireAdminAuth();
+    assertTrustedRequestOrigin(request);
+    await requireAdminAuth("operate");
     const { runId } = await params;
     const pdfJsBaseUrl = new URL(request.url).origin;
     const payload = updateSchema.parse(await request.json());
@@ -680,7 +682,8 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ ru
 
 export async function POST(request: Request, { params }: { params: Promise<{ runId: string }> }) {
   try {
-    await requireAdminAuth();
+    assertTrustedRequestOrigin(request);
+    await requireAdminAuth("operate");
     const { runId } = await params;
     const pdfJsBaseUrl = new URL(request.url).origin;
     const payload = reparseSchema.parse(await request.json());

@@ -17,7 +17,7 @@ const createTemporaryPassword = () => `Clover!${randomBytes(18).toString("base64
 export async function POST(request: Request, context: { params: Promise<{ userId: string }> }) {
   try {
     assertTrustedRequestOrigin(request);
-    const admin = await requireAdminAuth();
+    const admin = await requireAdminAuth("security");
     const { userId } = await context.params;
     schema.parse(await request.json());
     const user = await prisma.user.findFirst({

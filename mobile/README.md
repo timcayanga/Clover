@@ -1,15 +1,15 @@
-# Clover mobile · first native preview
+# Clover mobile preview
 
 React Native + Expo SDK 57, with one app implementation for iOS and Android.
 This is **not a WebView wrapper** and does not replace the existing Next.js site.
-It is an early vertical slice, not a store-ready or feature-complete release.
+Store distribution and live billing verification remain pending.
 
 ## What works in this source build
 
 - Native Home, Transactions, Add, Account, and full-page transaction detail screens.
 - Search and paginated transaction lists; names, descriptions, and tags can be edited.
 - Explicit sample mode with fictional data. Sample edits stay in memory and never call the API.
-- Clerk hosted sign-in integration and encrypted native session-token storage.
+- Custom Clerk sign-in/sign-up, email verification, password reset, native additional verification, and encrypted session-token storage.
 - Explicit Profile selection and account-level Free/Pro status from the shared backend.
 - Add opens Manual with Ask Clover and Upload tabs. Drafts remain in memory while switching.
 - Ask Clover prepares transaction suggestions using the existing Adviser backend; Review opens the native Manual form, and Add transaction explicitly saves it.
@@ -17,11 +17,12 @@ It is an early vertical slice, not a store-ready or feature-complete release.
 - Existing Clover import processing, visible-completion status, and saved-import recovery.
 - Safe areas, keyboard-aware forms, scalable text, screen-reader labels, pull-to-refresh, and a background privacy cover.
 
-The Adviser tab is explicitly marked unfinished. Accounts, Recurring, Reports,
-Investments, Budgets, Goals, Circles, Split Bills, native onboarding, full financial
-field editing, and final import confirmation are not implemented natively yet.
-Use the regular website for those workflows. Nothing here grants free Pro or
-pretends a payment succeeded.
+Native screens also cover Accounts, Recurring, Reports, Investments, Budgets,
+Goals, Circles, Split Bills, onboarding, review, and Settings. The current parity
+work adds Profile/category management, photo and connected-account controls,
+security, exports, shared preferences, and prepared store billing. See
+[verification status](../docs/native-admin-parity-work.md) for the limits of the
+checks; source coverage does not imply every device flow has passed.
 
 ## Preview now (no store memberships needed)
 
@@ -82,14 +83,12 @@ Requirements for this version:
 
 - iOS: full Xcode 26.4+, an iOS Simulator runtime, CocoaPods 1.15.2+.
   Clerk's native dependency raises this app's minimum iOS target to **17.0**.
-- Android: Android Studio or equivalent SDK tooling, JDK 17+, SDK platform 36,
-  platform-tools, and an emulator system image. Set `ANDROID_HOME`.
-- This Mac currently lacks those full toolchains. Native project generation and
-  bundle export are verified; native compilation, camera/picker behavior, and
-  installed-app testing are **not yet verified**.
+- Android: Android Studio or equivalent SDK tooling, JDK 17, SDK platform 36,
+  platform-tools, and an emulator system image. Set `ANDROID_HOME` and `JAVA_HOME` explicitly. The bundled Java 25 triggered CMake/prefab configuration errors in this task; use the installed Java 17 toolchain.
+- Toolchains are available on the development Mac. See the verification ledger for installed-build and device-test results.
 - Run one emulator at a time on this 8 GB Mac. Keep Metro at two workers if needed.
 - `npm run doctor` checks source dependencies and, once native directories exist,
-  local toolchains too; it will flag the missing CocoaPods installation on this Mac.
+  local toolchains too. CocoaPods is installed on the current development Mac.
 
 ## Connect an existing staging account
 
@@ -101,8 +100,7 @@ Requirements for this version:
    changes the authentication surface and has not been automatically enabled.
 4. After authenticated integration testing, set server-only
    `CLOVER_MOBILE_API_ENABLED=true` on staging. It defaults off everywhere.
-5. Sign in with an existing non-Admin test account. Complete website onboarding
-   first; choose the intended Profile in the app.
+5. Sign in with a non-Admin test account. Native onboarding now supports experience, currency, and first upload/skip; choose the intended Profile in the app.
 
 The gateway rejects the web server's `local` fixture environment, which has
 development-only automatic Pro behavior. Use the isolated staging deployment for
@@ -110,9 +108,7 @@ native account tests rather than pointing the app at a guest-enabled local serve
 
 Preview identifiers: `ph.clover.preview` on both platforms, scheme
 `clover-preview`. These are development identifiers, not reserved store listings.
-Native Apple Sign In entitlements are disabled before developer enrollment;
-hosted authentication uses the methods configured in Clerk. Configure and test
-the required production sign-in methods before store submission.
+Native Apple Sign In entitlements remain disabled in the preview configuration. Register the final app identifier and configure/test the required Apple and Google sign-in methods in Clerk before store submission.
 
 ## API and security boundary
 
@@ -149,18 +145,18 @@ from Clover so an app restart does not require re-uploading. Passwords are not
 stored persistently. Native background file transfer and full offline editing are
 not implemented. A password error may require returning to the website in this preview.
 
-## Pro and future RevenueCat integration
+## Pro and store integration preparation
 
-The backend's existing `getProAccess` determines native access, including paid
-subscriptions, cancellation periods, Admin overrides, and complimentary grants.
-Mobile cannot set its own entitlement. Native paid purchases are **disabled**;
-there is no Paddle/PayMongo checkout inside the app.
+The RevenueCat adapter uses the signed-in Clerk user ID. The server independently
+verifies product, store, environment, ownership, and expiration before granting
+Pro. Web subscriptions, Admin overrides, and temporary grants remain part of the
+effective entitlement calculation. Client purchase results cannot grant access.
 
-When RevenueCat is ready, add an SDK adapter keyed to the same Clerk user ID and
-verified webhooks feeding a multi-provider backend subscription ledger. The
-backend must handle idempotent events, refunds, revocations, renewals, restore
-purchases, and overlapping grants before enabling sales. RevenueCat is not needed
-to develop or run this preview and has not been configured here.
+Purchasing remains disabled until the store apps, products, RevenueCat project,
+public platform keys, server key, and authenticated webhook are configured.
+See [store setup and sandbox acceptance steps](../docs/mobile-store-setup.md).
+Live purchases, restores, refunds, and cross-device store access require that
+external setup and have not been verified.
 
 ## Release checklist (not completed)
 

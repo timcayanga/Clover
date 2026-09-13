@@ -5,7 +5,7 @@ import { revalidateTag } from "next/cache";
 import { verifyToken, clerkClient } from "@clerk/nextjs/server";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
-import { isAdminOnlyUserId, isConfiguredAdminEmail } from "@/lib/admin-access";
+import { isAdminOnlyUserId, isConfiguredAdminEmail, isAssignedAdmin } from "@/lib/admin-access";
 import { assertWorkspaceAccess } from "@/lib/workspace-access";
 import { withMobileRequestContext } from "@/lib/mobile-request-context";
 import {
@@ -61,7 +61,7 @@ async function handle(
     return reply({ error: "Your session expired. Please sign in again." }, 401);
   }
   try {
-    if (isAdminOnlyUserId(userId) || (await isConfiguredAdminEmail(userId)))
+    if (isAdminOnlyUserId(userId) || (await isConfiguredAdminEmail(userId)) || (await isAssignedAdmin(userId)))
       return reply({ error: "Use the Admin website for this account." }, 403);
     if (operation === "onboarding") {
       const body = z.object({ experience: z.enum(["beginner", "comfortable", "advanced"]), currency: z.string().regex(/^[A-Z]{3}$/), locale: z.string().min(2).max(40).default("en-PH"), timeZone: z.string().min(1).max(100).default("Asia/Manila") }).strict().parse(await request.json());
@@ -96,6 +96,22 @@ async function handle(
         },
         409,
       );
+    if (operation === "store-billing") {
+      const { storeBillingConfig, syncStoreAccess } = await import("@/lib/store-access");
+      const config = storeBillingConfig();
+      if (request.method === "POST") {
+        z.object({}).strict().parse(await request.json());
+        if (!config.enabled) return reply({ error: "Store purchases are not configured yet." }, 503);
+        await syncStoreAccess(user.id);
+      }
+      const access = await getProAccess(user.id);
+      return reply({ available: config.enabled && !(access.user.planTierLocked && access.planTier === "free"), appUserId: userId, entitlementId: config.entitlementId, productIds: config.products, planTier: access.planTier, accessEndsAt: access.accessEndsAt, renewing: access.renewing });
+    }
+    if (operation === "settings-preferences") {
+      const { getAppPreferences, updateAppPreferences } = await import("@/lib/app-preferences");
+      const preferences = request.method === "GET" ? await getAppPreferences(user.id) : await updateAppPreferences(user.id, await request.json());
+      return reply({ preferences });
+    }
     if (operation === "settings-account") {
       if (request.method === "GET") return reply({ firstName: user.firstName, lastName: user.lastName, email: user.email });
       const data = z.object({ firstName: z.string().trim().max(80), lastName: z.string().trim().max(80) }).strict().parse(await request.json());
@@ -103,6 +119,18 @@ async function handle(
       revalidateTag("clover-clerk-user");
       const updated = await prisma.user.update({ where: { id: user.id }, data, select: { firstName: true, lastName: true, email: true } });
       return reply(updated);
+    }
+    if (["settings-data", "settings-export", "settings-delete-account", "settings-wipe-data"].includes(operation)) {
+      const { handleMobileDataSettings } = await import("@/lib/mobile-data-settings");
+      const result = await handleMobileDataSettings(request, userId, operation, path[2]);
+      const headers = new Headers(result.headers);
+      for (const [key, value] of Object.entries(mobileResponseHeaders)) headers.set(key, value);
+      return new Response(result.body, { status: result.status, headers });
+    }
+    if (["settings-profiles", "settings-profile", "settings-categories"].includes(operation)) {
+      const { handleMobileSettings } = await import("@/lib/mobile-settings");
+      const result = await handleMobileSettings(request, userId, operation, path[2]);
+      return reply(await result.json(), result.status);
     }
     if (operation === "settings-regional") {
       return await withMobileRequestContext(userId, request, async () => {
@@ -113,16 +141,18 @@ async function handle(
       });
     }
     if (operation === "bootstrap") {
-      const [profiles, access] = await Promise.all([
+      const [profiles, access, preferences] = await Promise.all([
         prisma.workspace.findMany({
           where: { userId: user.id },
           select: { id: true, name: true },
           orderBy: { createdAt: "asc" },
         }),
         getProAccess(user.id),
+        (await import("@/lib/app-preferences")).getAppPreferences(user.id),
       ]);
       return reply({
         apiVersion: 1,
+        preferences,
         needsOnboarding: !user.onboardingCompletedAt,
         currencyChoices,
         firstName: user.firstName,
@@ -132,7 +162,7 @@ async function handle(
           fullFeatureAccess: hasFullFeatureAccess(access.planTier),
           accessEndsAt: access.accessEndsAt,
           renewing: access.renewing,
-          nativePurchasesAvailable: false,
+          nativePurchasesAvailable: (await import("@/lib/store-access")).storeBillingConfig().enabled && !(access.user.planTierLocked && access.planTier === "free"),
         },
       });
     }

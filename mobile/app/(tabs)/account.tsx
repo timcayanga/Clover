@@ -1,8 +1,18 @@
+import { SettingsPlan } from "../../src/settings-plan";
 import { Linking, Text } from "react-native";
 import { router } from "expo-router";
 import { useState } from "react";
 import { useSession } from "../../src/session";
-import { Body, Button, Card, Heading, Notice, Screen, dateLabel, useTheme } from "../../src/ui";
+import {
+  Body,
+  Button,
+  Card,
+  Heading,
+  Notice,
+  Screen,
+  dateLabel,
+  useTheme,
+} from "../../src/ui";
 export default function Account() {
   const { colors, styles, dark } = useTheme();
   const session = useSession();
@@ -11,35 +21,17 @@ export default function Account() {
   return (
     <Screen>
       <Heading>Your Clover account</Heading>
-      <Button title="Settings" secondary onPress={() => router.push("/settings")} />
-      <Button title="Notifications" secondary onPress={() => router.push("/notifications")} />
-      <Card>
-        <Text style={{ fontSize: 24, fontWeight: "700", color: colors.teal }}>
-          {access?.planTier === "pro" ? "Clover Pro" : "Clover Free"}
-        </Text>
-        <Body>
-          {session.demo
-            ? "This is a sample Free account."
-            : "Your plan belongs to your Clover account, not this device."}
-        </Body>
-        {access?.accessEndsAt ? (
-          <Body>Access through {dateLabel(access.accessEndsAt)}</Body>
-        ) : null}
-        {access?.renewing ? (
-          <Body>
-            Your subscription renews through its original billing provider.
-          </Body>
-        ) : null}
-        <Body>
-          Purchases are unavailable in this preview. Existing Pro access is
-          recognized when you sign in.
-        </Body>
-        <Button
-          title="Refresh plan status"
-          secondary
-          onPress={session.refresh}
-        />
-      </Card>
+      <Button
+        title="Settings"
+        secondary
+        onPress={() => router.push("/settings")}
+      />
+      <Button
+        title="Notifications"
+        secondary
+        onPress={() => router.push("/notifications")}
+      />
+      <SettingsPlan />
       <Card>
         <Text
           accessibilityRole="header"
@@ -90,7 +82,7 @@ export default function Account() {
             .catch(() => setError("Unable to sign out. Please try again."));
         }}
       />
-      <Body>Clover Preview 0.1.0 · Native purchases disabled</Body>
+      <Body>Clover Preview 0.1.0</Body>
     </Screen>
   );
 }

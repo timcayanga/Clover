@@ -23,11 +23,16 @@ export async function apiRequest<T>(
   token: string,
   path: string,
   options: RequestInit = {},
+  format: "json" | "text" = "json",
 ): Promise<T> {
   const controller = new AbortController();
   const timer = setTimeout(
     () => controller.abort(),
-    path.includes("/process") || path.startsWith("split-bill-receipts/") || path.startsWith("adviser/chat") ? 120000 : 25000,
+    path.includes("/process") ||
+      path.startsWith("split-bill-receipts/") ||
+      path.startsWith("adviser/chat")
+      ? 120000
+      : 25000,
   );
   try {
     const url = new URL(`${apiBase()}/api/mobile/v1/${path}`);
@@ -44,6 +49,11 @@ export async function apiRequest<T>(
       credentials: "omit",
       cache: "no-store",
     });
+    if (response.ok && format === "text") {
+      if (!response.headers.get("content-type")?.includes("text/csv"))
+        throw new Error("Unexpected export format.");
+      return (await response.text()) as T;
+    }
     const data = await response.json().catch(() => null);
     if (!response.ok)
       throw new ApiError(
@@ -56,7 +66,9 @@ export async function apiRequest<T>(
   } catch (error) {
     if (controller.signal.aborted)
       throw new Error(
-        path.includes("/process") ? "The connection timed out. Check the import status before trying the upload again." : "The connection timed out. Check your connection and try again.",
+        path.includes("/process")
+          ? "The connection timed out. Check the import status before trying the upload again."
+          : "The connection timed out. Check your connection and try again.",
       );
     throw error;
   } finally {

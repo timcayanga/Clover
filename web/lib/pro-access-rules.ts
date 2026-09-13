@@ -18,6 +18,7 @@ export type AccessInput = {
     interval: string | null;
     paidThrough: Date | null;
   } | null;
+  storeAccess?: { expiresAt: Date | null; renewing: boolean } | null;
   grants: { startsAt: Date; endsAt: Date; revokedAt: Date | null }[];
 };
 
@@ -26,17 +27,20 @@ export function calculateProAccess(input: AccessInput, now = new Date()) {
     (g) => !g.revokedAt && g.startsAt <= now && g.endsAt > now,
   );
   const paidThrough = input.subscription?.paidThrough ?? null;
+  const storePaid = Boolean(input.storeAccess?.expiresAt && input.storeAccess.expiresAt > now);
   const renewing =
+    (storePaid && input.storeAccess!.renewing) ||
     input.subscription?.status === "active" &&
     Boolean(input.subscription.interval);
-  const paid = renewing || Boolean(paidThrough && paidThrough > now);
+  const paid = storePaid || renewing || Boolean(paidThrough && paidThrough > now);
   const pro = input.planTierLocked
     ? input.planTier === "pro"
     : paid || activeGrants.length > 0;
-  let end =
+  let end: Date | null =
     paidThrough && paidThrough > now
       ? paidThrough
       : (activeGrants[0]?.endsAt ?? null);
+  if (storePaid && (!end || input.storeAccess!.expiresAt! > end)) end = input.storeAccess!.expiresAt;
   // Include only contiguous grants; a future, disconnected grant isn't current access.
   for (const grant of [...input.grants]
     .filter((g) => !g.revokedAt)

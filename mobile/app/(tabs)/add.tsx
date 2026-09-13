@@ -5,7 +5,7 @@ import * as Crypto from "expo-crypto";
 import { File } from "expo-file-system";
 import { router, useFocusEffect, useLocalSearchParams } from "expo-router";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Platform, View, Pressable, Text, Image } from "react-native";
+import { Alert, Platform, View, Pressable, Text, Image } from "react-native";
 import {
   Choices,
   ManualTransaction,
@@ -84,9 +84,40 @@ export default function Add() {
       setError(problem);
       return;
     }
-    const id = Crypto.randomUUID();
-    session.registerUpload(id, file);
-    router.push({ pathname: "/import/[id]", params: { id } });
+    const preferred =
+      session.data?.preferences?.defaults.defaultImportProfileId;
+    const target =
+      session.data?.profiles.find((p) => p.id === preferred) ??
+      session.data?.profiles.find((p) => p.id === session.profileId);
+    if (!target) {
+      removeUploadCopy(file.uri);
+      setError("Choose a Profile before importing.");
+      return;
+    }
+    const continueImport = () => {
+      const id = Crypto.randomUUID();
+      session.setProfileId(target.id);
+      session.registerUpload(id, file, target.id);
+      router.push({ pathname: "/import/[id]", params: { id } });
+    };
+    if (
+      target.id !== session.profileId &&
+      session.data?.preferences?.review.askBeforeDifferentProfile !== false
+    ) {
+      Alert.alert(
+        "Import into another Profile?",
+        `Your default import Profile is ${target.name}. Import this file there?`,
+        [
+          {
+            text: "Cancel",
+            style: "cancel",
+            onPress: () => removeUploadCopy(file.uri),
+          },
+          { text: `Use ${target.name}`, onPress: continueImport },
+        ],
+        { cancelable: false },
+      );
+    } else continueImport();
   };
   const choose = async (source: "file" | "library" | "camera") => {
     if (busy) return;

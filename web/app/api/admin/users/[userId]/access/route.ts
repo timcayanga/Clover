@@ -23,7 +23,7 @@ const schema = z.discriminatedUnion("action", [
 export async function POST(request: Request, context: { params: Promise<{ userId: string }> }) {
   try {
     assertTrustedRequestOrigin(request);
-    const admin = await requireAdminAuth();
+    const admin = await requireAdminAuth("security");
     const { userId } = await context.params;
     const payload = schema.parse(await request.json());
     const user = await prisma.user.findFirst({

@@ -5,7 +5,6 @@ import { isLocalDevHost, requireAuth } from "@/lib/auth";
 import { assertWorkspaceAccess } from "@/lib/workspace-access";
 import { capturePostHogServerEvent } from "@/lib/analytics";
 import { assertTrustedRequestOrigin } from "@/lib/request-security";
-import { buildVisibleWorkspaceTransactionWhere } from "@/lib/transaction-query";
 
 export const dynamic = "force-dynamic";
 
@@ -20,23 +19,6 @@ const resolveWorkspaceRouteUserId = async () => {
 
   const { userId } = await requireAuth();
   return userId;
-};
-
-const isDefaultPersonalWorkspace = async (workspace: { id: string; userId: string; type: string }) => {
-  if (workspace.type !== "personal") {
-    return false;
-  }
-
-  const defaultWorkspace = await prisma.workspace.findFirst({
-    where: {
-      userId: workspace.userId,
-      type: "personal",
-    },
-    orderBy: [{ createdAt: "asc" }],
-    select: { id: true },
-  });
-
-  return defaultWorkspace?.id === workspace.id;
 };
 
 export async function PATCH(request: Request, { params }: { params: Promise<{ workspaceId: string }> }) {
@@ -85,58 +67,18 @@ export async function DELETE(request: Request, { params }: { params: Promise<{ w
 
     const accessibleWorkspace = await assertWorkspaceAccess(userId, workspaceId);
 
-    if (await isDefaultPersonalWorkspace(accessibleWorkspace)) {
-      return NextResponse.json({ error: "The Personal profile is required and cannot be removed." }, { status: 400 });
-    }
-
-    const [workspace, nonCashAccountCount, transactionCount, importFileCount, documentImportCount, statementCheckpointCount, nonSystemCategoryCount] = await Promise.all([
-      prisma.workspace.findUnique({
-        where: { id: workspaceId },
-        select: {
-          id: true,
-        },
-      }),
-      prisma.account.count({
-        where: {
-          workspaceId,
-          type: { not: "cash" },
-        },
-      }),
-      prisma.transaction.count({
-        where: buildVisibleWorkspaceTransactionWhere(workspaceId),
-      }),
-      prisma.importFile.count({
-        where: { workspaceId },
-      }),
-      prisma.documentImport.count({
-        where: { workspaceId },
-      }),
-      prisma.accountStatementCheckpoint.count({
-        where: { workspaceId },
-      }),
-      prisma.category.count({
-        where: {
-          workspaceId,
-          isSystem: false,
-        },
-      }),
-    ]);
-
-    if (!workspace) {
-      return NextResponse.json({ error: "Profile not found" }, { status: 404 });
-    }
-
-    if (nonCashAccountCount > 0 || transactionCount > 0 || importFileCount > 0 || documentImportCount > 0 || statementCheckpointCount > 0 || nonSystemCategoryCount > 0) {
-      return NextResponse.json(
-        {
-          error: "Profiles with imported or confirmed data cannot be removed yet. Remove the data first, then try again.",
-        },
-        { status: 400 }
-      );
-    }
-
-    await prisma.workspace.delete({
-      where: { id: workspaceId },
+    await prisma.$transaction(async tx => {
+      // Lock the parent and starter accounts before checking emptiness. Inserts
+      // referencing either parent wait, so they cannot be cascaded by a race.
+      await tx.$queryRaw`SELECT "id" FROM "Workspace" WHERE "id" = ${workspaceId} FOR UPDATE`;
+      await tx.$queryRaw`SELECT "id" FROM "Account" WHERE "workspaceId" = ${workspaceId} FOR UPDATE`;
+      const original = await tx.workspace.findFirst({ where: { userId: accessibleWorkspace.userId, type: "personal" }, orderBy: [{ createdAt: "asc" }, { id: "asc" }], select: { id: true } });
+      if (original?.id === workspaceId) throw new Error("The Personal profile is required and cannot be removed.");
+      const workspace = await tx.workspace.findUniqueOrThrow({ where: { id: workspaceId }, include: { _count: true, accounts: true, categories: { select: { isSystem: true } } } });
+      const populated = Object.entries(workspace._count).some(([key, count]) => !["accounts", "categories", "auditLogs"].includes(key) && count > 0);
+      const changedAccount = workspace.accounts.some(account => account.type !== "cash" || account.name !== "Cash" || account.source !== "manual" || account.nameCustomized || account.institutionCustomized || account.logoCustomized || Number(account.balance ?? 0) !== 0 || account.accountNumber || account.creditLimit || account.investmentQuantity);
+      if (populated || changedAccount || workspace.categories.some(category => !category.isSystem)) throw new Error("Profiles with financial records, planning data, connections or custom categories cannot be removed. Remove that data first.");
+      await tx.workspace.delete({ where: { id: workspaceId } });
     });
 
     void capturePostHogServerEvent("workspace_deleted", userId, {
@@ -145,7 +87,7 @@ export async function DELETE(request: Request, { params }: { params: Promise<{ w
 
     return NextResponse.json({ ok: true });
   } catch (error) {
-    const message = error instanceof Error && error.message === "WORKSPACE_NOT_FOUND" ? "Profile not found" : "Unable to remove profile";
+    const message = error instanceof Error && error.message === "WORKSPACE_NOT_FOUND" ? "Profile not found" : error instanceof Error && /^(The Personal profile|Profiles with)/.test(error.message) ? error.message : "Unable to remove profile";
     const status = error instanceof Error && error.message === "WORKSPACE_NOT_FOUND" ? 404 : 400;
 
     return NextResponse.json({ error: message }, { status });

@@ -1,11 +1,14 @@
 import { Prisma, type ContactInquiry, type ContactInquiryStatus } from "@prisma/client";
-import { getAdminDataEnvironment } from "@/lib/admin";
+import { isConfiguredAdminEmail } from "@/lib/admin-access";
+import { getAdminDataEnvironment, isAdminUserId } from "@/lib/admin";
 import { getDeploymentEnvironment } from "@/lib/deployment-environment";
 import { prisma } from "@/lib/prisma";
 
 export const contactInquiryStatuses = ["open", "in_progress", "responded", "closed"] as const satisfies readonly ContactInquiryStatus[];
 
 export type ContactInquiryFilters = {
+  queue?: string;
+  actorId?: string;
   query?: string;
   status?: ContactInquiryStatus | "all";
   page?: number;
@@ -13,6 +16,9 @@ export type ContactInquiryFilters = {
 };
 
 export type ContactInquiryUpdateInput = {
+  assignedTo?: string | null;
+  priority?: string;
+  snoozedUntil?: Date | null;
   status?: ContactInquiryStatus;
   adminReplySubject?: string | null;
   adminReplyBody?: string | null;
@@ -129,6 +135,9 @@ export async function getAdminContactInquiries(filters: ContactInquiryFilters = 
   try {
     const where: Prisma.ContactInquiryWhereInput = {
       environment: getAdminDataEnvironment(),
+      ...(filters.queue === "mine" ? { assignedTo: filters.actorId ?? "" } : {}),
+      ...(filters.queue === "snoozed" ? { snoozedUntil: { gt: new Date() } } : {}),
+      ...(filters.queue === "open" ? { status: { in: ["open", "in_progress"] }, AND: [{ OR: [{ snoozedUntil: null }, { snoozedUntil: { lte: new Date() } }] }] } : {}),
       ...(filters.status && filters.status !== "all" ? { status: filters.status } : {}),
       ...(query
         ? {
@@ -168,20 +177,11 @@ export async function getAdminContactInquiries(filters: ContactInquiryFilters = 
       respondedCount,
     };
   } catch {
-    return {
-      items: [],
-      page,
-      pageSize,
-      total: 0,
-      totalPages: 1,
-      openCount: 0,
-      inProgressCount: 0,
-      respondedCount: 0,
-    };
+    throw new Error("Support storage is unavailable. Please retry.");
   }
 }
 
-export async function updateContactInquiry(id: string, input: ContactInquiryUpdateInput) {
+export async function updateContactInquiry(id: string, input: ContactInquiryUpdateInput, actorId?: string) {
   const contactInquiry = (prisma as unknown as { contactInquiry?: { update: (args: { where: { id: string }; data: Record<string, unknown> }) => Promise<ContactInquiry> } }).contactInquiry;
 
   if (!contactInquiry) {
@@ -196,15 +196,26 @@ export async function updateContactInquiry(id: string, input: ContactInquiryUpda
     throw new Error("Inquiry not found");
   }
 
-  return contactInquiry.update({
+  if (input.assignedTo) {
+    const member = await prisma.adminMember.findUnique({ where: { clerkUserId: input.assignedTo } });
+    if (member ? (!member.active || !["owner", "admin", "support"].includes(member.role)) : !(isAdminUserId(input.assignedTo) || await isConfiguredAdminEmail(input.assignedTo))) throw new Error("Assign this case to an active Owner, Admin, or Support member.");
+  }
+  return prisma.$transaction(async tx => {
+  const updated = await tx.contactInquiry.update({
     where: { id: inquiry.id },
     data: {
       ...(input.status ? { status: input.status } : {}),
+      ...(input.assignedTo !== undefined ? { assignedTo: input.assignedTo } : {}),
+      ...(input.priority !== undefined ? { priority: input.priority } : {}),
+      ...(input.snoozedUntil !== undefined ? { snoozedUntil: input.snoozedUntil } : {}),
       ...(input.adminReplySubject !== undefined ? { adminReplySubject: input.adminReplySubject?.trim() || null } : {}),
       ...(input.adminReplyBody !== undefined ? { adminReplyBody: input.adminReplyBody?.trim() || null } : {}),
       ...(input.adminReplyAt !== undefined ? { adminReplyAt: input.adminReplyAt } : {}),
       ...(input.adminReplyBy !== undefined ? { adminReplyBy: input.adminReplyBy?.trim() || null } : {}),
     },
+  });
+    if (actorId && (input.assignedTo !== undefined || input.priority !== undefined || input.snoozedUntil !== undefined)) await tx.adminSupportMessage.create({ data: { inquiryId: updated.id, actorId, kind: "assignment", body: `Assignment: ${updated.assignedTo ?? "Unassigned"}; priority: ${updated.priority}; snoozed until: ${updated.snoozedUntil?.toISOString() ?? "Not snoozed"}`, status: "internal", idempotencyKey: crypto.randomUUID() } });
+    return updated;
   });
 }
 

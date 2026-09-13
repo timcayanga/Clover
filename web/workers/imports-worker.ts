@@ -1,5 +1,7 @@
-import { Worker } from "bullmq";
-import { enqueueImportProcessing, getImportQueueName, getRedisConnection } from "@/lib/import-queue";
+import { claimAdminRetry } from "@/lib/admin-import-retry";
+import { prisma } from "@/lib/prisma";
+import { Worker, type Job } from "bullmq";
+import { enqueueImportProcessing, getImportQueueName, getAdminImportQueueName, getRedisConnection } from "@/lib/import-queue";
 import {
   countParsedTransactionRows,
   countTransactionsByImportFileCompat,
@@ -27,10 +29,9 @@ const passwordRequiredMessage = "This file is password-protected. Enter the pass
 const isMissingImportFileError = (error: unknown) =>
   error instanceof Error && error.message === "Import file not found";
 
-const worker = new Worker(
-  getImportQueueName(),
-  async (job) => {
+const processJob = async (job: Job) => {
     const { importFileId, actorUserId, password, allowDuplicateStatement, bankName, importMode, pdfJsBaseUrl } = job.data;
+    if (job.data.adminRetry && !await claimAdminRetry(importFileId, job.data.adminRetry.version)) return { skipped: true, reason: "admin_retry_conflict" };
     try {
       return await processImportFileText(importFileId, {
         actorUserId: actorUserId ?? null,
@@ -73,14 +74,15 @@ const worker = new Worker(
       }
       throw error;
     }
-  },
-  {
-    connection,
-    concurrency: 2,
-  }
-);
+};
+const worker = new Worker(getImportQueueName(), processJob, { connection, concurrency: 2 });
+// A separate queue prevents older workers from consuming jobs without the guard.
+const adminWorker = new Worker(getAdminImportQueueName(), processJob, { connection, concurrency: 1 });
 
-worker.on("completed", (job) => {
+const workers = [worker, adminWorker];
+for (const worker of workers) {
+worker.on("completed", (job, result) => {
+  if (result && "skipped" in result && result.skipped) return;
   console.log(`Import job completed: ${job.id}`);
   const importFileId = job.data?.importFileId;
   if (importFileId) {
@@ -101,6 +103,10 @@ worker.on("failed", async (job, error) => {
   console.error("Import job failed", { jobId: job?.id ?? null, error: summarizeErrorForLog(error) });
   const importFileId = job?.data?.importFileId;
   if (importFileId) {
+    if (job?.data?.adminRetry) {
+      await prisma.importFile.updateMany({ where: { id: importFileId, status: "processing", confirmedAt: null, confirmedTransactionsCount: 0, transactions: { none: { reviewStatus: { in: ["confirmed", "edited"] } } } }, data: { status: "failed", processingPhase: "failed", processingMessage: "Support retry failed. Review the import before retrying again." } }).catch(() => null);
+      return;
+    }
     if (isNonFinancialUploadError(error)) {
       await updateImportFileCompat(importFileId, {
         status: "failed",
@@ -205,8 +211,10 @@ worker.on("failed", async (job, error) => {
   }
 });
 
+}
+
 const shutdown = async () => {
-  await worker.close();
+  await Promise.all(workers.map(worker => worker.close()));
   await connection.quit();
   process.exit(0);
 };

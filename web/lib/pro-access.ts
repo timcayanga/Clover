@@ -6,6 +6,7 @@ export async function getProAccess(userId: string) {
     where: { id: userId },
     include: {
       billingSubscription: true,
+      storeAccess: true,
       proGrants: { orderBy: { startsAt: "asc" } },
     },
   });
@@ -36,6 +37,7 @@ export async function refreshProAccess(userId: string) {
   const user = await prisma.user.findUniqueOrThrow({
     where: { id: userId },
     select: {
+      storeAccess: { select: { expiresAt: true, renewing: true } },
       planTier: true,
       planTierLocked: true,
       billingSubscription: {

@@ -48,7 +48,7 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   let actor: string;
   try {
-    actor = (await requireAdminAuth()).userId!;
+    actor = (await requireAdminAuth("operate")).userId!;
   } catch {
     return NextResponse.json(
       { error: "Admin access required." },

@@ -153,7 +153,11 @@ export default function Welcome() {
                     accessibilityLabel={`Illustrative sample: ${slide.label}, ${slide.value}. ${slide.detail}`}
                   >
                     <Image
-                      source={require("../assets/welcome-clover.png")}
+                      source={
+                        i === 1
+                          ? require("../assets/organize/upload-files.png")
+                          : require("../assets/welcome-clover.png")
+                      }
                       style={{ width: 54, height: 54 }}
                     />
                     <Text style={s.label}>{slide.label}</Text>

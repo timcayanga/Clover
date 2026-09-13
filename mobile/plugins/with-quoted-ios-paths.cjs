@@ -33,7 +33,10 @@ ${constantsScript}CLOVER_CONSTANTS_SCRIPT
 function patchXcodeProject(project) {
   for (const phase of Object.values(project.hash.project.objects.PBXShellScriptBuildPhase)) {
     if (!phase || typeof phase !== "object" || !phase.shellScript) continue;
-    const script = JSON.parse(phase.shellScript);
+    // Xcode's parser can return quoted strings containing literal control
+    // characters. JSON requires those characters escaped before decoding.
+    const encoded = phase.shellScript.replace(/[\u0000-\u001f]/g, character => JSON.stringify(character).slice(1, -1));
+    const script = encoded.startsWith('"') ? JSON.parse(encoded) : phase.shellScript;
     const fixed = script.split("\n").flatMap(line => {
       if (!line.startsWith("`") || !line.includes("react-native-xcode.sh")) return [line];
       return [

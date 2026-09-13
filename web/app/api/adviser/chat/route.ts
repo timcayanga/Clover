@@ -903,6 +903,7 @@ export async function POST(request: Request) {
     assertContentLengthWithin(request, MAX_ADVISER_REQUEST_BYTES);
     const { userId } = await getSessionContext();
     const user = await getOrCreateCurrentUser(userId);
+    if (!(await (await import("@/lib/app-preferences")).getAppPreferences(user.id)).privacy.adviserUsesContext) return NextResponse.json({ error: "Adviser access to your finances is off. Enable it in Settings → Data to use this feature." }, { status: 403 });
     try {
       assertRateLimit(`adviser-chat-security:${user.id}`, ADVISER_SECURITY_RATE_LIMIT, 60_000);
     } catch {

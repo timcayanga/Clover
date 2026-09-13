@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { router } from "expo-router";
+import { notificationDestination } from "../src/notification-destination";
+import { router, type Href } from "expo-router";
 import { Linking, Text, View } from "react-native";
 import { apiBase } from "../src/api";
 import { useSession } from "../src/session";
@@ -147,6 +148,11 @@ export default function Notifications() {
               title={item.ctaLabel ?? "View details"}
               secondary
               onPress={() => {
+                const destination = notificationDestination(item.href!);
+                if (destination) {
+                  router.push(destination as Href);
+                  return;
+                }
                 void Linking.openURL(`${apiBase()}${item.href}`).catch(() =>
                   setError("Unable to open details."),
                 );

@@ -1,3 +1,4 @@
+import { claimApproval, finishApproval } from "@/lib/admin-approvals";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { getAdminDataEnvironment, requireAdminAuth } from "@/lib/admin";
@@ -17,14 +18,16 @@ const confirmations = {
 } as const;
 
 const schema = z.object({
+  approvalId: z.string().min(1).optional(),
   scope: z.enum(["transactions", "accounts", "all"]),
   confirmation: z.string(),
 });
 
 export async function DELETE(request: Request, context: { params: Promise<{ userId: string }> }) {
+  let claimedId: string | null = null;
   try {
     assertTrustedRequestOrigin(request);
-    const admin = await requireAdminAuth();
+    const admin = await requireAdminAuth("destructive");
     const { userId } = await context.params;
     const payload = schema.parse(await request.json());
     if (payload.confirmation !== confirmations[payload.scope]) {
@@ -42,6 +45,9 @@ export async function DELETE(request: Request, context: { params: Promise<{ user
     if (!user) {
       return NextResponse.json({ error: "User not found" }, { status: 404 });
     }
+
+    await claimApproval(payload.approvalId, admin.userId, userId, "delete", { scope: payload.scope });
+    claimedId = payload.approvalId!;
 
     const snapshot = await createAdminDataSnapshot(user.id, admin.userId);
     let deletedTransactions = 0;
@@ -91,6 +97,7 @@ export async function DELETE(request: Request, context: { params: Promise<{ user
       target_user_id: user.id,
     });
 
+    await finishApproval(claimedId, true, { snapshotId: snapshot.id });
     return NextResponse.json({
       success: true,
       scope: payload.scope,
@@ -99,6 +106,7 @@ export async function DELETE(request: Request, context: { params: Promise<{ user
       deletedTransactions,
     });
   } catch (error) {
+    if (claimedId) await finishApproval(claimedId, false, { error: "Execution did not complete. Inspect audit and current user data before requesting another action." });
     const message = error instanceof Error ? error.message : "Unable to delete user data.";
     if (message === "FORBIDDEN") return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     if (message === "UNAUTHORIZED") return NextResponse.json({ error: "Unauthorized" }, { status: 401 });

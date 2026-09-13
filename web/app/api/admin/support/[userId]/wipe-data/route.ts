@@ -1,3 +1,4 @@
+import { claimApproval, finishApproval } from "@/lib/admin-approvals";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { getAdminDataEnvironment, requireAdminAuth } from "@/lib/admin";
@@ -10,14 +11,16 @@ import { createAdminDataSnapshot, recordAdminSupportAction } from "@/lib/admin-s
 export const dynamic = "force-dynamic";
 
 const schema = z.object({
+  approvalId: z.string().min(1).optional(),
   confirmation: z.literal("WIPE"),
   reseedStarterWorkspace: z.boolean().default(true),
 });
 
 export async function POST(request: Request, context: { params: Promise<{ userId: string }> }) {
+  let claimedId: string | null = null;
   try {
     assertTrustedRequestOrigin(request);
-    const admin = await requireAdminAuth();
+    const admin = await requireAdminAuth("destructive");
     const { userId } = await context.params;
     const payload = schema.parse(await request.json());
     const user = await prisma.user.findFirst({
@@ -28,6 +31,9 @@ export async function POST(request: Request, context: { params: Promise<{ userId
     if (!user) {
       return NextResponse.json({ error: "User not found" }, { status: 404 });
     }
+
+    await claimApproval(payload.approvalId, admin.userId, userId, "wipe", { reseedStarterWorkspace: payload.reseedStarterWorkspace });
+    claimedId = payload.approvalId!;
 
     const snapshot = await createAdminDataSnapshot(user.id, admin.userId);
 
@@ -51,8 +57,10 @@ export async function POST(request: Request, context: { params: Promise<{ userId
     });
     void capturePostHogServerEvent("account_wiped", user.clerkUserId, { wipe_scope: "admin_support" });
 
+    await finishApproval(claimedId, true, { snapshotId: snapshot.id });
     return NextResponse.json({ success: true, snapshotId: snapshot.id, reseededStarterWorkspace: payload.reseedStarterWorkspace });
   } catch (error) {
+    if (claimedId) await finishApproval(claimedId, false, { error: "Execution did not complete. Inspect audit and current user data before requesting another action." });
     const message = error instanceof Error ? error.message : "Unable to wipe user data.";
     if (message === "FORBIDDEN") return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     if (message === "UNAUTHORIZED") return NextResponse.json({ error: "Unauthorized" }, { status: 401 });

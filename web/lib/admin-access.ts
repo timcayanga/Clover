@@ -1,3 +1,4 @@
+import { prisma } from "@/lib/prisma";
 import { getEnv } from "@/lib/env";
 import { syncClerkUser } from "@/lib/clerk";
 
@@ -32,3 +33,8 @@ export const isConfiguredAdminEmail = async (userId: string) => {
     return false;
   }
 };
+
+export async function isAssignedAdmin(userId: string) {
+  const member = await prisma.adminMember.findUnique({ where: { clerkUserId: userId }, select: { active: true } });
+  return member?.active === true;
+}

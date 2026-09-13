@@ -54,7 +54,7 @@ export async function POST(
 ) {
   try {
     assertTrustedRequestOrigin(request);
-    const admin = await requireAdminAuth();
+    const admin = await requireAdminAuth("entitlements");
     const { userId } = await context.params;
     await target(userId);
     const input = schema.parse(await request.json());

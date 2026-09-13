@@ -1,3 +1,4 @@
+import { assertTrustedRequestOrigin } from "@/lib/request-security";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { adminUserUpdateSchema } from "@/lib/admin-user-payload";
@@ -11,7 +12,8 @@ export const dynamic = "force-dynamic";
 
 export async function PATCH(request: Request, context: { params: Promise<{ userId: string }> }) {
   try {
-    const admin = await requireAdminAuth();
+    assertTrustedRequestOrigin(request);
+    const admin = await requireAdminAuth("operate");
     const { userId } = await context.params;
     const payload = adminUserUpdateSchema.parse(await request.json());
     const updated = await updateAdminUser(userId, payload);

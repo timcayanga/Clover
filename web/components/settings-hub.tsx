@@ -102,7 +102,7 @@ type NotificationPreferences = {
 };
 
 type ImportPreferences = {
-  duplicateHandling: "ask" | "skip" | "replace";
+  duplicateHandling: "ask" | "skip";
   reviewLowConfidence: boolean;
   openReviewAfterImport: boolean;
   askBeforeDifferentProfile: boolean;
@@ -419,10 +419,12 @@ function SettingsToggleRow({
   label,
   checked,
   onToggle,
+  disabled = false,
 }: {
   label: string;
   checked: boolean;
   onToggle: () => void;
+  disabled?: boolean;
 }) {
   return (
     <div className="settings-toggle-row">
@@ -435,6 +437,7 @@ function SettingsToggleRow({
         aria-pressed={checked}
         aria-label={`${label}: ${checked ? "On" : "Off"}`}
         onClick={onToggle}
+        disabled={disabled}
       >
         <span className="settings-ios-switch__track" aria-hidden="true">
           <span className="settings-ios-switch__thumb" />
@@ -1043,24 +1046,6 @@ export function SettingsHub({
 
   useEffect(() => {
     const guessedTimeZone = Intl.DateTimeFormat().resolvedOptions().timeZone || "Asia/Manila";
-    setNotificationPreferences(
-      readStoredJsonValue<NotificationPreferences>(SETTINGS_NOTIFICATIONS_KEY, {
-        weeklySummary: true,
-        importComplete: true,
-        transactionsNeedReview: true,
-        budgetWarnings: true,
-        inApp: true,
-        email: false,
-      })
-    );
-    setImportPreferences(
-      readStoredJsonValue<ImportPreferences>(SETTINGS_IMPORTS_KEY, {
-        duplicateHandling: "ask",
-        reviewLowConfidence: true,
-        openReviewAfterImport: true,
-        askBeforeDifferentProfile: true,
-      })
-    );
     const regionalFallback = normalizeRegionalPreferences(
       initialRegionalPreferences ?? {
         ...fallbackRegionalPreferences,
@@ -1069,19 +1054,6 @@ export function SettingsHub({
     );
     setRegionalPreferences(
       normalizeRegionalPreferences(readStoredJsonValue<unknown>(SETTINGS_REGIONAL_KEY, regionalFallback), regionalFallback)
-    );
-    setDataUsePreferences(
-      readStoredJsonValue<DataUsePreferences>(SETTINGS_DATA_USE_KEY, {
-        improveSuggestions: true,
-        adviserUsesContext: true,
-        clearCachedStateOnSignOut: true,
-      })
-    );
-    setWorkspaceDefaults(
-      readStoredJsonValue<WorkspaceDefaults>(SETTINGS_WORKSPACE_DEFAULTS_KEY, {
-        defaultLandingPage: "dashboard",
-        defaultImportProfileId: initialSelectedProfileId,
-      })
     );
   }, [initialRegionalPreferences, initialSelectedProfileId]);
 
@@ -1706,6 +1678,39 @@ export function SettingsHub({
     });
   };
 
+  const [preferencesReady, setPreferencesReady] = useState(false);
+  const [preferencesSaving, setPreferencesSaving] = useState(false);
+  const [preferencesMessage, setPreferencesMessage] = useState("");
+  useEffect(() => {
+    let current = true;
+    void fetch("/api/settings/preferences", { cache: "no-store" }).then(async (response) => {
+      if (!response.ok) throw new Error("Unable to load preferences. Reload to try again.");
+      const { preferences } = await response.json();
+      if (!current) return;
+      setNotificationPreferences(preferences.notifications);
+      setImportPreferences(preferences.review);
+      setDataUsePreferences(preferences.privacy);
+      setWorkspaceDefaults({ ...preferences.defaults, defaultImportProfileId: preferences.defaults.defaultImportProfileId ?? "" });
+      setPreferencesReady(true);
+    }).catch((error) => { if (current) setPreferencesMessage(error.message); });
+    return () => { current = false; };
+  }, []);
+  const saveSharedPreferences = async () => {
+    if (!preferencesReady || preferencesSaving) return;
+    const patch = activeSection === "notifications" ? { notifications: notificationPreferences }
+      : activeSection === "imports" ? { review: { ...importPreferences, reviewLowConfidence: true } }
+      : activeSection === "data" ? { privacy: { ...dataUsePreferences, clearCachedStateOnSignOut: true } }
+      : { defaults: { ...workspaceDefaults, defaultImportProfileId: workspaceDefaults.defaultImportProfileId || null } };
+    setPreferencesSaving(true);
+    setPreferencesMessage("");
+    try {
+      const response = await fetch("/api/settings/preferences", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(patch) });
+      if (!response.ok) throw new Error("Unable to save preferences. Please try again.");
+      setPreferencesMessage("Preferences saved across your devices.");
+    } catch (error) { setPreferencesMessage(error instanceof Error ? error.message : "Unable to save preferences."); }
+    finally { setPreferencesSaving(false); }
+  };
+
   const handleSafeSignOut = () => {
     if (dataUsePreferences.clearCachedStateOnSignOut) {
       clearAllWorkspaceCaches();
@@ -1773,6 +1778,12 @@ export function SettingsHub({
 
       {mode !== "menu" ? (
       <div className="settings-hub__panel glass">
+        {["notifications", "imports", "data", "profiles"].includes(activeSection) ? (
+          <div className="settings-card">
+            <button type="button" className="button button--primary" disabled={!preferencesReady || preferencesSaving} onClick={() => void saveSharedPreferences()}>{preferencesSaving ? "Saving…" : "Save preferences"}</button>
+            <p role="status">{preferencesMessage || (preferencesReady ? "Save changes to apply these preferences across your devices." : "Loading preferences…")}</p>
+          </div>
+        ) : null}
         {mode === "panel" ? (
           <div className="settings-hub__panel-back">
             <Link className="help-page__back-button settings-hub__back-button" href="/settings" aria-label="Back to settings" prefetch={false}>
@@ -2135,7 +2146,8 @@ export function SettingsHub({
                 <div className="settings-preference-card__list">
                   <SettingsToggleRow
                     label="Require manual review for low-confidence rows"
-                    checked={importPreferences.reviewLowConfidence}
+                    checked={true}
+                    disabled
                     onToggle={() =>
                       setImportPreferences((current) => ({
                         ...current,
@@ -2183,7 +2195,7 @@ export function SettingsHub({
                   >
                     <option value="ask">Ask me first</option>
                     <option value="skip">Skip duplicates</option>
-                    <option value="replace">Replace older copy</option>
+
                   </select>
                 </label>
               </article>
@@ -2560,7 +2572,8 @@ export function SettingsHub({
                   />
                   <SettingsToggleRow
                     label="Clear cached app state on sign out"
-                    checked={dataUsePreferences.clearCachedStateOnSignOut}
+                    checked={true}
+                    disabled
                     onToggle={() =>
                       setDataUsePreferences((current) => ({
                         ...current,

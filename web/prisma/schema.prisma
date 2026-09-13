@@ -349,6 +349,7 @@ model User {
   goalTargetAmount                 Decimal?                     @db.Decimal(18, 2)
   goalTargetSource                 String?
   goalPlan                         Json?
+  appPreferences                   Json?
   adviserPreferences               Json?
   regionalPreferences              Json?
   regionalPreferencesInitializedAt DateTime?
@@ -370,6 +371,7 @@ model User {
   circleContributions              CircleContribution[]
   circleSharedTransactions         CircleSharedTransaction[]
   circleInvestmentShares           CircleInvestmentShare[]
+  storeAccess                      StoreAccess?
   billingSubscription              BillingSubscription?
   proGrants                        ProAccessGrant[]
   referralCodes                    ReferralCode[]
@@ -732,6 +734,10 @@ model AppErrorLog {
 }
 
 model ContactInquiry {
+  supportMessages AdminSupportMessage[]
+  assignedTo String?
+  priority String @default("normal")
+  snoozedUntil DateTime?
   id                String               @id @default(cuid())
   name              String
   email             String
@@ -2195,4 +2201,70 @@ model CloverDeploymentEnvironment {
   environment String   @unique
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
+}
+
+// Server-only staff access. An explicit disabled record overrides bootstrap allowlists.
+model AdminMember {
+  clerkUserId String @id
+  role String
+  active Boolean @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model AdminPermissionAudit {
+  id String @id @default(cuid())
+  actorId String
+  targetId String
+  before Json?
+  after Json
+  createdAt DateTime @default(now())
+  @@index([targetId, createdAt])
+}
+
+model AdminApproval {
+  id String @id @default(cuid())
+  requesterId String
+  reviewerId String?
+  targetUserId String
+  action String
+  parameters Json
+  preview Json
+  reason String
+  status String @default("pending")
+  expiresAt DateTime
+  reviewedAt DateTime?
+  executedAt DateTime?
+  result Json?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  @@index([status, createdAt])
+  @@index([targetUserId, createdAt])
+}
+
+model AdminSupportMessage {
+  inquiry ContactInquiry @relation(fields: [inquiryId], references: [id], onDelete: Cascade)
+  id String @id @default(cuid())
+  inquiryId String
+  actorId String
+  kind String
+  subject String?
+  body String
+  status String
+  idempotencyKey String @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  @@index([inquiryId, createdAt])
+}
+
+// Server-verified store access stays separate from web billing and Admin grants.
+model StoreAccess {
+  userId String @id
+  expiresAt DateTime?
+  store String?
+  productId String?
+  sandbox Boolean
+  renewing Boolean @default(false)
+  verifiedAt DateTime
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 }

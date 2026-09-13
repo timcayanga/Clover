@@ -3839,6 +3839,7 @@ export const upsertMerchantRule = async (params: {
   source: string;
   confidence?: number;
 }) => {
+  if (!await (await import("@/lib/app-preferences")).canLearnFromWorkspace(params.workspaceId)) return null;
   const merchantKey = normalizeMerchantText(params.merchantText);
 
   try {
@@ -4811,6 +4812,7 @@ export const buildUnsupervisedLearningSnapshot = (
 export const promoteUnsupervisedLearningClustersForWorkspace = async (params: {
   workspaceId: string;
 }) => {
+  if (!await (await import("@/lib/app-preferences")).canLearnFromWorkspace(params.workspaceId)) return { audit: { candidateCount: 0, promotedCount: 0, suspendedCount: 0, reason: "learning_disabled" } };
   const templates = await prisma.statementTemplate.findMany({
     where: { workspaceId: params.workspaceId },
     orderBy: [{ updatedAt: "desc" }],
@@ -4934,6 +4936,7 @@ export const recordTrainingSignal = async (params: {
   previousValue?: Prisma.InputJsonValue | null;
   correctedValue?: Prisma.InputJsonValue | null;
 }) => {
+  if (!await (await import("@/lib/app-preferences")).canLearnFromWorkspace(params.workspaceId)) return null;
   const teachabilityScore =
     typeof params.teachabilityScore === "number" && Number.isFinite(params.teachabilityScore)
       ? Math.max(0, Math.min(100, Math.round(params.teachabilityScore)))

@@ -919,3 +919,20 @@ html[data-theme="dark"] .admin-adoption-range input { background: #0b1521; color
  .admin-page-shell > .admin-section-nav { position: static; flex-direction: row; flex-wrap: nowrap; overflow-x: auto; max-width: 100%; width: 100%; border-radius: 12px; padding: 6px; }
  .admin-page-shell > .admin-section-nav .admin-section-nav__link { white-space: nowrap; min-height: 44px; display: flex; align-items: center; }
 }
+
+.admin-governance { display: grid; gap: 20px; }
+.admin-governance__tabs { display: flex; flex-wrap: wrap; gap: 10px; }
+.admin-governance__card { display: grid; gap: 14px; padding: 22px; border: 1px solid var(--border, #dbe3e8); border-radius: 16px; background: var(--surface, #fff); }
+.admin-governance__card h2 { margin: 0; font-size: 18px; }
+.admin-governance__card label { display: grid; gap: 8px; }
+.admin-governance button, .admin-governance input:not([type=checkbox]), .admin-governance select, .admin-governance textarea { min-height: 44px; border-radius: 10px; border: 1px solid var(--border, #dbe3e8); padding: 10px 14px; color: inherit; background: var(--surface, #fff); font: inherit; }
+.admin-governance button { cursor: pointer; }
+.admin-governance button:disabled { opacity: .5; cursor: default; }
+.admin-governance button[aria-pressed=true] { background: #007f90; color: white; }
+.admin-governance__table { overflow-x: auto; }
+.admin-governance table { width: 100%; border-collapse: collapse; }
+.admin-governance th, .admin-governance td { text-align: left; padding: 14px; border-bottom: 1px solid var(--border, #dbe3e8); }
+@media(max-width: 640px) { .admin-governance__card { padding: 16px; } }
+.admin-case-layout { display: grid; grid-template-columns: minmax(240px, .7fr) minmax(0, 1.8fr); gap: 20px; align-items: start; }
+.admin-case-layout article { padding: 14px 0; border-bottom: 1px solid var(--border, #dbe3e8); overflow-wrap: anywhere; }
+@media(max-width: 760px) { .admin-case-layout { grid-template-columns: minmax(0, 1fr); } }

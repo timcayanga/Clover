@@ -1,11 +1,12 @@
 import { Queue } from "bullmq";
 import Redis from "ioredis";
 import { getEnv } from "@/lib/env";
-import { getDeploymentEnvironment } from "@/lib/deployment-environment";
+import { getDeploymentEnvironment, type DeploymentEnvironment } from "@/lib/deployment-environment";
 import type { ImportImageMode } from "@/lib/import-image-mode";
 
 type ImportJobPayload = {
   importFileId: string;
+  adminRetry?: { requestedBy: string; version: string };
   actorUserId?: string | null;
   password?: string;
   allowDuplicateStatement?: boolean;
@@ -15,15 +16,14 @@ type ImportJobPayload = {
 };
 
 const redisUrl = getEnv().REDIS_URL ?? "redis://127.0.0.1:6379";
-export const getImportQueueName = () => {
-  const environment = getDeploymentEnvironment();
+export const getImportQueueName = (environment = getDeploymentEnvironment()) => {
 
   // Keep the production name stable so already queued production jobs are not stranded.
   return environment === "production" ? "import-processing" : `import-processing-${environment}`;
 };
 
 let connection: Redis | null = null;
-let queue: Queue<ImportJobPayload> | null = null;
+const queues = new Map<string, Queue<ImportJobPayload>>();
 
 const getConnection = () => {
   connection ??= new Redis(redisUrl, {
@@ -34,8 +34,13 @@ const getConnection = () => {
   return connection;
 };
 
-export const getImportQueue = () => {
-  queue ??= new Queue<ImportJobPayload>(getImportQueueName(), {
+export const getAdminImportQueueName = (environment = getDeploymentEnvironment()) => `${getImportQueueName(environment)}-admin`;
+
+export const getImportQueue = (environment: DeploymentEnvironment = getDeploymentEnvironment(), adminRetry = false) => {
+  const queueName = adminRetry ? getAdminImportQueueName(environment) : getImportQueueName(environment);
+  const existing = queues.get(queueName);
+  if (existing) return existing;
+  const queue = new Queue<ImportJobPayload>(queueName, {
     connection: getConnection(),
     defaultJobOptions: {
       attempts: 3,
@@ -48,6 +53,7 @@ export const getImportQueue = () => {
     },
   });
 
+  queues.set(queueName, queue);
   return queue;
 };
 

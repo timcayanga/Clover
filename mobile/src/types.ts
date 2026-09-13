@@ -16,15 +16,21 @@ export type Transaction = {
   tags?: { id: string; name: string }[];
 };
 export type TransactionPage = {
-  summary?: { currencyTotals?: Record<string,{income:number;spending:number;transfers:number}> };
+  summary?: {
+    currencyTotals?: Record<
+      string,
+      { income: number; spending: number; transfers: number }
+    >;
+  };
   transactions: Transaction[];
   totalCount: number;
   page: number;
 };
 export type Profile = { id: string; name: string };
 export type Bootstrap = {
+  preferences?: import("../../shared/app-preferences").AppPreferences;
   needsOnboarding?: boolean;
-  currencyChoices?: {code:string;name:string}[];
+  currencyChoices?: { code: string; name: string }[];
   firstName: string | null;
   profiles: Profile[];
   entitlement: {
@@ -32,7 +38,7 @@ export type Bootstrap = {
     fullFeatureAccess?: boolean;
     accessEndsAt: string | null;
     renewing: boolean;
-    nativePurchasesAvailable: false;
+    nativePurchasesAvailable: boolean;
   };
 };
 export type ImportStatus = {

@@ -1,3 +1,4 @@
+import { assertTrustedRequestOrigin } from "@/lib/request-security";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { getAdminDataEnvironment, requireAdminAuth } from "@/lib/admin";
@@ -60,7 +61,8 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   try {
-    await requireAdminAuth();
+    assertTrustedRequestOrigin(request);
+    await requireAdminAuth("operate");
     const payload = replaySchema.parse(await request.json().catch(() => ({})));
 
     const imports = await prisma.importFile.findMany({

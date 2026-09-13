@@ -1,3 +1,4 @@
+import { assertTrustedRequestOrigin } from "@/lib/request-security";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { requireAdminAuth } from "@/lib/admin";
@@ -73,7 +74,8 @@ export async function GET() {
 
 export async function PATCH(request: Request) {
   try {
-    await requireAdminAuth();
+    assertTrustedRequestOrigin(request);
+    await requireAdminAuth("operate");
     await ensureDefaults();
     const payload = configSchema.parse(await request.json());
 

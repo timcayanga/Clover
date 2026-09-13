@@ -3,7 +3,7 @@ import { clerkClient } from "@clerk/nextjs/server";
 import { headers } from "next/headers";
 import { cookies } from "next/headers";
 import { rememberedSessionIdKey } from "@/lib/clerk-session-persistence";
-import { isAdminOnlyUserId, isConfiguredAdminEmail } from "@/lib/admin-access";
+import { isAdminOnlyUserId, isConfiguredAdminEmail, isAssignedAdmin } from "@/lib/admin-access";
 import { getMobileRequestContext } from "@/lib/mobile-request-context";
 
 const stagingHosts = new Set(["staging.clover.ph", "clover-stage.vercel.app"]);
@@ -91,7 +91,7 @@ export const getSessionContext = async () => {
     throw new Error("UNAUTHORIZED");
   }
 
-  if (isAdminOnlyUserId(session.userId) || (await isConfiguredAdminEmail(session.userId))) {
+  if (isAdminOnlyUserId(session.userId) || (await isConfiguredAdminEmail(session.userId)) || (await isAssignedAdmin(session.userId))) {
     throw new Error("ADMIN_ONLY");
   }
 

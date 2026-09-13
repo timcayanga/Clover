@@ -21,6 +21,7 @@ type Session = {
   profileId: string;
   setProfileId: (id: string) => void;
   refresh: () => void;
+  download: (path: string) => Promise<string>;
   request: <T>(path: string, options?: RequestInit) => Promise<T>;
   rows: Transaction[];
   updateSample: (row: Transaction) => void;
@@ -29,7 +30,11 @@ type Session = {
     string,
     { file: SelectedFile; profileId: string; started?: boolean }
   >;
-  registerUpload: (id: string, file: SelectedFile) => void;
+  registerUpload: (
+    id: string,
+    file: SelectedFile,
+    targetProfileId?: string,
+  ) => void;
   markUploadStarted: (id: string) => void;
 };
 const Context = createContext<Session | null>(null);
@@ -111,17 +116,25 @@ export function SessionProvider({
         profileId,
         ready: Boolean(data),
         request,
+        download: async (path) => {
+          if (demo) throw new Error("Sign in to export your records.");
+          const token = await tokenRef.current();
+          if (!token)
+            throw new Error("Your session expired. Please sign in again.");
+          return apiRequest<string>(token, path, {}, "text");
+        },
         setProfileId: (id) => {
           if (data?.profiles.some((p) => p.id === id)) setProfile(id);
         },
         refresh: () => setRevision((n) => n + 1),
         rows,
         uploads,
-        registerUpload: (id, file) => {
+        registerUpload: (id, file, targetProfileId = profileId) => {
+          if (!data?.profiles.some((p) => p.id === targetProfileId)) return;
           uploadCopies.current.push(file.uri);
           setUploads((previous) => ({
             ...previous,
-            [id]: { file, profileId },
+            [id]: { file, profileId: targetProfileId },
           }));
         },
         markUploadStarted: (id) =>
