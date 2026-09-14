@@ -66052,7 +66052,7 @@ html[data-theme="dark"] .content.content--reports .reports-range-menu__summary {
     padding: 0!important; gap: 2px!important;
   }
   .shell-mobile-subheader .reports-top-tabs .animated-tabs__tab {
-    display: flex!important; flex: 1 0 72px!important;
+    display: flex!important; flex: 1 0 auto!important; width: auto!important; max-width: none!important;
     min-width: 72px!important; height: 40px!important; min-height: 40px!important;
     flex-direction: row!important; padding: 8px 4px!important; gap: 4px!important;
     border: 1px solid var(--stroke)!important; border-bottom: 0!important;
@@ -66067,7 +66067,7 @@ html[data-theme="dark"] .content.content--reports .reports-range-menu__summary {
   .shell-mobile-subheader .reports-top-tabs .animated-tabs__icon svg {
     width: 12px!important; height: 12px!important; flex-shrink: 0;
   }
-  .shell-mobile-subheader .reports-top-tabs .animated-tabs__label { font-size: 11px!important; }
+  .shell-mobile-subheader .reports-top-tabs .animated-tabs__label { font-size: 11px!important; flex-shrink: 0; max-width: none; overflow: visible; text-overflow: clip; }
   .content.content--reports .reports-range-menu__summary { width: 40px!important; padding: 10px!important; }
   .content--reports .report-card__head { align-items: flex-start; }
   .content--reports .report-chart-switch { margin-left: auto; }
