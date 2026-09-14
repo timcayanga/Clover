@@ -1,7 +1,7 @@
 export type PricingMarket = "ph" | "global";
 export const regionalProPricing = {
-  ph: { currency: "PHP", monthly: { label: "₱169", amount: 169 }, annual: { label: "₱1,699", amount: 1699 } },
-  global: { currency: "USD", monthly: { label: "US$9.99", amount: 9.99 }, annual: { label: "US$99.99", amount: 99.99 } },
+  ph: { currency: "PHP", monthly: { label: "₱99", amount: 99 }, annual: { label: "₱999", amount: 999 } },
+  global: { currency: "USD", monthly: { label: "US$2.99", amount: 2.99 }, annual: { label: "US$29.99", amount: 29.99 } },
 } as const;
 export const plannedProPrices = (market: PricingMarket) => ({
   monthly: regionalProPricing[market].monthly.label,

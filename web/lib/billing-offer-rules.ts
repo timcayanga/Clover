@@ -1,4 +1,10 @@
-import { regionalProPricing, type PricingMarket } from "./public-plan-comparison";
+import { type PricingMarket } from "./public-plan-comparison";
+
+// Approved provider charges: Paddle bills Philippine customers in USD.
+export const paddleProPricing = {
+  ph: { currency: "USD", monthly: { amount: 1.59, label: "US$1.59" }, annual: { amount: 15.99, label: "US$15.99" } },
+  global: { currency: "USD", monthly: { amount: 2.99, label: "US$2.99" }, annual: { amount: 29.99, label: "US$29.99" } },
+} as const;
 
 type PaddlePrice = {
   status?: string;
@@ -11,8 +17,8 @@ type PaddlePrice = {
 export const pricingMarketForCountry = (country: string | null | undefined): PricingMarket =>
   country?.toUpperCase() === "PH" ? "ph" : "global";
 
-export function matchesPaddleAdvertisedPrice(price: PaddlePrice | null, country: string, interval: "monthly" | "annual") {
-  const expected = regionalProPricing[pricingMarketForCountry(country)];
+export function matchesPaddleApprovedPrice(price: PaddlePrice | null, country: string, interval: "monthly" | "annual") {
+  const expected = paddleProPricing[pricingMarketForCountry(country)];
   const unit = price?.unit_price_overrides?.find(override => override.country_codes?.includes(country.toUpperCase()))?.unit_price ?? price?.unit_price;
   return price?.status === "active" && !price.trial_period &&
     price.billing_cycle?.interval === (interval === "monthly" ? "month" : "year") &&
@@ -23,6 +29,7 @@ export function matchesPaddleAdvertisedPrice(price: PaddlePrice | null, country:
 export type BillingOffers = {
   market: PricingMarket;
   prices: { monthly: string; annual: string };
+  paddlePrices: { monthly: string; annual: string };
   paypal: { monthly: string | null; annual: string | null };
   paddle: { monthly: string | null; annual: string | null };
 };

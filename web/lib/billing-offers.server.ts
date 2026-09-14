@@ -1,7 +1,7 @@
 import { getEnv, type AppEnv } from "./env";
 import { fetchPayPalPlan } from "./paypal-billing";
 import { matchesOnboardingPrice } from "./onboarding-pricing";
-import { matchesPaddleAdvertisedPrice, pricingMarketForCountry, type BillingOffers } from "./billing-offer-rules";
+import { matchesPaddleApprovedPrice, pricingMarketForCountry, paddleProPricing, type BillingOffers } from "./billing-offer-rules";
 import { plannedProPrices } from "./public-plan-comparison";
 
 export async function getVerifiedBillingOffers(country: string, env: AppEnv = getEnv()): Promise<BillingOffers> {
@@ -20,7 +20,7 @@ export async function getVerifiedBillingOffers(country: string, env: AppEnv = ge
         signal: AbortSignal.timeout(10_000), cache: "no-store",
       });
       const price = response.ok ? (await response.json()).data : null;
-      return matchesPaddleAdvertisedPrice(price, country, interval) ? id : null;
+      return matchesPaddleApprovedPrice(price, country, interval) ? id : null;
     } catch { return null; }
   };
   const [paypalMonthly, paypalAnnual, paddleMonthly, paddleAnnual] = await Promise.all([
@@ -29,5 +29,5 @@ export async function getVerifiedBillingOffers(country: string, env: AppEnv = ge
     verifyPaddle(env.PADDLE_MONTHLY_PRICE_ID, "monthly"),
     verifyPaddle(env.PADDLE_ANNUAL_PRICE_ID, "annual"),
   ]);
-  return { market, prices: plannedProPrices(market), paypal: { monthly: paypalMonthly, annual: paypalAnnual }, paddle: { monthly: paddleMonthly, annual: paddleAnnual } };
+  return { market, prices: plannedProPrices(market), paddlePrices: { monthly: paddleProPricing[market].monthly.label, annual: paddleProPricing[market].annual.label }, paypal: { monthly: paypalMonthly, annual: paypalAnnual }, paddle: { monthly: paddleMonthly, annual: paddleAnnual } };
 }

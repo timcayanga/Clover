@@ -31,8 +31,8 @@ async function main() {
   assert.equal(PLAN_COMPARISON_KEYS.landing.length, 4);
   assert.equal(PLAN_COMPARISON_KEYS.feature.length, 6);
   assert.equal(PLAN_COMPARISON_KEYS.full.length, 11);
-  assert.deepEqual(plannedProPrices("ph"), { monthly: "₱169", annual: "₱1,699" });
-  assert.deepEqual(plannedProPrices("global"), { monthly: "US$9.99", annual: "US$99.99" });
+  assert.deepEqual(plannedProPrices("ph"), { monthly: "₱99", annual: "₱999" });
+  assert.deepEqual(plannedProPrices("global"), { monthly: "US$2.99", annual: "US$29.99" });
   assert.deepEqual(PLAN_COMPARISON_ROWS.accounts, ["Financial accounts", "5", "20"]);
   assert.deepEqual(PLAN_COMPARISON_ROWS.daily, ["AI usage per rolling 24 hours", "Up to 30,000 tokens", "Up to 250,000 tokens"]);
   assert.doesNotMatch(JSON.stringify(PLAN_COMPARISON_ROWS), /connected|linked bank/i, "Bank connections must not be advertised yet.");

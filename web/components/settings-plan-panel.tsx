@@ -332,6 +332,11 @@ export function SettingsPlanPanel({
                 <PlanFeatureItem key={feature} label={feature} className="settings-plan-card__feature-row" />
               ))}
             </ul>
+            {paddleReady && offers ? (
+              <p className="settings-helper">
+                Paddle bills {offers.paddlePrices[billingInterval]}{billingInterval === "monthly" ? " / month" : " / year"} in USD. Your payment provider may apply currency conversion.
+              </p>
+            ) : null}
             <div className="settings-plan-card__cta">
               {planTier === "free" ? (
                 isAwaitingApproval ? (
