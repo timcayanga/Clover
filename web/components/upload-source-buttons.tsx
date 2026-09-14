@@ -1,5 +1,5 @@
 "use client";
-import { useRef } from "react";
+import { useRef, useState } from "react";
 
 export function UploadSourceButtons({
   onFiles,
@@ -10,7 +10,16 @@ export function UploadSourceButtons({
   onCamera: () => void;
   onLibrary: () => void;
 }) {
+  const [cameraHelp, setCameraHelp] = useState(false);
   return (
+    <>
+      {cameraHelp ? (
+        <p role="status">
+          If your camera does not open, allow camera access in your browser or
+          device settings. You can also choose a file or enter the transaction
+          manually.
+        </p>
+      ) : null}
     <div className="organize-upload-choices">
       {(
         [
@@ -23,7 +32,10 @@ export function UploadSourceButtons({
           key={key}
           className="button button-secondary"
           type="button"
-          onClick={onClick}
+          onClick={() => {
+            setCameraHelp(key === "camera");
+            onClick();
+          }}
         >
           <img
             src={`/assets/organize/upload-${key}.svg`}
@@ -35,6 +47,7 @@ export function UploadSourceButtons({
         </button>
       ))}
     </div>
+    </>
   );
 }
 export function UploadSourcePicker({
