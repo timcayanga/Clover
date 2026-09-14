@@ -15,7 +15,7 @@ export const PLAN_COMPARISON_ROWS = {
   investments: ["Investment tracking", "Basic tracking", "Full portfolio tools"],
   insights: ["Reports & investments", "Essential reports and basic tracking", "Advanced reports and full portfolio tools"],
   accounts: ["Financial accounts", "5", "20"],
-  profiles: ["Profiles", "1", "5"],
+  profiles: ["Profiles", "3", "10"],
   planning: ["Active budgets & goals", "2 budgets · 2 goals", "5 budgets · 5 goals"],
   budgets: ["Active budgets", "2", "5"],
   goals: ["Active goals", "2", "5"],

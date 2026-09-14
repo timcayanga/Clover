@@ -18,6 +18,9 @@ const protectedRouteMatcher = middleware.match(
   /const isProtectedAppRoute = createRouteMatcher\(\[([\s\S]*?)\]\);/u,
 )?.[1] ?? "";
 
+assert.match(protectedRouteMatcher, /"\/referrals\(\.\*\)"/u, "Referrals must require authentication");
+assert.match(middleware, /matcher:\s*\[[\s\S]*"\/referrals\(\.\*\)"/u, "Referrals must execute Clerk middleware before its server-side auth call");
+
 assert.match(signInPage, /await auth\(\)\.catch\(\(\) => null\)/u, "Sign-in must survive missing Clerk middleware");
 assert.match(signInPage, /session\?\.userId/u, "Signed-in users must bypass the sign-in screen safely");
 assert.match(
