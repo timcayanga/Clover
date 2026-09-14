@@ -14,7 +14,7 @@ const config: ExpoConfig = {
     bundleIdentifier: process.env.CLOVER_IOS_BUNDLE_ID || "ph.clover.preview",
     appleTeamId: "6XX38GYURG",
     supportsTablet: true,
-    infoPlist: { ITSAppUsesNonExemptEncryption: false },
+    // SQLCipher adds bundled cryptography; complete Apple’s export declaration for release.
   },
   android: {
     package: process.env.CLOVER_ANDROID_PACKAGE_ID || "ph.clover.preview",
@@ -23,6 +23,8 @@ const config: ExpoConfig = {
   },
   plugins: [
     "expo-router",
+    ["expo-build-properties", { android: { minSdkVersion: 26 } }],
+    ["expo-sqlite", { useSQLCipher: true }],
     "./plugins/with-unique-pod-uuids.cjs",
     "./plugins/with-quoted-ios-paths.cjs",
     "expo-secure-store",

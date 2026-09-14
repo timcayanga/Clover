@@ -1,0 +1,26 @@
+{
+  "platform": "ios",
+  "checks": [
+    "SQLCipher encrypted storage persists across reopen",
+    "Database file does not expose plaintext/header",
+    "Incorrect encryption key rejected",
+    "Explicit local purge removes stored data",
+    "Native capability check responds",
+    "Concurrent first opens share the same encryption key",
+    "Native OCR reads synthetic receipt amount",
+    "Available on-device model generates a response"
+  ],
+  "capability": {
+    "provider": "Apple on-device model",
+    "detail": "Ready for offline requests.",
+    "model": "available"
+  },
+  "ocr": {
+    "text": "CLOVER QA RECEIPT\nCoffee PHP 125.00\nDate 2026-09-14",
+    "pagesRead": 1,
+    "totalPages": 1,
+    "complete": true
+  },
+  "inference": "Clover spent 500.00 on PHP income of 2000.00.",
+  "ok": true
+}

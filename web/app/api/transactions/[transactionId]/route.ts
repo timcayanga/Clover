@@ -141,6 +141,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ tra
     return NextResponse.json({
       transaction: {
         id: transaction.id,
+        updatedAt: transaction.updatedAt.toISOString(),
         workspaceId: transaction.workspaceId,
         accountId: transaction.accountId,
         accountName: transaction.account.name,

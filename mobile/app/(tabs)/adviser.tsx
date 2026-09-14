@@ -1,3 +1,12 @@
+import { router } from "expo-router";
+import * as Crypto from "expo-crypto";
+import {
+  askLocally,
+  refreshLocalAllowance,
+  localCapability,
+  deviceAllowance,
+} from "../../src/offline/local-ai";
+import { AdviserInputTools } from "../../src/adviser-input-tools";
 import { useEffect, useRef, useState } from "react";
 import { useLocalSearchParams } from "expo-router";
 import { Body, Card, Field, Notice, Screen } from "../../src/ui";
@@ -7,6 +16,8 @@ type Message = { role: "user" | "assistant"; content: string };
 export default function Adviser() {
   const session = useSession();
   const params = useLocalSearchParams<{ prompt?: string; page?: string }>();
+  const [local, setLocal] = useState(false);
+  const useLocal = local || !session.offlineStatus.online;
   const [messages, setMessages] = useState<Message[]>([]);
   const [draft, setDraft] = useState("");
   const [busy, setBusy] = useState(false);
@@ -46,6 +57,37 @@ export default function Adviser() {
     setBusy(true);
     setError("");
     try {
+      if (useLocal) {
+        if (!session.offline)
+          throw new Error(
+            "On-device tools require an updated native build with encrypted storage.",
+          );
+        // Reserve credits only on an explicit local request; never send the question online.
+        if (
+          session.offlineStatus.online &&
+          (await localCapability()).model === "available"
+        ) {
+          try {
+            await refreshLocalAllowance(
+              session.offline,
+              session.profileId,
+              () => Crypto.randomUUID(),
+            );
+          } catch (e) {
+            if (!(await deviceAllowance(session.offline).get())?.grant) throw e;
+          }
+        }
+        const reply = await askLocally(
+          session.offline,
+          session.profileId,
+          draft.trim(),
+        );
+        if (version !== generation.current) return;
+        setMessages([...next, { role: "assistant", content: reply }]);
+        setDraft("");
+        setActions(false);
+        return;
+      }
       const allowed = [
         "home",
         "accounts",
@@ -92,6 +134,30 @@ export default function Adviser() {
   };
   return (
     <Screen>
+      <Card>
+        <Body muted={false}>
+          {useLocal ? "On-device · Downloaded records" : "Cloud Adviser"}
+        </Body>
+        <Body>
+          {useLocal
+            ? "Uses this Profile’s downloaded data. Calculations stay on your phone. Local model requests have a separate allowance."
+            : "Questions are processed online using your cloud token allowance."}
+        </Body>
+        <PlanAction
+          title={local ? "Use cloud when connected" : "Use on-device tools"}
+          disabled={busy}
+          onPress={() => {
+            generation.current++;
+            setMessages([]);
+            setActions(false);
+            setLocal(!local);
+          }}
+        />
+        <PlanAction
+          title="Manage downloads and local AI"
+          onPress={() => router.push("/offline")}
+        />
+      </Card>
       <PlanAction
         title="New chat"
         disabled={busy}
@@ -142,6 +208,14 @@ export default function Adviser() {
         multiline
         maxLength={4000}
         editable={!busy}
+      />
+      <AdviserInputTools
+        onDeviceOnly={useLocal}
+        disabled={busy}
+        onText={(text) =>
+          setDraft((previous) => `${previous} ${text}`.trim().slice(0, 4000))
+        }
+        onPhoto={() => router.push("/(tabs)/add")}
       />
       {error ? <Notice>{error}</Notice> : null}
       <PlanAction

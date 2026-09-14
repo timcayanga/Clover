@@ -1,3 +1,4 @@
+import { OfflineFilePanel } from "../../src/offline/file-panel";
 import { router, useLocalSearchParams } from "expo-router";
 import { useEffect, useRef, useState } from "react";
 import { ActivityIndicator, AppState, Text } from "react-native";
@@ -19,10 +20,22 @@ import {
 export default function ImportDetail() {
   const { colors, styles, dark } = useTheme();
   const access = useAccess();
-  const { demo, profileId, request, uploads, markUploadStarted, data } =
-    useSession();
+  const {
+    demo,
+    profileId,
+    request,
+    uploads,
+    markUploadStarted,
+    data,
+    queuedFiles,
+  } = useSession();
   const openedReview = useRef(false);
-  const { id } = useLocalSearchParams<{ id: string }>();
+  const { id, server } = useLocalSearchParams<{
+    id: string;
+    server?: string;
+  }>();
+  const queued =
+    server !== "1" ? queuedFiles.find((f) => f.id === id) : undefined;
   const selected = uploads[id];
   const { uri, name, mimeType: mime } = selected?.file ?? {};
   const profile = selected?.profileId;
@@ -91,7 +104,14 @@ export default function ImportDetail() {
     data?.preferences?.review.openReviewAfterImport,
   ]);
   useEffect(() => {
-    if (demo || !started || !access.active || !correctProfile || complete)
+    if (
+      queued ||
+      demo ||
+      !started ||
+      !access.active ||
+      !correctProfile ||
+      complete
+    )
       return;
     let current = true;
     let timer: ReturnType<typeof setTimeout>;
@@ -140,8 +160,10 @@ export default function ImportDetail() {
     correctProfile,
     access.active,
     revision,
+    queued,
   ]);
   if (!access.active) return null;
+  if (queued) return <OfflineFilePanel key={queued.id} file={queued} />;
   const upload = async () => {
     if (lock.current || !uri || !correctProfile) return;
     lock.current = true;

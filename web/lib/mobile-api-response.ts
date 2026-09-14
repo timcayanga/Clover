@@ -22,6 +22,7 @@ const lastFour = (value: unknown) => {
   return digits.length >= 4 ? { lastFour: digits.slice(-4) } : {};
 };
 const transactionFields = [
+  "updatedAt",
   "id",
   "workspaceId",
   "accountId",

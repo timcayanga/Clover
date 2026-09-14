@@ -83,7 +83,7 @@ async function handle(
     }
     const user = await prisma.user.findUnique({
       where: { clerkUserId: userId },
-      select: { id: true, firstName: true, lastName: true, email: true, clerkUserId: true, planTier: true, onboardingCompletedAt: true },
+      select: { id: true, firstName: true, lastName: true, email: true, clerkUserId: true, planTier: true, dataWipedAt: true, onboardingCompletedAt: true },
     });
     const catalog = operation === "bootstrap" ? await import("@/lib/currencies") : null;
     const currencyChoices = catalog ? catalog.getCurrencyCatalogOptions(catalog.getCurrencyCatalogCodes()) : undefined;
@@ -152,6 +152,7 @@ async function handle(
       ]);
       return reply({
         apiVersion: 1,
+        offlineEpoch: user.dataWipedAt?.toISOString()??null,
         preferences,
         needsOnboarding: !user.onboardingCompletedAt,
         currencyChoices,
@@ -215,6 +216,28 @@ async function handle(
       const response = await withMobileRequestContext(userId, forwarded, async () =>
         (await import("@/app/api/adviser/chat/route")).POST(forwarded));
       return reply(mobileApiResponse(operation, await response.json()), response.status);
+    }
+
+    if (operation === "offline-allowance") {
+      const { reserveLocalAllowance } = await import("@/lib/mobile-local-allowance");
+      const text = await request.text();
+      if(new TextEncoder().encode(text).length>2048)return reply({error:"Request too large."},413);
+      return reply(await reserveLocalAllowance(user.id, JSON.parse(text)));
+    }
+    if (operation === "offline-sync") {
+      if (Number(request.headers.get("content-length") ?? 0) > 16384) return reply({error:"Change is too large."},413);
+      const { applyMobileOfflineMutation } = await import("@/lib/mobile-offline-sync");
+      const text = await request.text();
+      if(new TextEncoder().encode(text).length>16384)return reply({error:"Change is too large."},413);
+      const result = await applyMobileOfflineMutation(userId, workspaceId, JSON.parse(text));
+      if(result.status===200){
+        (await import("@/lib/workspace-summary-cache")).invalidateWorkspaceSummaryCache(workspaceId);
+        if('committed' in result && result.committed && result.kind === 'create') {
+          const row=(result.body as {transaction:{id:string;categoryId:string|null;categoryName:string|null;merchantRaw:string;merchantClean:string|null;type:"income"|"expense"}}).transaction;
+          if(row.categoryId)void import("@/lib/data-engine").then(({recordTrainingSignal})=>recordTrainingSignal({workspaceId,transactionId:row.id,merchantText:row.merchantClean??row.merchantRaw,categoryId:row.categoryId!,categoryName:row.categoryName,source:"manual_transaction_creation",type:row.type,confidence:100,actorUserId:userId})).catch(()=>{});
+        }
+      }
+      return reply(result.body,result.status);
     }
 
     if (operation === "reports") {

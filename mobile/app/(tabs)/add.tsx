@@ -97,8 +97,12 @@ export default function Add() {
     const continueImport = () => {
       const id = Crypto.randomUUID();
       session.setProfileId(target.id);
-      session.registerUpload(id, file, target.id);
-      router.push({ pathname: "/import/[id]", params: { id } });
+      setBusy(true);
+      void session
+        .registerUpload(id, file, target.id)
+        .then(() => router.push({ pathname: "/import/[id]", params: { id } }))
+        .catch((e: Error) => setError(e.message))
+        .finally(() => setBusy(false));
     };
     if (
       target.id !== session.profileId &&

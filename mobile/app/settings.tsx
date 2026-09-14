@@ -262,6 +262,13 @@ export default function Settings() {
         </>
       ) : null}
       {section === "categories" ? <SettingsCategories /> : null}
+      {section === "menu" ? (
+        <Button
+          title="Sync & Offline"
+          secondary
+          onPress={() => router.push("/offline")}
+        />
+      ) : null}
       {section === "security" ? <SettingsSecurity /> : null}
       {section === "data" ? (
         <>

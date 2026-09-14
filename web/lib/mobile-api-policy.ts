@@ -5,6 +5,8 @@ export function mobileOperation(method: string, segments: string[]) {
   if (path === "settings/wipe-data" && method === "POST") return "settings-wipe-data";
   if (path === "settings/delete-account" && method === "POST") return "settings-delete-account";
   if (path === "settings/data" && ["GET", "DELETE"].includes(method)) return "settings-data";
+  if (method === "POST" && path === "offline/allowance") return "offline-allowance";
+  if (method === "POST" && path === "offline/sync") return "offline-sync";
   if (["settings/export/transactions", "settings/export/account-balances"].includes(path) && method === "GET") return "settings-export";
   if (path === "settings/profiles" && ["GET", "POST"].includes(method)) return "settings-profiles";
   if (segments.length === 3 && segments[0] === "settings" && segments[1] === "profiles" && ["PATCH", "DELETE"].includes(method)) return "settings-profile";

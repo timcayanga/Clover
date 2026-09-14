@@ -1,3 +1,5 @@
+import { suggestLocalCategory } from "./offline/local-tools";
+import type { Transaction } from "./types";
 import * as ImagePicker from "expo-image-picker";
 import { AdviserInputTools } from "./adviser-input-tools";
 import { ApiError } from "./api";
@@ -129,9 +131,30 @@ export function ManualTransaction({
   onChange: (draft: TransactionDraft) => void;
 }) {
   const session = useSession();
+  const [localRows, setLocalRows] = useState<Transaction[]>([]);
+  useEffect(() => {
+    let active = true;
+    setLocalRows([]);
+    void session.offline
+      ?.downloadedTransactions(session.profileId)
+      .then((v) => {
+        if (active) setLocalRows(v.rows);
+      })
+      .catch(() => {});
+    return () => {
+      active = false;
+    };
+  }, [session.offline, session.profileId]);
+  const localSuggestion = !draft.categoryId
+    ? suggestLocalCategory(
+        draft.merchantRaw,
+        localRows.filter((r) => r.type === draft.type),
+      )
+    : null;
   const [options, setOptions] = useState<Options | null>(null);
   const [error, setError] = useState("");
   const [saved, setSaved] = useState(false);
+  const [savedPending, setSavedPending] = useState(false);
   const [uncertain, setUncertain] = useState(false);
   const [busy, setBusy] = useState(false);
   const lock = useRef(false);
@@ -187,6 +210,7 @@ export function ManualTransaction({
     setBusy(true);
     setError("");
     setSaved(false);
+    setSavedPending(false);
     try {
       if (!session.demo) {
         if (draft.adviserEntry) {
@@ -217,11 +241,13 @@ export function ManualTransaction({
               }),
             },
           );
-        } else
-          await session.request(
+        } else {
+          const result = await session.request<{ pendingSync?: boolean }>(
             `transactions?workspaceId=${encodeURIComponent(session.profileId)}`,
             { method: "POST", body: JSON.stringify(draft) },
           );
+          setSavedPending(Boolean(result.pendingSync));
+        }
       }
       setUncertain(false);
       setSaved(true);
@@ -241,7 +267,9 @@ export function ManualTransaction({
         <Notice>
           {session.demo
             ? "Sample completed. No financial record was saved."
-            : "Transaction saved."}
+            : savedPending
+              ? "Saved on this device. View pending changes in Sync & Offline."
+              : "Transaction saved."}
         </Notice>
       ) : null}
       <Choices
@@ -323,6 +351,32 @@ export function ManualTransaction({
             }
           />
         </>
+      ) : null}
+      {localSuggestion &&
+      options?.categories.some(
+        (c) => c.name === localSuggestion.category && c.type === draft.type,
+      ) ? (
+        <Card>
+          <Body>
+            Suggested category: {localSuggestion.category} ·{" "}
+            {localSuggestion.confidence}% confidence
+          </Body>
+          <Body>{localSuggestion.reason}</Body>
+          <Button
+            title="Use suggested category"
+            secondary
+            disabled={busy || uncertain}
+            onPress={() =>
+              change({
+                categoryId: options.categories.find(
+                  (c) =>
+                    c.name === localSuggestion.category &&
+                    c.type === draft.type,
+                )!.id,
+              })
+            }
+          />
+        </Card>
       ) : null}
       {draft.adviserEntry?.transactions[0]?.lines.length ? (
         <Card>

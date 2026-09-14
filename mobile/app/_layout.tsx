@@ -1,3 +1,4 @@
+import { resourceCache } from "@clerk/expo/resource-cache";
 import { disconnectStoreAccount } from "../src/store-billing";
 import { DisplayPreferences } from "../src/display-preferences";
 import { ClerkProvider, useAuth } from "@clerk/expo";
@@ -92,6 +93,12 @@ function Routes() {
             name="(tabs)"
             options={{ headerShown: false, title: "Clover" }}
           />
+          <Stack.Screen
+            name="offline"
+            options={{
+              header: () => <AppHeader title="Sync & Offline" back />,
+            }}
+          />
           <Stack.Screen name="settings" options={{ headerShown: false }} />
           <Stack.Screen name="notifications" options={{ headerShown: false }} />
           <Stack.Screen name="onboarding" options={{ headerShown: false }} />
@@ -128,6 +135,7 @@ function Routes() {
         (path.startsWith("/transaction/") ||
           path.startsWith("/import/") ||
           [
+            "/offline",
             "/settings",
             "/notifications",
             "/onboarding",
@@ -176,6 +184,7 @@ function AppSession({
       <SessionProvider
         key={demo ? "sample" : (userId ?? "signed-out")}
         demo={demo}
+        userId={userId}
         getToken={getToken}
         signOut={async () => {
           setDemo(false);
@@ -230,6 +239,9 @@ export default function RootLayout() {
         {key ? (
           <ClerkProvider
             publishableKey={key}
+            __experimental_resourceCache={
+              Platform.OS === "web" ? undefined : resourceCache
+            }
             tokenCache={Platform.OS === "web" ? undefined : authTokenCache}
           >
             <AuthenticatedApp />

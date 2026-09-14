@@ -1,4 +1,8 @@
 export type Transaction = {
+  updatedAt?: string;
+  pendingSync?: boolean;
+  isTransfer?: boolean;
+  isExcluded?: boolean;
   id: string;
   workspaceId: string;
   accountId: string;
@@ -28,6 +32,7 @@ export type TransactionPage = {
 };
 export type Profile = { id: string; name: string };
 export type Bootstrap = {
+  offlineEpoch?: string | null;
   preferences?: import("../../shared/app-preferences").AppPreferences;
   needsOnboarding?: boolean;
   currencyChoices?: { code: string; name: string }[];

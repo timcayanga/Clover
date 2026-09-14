@@ -169,6 +169,7 @@ export function Screen({
   gap?: number;
 }) {
   const { colors, styles, dark } = useTheme();
+  const session = useSession();
   return (
     <ScrollView
       style={{ flex: 1, backgroundColor: colors.bg }}
@@ -176,6 +177,23 @@ export function Screen({
       keyboardShouldPersistTaps="handled"
       automaticallyAdjustKeyboardInsets
     >
+      {!session.demo &&
+      (!session.offlineStatus.online || session.offlineStatus.pending > 0) ? (
+        <Pressable
+          accessibilityRole="button"
+          onPress={() => router.push("/offline")}
+          style={styles.notice}
+        >
+          <Text style={{ color: colors.ink, fontWeight: "600" }}>
+            {session.offlineStatus.online
+              ? `${session.offlineStatus.pending} changes pending sync`
+              : "You are offline · Downloaded data"}
+          </Text>
+          <Text style={{ color: colors.muted }}>
+            View sync status · Charts reflect the last downloaded data
+          </Text>
+        </Pressable>
+      ) : null}
       {children}
     </ScrollView>
   );
@@ -361,7 +379,7 @@ export function AppHeader({
                     })
               }
             >
-              <AddNavigationMark size={32}/>
+              <AddNavigationMark size={32} />
             </Pressable>
           ) : back || onClose ? (
             <Pressable
@@ -728,7 +746,7 @@ export function AccountAvatar() {
     </View>
   );
 }
-export function AddNavigationMark({size=48}: {size?:number} = {}) {
+export function AddNavigationMark({ size = 48 }: { size?: number } = {}) {
   return (
     <LinearGradient
       colors={["#03A8C0", "#5ED3D0"]}
@@ -737,12 +755,12 @@ export function AddNavigationMark({size=48}: {size?:number} = {}) {
       style={{
         width: size,
         height: size,
-        borderRadius: size/2,
+        borderRadius: size / 2,
         alignItems: "center",
         justifyContent: "center",
       }}
     >
-      <Icon name="add" size={size*0.58} color="white" />
+      <Icon name="add" size={size * 0.58} color="white" />
     </LinearGradient>
   );
 }

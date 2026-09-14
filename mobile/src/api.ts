@@ -1,7 +1,9 @@
+export class NetworkError extends Error {}
 export class ApiError extends Error {
   constructor(
     message: string,
     public status: number,
+    public data?: { current?: Record<string, unknown> },
   ) {
     super(message);
   }
@@ -48,6 +50,8 @@ export async function apiRequest<T>(
       signal: controller.signal,
       credentials: "omit",
       cache: "no-store",
+    }).catch((e: Error) => {
+      throw new NetworkError(e.message || "Connection unavailable.");
     });
     if (response.ok && format === "text") {
       if (!response.headers.get("content-type")?.includes("text/csv"))
@@ -59,13 +63,14 @@ export async function apiRequest<T>(
       throw new ApiError(
         data?.error ?? "Clover could not complete the request.",
         response.status,
+        data,
       );
     if (!data)
       throw new Error("Clover returned an unexpected response. Please retry.");
     return data as T;
   } catch (error) {
     if (controller.signal.aborted)
-      throw new Error(
+      throw new NetworkError(
         path.includes("/process")
           ? "The connection timed out. Check the import status before trying the upload again."
           : "The connection timed out. Check your connection and try again.",

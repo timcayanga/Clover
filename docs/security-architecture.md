@@ -12,7 +12,7 @@
 - Browser origin checks are unchanged. The native exemption only recognizes the
   exact Request authenticated inside the server's mobile request context.
 - Native financial responses are no-store and omit raw import payloads/storage
-  keys. Device financial lists are in-memory; session tokens use secure storage.
+  keys. Native financial downloads and pending changes use per-user/environment SQLCipher storage with device-only keys; session tokens use secure storage. See `docs/offline/native-offline-design.md` for retention, backup exclusion, authorization expiry and sync conflict rules. Browser preview financial lists remain in memory.
 
 ## Database Access
 

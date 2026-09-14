@@ -44,3 +44,7 @@ yarn-error.*
 
 # Local EAS signing credentials (contains certificate password)
 /credentials.json
+
+# Local Expo module compilation output
+/modules/*/android/build/
+/modules/*/android/.gradle/

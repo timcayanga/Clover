@@ -1,3 +1,4 @@
+import { useSession } from "./session";
 import {
   ExpoSpeechRecognitionModule,
   useSpeechRecognitionEvent,
@@ -10,12 +11,15 @@ export function AdviserInputTools({
   disabled,
   onText,
   onPhoto,
+  onDeviceOnly = false,
 }: {
+  onDeviceOnly?: boolean;
   disabled: boolean;
   onText: (text: string) => void;
   onPhoto: () => void;
 }) {
   const { colors } = useTheme();
+  const { offlineStatus } = useSession();
   const [listening, setListening] = useState(false);
   const [error, setError] = useState("");
   useSpeechRecognitionEvent("start", () => setListening(true));
@@ -53,7 +57,17 @@ export function AdviserInputTools({
         );
         return;
       }
+      const onDevice =
+        ExpoSpeechRecognitionModule.supportsOnDeviceRecognition();
+      const requiresLocal = onDeviceOnly || !offlineStatus.online;
+      if (requiresLocal && !onDevice) {
+        setError(
+          "Offline dictation is unavailable on this device. Type your message, or connect to use voice input.",
+        );
+        return;
+      }
       ExpoSpeechRecognitionModule.start({
+        requiresOnDeviceRecognition: requiresLocal,
         lang: "en-PH",
         interimResults: false,
         continuous: false,
