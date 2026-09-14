@@ -3492,7 +3492,7 @@ function TransactionsPageContent() {
         }
       }
 
-      setMessage("Import complete. Accounts and Transactions are updated.");
+      setMessage(summary.completionMessage ?? "Import complete. Accounts and Transactions are updated.");
     },
     [accountNumberById, currencyFilter, refreshTransactionsAfterImport, selectedWorkspaceId]
   );

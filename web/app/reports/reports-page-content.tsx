@@ -1,3 +1,4 @@
+import { reportAccountBalance, buildReportBalanceSeries } from "@/lib/report-balances";
 import { ReportChartSwitch } from "@/components/report-chart-switch";
 import { loadReportNetWorth } from "@/lib/report-net-worth";
 import nextDynamic from "next/dynamic";
@@ -38,7 +39,6 @@ import { AdviserHeaderLink } from "@/components/adviser-header-link";
 import { ReportsCurrencyFilter } from "@/components/reports-currency-filter";
 import {
   ReportsMoneyOverTimeChart,
-  type ReportsMoneyPoint,
 } from "@/components/reports-money-over-time-chart";
 import { ReportsCashFlowMap } from "@/components/reports-cash-flow-map";
 import { formatAccountOptionLabel } from "@/lib/account-option-label";
@@ -475,6 +475,8 @@ export async function ReportsStream({
     } = reportWindow;
     const sixMonthsAgo = new Date(currentWindowEnd.getFullYear(), currentWindowEnd.getMonth() - 5, 1);
     const reportQueryStart = new Date(Math.min(previousWindowStart.getTime(), sixMonthsAgo.getTime()));
+    const balanceAsOf = getCalendarDayEndInTimeZone(now, normalizeRegionalPreferences(user.regionalPreferences).timeZone);
+    const reportQueryEnd = new Date(Math.max(+currentWindowEnd, +balanceAsOf));
 
     const requestedAccountId = searchParams?.accountId?.trim() || undefined;
     const [
@@ -486,12 +488,12 @@ export async function ReportsStream({
     ] = await loadCachedWorkspaceSummary({
       workspaceId: selectedWorkspaceId,
       area: "reports",
-      keyParts: [reportQueryStart.toISOString(), currentWindowEnd.toISOString(), needsAdvancedData ? "advanced" : "core", requestedAccountId ?? "all-accounts"],
+      keyParts: [reportQueryStart.toISOString(), reportQueryEnd.toISOString(), needsAdvancedData ? "advanced" : "core", requestedAccountId ?? "all-accounts"],
       load: () => Promise.all([
       prisma.transaction.findMany({
         where: buildActiveWorkspaceTransactionWhere(selectedWorkspaceId, {
           ...(requestedAccountId ? { accountId: requestedAccountId } : {}),
-          date: { gte: reportQueryStart, lte: currentWindowEnd },
+          date: { gte: reportQueryStart, lte: reportQueryEnd },
         }),
         select: {
           id: true,
@@ -534,9 +536,13 @@ export async function ReportsStream({
               balance: true,
               currency: true,
               type: true,
+              source: true,
+              transactions: { where: { deletedAt: null, isExcluded: false, account: { source: "manual" } },
+                select: { amount: true, currency: true, type: true, date: true, createdAt: true, merchantRaw: true, merchantClean: true, description: true, rawPayload: true } },
+              statementCheckpoints: { select: { endingBalance: true, status: true, statementEndDate: true, createdAt: true, sourceMetadata: true }, orderBy: { createdAt: "desc" }, take: 50 },
             },
             orderBy: [{ balance: "desc" }, { updatedAt: "desc" }],
-          }) as Promise<WorkspaceAccountSnapshot[]>),
+          }).then(accounts => accounts.map(account => ({ id: account.id, name: account.name, accountNumber: account.accountNumber, currency: account.currency, type: account.type, balance: reportAccountBalance({ ...account, transactions: account.transactions.map(t => ({ ...t, amount: t.amount.toString(), rawPayload: t.rawPayload as Parameters<typeof reportAccountBalance>[0]["transactions"][number]["rawPayload"] })) }) }))) as Promise<WorkspaceAccountSnapshot[]>),
       needsAdvancedData
         ? prisma.importFile.findFirst({
             where: { workspaceId: selectedWorkspaceId, ...(requestedAccountId ? { accountId: requestedAccountId } : {}) },
@@ -1294,29 +1300,12 @@ export async function ReportsStream({
     const previousWeeklyNet = previousWeeklySummary.income - previousWeeklySummary.expense;
     const weeklyNetChange = weeklyNet - previousWeeklyNet;
     const weeklySummaryLabel = `${formatShortDate(weeklySummaryStart)} - ${formatShortDate(weeklySummaryEnd)}`;
-    const reportDateKey = (date: Date) =>
-      `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
-    const dailyNetByDate = new Map<string, number>();
-    reportDisplayTransactions.forEach((transaction) => {
-      const type = getResolvedReportTransactionType(transaction);
-      if (type !== "income" && type !== "expense") return;
-      const signedAmount = toReportMagnitude(transaction.amount) * (type === "income" ? 1 : -1);
-      const dateKey = reportDateKey(transaction.date);
-      dailyNetByDate.set(dateKey, (dailyNetByDate.get(dateKey) ?? 0) + signedAmount);
-    });
     const netWorthHistory = await loadReportNetWorth(selectedWorkspaceId, displayCurrency, currentWindowStart, currentWindowEnd, requestedAccountId ?? undefined);
-    const reportMoneyPoints: ReportsMoneyPoint[] = [];
-    let runningBalance = totalAccountBalance - currentNet;
-    const timelineDate = new Date(currentWindowStart);
-    timelineDate.setHours(0, 0, 0, 0);
-    const timelineEnd = new Date(currentWindowEnd);
-    timelineEnd.setHours(23, 59, 59, 999);
-    while (timelineDate <= timelineEnd) {
-      const dateKey = reportDateKey(timelineDate);
-      runningBalance += dailyNetByDate.get(dateKey) ?? 0;
-      reportMoneyPoints.push({ date: dateKey, balance: runningBalance });
-      timelineDate.setDate(timelineDate.getDate() + 1);
-    }
+    const reportMoneySeries = buildReportBalanceSeries(workspaceAccountSummaries,
+      reportAllTransactions.map(transaction => ({ ...transaction, accountId: transaction.account.id,
+        date: getCalendarDayEndInTimeZone(transaction.date, normalizeRegionalPreferences(user.regionalPreferences).timeZone),
+        amount: String(transaction.amount), rawPayload: transaction.rawPayload as Parameters<typeof buildReportBalanceSeries>[1][number]["rawPayload"] })),
+      currentWindowStart, currentWindowEnd, balanceAsOf);
     const reportCategorySegments = reportExpenseDisplayCategories.map(([categoryName, amount]) => ({
       categoryName,
       amount,
@@ -1723,10 +1712,9 @@ export async function ReportsStream({
             <section className="reports-grid reports-grid--primary reports-overview-visual">
               <article className="report-card glass report-card--wide">
                 <ReportInfoTip className="reports-container-info" label={`A ${rangeWindowText} view of how income and spending changed the net position.`} />
-                <ReportsMoneyOverTimeChart
-                  points={reportMoneyPoints}
-                  currency={displayCurrency}
-                />
+                {reportMoneySeries.map(series => <ReportsMoneyOverTimeChart key={series.currency}
+                  points={series.points} currency={series.currency} title={`Money over time · ${series.currency}`} />)}
+                <p className="muted">Estimated from current balances and recorded account movements. Each currency is shown separately.</p>
                 <div className="reports-chart-insight"><strong>{currentNet >= 0 ? `You kept ${formatCurrency(currentNet)} after spending` : `Spending exceeded income by ${formatCurrency(Math.abs(currentNet))}`}</strong><p>{savingsRate === null ? "Add income to compare your savings rate." : `${Math.round(savingsRate * 100)}% of income remains in this period.`}</p><Link className="button button-primary button-small" href="/accounts">View balance details</Link><Link className="button plan-action-view" href={buildTransactionsHref({type:"expense"})}>Explore spending</Link></div>
               </article>
               <article className="report-card glass report-card--wide"><ReportsMoneyOverTimeChart points={netWorthHistory.points} currency={displayCurrency} title="Net worth over time"/><p className="muted">Assets minus liabilities in {displayCurrency}, using dated balance records for all {netWorthHistory.accountCount} selected accounts. Values between statements are carried forward; incomplete history is not shown.</p></article>

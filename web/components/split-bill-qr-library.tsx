@@ -423,7 +423,9 @@ export function SplitBillQrLibrary() {
 
   const openEdit = (profile: PaymentProfile) => {
     setDraft(profileToDraft(profile));
-    setSelectedPaymentAccountId("");
+    // Saved payment details may differ from the linked account (or outlive it).
+    // Keep their provider usable without rematching an edited account number.
+    setSelectedPaymentAccountId(profile.provider ? "saved-provider" : "");
     setEditingId(profile.id);
     setNotice(null);
     setError(null);
@@ -687,7 +689,7 @@ export function SplitBillQrLibrary() {
                 <select
                   value={selectedPaymentAccountId}
                   required
-                  disabled={isLoadingPaymentAccounts || paymentAccounts.length === 0}
+                  disabled={isLoadingPaymentAccounts || (paymentAccounts.length === 0 && selectedPaymentAccountId !== "saved-provider")}
                   onChange={(event) => selectPaymentAccount(event.target.value)}
                 >
                   <option value="">
@@ -697,6 +699,7 @@ export function SplitBillQrLibrary() {
                         ? "No bank or wallet accounts available"
                         : "Select a bank or wallet"}
                   </option>
+                  {selectedPaymentAccountId === "saved-provider" ? <option value="saved-provider">{draft.provider}</option> : null}
                   {paymentAccounts.map((account) => (
                     <option key={account.id} value={account.id}>{formatPaymentAccountLabel(account)}</option>
                   ))}

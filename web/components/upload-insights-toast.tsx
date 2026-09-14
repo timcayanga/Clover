@@ -8,6 +8,7 @@ import { buildImportResultChecklist, formatImportResultHeadline } from "@/lib/im
 
 export type UploadInsightsSummary = {
   fileName: string;
+  completionMessage?: string;
   rowsImported: number;
   accountId: string | null;
   accountName: string | null;
@@ -64,7 +65,7 @@ type UploadInsightsToastProps = {
 };
 
 export function UploadInsightsToast({ summary, onClose }: UploadInsightsToastProps) {
-  const headline = formatImportResultHeadline(summary);
+  const headline = summary.completionMessage ?? formatImportResultHeadline(summary);
   const checklist = buildImportResultChecklist(summary);
 
   useEffect(() => {
@@ -82,7 +83,7 @@ export function UploadInsightsToast({ summary, onClose }: UploadInsightsToastPro
       <div className="upload-insights-toast__eyebrow">Import complete</div>
       <div className="upload-insights-toast__title-row">
         <div>
-          <h4>Your statement has been imported</h4>
+          <h4>{summary.completionMessage ? "Upload checked" : "Your statement has been imported"}</h4>
           <p>{headline || `${summary.rowsImported} transaction${summary.rowsImported === 1 ? "" : "s"} imported`}</p>
         </div>
           <button type="button" className="icon-button upload-insights-toast__close" onClick={onClose} aria-label="Close insights popup"><InterfaceIcon name="close" /></button>

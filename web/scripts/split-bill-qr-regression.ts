@@ -55,7 +55,8 @@ assert.match(paymentOptionsSource, /split-bill-qr-editor-surface/, "Payment opti
 assert.match(paymentOptionsSource, /split-bill-qr-editor__close-mobile/, "The mobile payment-option page must provide a back action.");
 assert.match(paymentOptionsSource, /setMobileOverlayChrome/, "The mobile payment-option editor must retain Clover's shared page chrome.");
 assert.match(cloverShellSource, /mobileOverlayChrome\?\.title \?\? title/, "The shared mobile header must support contextual editor titles.");
-assert.match(splitBillHomeSource, /split-bill-mobile-add-button[\s\S]*?>\s*Add\s*<\/button>/, "People and Groups must retain a visible mobile Add action.");
+assert.match(splitBillHomeSource, /clover:open-split-bill-group[\s\S]{0,100}Add Group/, "Groups must retain a labeled Add action.");
+assert.match(splitBillHomeSource, /clover:open-split-bill-people[\s\S]{0,100}Add People/, "People must retain a labeled Add action.");
 assert.match(splitBillActionsSource, /title: isPersonModalOpen \? "Add Person" : editingGroupId \? "Edit Group" : "Add Group"/, "Mobile People and Group editors must use Clover's shared page header.");
 assert.match(globalStyles, /split-bill-mobile-home__footer \.split-bill-mobile-add-button[\s\S]*?width: auto !important/, "Mobile People and Groups Add actions must not collapse into icon-only buttons.");
 assert.match(globalStyles, /\.split-bill-simple-entry-modal\s*\{[\s\S]*?inset: 72px 0 calc\(86px \+ env\(safe-area-inset-bottom\)\)/, "Mobile People and Group editors must render as full pages between Clover's shared navigation bars.");

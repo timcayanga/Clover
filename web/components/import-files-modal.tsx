@@ -4483,8 +4483,7 @@ export function ImportFilesModal({
             );
 
             groupedSummaries.push(summary);
-            seedImportedWorkspaceCaches(workspaceId, summary);
-            await Promise.resolve(onImported(summary));
+            // Publish only after the server has checked duplicate identity.
           }
 
           const combinedSummary = combineUploadInsightsSummaries(groupedSummaries);
@@ -4537,9 +4536,7 @@ export function ImportFilesModal({
         true
       );
 
-      seedImportedWorkspaceCaches(workspaceId, summary);
       localPreparseSummaryByItemIdRef.current.set(itemId, summary);
-      await Promise.resolve(onImported(summary));
       updateItem(itemId, {
         importFileId: localImportFileId,
         targetAccountId: resolvedAccountId,
@@ -4572,9 +4569,7 @@ export function ImportFilesModal({
               })),
             } satisfies UploadInsightsSummary;
 
-            seedImportedWorkspaceCaches(workspaceId, persistedSummary);
             localPreparseSummaryByItemIdRef.current.set(itemId, persistedSummary);
-            await Promise.resolve(onImported(persistedSummary));
             updateItem(itemId, {
               targetAccountId: persistedAccountId,
             });
@@ -6086,8 +6081,15 @@ export function ImportFilesModal({
           summary: null,
           errorMessage: null,
         });
+        const duplicateSummary: UploadInsightsSummary = {
+          fileName: item.file.name, rowsImported: 0, accountId: null, accountName: null, institution: null,
+          balance: null, optimistic: false, previewTransactions: [], completionMessage: duplicateMessage,
+          incomeTotal: 0, expenseTotal: 0, netTotal: 0, topCategoryName: null, topCategoryAmount: null,
+          topCategoryShare: null, topMerchantName: null, topMerchantCount: null,
+        };
+        await Promise.resolve(onImported(duplicateSummary));
         setMessage(duplicateMessage);
-        return { status: "done", importedRows: 0, summary: null };
+        return { status: "done", importedRows: 0, summary: duplicateSummary };
       }
 
       capturePostHogClientEvent("import_parsed_successfully", {
@@ -8033,7 +8035,7 @@ export function ImportFilesModal({
             fileTotal: queuedItems.length,
             completedFiles: queuedItems.length,
             progress: 100,
-            detail: "Accounts and transactions are visible in Clover. Clover will keep cleaning up names and categories in the background.",
+            detail: completedSummary.completionMessage ?? "Accounts and transactions are visible in Clover. Clover will keep cleaning up names and categories in the background.",
             summary: completedSummary,
           });
         }

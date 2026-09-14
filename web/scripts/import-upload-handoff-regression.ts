@@ -503,10 +503,11 @@ const main = async () => {
     "Receipt completion must wait for its committed transaction before publishing 100%."
   );
   const duplicateSource = section(modalSource, "if (processPayload?.duplicate)", "capturePostHogClientEvent(\"import_parsed_successfully\"");
-  assert.doesNotMatch(duplicateSource, /incomeTotal:\s*0/);
-  assert.doesNotMatch(duplicateSource, /await Promise\.resolve\(onImported/);
-  assert.doesNotMatch(duplicateSource, /router\.refresh\(\)/);
-  assert.match(duplicateSource, /return \{ status: "done", importedRows: 0, summary: null \}/);
+  assert.match(duplicateSource, /rowsImported: 0/);
+  assert.match(duplicateSource, /previewTransactions: \[\]/);
+  assert.match(duplicateSource, /completionMessage: duplicateMessage/);
+  assert.match(duplicateSource, /await Promise\.resolve\(onImported\(duplicateSummary\)\)/);
+  assert.match(duplicateSource, /return \{ status: "done", importedRows: 0, summary: duplicateSummary \}/);
   assert.doesNotMatch(
     transactionsPageSource,
     /pendingImportSummary\.optimistic[\s\S]{0,500}setImportOpen\(false\)/,

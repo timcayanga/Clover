@@ -60,7 +60,7 @@ const isOpeningBalanceTransaction = (transaction: BalanceLikeTransaction) => {
   return kind === "opening_balance" || merchantRaw === "beginning balance";
 };
 
-const getTransactionAmountDelta = (transaction: BalanceLikeTransaction) => {
+export const getTransactionAmountDelta = (transaction: BalanceLikeTransaction) => {
   const rawPayload = transaction.rawPayload ?? null;
   const rawDelta = parseBalanceValue(rawPayload?.amountDelta ?? null);
   if (rawDelta !== null) {

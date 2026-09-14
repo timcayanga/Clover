@@ -1,5 +1,7 @@
 "use client";
 
+import { getParticipantOutstandingBalance } from "@/lib/split-bill-view-models";
+
 import { hasSplitBillAllocationChanges } from "@/lib/split-bill";
 import { InterfaceIcon } from "@/components/interface-icon";
 
@@ -1278,17 +1280,19 @@ export function SplitBillWorkspace({
         <strong>People and balances</strong>
       </div>
       <div className="split-bill-detail-modal__allocation-grid">
-        {bill.settlement.participants.map((participant) => (
+        {bill.settlement.participants.map((participant) => {
+          const outstanding = getParticipantOutstandingBalance(bill, participant.id);
+          return (
           <article key={participant.id}>
             <strong>{participant.name}</strong>
             <span>Paid {formatSplitBillAmount(participant.paid, bill.currency)}</span>
             <span>Share {formatSplitBillAmount(participant.owed, bill.currency)}</span>
-            <span className={participant.balance >= 0 ? "is-positive" : "is-negative"}>
-              {participant.balance >= 0 ? "Is owed" : "Owes"}{" "}
-              {formatSplitBillAmount(Math.abs(participant.balance), bill.currency)}
+            <span className={outstanding >= 0 ? "is-positive" : "is-negative"}>
+              {Math.abs(outstanding) < 0.005 ? "Settled" : outstanding >= 0 ? "Is owed" : "Owes"}{" "}
+              {formatSplitBillAmount(Math.abs(outstanding), bill.currency)}
             </span>
           </article>
-        ))}
+        );})}
       </div>
       <div className="split-bill-detail-modal__allocation-transfers">
         <strong>Who pays whom</strong>

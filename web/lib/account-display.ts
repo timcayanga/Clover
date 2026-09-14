@@ -188,7 +188,8 @@ export const getAccountDisplayName = (account: AccountDisplayInput) => {
 
 export const getAccountCardName = (account: AccountDisplayInput) => {
   if (account.type === "cash") {
-    return "Cash";
+    const name = normalizeWhitespace(account.name ?? "");
+    return name && !/^cash(?: [A-Z]{3})?$/i.test(name) ? name : "Cash";
   }
 
   if (account.type === "investment") {

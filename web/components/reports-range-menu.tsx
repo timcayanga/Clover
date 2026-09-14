@@ -70,7 +70,8 @@ export function ReportsRangeMenu({
 
   useEffect(() => {
     const handlePointerDown = (event: PointerEvent) => {
-      if (!menuRef.current || menuRef.current.contains(event.target as Node)) {
+      if (!menuRef.current || menuRef.current.contains(event.target as Node) ||
+        (event.target instanceof Element && event.target.closest(".reports-currency-filter__menu"))) {
         return;
       }
 
