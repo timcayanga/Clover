@@ -48,7 +48,7 @@ export default function TabLayout() {
               borderTopColor: colors.line,
               backgroundColor: colors.white,
             },
-            tabBarLabel: ({ children, color }) => <Text style={{fontFamily:"Poppins-Regular",fontSize:10,color,textAlign:"center"}}>{children}</Text>,
+            tabBarLabel: ({ children, color }) => <Text style={{fontFamily:"Poppins-Regular",fontSize:11,color,textAlign:"center"}}>{children}</Text>,
             tabBarLabelStyle: { fontSize: 11, fontFamily: "Poppins-Regular" },
           }}
         >

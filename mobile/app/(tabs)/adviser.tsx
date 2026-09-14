@@ -170,14 +170,11 @@ export default function Adviser() {
       />
       {!messages.length ? (
         <Card>
-          <Body muted={false}>What would you like to understand?</Body>
-          <Body>
-            Ask about your spending, budgets or goals in this Profile.
-          </Body>
+          <Body muted={false}>Ask Clover anything about your finances.</Body>
           {[
-            "Where did my money go this month?",
-            "How can I stay within my budget?",
-            "How am I doing on my goals?",
+            "📊 Where did my money go this month?",
+            "💰 How can I stay within my budget?",
+            "🎯 How am I doing on my goals?",
           ].map((prompt) => (
             <PlanAction
               key={prompt}

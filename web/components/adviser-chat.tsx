@@ -567,7 +567,7 @@ function ScopedAdviserChat({ prompts, storageKey = adviserChatStorageKey, initia
           value={input}
           onChange={(event) => setInput(event.target.value)}
           onKeyDown={handleComposerKeyDown}
-          placeholder="Ask Adviser about your money..."
+          placeholder="Ask Clover"
           disabled={hasReachedLimit || isSending || entryLocked}
         />
         {(input.trim() || attachments.length) ? <button type="submit" className="adviser-chat__send" aria-label="Send message" disabled={hasReachedLimit||isSending||attaching||entryLocked}>↑</button> : null}
@@ -613,8 +613,8 @@ function ScopedAdviserChat({ prompts, storageKey = adviserChatStorageKey, initia
         <div className="adviser-chat__welcome">
           <Image className="adviser-chat__welcome-mark" src="/clover-mark.svg" alt="" width={42} height={42} priority />
           <div className="adviser-chat__welcome-copy">
-            {layout === "workspace" ? <h2>Make your next money move.</h2> : null}
-            <p className="adviser-chat__question-lead">Ask Adviser to compare your options, spot risks, and suggest what to do next.</p>
+            {layout === "workspace" ? <h2>Ask Clover anything about your finances.</h2> : null}
+            {layout === "embedded" ? <p className="adviser-chat__question-lead">Ask Clover anything about your finances.</p> : null}
           </div>
           {layout === "workspace" ? composer : null}
           <div className="adviser-chat__prompt-row" aria-label="Suggested questions">

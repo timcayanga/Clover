@@ -166,6 +166,7 @@ export function PlanAction({
     <Pressable
       accessibilityRole="button"
       accessibilityState={{ disabled }}
+      hitSlop={4}
       disabled={disabled}
       onPress={onPress}
       style={{
@@ -189,13 +190,14 @@ export function PlanAction({
         }
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 0 }}
-        style={{ minHeight: 44, paddingVertical: 10, paddingHorizontal: 14, alignItems: "center", justifyContent: "center" }}
+        style={{ minHeight: 38, paddingVertical: 8, paddingHorizontal: 14, alignItems: "center", justifyContent: "center" }}
       >
         <Text
           style={{
             color: palette[1],
             fontFamily: "Poppins-Medium",
             fontSize: 15,
+            lineHeight: 22,
           }}
         >
           {title}
@@ -307,7 +309,7 @@ export function SummaryCard({
           fontSize: 16,
           lineHeight: 24,
           textAlign: "center",
-          color: colors.muted,
+          color: "#7A879C",
         }}
       >
         {title}

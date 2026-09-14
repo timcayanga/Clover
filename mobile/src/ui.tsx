@@ -1,3 +1,4 @@
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
 import { useAccess } from "./access";
 import { useDisplayPreferences } from "./display-preferences";
@@ -107,6 +108,7 @@ export function Button({
     <Pressable
       accessibilityRole="button"
       accessibilityLabel={title}
+      hitSlop={4}
       accessibilityState={{ disabled }}
       disabled={disabled}
       onPress={onPress}
@@ -116,6 +118,15 @@ export function Button({
         (pressed || disabled) && { opacity: 0.6 },
       ]}
     >
+      {!secondary ? (
+        <LinearGradient
+          pointerEvents="none"
+          colors={["#03A8C0", "#2CCFCA"]}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 0 }}
+          style={[StyleSheet.absoluteFill, { borderRadius: 26 }]}
+        />
+      ) : null}
       {icon ? (
         <Icon
           name={icon}
@@ -622,8 +633,8 @@ const makeStyles = (colors: typeof lightColors) =>
       color: colors.ink,
       letterSpacing: -0.7,
     },
-    body: { fontSize: 16, lineHeight: 24, color: colors.muted },
-    label: { fontSize: 15, fontWeight: "600", color: colors.ink },
+    body: { fontFamily: "Poppins-Regular", fontSize: 16, lineHeight: 24, color: colors.muted },
+    label: { fontFamily: "Poppins-Medium", fontSize: 15, color: colors.ink },
     card: {
       padding: 22,
       borderRadius: 24,
@@ -634,13 +645,13 @@ const makeStyles = (colors: typeof lightColors) =>
     },
     notice: { padding: 15, borderRadius: 16, backgroundColor: colors.pale },
     button: {
-      minHeight: 44,
+      minHeight: 40,
       alignSelf: "flex-start",
       maxWidth: "100%",
       flexDirection: "row",
       gap: 8,
       paddingHorizontal: 16,
-      paddingVertical: 10,
+      paddingVertical: 8,
       borderRadius: 26,
       backgroundColor: colors.teal,
       alignItems: "center",
@@ -654,6 +665,7 @@ const makeStyles = (colors: typeof lightColors) =>
     buttonText: {
       flexShrink: 1,
       fontSize: 15,
+      lineHeight: 22,
       fontFamily: "Poppins-Medium",
       color: "#FFFFFF",
       textAlign: "center",
@@ -769,13 +781,14 @@ export function DetailNavigation({
 }: { onNavigate?: () => void } = {}) {
   const access = useAccess();
   const { colors } = useTheme();
+  const insets = useSafeAreaInsets();
   return (
     <View
       style={{
         flexDirection: "row",
         paddingVertical: 7,
-        minHeight: 72,
-        paddingBottom: 16,
+        minHeight: 72 + insets.bottom,
+        paddingBottom: 8 + insets.bottom,
         borderTopWidth: 1,
         borderTopColor: colors.line,
         backgroundColor: colors.white,
