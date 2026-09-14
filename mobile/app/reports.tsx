@@ -36,6 +36,12 @@ type Report = {
     points: { date: string; balance: number }[];
     accountCount: number;
   };
+  balances?: {
+    currency: string;
+    weekly: { date: string; balance: number }[];
+    monthly: { date: string; balance: number }[];
+    accountCount: number;
+  };
   reviewCount: number;
 };
 const sampleDays = [
@@ -78,6 +84,20 @@ const sample: Report = {
     ],
     accountCount: 4,
   },
+  balances: {
+    currency: "PHP",
+    accountCount: 4,
+    weekly: [
+      { date: "2026-09-10", balance: 137000 },
+      { date: "2026-09-12", balance: 143000 },
+    ],
+    monthly: [
+      { date: "2026-09-01", balance: 141000 },
+      { date: "2026-09-06", balance: 132000 },
+      { date: "2026-09-10", balance: 137000 },
+      { date: "2026-09-12", balance: 143000 },
+    ],
+  },
   reviewCount: 0,
 };
 export default function Reports() {
@@ -93,6 +113,9 @@ export default function Reports() {
     sample,
   );
   const summary = data?.[period];
+  const balancePoints =
+    data?.balances?.currency === currency ? data.balances[period] : [];
+  const latestBalance = balancePoints.at(-1);
   const net = (summary?.income ?? 0) - (summary?.expense ?? 0);
   return (
     <Screen gap={20}>
@@ -102,8 +125,17 @@ export default function Reports() {
           <Pressable
             accessibilityRole="button"
             accessibilityLabel="Filters"
+            accessibilityState={{ expanded: filters }}
             onPress={() => setFilters(!filters)}
-            style={{ padding: 8 }}
+            style={{
+              width: 40,
+              height: 40,
+              borderWidth: 1,
+              borderColor: colors.line,
+              borderRadius: 20,
+              alignItems: "center",
+              justifyContent: "center",
+            }}
           >
             <Icon name="options-outline" />
           </Pressable>
@@ -137,6 +169,7 @@ export default function Reports() {
         </Card>
       ) : null}
       <PlanTabs
+        compact
         items={["Overview", "Spending", "Trends", "Insights · Pro"]}
         value={tab}
         onChange={setTab}
@@ -243,36 +276,51 @@ export default function Reports() {
             >
               Money over time
             </Text>
-            <Body>{period === "weekly" ? "Last 7 days" : "Last 30 days"}</Body>
+            <Body>
+              Tracked account balance · {currency} ·{" "}
+              {period === "weekly" ? "Last 7 days" : "Last 30 days"}
+            </Body>
+            {latestBalance ? (
+              <Text
+                style={{
+                  fontFamily: "Poppins-SemiBold",
+                  fontSize: 22,
+                  color: colors.ink,
+                }}
+              >
+                {money(String(latestBalance.balance), currency)}
+              </Text>
+            ) : null}
             <ReportLineChart
               currency={currency}
               series={[
                 {
-                  name: "Income",
-                  color: colors.positive,
-                  points: summary.days.map((day) => ({
-                    date: day.date,
-                    value: day.income,
-                  })),
-                },
-                {
-                  name: "Spending",
-                  color: colors.danger,
-                  points: summary.days.map((day) => ({
-                    date: day.date,
-                    value: day.expense,
+                  name: "Tracked account balance",
+                  color: colors.bright,
+                  points: balancePoints.map((point) => ({
+                    date: point.date,
+                    value: point.balance,
                   })),
                 },
               ]}
             />
+            <Body>
+              Estimated from current balances and recorded account movements.
+              Each currency is shown separately.
+            </Body>
             <Body muted={false}>
               {net >= 0
                 ? `You kept ${money(String(net), currency)} after spending`
                 : `Spending exceeded income by ${money(String(-net), currency)}`}
             </Body>
             <PlanAction
-              title="Explore transactions"
-              onPress={() => router.push("/(tabs)/transactions")}
+              title="View balance details"
+              tone="primary"
+              onPress={() => router.push("/(tabs)/accounts")}
+            />
+            <PlanAction
+              title="Explore spending"
+              onPress={() => setTab("Spending")}
             />
           </Card>
           <Card>
@@ -324,7 +372,9 @@ export default function Reports() {
             >
               Spending Mix
             </Text>
-            <View style={{ marginLeft: "auto" }}><ChartControls value={chart} onChange={setChart} /></View>
+            <View style={{ marginLeft: "auto" }}>
+              <ChartControls value={chart} onChange={setChart} />
+            </View>
           </View>
           <Body>This calendar month · {currency}</Body>
           {chart === "Donut" ? (

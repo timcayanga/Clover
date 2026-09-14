@@ -244,8 +244,10 @@ async function handle(
       const currency = z.string().regex(/^[A-Z]{3}$/).parse(url.searchParams.get("currency") ?? "PHP");
       const {mobileHome} = await import("@/lib/mobile-home");
       const {loadReportNetWorth} = await import("@/lib/report-net-worth");
-      const [data, netWorth] = await Promise.all([mobileHome(workspaceId,currency),loadReportNetWorth(workspaceId,currency,new Date(Date.now()-90*86400000),new Date())]);
-      return reply({...data,netWorth});
+      const { mobileReportBalances } = await import("@/lib/mobile-report-balances");
+      const now = new Date();
+      const [data, netWorth, balances] = await Promise.all([mobileHome(workspaceId,currency),loadReportNetWorth(workspaceId,currency,new Date(+now-90*86400000),now),mobileReportBalances(workspaceId,currency,now)]);
+      return reply({...data,netWorth,balances});
     }
     if (operation === "together-options") {
       const [groups, people, profiles] = await Promise.all([

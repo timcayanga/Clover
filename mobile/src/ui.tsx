@@ -56,6 +56,23 @@ export function Icon({
 }) {
   const { colors, styles, dark } = useTheme();
   const source = mobileNavigationIcons[name] ?? mobileInterfaceIcons[name];
+  if (name === "chatbubble-ellipses-outline" && source)
+    return (
+      <View style={{ width: size, height: size, overflow: "hidden" }}>
+        <Image
+          source={source}
+          accessible={false}
+          resizeMode="contain"
+          style={{
+            position: "absolute",
+            width: size * 1.2,
+            height: size * 1.2,
+            left: -size * 0.1,
+            top: -size * 0.075,
+          }}
+        />
+      </View>
+    );
   if (source)
     return (
       <Image
@@ -633,7 +650,12 @@ const makeStyles = (colors: typeof lightColors) =>
       color: colors.ink,
       letterSpacing: -0.7,
     },
-    body: { fontFamily: "Poppins-Regular", fontSize: 16, lineHeight: 24, color: colors.muted },
+    body: {
+      fontFamily: "Poppins-Regular",
+      fontSize: 16,
+      lineHeight: 24,
+      color: colors.muted,
+    },
     label: { fontFamily: "Poppins-Medium", fontSize: 15, color: colors.ink },
     card: {
       padding: 22,

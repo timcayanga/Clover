@@ -66046,6 +66046,28 @@ html[data-theme="dark"] .content.content--reports .reports-range-menu__summary {
 .content--reports .reports-top-tabs .animated-tabs__tab.is-active { border-color: var(--stroke, #dce8eb); border-bottom-color: var(--surface, #fff); background: var(--surface, #fff); }
 .content--reports .reports-top-tabs .animated-tabs__indicator { display: none; }
 @media (max-width: 1100px) {
+  /* Mobile tabs are rendered in the shell, outside .content--reports. */
+  .shell-mobile-subheader .reports-top-tabs {
+    min-height: 40px!important; height: auto!important;
+    padding: 0!important; gap: 2px!important;
+  }
+  .shell-mobile-subheader .reports-top-tabs .animated-tabs__tab {
+    display: flex!important; flex: 1 0 72px!important;
+    min-width: 72px!important; height: 40px!important; min-height: 40px!important;
+    flex-direction: row!important; padding: 8px 4px!important; gap: 4px!important;
+    border: 1px solid var(--stroke)!important; border-bottom: 0!important;
+    border-radius: 8px 8px 0 0!important; background: var(--surface-2, #f0f5f7)!important;
+    font-size: 11px!important;
+  }
+  .shell-mobile-subheader .reports-top-tabs .animated-tabs__tab.is-active {
+    background: color-mix(in srgb, var(--accent) 12%, var(--surface))!important;
+  }
+  .shell-mobile-subheader .reports-top-tabs .animated-tabs__indicator { display: none; }
+  .shell-mobile-subheader .reports-top-tabs .animated-tabs__icon,
+  .shell-mobile-subheader .reports-top-tabs .animated-tabs__icon svg {
+    width: 12px!important; height: 12px!important; flex-shrink: 0;
+  }
+  .shell-mobile-subheader .reports-top-tabs .animated-tabs__label { font-size: 11px!important; }
   .content.content--reports .reports-range-menu__summary { width: 40px!important; padding: 10px!important; }
   .content--reports .report-card__head { align-items: flex-start; }
   .content--reports .report-chart-switch { margin-left: auto; }

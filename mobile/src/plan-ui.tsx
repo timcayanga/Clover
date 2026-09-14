@@ -1,7 +1,7 @@
 import { LinearGradient } from "expo-linear-gradient";
 import { useEffect, useState, useCallback, type ReactNode } from "react";
 import { router, useFocusEffect } from "expo-router";
-import { Pressable, Text, View } from "react-native";
+import { Platform, Pressable, Text, View } from "react-native";
 import { useSession } from "./session";
 import { Icon, useTheme } from "./ui";
 export function PlanHeader({
@@ -32,7 +32,10 @@ export function PlanHeader({
         onPress={back ?? adviser}
         style={{ padding: 8 }}
       >
-        <Icon name={back ? "chevron-back" : "chatbubble-ellipses-outline"} />
+        <Icon
+          name={back ? "chevron-back" : "chatbubble-ellipses-outline"}
+          size={back ? 24 : 32}
+        />
       </Pressable>
       <Text
         accessibilityRole="header"
@@ -58,6 +61,7 @@ export function PlanHeader({
           style={{ padding: 8 }}
         >
           <Icon
+            size={back ? 32 : 24}
             name={
               back
                 ? "chatbubble-ellipses-outline"
@@ -75,7 +79,9 @@ export function PlanTabs({
   items,
   value,
   onChange,
+  compact = false,
 }: {
+  compact?: boolean;
   items: string[];
   value: string;
   onChange: (value: string) => void;
@@ -102,7 +108,13 @@ export function PlanTabs({
           style={{
             flexGrow: 1,
             flexBasis: items.length > 4 ? "30%" : 0,
-            paddingVertical: 12,
+            paddingVertical: compact ? 8 : 12,
+            paddingHorizontal: compact ? 2 : 0,
+            minHeight: 40,
+            flexDirection: compact ? "row" : "column",
+            justifyContent: "center",
+            backgroundColor:
+              compact && item === value ? colors.pale : undefined,
             borderWidth: 1,
             borderColor: item === value ? colors.bright : colors.line,
             borderTopLeftRadius: 8,
@@ -114,7 +126,9 @@ export function PlanTabs({
           <Icon
             name={
               index === 0
-                ? "grid-outline"
+                ? compact
+                  ? "apps-outline"
+                  : "grid-outline"
                 : /history|activity/i.test(item)
                   ? "time-outline"
                   : /transaction|payment/i.test(item)
@@ -135,9 +149,32 @@ export function PlanTabs({
                                   ? "list-outline"
                                   : "stats-chart-outline"
             }
-            size={16}
+            size={compact ? 12 : 16}
           />
-          <Text style={{ fontSize: 11, fontFamily: "Poppins-Regular", color: colors.teal }}>{item}</Text>
+          <Text
+            style={{
+              fontSize: 11,
+              flexShrink: compact ? 1 : undefined,
+              fontFamily: "Poppins-Regular",
+              color: colors.teal,
+            }}
+          >
+            {compact ? item.replace(" · Pro", "") : item}
+          </Text>
+          {compact && item.includes(" · Pro") ? (
+            <Text
+              style={{
+                position: "absolute",
+                top: 1,
+                right: 3,
+                fontSize: 7,
+                fontFamily: "Poppins-SemiBold",
+                color: colors.teal,
+              }}
+            >
+              Pro
+            </Text>
+          ) : null}
         </Pressable>
       ))}
     </View>
@@ -192,7 +229,13 @@ export function PlanAction({
         }
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 0 }}
-        style={{ minHeight: 38, paddingVertical: 8, paddingHorizontal: 14, alignItems: "center", justifyContent: "center" }}
+        style={{
+          minHeight: 38,
+          paddingVertical: 8,
+          paddingHorizontal: 14,
+          alignItems: "center",
+          justifyContent: "center",
+        }}
       >
         <Text
           style={{
@@ -288,8 +331,21 @@ export function SummaryCard({
   detailColor?: string;
 }) {
   const { colors } = useTheme();
+  const [cardWidth, setCardWidth] = useState(0);
+  const valueSize =
+    Platform.OS === "web" && cardWidth > 0
+      ? Math.max(
+          13.2,
+          Math.min(22, (cardWidth - 10) / (Math.max(value.length, 1) * 0.68)),
+        )
+      : 22;
   return (
     <View
+      onLayout={
+        Platform.OS === "web"
+          ? (event) => setCardWidth(event.nativeEvent.layout.width)
+          : undefined
+      }
       style={{
         flex: 1,
         minWidth: 0,
@@ -319,13 +375,13 @@ export function SummaryCard({
       <Text
         style={{
           fontFamily: "Poppins-SemiBold",
-          fontSize: 22,
+          fontSize: valueSize,
           lineHeight: 33,
           textAlign: "center",
           color: color ?? colors.ink,
         }}
         adjustsFontSizeToFit
-        numberOfLines={1}
+        numberOfLines={Platform.OS === "web" ? undefined : 1}
         minimumFontScale={0.6}
       >
         {value}

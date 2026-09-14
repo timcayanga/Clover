@@ -36,6 +36,9 @@ async function main() {
   assert.equal(mobileOperation("GET", ["bootstrap"]), "bootstrap");
   assert.equal(mobileOperation("POST", ["adviser", "chat"]), "adviser-chat");
   assert.equal(mobileOperation("GET", ["adviser", "chat"]), null);
+  const chat = mobileApiResponse("adviser-chat", { reply: "Example", grounding: { transactionCount: 42, historyThrough: "2026-09-15T00:00:00Z", rawPayload: "private", accountNumber: "private" }, suggestions: [{ id: "follow-up", label: "Compare spending", prompt: "Compare my spending", secret: "private" }] }) as { grounding: unknown; suggestions: unknown };
+  assert.deepEqual(chat.grounding, { transactionCount: 42, historyThrough: "2026-09-15T00:00:00Z" });
+  assert.deepEqual(chat.suggestions, [{ id: "follow-up", label: "Compare spending", prompt: "Compare my spending" }]);
   assert.equal(mobileOperation("POST", ["adviser", "actions"]), null, "Native suggestions must go through editable manual drafts, never arbitrary Adviser writes");
   assert.ok(routeSource.indexOf('await assertWorkspaceAccess(userId, workspaceId)') < routeSource.indexOf('if (operation === "adviser-chat")'), "Native chat must check the requested Profile before dispatch");
   assert.equal(mobileOperation("GET", ["circles"]), "circles");

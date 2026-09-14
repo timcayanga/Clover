@@ -84,6 +84,7 @@ export function mobileApiResponse(operation: string, value: unknown) {
     ...(projectAdviserDeviceContext(data.deviceContext) ? { deviceContext: projectAdviserDeviceContext(data.deviceContext) } : {}),
     entryDraft: Array.isArray(data.actions) ? data.actions.filter(action => record(action).type === "create_entries").map(action => entryDraftSchema.safeParse(record(action).payload)).find(result => result.success)?.data : undefined,
     suggestions: rows(data.suggestions, ["id", "label", "prompt"]),
+    ...(data.grounding ? { grounding: pick(data.grounding, ["transactionCount", "historyThrough"]) } : {}),
     usage: pick(data.usage, ["plan", "remaining", "resetsAt", "unlimited"]),
     // Native action confirmation is not implemented yet; never execute or expose
     // model-generated action payloads as if they were saved financial records.

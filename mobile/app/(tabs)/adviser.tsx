@@ -21,6 +21,8 @@ import {
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+type FollowUp = { id: string; label: string; prompt: string };
+type Grounding = { transactionCount?: number; historyThrough?: string };
 type Message = { role: "user" | "assistant"; content: string };
 export default function Adviser() {
   const session = useSession();
@@ -35,12 +37,16 @@ export default function Adviser() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [actions, setActions] = useState(false);
+  const [followUps, setFollowUps] = useState<FollowUp[]>([]);
+  const [grounding, setGrounding] = useState<Grounding | null>(null);
   const generation = useRef(0),
     inFlight = useRef(false);
   useEffect(() => {
     generation.current++;
     inFlight.current = false;
     setMessages([]);
+    setFollowUps([]);
+    setGrounding(null);
     setDraft("");
     setError("");
     setBusy(false);
@@ -96,6 +102,8 @@ export default function Adviser() {
         );
         if (version !== generation.current) return;
         setMessages([...next, { role: "assistant", content: reply }]);
+        setFollowUps([]);
+        setGrounding(null);
         setDraft("");
         setActions(false);
         return;
@@ -116,6 +124,8 @@ export default function Adviser() {
         reply: string;
         hasActions?: boolean;
         entryDraft?: unknown;
+        suggestions?: FollowUp[];
+        grounding?: Grounding;
       }>(`adviser/chat?workspaceId=${encodeURIComponent(session.profileId)}`, {
         method: "POST",
         body: JSON.stringify({
@@ -132,6 +142,15 @@ export default function Adviser() {
       setMessages([...next, { role: "assistant", content: result.reply }]);
       setDraft("");
       setActions(Boolean(result.hasActions || result.entryDraft));
+      setFollowUps(
+        (result.suggestions ?? [])
+          .filter(
+            (item) =>
+              typeof item.prompt === "string" && typeof item.label === "string",
+          )
+          .slice(0, 3),
+      );
+      setGrounding(result.grounding ?? null);
     } catch (e) {
       if (version === generation.current)
         setError(
@@ -210,6 +229,8 @@ export default function Adviser() {
               disabled={busy}
               onPress={() => {
                 setMessages([]);
+                setFollowUps([]);
+                setGrounding(null);
                 setDraft("");
                 setError("");
                 setActions(false);
@@ -230,6 +251,8 @@ export default function Adviser() {
               onPress={() => {
                 generation.current++;
                 setMessages([]);
+                setFollowUps([]);
+                setGrounding(null);
                 setActions(false);
                 setError("");
                 setLocal(!local);
@@ -306,6 +329,30 @@ export default function Adviser() {
             <Body muted={false}>{message.content}</Body>
           </View>
         ))}
+        {grounding &&
+        Number.isFinite(grounding.transactionCount) &&
+        messages.length ? (
+          <Body>
+            Data used: {grounding.transactionCount ?? 0} transactions
+            {grounding.historyThrough &&
+            Number.isFinite(Date.parse(grounding.historyThrough))
+              ? ` · through ${new Date(grounding.historyThrough).toLocaleDateString("en-PH", { month: "short", day: "numeric", timeZone: "Asia/Manila" })}`
+              : ""}
+          </Body>
+        ) : null}
+        {followUps.length && messages.length ? (
+          <View style={{ gap: 8 }}>
+            {followUps.map((item, index) => (
+              <PlanAction
+                key={`${item.id}-${index}`}
+                title={`💡 ${item.label}`}
+                disabled={busy}
+                fullWidth
+                onPress={() => setDraft(item.prompt.slice(0, 4000))}
+              />
+            ))}
+          </View>
+        ) : null}
         {busy ? (
           <Text
             accessibilityLiveRegion="polite"
