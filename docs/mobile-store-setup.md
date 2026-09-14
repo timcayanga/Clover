@@ -2,7 +2,7 @@
 
 Expo account: `cloverph`. Organization/project owner: `clover-innovations`. Mac login verified and EAS project created: `@clover-innovations/clover-mobile`, project ID `742a3fe2-1cb2-4d71-8ed7-bc7e2e89b0ff`. Local Expo config contains this project link.
 
-Status updated September 14, 2026: the user has created the Apple App ID and App Store Connect record, and a Google Play draft for **Clover: Personal Finance**, under **Clover Innovations OPC**. Google developer account type: **Organization**. Both app identifiers are `ph.clover.app`. Apple Team ID: `6XX38GYURG`; App Store Connect numeric app ID: `6811711508`. Subscription products remain pending. No signed build or submission is claimed by this configuration work.
+Status updated September 14, 2026: the user has created the Apple App ID and App Store Connect record, and a Google Play draft for **Clover: Personal Finance**, under **Clover Innovations OPC**. Google developer account type: **Organization**. Both app identifiers are `ph.clover.app`. Apple Team ID: `6XX38GYURG`; App Store Connect numeric app ID: `6811711508`. Subscription products remain pending. The first signed iOS build completed and the user confirmed delivery through Transporter. Replacement builds are being prepared with the September 14 Figma refresh and dark app icon. Public release and real subscription testing remain pending.
 
 `mobile/eas.json` now prepares a `store-test` profile for TestFlight and Google Play internal testing, pointing at staging. Development builds retain the preview identifier and scheme. Store-test builds use the `clover` scheme; configure matching Clerk callbacks before authentication testing.
 
