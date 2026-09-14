@@ -141,7 +141,7 @@ export default function TransactionDetail() {
   return (
     <KeyboardAvoidingView
       style={{ flex: 1 }}
-      behavior={Platform.OS === "ios" ? "padding" : undefined}
+      behavior={Platform.OS === "ios" ? "padding" : "height"}
     >
       <Screen>
         {error ? <Notice>{error}</Notice> : null}

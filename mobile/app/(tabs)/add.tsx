@@ -198,7 +198,7 @@ export default function Add() {
     void choose(picker as "file" | "camera" | "library");
   }, [picker, session.data]);
   return (
-    <KeyboardAvoidingView style={{ flex: 1 }} keyboardVerticalOffset={insets.top + 70} behavior={Platform.OS === "ios" ? "padding" : undefined}>
+    <KeyboardAvoidingView style={{ flex: 1 }} keyboardVerticalOffset={insets.top + 70} behavior={Platform.OS === "ios" ? "padding" : "height"}>
     <Screen>
       <View
         style={{
