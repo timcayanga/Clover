@@ -1235,7 +1235,10 @@ export function CloverShell({
         setOpenMenu(null);
       }
 
-      if (!shellRef.current.contains(target)) {
+      if (
+        !shellRef.current.contains(target) &&
+        !notificationsPopoverRef.current?.contains(target)
+      ) {
         setOpenMenu(null);
         setIsSearchOpen(false);
         setNotificationsPopoverStyle(null);
