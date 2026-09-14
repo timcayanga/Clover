@@ -175,6 +175,23 @@ test("conflict pauses and explicit keep uses latest version with new ID", async 
   assert.notEqual(sent[0].id, sent[1].id);
   assert.equal(sent[1].baseVersion, current.updatedAt);
 });
+test("online financial edits use the authenticated API without entering the offline queue", async () => {
+  let edits = 0;
+  const e = setup(async (_path, options) => {
+    if (options?.method === "PATCH") {
+      edits++;
+      assert.deepEqual(JSON.parse(String(options.body)), {amount:"30"});
+      return {transaction:{...row,amount:"30"}};
+    }
+    return {transaction:row};
+  });
+  await prime(e);
+  await e.setOnline(true);
+  const result = await e.request<{transaction:Transaction}>("transactions/t?workspaceId=p", {method:"PATCH",body:JSON.stringify({amount:"30"})});
+  assert.equal(result.transaction.amount,"30");
+  assert.equal(edits,1);
+  assert.equal((await e.pending()).length,0);
+});
 test("offline edits reject financial amount changes and duplicate drafts", async () => {
   const e = setup();
   await prime(e);

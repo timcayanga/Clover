@@ -14,6 +14,9 @@ import {
 } from "./ui";
 import { Choices } from "./transaction-entry";
 import { useSession } from "./session";
+export const accountDisplayBalance = (account: AccountRecord) =>
+  account.displayBalance === undefined ? account.balance : account.displayBalance;
+
 export type AccountRecord = {
   id: string;
   name: string;
@@ -21,6 +24,7 @@ export type AccountRecord = {
   type: string;
   currency: string;
   balance: string | null;
+  displayBalance?: string | null;
   lastFour?: string;
   source?: string;
   favorite?: boolean;
@@ -349,9 +353,9 @@ export function AccountEditor({
           </Body>
           {record.lastFour ? <Body>Account •••• {record.lastFour}</Body> : null}
           <Heading>
-            {record.balance === null
+            {accountDisplayBalance(record) === null
               ? "Not recorded"
-              : money(record.balance, record.currency)}
+              : money(accountDisplayBalance(record)!, record.currency)}
           </Heading>
           <Body>
             {record.currency} · {record.source || "Recorded"}

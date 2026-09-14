@@ -121,12 +121,6 @@ export class OfflineEngine {
             "Open this transaction online once before editing it offline.",
           );
         if (
-          Object.keys(payload).some(
-            (k) => !["merchantClean", "description", "tags"].includes(k),
-          )
-        )
-          throw new Error("This change requires an online connection.");
-        if (
           (await this.pending()).some(
             (p) =>
               p.workspaceId === profile &&
@@ -136,6 +130,10 @@ export class OfflineEngine {
           throw new Error(
             "Sync or review the pending edit for this transaction first.",
           );
+        if (Object.keys(payload).some(k => !["merchantClean", "description", "tags"].includes(k))) {
+          if (!this.status.online) throw new Error("This change requires an online connection.");
+          return this.transport<T>(path, options);
+        }
       }
       if (method === "POST" && payload.type === "transfer") {
         if (!this.status.online)

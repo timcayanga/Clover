@@ -24,6 +24,7 @@ import {
 } from "../../src/ui";
 import {
   AccountEditor,
+  accountDisplayBalance,
   type AccountRecord as Account,
 } from "../../src/account-editor";
 export default function Accounts() {
@@ -190,13 +191,13 @@ function AccountsContent() {
             <View style={{flexDirection:"row",alignItems:"center",gap:12,flexWrap:"wrap"}}><Text style={{fontFamily:"Poppins-SemiBold",fontSize:16,color:colors.ink}}>{group.title}</Text><Text style={{fontFamily:"Poppins-SemiBold",fontSize:13,color:colors.ink}}>{
                 group.rows.some(
                   (a) =>
-                    a.balance === null || !Number.isFinite(Number(a.balance)),
+                    accountDisplayBalance(a) === null || !Number.isFinite(Number(accountDisplayBalance(a))),
                 )
                   ? "Balance not recorded"
                   : money(
                       String(
                         group.rows.reduce(
-                          (sum, a) => sum + Number(a.balance),
+                          (sum, a) => sum + Number(accountDisplayBalance(a)),
                           0,
                         ),
                       ),
@@ -269,9 +270,9 @@ function AccountsContent() {
                       )[1],
                     }}
                   >
-                    {account.balance === null
+                    {accountDisplayBalance(account) === null
                       ? "Not recorded"
-                      : money(account.balance, account.currency)}
+                      : money(accountDisplayBalance(account)!, account.currency)}
                   </Text>
                   <Text
                     accessibilityElementsHidden

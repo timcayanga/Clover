@@ -74,7 +74,7 @@ export function Choices({
     </View>
   );
 }
-function ChoiceField({
+export function ChoiceField({
   label,
   options,
   value,

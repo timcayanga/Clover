@@ -590,10 +590,14 @@ async function handle(
         }
       },
     );
-    return reply(
-      mobileApiResponse(operation, await response.json()),
-      response.status,
-    );
+    const responseData = await response.json();
+    if (response.ok && request.method === "GET" && (operation === "accounts" || operation === "account")) {
+      const rows = operation === "accounts" ? responseData.accounts : [responseData.account];
+      const { mobileAccountBalances } = await import("@/lib/mobile-account-balances");
+      const balances = await mobileAccountBalances(workspaceId, rows.map((row: { id: string }) => row.id));
+      for (const row of rows) row.displayBalance = balances.has(row.id) ? balances.get(row.id) : row.balance;
+    }
+    return reply(mobileApiResponse(operation, responseData), response.status);
   } catch (error) {
     if (error instanceof z.ZodError)
       return reply({ error: "Please check the entered fields." }, 400);

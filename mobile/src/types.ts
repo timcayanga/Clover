@@ -16,6 +16,8 @@ export type Transaction = {
   merchantClean: string | null;
   description: string | null;
   categoryName: string | null;
+  categoryId?: string | null;
+  confidenceScore?: number | null;
   reviewStatus: string | null;
   tags?: { id: string; name: string }[];
 };

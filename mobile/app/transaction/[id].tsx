@@ -1,6 +1,7 @@
-import { useLocalSearchParams } from "expo-router";
+import { ChoiceField } from "../../src/transaction-entry";
+import { router, useLocalSearchParams } from "expo-router";
 import { useEffect, useState } from "react";
-import { KeyboardAvoidingView, Platform, Text, View } from "react-native";
+import { Alert, KeyboardAvoidingView, Platform, Text, View } from "react-native";
 import { useAccess } from "../../src/access";
 import { useSession } from "../../src/session";
 import type { Transaction } from "../../src/types";
@@ -12,6 +13,12 @@ export default function TransactionDetail() {
   const session = useSession();
   const { id } = useLocalSearchParams<{ id: string }>();
   const [row, setRow] = useState<Transaction | null>(null);
+  const [amount, setAmount] = useState("");
+  const [date, setDate] = useState("");
+  const [accountId, setAccountId] = useState("");
+  const [categoryId, setCategoryId] = useState("");
+  const [accounts, setAccounts] = useState<{id:string;name:string;currency:string}[]>([]);
+  const [categories, setCategories] = useState<{id:string;name:string;type:string}[]>([]);
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [tags, setTags] = useState("");
@@ -24,17 +31,22 @@ export default function TransactionDetail() {
     setRow(null);
     setError("");
     const load = async () => {
-      const result = session.demo
-        ? session.rows.find((r) => r.id === id)
-        : (
-            await session.request<{ transaction: Transaction }>(
-              `transactions/${id}?workspaceId=${encodeURIComponent(session.profileId)}`,
-            )
-          ).transaction;
+      const response = session.demo ? null : await session.request<{
+        transaction: Transaction;
+        accounts: {id:string;name:string;currency:string}[];
+        categories: {id:string;name:string;type:string}[];
+      }>(`transactions/${id}?workspaceId=${encodeURIComponent(session.profileId)}`);
+      const result = response?.transaction ?? session.rows.find((r) => r.id === id);
       if (!live) return;
       if (!result || result.workspaceId !== session.profileId)
         throw new Error("This transaction is not in the selected Profile.");
       setRow(result);
+      setAmount(result.amount);
+      setDate(result.date.slice(0,10));
+      setAccountId(result.accountId);
+      setCategoryId(result.categoryId ?? "");
+      setAccounts(response?.accounts ?? []);
+      setCategories(response?.categories ?? []);
       setName(result.merchantClean ?? result.merchantRaw);
       setDescription(result.description ?? "");
       setTags(result.tags?.map((t) => t.name).join(", ") ?? "");
@@ -59,6 +71,12 @@ export default function TransactionDetail() {
     if (!row || busy) return;
     if (!name.trim()) {
       setError("Add a transaction name.");
+      return;
+    }
+    const parsedDate = new Date(`${date}T00:00:00Z`);
+    if (!/^\d{1,12}(\.\d{1,2})?$/.test(amount) || Number(amount) <= 0 ||
+        !/^\d{4}-\d{2}-\d{2}$/.test(date) || !Number.isFinite(parsedDate.getTime()) || parsedDate.toISOString().slice(0,10) !== date) {
+      setError("Enter a positive amount and a valid date.");
       return;
     }
     const selectedTags = [
@@ -93,6 +111,10 @@ export default function TransactionDetail() {
           {
             method: "PATCH",
             body: JSON.stringify({
+              ...(amount !== row.amount ? {amount} : {}),
+              ...(date !== row.date.slice(0,10) ? {date} : {}),
+              ...(accountId !== row.accountId ? {accountId} : {}),
+              ...(categoryId !== (row.categoryId ?? "") ? {categoryId: categoryId || null} : {}),
               merchantClean: name.trim(),
               description,
               tags: selectedTags,
@@ -100,11 +122,21 @@ export default function TransactionDetail() {
           },
         );
       setSaved(true);
+      setReload(n => n + 1);
     } catch (e) {
       setError((e as Error).message);
     } finally {
       setBusy(false);
     }
+  };
+  const remove = async () => {
+    if (!row || busy) return;
+    setBusy(true); setError("");
+    try {
+      await session.request(`transactions/${id}?workspaceId=${encodeURIComponent(session.profileId)}`, {method:"DELETE"});
+      router.replace("/(tabs)/transactions");
+    } catch(e) { setError((e as Error).message); }
+    finally { setBusy(false); }
   };
   return (
     <KeyboardAvoidingView
@@ -141,6 +173,12 @@ export default function TransactionDetail() {
                   : "Your transaction record"}
               </Body>
             </Card>
+            <Field label={`Amount (${row.currency})`} value={amount} onChangeText={setAmount} keyboardType="decimal-pad" />
+            <Field label="Date (YYYY-MM-DD)" value={date} onChangeText={setDate} />
+            {!session.demo ? <>
+              <ChoiceField label="Account" value={accountId} onChange={setAccountId} options={accounts.filter(a => a.currency === row.currency).map(a => ({value:a.id,label:a.name}))} />
+              <ChoiceField label="Category" value={categoryId} onChange={setCategoryId} options={[{value:"",label:"Uncategorized"}, ...categories.filter(c => c.type === row.type || row.type === "transfer").map(c => ({value:c.id,label:c.name}))]} />
+            </> : null}
             <Field
               label="Name"
               value={name}
@@ -185,10 +223,7 @@ export default function TransactionDetail() {
               disabled={busy}
               onPress={() => void save()}
             />
-            <Body>
-              Amount, date, account, category, and final import confirmation
-              remain editable on the Clover website in this first preview.
-            </Body>
+            {!session.demo ? <Button secondary title="Delete transaction" disabled={busy} onPress={() => Alert.alert("Delete transaction?", "This removes the transaction from your active records.", [{text:"Cancel",style:"cancel"},{text:"Delete",style:"destructive",onPress:()=>void remove()}])} /> : null}
           </>
         )}
       </Screen>
