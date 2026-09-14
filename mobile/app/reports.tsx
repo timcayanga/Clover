@@ -1,3 +1,4 @@
+import { ChartControls } from "../src/chart-controls";
 import { SpendingDonut } from "../src/spending-donut";
 import { useState } from "react";
 import { Pressable, Text, View } from "react-native";
@@ -262,11 +263,7 @@ export default function Reports() {
         <Card>
           <Body muted={false}>Spending Mix</Body>
           <Body>This calendar month · {currency}</Body>
-          <PlanTabs
-            items={["Bars", "Donut", "Table"]}
-            value={chart}
-            onChange={setChart}
-          />
+          <ChartControls value={chart} onChange={setChart} />
           {chart === "Donut" ? (
             <SpendingDonut categories={data.categories} currency={currency} />
           ) : null}

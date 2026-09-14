@@ -65953,6 +65953,8 @@ html[data-theme=dark] .notifications-filters button[aria-pressed=true] { backgro
  .accounts-mobile-list-row:is([data-account-icon="cash"],[data-account-icon="insurance"],[data-account-icon="receivable"],[data-account-icon="prepaid"],[data-account-icon="other"]) { background:color-mix(in srgb,#67dfb3 22%,var(--surface))!important; }
  .accounts-mobile-list-row:is([data-account-icon="loan"],[data-account-icon="mortgage"],[data-account-icon="line_of_credit"],[data-account-icon="bnpl"],[data-account-icon="payable"]) { background:color-mix(in srgb,#f18dad 22%,var(--surface))!important; }
 
+}
+
 /* Split Bills: shared identities and unclipped Figma cards. */
 .split-bill-home .split-bill-group-card {
   height: auto; min-height: 0; overflow: visible; padding: 20px; gap: 16px;

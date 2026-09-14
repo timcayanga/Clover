@@ -32,13 +32,7 @@ export function ReportChartSwitch({
               title={type}
               onClick={() => setView(type)}
             >
-              {type === "table" ? (
-                <InterfaceIcon name="details" size={16} />
-              ) : (
-                <ReportsTabIcon
-                  section={type === "bars" ? "spending" : "overview"}
-                />
-              )}
+              <span aria-hidden="true" style={{width:18,height:18,backgroundColor:"currentColor",mask:`url(/assets/report-controls/${type}.svg) center / contain no-repeat`,WebkitMask:`url(/assets/report-controls/${type}.svg) center / contain no-repeat`}}/>
             </button>
           ))}
         </div>
