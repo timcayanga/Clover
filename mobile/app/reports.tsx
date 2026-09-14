@@ -1,3 +1,4 @@
+import { ReportLineChart } from "../src/report-line-chart";
 import { ChartControls } from "../src/chart-controls";
 import { SpendingDonut } from "../src/spending-donut";
 import { useState } from "react";
@@ -37,25 +38,46 @@ type Report = {
   };
   reviewCount: number;
 };
+const sampleDays = [
+  { date: "2026-09-01", income: 28000, expense: 7000 },
+  { date: "2026-09-06", income: 0, expense: 9000 },
+  { date: "2026-09-10", income: 15000, expense: 10000 },
+  { date: "2026-09-12", income: 22000, expense: 16000 },
+];
+// Only used behind the existing, visibly labelled sample-mode gate.
 const sample: Report = {
   currency: "PHP",
   currencies: ["PHP"],
-  month: { income: 0, expense: 0 },
-  previousMonth: { income: 0, expense: 0 },
+  month: { income: 65000, expense: 42000 },
+  previousMonth: { income: 60000, expense: 40000 },
   weekly: {
-    income: 0,
-    expense: 0,
-    previous: { income: 0, expense: 0 },
-    days: [],
+    income: 37000,
+    expense: 26000,
+    previous: { income: 28000, expense: 16000 },
+    days: sampleDays.slice(2),
   },
   monthly: {
-    income: 0,
-    expense: 0,
-    previous: { income: 0, expense: 0 },
-    days: [],
+    income: 65000,
+    expense: 42000,
+    previous: { income: 60000, expense: 40000 },
+    days: sampleDays,
   },
-  categories: [],
-  netWorth: { points: [], accountCount: 0 },
+  categories: [
+    { name: "Housing", amount: 15000 },
+    { name: "Food & Dining", amount: 9000 },
+    { name: "Groceries", amount: 6000 },
+    { name: "Other", amount: 5000 },
+    { name: "Transport", amount: 4000 },
+    { name: "Subscriptions", amount: 3000 },
+  ],
+  netWorth: {
+    points: [
+      { date: "2026-07-01", balance: 88000 },
+      { date: "2026-08-01", balance: 94000 },
+      { date: "2026-09-01", balance: 112000 },
+    ],
+    accountCount: 4,
+  },
   reviewCount: 0,
 };
 export default function Reports() {
@@ -196,7 +218,13 @@ export default function Reports() {
                     <SummaryCard
                       title={row.title}
                       value={row.value}
-                      color={color}
+                      color={
+                        row.title === "Income"
+                          ? colors.positive
+                          : row.title === "Spending"
+                            ? colors.danger
+                            : colors.ink
+                      }
                       detail={detail}
                       detailColor={color}
                     />
@@ -206,32 +234,37 @@ export default function Reports() {
             })()}
           </View>
           <Card>
-            <Body muted={false}>Income and spending over time</Body>
+            <Text
+              style={{
+                color: "#7A879C",
+                fontSize: 16,
+                fontFamily: "Poppins-SemiBold",
+              }}
+            >
+              Money over time
+            </Text>
             <Body>{period === "weekly" ? "Last 7 days" : "Last 30 days"}</Body>
-            {summary.days.length ? (
-              summary.days
-                .filter(
-                  (_, i) =>
-                    i % Math.max(1, Math.floor(summary.days.length / 10)) === 0,
-                )
-                .map((day) => (
-                  <View key={day.date} style={{ gap: 8 }}>
-                    <Body>
-                      {day.date} · Income {money(String(day.income), currency)}{" "}
-                      · Spending {money(String(day.expense), currency)}
-                    </Body>
-                    <Progress
-                      value={
-                        (day.expense /
-                          Math.max(1, ...summary.days.map((d) => d.expense))) *
-                        100
-                      }
-                    />
-                  </View>
-                ))
-            ) : (
-              <Body>No transaction history yet.</Body>
-            )}
+            <ReportLineChart
+              currency={currency}
+              series={[
+                {
+                  name: "Income",
+                  color: colors.positive,
+                  points: summary.days.map((day) => ({
+                    date: day.date,
+                    value: day.income,
+                  })),
+                },
+                {
+                  name: "Spending",
+                  color: colors.danger,
+                  points: summary.days.map((day) => ({
+                    date: day.date,
+                    value: day.expense,
+                  })),
+                },
+              ]}
+            />
             <Body muted={false}>
               {net >= 0
                 ? `You kept ${money(String(net), currency)} after spending`
@@ -243,16 +276,28 @@ export default function Reports() {
             />
           </Card>
           <Card>
-            <Body muted={false}>Net worth over time</Body>
-            {data.netWorth.points.length ? (
-              data.netWorth.points.map((point) => (
-                <Body key={point.date}>
-                  {point.date} · {money(String(point.balance), currency)}
-                </Body>
-              ))
-            ) : (
-              <Body>No complete dated balance history is available yet.</Body>
-            )}
+            <Text
+              style={{
+                color: "#7A879C",
+                fontSize: 16,
+                fontFamily: "Poppins-SemiBold",
+              }}
+            >
+              Net worth over time
+            </Text>
+            <ReportLineChart
+              currency={currency}
+              series={[
+                {
+                  name: "Net worth",
+                  color: colors.bright,
+                  points: data.netWorth.points.map((point) => ({
+                    date: point.date,
+                    value: point.balance,
+                  })),
+                },
+              ]}
+            />
             <Body>
               Assets minus liabilities in {currency}. Only complete recorded
               history is shown.
@@ -261,9 +306,27 @@ export default function Reports() {
         </>
       ) : tab === "Spending" ? (
         <Card>
-          <Body muted={false}>Spending Mix</Body>
+          <View
+            style={{
+              flexDirection: "row",
+              flexWrap: "wrap",
+              alignItems: "center",
+              justifyContent: "space-between",
+              gap: 12,
+            }}
+          >
+            <Text
+              style={{
+                color: "#7A879C",
+                fontSize: 16,
+                fontFamily: "Poppins-SemiBold",
+              }}
+            >
+              Spending Mix
+            </Text>
+            <View style={{ marginLeft: "auto" }}><ChartControls value={chart} onChange={setChart} /></View>
+          </View>
           <Body>This calendar month · {currency}</Body>
-          <ChartControls value={chart} onChange={setChart} />
           {chart === "Donut" ? (
             <SpendingDonut categories={data.categories} currency={currency} />
           ) : null}

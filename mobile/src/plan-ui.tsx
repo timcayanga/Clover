@@ -137,7 +137,7 @@ export function PlanTabs({
             }
             size={16}
           />
-          <Text style={{ fontSize: 11, color: colors.teal }}>{item}</Text>
+          <Text style={{ fontSize: 11, fontFamily: "Poppins-Regular", color: colors.teal }}>{item}</Text>
         </Pressable>
       ))}
     </View>

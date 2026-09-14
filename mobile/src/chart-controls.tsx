@@ -19,12 +19,13 @@ export function ChartControls({
         <Pressable
           key={name}
           accessibilityRole="button"
+          hitSlop={2}
           accessibilityLabel={`${name} chart`}
           accessibilityState={{ selected: value === name }}
           onPress={() => onChange(name)}
           style={{
-            width: 44,
-            height: 44,
+            width: 40,
+            height: 40,
             borderRadius: 8,
             borderWidth: 1,
             borderColor: colors.line,
