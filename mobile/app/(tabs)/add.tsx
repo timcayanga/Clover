@@ -1,3 +1,4 @@
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
 import * as DocumentPicker from "expo-document-picker";
 import * as ImagePicker from "expo-image-picker";
@@ -5,7 +6,7 @@ import * as Crypto from "expo-crypto";
 import { File } from "expo-file-system";
 import { router, useFocusEffect, useLocalSearchParams } from "expo-router";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Alert, Platform, View, Pressable, Text, Image } from "react-native";
+import { Alert, KeyboardAvoidingView, Platform, View, Pressable, Text, Image } from "react-native";
 import {
   Choices,
   ManualTransaction,
@@ -30,6 +31,7 @@ import {
 } from "../../src/ui";
 export default function Add() {
   const { colors, dark } = useTheme();
+  const insets = useSafeAreaInsets();
   const session = useSession();
   const [tab, setTab] = useState("manual");
   const [draft, setDraft] = useState(emptyTransaction);
@@ -41,7 +43,7 @@ export default function Add() {
   useEffect(() => {
     setTab(entry?.startsWith("upload-") ? "upload" : "manual");
     setDraft(emptyTransaction());
-  }, [entry]);
+  }, [entry, session.profileId]);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const [history, setHistory] = useState<
@@ -196,6 +198,7 @@ export default function Add() {
     void choose(picker as "file" | "camera" | "library");
   }, [picker, session.data]);
   return (
+    <KeyboardAvoidingView style={{ flex: 1 }} keyboardVerticalOffset={insets.top + 70} behavior={Platform.OS === "ios" ? "padding" : undefined}>
     <Screen>
       <View
         style={{
@@ -390,5 +393,6 @@ export default function Add() {
         </View>
       </View>
     </Screen>
+    </KeyboardAvoidingView>
   );
 }

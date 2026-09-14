@@ -173,6 +173,10 @@ export default function TransactionDetail() {
                   : "Your transaction record"}
               </Body>
             </Card>
+            {row.reviewStatus === "pending_review" ? <Notice>
+              {typeof row.confidenceScore === "number" ? `Recorded confidence: ${row.confidenceScore}%. ` : "This transaction needs review. "}
+              Check the amount, date, account and category against the original record before saving corrections.
+            </Notice> : null}
             <Field label={`Amount (${row.currency})`} value={amount} onChangeText={setAmount} keyboardType="decimal-pad" />
             <Field label="Date (YYYY-MM-DD)" value={date} onChangeText={setDate} />
             {!session.demo ? <>
