@@ -7,7 +7,8 @@ import { PayPalSubscribeButton } from "@/components/paypal-subscribe-button";
 import { PaddleCheckoutButton } from "@/components/paddle-checkout-button";
 import { PlanFeatureItem } from "@/components/plan-feature-item";
 import { capturePostHogClientEvent } from "@/components/posthog-analytics";
-import { BILLING_PLANS, type BillingInterval } from "@/lib/billing-plans";
+import { type BillingInterval } from "@/lib/billing-plans";
+import type { BillingOffers } from "@/lib/billing-offer-rules";
 import type { CloverTokenUsageSnapshot } from "@/lib/clover-token-usage";
 import { TokenUsageDonut } from "@/components/token-usage-donut";
 
@@ -122,9 +123,21 @@ export function SettingsPlanPanel({
   const [billingInterval, setBillingInterval] = useState<BillingInterval>(initialInterval);
   const [paddlePortalAction, setPaddlePortalAction] = useState<PaddlePortalAction | null>(null);
   const [paddlePortalMessage, setPaddlePortalMessage] = useState<string | null>(null);
-  const billingPlan = BILLING_PLANS.find((plan) => plan.interval === billingInterval);
-  const checkoutPlanId = billingInterval === "monthly" ? paypalMonthlyPlanId : paypalAnnualPlanId;
-  const paddlePriceId = billingInterval === "monthly" ? paddleMonthlyPriceId : paddleAnnualPriceId;
+  const [offers, setOffers] = useState<BillingOffers | null>(null);
+  const [offersLoading, setOffersLoading] = useState(true);
+  useEffect(() => {
+    const controller = new AbortController();
+    setOffersLoading(true);
+    setOffers(null);
+    fetch("/api/billing/offers", { signal: controller.signal, cache: "no-store" })
+      .then(async response => { if (!response.ok) throw new Error("Offers unavailable"); return response.json() as Promise<BillingOffers>; })
+      .then(value => { if (!controller.signal.aborted) setOffers(value); })
+      .catch(() => { /* Keep checkout unavailable until the offer can be verified. */ })
+      .finally(() => { if (!controller.signal.aborted) setOffersLoading(false); });
+    return () => controller.abort();
+  }, [billingCustomerId]);
+  const checkoutPlanId = offers?.paypal[billingInterval];
+  const paddlePriceId = offers?.paddle[billingInterval];
   const paypalCheckoutReady = Boolean(paypalClientId && checkoutPlanId && billingCustomerId);
   const paddleReady = Boolean(
     paddleCheckoutReady &&
@@ -292,8 +305,8 @@ export function SettingsPlanPanel({
             <span className="settings-plan-card__band-text">
               <strong className="settings-plan-card__band-title">Pro</strong>
               <span className="settings-plan-card__band-price">
-                {billingPlan?.priceLabel ?? (billingInterval === "monthly" ? "USD 2.99" : "USD 29.99")}
-                {billingInterval === "monthly" ? " / month" : " / year"}
+                {offers?.prices[billingInterval] ?? (offersLoading ? "Checking regional pricing…" : "Regional pricing unavailable")}
+                {offers ? (billingInterval === "monthly" ? " / month" : " / year") : ""}
               </span>
             </span>
           </div>
@@ -359,9 +372,7 @@ export function SettingsPlanPanel({
                   />
                 ) : (
                   <p className="settings-helper">
-                    {paddleClientToken
-                      ? "Paddle checkout will unlock after its webhook is connected."
-                      : "Subscription checkout is not configured yet."}
+                    {offersLoading ? "Checking subscription availability…" : "Checkout is temporarily unavailable for the advertised regional price. You can keep using Clover Free."}
                   </p>
                 )
               ) : !billingDetailsReady ? (

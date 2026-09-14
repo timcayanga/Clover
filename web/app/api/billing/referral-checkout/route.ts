@@ -4,6 +4,7 @@ import { z } from "zod";
 import { getOrCreateCurrentUser } from "@/lib/user-context";
 import { prepareReferralCheckout } from "@/lib/growth";
 import { assertTrustedRequestOrigin } from "@/lib/request-security";
+import { getVerifiedBillingOffers } from "@/lib/billing-offers.server";
 
 export async function POST(request: Request) {
   try {
@@ -21,6 +22,10 @@ export async function POST(request: Request) {
         code: z.string().max(64).default(""),
       })
       .parse(await request.json());
+    const offers = await getVerifiedBillingOffers(request.headers.get("x-vercel-ip-country") ?? "");
+    if (!Object.values(offers[body.provider]).includes(body.planId)) {
+      return NextResponse.json({ error: "Checkout is temporarily unavailable for the advertised regional price. You can keep using Clover Free." }, { status: 409 });
+    }
     const user = await getOrCreateCurrentUser(userId);
     const result = await prepareReferralCheckout(
       user.id,
