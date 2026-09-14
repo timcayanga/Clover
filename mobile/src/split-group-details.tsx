@@ -192,7 +192,9 @@ export function SplitGroupDetails({
                 }}
               >
                 <PersonAvatar name={person} />
-                <Body muted={false}>{person}</Body>
+                <View style={{ flex: 1, minWidth: 0 }}>
+                  <Body muted={false}>{person}</Body>
+                </View>
               </View>
               <View>
                 {Array.from(totals, ([currency, amount]) => (
