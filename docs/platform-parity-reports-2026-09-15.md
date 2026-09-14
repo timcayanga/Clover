@@ -17,6 +17,7 @@ References: Reports mobile `1243:507886`, desktop `1243:507887`, Spending Mix mo
 
 - Added a release-gated chart geometry check for empty/invalid input, uneven dates, signed values, shared scales, single points and flat histories.
 - Native preview checked at 390×844 and 320×568. At 320px, document scroll width is 320px; charts fit their containers, values expand, and bottom navigation remains present. Spending Mix controls wrap without title overlap.
+- Authenticated staging desktop was visually checked after deployment: semantic summary colors, tighter cards and the enclosed Filters control are present. Follow-up source correction removes legacy summary-label tracking and tab padding overrides.
 - Required full `qa:prepush` includes TypeScript, regression checks, iOS/Android bundle export and optimized web build. The push hook repeats it before staging publication.
 
 This targeted pass is not an installed-device certification or a complete audit of every detailed Figma state. Native Money Over Time does not yet expose the desktop tracked-balance data series; native chat history/report rendering remain separate outstanding work from the preceding pass.
