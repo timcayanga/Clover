@@ -624,7 +624,7 @@ export function SplitBillQrLibrary() {
             return (
               <button
                 type="button"
-                className={`split-bill-qr-card${profile.qrImageData ? " has-qr" : ""}`}
+                className={`split-bill-qr-card luxury-account-card luxury-account-card--faceted${profile.qrImageData ? " has-qr" : ""}`}
                 key={profile.id}
                 style={{ "--qr-start": theme.start, "--qr-end": theme.end, "--qr-accent": theme.accent } as CSSProperties}
                 onClick={() => openEdit(profile)}

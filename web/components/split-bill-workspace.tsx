@@ -56,15 +56,6 @@ type BillEditorItem = SplitBillDraft["items"][number];
 
 const createSplitBillDraftId = () => globalThis.crypto?.randomUUID?.() ?? `split-bill-${Date.now()}-${Math.random().toString(16).slice(2)}`;
 
-const getPersonInitials = (name: string) =>
-  name
-    .trim()
-    .split(/\s+/)
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((part) => part[0]?.toUpperCase() ?? "")
-    .join("") || "?"
-
 const isSamePersonName = (left: string, right: string) => {
   const normalize = (value: string) => value.trim().toLowerCase().replace(/\s+/g, " ");
   const leftName = normalize(left);
@@ -1193,7 +1184,7 @@ export function SplitBillWorkspace({
               <th className="split-bill-detail-modal__amount-col">Amount</th>
               {participants.map((participant) => (
                 <th key={participant.id} title={participant.name}>
-                  {getPersonInitials(participant.name)}
+                  <SplitBillEntityAvatar name={participant.name} avatarUrl={people.find((person) => person.name === participant.name)?.avatarUrl ?? null} />
                 </th>
               ))}
             </tr>
@@ -1651,7 +1642,7 @@ export function SplitBillWorkspace({
                     <div className="split-bill-detail-modal__section-head split-bill-detail-modal__section-head--members">
                       <div>
                         <strong>People</strong>
-                        <span>{selectedGroup.members.map((member) => member.name).join(", ") || "No people added yet"}</span>
+                        <div className="split-bill-group-members">{selectedGroup.members.map((member) => <span key={member.id}><SplitBillEntityAvatar name={member.name} avatarUrl={people.find((person) => person.name === member.name)?.avatarUrl ?? null} />{member.name}</span>)}{!selectedGroup.members.length ? "No people added yet" : null}</div>
                       </div>
                       <button
                         className="button button-secondary button-small"

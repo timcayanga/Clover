@@ -65952,4 +65952,43 @@ html[data-theme=dark] .notifications-filters button[aria-pressed=true] { backgro
  .accounts-mobile-list-row__brand strong,.accounts-mobile-list-row__end strong,.accounts-mobile-list-row__brand small { font-family:var(--font-poppins),sans-serif!important; }
  .accounts-mobile-list-row:is([data-account-icon="cash"],[data-account-icon="insurance"],[data-account-icon="receivable"],[data-account-icon="prepaid"],[data-account-icon="other"]) { background:color-mix(in srgb,#67dfb3 22%,var(--surface))!important; }
  .accounts-mobile-list-row:is([data-account-icon="loan"],[data-account-icon="mortgage"],[data-account-icon="line_of_credit"],[data-account-icon="bnpl"],[data-account-icon="payable"]) { background:color-mix(in srgb,#f18dad 22%,var(--surface))!important; }
+
+/* Split Bills: shared identities and unclipped Figma cards. */
+.split-bill-home .split-bill-group-card {
+  height: auto; min-height: 0; overflow: visible; padding: 20px; gap: 16px;
+  border-radius: 20px; background: linear-gradient(110deg, #e4faf3, #dff2fa); color: #17363d;
+}
+.split-bill-home .split-bill-group-card:nth-child(even) { background: linear-gradient(110deg, #fff0e0, #f6e7f5); }
+.split-bill-group-identity { display: flex; align-items: center; gap: 16px; min-width: 0; }
+.split-bill-group-identity strong { font-size: 16px; font-weight: 600; overflow-wrap: anywhere; }
+.split-bill-person-avatar.split-bill-group-photo { width: 72px; height: 72px; flex: 0 0 72px; border-radius: 12px; font-size: 22px; overflow: hidden; }
+.split-bill-group-card > .button { flex: 0 0 auto; min-height: 40px; height: auto; margin-top: auto; padding: 9px 20px; font-size: 15px; font-weight: 500; }
+.split-bill-group-card .split-bill-avatars { flex-wrap: wrap; }
+.split-bill-group-card .split-bill-avatars .split-bill-person-avatar { width: 36px; height: 36px; }
+.split-bill-group-members { display: flex; gap: 12px; flex-wrap: wrap; margin-top: 12px; }
+.split-bill-group-members > span, .split-bill-shared-with { display: inline-flex; gap: 8px; align-items: center; min-width: 0; }
+.split-bill-shared-with > span:last-child { overflow-wrap: anywhere; }
+.split-bill-avatar-stack { display: inline-flex; flex-shrink: 0; padding-right: 4px; }
+.split-bill-avatar-stack .split-bill-person-avatar + .split-bill-person-avatar { margin-left: -8px; border: 2px solid var(--surface); }
+.split-bill-name-link { display: inline-flex; align-items: center; gap: 10px; text-align: left; font-weight: 600; }
+.split-bill-name-link > :first-child { flex-shrink: 0; }
+.split-bill-mobile-context { display: none; }
+.split-bill-home .split-bill-pulse__metrics article { display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: 16px; gap: 8px; }
+.split-bill-list-toolbar > input, .split-bill-list-toolbar > .button { height: 40px; min-height: 40px; box-sizing: border-box; padding-top: 8px; padding-bottom: 8px; }
+.split-bill-bills-table .split-bill-open-cell { width: 40px; padding-left: 0; padding-right: 8px; }
+.split-bill-bills-table .split-bill-open { display: inline-flex; align-items: center; justify-content: center; width: 40px; min-height: 44px; color: var(--accent, #03a8c0); font-size: 28px; }
+.split-bill-qr-card.luxury-account-card--faceted::after { width: auto; height: auto; border-radius: 0; box-shadow: none; }
+.split-bill-qr-card__copy, .split-bill-qr-card__image { position: relative; z-index: 1; }
+[data-theme="dark"] .split-bill-home .split-bill-group-card { background: linear-gradient(110deg, #173f3e, #24414d); color: #e6f7f8; }
+[data-theme="dark"] .split-bill-home .split-bill-group-card:nth-child(even) { background: linear-gradient(110deg, #343052, #213e4a); }
+@media (max-width: 700px) {
+  .split-bill-mobile-context { display: flex; flex-direction: column; gap: 6px; padding-top: 6px; font-size: 11px; color: var(--muted); }
+  .split-bill-mobile-context .split-bill-person-avatar { width: 20px; height: 20px; font-size: 9px; }
+  .split-bill-bills-table { table-layout: fixed; }
+  .split-bill-bills-table th:first-child { width: 42%; }
+  .split-bill-bills-table th:last-child { width: 28px; }
+  .split-bill-bills-table .amount { font-size: 11px; overflow-wrap: anywhere; }
+  .split-bill-bills-table .split-bill-name-link { gap: 6px; font-size: 12px; overflow-wrap: anywhere; }
+  .split-bill-bills-table .split-bill-open-cell { padding: 0; }
+  .split-bill-bills-table .split-bill-open { width: 28px; font-size: 26px; }
 }

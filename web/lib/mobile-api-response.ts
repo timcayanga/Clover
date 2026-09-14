@@ -61,6 +61,7 @@ const splitDetail = (value: unknown) => {
   const bill = record(value), settlement = record(bill.settlement);
   return { ...splitSummary(bill),
     group: bill.group ? pick(bill.group, ["id", "name"]) : null,
+    categoryName: typeof record(record(bill.transaction).category).name === "string" ? record(record(bill.transaction).category).name : null,
     participants: rows(bill.participants, ["id", "name"]),
     items: rows(bill.items, ["id", "description", "amount", "participantIds", "splitMethod", "allocations"]),
     settlement: {

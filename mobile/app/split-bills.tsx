@@ -36,6 +36,7 @@ type Bill = {
   settlementStatus: string;
   resolved?: boolean;
   group?: { id: string; name: string } | null;
+  categoryName?: string | null;
   participants?: { id: string; name: string }[];
   items?: BillItem[];
   settlement?: {
@@ -339,7 +340,7 @@ export default function SplitBills() {
                             borderColor: colors.line,
                           }}
                         >
-                          <CategoryMark name={null} />
+                          <CategoryMark name={bill.categoryName} />
                           <View style={{ flex: 1 }}>
                             <Body muted={false}>{bill.title}</Body>
                             <Body>{bill.billDate.slice(0, 10)}</Body>

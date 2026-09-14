@@ -196,7 +196,7 @@ const getBillInclude = {
   transaction: {
     select: {
       id: true,
-      merchantRaw: true,
+      merchantRaw: true, category: { select: { name: true } },
       merchantClean: true,
       date: true,
       amount: true,

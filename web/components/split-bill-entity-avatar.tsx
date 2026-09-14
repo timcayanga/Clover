@@ -1,8 +1,7 @@
 "use client";
-import { avatarGradient } from "../../shared/visual-identity";
 
 import { useEffect, useState } from "react";
-import { getAvatarInitials } from "@/lib/avatar-utils";
+import { getCloverAvatarBackgroundStyle, getAvatarInitials } from "@/lib/avatar-utils";
 
 type SplitBillEntityAvatarProps = {
   name: string;
@@ -26,7 +25,7 @@ export function SplitBillEntityAvatar({
   }, [avatarUrl]);
 
   return (
-    <span className={`${className} ${sizeClass}`} title={title ?? name} style={{ background: `linear-gradient(135deg, ${avatarGradient(name).join(", ")})`, color: "#17363d" }}>
+    <span className={`${className} ${sizeClass}`} title={title ?? name} style={getCloverAvatarBackgroundStyle(name)}>
       {avatarUrl && !imageFailed ? (
         <img className="split-bill-person-avatar__image" src={avatarUrl} alt="" onError={() => setImageFailed(true)} />
       ) : (
