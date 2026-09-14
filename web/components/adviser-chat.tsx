@@ -153,7 +153,7 @@ export function AdviserChat(props: AdviserChatProps) {
   }, [props.workspaceId]);
   return scope ? <ScopedAdviserChat key={scope} {...props} workspaceId={scope} storageKey={`${adviserChatStorageKey}:${scope}`} /> : <p>Choose a Profile to ask Adviser.</p>;
 }
-function ScopedAdviserChat({ prompts, isPro, storageKey = adviserChatStorageKey, initialPrompt = "", layout = "embedded", surface = "general", pageLabel, workspaceId }: AdviserChatProps & {workspaceId:string}) {
+function ScopedAdviserChat({ prompts, storageKey = adviserChatStorageKey, initialPrompt = "", layout = "embedded", surface = "general", pageLabel, workspaceId }: AdviserChatProps & {workspaceId:string}) {
   const [entryDraft,setEntryDraft] = useState<EntryDraft|null>(null);
   const [entryLocked,setEntryLocked] = useState(false);
 
@@ -518,37 +518,6 @@ function ScopedAdviserChat({ prompts, isPro, storageKey = adviserChatStorageKey,
       keepalive: true,
     }).catch(() => null);
   };
-
-  if (!isPro) {
-    return (
-      <div className={`adviser-chat adviser-chat--locked${layout === "workspace" ? " adviser-chat--workspace" : ""}`} aria-label="Ask Clover is available with Pro">
-        <div className="adviser-chat__locked-preview" aria-hidden="true">
-          <div className="adviser-chat__composer-bar">
-            <input type="text" value="Ask Clover a question about your money..." readOnly tabIndex={-1} />
-            <button type="button" className="button button-primary button-small" disabled>
-              Send
-            </button>
-          </div>
-          <div className="adviser-chat__prompt-row">
-            {prompts.slice(0, 3).map((prompt) => (
-              <span key={prompt.id} className="adviser-chat__prompt">
-                <span className="adviser-chat__prompt-emoji">{getPromptEmoji(prompt.group)}</span>
-                <span>{prompt.label}</span>
-              </span>
-            ))}
-          </div>
-        </div>
-        <div className="adviser-chat__locked-copy">
-          <p className="eyebrow">Pro feature</p>
-          <h3>Ask Clover about your money</h3>
-          <p>Get personalized answers grounded in your accounts, transactions, goals, and recurring bills.</p>
-          <Link className="button button-primary button-small" href="/pricing">
-            Upgrade to Pro
-          </Link>
-        </div>
-      </div>
-    );
-  }
 
   const attachFile = async (file?: File) => {
     if (!file || attachmentBusy.current || isSending || entryLocked) return;

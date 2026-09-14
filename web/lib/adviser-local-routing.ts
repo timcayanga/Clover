@@ -35,6 +35,15 @@ const LOCAL_SUMMARY_TOOLS = new Set<AdviserToolName>([
   "get_investment_summary",
 ]);
 
+/** Excluding transfers is a filter on a money question, not a transfer-review request. */
+export const isTransferReviewQuestion = (question: string): boolean => {
+  const subject = question.toLowerCase()
+    .replace(/\b(?:exclude|excluding|ignore|ignoring|omit|omitting|without|except|not counting|do not include|don't include|do not show|don't show)\s+(?:(?:all|internal|bank|account)\s+)?transfers?\b/g, "")
+    .replace(/\btransfers?\s+(?:excluded|omitted|ignored)\b/g, "")
+    .replace(/\bnon[- ]transfers?\b/g, "");
+  return /\b(?:transfers?|money sent|money moved)\b/.test(subject);
+};
+
 /** Select the cheapest answer path that remains fully grounded in Clover data. */
 export const decideAdviserAnswerRoute = ({
   question,

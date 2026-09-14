@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { decideAdviserAnswerRoute } from "@/lib/adviser-local-routing";
+import { decideAdviserAnswerRoute, isTransferReviewQuestion } from "@/lib/adviser-local-routing";
 
 const localCases = [
   decideAdviserAnswerRoute({ question: "Give me my overall money picture", selectedTools: ["get_account_summary"], asksForOverallMoneyOverview: true }),
@@ -33,3 +33,14 @@ assert.match(routeSource, /answerSource: "local"/);
 assert.match(routeSource, /routingVersion: routing \? "tiered-v1"/);
 
 console.log("Adviser local routing regression passed.");
+
+for (const question of [
+  "Summarize my September spending. Exclude transfers.",
+  "Show expenses excluding internal transfers",
+  "What did I spend without transfers?",
+  "Show income, transfers excluded",
+  "Summarize non-transfer spending",
+  "Don't include transfers in the totals",
+]) assert.equal(isTransferReviewQuestion(question), false, question);
+for (const question of ["Which transactions were transfers?", "Review money sent", "Find transfers excluding credit-card payments"])
+  assert.equal(isTransferReviewQuestion(question), true, question);

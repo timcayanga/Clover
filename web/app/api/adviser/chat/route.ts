@@ -25,7 +25,7 @@ import { assertRateLimit } from "@/lib/rate-limit";
 import { getPlannedPaymentSuggestions } from "@/lib/planned-payment-suggestions";
 import { normalizeAdviserPreferences } from "@/lib/adviser-preferences";
 import { selectAdviserToolNames } from "@/lib/adviser-tool-routing";
-import { decideAdviserAnswerRoute } from "@/lib/adviser-local-routing";
+import { decideAdviserAnswerRoute, isTransferReviewQuestion } from "@/lib/adviser-local-routing";
 import {
   buildInvestmentReview,
   calculateDailySpendingPlan,
@@ -2394,7 +2394,7 @@ export async function POST(request: Request) {
       /overall money picture|money overview|overview of my balances|balances.*spending.*(?:upcoming|pressure|focus)|balances.*upcoming.*focus/.test(
         latestQuestionLower
       );
-    const asksAboutTransfers = /transfer|transfers|money sent|money moved/.test(latestQuestionLower);
+    const asksAboutTransfers = isTransferReviewQuestion(latestQuestion);
     const latestHasExplicitTheme = /goal|target|track|progress|save|invest|portfolio|dividend|gain|loss|snapshot|stock|transaction|spend|merchant|bill|recurr|due|loan|balance|cash flow|budget|owe|payment|pressure|account|afford|purchase|phone|car|travel|safe to spend|payday|credit card|bank|income|earn|food|meal|eat/.test(latestQuestionLower);
     const asksForSuggestedGoal =
       !goalValue
