@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import { Image, Text } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { avatarGradient } from "../../shared/visual-identity";
@@ -10,6 +11,8 @@ export function PersonAvatar({
   imageUrl?: string | null;
   size?: number;
 }) {
+  const [failed, setFailed] = useState(false);
+  useEffect(() => setFailed(false), [imageUrl]);
   return (
     <LinearGradient
       colors={avatarGradient(name)}
@@ -24,9 +27,10 @@ export function PersonAvatar({
         justifyContent: "center",
       }}
     >
-      {imageUrl ? (
+      {imageUrl && !failed ? (
         <Image
           source={{ uri: imageUrl }}
+          onError={() => setFailed(true)}
           style={{ width: size, height: size }}
         />
       ) : (

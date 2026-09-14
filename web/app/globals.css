@@ -65994,3 +65994,4 @@ html[data-theme=dark] .notifications-filters button[aria-pressed=true] { backgro
   .split-bill-bills-table .split-bill-open-cell { padding: 0; }
   .split-bill-bills-table .split-bill-open { width: 28px; font-size: 26px; }
 }
+.content--reports .report-card__head > .reports-subtab-title { font-family:var(--font-poppins),sans-serif; font-size:16px; font-weight:600; letter-spacing:0; text-transform:none; color:var(--text); line-height:1.5; }
