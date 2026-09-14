@@ -301,6 +301,12 @@ export function AdminDataQaFileDetail({ importFileId }: { importFileId: string }
 
       {error ? <div className="admin-users__notice admin-users__notice--error">{error}</div> : null}
       {loading ? <div className="admin-users__loading">Loading file detail...</div> : null}
+      {importFile?.status === "failed" && importFile.processingMessage ? (
+        <div className="admin-users__notice admin-users__notice--error" role="status">
+          <strong>Import failed: </strong>
+          {importFile.processingMessage}
+        </div>
+      ) : null}
 
       <article className="table-panel">
         <div className="admin-data-qa-run-detail__section-head">

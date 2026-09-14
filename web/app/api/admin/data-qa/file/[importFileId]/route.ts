@@ -90,6 +90,8 @@ export async function GET(_request: Request, { params }: { params: Promise<{ imp
 
     return NextResponse.json({
       importFileId,
+      parsedRowsCount,
+      confirmedTransactionsCount,
       importFile: {
         id: importFile.id,
         fileName: importFile.fileName,
