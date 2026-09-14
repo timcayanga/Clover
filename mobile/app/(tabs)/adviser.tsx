@@ -9,12 +9,24 @@ import {
 import { AdviserInputTools } from "../../src/adviser-input-tools";
 import { useEffect, useRef, useState } from "react";
 import { useLocalSearchParams } from "expo-router";
-import { Body, Card, Field, Notice, Screen } from "../../src/ui";
+import { Body, Card, Icon, Notice, Screen, useTheme } from "../../src/ui";
 import { PlanAction } from "../../src/plan-ui";
 import { useSession } from "../../src/session";
+import {
+  Image,
+  KeyboardAvoidingView,
+  Platform,
+  Pressable,
+  Text,
+  View,
+} from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 type Message = { role: "user" | "assistant"; content: string };
 export default function Adviser() {
   const session = useSession();
+  const { colors } = useTheme();
+  const insets = useSafeAreaInsets();
+  const [showSettings, setShowSettings] = useState(false);
   const params = useLocalSearchParams<{ prompt?: string; page?: string }>();
   const [local, setLocal] = useState(false);
   const useLocal = local || !session.offlineStatus.online;
@@ -132,95 +144,195 @@ export default function Adviser() {
       }
     }
   };
+  const composer = (
+    <AdviserInputTools
+      value={draft}
+      onChangeText={setDraft}
+      onSend={() => void send()}
+      onDeviceOnly={useLocal}
+      disabled={busy}
+      onText={(text) =>
+        setDraft((previous) => `${previous} ${text}`.trim().slice(0, 4000))
+      }
+      onPhoto={() =>
+        router.push({
+          pathname: "/(tabs)/add",
+          params: { entry: `upload-${Date.now()}` },
+        })
+      }
+    />
+  );
   return (
-    <Screen>
-      <Card>
-        <Body muted={false}>
-          {useLocal ? "On-device · Downloaded records" : "Cloud Adviser"}
-        </Body>
-        <Body>
-          {useLocal
-            ? "Uses this Profile’s downloaded data. Calculations stay on your phone. Local model requests have a separate allowance."
-            : "Questions are processed online using your cloud token allowance."}
-        </Body>
-        <PlanAction
-          title={local ? "Use cloud when connected" : "Use on-device tools"}
-          disabled={busy}
-          onPress={() => {
-            generation.current++;
-            setMessages([]);
-            setActions(false);
-            setLocal(!local);
+    <KeyboardAvoidingView
+      style={{ flex: 1, backgroundColor: colors.bg }}
+      behavior={Platform.OS === "ios" ? "padding" : undefined}
+      keyboardVerticalOffset={insets.top + 70}
+    >
+      <Screen>
+        <View
+          style={{
+            flexDirection: "row",
+            alignItems: "center",
+            justifyContent: "space-between",
+            gap: 8,
           }}
-        />
-        <PlanAction
-          title="Manage downloads and local AI"
-          onPress={() => router.push("/offline")}
-        />
-      </Card>
-      <PlanAction
-        title="New chat"
-        disabled={busy}
-        onPress={() => {
-          setMessages([]);
-          setDraft("");
-          setError("");
-          setActions(false);
-        }}
-      />
-      {!messages.length ? (
-        <Card>
-          <Body muted={false}>Ask Clover anything about your finances.</Body>
-          {[
-            "📊 Where did my money go this month?",
-            "💰 How can I stay within my budget?",
-            "🎯 How am I doing on my goals?",
-          ].map((prompt) => (
-            <PlanAction
-              key={prompt}
-              title={prompt}
-              onPress={() => setDraft(prompt)}
+        >
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Adviser processing settings"
+            accessibilityState={{ expanded: showSettings }}
+            onPress={() => setShowSettings(!showSettings)}
+            style={{
+              minHeight: 40,
+              flexDirection: "row",
+              alignItems: "center",
+              gap: 6,
+              flexShrink: 1,
+            }}
+          >
+            <Text
+              style={{
+                color: colors.teal,
+                fontFamily: "Poppins-Medium",
+                fontSize: 13,
+              }}
+            >
+              {useLocal ? "On-device" : "Cloud Adviser"}
+            </Text>
+            <Icon
+              name={showSettings ? "chevron-up" : "chevron-down"}
+              size={16}
             />
-          ))}
-        </Card>
+          </Pressable>
+          {messages.length ? (
+            <PlanAction
+              title="New chat"
+              disabled={busy}
+              onPress={() => {
+                setMessages([]);
+                setDraft("");
+                setError("");
+                setActions(false);
+              }}
+            />
+          ) : null}
+        </View>
+        {showSettings ? (
+          <Card>
+            <Body>
+              {useLocal
+                ? "Uses this Profile’s downloaded data. Calculations stay on your phone. Local model requests have a separate allowance."
+                : "Questions are processed online using your cloud token allowance."}
+            </Body>
+            <PlanAction
+              title={local ? "Use cloud when connected" : "Use on-device tools"}
+              disabled={busy}
+              onPress={() => {
+                generation.current++;
+                setMessages([]);
+                setActions(false);
+                setError("");
+                setLocal(!local);
+              }}
+            />
+            <PlanAction
+              title="Manage downloads and local AI"
+              onPress={() => router.push("/offline")}
+            />
+          </Card>
+        ) : null}
+        {!messages.length ? (
+          <View style={{ gap: 20, paddingTop: 32 }}>
+            <Image
+              source={require("../../assets/organize/clover.png")}
+              style={{ width: 44, height: 44 }}
+            />
+            <Text
+              accessibilityRole="header"
+              style={{
+                fontFamily: "Poppins-SemiBold",
+                fontSize: 26,
+                lineHeight: 34,
+                color: colors.ink,
+              }}
+            >
+              {session.data?.firstName?.trim()
+                ? `Hi ${session.data.firstName.trim()}! `
+                : ""}
+              Ask Clover anything about your finances.
+            </Text>
+            {composer}
+            <View style={{ gap: 8 }}>
+              {[
+                "🍽️ Why is food spending up?",
+                "📅 What’s due before payday?",
+                "🎯 How are my goals doing?",
+              ].map((prompt) => (
+                <PlanAction
+                  fullWidth
+                  key={prompt}
+                  title={prompt}
+                  disabled={busy}
+                  onPress={() => setDraft(prompt)}
+                />
+              ))}
+            </View>
+          </View>
+        ) : null}
+        {messages.map((message, index) => (
+          <View
+            key={index}
+            style={{
+              alignSelf: message.role === "user" ? "flex-end" : "flex-start",
+              maxWidth: "92%",
+              padding: 16,
+              borderRadius: 20,
+              borderBottomRightRadius: message.role === "user" ? 4 : 20,
+              borderBottomLeftRadius: message.role === "assistant" ? 4 : 20,
+              backgroundColor:
+                message.role === "user" ? colors.pale : colors.white,
+              gap: 6,
+            }}
+          >
+            <Text
+              style={{
+                color: colors.teal,
+                fontFamily: "Poppins-SemiBold",
+                fontSize: 13,
+              }}
+            >
+              {message.role === "user" ? "You" : "Clover"}
+            </Text>
+            <Body muted={false}>{message.content}</Body>
+          </View>
+        ))}
+        {busy ? (
+          <Text
+            accessibilityLiveRegion="polite"
+            style={{ color: colors.muted, fontFamily: "Poppins-Regular" }}
+          >
+            Clover is thinking…
+          </Text>
+        ) : null}
+        {actions ? (
+          <Notice>
+            This reply includes a suggested change. No records were changed. Use
+            the relevant entry or edit form to review and confirm it.
+          </Notice>
+        ) : null}
+        {error ? <Notice>{error}</Notice> : null}
+      </Screen>
+      {messages.length ? (
+        <View
+          style={{
+            padding: 16,
+            borderTopWidth: 1,
+            borderTopColor: colors.line,
+          }}
+        >
+          {composer}
+        </View>
       ) : null}
-      {messages.map((message, index) => (
-        <Card key={index}>
-          <Body muted={false}>
-            {message.role === "user" ? "You" : "Clover"}
-          </Body>
-          <Body>{message.content}</Body>
-        </Card>
-      ))}
-      {actions ? (
-        <Notice>
-          This reply includes a suggested change. No records were changed. Use
-          the relevant entry or edit form to review and confirm it.
-        </Notice>
-      ) : null}
-      <Field
-        label="Ask Clover"
-        value={draft}
-        onChangeText={setDraft}
-        multiline
-        maxLength={4000}
-        editable={!busy}
-      />
-      <AdviserInputTools
-        onDeviceOnly={useLocal}
-        disabled={busy}
-        onText={(text) =>
-          setDraft((previous) => `${previous} ${text}`.trim().slice(0, 4000))
-        }
-        onPhoto={() => router.push("/(tabs)/add")}
-      />
-      {error ? <Notice>{error}</Notice> : null}
-      <PlanAction
-        title={busy ? "Thinking…" : "Send question"}
-        tone="primary"
-        disabled={busy || !draft.trim()}
-        onPress={() => void send()}
-      />
-    </Screen>
+    </KeyboardAvoidingView>
   );
 }

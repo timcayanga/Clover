@@ -148,11 +148,13 @@ export function PlanAction({
   onPress,
   tone = "view",
   disabled = false,
+  fullWidth = false,
 }: {
   title: string;
   onPress: () => void;
   tone?: "view" | "edit" | "ask" | "delete" | "primary";
   disabled?: boolean;
+  fullWidth?: boolean;
 }) {
   const { dark, colors } = useTheme();
   const palette = {
@@ -177,7 +179,7 @@ export function PlanAction({
         borderRadius: 24,
         overflow: "hidden",
         alignItems: "stretch",
-        alignSelf: "flex-start",
+        alignSelf: fullWidth ? "stretch" : "flex-start",
         maxWidth: "100%",
         opacity: disabled ? 0.5 : 1,
       }}

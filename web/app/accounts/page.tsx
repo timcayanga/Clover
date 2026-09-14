@@ -17,7 +17,6 @@ import { CurrencySelector } from "@/components/currency-selector";
 import { FinancialAccountCard } from "@/components/financial-account-card";
 import { InstitutionAutocomplete } from "@/components/institution-autocomplete";
 import { PlanLimitNudge } from "@/components/plan-limit-nudge";
-import { LunchFlowConnectButton } from "@/components/lunch-flow-connect-button";
 import { PageFileDropZone } from "@/components/page-file-drop-zone";
 import { MobileSwipeDelete } from "@/components/mobile-swipe-delete";
 import { formatCurrencyAmount, formatCurrencyCode, formatCurrencySymbol } from "@/lib/currency-format";
@@ -3978,6 +3977,7 @@ function AccountsPageContent() {
           <button
             type="button"
             className="accounts-mobile-list-row"
+            style={{ background: accountBrand.background, color: accountBrand.foreground }}
             data-account-icon={accountBrand.fallbackIconSrc.split("/").pop()?.replace(".png", "")}
             aria-expanded={isExpanded}
             aria-hidden={isExpanded}
@@ -4045,6 +4045,7 @@ function AccountsPageContent() {
         <button
           type="button"
           className="accounts-mobile-list-row"
+            style={{ background: accountBrand.background, color: accountBrand.foreground }}
             data-account-icon={accountBrand.fallbackIconSrc.split("/").pop()?.replace(".png", "")}
           aria-expanded={isExpanded}
           aria-hidden={isExpanded}
@@ -4583,11 +4584,7 @@ function AccountsPageContent() {
         menuAlignment="end"
         showChevron={false}
       />
-      <LunchFlowConnectButton
-        workspaceId={selectedWorkspaceId}
-        onSynced={() => loadWorkspaceData(selectedWorkspaceId, { silent: true, awaitHydration: true, forceFresh: true })}
-      />
-      <button className="button button-primary button-small accounts-toolbar-add" type="button" onClick={openAddAccount} aria-label="Add account">
+      <button className="button button-secondary button-small accounts-toolbar-add" type="button" onClick={openAddAccount} aria-label="Add account">
         <ActionIcon name="plus" />
         <span>Add account</span>
       </button>

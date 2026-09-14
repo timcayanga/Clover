@@ -124,3 +124,11 @@
 @media (max-width: 1100px) { .transactions-filters-overlay { width: auto; } }
 
 .transaction-selection-toolbar input[type="search"] { background-image:url("/assets/organize/search.svg"); background-repeat:no-repeat; background-position:12px center; background-size:16px; padding-left:36px; }
+
+/* Keep selection and active filters out of the table's document flow. */
+.transaction-filter-count { display: inline-flex; align-items: center; justify-content: center; min-width: 18px; height: 18px; padding: 0 4px; border-radius: 9px; background: var(--accent, #03a8c0); color: white; font: 500 11px/1 var(--font-poppins), sans-serif; }
+.transactions-selection-overlay { width: min(480px, calc(100vw - 32px)); }
+.transactions-selection-overlay .transaction-selection-toolbar--selected { margin: 0; flex-wrap: wrap; }
+.transactions-selection-overlay .transaction-selection-toolbar__actions { flex-wrap: wrap; }
+.transactions-filters-overlay .transactions-active-filters .button { font: 500 13px/20px var(--font-poppins), sans-serif; min-height: 32px; padding: 5px 10px; }
+@media (max-width: 1100px) { .transactions-selection-overlay { width: auto; } }

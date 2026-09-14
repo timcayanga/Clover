@@ -1188,8 +1188,8 @@ const getBaseAccountBrand = (params: AccountBrandInput): AccountBrand => {
       logoSrc: null,
       logoSrcs: [],
       fallbackIconSrc: othersIcon,
-      accent: "#A8B0BC",
-      background: "linear-gradient(135deg, rgba(212, 217, 223, 0.94), rgba(166, 173, 184, 0.88))",
+      accent: "#2E5673",
+      background: "linear-gradient(135deg, #203C54, #376786)",
       foreground: "#111827",
     });
   }
@@ -1199,8 +1199,8 @@ const getBaseAccountBrand = (params: AccountBrandInput): AccountBrand => {
     logoSrc: null,
     logoSrcs: [],
     fallbackIconSrc: bankIcon,
-    accent: "#A8B0BC",
-    background: "linear-gradient(135deg, rgba(212, 217, 223, 0.94), rgba(166, 173, 184, 0.88))",
+    accent: "#2E5673",
+    background: "linear-gradient(135deg, #203C54, #376786)",
     foreground: "#111827",
   });
 };

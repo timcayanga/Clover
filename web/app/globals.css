@@ -65460,7 +65460,7 @@ html[data-theme="dark"] .sidebar-brand-link__wordmark { filter:brightness(0) inv
   .transactions-entry--figma::before { content:""; display:block; width:36px; height:4px; border-radius:4px; background:var(--stroke-strong); margin:0 auto 16px; }
 }
 .content .topbar__desktop-adviser .adviser-header-link,.content .topbar__desktop-adviser .adviser-header-link img { width:38px; height:38px; }
-html[data-theme="dark"] .content :is(.financial-account-card,.transaction-columns__menu) { background-color:var(--surface); color:var(--text); }
+html[data-theme="dark"] .content .transaction-columns__menu { background-color:var(--surface); color:var(--text); }
 .warning-summary-button { width:auto; min-width:44px; gap:7px; }
 .warning-summary-button__count { position:static; border:0; border-radius:0; box-shadow:none; background:transparent; color:var(--text); height:auto; padding:0; font-size:12px; line-height:1; }
 .warning-summary-button::after { white-space:normal; width:270px; border-radius:12px; padding:12px; line-height:1.5; text-align:left; }
@@ -65943,8 +65943,6 @@ html[data-theme=dark] .notifications-filters button[aria-pressed=true] { backgro
 .accounts-brand-mark__fallback { width:100%!important;height:100%!important;object-fit:contain;filter:none!important; }
 @media(max-width:767px) {
   .report-chart-switch button { min-width:44px;min-height:44px; }
-  .financial-account-card[data-account-icon="cash"],.financial-account-card[data-account-icon="insurance"],.financial-account-card[data-account-icon="receivable"],.financial-account-card[data-account-icon="prepaid"],.financial-account-card[data-account-icon="other"] { background:color-mix(in srgb,#67dfb3 22%,var(--surface))!important; }
-  .financial-account-card[data-account-icon="loan"],.financial-account-card[data-account-icon="mortgage"],.financial-account-card[data-account-icon="line_of_credit"],.financial-account-card[data-account-icon="bnpl"],.financial-account-card[data-account-icon="payable"] { background:color-mix(in srgb,#f18dad 22%,var(--surface))!important; }
   .shell-bottom-nav { min-height:72px; }
 }
 
@@ -65959,8 +65957,6 @@ html[data-theme=dark] .notifications-filters button[aria-pressed=true] { backgro
  .accounts-mobile-type-icon { width:34px;height:34px;flex:none;object-fit:contain; }
  .accounts-mobile-list-row__brand { min-width:0;gap:10px; }
  .accounts-mobile-list-row__brand strong,.accounts-mobile-list-row__end strong,.accounts-mobile-list-row__brand small { font-family:var(--font-poppins),sans-serif!important; }
- .accounts-mobile-list-row:is([data-account-icon="cash"],[data-account-icon="insurance"],[data-account-icon="receivable"],[data-account-icon="prepaid"],[data-account-icon="other"]) { background:color-mix(in srgb,#67dfb3 22%,var(--surface))!important; }
- .accounts-mobile-list-row:is([data-account-icon="loan"],[data-account-icon="mortgage"],[data-account-icon="line_of_credit"],[data-account-icon="bnpl"],[data-account-icon="payable"]) { background:color-mix(in srgb,#f18dad 22%,var(--surface))!important; }
 
 }
 
@@ -66014,4 +66010,15 @@ html[data-theme=dark] .notifications-filters button[aria-pressed=true] { backgro
 }
 @media(max-width:1100px) {
   .shell-bottom-nav .shell-bottom-nav__label { font-size:11px; line-height:12px; }
+}
+
+/* Accounts master: brand surfaces and a single aligned desktop header. */
+.content--accounts .accounts-mobile-list-row { border-radius: 12px; padding-inline: 12px; }
+.content--accounts .accounts-mobile-list-row :is(strong,small,.accounts-mobile-list-row__chevron) { color: inherit; }
+.content--accounts .accounts-mobile-list-row small { opacity: .86; }
+@media (min-width: 1101px) {
+  .content--accounts > .topbar { align-items: center; }
+  .content--accounts > .topbar .topbar__title-row { display: flex; align-items: center; gap: 10px; }
+  .content--accounts > .topbar .topbar__title-row h1 { margin: 0; }
+  .content--accounts .topbar__desktop-title-action { display: flex; align-items: center; }
 }

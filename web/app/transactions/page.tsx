@@ -7561,7 +7561,7 @@ function TransactionsPageContent() {
     </div>
   ) : (
     <div className="transactions-shell-actions" style={transactionsShellActionsStyle}>
-      <TransactionSelectionToolbar count={0} query={query} onQueryChange={setQuery} filterOpen={filterOpen} onFilter={toggleFiltersPanel} onEdit={editSelection} onTags={openSelectionTags} onDelete={() => setBulkDeleteConfirmOpen(true)} onClear={clearSelection} />
+      <TransactionSelectionToolbar activeFilterCount={activeFilterChips.length} count={0} query={query} onQueryChange={setQuery} filterOpen={filterOpen} onFilter={toggleFiltersPanel} onEdit={editSelection} onTags={openSelectionTags} onDelete={() => setBulkDeleteConfirmOpen(true)} onClear={clearSelection} />
 
       <TransactionsManageMenu />
 
@@ -7693,9 +7693,8 @@ function TransactionsPageContent() {
       />
       <section className={`transactions-layout ${summaryOpen ? "transactions-layout--summary-open" : ""}`} style={transactionsLayoutStyle}>
         <div className="transactions-main-panel">
-          {isCompactViewport ? <TransactionSelectionToolbar compact warningCount={warningTransactionCount} count={selectedTransactionCount} query={query} onQueryChange={setQuery} filterOpen={filterOpen} onFilter={toggleFiltersPanel} onEdit={editSelection} onTags={openSelectionTags} onDelete={() => setBulkDeleteConfirmOpen(true)} onClear={clearSelection} /> : null}
-          {!isCompactViewport && selectedTransactionCount > 0 ? <TransactionSelectionToolbar count={selectedTransactionCount} query={query} onQueryChange={setQuery} filterOpen={filterOpen} onFilter={toggleFiltersPanel} onEdit={editSelection} onTags={openSelectionTags} onDelete={() => setBulkDeleteConfirmOpen(true)} onClear={clearSelection} /> : null}
-          {activeFilterChips.length ? <div className="transactions-active-filters" aria-label="Active filters">{activeFilterChips.map((chip, index) => <button key={`${chip.label}-${index}`} type="button" className="button button-secondary button-small" onClick={chip.clear} aria-label={`Remove ${chip.label} filter`}>{chip.label}<InterfaceIcon name="close" size={12} /></button>)}</div> : null}
+          {isCompactViewport ? <TransactionSelectionToolbar compact activeFilterCount={activeFilterChips.length} warningCount={warningTransactionCount} count={0} query={query} onQueryChange={setQuery} filterOpen={filterOpen} onFilter={toggleFiltersPanel} onEdit={editSelection} onTags={openSelectionTags} onDelete={() => setBulkDeleteConfirmOpen(true)} onClear={clearSelection} /> : null}
+          {selectedTransactionCount > 0 ? <TransactionsHeaderOverlay className="transactions-selection-overlay"><TransactionSelectionToolbar activeFilterCount={activeFilterChips.length} count={selectedTransactionCount} query={query} onQueryChange={setQuery} filterOpen={filterOpen} onFilter={toggleFiltersPanel} onEdit={editSelection} onTags={openSelectionTags} onDelete={() => setBulkDeleteConfirmOpen(true)} onClear={clearSelection} /></TransactionsHeaderOverlay> : null}
           {dateFilterMode === "custom" && customStart && customEnd && customStart > customEnd ? <p role="alert">From date must be on or before To date. Choose a valid range to update the results.</p> : null}
           {message ? <p role="status" aria-live="polite" style={isCompactViewport && hasSelectedTransactions ? { paddingTop: 56 } : undefined}>{message}</p> : null}
           {showFinalizingNotice ? (
@@ -7723,6 +7722,7 @@ function TransactionsPageContent() {
       {filterOpen ? <TransactionsHeaderOverlay className="transactions-filters-overlay">
         <section className="transactions-inline-filters" aria-label="Transaction filters">
           <div className="transactions-inline-filters__head"><strong>Filters</strong><button className="button button-ghost button-small" type="button" onClick={clearTransactionFilters}>Reset</button><button className="icon-button" type="button" onClick={() => { setFilterOpen(false); document.querySelector<HTMLButtonElement>(".transaction-selection-toolbar__filter")?.focus(); }} aria-label="Close filters"><InterfaceIcon name="close" /></button></div>
+          {activeFilterChips.length ? <div className="transactions-active-filters" aria-label="Active filters">{activeFilterChips.map((chip, index) => <button key={`${chip.label}-${index}`} type="button" className="button button-secondary button-small" onClick={chip.clear} aria-label={`Remove ${chip.label} filter`}>{chip.label}<InterfaceIcon name="close" size={12} /></button>)}</div> : null}
           <div className="transactions-filter-presets" role="group" aria-label="Filter presets">
             <button type="button" className="button button-secondary button-small" aria-pressed={dateFilterMode === "month"} onClick={() => applyDateFilterMode("month")}>This month</button>
             <button type="button" className="button button-secondary button-small" aria-pressed={typeFilters.length === 1 && typeFilters[0] === "debit"} onClick={() => setTypeFilters(["debit"])}>Expenses</button>
