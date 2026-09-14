@@ -148,7 +148,7 @@ const getBillInclude = {
     select: {
       id: true,
       workspaceId: true,
-      merchantRaw: true,
+      merchantRaw: true, category: { select: { name: true } },
       merchantClean: true,
       date: true,
       amount: true,

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { getBrightAvatarBackgroundStyle, getAvatarInitials } from "@/lib/avatar-utils";
+import { getCloverAvatarBackgroundStyle, getAvatarInitials } from "@/lib/avatar-utils";
 
 type SplitBillEntityAvatarProps = {
   name: string;
@@ -25,7 +25,7 @@ export function SplitBillEntityAvatar({
   }, [avatarUrl]);
 
   return (
-    <span className={`${className} ${sizeClass}`} title={title ?? name} style={getBrightAvatarBackgroundStyle(name)}>
+    <span className={`${className} ${sizeClass}`} title={title ?? name} style={getCloverAvatarBackgroundStyle(name)}>
       {avatarUrl && !imageFailed ? (
         <img className="split-bill-person-avatar__image" src={avatarUrl} alt="" onError={() => setImageFailed(true)} />
       ) : (

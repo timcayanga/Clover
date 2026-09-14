@@ -1,5 +1,6 @@
 "use client";
 
+import { CategoryBrandMark } from "@/components/category-brand-mark";
 import { InterfaceIcon } from "@/components/interface-icon";
 import { useMemo, useState } from "react";
 import { useUser } from "@clerk/nextjs";
@@ -329,6 +330,19 @@ export function SplitBillHome({
     : peopleWithBalances.slice(0, 6);
   const hasHiddenPeople = peopleWithBalances.length > 6;
   const currentUserAvatarUrl = user?.imageUrl ?? cachedProfileImage;
+  const personPhoto = (name: string) => isSamePersonName(name, currentUserName)
+    ? currentUserAvatarUrl
+    : people.find((person) => person.name.trim().toLowerCase() === name.trim().toLowerCase())?.avatarUrl ?? null;
+  const sharedWith = (bill: SplitBillSerializedBill) => {
+    const group = groups.find((entry) => entry.id === bill.groupId);
+    const names = bill.participants.map((person) => person.name);
+    return <span className="split-bill-shared-with">
+      {bill.group ? <SplitBillEntityAvatar name={bill.group.name} avatarUrl={group?.avatarUrl ?? null} /> :
+        <span className="split-bill-avatar-stack">{names.slice(0, 3).map((name, index) => <SplitBillEntityAvatar key={`${name}-${index}`} name={name} avatarUrl={personPhoto(name)} />)}</span>}
+      <span>{bill.group?.name ?? (names.slice(0, 2).join(", ") + (names.length > 2 ? ` +${names.length - 2}` : ""))}</span>
+    </span>;
+  };
+
 
   return (
     <div className="split-bill-home">
@@ -359,12 +373,10 @@ export function SplitBillHome({
             <article>
               <span>You owe</span>
               <strong>{balancePulse.owesLabel}</strong>
-              <small>Across open bills</small>
             </article>
             <article>
               <span>Owed to you</span>
               <strong>{balancePulse.isOwedLabel}</strong>
-              <small>Across open bills</small>
             </article>
           </section>
           {duePaymentRequests.length ? (
@@ -460,16 +472,17 @@ export function SplitBillHome({
             </section>
           ) : (
             <div className="split-bill-table-scroll">
-              <table aria-label="Split bills">
+              <table className="split-bill-bills-table" aria-label="Split bills">
                 <thead>
                   <tr>
                     <th>Bill</th>
                     <th className="desktop-column">Date</th>
-                    <th className="desktop-column">Group</th>
+                    <th className="desktop-column">Shared with</th>
                     <th className="desktop-column">Paid by</th>
                     <th className="amount">Total</th>
                     <th className="amount">Your balance</th>
-                    <th>Status</th>
+                    <th className="desktop-column">Status</th>
+                    <th><span className="sr-only">Open bill</span></th>
                   </tr>
                 </thead>
                 <tbody>
@@ -493,17 +506,20 @@ export function SplitBillHome({
                         <td>
                           <button
                             type="button"
+                            className="split-bill-name-link"
                             aria-label={`View ${bill.title}`}
                             onClick={() => onOpenBill(bill.id)}
                           >
-                            {bill.title}
+                            <CategoryBrandMark categoryName={bill.transaction?.category?.name ?? "Uncategorized"} size={32} />
+                            <span>{bill.title}</span>
                           </button>
+                          <div className="split-bill-mobile-context"><small>{formatDate(bill.billDate)}</small>{sharedWith(bill)}</div>
                         </td>
                         <td className="desktop-column">
                           {formatDate(bill.billDate)}
                         </td>
                         <td className="desktop-column">
-                          {bill.group?.name ?? "—"}
+                          {sharedWith(bill)}
                         </td>
                         <td className="desktop-column">
                           {bill.payments
@@ -527,17 +543,18 @@ export function SplitBillHome({
                         <td className="amount">
                           {formatSplitBillAmount(balance, bill.currency)}
                         </td>
-                        <td>
+                        <td className="desktop-column">
                           {bill.resolved ? "Resolved" : formatSplitBillSettlementStatus(
                             bill.settlementStatus,
                           )}
                         </td>
+                        <td className="split-bill-open-cell"><button className="split-bill-open" type="button" aria-label={`Open ${bill.title}`} onClick={() => onOpenBill(bill.id)}>›</button></td>
                       </tr>
                     );
                   })}
                   {!recentBills.length ? (
                     <tr>
-                      <td colSpan={7}>No bills match these filters.</td>
+                      <td colSpan={8}>No bills match these filters.</td>
                     </tr>
                   ) : null}
                 </tbody>
@@ -555,13 +572,16 @@ export function SplitBillHome({
           <div className="split-bill-group-grid">
             {visibleGroups.map((group) => (
               <article className="split-bill-group-card" key={group.id}>
-                <strong>{group.name}</strong>
+                <div className="split-bill-group-identity">
+                  <SplitBillEntityAvatar name={group.name} avatarUrl={group.avatarUrl} sizeClass="split-bill-group-photo" />
+                  <strong>{group.name}</strong>
+                </div>
                 <div className="split-bill-avatars">
                   {group.members.slice(0, 5).map((member) => (
                     <SplitBillEntityAvatar
                       key={member.id}
                       name={member.name}
-                      avatarUrl={null}
+                      avatarUrl={personPhoto(member.name)}
                     />
                   ))}
                   {group.members.length > 5 ? (

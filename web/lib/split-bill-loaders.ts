@@ -7,7 +7,7 @@ const billInclude = {
   transaction: {
     select: {
       id: true,
-      merchantRaw: true,
+      merchantRaw: true, category: { select: { name: true } },
       merchantClean: true,
       date: true,
       amount: true,
@@ -62,7 +62,7 @@ const workspaceBillSelect = {
   transaction: {
     select: {
       id: true,
-      merchantRaw: true,
+      merchantRaw: true, category: { select: { name: true } },
       merchantClean: true,
       date: true,
       amount: true,

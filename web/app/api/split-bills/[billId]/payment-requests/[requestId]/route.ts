@@ -9,7 +9,7 @@ import { Prisma } from "@prisma/client";
 const statusSchema = z.object({ status: z.enum(["requested", "paid", "declined"]) });
 
 const billInclude = {
-  transaction: { select: { id: true, merchantRaw: true, merchantClean: true, date: true, amount: true, currency: true, account: { select: { name: true } } } },
+  transaction: { select: { id: true, merchantRaw: true, category: { select: { name: true } }, merchantClean: true, date: true, amount: true, currency: true, account: { select: { name: true } } } },
   group: { include: { members: { orderBy: splitBillGroupMemberOrderBy } } },
   participants: true,
   items: { include: { participants: true }, orderBy: splitBillItemOrderBy },

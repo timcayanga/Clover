@@ -256,6 +256,7 @@ export type SplitBillSerializedBill = {
   transaction: {
     id: string;
     merchantRaw: string;
+    category?: { name: string } | null;
     merchantClean: string | null;
     date: string;
     amount: string;
@@ -3493,6 +3494,7 @@ export const serializeSplitBillRecord = (bill: {
   transaction?: {
     id: string;
     merchantRaw: string;
+    category?: { name: string } | null;
     merchantClean: string | null;
     date: Date;
     amount: { toString: () => string };
@@ -3599,6 +3601,7 @@ export const serializeSplitBillRecord = (bill: {
       ? {
           id: bill.transaction.id,
           merchantRaw: bill.transaction.merchantRaw,
+          category: bill.transaction.category ?? null,
           merchantClean: bill.transaction.merchantClean,
           date: bill.transaction.date.toISOString(),
           amount: bill.transaction.amount.toString(),

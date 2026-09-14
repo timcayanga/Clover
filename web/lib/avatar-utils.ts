@@ -42,3 +42,16 @@ export const getAvatarBackgroundStyle = (value: string) => ({
 export const getBrightAvatarBackgroundStyle = (value: string) => ({
   background: brightAvatarBackgrounds[Math.abs(hashString(value.trim() || value)) % brightAvatarBackgrounds.length],
 });
+
+// Stable Clover colors keep a person recognizable across shared bill views.
+const cloverAvatarBackgrounds = [
+  "linear-gradient(135deg, #0bafc1, #67dfb3)",
+  "linear-gradient(135deg, #ad8de9, #65c5e8)",
+  "linear-gradient(135deg, #ffb579, #f18dad)",
+  "linear-gradient(135deg, #8ccbcb, #b3e2cc)",
+] as const;
+
+export const getCloverAvatarBackgroundStyle = (value: string) => ({
+  background: cloverAvatarBackgrounds[Math.abs(hashString(value.trim().toLowerCase().replace(/\s+/g, " "))) % cloverAvatarBackgrounds.length],
+  color: "#17363d",
+});
