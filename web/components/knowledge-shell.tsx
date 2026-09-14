@@ -50,7 +50,7 @@ export function KnowledgeContact() {
           out of your message.
         </p>
       </div>
-      <Link className={styles.button} href="/contact">
+      <Link className={styles.button} href="/contact-us">
         Contact support <span aria-hidden="true"> →</span>
       </Link>
     </aside>
