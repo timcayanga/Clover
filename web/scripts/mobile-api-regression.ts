@@ -63,6 +63,10 @@ async function main() {
   assert.ok(!JSON.stringify(circleResponse).includes("secret"));
   const splitResponse = mobileApiResponse("split-bill", { bill: { id: "one", userId: "private", transaction: { account: "private" }, rawPayload: "private", receiptStorageKey: "private", settlement: { participants: [], transfers: [] } } });
   assert.ok(!JSON.stringify(splitResponse).includes("private"));
+  const sharedWith = mobileApiResponse("split-bills", { bills: [{ id: "bill", group: { id: "group", name: "Weekend", shareToken: "secret", userId: "private" } }] });
+  assert.deepEqual((sharedWith as {bills: {group: unknown}[]}).bills[0].group, {id:"group",name:"Weekend"});
+  assert.ok(!JSON.stringify(sharedWith).includes("secret"));
+  assert.ok(!JSON.stringify(sharedWith).includes("private"));
   assert.equal(mobileOperation("GET", ["budgets"]), "budgets");
   assert.equal(mobileOperation("POST", ["budgets"]), "budgets");
   assert.equal(mobileOperation("GET", ["budgets", "options"]), "budget-options");

@@ -1,3 +1,4 @@
+import { SpendingDonut } from "../src/spending-donut";
 import { useState } from "react";
 import { Pressable, Text, View } from "react-native";
 import { router } from "expo-router";
@@ -63,7 +64,7 @@ export default function Reports() {
   const [tab, setTab] = useState("Overview");
   const [period, setPeriod] = useState<"weekly" | "monthly">("monthly");
   const [filters, setFilters] = useState(false);
-  const [chart, setChart] = useState("Bars");
+  const [chart, setChart] = useState("Donut");
   const { data, error, reload } = usePlanData(
     `reports?currency=${currency}`,
     sample,
@@ -130,19 +131,76 @@ export default function Reports() {
             {(() => {
               const prior = summary.previous;
               const priorNet = prior.income - prior.expense;
-              const rate = summary.income > 0 ? Math.min(1, Math.max(0, net / summary.income)) * 100 : null;
-              const priorRate = prior.income > 0 ? Math.min(1, Math.max(0, priorNet / prior.income)) * 100 : null;
-              const percentage = (now: number, before: number) => before > 0 ? ((now - before) / before) * 100 : null;
+              const rate =
+                summary.income > 0
+                  ? Math.min(1, Math.max(0, net / summary.income)) * 100
+                  : null;
+              const priorRate =
+                prior.income > 0
+                  ? Math.min(1, Math.max(0, priorNet / prior.income)) * 100
+                  : null;
+              const percentage = (now: number, before: number) =>
+                before > 0 ? ((now - before) / before) * 100 : null;
               const rows = [
-                { title: "Income", value: money(String(summary.income), currency), delta: percentage(summary.income, prior.income), lower: false, unit: "% vs prior period" },
-                { title: "Spending", value: money(String(summary.expense), currency), delta: percentage(summary.expense, prior.expense), lower: true, unit: "% vs prior period" },
-                { title: "Net income", value: money(String(net), currency), delta: net - priorNet, lower: false, unit: "money" },
-                { title: "Savings rate", value: rate === null ? "N/A" : `${rate.toFixed(1)}%`, delta: rate !== null && priorRate !== null ? rate - priorRate : null, lower: false, unit: " percentage points" },
+                {
+                  title: "Income",
+                  value: money(String(summary.income), currency),
+                  delta: percentage(summary.income, prior.income),
+                  lower: false,
+                  unit: "% vs prior period",
+                },
+                {
+                  title: "Spending",
+                  value: money(String(summary.expense), currency),
+                  delta: percentage(summary.expense, prior.expense),
+                  lower: true,
+                  unit: "% vs prior period",
+                },
+                {
+                  title: "Net income",
+                  value: money(String(net), currency),
+                  delta: net - priorNet,
+                  lower: false,
+                  unit: "money",
+                },
+                {
+                  title: "Savings rate",
+                  value: rate === null ? "N/A" : `${rate.toFixed(1)}%`,
+                  delta:
+                    rate !== null && priorRate !== null
+                      ? rate - priorRate
+                      : null,
+                  lower: false,
+                  unit: " percentage points",
+                },
               ];
-              return rows.map(row => {
-                const color = row.delta === null || row.delta === 0 ? colors.ink : (row.lower ? row.delta < 0 : row.delta > 0) ? colors.positive : colors.danger;
-                const detail = row.delta === null ? "No prior value to compare" : row.unit === "money" ? `${money(String(row.delta), currency)} vs prior period` : `${row.delta > 0 ? "+" : ""}${row.delta.toFixed(1)}${row.unit}`;
-                return <View key={row.title} style={{ flexGrow: 1, flexBasis: "44%" }}><SummaryCard title={row.title} value={row.value} color={color} detail={detail} detailColor={color} /></View>;
+              return rows.map((row) => {
+                const color =
+                  row.delta === null || row.delta === 0
+                    ? colors.ink
+                    : (row.lower ? row.delta < 0 : row.delta > 0)
+                      ? colors.positive
+                      : colors.danger;
+                const detail =
+                  row.delta === null
+                    ? "No prior value to compare"
+                    : row.unit === "money"
+                      ? `${money(String(row.delta), currency)} vs prior period`
+                      : `${row.delta > 0 ? "+" : ""}${row.delta.toFixed(1)}${row.unit}`;
+                return (
+                  <View
+                    key={row.title}
+                    style={{ flexGrow: 1, flexBasis: "44%" }}
+                  >
+                    <SummaryCard
+                      title={row.title}
+                      value={row.value}
+                      color={color}
+                      detail={detail}
+                      detailColor={color}
+                    />
+                  </View>
+                );
               });
             })()}
           </View>
@@ -205,10 +263,13 @@ export default function Reports() {
           <Body muted={false}>Spending Mix</Body>
           <Body>This calendar month · {currency}</Body>
           <PlanTabs
-            items={["Bars", "Table"]}
+            items={["Bars", "Donut", "Table"]}
             value={chart}
             onChange={setChart}
           />
+          {chart === "Donut" ? (
+            <SpendingDonut categories={data.categories} currency={currency} />
+          ) : null}
           {data.categories.length ? (
             data.categories.map((category) => (
               <View key={category.name} style={{ gap: 8 }}>

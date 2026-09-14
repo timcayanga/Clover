@@ -1,5 +1,6 @@
 "use client";
 
+import { getCategoryIconSrc } from "@/lib/category-icons";
 import { InterfaceIcon } from "@/components/interface-icon";
 import { useMemo, useState } from "react";
 import { useUser } from "@clerk/nextjs";
@@ -359,12 +360,10 @@ export function SplitBillHome({
             <article>
               <span>You owe</span>
               <strong>{balancePulse.owesLabel}</strong>
-              <small>Across open bills</small>
             </article>
             <article>
               <span>Owed to you</span>
               <strong>{balancePulse.isOwedLabel}</strong>
-              <small>Across open bills</small>
             </article>
           </section>
           {duePaymentRequests.length ? (
@@ -465,7 +464,7 @@ export function SplitBillHome({
                   <tr>
                     <th>Bill</th>
                     <th className="desktop-column">Date</th>
-                    <th className="desktop-column">Group</th>
+                    <th className="desktop-column">Shared with</th>
                     <th className="desktop-column">Paid by</th>
                     <th className="amount">Total</th>
                     <th className="amount">Your balance</th>
@@ -496,14 +495,15 @@ export function SplitBillHome({
                             aria-label={`View ${bill.title}`}
                             onClick={() => onOpenBill(bill.id)}
                           >
-                            {bill.title}
+                            <img src={getCategoryIconSrc(null)} alt="" width={24} height={24}/><span>{bill.title}</span><span className="split-bill-row-chevron" aria-hidden="true">›</span>
                           </button>
+                          <span className="split-bill-mobile-sharing"><small>{formatDate(bill.billDate)}</small><span className="split-bill-avatars"><SplitBillEntityAvatar name={bill.group?.name || bill.participants.map(p=>p.name).join(" & ")} avatarUrl={bill.group ? groups.find(g=>g.id===bill.group?.id)?.avatarUrl || "/assets/split-bills/group-default.jpg" : people.find(p=>p.name===bill.participants[0]?.name)?.avatarUrl ?? null}/>{bill.group?.name || bill.participants.map(p=>p.name).join(", ") || "No participants"}</span></span>
                         </td>
                         <td className="desktop-column">
                           {formatDate(bill.billDate)}
                         </td>
                         <td className="desktop-column">
-                          {bill.group?.name ?? "—"}
+                          <span className="split-bill-avatars"><SplitBillEntityAvatar name={bill.group?.name || bill.participants.map(p => p.name).join(" & ")} avatarUrl={bill.group ? groups.find(g=>g.id===bill.group?.id)?.avatarUrl || "/assets/split-bills/group-default.jpg" : people.find(p=>p.name===bill.participants[0]?.name)?.avatarUrl ?? null}/>{bill.group?.name || bill.participants.map(p=>p.name).join(", ") || "No participants"}</span>
                         </td>
                         <td className="desktop-column">
                           {bill.payments
@@ -555,13 +555,13 @@ export function SplitBillHome({
           <div className="split-bill-group-grid">
             {visibleGroups.map((group) => (
               <article className="split-bill-group-card" key={group.id}>
-                <strong>{group.name}</strong>
+                <div className="split-bill-group-identity"><SplitBillEntityAvatar name={group.name} avatarUrl={group.avatarUrl || "/assets/split-bills/group-default.jpg"} sizeClass="split-bill-group-photo"/><strong>{group.name}</strong></div>
                 <div className="split-bill-avatars">
                   {group.members.slice(0, 5).map((member) => (
                     <SplitBillEntityAvatar
                       key={member.id}
                       name={member.name}
-                      avatarUrl={null}
+                      avatarUrl={people.find(person => person.name === member.name)?.avatarUrl ?? null}
                     />
                   ))}
                   {group.members.length > 5 ? (

@@ -211,21 +211,21 @@ const makeBrand = (params: {
   };
 };
 
-const bankIcon = iconPath("bank.png");
-const cashIcon = iconPath("cash.png");
-const creditCardIcon = iconPath("credit card.png");
-const investmentIcon = iconPath("investment.png");
-const othersIcon = iconPath("others.png");
-const walletIcon = iconPath("wallet.png");
-const liabilityIcon = "/assets/icons/debt.png";
-const loanIcon = "/assets/icons/loan.png";
-const mortgageIcon = "/assets/icons/mortgage.png";
-const lineOfCreditIcon = "/assets/icons/line of credit.png";
-const receivableIcon = "/assets/icons/receivable.png";
-const payableIcon = "/assets/icons/payable.png";
-const bnplIcon = "/assets/icons/bnpl.png";
-const prepaidIcon = "/assets/icons/prepaid.png";
-const insuranceIcon = "/assets/icons/insurance.png";
+const bankIcon = "/assets/account-types/bank.png";
+const cashIcon = "/assets/account-types/cash.png";
+const creditCardIcon = "/assets/account-types/credit_card.png";
+const investmentIcon = "/assets/account-types/investment.png";
+const othersIcon = "/assets/account-types/other.png";
+const walletIcon = "/assets/account-types/wallet.png";
+const liabilityIcon = "/assets/account-types/loan.png";
+const loanIcon = "/assets/account-types/loan.png";
+const mortgageIcon = "/assets/account-types/mortgage.png";
+const lineOfCreditIcon = "/assets/account-types/line_of_credit.png";
+const receivableIcon = "/assets/account-types/receivable.png";
+const payableIcon = "/assets/account-types/payable.png";
+const bnplIcon = "/assets/account-types/bnpl.png";
+const prepaidIcon = "/assets/account-types/prepaid.png";
+const insuranceIcon = "/assets/account-types/insurance.png";
 const philippinesLogo = (baseName: string) => [
   philippinesLogoPath(`${baseName}.png`),
   philippinesLogoPath(`${baseName}.jpg`),

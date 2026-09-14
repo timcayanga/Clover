@@ -1,15 +1,18 @@
 import type { ExpoConfig } from "expo/config";
 
 const config: ExpoConfig = {
-  name: "Clover Preview",
+  name: process.env.CLOVER_APP_NAME || "Clover Preview",
   slug: "clover-mobile",
-  scheme: "clover-preview",
+  owner: "clover-innovations",
+  extra: { eas: { projectId: "742a3fe2-1cb2-4d71-8ed7-bc7e2e89b0ff" } },
+  scheme: process.env.CLOVER_APP_SCHEME || "clover-preview",
   version: "0.1.0",
-  icon: "./assets/clover-icon.png",
+  icon: "./assets/clover-icon-dark.png",
   userInterfaceStyle: "automatic",
   orientation: "default",
   ios: {
     bundleIdentifier: process.env.CLOVER_IOS_BUNDLE_ID || "ph.clover.preview",
+    appleTeamId: "6XX38GYURG",
     supportsTablet: true,
     infoPlist: { ITSAppUsesNonExemptEncryption: false },
   },

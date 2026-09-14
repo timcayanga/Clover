@@ -3978,13 +3978,14 @@ function AccountsPageContent() {
           <button
             type="button"
             className="accounts-mobile-list-row"
+            data-account-icon={accountBrand.fallbackIconSrc.split("/").pop()?.replace(".png", "")}
             aria-expanded={isExpanded}
             aria-hidden={isExpanded}
             tabIndex={isExpanded ? -1 : 0}
             onClick={() => setExpandedMobileAccount(rowKey)}
           >
             <span className="accounts-mobile-list-row__brand">
-              <AccountBrandMark accountBrand={accountBrand} label={row.institution} />
+              <img className="accounts-mobile-type-icon" src={accountBrand.fallbackIconSrc} alt="" width={34} height={34}/>
               <span>
                 <strong>{row.institution}</strong>
                 <small>{row.assetCount ? `${row.assetCount} asset${row.assetCount === 1 ? "" : "s"}` : getInvestmentInstitutionPreview(row.accounts)}</small>
@@ -4044,13 +4045,14 @@ function AccountsPageContent() {
         <button
           type="button"
           className="accounts-mobile-list-row"
+            data-account-icon={accountBrand.fallbackIconSrc.split("/").pop()?.replace(".png", "")}
           aria-expanded={isExpanded}
           aria-hidden={isExpanded}
           tabIndex={isExpanded ? -1 : 0}
           onClick={() => setExpandedMobileAccount(rowKey)}
         >
           <span className="accounts-mobile-list-row__brand">
-            <AccountBrandMark accountBrand={accountBrand} label={accountDisplayName} />
+            <img className="accounts-mobile-type-icon" src={accountBrand.fallbackIconSrc} alt="" width={34} height={34}/>
             <span>
               <strong>{accountDisplayName}</strong>
               {showAccountEyebrow ? <small>{accountEyebrow}</small> : null}

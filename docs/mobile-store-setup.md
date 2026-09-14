@@ -1,6 +1,14 @@
 # Clover iOS and Android store setup
 
-Status: apps and subscription products have **not** been created. Integration code is prepared, sales default to disabled, and no app/account/product has been registered or submitted by this work. Live purchase, restore, renewal and refund tests remain blocked on setup.
+Expo account: `cloverph`. Organization/project owner: `clover-innovations`. Mac login verified and EAS project created: `@clover-innovations/clover-mobile`, project ID `742a3fe2-1cb2-4d71-8ed7-bc7e2e89b0ff`. Local Expo config contains this project link.
+
+Status updated September 14, 2026: the user has created the Apple App ID and App Store Connect record, and a Google Play draft for **Clover: Personal Finance**, under **Clover Innovations OPC**. Google developer account type: **Organization**. Both app identifiers are `ph.clover.app`. Apple Team ID: `6XX38GYURG`; App Store Connect numeric app ID: `6811711508`. Subscription products remain pending. No signed build or submission is claimed by this configuration work.
+
+`mobile/eas.json` now prepares a `store-test` profile for TestFlight and Google Play internal testing, pointing at staging. Development builds retain the preview identifier and scheme. Store-test builds use the `clover` scheme; configure matching Clerk callbacks before authentication testing.
+
+Next: sign in to Expo/EAS and link this app to a project, configure its preview public Clerk key, set up Apple distribution signing and the Android upload keystore, and connect submission credentials privately. The first Android AAB must be uploaded manually in Play Console before automated API submissions. Then, from `mobile/`, use `eas build --profile store-test --platform ios` (or `android`) and submit the selected build with `eas submit --profile store-test --platform ios` (or `android`). Store-test is staging-only and must not be promoted to public production.
+
+The subscription integration is prepared and sales remain disabled. Live purchase, restore, renewal and refund tests remain blocked on product/provider setup.
 
 ## Prepared integration
 
@@ -11,9 +19,9 @@ Status: apps and subscription products have **not** been created. Integration co
 
 ## Create apps and products
 
-1. Choose permanent bundle/package IDs. Current development ID `ph.clover.preview` is not a reserved production ID. Suggested final ID for both: `ph.clover.app`, subject to availability.
-2. Apple Developer: register an explicit app ID with the required capabilities. App Store Connect: create Clover against it, complete agreements/tax/banking, and add sandbox testers.
-3. Google Play: create Clover, configure Play App Signing, complete app/account requirements, upload a signed internal-test AAB with the final package ID, and add license/internal testers.
+1. Registered identifiers: `ph.clover.app` for both stores. The separate development identifier remains `ph.clover.preview`.
+2. Apple app registration is complete. Configure required capabilities, complete outstanding agreements/tax/banking, and add sandbox testers.
+3. Google Play draft creation is complete. Configure Play App Signing, complete outstanding app requirements, upload a signed internal-test AAB, and add license/internal testers.
 4. Build with `CLOVER_IOS_BUNDLE_ID` and `CLOVER_ANDROID_PACKAGE_ID` matching the registered IDs. Update Clerk native redirects for that build. Keep staging identifiers/configuration separate.
 5. Apple: create one Clover Pro subscription group with monthly and annual auto-renewing products. Proposed IDs: `clover.pro.monthly` and `clover.pro.annual` (not created).
 6. Google: create Clover Pro with monthly/annual auto-renewing base plans. Record the exact product identifiers RevenueCat returns, including base-plan suffixes where applicable.

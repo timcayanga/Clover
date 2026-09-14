@@ -5,6 +5,7 @@ import { useAccess } from "../../src/access";
 import { useSession } from "../../src/session";
 import {
   AccountAvatar,
+  AddNavigationMark,
   AppHeader,
   Icon,
   ProfileGate,
@@ -41,13 +42,14 @@ export default function TabLayout() {
             tabBarActiveTintColor: colors.teal,
             tabBarInactiveTintColor: colors.muted,
             tabBarStyle: {
-              height: 70 + insets.bottom,
+              height: 72 + insets.bottom,
               paddingTop: 7,
               paddingBottom: 8 + insets.bottom,
               borderTopColor: colors.line,
               backgroundColor: colors.white,
             },
-            tabBarLabelStyle: { fontSize: 10, fontWeight: "500" },
+            tabBarLabel: ({ children, color }) => <Text style={{fontFamily:"Poppins-Regular",fontSize:10,color,textAlign:"center"}}>{children}</Text>,
+            tabBarLabelStyle: { fontSize: 11, fontFamily: "Poppins-Regular" },
           }}
         >
           <Tabs.Screen
@@ -63,7 +65,7 @@ export default function TabLayout() {
             options={{
               title: "Home",
               tabBarIcon: ({ color }) => (
-                <Icon name="home-outline" color={color} />
+                <Icon name="home-outline" color={color} size={34} />
               ),
             }}
           />
@@ -72,7 +74,7 @@ export default function TabLayout() {
             options={{
               title: "Transactions",
               tabBarIcon: ({ color }) => (
-                <Icon name="swap-horizontal-outline" color={color} />
+                <Icon name="swap-horizontal-outline" color={color} size={34} />
               ),
             }}
           />
@@ -86,17 +88,9 @@ export default function TabLayout() {
             })}
             options={{
               title: "Add",
-              tabBarIcon: () => (
-                <View
-                  style={{
-                    backgroundColor: colors.teal,
-                    borderRadius: 20,
-                    padding: 5,
-                  }}
-                >
-                  <Icon name="add" color="white" />
-                </View>
-              ),
+              tabBarAccessibilityLabel: "Add",
+              tabBarLabel: () => null,
+              tabBarIcon: () => <AddNavigationMark />,
             }}
           />
           <Tabs.Screen
@@ -104,7 +98,11 @@ export default function TabLayout() {
             options={{
               title: "Adviser",
               tabBarIcon: ({ color }) => (
-                <Icon name="chatbubble-ellipses-outline" color={color} />
+                <Icon
+                  name="chatbubble-ellipses-outline"
+                  color={color}
+                  size={34}
+                />
               ),
             }}
           />
@@ -112,6 +110,7 @@ export default function TabLayout() {
             name="account"
             options={{
               title: "Account",
+              tabBarAccessibilityLabel: "Account",
               tabBarIcon: ({ color }) => <AccountAvatar />,
             }}
           />

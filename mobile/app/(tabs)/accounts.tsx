@@ -1,3 +1,5 @@
+import { AccountTypeMark } from "../../src/account-type-mark";
+import { accountRowColors } from "../../../shared/visual-identity";
 import {
   useFocusEffect,
   useLocalSearchParams,
@@ -123,20 +125,25 @@ function AccountsContent() {
       savings: "Banks & savings",
       checking: "Banks & savings",
       credit_card: "Credit cards",
-      line_of_credit: "Credit cards",
+      line_of_credit: "Liabilities",
       wallet: "Wallets",
       cash: "Cash",
       investment: "Investments",
-      loan: "Loans & mortgages",
-      mortgage: "Loans & mortgages",
+      loan: "Liabilities",
+      mortgage: "Liabilities",
+      payable: "Liabilities",
+      bnpl: "Liabilities",
+      receivable: "Tracked assets",
+      insurance: "Tracked assets",
+      prepaid: "Tracked assets",
+      other: "Tracked assets",
     })[type] ?? "Other accounts";
   const groups = new Map<
     string,
     { title: string; currency: string; rows: Account[] }
   >();
-  for (const account of accounts.filter(
-    (a) =>
-      `${a.name} ${a.institution}`.toLowerCase().includes(query.toLowerCase()),
+  for (const account of accounts.filter((a) =>
+    `${a.name} ${a.institution}`.toLowerCase().includes(query.toLowerCase()),
   )) {
     const title = sectionName(account.type),
       key = `${title}:${account.currency}`;
@@ -180,7 +187,22 @@ function AccountsContent() {
       ) : (
         Array.from(groups, ([key, group]) => (
           <View key={key} style={{ gap: 12 }}>
-            <SummaryCard title={group.title} value={group.rows.some(a=>a.balance===null || !Number.isFinite(Number(a.balance))) ? "Balance not recorded" : money(String(group.rows.reduce((sum,a)=>sum+Number(a.balance),0)),group.currency)}/>
+            <View style={{flexDirection:"row",alignItems:"center",gap:12,flexWrap:"wrap"}}><Text style={{fontFamily:"Poppins-SemiBold",fontSize:16,color:colors.ink}}>{group.title}</Text><Text style={{fontFamily:"Poppins-SemiBold",fontSize:13,color:colors.ink}}>{
+                group.rows.some(
+                  (a) =>
+                    a.balance === null || !Number.isFinite(Number(a.balance)),
+                )
+                  ? "Balance not recorded"
+                  : money(
+                      String(
+                        group.rows.reduce(
+                          (sum, a) => sum + Number(a.balance),
+                          0,
+                        ),
+                      ),
+                      group.currency,
+                    )
+              }</Text></View>
             {group.rows.map((account) => (
               <Pressable
                 key={account.id}
@@ -188,52 +210,83 @@ function AccountsContent() {
                 accessibilityLabel={`Open ${label(account)}`}
                 onPress={() => setSelected(account)}
               >
-                <LinearGradient
-                  colors={
-                    dark ? ["#193A43", "#15252D"] : ["#DEF6F4", "#FFFFFF"]
-                  }
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 1, y: 1 }}
+                <View
                   style={{
-                    borderRadius: 22,
-                    borderWidth: 1,
-                    borderColor: colors.line,
-                    padding: 20,
-                    gap: 12,
+                    flexDirection: "row",
+                    alignItems: "center",
+                    gap: 10,
+                    borderRadius: 14,
+                    minHeight: 54,
+                    padding: 10,
+                    backgroundColor: accountRowColors(
+                      account.type,
+                      account.institution || account.name,
+                      dark,
+                    )[0],
                   }}
                 >
-                  <View style={styles.row}>
-                    <Icon name="card-outline" size={36} />
-                    <View style={{ flex: 1 }}>
+                  <AccountTypeMark type={account.type} />
+                  <View style={{ flex: 1, minWidth: 0 }}>
+                    <Text
+                      style={{
+                        fontFamily: "Poppins-SemiBold",
+                        fontSize: 13,
+                        color: accountRowColors(
+                          account.type,
+                          account.institution || account.name,
+                          dark,
+                        )[1],
+                      }}
+                    >
+                      {account.name}
+                    </Text>
+                    {account.lastFour ? (
                       <Text
                         style={{
-                          color: colors.ink,
-                          fontSize: 18,
-                          fontWeight: "600",
+                          fontFamily: "Poppins-Regular",
+                          fontSize: 10,
+                          color: accountRowColors(
+                            account.type,
+                            account.institution || account.name,
+                            dark,
+                          )[1],
                         }}
                       >
-                        {label(account)}
+                        Account •••• {account.lastFour}
                       </Text>
-                      <Body>
-                        {account.institution ||
-                          account.type.replaceAll("_", " ")}
-                      </Body>
-                    </View>
+                    ) : null}
                   </View>
-                  <Body>{amountLabel(account)}</Body>
                   <Text
                     style={{
-                      color: colors.ink,
-                      fontSize: 28,
-                      fontWeight: "600",
+                      maxWidth: "43%",
+                      textAlign: "right",
+                      fontFamily: "Poppins-SemiBold",
+                      fontSize: 14,
+                      color: accountRowColors(
+                        account.type,
+                        account.institution || account.name,
+                        dark,
+                      )[1],
                     }}
                   >
                     {account.balance === null
                       ? "Not recorded"
                       : money(account.balance, account.currency)}
                   </Text>
-                  <Body>{account.currency} · View account ›</Body>
-                </LinearGradient>
+                  <Text
+                    accessibilityElementsHidden
+                    style={{
+                      fontSize: 24,
+                      color: accountRowColors(
+                        account.type,
+                        account.institution || account.name,
+                        dark,
+                      )[1],
+                    }}
+                  >
+                    ›
+                  </Text>
+                </View>
               </Pressable>
             ))}
           </View>

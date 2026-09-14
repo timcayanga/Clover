@@ -65913,3 +65913,43 @@ html[data-theme=dark] .notifications-filters button[aria-pressed=true] { backgro
     padding: 12px 4px;
   }
 }
+
+/* Figma snapshot 14 September 2026: shared card and chart geometry. */
+.content--reports .report-card__head { display:flex; flex-wrap:wrap; align-items:center; gap:12px; }
+.content--reports .report-card__head > .reports-subtab-title { flex:1 1 150px; min-width:0; }
+.report-chart-switch { flex:none; flex-wrap:wrap; }
+.content--reports .report-donut { grid-template-columns:minmax(0,1fr); justify-items:center; }
+.content--reports .report-donut__chart { margin-inline:auto; justify-self:center; }
+.content--reports .report-donut__legend { width:100%; min-width:0; }
+.split-bill-group-card { min-width:0; height:auto; overflow:visible; border-radius:20px; background:linear-gradient(110deg,color-mix(in srgb,#67dfb3 18%,var(--surface)),color-mix(in srgb,#65c5e8 16%,var(--surface))); }
+.split-bill-group-identity { display:flex; align-items:center; gap:16px; min-width:0; }
+.split-bill-group-identity strong { overflow-wrap:anywhere; }
+.split-bill-group-photo { width:72px!important; height:72px!important; border-radius:12px!important; flex-shrink:0; overflow:hidden; }
+.split-bill-group-card > .button { margin-top:auto; flex:none; }
+.split-bill-row-chevron { font-size:26px; line-height:1; margin-left:10px; flex:none; }
+.split-bill-list-toolbar input { min-height:40px; height:40px; box-sizing:border-box; }
+.split-bill-qr-card { border-radius:20px; padding:20px; min-height:220px; font-family:var(--font-poppins),sans-serif; background:linear-gradient(24deg,transparent 48%,#ffffff14 48%,#ffffff14 67%,transparent 67%),linear-gradient(110deg,var(--qr-start),var(--qr-end)); }
+.financial-account-card__name,.financial-account-card__number,.financial-account-card__amount { font-family:var(--font-poppins),sans-serif; }
+.accounts-brand-mark:has(.accounts-brand-mark__fallback) { background:transparent!important; box-shadow:none!important; }
+.accounts-brand-mark__fallback { width:100%!important;height:100%!important;object-fit:contain;filter:none!important; }
+@media(max-width:767px) {
+  .report-chart-switch button { min-width:44px;min-height:44px; }
+  .financial-account-card[data-account-icon="cash"],.financial-account-card[data-account-icon="insurance"],.financial-account-card[data-account-icon="receivable"],.financial-account-card[data-account-icon="prepaid"],.financial-account-card[data-account-icon="other"] { background:color-mix(in srgb,#67dfb3 22%,var(--surface))!important; }
+  .financial-account-card[data-account-icon="loan"],.financial-account-card[data-account-icon="mortgage"],.financial-account-card[data-account-icon="line_of_credit"],.financial-account-card[data-account-icon="bnpl"],.financial-account-card[data-account-icon="payable"] { background:color-mix(in srgb,#f18dad 22%,var(--surface))!important; }
+  .shell-bottom-nav { min-height:72px; }
+}
+
+.split-bill-mobile-sharing { display:none; }
+.split-bill-table-scroll td > button { display:flex;align-items:center;gap:8px; }
+@media(max-width:767px) { .split-bill-mobile-sharing { display:grid; gap:8px; margin-top:6px; font-size:11px; } }
+
+.content--reports .report-donut--pie .report-donut__chart { width:min(100%,300px); }
+.content--reports .report-donut--pie .report-donut__chart svg { width:100%; }
+
+@media(max-width:1100px) {
+ .accounts-mobile-type-icon { width:34px;height:34px;flex:none;object-fit:contain; }
+ .accounts-mobile-list-row__brand { min-width:0;gap:10px; }
+ .accounts-mobile-list-row__brand strong,.accounts-mobile-list-row__end strong,.accounts-mobile-list-row__brand small { font-family:var(--font-poppins),sans-serif!important; }
+ .accounts-mobile-list-row:is([data-account-icon="cash"],[data-account-icon="insurance"],[data-account-icon="receivable"],[data-account-icon="prepaid"],[data-account-icon="other"]) { background:color-mix(in srgb,#67dfb3 22%,var(--surface))!important; }
+ .accounts-mobile-list-row:is([data-account-icon="loan"],[data-account-icon="mortgage"],[data-account-icon="line_of_credit"],[data-account-icon="bnpl"],[data-account-icon="payable"]) { background:color-mix(in srgb,#f18dad 22%,var(--surface))!important; }
+}

@@ -1930,6 +1930,7 @@ export async function ReportsStream({
                     : null}
                   <circle cx="120" cy="120" r="65" style={{fill:"var(--surface)"}} />
                 </svg>
+                {reportSpendingMixSegments.length ? <div className="report-donut__center"><strong>{formatCurrency(currentSpend)}</strong><span>Total spending</span></div> : null}
               </div>
 
               <div className="report-donut__legend">

@@ -60,6 +60,7 @@ const splitSummary = (value: unknown) => pick(value, ["id", "title", "note", "bi
 const splitDetail = (value: unknown) => {
   const bill = record(value), settlement = record(bill.settlement);
   return { ...splitSummary(bill),
+    group: bill.group ? pick(bill.group, ["id", "name"]) : null,
     participants: rows(bill.participants, ["id", "name"]),
     items: rows(bill.items, ["id", "description", "amount", "participantIds", "splitMethod", "allocations"]),
     settlement: {

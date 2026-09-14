@@ -1,3 +1,6 @@
+import { LinearGradient } from "expo-linear-gradient";
+import { PersonAvatar } from "../src/person-avatar";
+import { AccountTypeMark } from "../src/account-type-mark";
 import { SplitGroupDetails, type SplitGroup } from "../src/split-group-details";
 import * as DocumentPicker from "expo-document-picker";
 import { BillDetails, type BillItem } from "../src/bill-details";
@@ -32,6 +35,7 @@ type Bill = {
   total: string;
   settlementStatus: string;
   resolved?: boolean;
+  group?: { id: string; name: string } | null;
   participants?: { id: string; name: string }[];
   items?: BillItem[];
   settlement?: {
@@ -57,9 +61,10 @@ const optionsSample = {
     id: string;
     name: string;
     members: { id: string; name: string }[];
+    avatarUrl?: string | null;
     _count: { bills: number };
   }[],
-  people: [] as { id: string; name: string }[],
+  people: [] as { id: string; name: string; avatarUrl?: string | null }[],
   profiles: [] as {
     id: string;
     label: string;
@@ -72,11 +77,14 @@ const optionsSample = {
   }[],
 };
 export default function SplitBills() {
-  const params=useLocalSearchParams<{billId?:string}>();
+  const params = useLocalSearchParams<{ billId?: string }>();
   const session = useSession();
-  const { colors } = useTheme();
+  const { colors, dark } = useTheme();
   const [statusFilter, setStatusFilter] = useState("All");
-  const [entity,setEntity] = useState<{group?:SplitGroup;person?:string}|null>(null);
+  const [entity, setEntity] = useState<{
+    group?: SplitGroup;
+    person?: string;
+  } | null>(null);
   const [page, setPage] = useState(1);
   const { data, setData, error, reload } = usePlanData(
     `split-bills?page=${page}`,
@@ -105,7 +113,18 @@ export default function SplitBills() {
     setDeletePayment(false);
     setPaymentError("");
   }, [session.profileId]);
-  useEffect(()=>{if(params.billId)setSelected({id:params.billId,title:"Bill",note:"",billDate:"",currency:"PHP",total:"0",settlementStatus:"open"});},[params.billId]);
+  useEffect(() => {
+    if (params.billId)
+      setSelected({
+        id: params.billId,
+        title: "Bill",
+        note: "",
+        billDate: "",
+        currency: "PHP",
+        total: "0",
+        settlementStatus: "open",
+      });
+  }, [params.billId]);
   const selectedId = selected?.id;
   useEffect(() => {
     if (!selectedId || session.demo) return;
@@ -129,7 +148,27 @@ export default function SplitBills() {
       active = false;
     };
   }, [selectedId, session.demo, session.profileId, session.request]);
-  if(entity) return <SplitGroupDetails key={session.profileId} {...entity} onClose={()=>setEntity(null)} onChanged={()=>options.reload()} onBill={id=>{setEntity(null);setSelected({id,title:"Bill",note:"",billDate:"",currency:"PHP",total:"0",settlementStatus:"open"});}}/>;
+  if (entity)
+    return (
+      <SplitGroupDetails
+        key={session.profileId}
+        {...entity}
+        onClose={() => setEntity(null)}
+        onChanged={() => options.reload()}
+        onBill={(id) => {
+          setEntity(null);
+          setSelected({
+            id,
+            title: "Bill",
+            note: "",
+            billDate: "",
+            currency: "PHP",
+            total: "0",
+            settlementStatus: "open",
+          });
+        }}
+      />
+    );
   if (adding)
     return (
       <BillEditor
@@ -279,7 +318,11 @@ export default function SplitBills() {
                             .includes(search.toLowerCase()) &&
                           (statusFilter === "All" ||
                             (statusFilter === "Resolved" && b.resolved) ||
-                            (!b.resolved && (statusFilter === "Settled" ? b.settlementStatus === "settled" : statusFilter === "Open" && b.settlementStatus !== "settled"))),
+                            (!b.resolved &&
+                              (statusFilter === "Settled"
+                                ? b.settlementStatus === "settled"
+                                : statusFilter === "Open" &&
+                                  b.settlementStatus !== "settled"))),
                       )
                       .map((bill) => (
                         <Pressable
@@ -296,16 +339,70 @@ export default function SplitBills() {
                             borderColor: colors.line,
                           }}
                         >
+                          <CategoryMark name={null} />
                           <View style={{ flex: 1 }}>
                             <Body muted={false}>{bill.title}</Body>
                             <Body>{bill.billDate.slice(0, 10)}</Body>
+                            <View
+                              style={{
+                                flexDirection: "row",
+                                alignItems: "center",
+                                gap: 6,
+                                marginTop: 6,
+                              }}
+                            >
+                              {bill.group ? (
+                                <Image
+                                  source={
+                                    options.data?.groups.find(
+                                      (g) => g.id === bill.group?.id,
+                                    )?.avatarUrl
+                                      ? {
+                                          uri: options.data.groups.find(
+                                            (g) => g.id === bill.group?.id,
+                                          )!.avatarUrl!,
+                                        }
+                                      : require("../assets/split-bills/group-default.jpg")
+                                  }
+                                  style={{
+                                    width: 24,
+                                    height: 24,
+                                    borderRadius: 8,
+                                  }}
+                                />
+                              ) : (
+                                <PersonAvatar
+                                  name={bill.participants?.[0]?.name || "?"}
+                                  size={24}
+                                />
+                              )}
+                              <View style={{ flex: 1 }}>
+                                <Body>
+                                  {bill.group?.name ||
+                                    bill.participants
+                                      ?.map((p) => p.name)
+                                      .join(", ") ||
+                                    "No participants"}
+                                </Body>
+                              </View>
+                            </View>
                           </View>
                           <View style={{ alignItems: "flex-end" }}>
                             <Body muted={false}>
                               {money(bill.total, bill.currency)}
                             </Body>
-                            <Body>{bill.resolved ? "Resolved" : bill.settlementStatus}</Body>
+                            <Body>
+                              {bill.resolved
+                                ? "Resolved"
+                                : bill.settlementStatus}
+                            </Body>
                           </View>
+                          <Text
+                            style={{ fontSize: 26, color: colors.ink }}
+                            accessibilityElementsHidden
+                          >
+                            ›
+                          </Text>
                         </Pressable>
                       ))
                   ) : (
@@ -351,33 +448,59 @@ export default function SplitBills() {
             <>
               {options.data.groups.length ? (
                 options.data.groups.map((group) => (
-                  <Card key={group.id}>
-                    <Body muted={false}>{group.name}</Body>
-                    <PlanAction title="View Group" onPress={()=>setEntity({group})}/>
+                  <LinearGradient
+                    key={group.id}
+                    colors={
+                      dark ? ["#193A43", "#182B36"] : ["#E4FAF3", "#DFF2FA"]
+                    }
+                    style={{
+                      borderRadius: 20,
+                      padding: 20,
+                      gap: 16,
+                      borderWidth: 1,
+                      borderColor: colors.line,
+                    }}
+                  >
+                    <View
+                      style={{
+                        flexDirection: "row",
+                        alignItems: "center",
+                        gap: 16,
+                      }}
+                    >
+                      <Image
+                        source={
+                          group.avatarUrl
+                            ? { uri: group.avatarUrl }
+                            : require("../assets/split-bills/group-default.jpg")
+                        }
+                        style={{ width: 72, height: 72, borderRadius: 12 }}
+                      />
+                      <View style={{ flex: 1 }}>
+                        <Body muted={false}>{group.name}</Body>
+                      </View>
+                    </View>
                     <View style={{ flexDirection: "row", gap: 6 }}>
                       {group.members.slice(0, 5).map((member) => (
-                        <Text
-                          accessibilityLabel={member.name}
+                        <PersonAvatar
                           key={member.id}
-                          style={{
-                            padding: 10,
-                            borderRadius: 20,
-                            backgroundColor: colors.bright,
-                            color: colors.ink,
-                          }}
-                        >
-                          {member.name
-                            .split(" ")
-                            .map((n) => n[0])
-                            .slice(0, 2)
-                            .join("")}
-                        </Text>
+                          name={member.name}
+                          imageUrl={
+                            options.data?.people.find(
+                              (p) => p.name === member.name,
+                            )?.avatarUrl
+                          }
+                        />
                       ))}
                       {group.members.length > 5 ? (
                         <Body>+{group.members.length - 5}</Body>
                       ) : null}
                     </View>
-                  </Card>
+                    <PlanAction
+                      title="View Group"
+                      onPress={() => setEntity({ group })}
+                    />
+                  </LinearGradient>
                 ))
               ) : (
                 <Notice>No groups yet.</Notice>
@@ -388,8 +511,23 @@ export default function SplitBills() {
               {options.data.people.length ? (
                 options.data.people.map((person) => (
                   <Card key={person.id}>
-                    <Body muted={false}>{person.name}</Body>
-                    <PlanAction title="View person" onPress={()=>setEntity({person:person.name})}/>
+                    <View
+                      style={{
+                        flexDirection: "row",
+                        gap: 12,
+                        alignItems: "center",
+                      }}
+                    >
+                      <PersonAvatar
+                        name={person.name}
+                        imageUrl={person.avatarUrl}
+                      />
+                      <Body muted={false}>{person.name}</Body>
+                    </View>
+                    <PlanAction
+                      title="View person"
+                      onPress={() => setEntity({ person: person.name })}
+                    />
                   </Card>
                 ))
               ) : (
@@ -400,21 +538,52 @@ export default function SplitBills() {
             <>
               {options.data.profiles.length ? (
                 options.data.profiles.map((profile) => (
-                  <Card key={profile.id}>
-                    <Body muted={false}>
+                  <LinearGradient
+                    key={profile.id}
+                    colors={
+                      /gcash/i.test(profile.provider)
+                        ? ["#1256B8", "#37A1EE"]
+                        : ["#087E91", "#1CA8AF"]
+                    }
+                    style={{ padding: 20, gap: 16, borderRadius: 20 }}
+                  >
+                    <Text
+                      style={{
+                        fontFamily: "Poppins-SemiBold",
+                        color: "white",
+                        fontSize: 16,
+                      }}
+                    >
                       {profile.label}
                       {profile.isDefault ? " · Default" : ""}
-                    </Body>
-                    <Body>
+                    </Text>
+                    <Text
+                      style={{ fontFamily: "Poppins-Regular", color: "white" }}
+                    >
                       {profile.provider} · {profile.currency}
-                    </Body>
-                    <Body>{profile.accountName}</Body>
-                    <Body>{profile.accountNumber}</Body>
+                    </Text>
+                    <Text
+                      style={{ fontFamily: "Poppins-Regular", color: "white" }}
+                    >
+                      {profile.accountName}
+                    </Text>
+                    <Text
+                      style={{ fontFamily: "Poppins-Regular", color: "white" }}
+                    >
+                      {profile.accountNumber}
+                    </Text>
                     {profile.qrImageData ? (
                       <Image
                         source={{ uri: profile.qrImageData }}
                         accessibilityLabel={`${profile.label} QR code`}
-                        style={{ width: 120, height: 120 }}
+                        style={{
+                          width: 128,
+                          height: 128,
+                          backgroundColor: "white",
+                          borderWidth: 8,
+                          borderColor: "white",
+                          borderRadius: 8,
+                        }}
                         resizeMode="contain"
                       />
                     ) : null}
@@ -422,7 +591,7 @@ export default function SplitBills() {
                       title="View payment option"
                       onPress={() => setPaymentDetail(profile)}
                     />
-                  </Card>
+                  </LinearGradient>
                 ))
               ) : (
                 <Notice>No payment options saved yet.</Notice>

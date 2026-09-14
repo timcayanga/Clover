@@ -1,3 +1,4 @@
+import { LinearGradient } from "expo-linear-gradient";
 import { useAccess } from "./access";
 import { useDisplayPreferences } from "./display-preferences";
 import Ionicons from "@expo/vector-icons/Ionicons";
@@ -115,13 +116,14 @@ export function Button({
         (pressed || disabled) && { opacity: 0.6 },
       ]}
     >
-      {icon ? <Icon name={icon} size={18} color={secondary ? colors.ink : "#FFFFFF"} /> : null}
-      <Text
-        style={[
-          styles.buttonText,
-          secondary && { color: colors.ink },
-        ]}
-      >
+      {icon ? (
+        <Icon
+          name={icon}
+          size={18}
+          color={secondary ? colors.ink : "#FFFFFF"}
+        />
+      ) : null}
+      <Text style={[styles.buttonText, secondary && { color: colors.ink }]}>
         {title}
       </Text>
     </Pressable>
@@ -159,7 +161,13 @@ export function Card({
   const { colors, styles, dark } = useTheme();
   return <View style={[styles.card, style]}>{children}</View>;
 }
-export function Screen({ children, gap = 16 }: { children: ReactNode; gap?: number }) {
+export function Screen({
+  children,
+  gap = 16,
+}: {
+  children: ReactNode;
+  gap?: number;
+}) {
   const { colors, styles, dark } = useTheme();
   return (
     <ScrollView
@@ -353,7 +361,7 @@ export function AppHeader({
                     })
               }
             >
-              <Icon name="add" />
+              <AddNavigationMark size={32}/>
             </Pressable>
           ) : back || onClose ? (
             <Pressable
@@ -643,7 +651,7 @@ const makeStyles = (colors: typeof lightColors) =>
       color: colors.ink,
     },
     header: {
-      minHeight: 64,
+      minHeight: 70,
       flexDirection: "row",
       alignItems: "center",
       backgroundColor: colors.white,
@@ -700,9 +708,9 @@ export function AccountAvatar() {
   return (
     <View
       style={{
-        width: 28,
-        height: 28,
-        borderRadius: 8,
+        width: 34,
+        height: 34,
+        borderRadius: 17,
         backgroundColor: colors.ink,
         alignItems: "center",
         justifyContent: "center",
@@ -720,15 +728,36 @@ export function AccountAvatar() {
     </View>
   );
 }
-export function DetailNavigation({ onNavigate }: { onNavigate?: () => void } = {}) {
+export function AddNavigationMark({size=48}: {size?:number} = {}) {
+  return (
+    <LinearGradient
+      colors={["#03A8C0", "#5ED3D0"]}
+      start={{ x: 0, y: 0 }}
+      end={{ x: 1, y: 1 }}
+      style={{
+        width: size,
+        height: size,
+        borderRadius: size/2,
+        alignItems: "center",
+        justifyContent: "center",
+      }}
+    >
+      <Icon name="add" size={size*0.58} color="white" />
+    </LinearGradient>
+  );
+}
+export function DetailNavigation({
+  onNavigate,
+}: { onNavigate?: () => void } = {}) {
   const access = useAccess();
   const { colors } = useTheme();
   return (
     <View
       style={{
         flexDirection: "row",
-        paddingVertical: 12,
-        paddingBottom: 24,
+        paddingVertical: 7,
+        minHeight: 72,
+        paddingBottom: 16,
         borderTopWidth: 1,
         borderTopColor: colors.line,
         backgroundColor: colors.white,
@@ -776,10 +805,22 @@ export function DetailNavigation({ onNavigate }: { onNavigate?: () => void } = {
         >
           {item.title === "Account" ? (
             <AccountAvatar />
+          ) : item.title === "Add" ? (
+            <AddNavigationMark />
           ) : (
-            <Icon name={item.icon} />
+            <Icon name={item.icon} size={34} />
           )}
-          <Text style={{ fontSize: 10, color: colors.ink }}>{item.title}</Text>
+          {item.title !== "Add" ? (
+            <Text
+              style={{
+                fontFamily: "Poppins-Regular",
+                fontSize: 11,
+                color: colors.muted,
+              }}
+            >
+              {item.title}
+            </Text>
+          ) : null}
         </Pressable>
       ))}
     </View>

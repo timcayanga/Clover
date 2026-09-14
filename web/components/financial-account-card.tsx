@@ -157,6 +157,7 @@ export function FinancialAccountCard({
     <article
       className={["financial-account-card", interactive ? "is-interactive" : null, className].filter(Boolean).join(" ")}
       data-brand-label={accountBrand.label}
+      data-account-icon={accountBrand.fallbackIconSrc.split("/").pop()?.replace(".png", "")}
       style={
         {
           ["--card-accent" as string]: accountBrand.accent,

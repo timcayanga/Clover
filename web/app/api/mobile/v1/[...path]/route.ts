@@ -226,8 +226,8 @@ async function handle(
     }
     if (operation === "together-options") {
       const [groups, people, profiles] = await Promise.all([
-        prisma.splitBillGroup.findMany({ where:{ OR:[{userId:user.id},{collaborators:{some:{userId:user.id}}}], archivedAt:null }, select:{id:true,name:true,members:{select:{id:true,name:true}},_count:{select:{bills:true}}} }),
-        prisma.splitBillPerson.findMany({where:{userId:user.id},select:{id:true,name:true}}),
+        prisma.splitBillGroup.findMany({ where:{ OR:[{userId:user.id},{collaborators:{some:{userId:user.id}}}], archivedAt:null }, select:{id:true,name:true,avatarUrl:true,members:{select:{id:true,name:true}},_count:{select:{bills:true}}} }),
+        prisma.splitBillPerson.findMany({where:{userId:user.id},select:{id:true,name:true,avatarUrl:true}}),
         prisma.splitBillPaymentProfile.findMany({where:{userId:user.id},select:{id:true,label:true,provider:true,currency:true,accountName:true,accountNumber:true,qrImageData:true,isDefault:true}}),
       ]);
       return reply({groups,people,profiles});

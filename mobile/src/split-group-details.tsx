@@ -1,3 +1,4 @@
+import { PersonAvatar } from "./person-avatar";
 import { useState } from "react";
 import { View, Text, Pressable } from "react-native";
 import { useSession } from "./session";
@@ -190,7 +191,17 @@ export function SplitGroupDetails({
                 borderColor: colors.line,
               }}
             >
-              <Body muted={false}>{person}</Body>
+              <View
+                style={{
+                  flexDirection: "row",
+                  alignItems: "center",
+                  gap: 10,
+                  flex: 1,
+                }}
+              >
+                <PersonAvatar name={person} />
+                <Body muted={false}>{person}</Body>
+              </View>
               <View>
                 {Array.from(totals, ([currency, amount]) => (
                   <Body key={currency}>
