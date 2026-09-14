@@ -81,7 +81,7 @@ assert.match(currencyFilterSource, /window\.location\.replace\(/);
 assert.match(moneyChartSource, /onPointerMove=\{\(event\) => handlePointerMove\(event\.clientX\)\}/);
 assert.match(moneyChartSource, /onPointerDown=\{\(event\) => handlePointerSelection\(event\.clientX\)\}/);
 assert.match(moneyChartSource, /`Balance on \$\{dateFormatter\.format/);
-assert.match(moneyChartSource, /`Current balance · \$\{dateFormatter\.format/);
+assert.match(moneyChartSource, /`Balance · \$\{dateFormatter\.format/);
 assert.doesNotMatch(moneyChartSource, /reports-money-chart__summary/);
 assert.match(moneyChartSource, /reports-money-chart__y-axis/);
 assert.match(moneyChartSource, /formatCurrencyAmount\(tick\.value, currency\)/);

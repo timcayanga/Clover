@@ -138,7 +138,7 @@ export function ReportsMoneyOverTimeChart({
           <span>
             {interactionPoint
               ? `Balance on ${dateFormatter.format(parseReportDate(activePoint.date))}`
-              : `Current balance · ${dateFormatter.format(parseReportDate(activePoint.date))}`}
+              : `Balance · ${dateFormatter.format(parseReportDate(activePoint.date))}`}
           </span>
         </div>
       </div>

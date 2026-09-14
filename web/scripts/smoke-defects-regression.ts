@@ -1,12 +1,13 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { getAccountCardName } from "../lib/account-display";
+import { getAccountCardName, formatUploadAccountDisplayName } from "../lib/account-display";
 import { reportAccountBalance, buildReportBalanceSeries } from "../lib/report-balances";
 import { getParticipantOutstandingBalance } from "../lib/split-bill-view-models";
 import type { SplitBillSerializedBill } from "../lib/split-bill";
 
 assert.equal(getAccountCardName({type:"cash",name:"QA Dollar Cash Renamed"}),"QA Dollar Cash Renamed");
 assert.equal(getAccountCardName({type:"cash",name:"Cash USD"}),"Cash");
+assert.equal(formatUploadAccountDisplayName("QA Dollar Cash Renamed", "Cash", null, "cash"), "QA Dollar Cash Renamed");
 const movements = [
   {accountId:"bank",amount:"2000",type:"income",date:new Date("2026-09-14T12:00:00"),currency:"PHP"},
   {accountId:"bank",amount:"500",type:"expense",date:new Date("2026-09-14T12:00:00"),currency:"PHP"},

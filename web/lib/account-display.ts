@@ -112,6 +112,10 @@ export const formatUploadAccountDisplayName = (
     return "GoTrade";
   }
 
+  if (type === "cash" && rawSafeName && !/^cash(?: [A-Z]{3})?$/i.test(rawSafeName)) {
+    return rawSafeName;
+  }
+
   if (type === "cash" || resolvedLabel.toLowerCase() === "cash") {
     const explicitCurrency = safeName?.match(/\b([A-Z]{3})$/i)?.[1]?.toUpperCase() ?? null;
     return explicitCurrency && explicitCurrency !== "PHP" ? `Cash ${explicitCurrency}` : "Cash";
