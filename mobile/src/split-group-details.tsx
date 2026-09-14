@@ -11,6 +11,7 @@ import {
   usePlanData,
 } from "./plan-ui";
 import type { EditableBill } from "./bill-details";
+import { outstandingSplitBalances } from "./split-balances";
 export type SplitGroup = {
   id: string;
   name: string;
@@ -50,16 +51,7 @@ export function SplitGroupDetails({
     `split-bills?page=${page}${group ? `&groupId=${encodeURIComponent(group.id)}` : ""}${person ? `&person=${encodeURIComponent(person)}` : ""}`,
     sample,
   );
-  const balances = new Map<string, Map<string, number>>();
-  for (const bill of data?.bills ?? [])
-    for (const p of bill.settlement?.participants ?? []) {
-      const currencies = balances.get(p.name) ?? new Map<string, number>();
-      currencies.set(
-        bill.currency,
-        (currencies.get(bill.currency) ?? 0) + p.balance,
-      );
-      balances.set(p.name, currencies);
-    }
+  const balances = outstandingSplitBalances(data?.bills ?? []);
   async function save(method: "PATCH" | "DELETE") {
     if (!group || busy) return;
     setBusy(true);
@@ -205,7 +197,7 @@ export function SplitGroupDetails({
               <View>
                 {Array.from(totals, ([currency, amount]) => (
                   <Body key={currency}>
-                    {amount < 0 ? "Owes" : "Is owed"}{" "}
+                    {amount === 0 ? "Settled" : amount < 0 ? "Owes" : "Is owed"}{" "}
                     {money(String(Math.abs(amount)), currency)}
                   </Body>
                 ))}
