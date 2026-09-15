@@ -604,6 +604,7 @@ const isReceiptAdministrativeLine = (line: string) =>
 
 const isReceiptFooterValueLine = (line: string) =>
   /^\s*amount\b/i.test(line) ||
+  /^\s*no\s+(?:vat|tax|discounts?|service\s+charges?)\b/i.test(line) ||
   /\b(?:gross amount|ross amount|bill amount|amount due|grand total|bill total|vatable amount|ustable amount|vatable|vat exempt|vat zero|vat sales|uat sales|cash\b|chan[zg]e\b|thank you|official receipt|trans(?:action)?\s*no|ref(?:erence)?\s*no|serial\s*n[bo0]|permit\s*no|\d{2,3}\s+va[tr]\b|for comments|pls contact|please contact)\b/i.test(
     line
   );

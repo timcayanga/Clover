@@ -649,7 +649,16 @@ export async function ReportsStream({
       getResolvedReportTransactionType(transaction) === "expense";
     const requestedFilter = searchParams?.filter?.trim().toLowerCase() ?? "";
     const requestedCurrencyValue = searchParams?.currency?.trim().toUpperCase() ?? "";
-    const requestedCurrency = requestedCurrencyValue && requestedCurrencyValue !== "ALL" ? requestedCurrencyValue : null;
+    const selectedCurrency = requestedCurrencyValue && requestedCurrencyValue !== "ALL" ? requestedCurrencyValue : null;
+    const reportCurrencies = selectedCurrency ? [selectedCurrency] : Array.from(new Set([
+      ...workspaceAccountSnapshots.map(account => formatCurrencyCode(account.currency)),
+      ...reportAllTransactions.map(transaction => formatCurrencyCode(transaction.account.currency)),
+    ])).filter(Boolean).sort();
+    // Fetch once above, then compute every monetary report within one currency.
+    // This also keeps category shares, comparisons and Adviser context coherent.
+    const renderCurrencyReport = async (requestedCurrency: string | null) => {
+    const netWorthPromise = loadReportNetWorth(selectedWorkspaceId, requestedCurrency ?? "MIXED", currentWindowStart, currentWindowEnd, requestedAccountId);
+    const buildTransactionsHref = (params: Record<string, string>) => `/transactions?${new URLSearchParams({ ...params, ...(requestedCurrency ? { currency: requestedCurrency } : {}) }).toString()}`;
     const currencyScopedTransactions = requestedCurrency
       ? reportAllTransactions.filter(
           (transaction) => formatCurrencyCode(transaction.account.currency) === requestedCurrency
@@ -1300,7 +1309,7 @@ export async function ReportsStream({
     const previousWeeklyNet = previousWeeklySummary.income - previousWeeklySummary.expense;
     const weeklyNetChange = weeklyNet - previousWeeklyNet;
     const weeklySummaryLabel = `${formatShortDate(weeklySummaryStart)} - ${formatShortDate(weeklySummaryEnd)}`;
-    const netWorthHistory = await loadReportNetWorth(selectedWorkspaceId, displayCurrency, currentWindowStart, currentWindowEnd, requestedAccountId ?? undefined);
+    const netWorthHistory = await netWorthPromise;
     const reportMoneySeries = buildReportBalanceSeries(workspaceAccountSummaries,
       reportAllTransactions.map(transaction => ({ ...transaction, accountId: transaction.account.id,
         date: getCalendarDayEndInTimeZone(transaction.date, normalizeRegionalPreferences(user.regionalPreferences).timeZone),
@@ -2181,6 +2190,14 @@ export async function ReportsStream({
 
       </>
     );
+    };
+    const currencies = reportCurrencies.length > 0 ? reportCurrencies : [null];
+    return await Promise.all(currencies.map(async currency => (
+      <section key={currency ?? "empty"} aria-label={currency ? `${currency} reports` : "Reports"}>
+        {currencies.length > 1 ? <h2 className="reports-subtab-title">{currency}</h2> : null}
+        {await renderCurrencyReport(currency)}
+      </section>
+    )));
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);
     const errorDigest =

@@ -44,7 +44,7 @@ async function main() {
   const cadences = ["daily", "weekly", "biweekly", "monthly", "quarterly", "annual"] as const;
   for (const now of [new Date(2026, 8, 3, 12), new Date(2027, 0, 1, 12), new Date(2028, 1, 29, 12)]) {
     transactions = Array.from({ length: 4000 }, (_, index) => ({
-      accountId: "cash", categoryId: index % 4 ? "food" : null, type: index % 5 ? "expense" : "income",
+      currency: "PHP", accountId: "cash", categoryId: index % 4 ? "food" : null, type: index % 5 ? "expense" : "income",
       amount: index + 1, date: new Date(now.getTime() - Math.floor(index / 10) * 86400000), isExcluded: false,
       isTransfer: index % 7 === 0, category: { name: index % 7 === 0 ? "Transfers" : "Food" },
     }));
@@ -67,8 +67,8 @@ async function main() {
   }
   const now = new Date(2026, 8, 3, 12);
   budgets = [budgets[0]];
-  parsedRows = [{ date: now, amount: 20, type: "expense", categoryName: "Food", importFile: { accountId: "cash" } }];
-  transactions = [{ accountId: "cash", categoryId: "food", type: "expense", amount: 100, date: new Date(2026, 1, 1), isExcluded: false }];
+  parsedRows = [{ currency: "PHP", date: now, amount: 20, type: "expense", categoryName: "Food", importFile: { accountId: "cash" } }];
+  transactions = [{ currency: "PHP", accountId: "cash", categoryId: "food", type: "expense", amount: 100, date: new Date(2026, 1, 1), isExcluded: false }];
   budgets[0] = { ...budgets[0], cadence: "monthly" };
   calls = [];
   assert.equal((await loadBudgetWorkspaceData("workspace", now, { directory: true })).overview.budgets[0].actualAmount, 0);

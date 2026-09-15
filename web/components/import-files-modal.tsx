@@ -5549,6 +5549,14 @@ export function ImportFilesModal({
                 progressFloor: Number(itemsRef.current.find((entry) => entry.id === itemId)?.progress ?? IMPORT_PROGRESS.uploading),
               });
 
+              if (statusDecision.kind === "repair_needed") {
+                inFlightStatusMonitorStopped = true;
+                importEventStream?.close();
+                importEventStream = null;
+                closeImportAfterError(itemId, "background", item.file.name, statusDecision.message);
+                break;
+              }
+
               if (statusDecision.kind === "visible") {
                 if (receiptModeDetectedInFlight && !payload.receiptTransaction) {
                   const visibleRows = Math.max(1, confirmedTransactionsCount, parsedRowsCount);

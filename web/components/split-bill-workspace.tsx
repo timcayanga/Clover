@@ -6,6 +6,7 @@ import { hasSplitBillAllocationChanges } from "@/lib/split-bill";
 import { InterfaceIcon } from "@/components/interface-icon";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { previewSplitBillItems } from "@/lib/split-bill";
 import { useSearchParams } from "next/navigation";
 import { CloverShell } from "@/components/clover-shell";
@@ -1357,7 +1358,7 @@ export function SplitBillWorkspace({
         onDeletePerson={removePerson}
       />
 
-      {selected ? (
+      {selected && typeof document !== "undefined" ? createPortal(
         <div className="split-bill-modal" role="presentation" onClick={closeDetail}>
           <section className="split-bill-modal__card glass split-bill-detail-modal" role="dialog" aria-modal="true" aria-label={selectedDetailLabel} onClick={(event) => event.stopPropagation()}>
             <div className="split-bill-manual-modal__head">
@@ -1755,7 +1756,8 @@ export function SplitBillWorkspace({
               </div>
             ) : null}
           </section>
-        </div>
+        </div>,
+        document.body
       ) : null}
     </CloverShell>
   );

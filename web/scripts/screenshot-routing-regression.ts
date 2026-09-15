@@ -1,3 +1,4 @@
+import { isTransactionHistoryScreenshotText, parseImportTextGenericOnly } from "@/lib/import-parser";
 import assert from "node:assert/strict";
 import {
   assessImageStatementParse,
@@ -525,3 +526,13 @@ assert.equal(
 );
 
 console.log("screenshot routing regression passed");
+
+const activityText = ["WALLET - TRANSACTION HISTORY", ...Array.from({ length: 10 }, (_, i) => [
+  `15 Sep 2026 10:0${i}:00`, "Grocery purchase", "-PHP 25.00",
+].join("\n")), "10 transactions"].join("\n");
+assert.equal(isTransactionHistoryScreenshotText(activityText), true);
+assert.equal(isTransactionHistoryScreenshotText("Receipt\n15 Sep 2026\nMeal 25.00\nTOTAL PHP 25.00"), false);
+const activityRows = parseImportTextGenericOnly(activityText, "history.png", "image/png");
+assert.equal(activityRows.length, 10, "Distinct timestamps preserve repeated purchases");
+assert.ok(activityRows.every(row => row.amount === "25.00" && row.description === "Grocery purchase"));
+assert.ok(activityRows.every(row => (row.rawPayload as {reviewRequired?: boolean}).reviewRequired));

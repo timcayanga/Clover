@@ -1,3 +1,4 @@
+import { buildImportResultChecklist } from "../lib/import-result-summary";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
@@ -841,3 +842,20 @@ assert.match(
 );
 
 console.log("Receipt camera import regression checks passed.");
+
+// Tax/payment footers must not become modifiers of the last purchased item.
+const tenItemReceipt = parseReceiptText([
+  "SPEED CAFE", "Date: 15 Sep 2026 Receipt: QA0003", "Payment: Cash Currency: PHP",
+  ...Array.from({ length: 10 }, (_, i) => `1 Test meal ${i + 1} variant 3 25.00`),
+  "TOTAL PHP 250.00", "10 items Paid cash: PHP 250.00",
+  "No VAT / discounts / service charges",
+].join("\n"));
+assert.equal(tenItemReceipt.items.length, 10);
+assert.equal(tenItemReceipt.subtotal, "250.00");
+assert.equal(tenItemReceipt.total, "250.00");
+assert.equal(tenItemReceipt.items[9].amount, "25.00");
+
+assert.ok(buildImportResultChecklist({ rowsImported: 1, previewTransactions: [{ categoryName: "Food", reviewStatus: "pending_review" }] }).includes("1 transaction needs review"));
+assert.ok(buildImportResultChecklist({ rowsImported: 1 }).includes("Review status pending"));
+assert.ok(buildImportResultChecklist({ rowsImported: 1, previewTransactions: [{ categoryName: "Other", reviewStatus: "confirmed" }] }).includes("No transactions need review"));
+assert.ok(buildImportResultChecklist({ rowsImported: 10, previewTransactions: [{ categoryName: "Food", reviewStatus: "confirmed" }] }).includes("Review status pending"));

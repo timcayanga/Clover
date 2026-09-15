@@ -10,3 +10,7 @@
 - Source re-imports must be idempotent and must reject the legacy pattern of multiple `Shared bill: <name> share` transactions.
 - Once transaction rows and raw source payloads are durably persisted, publish the usable transactions before Data QA and enrichment finish.
 - Keep low-confidence fields review-required. Post-visible cleanup must never overwrite confirmed, edited, rejected, or otherwise user-controlled values.
+
+### Receipt footer notices
+
+A “No VAT / discounts / service charges” footer is administrative text, not a modifier of the last purchased item. Preserve the final item and reconcile the item subtotal against the printed total.

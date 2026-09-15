@@ -3332,6 +3332,15 @@ const buildGenericScreenshotHoldingRows = (
   return rows;
 };
 
+// A dated activity list is multiple financial events, not receipt line items.
+export const isTransactionHistoryScreenshotText = (text: string) => {
+  if (!/\b(?:transaction\s+history|past\s+transactions|recent\s+transactions|account\s+activity)\b/i.test(text)) return false;
+  const lines = splitStatementLines(text);
+  const datedLines = lines.filter((line) => /\b(?:\d{4}[-/]\d{1,2}[-/]\d{1,2}|\d{1,2}\s+[A-Za-z]{3,9}\s+\d{4}|[A-Za-z]{3,9}\s+\d{1,2},?\s+\d{4})\b/.test(line));
+  const signedAmounts = lines.filter((line) => /[+-]\s*(?:(?:[A-Z]{3}|₱|\$|€|£)\s*)?\d[\d,]*\.\d{2}\b/.test(line));
+  return datedLines.length > 0 && signedAmounts.length >= 2;
+};
+
 const parseGenericMobileScreenshotTransactionRows = (
   text: string,
   fileName: string,
@@ -3354,11 +3363,16 @@ const parseGenericMobileScreenshotTransactionRows = (
   const rows: ParsedImportRow[] = [];
   const seen = new Set<string>();
   let currentDate: string | null = null;
+  let currentTime = "";
+  let dateLineIndex = -1;
+  const withoutTime = (line: string) => line.replace(/\s+\d{1,2}:\d{2}(?::\d{2})?\s*(?:AM|PM)?$/i, "");
 
   for (let index = 0; index < lines.length; index += 1) {
     const line = lines[index] ?? "";
-    if (datePattern.test(line)) {
-      currentDate = parseDateValue(dateOnly(line))?.toISOString().slice(0, 10) ?? currentDate;
+    if (datePattern.test(withoutTime(line))) {
+      dateLineIndex = index;
+      currentTime = line.slice(withoutTime(line).length).trim();
+      currentDate = parseDateValue(dateOnly(withoutTime(line)))?.toISOString().slice(0, 10) ?? currentDate;
       continue;
     }
     if (!currentDate || isGenericScreenshotNoiseLine(line) || statusPattern.test(line)) continue;
@@ -3368,10 +3382,10 @@ const parseGenericMobileScreenshotTransactionRows = (
     const amount = parseMoney(amountMatch[2] ?? null);
     if (amount === null) continue;
     const signedAmount = amountMatch[1] === "-" ? -amount : amountMatch[1] === "+" ? amount : null;
-    const blockStart = Math.max(0, index - 3);
+    const blockStart = Math.max(0, dateLineIndex + 1, index - 3);
     const description = lines
       .slice(blockStart, index)
-      .filter((candidate) => !datePattern.test(candidate) && !statusPattern.test(candidate) && !amountPattern.test(candidate))
+      .filter((candidate) => !datePattern.test(withoutTime(candidate)) && !statusPattern.test(candidate) && !amountPattern.test(candidate))
       .filter((candidate) => !/^\d{1,2}:\d{2}\s*(?:AM|PM)$/i.test(candidate))
       .filter((candidate) => !/^(?:transactions?|activity|history|payments?|transfers?|cash\s+(?:in|out))$/i.test(candidate))
       .join(" ")
@@ -3384,7 +3398,7 @@ const parseGenericMobileScreenshotTransactionRows = (
       /\b(?:received|deposit|refund|interest|cash\s+in)\b/i.test(description) ? "income" :
         /\b(?:transfer|sent)\b/i.test(description) ? "transfer" : "expense";
     const absoluteAmount = Math.abs(signedAmount ?? amount);
-    const key = [currentDate, description.toLowerCase(), absoluteAmount.toFixed(2), amountMatch[1] ?? ""].join("|");
+    const key = [currentDate, currentTime, description.toLowerCase(), absoluteAmount.toFixed(2), amountMatch[1] ?? ""].join("|");
     if (seen.has(key)) continue;
     seen.add(key);
     const institution = context.institution ?? null;

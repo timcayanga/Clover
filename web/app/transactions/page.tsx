@@ -2358,6 +2358,7 @@ function TransactionsPageContent() {
       const snapshot = readImportActivity();
       if (snapshot?.workspaceId && snapshot.status === "active") {
         canceledImportWorkspaceIdsRef.current.delete(snapshot.workspaceId);
+        if (snapshot.workspaceId === selectedWorkspaceId) setMessage("");
       }
       if (isCanceledWorkspaceImport(snapshot, snapshot?.workspaceId ?? "") && snapshot?.workspaceId) {
         canceledImportWorkspaceIdsRef.current.add(snapshot.workspaceId);

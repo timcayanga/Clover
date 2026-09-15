@@ -174,7 +174,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ imp
 
     const staleStatementImageEmptyDone =
       isRecoverableImageImportMode(importMode) &&
-      (snapshot.importFile.status === "done" || snapshot.importFile.status === "failed") &&
+      snapshot.importFile.status === "done" &&
       snapshot.importFile.processingPhase !== "non_financial" &&
       isRecoverableStatementFile(snapshot.importFile.fileName, snapshot.importFile.fileType) &&
       snapshot.confirmedTransactionsCount === 0 &&

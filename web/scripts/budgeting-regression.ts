@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import type { BudgetRecord, BudgetTransaction, BudgetCommitment } from "@/lib/budgeting";
-import { buildBudgetOverview, buildBudgetSuggestions } from "@/lib/budgeting";
+import { buildBudgetOverview, buildBudgetSuggestions, buildBudgetHistory } from "@/lib/budgeting";
 import { budgetIcons, getBudgetAppearance, isBudgetEmoji } from "@/lib/budget-appearance";
 
 const now = new Date("2026-07-14T12:00:00.000Z");
@@ -58,6 +58,7 @@ const budget = (overrides: Partial<BudgetRecord> = {}): BudgetRecord => ({
 });
 
 const transaction = (overrides: Partial<BudgetTransaction> = {}): BudgetTransaction => ({
+  currency: "PHP",
   accountId: "account-1",
   categoryId: "category-1",
   type: "expense",
@@ -146,3 +147,10 @@ assert.deepEqual(
 );
 
 console.log("Budgeting regression checks passed.");
+
+const currencyRows = [transaction({ amount: 275 }), transaction({ amount: 40, currency: "USD" })];
+const currencyBudget = budget({ targetAmount: 500 });
+const currencyOverview = buildBudgetOverview({ budgets: [currencyBudget], transactions: currencyRows, now });
+assert.equal(currencyOverview.budgets[0].actualAmount, 275);
+assert.equal(currencyOverview.budgets[0].remainingAmount, 225);
+assert.equal(buildBudgetHistory(currencyBudget, currencyRows.map((t,i)=>({...t,id:String(i)})), now).points.at(-1)?.actualAmount, 275);

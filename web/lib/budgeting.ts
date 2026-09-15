@@ -25,6 +25,7 @@ export type BudgetRecord = {
 };
 
 export type BudgetTransaction = {
+  currency: string | null;
   accountId: string;
   categoryId: string | null;
   type: TransactionType;
@@ -377,6 +378,7 @@ const getBudgetStatus = (kind: BudgetKind, stage: BudgetAlertStage) => {
 };
 
 const matchesBudgetScope = (budget: BudgetRecord, transaction: BudgetTransaction) => {
+  if (transaction.currency?.trim().toUpperCase() !== budget.currency.trim().toUpperCase()) return false;
   if (budget.scope === "account") {
     return transaction.accountId === budget.accountId;
   }

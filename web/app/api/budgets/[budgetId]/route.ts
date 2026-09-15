@@ -69,6 +69,7 @@ type BudgetHistoryTransactionRow = Prisma.TransactionGetPayload<{
     categoryId: true;
     type: true;
     amount: true;
+    currency: true;
     date: true;
     isExcluded: true;
     merchantRaw: true;
@@ -79,6 +80,7 @@ type BudgetHistoryTransactionRow = Prisma.TransactionGetPayload<{
 }>;
 
 type BudgetHistoryInput = {
+  currency: string | null;
   id: string;
   accountId: string;
   categoryId: string | null;
@@ -182,6 +184,7 @@ export async function GET(_request: Request, { params }: Params) {
         categoryId: true,
         type: true,
         amount: true,
+        currency: true,
         date: true,
         isExcluded: true,
         merchantRaw: true,
@@ -233,6 +236,7 @@ export async function GET(_request: Request, { params }: Params) {
           id: true,
           date: true,
           amount: true,
+        currency: true,
           type: true,
           merchantRaw: true,
           merchantClean: true,
@@ -258,6 +262,7 @@ export async function GET(_request: Request, { params }: Params) {
           categoryId: categoryIdByName.get(categoryName.toLowerCase()) ?? null,
           type: row.type ?? (categoryName.toLowerCase() === "income" ? "income" : "expense"),
           amount: row.amount,
+          currency: row.currency,
           date: row.date,
           isExcluded: false,
           merchantRaw: row.merchantRaw,

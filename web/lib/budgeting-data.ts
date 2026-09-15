@@ -101,6 +101,7 @@ export const loadBudgetWorkspaceData = async (workspaceId: string, now = new Dat
         isTransfer: true,
         category: { select: { name: true } },
         amount: true,
+        currency: true,
         date: true,
         isExcluded: true,
       },
@@ -135,6 +136,7 @@ export const loadBudgetWorkspaceData = async (workspaceId: string, now = new Dat
       select: {
         date: true,
         amount: true,
+        currency: true,
         type: true,
         categoryName: true,
         importFile: {
@@ -162,6 +164,7 @@ export const loadBudgetWorkspaceData = async (workspaceId: string, now = new Dat
           isTransfer: categoryName.toLowerCase() === "transfers",
           category: categoryName ? { name: categoryName } : null,
           amount: row.amount,
+          currency: row.currency ?? "",
           date: row.date,
           isExcluded: false,
         },

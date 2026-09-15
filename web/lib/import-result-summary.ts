@@ -1,5 +1,6 @@
 type ImportResultPreviewTransaction = {
   categoryName?: string | null;
+  reviewStatus?: string | null;
   merchantRaw?: string | null;
   merchantClean?: string | null;
   description?: string | null;
@@ -87,7 +88,7 @@ const getExpenseTotal = (summary: ImportResultSummaryInput) => {
 const getCategorizedStats = (summary: ImportResultSummaryInput) => {
   const rows = getPreviewRows(summary);
   if (rows.length === 0) {
-    return { categorized: 0, review: 0, total: getRowCount(summary) };
+    return { categorized: 0, review: 0, unknown: getRowCount(summary), total: getRowCount(summary) };
   }
 
   const categorized = rows.filter((row) => {
@@ -97,8 +98,9 @@ const getCategorizedStats = (summary: ImportResultSummaryInput) => {
 
   return {
     categorized,
-    review: Math.max(0, rows.length - categorized),
-    total: rows.length,
+    review: rows.filter((row) => ["pending_review", "suggested"].includes(row.reviewStatus ?? "")).length,
+    unknown: Math.max(0, getRowCount(summary) - rows.length) + rows.filter((row) => !row.reviewStatus).length,
+    total: getRowCount(summary),
   };
 };
 
@@ -179,7 +181,7 @@ export const buildImportResultChecklist = (summary: ImportResultSummaryInput | n
     checklist.push(
       stats.review > 0
         ? `${stats.review.toLocaleString("en-US")} transaction${stats.review === 1 ? " needs" : "s need"} review`
-        : "No transactions need review"
+        : stats.unknown > 0 ? "Review status pending" : "No transactions need review"
     );
   }
 

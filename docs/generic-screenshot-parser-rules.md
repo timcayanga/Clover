@@ -69,3 +69,7 @@ These rules apply when an uploaded screenshot does not match a trained instituti
 - Shares, units, and principal are optional fields and must only be emitted when the screenshot labels them.
 - Time deposits should carry deposit, maturity, interest-rate, tenure, and maturity-date metadata when visible, but must not be represented as share/unit holdings.
 - Ambiguous values belong in the review queue rather than being auto-confirmed.
+
+### Timestamped activity lists
+
+A transaction-history screen with multiple signed amounts represents separate events, not receipt line items. Keep date/time headings out of descriptions and retain repeated same-day purchases when timestamps differ. Generic layout rows remain pending review with raw source evidence.

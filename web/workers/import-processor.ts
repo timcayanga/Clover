@@ -16,6 +16,7 @@ import {
   parseImportText,
   parseImportTextGenericOnly,
   isGcryptoTransactionHistoryScreenshotText,
+  isTransactionHistoryScreenshotText,
   type ParsedImportRow,
 } from "@/lib/import-parser";
 import { isTrustedMetadataOnlyWiseStatement } from "@/lib/metadata-only-statement";
@@ -9720,7 +9721,10 @@ export const processImportFileText = async (
       );
     }) &&
     countPdaxPortfolioHoldingRows(parsedRows as Array<Record<string, unknown>>) === 0;
-  let effectiveImportMode = inferStructuredDocumentImportModeFromParsedRows(importMode, parsedRows, metadataForParse);
+  const isTransactionHistoryImage = imageImport && isTransactionHistoryScreenshotText(textForParse);
+  let effectiveImportMode = isTransactionHistoryImage && importMode === "statement"
+    ? "statement"
+    : inferStructuredDocumentImportModeFromParsedRows(importMode, parsedRows, metadataForParse);
   if (effectiveImportMode !== "statement") {
     isDocumentImport = true;
   }
@@ -10527,7 +10531,7 @@ export const processImportFileText = async (
       dateCoverage: Number(parsedDateCoverage.toFixed(3)),
     });
   }
-  const receiptPreview = imageImport ? parseReceiptText(textForParse) : null;
+  const receiptPreview = imageImport && !isTransactionHistoryImage ? parseReceiptText(textForParse) : null;
   if (!cachedReceiptExtraction && perceptualReceiptCacheCandidate && receiptPreview) {
     const cachedDetails = perceptualReceiptCacheCandidate.extraction.receiptDetails;
     const previewTotal = Number(receiptPreview.total);
@@ -10614,6 +10618,7 @@ export const processImportFileText = async (
   );
   const autoDetectedReceiptPreview =
     imageImport &&
+    !isTransactionHistoryImage &&
     importMode === "statement" &&
     (
       receiptPreviewCanSkipBackup ||
@@ -10867,7 +10872,7 @@ export const processImportFileText = async (
       : null;
     if (imageImport && importMode === "statement" && openAiParsed) {
       const detectedBackupImportMode = normalizeImportImageMode(openAiParsed.documentType);
-      if (detectedBackupImportMode !== "statement") {
+      if (detectedBackupImportMode !== "statement" && !isTransactionHistoryImage) {
         effectiveImportMode = detectedBackupImportMode;
         isDocumentImport = true;
       }
@@ -11283,7 +11288,7 @@ export const processImportFileText = async (
 
       if (shouldAdoptTranscriptParse) {
         openAiParsed = transcriptParsed;
-        if (importMode === "statement" && transcriptImportMode !== "statement") {
+        if (importMode === "statement" && transcriptImportMode !== "statement" && !isTransactionHistoryImage) {
           effectiveImportMode = transcriptImportMode;
           isDocumentImport = true;
         }
