@@ -1,6 +1,13 @@
+import { LinearGradient } from "expo-linear-gradient";
 import { compactSummaryMoney } from "../../shared/summary-format";
 import { useEffect, useState } from "react";
-import { Image, Pressable, Text, View } from "react-native";
+import {
+  Image,
+  Pressable,
+  Text,
+  View,
+  useWindowDimensions,
+} from "react-native";
 import { router } from "expo-router";
 import { useSession } from "../src/session";
 import { AccountEditor, type AccountRecord } from "../src/account-editor";
@@ -30,6 +37,7 @@ import {
 const sample = { accounts: [] as AccountRecord[] };
 export default function Investments() {
   const session = useSession();
+  const { width } = useWindowDimensions();
   const { colors } = useTheme();
   const { data, setData, error, reload } = usePlanData("investments", sample);
   const [tab, setTab] = useState("Overview");
@@ -45,6 +53,7 @@ export default function Investments() {
     setCurrency("");
     setType("all");
     setSearch("");
+    setFilters(false);
     setTab("Overview");
   }, [session.profileId]);
   const accounts = data?.accounts ?? [];
@@ -150,7 +159,7 @@ export default function Investments() {
               delta === null
                 ? colors.muted
                 : delta >= 0
-                  ? colors.teal
+                  ? colors.positive
                   : colors.danger,
           }}
         >
@@ -166,6 +175,7 @@ export default function Investments() {
     <Screen gap={20}>
       <PlanHeader
         title="Investments"
+        stackedTitle={width < 360}
         trailing={
           <View style={{ flexDirection: "row", gap: 4 }}>
             <Pressable
@@ -174,17 +184,40 @@ export default function Investments() {
                 filters ? "Close filters" : "Filter investments"
               }
               onPress={() => setFilters(!filters)}
-              style={{ padding: 8 }}
+              accessibilityState={{ expanded: filters }}
+              style={{
+                width: 40,
+                height: 40,
+                borderRadius: 20,
+                borderWidth: 1,
+                borderColor: colors.line,
+                backgroundColor: colors.white,
+                alignItems: "center",
+                justifyContent: "center",
+              }}
             >
-              <Icon name="options-outline" />
+              <Icon name="options-outline" size={18} />
             </Pressable>
             <Pressable
               accessibilityRole="button"
               accessibilityLabel="Add Investments"
               onPress={() => setEditor({ account: null })}
-              style={{ padding: 8 }}
+              hitSlop={4}
             >
-              <Icon name="add-circle" />
+              <LinearGradient
+                colors={["#03a8c0", "#34d3d0"]}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 0 }}
+                style={{
+                  width: 40,
+                  height: 40,
+                  borderRadius: 20,
+                  alignItems: "center",
+                  justifyContent: "center",
+                }}
+              >
+                <Icon name="add" size={22} color="#fff" />
+              </LinearGradient>
             </Pressable>
           </View>
         }
@@ -225,6 +258,7 @@ export default function Investments() {
         </Card>
       ) : null}
       <PlanTabs
+        compact
         items={[
           "Overview",
           "Portfolio",
@@ -253,13 +287,27 @@ export default function Investments() {
             />
             <SummaryCard
               title="Gain/loss"
-              value={known.length ? compactSummaryMoney(gain, selectedCurrency) : "—"}
-              color={gain >= 0 ? colors.teal : colors.danger}
+              value={
+                known.length ? compactSummaryMoney(gain, selectedCurrency) : "—"
+              }
+              color={
+                gain === 0
+                  ? colors.ink
+                  : gain > 0
+                    ? colors.positive
+                    : colors.danger
+              }
             />
             <SummaryCard
               title="Return"
               value={cost > 0 ? `${((gain / cost) * 100).toFixed(2)}%` : "—"}
-              color={gain >= 0 ? colors.teal : colors.danger}
+              color={
+                gain === 0
+                  ? colors.ink
+                  : gain > 0
+                    ? colors.positive
+                    : colors.danger
+              }
             />
           </View>
           <Body>
@@ -273,16 +321,27 @@ export default function Investments() {
             />
           ) : (
             <>
-              <Notice>No investments in this view yet.</Notice>
-              <PlanAction
-                title="Add a holding"
-                tone="primary"
-                onPress={() => setEditor({ account: null })}
-              />
-              <PlanAction
-                title="Upload a statement"
-                onPress={() => router.push("/(tabs)/add")}
-              />
+              <Card>
+                <Text
+                  style={{
+                    fontFamily: "Poppins-SemiBold",
+                    fontSize: 16,
+                    color: "#7A879C",
+                  }}
+                >
+                  Estimated value history
+                </Text>
+                <Body>No investments in this view yet.</Body>
+                <PlanAction
+                  title="Add a holding"
+                  tone="primary"
+                  onPress={() => setEditor({ account: null })}
+                />
+                <PlanAction
+                  title="Upload a statement"
+                  onPress={() => router.push("/(tabs)/add")}
+                />
+              </Card>
             </>
           )}
         </>

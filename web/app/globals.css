@@ -66105,3 +66105,50 @@ html[data-theme="dark"] .content.content--reports .reports-range-menu__summary {
   }
   .content:is(.content--budgeting,.content--goals) > :is(.topbar,.shell-compact-bar) .accounts-toolbar-add > span:not(.button-icon) { display: none; }
 }
+
+/* Investments content masters: full-width browser tabs and enclosed header filters. */
+.investments-desktop-tabs { margin-bottom: 20px; }
+.investments-desktop-tabs .investments-tabs,
+.shell-mobile-subheader .investments-tabs--mobile {
+  display: flex !important; gap: 4px; padding: 0 !important; border: 0;
+  min-height: 40px; height: auto; width: 100%; mask-image:none; -webkit-mask-image:none;
+}
+.investments-desktop-tabs .animated-tabs__indicator,
+.shell-mobile-subheader .investments-tabs--mobile .animated-tabs__indicator { display: none; }
+.investments-desktop-tabs .animated-tabs__tab,
+.shell-mobile-subheader .investments-tabs--mobile .animated-tabs__tab {
+  display: flex !important; flex: 1 1 0 !important; width: auto !important;
+  max-width: none !important; min-width: 0 !important; min-height: 40px !important;
+  height: 40px !important; padding: 8px !important; gap: 5px !important;
+  flex-direction: row !important; align-items: center; justify-content: center;
+  border: 1px solid var(--stroke) !important; border-radius: 8px 8px 0 0 !important;
+  background: var(--surface) !important; font-size: 12px; color: var(--accent);
+}
+.investments-desktop-tabs .animated-tabs__tab.is-active,
+.shell-mobile-subheader .investments-tabs--mobile .animated-tabs__tab.is-active {
+  border-color: var(--accent) !important; background: color-mix(in srgb,var(--accent) 8%,var(--surface)) !important;
+}
+.investments-desktop-tabs .animated-tabs__label,
+.shell-mobile-subheader .investments-tabs--mobile .animated-tabs__label {
+  display: inline !important; max-width: none !important; font-size: 12px !important;
+  overflow: visible !important; text-overflow: clip !important;
+}
+.content--investments .portfolio-filter-menu__trigger {
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+  width: auto; min-width: 40px; height: 40px; padding: 8px 14px;
+  border: 1px solid var(--stroke); border-radius: 20px;
+  background: var(--surface); color: var(--accent);
+}
+.portfolio-filter-menu__label-text { font: 500 15px/22px var(--font-poppins),sans-serif; }
+@media (min-width:1101px) {
+  .content--investments .topbar__title-row { display:flex; align-items:center; gap:10px; }
+  .content--investments .topbar__desktop-title-action { display:flex; align-items:center; }
+}
+@media (max-width:1100px) {
+  .investments-desktop-tabs { display:none; }
+  .shell-mobile-subheader .investments-tabs--mobile { flex-wrap:wrap !important; overflow:visible; }
+  .shell-mobile-subheader .investments-tabs--mobile .animated-tabs__tab { flex:1 0 30% !important; }
+  .shell-mobile-subheader .investments-tabs--mobile .animated-tabs__icon { width:12px; height:12px; }
+  .shell-mobile-subheader .investments-tabs--mobile .animated-tabs__label { font-size:11px !important; }
+  .portfolio-filter-menu__label-text { display:none; }
+}

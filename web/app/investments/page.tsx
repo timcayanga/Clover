@@ -2908,12 +2908,11 @@ export default function InvestmentsPage() {
     <CloverShell
       active="investments"
       title="Investments"
-      titleAddon={renderInvestmentTabs()}
+      desktopTitleAction={<AdviserHeaderLink />}
       mobileSubheader={renderInvestmentTabs(true)}
       mobileLeadingAction={<AdviserHeaderLink />}
       actions={
         <>
-          <AdviserHeaderLink />
                   <InvestmentPortfolioFilters active={investmentSubtypeFilter !== "all" || investmentSortKey !== "value_desc" || portfolioView !== "all"}>
           <CurrencySelector
             value={portfolioCurrencyFilter}
@@ -2976,6 +2975,7 @@ export default function InvestmentsPage() {
         </>
       }
     >
+      <div className="investments-desktop-tabs">{renderInvestmentTabs()}</div>
       <div className="accounts-page animate-tab-panel" key={selectedTab}>
         {!loading && message ? <p className="panel-muted">{message}</p> : null}
 

@@ -54,11 +54,13 @@ export function PlanHeader({
   back,
   add,
   trailing,
+  stackedTitle = false,
 }: {
   title: string;
   back?: () => void;
   add?: () => void;
   trailing?: ReactNode;
+  stackedTitle?: boolean;
 }) {
   const { colors } = useTheme();
   const adviser = () => router.push("/(tabs)/adviser");
@@ -66,9 +68,9 @@ export function PlanHeader({
     <View
       style={{
         flexDirection: "row",
-        alignItems: "center",
+        alignItems: stackedTitle ? "flex-start" : "center",
         justifyContent: "space-between",
-        minHeight: 48,
+        minHeight: stackedTitle ? 84 : 48,
       }}
     >
       <Pressable
@@ -86,8 +88,9 @@ export function PlanHeader({
         accessibilityRole="header"
         style={{
           position: "absolute",
-          left: 76,
-          right: 76,
+          left: stackedTitle ? 0 : 76,
+          right: stackedTitle ? 0 : 76,
+          top: stackedTitle ? 52 : undefined,
           textAlign: "center",
           fontFamily: "Poppins-SemiBold",
           fontSize: 18,

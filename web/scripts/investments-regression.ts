@@ -374,8 +374,8 @@ const marketHistoryRouteSource = readFileSync(resolve(process.cwd(), "app/api/ma
 
 assert.match(
   investmentsPageSource,
-  /actions=\{[\s\S]*?<AdviserHeaderLink \/>[\s\S]*?<CurrencySelector/,
-  "Investments must expose Adviser in its page header",
+  /desktopTitleAction=\{<AdviserHeaderLink \/>\}/,
+  "Investments must expose Adviser immediately beside its desktop title",
 );
 assert.match(investmentsPageSource, /deleteSelectedInvestmentAsset/, "Asset details should expose the delete workflow.");
 assert.match(investmentsPageSource, /"Delete asset"/, "Asset details should render a clear delete action.");
