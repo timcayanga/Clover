@@ -4,6 +4,51 @@ import { router, useFocusEffect } from "expo-router";
 import { Platform, Pressable, Text, View } from "react-native";
 import { useSession } from "./session";
 import { Icon, useTheme } from "./ui";
+/** Square at normal text size, but grows rather than clipping larger text. */
+export function PlanDirectoryCard({
+  children,
+  color,
+}: {
+  children: ReactNode;
+  color: string;
+}) {
+  const { dark, colors } = useTheme();
+  const [width, setWidth] = useState(0);
+  const tint = /^#[0-9a-f]{6}$/i.test(color) ? color : "#35b875";
+  return (
+    <LinearGradient
+      colors={dark ? [colors.white, `${tint}24`] : [`${tint}38`, `${tint}0a`]}
+      start={{ x: 0, y: 0 }}
+      end={{ x: 1, y: 0 }}
+      onLayout={(event) => setWidth(event.nativeEvent.layout.width)}
+      style={{
+        minHeight: width,
+        padding: 20,
+        gap: 16,
+        justifyContent: "space-between",
+        borderRadius: 24,
+        borderWidth: 1,
+        borderColor: `${tint}88`,
+      }}
+    >
+      {children}
+    </LinearGradient>
+  );
+}
+export function PlanAmount({ children }: { children: ReactNode }) {
+  const { colors } = useTheme();
+  return (
+    <Text
+      style={{
+        fontFamily: "Poppins-SemiBold",
+        fontSize: 24,
+        color: colors.ink,
+      }}
+    >
+      {children}
+    </Text>
+  );
+}
 export function PlanHeader({
   title,
   back,
@@ -51,27 +96,42 @@ export function PlanHeader({
       >
         {title}
       </Text>
-      {trailing ?? (
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel={back ? "Adviser" : add ? `Add ${title}` : "Home"}
-          onPress={
-            back ? adviser : (add ?? (() => router.push("/(tabs)/index")))
-          }
-          style={{ padding: 8 }}
-        >
-          <Icon
-            size={back ? 32 : 24}
-            name={
-              back
-                ? "chatbubble-ellipses-outline"
-                : add
-                  ? "add-circle"
-                  : "home-outline"
-            }
-          />
-        </Pressable>
-      )}
+      {trailing ??
+        (!back && add ? (
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={`Add ${title}`}
+            onPress={add}
+            hitSlop={4}
+          >
+            <LinearGradient
+              colors={["#03a8c0", "#34d3d0"]}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 0 }}
+              style={{
+                width: 40,
+                height: 40,
+                borderRadius: 20,
+                alignItems: "center",
+                justifyContent: "center",
+              }}
+            >
+              <Icon name="add" color="#fff" size={22} />
+            </LinearGradient>
+          </Pressable>
+        ) : (
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={back ? "Adviser" : "Home"}
+            onPress={back ? adviser : () => router.push("/(tabs)/index")}
+            style={{ padding: 8 }}
+          >
+            <Icon
+              size={back ? 32 : 24}
+              name={back ? "chatbubble-ellipses-outline" : "home-outline"}
+            />
+          </Pressable>
+        ))}
     </View>
   );
 }

@@ -82,7 +82,7 @@ export function GoalDirectory({ goals }: { goals: GoalCardData[] }) {
             onSave={async () => {}}
           >
             {goal.progress ? (
-              <div className="collection-card__progress">
+              <div className="collection-card__goal-progress">
                 <strong>
                   {goal.progress.currentAmount === null
                     ? "—"

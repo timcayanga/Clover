@@ -65611,8 +65611,8 @@ html[data-theme="dark"] :is(.transaction-creation-panel,.accounts-import-footer-
 .content--reports .reports-overview-grid .metric { border:1px solid var(--stroke,#dfe7eb)!important; border-radius:18px!important; background:var(--surface,#fff)!important; padding:12px!important; } .reports-chart-insight { margin-top:24px; display:flex; flex-wrap:wrap; gap:12px; } .reports-chart-insight strong,.reports-chart-insight p { width:100%; } .reports-chart-insight .button { width:auto; flex:none; border-radius:999px; } .reports-income-source { display:grid; grid-template-columns:1fr auto; gap:10px; margin:18px 0; } .reports-income-source progress { grid-column:1/-1; width:100%; height:8px; accent-color:#03a8c0; } .report-chart-switch { display:flex; gap:6px; } .report-chart-switch button { width:34px;height:34px; display:grid; place-items:center; border:1px solid var(--stroke,#dfe7eb); border-radius:8px; color:var(--accent,#03a8c0);background:var(--surface,#fff); } .report-chart-switch svg {width:16px;height:16px;} .report-chart-switch button[aria-pressed="true"] { background:var(--accent,#03a8c0);color:white; } .reports-range-menu__summary { width:auto!important; display:flex;gap:6px;padding:8px 14px!important; } .reports-filter-label {font-size:12px;} .content--reports .topbar__title-row h1 {font-size:18px;}
 @media(max-width:1100px){.reports-filter-label{display:none}.reports-range-menu__summary{padding:10px!important}.reports-income-source{grid-template-columns:1fr}.reports-income-source strong{font-size:13px;}.reports-overview-grid{grid-template-columns:repeat(2,minmax(0,1fr))!important;}}
 
-.collection-card__progress { display:grid; gap:8px; }
-.collection-card__progress progress { width:100%; accent-color:var(--collection-color, #03a8c0); }
+.collection-card__goal-progress { display:grid; gap:8px; min-width:0; overflow-wrap:anywhere; }
+.collection-card__goal-progress progress { width:100%; accent-color:var(--collection-color, #03a8c0); }
 .content--circles .collection-card-grid { grid-template-columns:repeat(2,minmax(0,1fr)); }
 @media(max-width:700px){.content--circles .collection-card-grid{grid-template-columns:1fr;}}
 
@@ -66071,4 +66071,37 @@ html[data-theme="dark"] .content.content--reports .reports-range-menu__summary {
   .content.content--reports .reports-range-menu__summary { width: 40px!important; padding: 10px!important; }
   .content--reports .report-card__head { align-items: flex-start; }
   .content--reports .report-chart-switch { margin-left: auto; }
+}
+
+/* Planning directories: align the title and Adviser and retain the create glyph. */
+@media (min-width: 1101px) {
+  .content:is(.content--budgeting,.content--goals) > :is(.topbar,.shell-compact-bar) {
+    align-items: center;
+  }
+  .content:is(.content--budgeting,.content--goals) .topbar__title-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .content:is(.content--budgeting,.content--goals) .topbar__title-row h1 { margin: 0; }
+}
+.content:is(.content--budgeting,.content--goals) .collection-toolbar-actions .accounts-toolbar-add > svg {
+  display: block;
+  width: 16px;
+  height: 16px;
+  flex: 0 0 16px;
+}
+@media (max-width: 1100px) {
+  .content.content:is(.content--budgeting,.content--goals) > :is(.topbar,.shell-compact-bar) .accounts-toolbar-add {
+    display: inline-flex !important;
+    align-items: center;
+    justify-content: center;
+    width: 40px !important;
+    min-width: 40px !important;
+    height: 40px !important;
+    min-height: 40px !important;
+    padding: 0 !important;
+    border-radius: 50% !important;
+  }
+  .content:is(.content--budgeting,.content--goals) > :is(.topbar,.shell-compact-bar) .accounts-toolbar-add > span:not(.button-icon) { display: none; }
 }

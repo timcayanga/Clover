@@ -15,6 +15,8 @@ import {
 import {
   PlanAction,
   PlanHeader,
+  PlanDirectoryCard,
+  PlanAmount,
   PlanTabs,
   Progress,
   usePlanData,
@@ -372,15 +374,15 @@ export default function Goals() {
             </>
           ) : (
             data.goals.map((goal) => (
-              <Card
+              <PlanDirectoryCard
                 key={goal.id}
-                style={{
-                  backgroundColor: dark
-                    ? "#183137"
-                    : goal.goal === "build_emergency_fund"
-                      ? "#fff1f3"
-                      : "#effaf5",
-                }}
+                color={
+                  goal.goal === "build_emergency_fund"
+                    ? "#ef8e99"
+                    : goal.goal === "invest_better"
+                      ? "#27845c"
+                      : "#4ade80"
+                }
               >
                 <View
                   style={{
@@ -410,12 +412,12 @@ export default function Goals() {
                 </Body>
                 {goal.progress ? (
                   <>
-                    <Body muted={false}>
+                    <PlanAmount>
                       {money(
                         String(goal.progress.currentAmount),
                         goal.currency,
                       )}
-                    </Body>
+                    </PlanAmount>
                     <Body>{goal.progress.currentLabel}</Body>
                     <Progress value={goal.progress.progressPercent ?? 0} />
                     <Body>
@@ -431,7 +433,7 @@ export default function Goals() {
                     setTab("Overview");
                   }}
                 />
-              </Card>
+              </PlanDirectoryCard>
             ))
           )}
         </>

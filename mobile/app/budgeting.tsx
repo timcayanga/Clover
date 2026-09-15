@@ -14,6 +14,8 @@ import {
 } from "../src/ui";
 import {
   PlanHeader,
+  PlanDirectoryCard,
+  PlanAmount,
   PlanTabs,
   PlanAction,
   Progress,
@@ -304,12 +306,18 @@ export default function Budgeting() {
             </>
           ) : (
             data.budgets.map((budget) => (
-              <Card
+              <PlanDirectoryCard
                 key={budget.id}
-                style={{
-                  backgroundColor: dark ? "#183137" : "#effaf5",
-                  borderColor: budget.appearance?.color ?? colors.line,
-                }}
+                color={
+                  budget.appearance?.color ??
+                  (budget.kind === "savings_target"
+                    ? "#4ade80"
+                    : /food|dining/i.test(budget.categoryName ?? budget.name)
+                      ? "#fdba74"
+                      : /transport/i.test(budget.categoryName ?? budget.name)
+                        ? "#bae6fd"
+                        : "#35b875")
+                }
               >
                 <View
                   style={{
@@ -341,7 +349,7 @@ export default function Budgeting() {
                 <Body>
                   {budget.periodLabel} · {budget.isActive ? "Active" : "Paused"}
                 </Body>
-                <Body muted={false}>
+                <PlanAmount>
                   {money(
                     String(Math.abs(budget.targetAmount - budget.actualAmount)),
                     budget.currency,
@@ -349,7 +357,7 @@ export default function Budgeting() {
                   {budget.actualAmount > budget.targetAmount
                     ? "over target"
                     : "left"}
-                </Body>
+                </PlanAmount>
                 <Body>
                   {money(String(budget.actualAmount), budget.currency)} of{" "}
                   {money(String(budget.targetAmount), budget.currency)}
@@ -363,7 +371,7 @@ export default function Budgeting() {
                     setSelected(budget);
                   }}
                 />
-              </Card>
+              </PlanDirectoryCard>
             ))
           )}
         </>
