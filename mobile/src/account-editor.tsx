@@ -12,10 +12,14 @@ import {
   Screen,
   money,
 } from "./ui";
+import { AssetSnapshot } from "./asset-snapshot";
+import { PlanHeader } from "./plan-ui";
 import { Choices } from "./transaction-entry";
 import { useSession } from "./session";
 export const accountDisplayBalance = (account: AccountRecord) =>
-  account.displayBalance === undefined ? account.balance : account.displayBalance;
+  account.displayBalance === undefined
+    ? account.balance
+    : account.displayBalance;
 
 export type AccountRecord = {
   id: string;
@@ -258,6 +262,9 @@ export function AccountEditor({
   const { colors } = useTheme();
   return (
     <Screen>
+      {!editing && record?.type === "investment" ? (
+        <PlanHeader title="Asset Details" back={onClose} />
+      ) : null}
       {editing ? (
         <Heading>{record ? "Edit account" : "Add account"}</Heading>
       ) : null}
@@ -320,66 +327,76 @@ export function AccountEditor({
         </Card>
       ) : record ? (
         <Card>
-          <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
-            <Text
-              style={{
-                flex: 1,
-                color: colors.ink,
-                fontFamily: "Poppins-SemiBold",
-                fontSize: 16,
-              }}
-            >
-              {record.name}
-            </Text>
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel="Edit account"
-              onPress={beginEdit}
-              style={{
-                width: 44,
-                height: 44,
-                borderRadius: 8,
-                backgroundColor: "white",
-                alignItems: "center",
-                justifyContent: "center",
-              }}
-            >
-              <Icon name="create-outline" color="#18343e" />
-            </Pressable>
-          </View>
-          <Body>
-            {record.institution || "Manual account"} ·{" "}
-            {record.type.replaceAll("_", " ")}
-          </Body>
-          {record.lastFour ? <Body>Account •••• {record.lastFour}</Body> : null}
-          <Heading>
-            {accountDisplayBalance(record) === null
-              ? "Not recorded"
-              : money(accountDisplayBalance(record)!, record.currency)}
-          </Heading>
-          <Body>
-            {record.currency} · {record.source || "Recorded"}
-          </Body>
-          {Object.keys(labels)
-            .filter(
-              (k) =>
-                ![
-                  "name",
-                  "institution",
-                  "currency",
-                  "balance",
-                  "accountNumber",
-                ].includes(k) && record[k as keyof AccountRecord] != null,
-            )
-            .map((k) => (
-              <Body key={k}>
-                {labels[k]}:{" "}
-                {String(record[k as keyof AccountRecord]).slice(
-                  0,
-                  dateFields.has(k) ? 10 : undefined,
-                )}
+          {record.type === "investment" ? (
+            <AssetSnapshot account={record} onEdit={beginEdit} />
+          ) : (
+            <>
+              <View
+                style={{ flexDirection: "row", alignItems: "center", gap: 12 }}
+              >
+                <Text
+                  style={{
+                    flex: 1,
+                    color: colors.ink,
+                    fontFamily: "Poppins-SemiBold",
+                    fontSize: 16,
+                  }}
+                >
+                  {record.name}
+                </Text>
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel="Edit account"
+                  onPress={beginEdit}
+                  style={{
+                    width: 44,
+                    height: 44,
+                    borderRadius: 8,
+                    backgroundColor: "white",
+                    alignItems: "center",
+                    justifyContent: "center",
+                  }}
+                >
+                  <Icon name="create-outline" color="#18343e" />
+                </Pressable>
+              </View>
+              <Body>
+                {record.institution || "Manual account"} ·{" "}
+                {record.type.replaceAll("_", " ")}
               </Body>
-            ))}
+              {record.lastFour ? (
+                <Body>Account •••• {record.lastFour}</Body>
+              ) : null}
+              <Heading>
+                {accountDisplayBalance(record) === null
+                  ? "Not recorded"
+                  : money(accountDisplayBalance(record)!, record.currency)}
+              </Heading>
+              <Body>
+                {record.currency} · {record.source || "Recorded"}
+              </Body>
+              {Object.keys(labels)
+                .filter(
+                  (k) =>
+                    ![
+                      "name",
+                      "institution",
+                      "currency",
+                      "balance",
+                      "accountNumber",
+                    ].includes(k) && record[k as keyof AccountRecord] != null,
+                )
+                .map((k) => (
+                  <Body key={k}>
+                    {labels[k]}:{" "}
+                    {String(record[k as keyof AccountRecord]).slice(
+                      0,
+                      dateFields.has(k) ? 10 : undefined,
+                    )}
+                  </Body>
+                ))}
+            </>
+          )}
           <Button
             title="Delete account"
             secondary
