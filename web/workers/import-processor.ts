@@ -1955,7 +1955,14 @@ const inferParserRowConfidence = (params: {
   return Math.max(confidence, parserConfidence, categoryConfidence, deterministicFallback);
 };
 
-const shouldRouteToReview = (params: { confidence: number; categoryName?: string | null; type?: string | null }) => {
+const hasRequiredImportReview = (rawPayload: unknown) => {
+  const payload = rawPayload && typeof rawPayload === "object" && !Array.isArray(rawPayload) ? rawPayload as Record<string, unknown> : null;
+  const arbitration = payload?.parserArbitration as { requiresReview?: boolean } | undefined;
+  return payload?.reviewRequired === true || arbitration?.requiresReview === true;
+};
+
+export const shouldRouteToReview = (params: { confidence: number; categoryName?: string | null; type?: string | null; rawPayload?: unknown }) => {
+  if (hasRequiredImportReview(params.rawPayload)) return true;
   if (!params.type) {
     return true;
   }
@@ -1974,6 +1981,7 @@ export const buildImportReviewReasons = (params: {
   rawPayload?: unknown;
 }) => {
   const reasons: string[] = [];
+  if (hasRequiredImportReview(params.rawPayload)) reasons.push("parser_review_required");
   if (!params.type) reasons.push("missing_transaction_type");
   if (!params.categoryName || params.categoryName.trim().toLowerCase() === "other") reasons.push("ambiguous_category");
   if (params.confidence < 70) reasons.push("low_confidence");
@@ -7901,6 +7909,7 @@ export const processImportEnrichmentJobs = async (options: {
             confidence: Math.max(rowConfidence, categoryConfidence),
             categoryName,
             type: canonicalType,
+            rawPayload: row.rawPayload,
           })
             ? "pending_review"
             : "confirmed";
@@ -9721,8 +9730,8 @@ export const processImportFileText = async (
       );
     }) &&
     countPdaxPortfolioHoldingRows(parsedRows as Array<Record<string, unknown>>) === 0;
-  const isTransactionHistoryImage = imageImport && isTransactionHistoryScreenshotText(textForParse);
-  let effectiveImportMode = isTransactionHistoryImage && importMode === "statement"
+  const isTransactionHistoryImage = () => imageImport && isTransactionHistoryScreenshotText(textForParse);
+  let effectiveImportMode = isTransactionHistoryImage() && importMode === "statement"
     ? "statement"
     : inferStructuredDocumentImportModeFromParsedRows(importMode, parsedRows, metadataForParse);
   if (effectiveImportMode !== "statement") {
@@ -10531,7 +10540,7 @@ export const processImportFileText = async (
       dateCoverage: Number(parsedDateCoverage.toFixed(3)),
     });
   }
-  const receiptPreview = imageImport && !isTransactionHistoryImage ? parseReceiptText(textForParse) : null;
+  const receiptPreview = imageImport && !isTransactionHistoryImage() ? parseReceiptText(textForParse) : null;
   if (!cachedReceiptExtraction && perceptualReceiptCacheCandidate && receiptPreview) {
     const cachedDetails = perceptualReceiptCacheCandidate.extraction.receiptDetails;
     const previewTotal = Number(receiptPreview.total);
@@ -10618,7 +10627,7 @@ export const processImportFileText = async (
   );
   const autoDetectedReceiptPreview =
     imageImport &&
-    !isTransactionHistoryImage &&
+    !isTransactionHistoryImage() &&
     importMode === "statement" &&
     (
       receiptPreviewCanSkipBackup ||
@@ -10872,7 +10881,7 @@ export const processImportFileText = async (
       : null;
     if (imageImport && importMode === "statement" && openAiParsed) {
       const detectedBackupImportMode = normalizeImportImageMode(openAiParsed.documentType);
-      if (detectedBackupImportMode !== "statement" && !isTransactionHistoryImage) {
+      if (detectedBackupImportMode !== "statement" && !isTransactionHistoryImage()) {
         effectiveImportMode = detectedBackupImportMode;
         isDocumentImport = true;
       }
@@ -11288,7 +11297,7 @@ export const processImportFileText = async (
 
       if (shouldAdoptTranscriptParse) {
         openAiParsed = transcriptParsed;
-        if (importMode === "statement" && transcriptImportMode !== "statement" && !isTransactionHistoryImage) {
+        if (importMode === "statement" && transcriptImportMode !== "statement" && !isTransactionHistoryImage()) {
           effectiveImportMode = transcriptImportMode;
           isDocumentImport = true;
         }
@@ -15762,7 +15771,7 @@ export const confirmImportFile = async (
     });
     const reviewStatus = reviewOnlyRow
       ? "rejected"
-      : shouldRouteToReview({ confidence: rowConfidence, categoryName, type: canonicalType })
+      : shouldRouteToReview({ confidence: rowConfidence, categoryName, type: canonicalType, rawPayload: row.rawPayload })
         ? "pending_review"
         : "confirmed";
     const insertRow = buildTransactionInsertRecord({

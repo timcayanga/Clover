@@ -1359,7 +1359,7 @@ export function SplitBillWorkspace({
       />
 
       {selected && typeof document !== "undefined" ? createPortal(
-        <div className="split-bill-modal" role="presentation" onClick={closeDetail}>
+        <div className="split-bill-modal split-bill-detail-backdrop" role="presentation" onClick={closeDetail}>
           <section className="split-bill-modal__card glass split-bill-detail-modal" role="dialog" aria-modal="true" aria-label={selectedDetailLabel} onClick={(event) => event.stopPropagation()}>
             <div className="split-bill-manual-modal__head">
               <div>

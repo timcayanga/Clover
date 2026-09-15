@@ -2,6 +2,8 @@ import { isTransactionHistoryScreenshotText, parseImportTextGenericOnly } from "
 import assert from "node:assert/strict";
 import {
   assessImageStatementParse,
+  shouldRouteToReview,
+  buildImportReviewReasons,
   buildParserRoutingDecision,
   shouldPreferDirectImageStatementVisionPath,
   shouldAttemptGenericScreenshotTranscriptRepair,
@@ -536,3 +538,9 @@ const activityRows = parseImportTextGenericOnly(activityText, "history.png", "im
 assert.equal(activityRows.length, 10, "Distinct timestamps preserve repeated purchases");
 assert.ok(activityRows.every(row => row.amount === "25.00" && row.description === "Grocery purchase"));
 assert.ok(activityRows.every(row => (row.rawPayload as {reviewRequired?: boolean}).reviewRequired));
+
+const requiredReviewRow = {confidence: 99, categoryName: "Food & Dining", type: "expense", rawPayload: {reviewRequired: true}};
+assert.equal(shouldRouteToReview(requiredReviewRow), true, "AI confidence cannot waive explicit parser review");
+assert.ok(buildImportReviewReasons(requiredReviewRow).includes("parser_review_required"));
+assert.equal(shouldRouteToReview({...requiredReviewRow, rawPayload: {}}), false);
+assert.equal(shouldRouteToReview({...requiredReviewRow, rawPayload: {parserArbitration: {requiresReview: true}}}), true);

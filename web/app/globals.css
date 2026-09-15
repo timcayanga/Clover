@@ -51072,6 +51072,10 @@ html[data-theme="dark"] .goals-editor__purpose-chip {
   z-index: 40;
 }
 
+.split-bill-modal.split-bill-detail-backdrop {
+  z-index: 70; /* Above the sticky page header (60), below shared navigation. */
+}
+
 .split-bill-modal__card {
   width: min(520px, 100%);
   padding: 24px;

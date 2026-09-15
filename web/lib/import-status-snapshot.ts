@@ -1,3 +1,4 @@
+import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { buildImportTelemetrySnapshot } from "@/lib/import-telemetry";
 import { readCheckpointWorkflowStage } from "@/lib/import-workflow";
@@ -582,6 +583,10 @@ export const loadImportStatusSnapshot = async (
             where: {
               importFileId,
               deletedAt: null,
+              OR: [
+                { rawPayload: { path: ["documentType"], equals: "receipt" } },
+                { rawPayload: { path: ["receiptDetails"], not: Prisma.JsonNull } },
+              ],
             },
             select: {
               id: true,
