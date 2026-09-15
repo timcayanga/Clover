@@ -7,7 +7,7 @@ import {
 } from "expo-router";
 import { SummaryCard } from "../../src/plan-ui";
 import { LinearGradient } from "expo-linear-gradient";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useState } from "react";
 import { Pressable, Text, View } from "react-native";
 import { useSession } from "../../src/session";
 import {
@@ -46,30 +46,9 @@ function AccountsContent() {
       setAdding(true);
     }
   }, [add]);
-  useEffect(() => {
-    const title = adding
-      ? "Add Account"
-      : selected
-        ? selected.type === "investment"
-          ? "Asset Details"
-          : "Account Details"
-        : "Accounts";
-    navigation.setOptions({
-      title,
-      header: () => (
-        <AppHeader
-          title={title}
-          onClose={
-            adding || selected
-              ? () => {
-                  setAdding(false);
-                  setSelected(null);
-                }
-              : undefined
-          }
-        />
-      ),
-    });
+  useLayoutEffect(() => {
+    // The shared editor owns its header, whether opened here or from Investments.
+    navigation.setOptions({ headerShown: !adding && !selected });
   }, [adding, selected, navigation]);
   const [revision, setRevision] = useState(0);
   const [error, setError] = useState("");

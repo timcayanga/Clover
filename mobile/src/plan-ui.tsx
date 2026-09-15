@@ -55,12 +55,14 @@ export function PlanHeader({
   add,
   trailing,
   stackedTitle = false,
+  titleInset = 76,
 }: {
   title: string;
   back?: () => void;
   add?: () => void;
   trailing?: ReactNode;
   stackedTitle?: boolean;
+  titleInset?: number;
 }) {
   const { colors } = useTheme();
   const adviser = () => router.push("/(tabs)/adviser");
@@ -88,8 +90,8 @@ export function PlanHeader({
         accessibilityRole="header"
         style={{
           position: "absolute",
-          left: stackedTitle ? 0 : 76,
-          right: stackedTitle ? 0 : 76,
+          left: stackedTitle ? 0 : titleInset,
+          right: stackedTitle ? 0 : titleInset,
           top: stackedTitle ? 52 : undefined,
           textAlign: "center",
           fontFamily: "Poppins-SemiBold",

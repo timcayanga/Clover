@@ -1,19 +1,8 @@
-import { Pressable, View, Text } from "react-native";
 import { useEffect, useRef, useState } from "react";
-import {
-  Body,
-  Button,
-  Card,
-  Field,
-  Heading,
-  Icon,
-  useTheme,
-  Notice,
-  Screen,
-  money,
-} from "./ui";
+import { Body, Button, Card, Field, Notice, Screen } from "./ui";
 import { AssetSnapshot } from "./asset-snapshot";
-import { PlanHeader } from "./plan-ui";
+import { AccountIdentity } from "./account-identity";
+import { PlanAction, PlanHeader } from "./plan-ui";
 import { Choices } from "./transaction-entry";
 import { useSession } from "./session";
 export const accountDisplayBalance = (account: AccountRecord) =>
@@ -259,15 +248,27 @@ export function AccountEditor({
           : []),
       ]
     : ["balance"];
-  const { colors } = useTheme();
   return (
     <Screen>
-      {!editing && record?.type === "investment" ? (
-        <PlanHeader title="Asset Details" back={onClose} />
-      ) : null}
-      {editing ? (
-        <Heading>{record ? "Edit account" : "Add account"}</Heading>
-      ) : null}
+      <PlanHeader
+        titleInset={52}
+        title={
+          editing
+            ? record
+              ? "Edit Account"
+              : "Add Account"
+            : record?.type === "investment"
+              ? "Asset Details"
+              : "Account Details"
+        }
+        back={() => {
+          if (busy) return;
+          if (editing && record) {
+            setEditing(false);
+            setError("");
+          } else onClose();
+        }}
+      />
       {error ? <Notice>{error}</Notice> : null}
       {loading ? (
         <Body>Loading account details…</Body>
@@ -331,50 +332,7 @@ export function AccountEditor({
             <AssetSnapshot account={record} onEdit={beginEdit} />
           ) : (
             <>
-              <View
-                style={{ flexDirection: "row", alignItems: "center", gap: 12 }}
-              >
-                <Text
-                  style={{
-                    flex: 1,
-                    color: colors.ink,
-                    fontFamily: "Poppins-SemiBold",
-                    fontSize: 16,
-                  }}
-                >
-                  {record.name}
-                </Text>
-                <Pressable
-                  accessibilityRole="button"
-                  accessibilityLabel="Edit account"
-                  onPress={beginEdit}
-                  style={{
-                    width: 44,
-                    height: 44,
-                    borderRadius: 8,
-                    backgroundColor: "white",
-                    alignItems: "center",
-                    justifyContent: "center",
-                  }}
-                >
-                  <Icon name="create-outline" color="#18343e" />
-                </Pressable>
-              </View>
-              <Body>
-                {record.institution || "Manual account"} ·{" "}
-                {record.type.replaceAll("_", " ")}
-              </Body>
-              {record.lastFour ? (
-                <Body>Account •••• {record.lastFour}</Body>
-              ) : null}
-              <Heading>
-                {accountDisplayBalance(record) === null
-                  ? "Not recorded"
-                  : money(accountDisplayBalance(record)!, record.currency)}
-              </Heading>
-              <Body>
-                {record.currency} · {record.source || "Recorded"}
-              </Body>
+              <AccountIdentity account={record} onEdit={beginEdit} />
               {Object.keys(labels)
                 .filter(
                   (k) =>
@@ -397,9 +355,9 @@ export function AccountEditor({
                 ))}
             </>
           )}
-          <Button
+          <PlanAction
             title="Delete account"
-            secondary
+            tone="delete"
             onPress={() => setConfirmDelete(true)}
           />
           {confirmDelete ? (
@@ -408,7 +366,8 @@ export function AccountEditor({
                 Delete this account and its linked transactions and import
                 artifacts? This cannot be undone.
               </Body>
-              <Button
+              <PlanAction
+                tone="delete"
                 title="Confirm account deletion"
                 disabled={busy}
                 onPress={() => void remove()}
