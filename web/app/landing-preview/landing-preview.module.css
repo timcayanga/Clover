@@ -669,3 +669,10 @@
 .figmaBackground, .figmaBackground picture, .figmaBackground img { position: absolute; inset: 0; width: 100%; height: 100%; }
 .figmaBackground img { object-fit: cover; object-position: center; }
 .journey[data-chapter] .world>.worldWash { display: none; }
+
+/* Restore chapter entrance motion after replacing the original scene stack. */
+.chapterCopy{transition:opacity 300ms ease-out}
+.chapterCopy[data-visible=true]{animation:chapter-copy-arrive 420ms ease-out both}
+.supportStage>div{transition:opacity 350ms ease-out,transform 450ms cubic-bezier(.2,.7,.2,1),visibility 350ms}
+@keyframes chapter-copy-arrive{from{opacity:0;translate:0 14px}to{opacity:1;translate:0 0}}
+@media(prefers-reduced-motion:reduce){.chapterCopy,.supportStage>div{transition:none;animation:none}}

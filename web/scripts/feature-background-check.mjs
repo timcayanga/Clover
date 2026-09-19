@@ -16,15 +16,19 @@ try {
         const state = evaluate(`(async()=>{
           const root=document.querySelector('[data-feature-story]');
           scrollTo({top:scrollY+root.getBoundingClientRect().top+(root.offsetHeight-innerHeight)*${progress},behavior:'instant'});
-          await Promise.all([...root.querySelectorAll('[data-feature-scene] img')].map(i=>i.decode().catch(()=>{})));
-          await new Promise(r=>setTimeout(r,350));
+          await Promise.all([...root.querySelectorAll('[data-story-background] picture img')].map(i=>i.decode().catch(()=>{})));
+          await new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)));
+          await new Promise(r=>setTimeout(r,1000));
           const bg=root.querySelector('[data-feature-background]');
-          const pictures=[...root.querySelectorAll('[data-feature-scene]')];
-          return {opacity:pictures.map(p=>getComputedStyle(p).opacity),loaded:pictures.every(p=>p.querySelector('img').naturalWidth>0),backdrop:getComputedStyle(bg.parentElement).backgroundImage,transform:getComputedStyle(bg).transform,overflow:document.documentElement.scrollWidth>innerWidth,error:!!document.querySelector('[data-nextjs-dialog]')};
+          const pictures=[...root.querySelectorAll('[data-story-background] picture')];
+          return {opacity:pictures.map(p=>getComputedStyle(p).opacity),dimensions:pictures.map(p=>p.querySelector('img').naturalWidth),fit:pictures.map(p=>getComputedStyle(p.querySelector('img')).objectFit),loaded:pictures.every(p=>p.querySelector('img').naturalWidth>0),backdrop:getComputedStyle(bg.parentElement).backgroundImage,transform:getComputedStyle(bg).transform,overflow:document.documentElement.scrollWidth>innerWidth,error:!!document.querySelector('[data-nextjs-dialog]')};
         })()`);
-        assert.deepEqual(state.opacity.slice().sort(), ["0","1"], `${slug} ${width} ${progress}: ghosting`);
+        assert.equal(state.opacity.filter(o=>o==="1").length, 1, `${slug} ${width} ${progress}: ghosting`);
         assert.equal(state.backdrop,"none", `${slug}: duplicate backdrop`);
         assert.equal(state.transform,"none", `${slug}: moving background`);
+        if(width<=900)assert.ok(state.dimensions.every(w=>w>=900),`${slug}: low-resolution mobile source`);
+        assert.ok(state.fit.every(f=>f==="cover"),`${slug}: photo must preserve aspect ratio`);
+        assert.ok(state.opacity.every(o=>o==="0"||o==="1"),`${slug}: transition failed to settle`);
         assert.equal(state.loaded,true, `${slug}: missing asset`);
         assert.equal(state.overflow,false, `${slug}: overflow`);
         assert.equal(state.error,false, `${slug}: error overlay`);

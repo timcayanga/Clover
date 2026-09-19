@@ -338,7 +338,8 @@ for (const slug of ["manage-money", "understand-your-money", "plan-ahead", "mana
   assert.ok(featureStoriesSource.includes(`slug: "${slug}"`), `Missing feature story: ${slug}`);
 }
 assert.match(featureStorySource, /prefers-reduced-motion/);
-assert.match(featureStorySource, /draggable=\{false\}/);
+assert.match(featureStorySource, /<StoryBackground /);
+assert.match(readSource("components/story-background.tsx"), /draggable=\{false\}/);
 assert.match(featureStorySource, /aria-current/);
 assert.match(featureStorySource, /hashchange/);
 assert.doesNotMatch(featureStorySource, /data-eyebrow|data-products/);

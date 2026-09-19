@@ -88,8 +88,11 @@ async function main() {
   for (const source of [journey, featureStory]) {
     assert.ok(source.includes("useLandingTableFit("), "Both public stories must fit complete mobile tables.");
     assert.ok(source.includes("aria-current="), "Public chapter navigation must identify the current section accessibly.");
-    assert.ok(source.includes("connectPlatformDesigns"), "Public chapters must use their approved composed backgrounds.");
+    assert.ok(source.includes("<StoryBackground "), "Public chapters must use the shared responsive background.");
   }
+  const background = await readSource("components/story-background.tsx");
+  assert.ok(background.includes("connectPlatformDesigns"), "Desktop backgrounds must retain approved Figma compositions.");
+  assert.ok(background.includes("mobileStoryPhotos"), "Mobile backgrounds must use the original high-resolution photo sources.");
   for (const css of [journeyCss, featureCss]) {
 
     assert.match(css, /scale:\s*var\(--landing-table-scale,\s*1\)/);

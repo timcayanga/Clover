@@ -1,5 +1,6 @@
 "use client";
-import { cloverPhoneScreens, connectPlatformDesigns } from "@/lib/connect-platform-designs";
+import { StoryBackground } from "@/components/story-background";
+import { cloverPhoneScreens } from "@/lib/connect-platform-designs";
 import { useLandingTableFit } from "@/lib/use-landing-table-fit";
 
 import Image from "next/image";
@@ -326,7 +327,7 @@ export function LandingJourney({ authEnabled, initialMarket, countryResolved }: 
   const productMotion = (index: number, direction = 1): CSSProperties => {
     if (index > 0) {
       const visible = displayedChapter === productChapters[index];
-      return { opacity: visible ? 1 : 0, visibility: visible ? "visible" : "hidden", transform: "none" };
+      return { opacity: visible ? 1 : 0, visibility: visible ? "visible" : "hidden", transform: visible ? "translate3d(0,0,0)" : "translate3d(0,24px,0)" };
     }
     const distance = storyPosition - productChapters[index];
     const proximity = clamp(1 - Math.abs(distance) * 1.35);
@@ -342,15 +343,13 @@ export function LandingJourney({ authEnabled, initialMarket, countryResolved }: 
       <JourneyHeader />
 
       <div className={styles.world} aria-hidden="true">
-        <div className={styles.figmaBackground}>
-          <picture><source media="(max-width:900px)" srcSet={connectPlatformDesigns[`landing-mobile-${displayedChapter}`].background} /><img src={connectPlatformDesigns[`landing-desktop-${displayedChapter}`].background} alt="" draggable={false} fetchPriority="high" /></picture>
-        </div>
+        <StoryBackground prefix="landing" count={chapters.length} active={displayedChapter} blurred={chapter === 1 || chapter === 6} />
         <div className={styles.worldWash} />
       </div>
 
       <section className={styles.story} aria-live="polite">
         {chapters.map((item, index) => <div className={`${styles.chapter} ${index === 1 ? styles.comparisonChapter : ""} ${index === 6 ? styles.proChapter : ""} ${index === 7 ? styles.finalChapter : ""}`} data-landing-copy data-active={chapter === index} key={index} aria-hidden={chapter !== index} inert={chapter !== index} style={chapterMotion(index)}>
-          <div style={{ opacity: index === displayedChapter ? 1 : 0 }}><h1>{item.title}</h1>
+          <div className={styles.chapterCopy} data-visible={index === displayedChapter} style={{ opacity: index === displayedChapter ? 1 : 0 }}><h1>{item.title}</h1>
           {item.copy ? <p>{item.copy}</p> : null}
           {index === 6 ? <ProActions market={market} /> : null}</div>
           {index === 1 ? <div className={styles.comparisonDetails} style={tableMotion(index)}><ComparisonTable /></div> : null}
