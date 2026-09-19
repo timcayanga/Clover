@@ -40,6 +40,8 @@ let cacheEvents = 0;
 void (async () => {
   const {
     accountsWorkspaceCacheKey,
+    getCachedTransactionsWorkspace,
+    persistTransactionsWorkspaceCache,
     getCachedAccountsWorkspace,
     syncImportedWorkspaceAccountCaches,
     syncImportedWorkspaceTransactionCaches,
@@ -79,6 +81,15 @@ void (async () => {
     (localStorage.getItem(accountsWorkspaceCacheKey) ?? sessionStorage.getItem(accountsWorkspaceCacheKey))?.length,
     "A bounded account snapshot should remain persisted when the full transaction history exceeds quota."
   );
+
+  const receiptSummary = {totalCount: 1, income: 0, spending: 250, transfers: 0, currencyTotals: {PHP: {income: 0, spending: 250, transfers: 0}}};
+  const receiptRow = {id: "receipt-row", accountId: "cash", importFileId: "receipt-import", amount: "250", currency: "PHP", type: "expense", merchantRaw: "QA Cafe", date: "2026-09-19"};
+  persistTransactionsWorkspaceCache("receipt-workspace", {accounts: [], categories: [], imports: [], transactions: [receiptRow], totalCount: 1, page: 1, pageSize: 25, summary: receiptSummary});
+  syncImportedWorkspaceTransactionCaches("receipt-workspace", [receiptRow]);
+  assert.deepEqual(getCachedTransactionsWorkspace("receipt-workspace")?.summary, receiptSummary, "Late receipt detail publication must not erase a persisted spending summary");
+  syncImportedWorkspaceAccountCaches("receipt-workspace", {id: "cash", workspaceId: "receipt-workspace", name: "Cash", institution: "Cash", currency: "PHP", type: "cash", balance: "1000"});
+  assert.deepEqual(getCachedTransactionsWorkspace("receipt-workspace")?.summary, receiptSummary, "Account publication must retain transaction summary and paging");
+  assert.equal(getCachedTransactionsWorkspace("receipt-workspace")?.pageSize, 25);
 
   assert.equal(BETA_FULL_ACCESS_ENABLED, false, "Beta full access must remain disabled after plan enforcement is restored.");
   assert.deepEqual(getPlanDefaultLimits("free"), {

@@ -2014,6 +2014,8 @@ export const syncImportedWorkspaceAccountCaches = (
 
   const transactionsCache = readTransactionsWorkspaceCache();
   const nextTransactionsSnapshot: TransactionsWorkspaceCacheSnapshot = {
+    // Background import details must retain authoritative list totals and paging.
+    ...transactionsCache?.snapshots[workspaceId],
     workspaceId,
     updatedAt: Date.now(),
     accounts: pruneImportedAccountPlaceholders(mergeImportedAccount(transactionsCache?.snapshots[workspaceId]?.accounts ?? [], account, options)),
@@ -2060,6 +2062,8 @@ export const syncImportedWorkspaceTransactionCaches = (
   };
 
   const nextTransactionsSnapshot: TransactionsWorkspaceCacheSnapshot = {
+    // Background import details must retain authoritative list totals and paging.
+    ...transactionsCache?.snapshots[workspaceId],
     workspaceId,
     updatedAt: Date.now(),
     accounts: transactionsCache?.snapshots[workspaceId]?.accounts ?? [],

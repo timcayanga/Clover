@@ -903,7 +903,7 @@ const cleanReceiptDescription = (line: string, preserveNumericSuffix = false) =>
   normalizeWhitespace(line)
     .replace(/^[^A-Za-z0-9(]+/, "")
     .replace(/[^A-Za-z0-9)%]+$/g, "")
-    .replace(/\s+\d{1,3}(?:[.,]\d{2})?$/, (suffix) => preserveNumericSuffix ? suffix : "")
+    .replace(/\s+\d{1,3}(?:[.,]\d{2})?$/, (suffix) => preserveNumericSuffix && /^\s+\d+$/.test(suffix) ? suffix : "")
     .replace(/\s+\d+x\s*$/i, "")
     .replace(/\b\d{1,3}\s*x\s*/i, "")
     .replace(/\s*[~_=|•¦]{2,}\s*/g, " ")
