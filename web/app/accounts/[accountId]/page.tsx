@@ -1015,6 +1015,7 @@ function AccountDetailPageContent() {
 
   const [account, setAccount] = useState<Account | null>(null);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [ledgerReadyAccountId, setLedgerReadyAccountId] = useState<string | null>(null);
   const [balanceAnchor, setBalanceAnchor] = useState<AccountBalanceAnchor<Transaction> | null>(null);
   const [categories, setCategories] = useState<Category[]>([]);
   const [transactionPage, setTransactionPage] = useState(1);
@@ -1755,6 +1756,7 @@ function AccountDetailPageContent() {
                   : cachedTransactions.length > 0
                     ? cachedTransactions
                     : [];
+              setLedgerReadyAccountId(nextAccount.id);
               setBalanceAnchor(typeof transactionsPayload?.manualLedgerBalance === "string" ? {
                 accountId: nextAccount.id, balance: transactionsPayload.manualLedgerBalance,
                 openingBalance: transactionsPayload.ledgerOpeningBalance ?? nextAccount.balance, rows: mergedTransactions,
@@ -2132,12 +2134,16 @@ function AccountDetailPageContent() {
     return Number.isFinite(numeric) && numeric !== 0;
   };
   const hasVisibleBalance = hasMeaningfulBalance(account?.balance);
-  const isPendingBalance =
+  // A manual account stores its opening balance; its current balance also
+  // needs the complete ledger projection. Cached rows may be only one page.
+  const isManualBalancePending = Boolean(account && account.source === "manual" &&
+    account.type !== "investment" && ledgerReadyAccountId !== account.id);
+  const isPendingBalance = isManualBalancePending || (
     account?.source === "upload" &&
     account?.type !== "investment" &&
     !hasVisibleBalance &&
     !hasMeaningfulBalance(checkpointBalance) &&
-    !hasLoadedTransactions;
+    !hasLoadedTransactions);
   const stableDisplayBalance = useMemo(() => {
     const candidates = [stableBalanceRef.current, cachedImportedBalance, account?.balance, checkpointBalance, String(currentBalance)];
     for (const candidate of candidates) {
@@ -4056,11 +4062,11 @@ function AccountDetailPageContent() {
     >
       <section className="accounts-detail__panel" style={accountBrandStyles}>
         {account ? (
-          <div className="accounts-detail__hero">
+          <div className="accounts-detail__hero" aria-busy={isPendingBalance} data-account-balance-ready={!isPendingBalance}>
             {isPendingBalance ? (
               <div className="accounts-detail__loading-chip-wrap">
                 <span className="accounts-summary-chip is-neutral">Loading</span>
-                <p className="panel-muted">Clover is still reading this {latestCheckpointFamily?.pendingLabel ?? "statement"} and filling in the rest.</p>
+                <p className="panel-muted">{isManualBalancePending ? (transactionsError ? "Balance unavailable while account history reconnects." : "Updating balance from account history…") : <>Clover is still reading this {latestCheckpointFamily?.pendingLabel ?? "statement"} and filling in the rest.</>}</p>
               </div>
             ) : null}
 
@@ -4074,14 +4080,14 @@ function AccountDetailPageContent() {
                   accountBrand={accountBrand}
                   name={accountCardName}
                   accountNumber={liveCardNumber}
-                  amount={isPendingBalance ? "Loading..." : formatAccountAmount(accountCardBalance, account.currency)}
+                  amount={isPendingBalance ? (transactionsError ? "Unavailable" : "Loading...") : formatAccountAmount(accountCardBalance, account.currency)}
                   amountLabel={`Change ${accountCardName} balance`}
                   editableName={account.type === "investment" ? undefined : account.name}
                   editableAccountNumber={account.type === "investment" ? undefined : account.accountNumber ?? ""}
                   editableAmount={Math.abs(parseAmount(displayBalance)).toFixed(2)}
                   onNameCommit={account.type === "investment" ? undefined : (value) => saveInlineCardIdentity("name", value)}
                   onAccountNumberCommit={account.type === "investment" ? undefined : (value) => saveInlineCardIdentity("accountNumber", value)}
-                  onAmountCommit={saveInlineCardBalance}
+                  onAmountCommit={isPendingBalance ? undefined : saveInlineCardBalance}
                   logoUrl={account.logoUrl}
                   onLogoCommit={saveAccountLogo}
                   showChevron={false}

@@ -24,3 +24,7 @@ Validation and live-run results are recorded separately; these changes alone do 
 A fresh receipt23 on staging commit 72f56bdf reproduced stale details: the drawer opened at 8.325s, the API later contained all ten items, but the open drawer still showed no items after processing settled and a further three seconds. This was a correctness diagnostic run during the local gate, not a speed baseline.
 
 Desktop drawer and mobile detail page now refresh only a newly imported, itemless receipt, stop when details arrive, abort on navigation, and stop after 60 seconds. Hidden tabs pause network requests. The dedicated read flag avoids fetching account/category lists on every refresh. Draft merging preserves edits and intentional clears; no financial records are modified by the refresh. Existing old/itemless receipts do not poll.
+
+## Account balance readiness defect
+
+Android receipt47 caught the account card temporarily reverting from the cached PHP750 projection to PHP1000 while history loaded, before returning to PHP750. The account API's `balance` is intentionally the stored opening balance; it must not be changed to the projected value. The account card now waits for a successful ledger response on manual accounts before displaying/editing the current balance. This is a read/presentation fix only. Retests must require `data-account-balance-ready=true` and the expected value together; a first matching cached number is insufficient evidence of settled readiness.
