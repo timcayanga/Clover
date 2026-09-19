@@ -21,6 +21,8 @@ type SplitBillManualModalProps = {
   onSaved?: (bill: SplitBillSerializedBill) => void;
 };
 
+const todayDate = () => { const now = new Date(); return `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,"0")}-${String(now.getDate()).padStart(2,"0")}`; };
+
 const currencyOptions = getCurrencyCatalogCodes();
 
 const splitModeOptions = (currentUserName: string): Array<{ value: SplitBillQuickAddMode; label: string }> => [
@@ -46,6 +48,7 @@ export function SplitBillManualModal({ open, currentUserName, people, groups, on
   const [query, setQuery] = useState("");
   const [description, setDescription] = useState("");
   const [amount, setAmount] = useState("");
+  const [billDate, setBillDate] = useState(todayDate);
   const [currency, setCurrency] = useState("PHP");
   const [splitMode, setSplitMode] = useState<SplitBillQuickAddMode>("you-paid");
   const [selectedPayer, setSelectedPayer] = useState("");
@@ -64,6 +67,7 @@ export function SplitBillManualModal({ open, currentUserName, people, groups, on
     setDescription("");
     setAmount("");
     setCurrency("PHP");
+    setBillDate(todayDate());
     setSplitMode("you-paid");
     setSelectedPayer("");
     setError(null);
@@ -177,6 +181,8 @@ export function SplitBillManualModal({ open, currentUserName, people, groups, on
       return;
     }
 
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(billDate) || !Number.isFinite(Date.parse(billDate)) || new Date(billDate).toISOString().slice(0,10) !== billDate) { setError("Choose a valid bill date."); return; }
+
     setIsSaving(true);
     setError(null);
 
@@ -197,7 +203,7 @@ export function SplitBillManualModal({ open, currentUserName, people, groups, on
 
       const payload = {
         title: trimmedDescription,
-        billDate: new Date().toISOString(),
+        billDate,
         currency,
         sourceType: "manual" as const,
         groupId: selectedGroupId,
@@ -279,6 +285,8 @@ export function SplitBillManualModal({ open, currentUserName, people, groups, on
             placeholder="Dinner, drinks, ride, groceries"
           />
         </label>
+
+        <label className="settings-field"><span>Date</span><input className="settings-input" type="date" value={billDate} onChange={event => setBillDate(event.target.value)} required /></label>
 
         <div className="split-bill-manual-modal__amount-row">
           <label className="settings-field">

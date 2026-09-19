@@ -1,5 +1,6 @@
 "use client";
 import { useLayoutEffect, useState, type ReactNode } from "react";
+import { TransactionDetailLabel } from "@/components/transaction-detail-label";
 import { createPortal } from "react-dom";
 
 export function TransactionsHeaderOverlay({ children, className = "" }: { children: ReactNode; className?: string }) {
@@ -20,7 +21,7 @@ export function TransactionsHeaderOverlay({ children, className = "" }: { childr
 
 export function TransactionFilterRow({ label, summary, children }: { label: string; summary: string; children: ReactNode }) {
   return <details className="transaction-filter-row">
-    <summary><span>{label}</span><span className="transaction-filter-row__summary" title={summary}>{summary}</span><span className="transaction-filter-row__chevron" aria-hidden="true">⌄</span></summary>
+    <summary><TransactionDetailLabel label={label} /><span className="transaction-filter-row__summary" title={summary}>{summary}</span><span className="transaction-filter-row__chevron" aria-hidden="true">⌄</span></summary>
     <div className="transaction-filter-row__body">{children}</div>
   </details>;
 }

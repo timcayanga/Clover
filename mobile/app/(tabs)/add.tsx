@@ -306,11 +306,6 @@ export default function Add() {
           ) : null}
         </View>
         <View style={{ display: tab === "upload" ? "flex" : "none", gap: 18 }}>
-          <Heading>Add from a receipt or statement</Heading>
-          <Body>
-            Statements, receipts, wallet screenshots, or spreadsheets. Choose
-            one file to get started.
-          </Body>
           <View style={{ gap: 10 }}>
             {(
               [

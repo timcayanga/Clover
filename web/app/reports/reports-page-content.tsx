@@ -1,3 +1,5 @@
+import { organizeAccountLabels } from "@/lib/organize-account-label";
+import { reportFilterSelection, matchesReportSelection } from "@/lib/report-filter-policy";
 import { buildReportNetWorth } from "@/lib/report-net-worth-data";
 import { reportAccountBalance, buildReportBalanceSeries } from "@/lib/report-balances";
 import { ReportChartSwitch } from "@/components/report-chart-switch";
@@ -37,7 +39,7 @@ import { buildSpendingPaceSnapshot } from "@/lib/spending-pace";
 import { SpendingPaceCard } from "@/components/spending-pace-card";
 import type { User } from "@prisma/client";
 import { AdviserHeaderLink } from "@/components/adviser-header-link";
-import { ReportsCurrencyFilter } from "@/components/reports-currency-filter";
+
 import {
   ReportsMoneyOverTimeChart,
 } from "@/components/reports-money-over-time-chart";
@@ -130,6 +132,7 @@ type ReportTransaction = {
   } | null;
   importFileId: string | null;
   isTransfer: boolean;
+  reviewStatus?: string;
 };
 
 const getReportTransactionCategoryName = (transaction: ReportTransaction) =>
@@ -288,6 +291,7 @@ const mapParsedRowsToReportTransactions = (
     return [
       {
         id: `parsed:${row.id}`,
+        reviewStatus: "pending_review",
         date: row.date,
         amount: row.amount,
         type,
@@ -383,7 +387,7 @@ export async function ReportsStream({
   sessionIsGuest,
 }: {
   active?: "reports" | "adviser";
-  searchParams?: { range?: string; section?: string; filter?: string; from?: string; to?: string; currency?: string; accountId?: string };
+  searchParams?: { range?: string; section?: string; filter?: string; from?: string; to?: string; currency?: string; accountId?: string; accounts?: string; categories?: string; review?: string; transfers?: string; compare?: string };
   user: User;
   sessionIsGuest: boolean;
 }) {
@@ -487,7 +491,7 @@ export async function ReportsStream({
     loadCachedWorkspaceSummary({
       workspaceId: selectedWorkspaceId,
       area: "reports",
-      keyParts: ["range-data-v2", reportQueryStart.toISOString(), reportQueryEnd.toISOString(), needsAdvancedData ? "advanced" : "core", requestedAccountId ?? "all-accounts"],
+      keyParts: ["range-data-v3-review", reportQueryStart.toISOString(), reportQueryEnd.toISOString(), needsAdvancedData ? "advanced" : "core", requestedAccountId ?? "all-accounts"],
       load: () => Promise.all([
       prisma.transaction.findMany({
         where: buildActiveWorkspaceTransactionWhere(selectedWorkspaceId, {
@@ -505,6 +509,7 @@ export async function ReportsStream({
           rawPayload: true,
           importFileId: true,
           isTransfer: true,
+          reviewStatus: true,
           account: {
             select: {
               id: true,
@@ -666,6 +671,7 @@ export async function ReportsStream({
     const getResolvedReportTransactionType = (transaction: ReportTransaction) => reportTransactionTypes.get(transaction)!;
     const isResolvedReportSpendingTransaction = (transaction: ReportTransaction) =>
       getResolvedReportTransactionType(transaction) === "expense";
+    const selection = reportFilterSelection(searchParams);
     const requestedFilter = searchParams?.filter?.trim().toLowerCase() ?? "";
     const requestedCurrencyValue = searchParams?.currency?.trim().toUpperCase() ?? "";
     const selectedCurrency = requestedCurrencyValue && requestedCurrencyValue !== "ALL" ? requestedCurrencyValue : null;
@@ -688,14 +694,15 @@ export async function ReportsStream({
           (transaction) => formatCurrencyCode(transaction.account.currency) === requestedCurrency
         )
       : reportAllTransactions;
+    const matchingTransactions = currencyScopedTransactions.filter(transaction => matchesReportSelection(transaction, reportCategoryName(transaction), getResolvedReportTransactionType(transaction), selection));
     const reportScopedTransactions = requestedFilter
-      ? currencyScopedTransactions.filter((transaction) => {
+      ? matchingTransactions.filter((transaction) => {
           const category = reportCategoryName(transaction).toLowerCase();
           const merchant = normalizeMerchant(transaction.merchantClean ?? transaction.merchantRaw).toLowerCase();
           const account = transaction.account.name.toLowerCase();
           return category.includes(requestedFilter) || merchant.includes(requestedFilter) || account.includes(requestedFilter);
         })
-      : currencyScopedTransactions;
+      : matchingTransactions;
     const spendingPaceTransactions = reportScopedTransactions.filter(isResolvedReportSpendingTransaction);
     const spendingPace = buildSpendingPaceSnapshot(
       spendingPaceTransactions.map((transaction) => ({
@@ -831,7 +838,7 @@ export async function ReportsStream({
 
     const allWorkspaceAccountSummaries = Array.isArray(workspaceAccountSnapshots)
       ? (workspaceAccountSnapshots as Array<WorkspaceAccountSnapshot | null | undefined>).flatMap((account) => {
-          if (!account || typeof account.id !== "string") {
+          if (!account || typeof account.id !== "string" || (selection.accounts.length && !selection.accounts.includes(account.id))) {
             return [];
           }
 
@@ -947,7 +954,7 @@ export async function ReportsStream({
     const comparisonTone = (delta: number | null, lowerIsBetter = false) =>
       delta === null || delta === 0 ? "" : (lowerIsBetter ? delta < 0 : delta > 0) ? "positive" : "negative";
     const percentComparison = (delta: number | null) => delta === null
-      ? "No prior income or spending to compare" : `${delta > 0 ? "+" : ""}${delta.toFixed(1)}% vs prior period`;
+      ? "No prior income or spending to compare" : `${delta > 0 ? "+" : ""}${delta.toFixed(1)}% vs ${searchParams?.compare === "year" ? "same dates last year" : "prior period"}`;
     const spendDelta = previousSpend > 0 ? ((currentSpend - previousSpend) / previousSpend) * 100 : null;
     const incomeDelta = previousSummary.income > 0 ? ((currentSummary.income - previousSummary.income) / previousSummary.income) * 100 : null;
 
@@ -1333,7 +1340,7 @@ export async function ReportsStream({
     const previousWeeklyNet = previousWeeklySummary.income - previousWeeklySummary.expense;
     const weeklyNetChange = weeklyNet - previousWeeklyNet;
     const weeklySummaryLabel = `${formatShortDate(weeklySummaryStart)} - ${formatShortDate(weeklySummaryEnd)}`;
-    const netWorthHistory = buildReportNetWorth(netWorthAccounts, requestedCurrency ?? "MIXED", currentWindowStart, currentWindowEnd);
+    const netWorthHistory = buildReportNetWorth(netWorthAccounts.filter(account => !selection.accounts.length || selection.accounts.includes(account.id)), requestedCurrency ?? "MIXED", currentWindowStart, currentWindowEnd);
     const reportMoneySeries = buildReportBalanceSeries(workspaceAccountSummaries,
       reportBalanceMovements,
       currentWindowStart, currentWindowEnd, balanceAsOf);
@@ -1730,7 +1737,7 @@ export async function ReportsStream({
                 <ReportInfoTip className="reports-container-info" label="Income minus spending for the selected range." />
                 <div className="metric__label"><span>Net income</span></div>
                 <strong className="reports-summary-neutral">{formatSignedCurrency(currentNet)}</strong>
-                <p className={`reports-summary-comparison ${comparisonTone(currentNet - previousNet)}`}>{formatSignedCurrency(currentNet - previousNet)} vs prior period</p>
+                <p className={`reports-summary-comparison ${comparisonTone(currentNet - previousNet)}`}>{formatSignedCurrency(currentNet - previousNet)} vs {searchParams?.compare === "year" ? "same dates last year" : "prior period"}</p>
               </article>
               <article className="metric compact metric--highlight glass">
                 <ReportInfoTip className="reports-container-info" label="The share of income left after spending." />
@@ -2259,7 +2266,7 @@ export async function ReportsStream({
   }
 }
 
-async function ReportsPageStream({ searchParams }: { searchParams?: Promise<{ range?: string; section?: string; filter?: string; from?: string; to?: string; currency?: string; accountId?: string }> }) {
+async function ReportsPageStream({ searchParams }: { searchParams?: Promise<{ range?: string; section?: string; filter?: string; from?: string; to?: string; currency?: string; accountId?: string; accounts?: string; categories?: string; review?: string; transfers?: string; compare?: string }> }) {
   const resolvedSearchParams = searchParams ? await searchParams : undefined;
   const session = await getPageSessionContext();
   const user = await getOrCreateCurrentUser(session.userId);
@@ -2267,6 +2274,15 @@ async function ReportsPageStream({ searchParams }: { searchParams?: Promise<{ ra
     redirect("/onboarding");
   }
 
+  const profiles = await prisma.workspace.findMany({where:{userId:user.id},select:{id:true,name:true},orderBy:{createdAt:"asc"}});
+  const selectedCookie = (await cookies()).get(selectedWorkspaceKey)?.value;
+  const filterProfile = profiles.find(profile => profile.id === selectedCookie) ?? profiles[0];
+  const [filterAccounts, filterCategories] = filterProfile ? await Promise.all([
+    prisma.account.findMany({where:{workspaceId:filterProfile.id},select:{id:true,name:true,accountNumber:true,currency:true,type:true,source:true,institution:true},orderBy:{name:"asc"}}),
+    prisma.category.findMany({where:{workspaceId:filterProfile.id},select:{name:true},orderBy:{name:"asc"}}),
+  ]) : [[], []];
+  const filterAccountLabels = organizeAccountLabels(filterAccounts);
+  const filterOptions = {profiles, currentProfile:filterProfile?.id ?? "", accounts:filterAccounts.map(account=>({id:account.id,name:filterAccountLabels.get(account.id) ?? account.name})), categories:filterCategories.map(category=>category.name)};
   const reportWindow = resolveReportWindow(
     getCalendarDayEndInTimeZone(new Date(), normalizeRegionalPreferences(user.regionalPreferences).timeZone),
     resolvedSearchParams,
@@ -2286,15 +2302,16 @@ async function ReportsPageStream({ searchParams }: { searchParams?: Promise<{ ra
         titleAddon={<ReportsTopTabs />}
         mobileSubheader={<ReportsTopTabs />}
         mobileLeadingAction={<AdviserHeaderLink />}
-        mobileTrailingAction={<ReportsRangeMenu currentRange={selectedRange} currentRangeLabel={selectedRangeLabel} currentFrom={reportWindow.from} currentTo={reportWindow.to}><ReportsCurrencyFilter currentCurrency={resolvedSearchParams?.currency?.trim().toUpperCase()} /></ReportsRangeMenu>}
+        mobileTrailingAction={<ReportsRangeMenu options={filterOptions} currentRange={selectedRange} currentRangeLabel={selectedRangeLabel} currentFrom={reportWindow.from} currentTo={reportWindow.to} />}
         actions={
           <div className="reports-page__actions">
             <ReportsRangeMenu
+              options={filterOptions}
               currentRange={selectedRange}
               currentRangeLabel={selectedRangeLabel}
               currentFrom={reportWindow.from}
               currentTo={reportWindow.to}
-            ><ReportsCurrencyFilter currentCurrency={resolvedSearchParams?.currency?.trim().toUpperCase()} /></ReportsRangeMenu>
+             />
             <AdviserHeaderLink />
           </div>
         }
@@ -2310,6 +2327,6 @@ async function ReportsPageStream({ searchParams }: { searchParams?: Promise<{ ra
   );
 }
 
-export default function ReportsPage({ searchParams }: { searchParams?: Promise<{ range?: string; section?: string; filter?: string; from?: string; to?: string; currency?: string; accountId?: string }> }) {
+export default function ReportsPage({ searchParams }: { searchParams?: Promise<{ range?: string; section?: string; filter?: string; from?: string; to?: string; currency?: string; accountId?: string; accounts?: string; categories?: string; review?: string; transfers?: string; compare?: string }> }) {
   return <RouteSplash label="reports"><ReportsPageStream searchParams={searchParams} /></RouteSplash>;
 }

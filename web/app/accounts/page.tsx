@@ -3911,7 +3911,7 @@ function AccountsPageContent() {
             onClick={() => setExpandedMobileAccount(rowKey)}
           >
             <span className="accounts-mobile-list-row__brand">
-              <img className="accounts-mobile-type-icon" src={accountBrand.fallbackIconSrc} alt="" width={34} height={34}/>
+              <AccountBrandMark accountBrand={accountBrand} label="" />
               <span>
                 <strong>{row.institution}</strong>
                 <small>{row.assetCount ? `${row.assetCount} asset${row.assetCount === 1 ? "" : "s"}` : getInvestmentInstitutionPreview(row.accounts)}</small>
@@ -3952,7 +3952,6 @@ function AccountsPageContent() {
     const accountDisplayName = getAccountDisplayName(row);
     const accountEyebrow = getAccountCardEyebrow(row);
     const showAccountEyebrow =
-      getEffectiveAccountType(row) !== "investment" ||
       !areEquivalentAccountCardLabels(accountDisplayName, accountEyebrow);
     const loadingContext = getUploadAccountLoadingContext(row);
 
@@ -3979,7 +3978,7 @@ function AccountsPageContent() {
           onClick={() => setExpandedMobileAccount(rowKey)}
         >
           <span className="accounts-mobile-list-row__brand">
-            <img className="accounts-mobile-type-icon" src={accountBrand.fallbackIconSrc} alt="" width={34} height={34}/>
+            <AccountBrandMark accountBrand={accountBrand} label="" />
             <span>
               <strong>{accountDisplayName}</strong>
               {showAccountEyebrow ? <small>{accountEyebrow}</small> : null}
@@ -4519,7 +4518,7 @@ function AccountsPageContent() {
       actions={<div className="accounts-desktop-tools">{accountsShellActions}</div>}
       >
       <div className="accounts-page">
-        <details className="accounts-mobile-tools"><summary>Account tools</summary><div>{accountsShellActions}</div></details>
+
         {visibleAccounts.length > 0 ? (
           <section className="accounts-overview-grid" aria-label="Account summary">
             <article className="accounts-overview-card glass">

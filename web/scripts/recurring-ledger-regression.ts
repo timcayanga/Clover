@@ -19,10 +19,10 @@ const dashboardSource = readFileSync(join(webRoot, "components", "recurring-dash
 const createSource = readFileSync(join(webRoot, "components", "recurring-create-form.tsx"), "utf8");
 assert.match(panelSource, /<RecurringDashboard/, "Saved commitments must render through the redesigned dashboard.");
 assert.match(dashboardSource, /<RecurringCalendar commitments=\{items\} comprehensive/, "Overview retains the full calendar.");
-assert.match(dashboardSource, /Next 7 days/, "Subtabs have a seven-day payment strip.");
+assert.match(dashboardSource, /<RecurringCalendar commitments=\{subset\.filter/, "Subtabs share the navigable payment calendar.");
 assert.match(dashboardSource, /All saved items/, "Inactive and out-of-range items remain accessible.");
 assert.match(dashboardSource, /onOpen\(item,date/, "Every list item opens editable details.");
-assert.match(dashboardSource, /Recurring date range/, "Date filtering must have an accessible name.");
+assert.match(dashboardSource, /Recurring list date range/, "Date filtering must have an accessible name.");
 assert.match(dashboardSource, /new Map<string,number>/, "Totals must separate currencies.");
 assert.match(createSource, /Payments already made/, "Installment creation includes progress.");
 assert.match(createSource, /parseRecurringTracking/, "Creation validates schedule data before saving.");
