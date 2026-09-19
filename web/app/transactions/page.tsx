@@ -1,4 +1,5 @@
 "use client";
+import { TransactionDetailLabel } from "@/components/transaction-detail-label";
 import { addTransactionCurrencyAmount, withTransactionCurrencyDelta } from "@/lib/transaction-currency-summary";
 import { UploadSourceButtons, UploadSecurityCopy } from "@/components/upload-source-buttons";
 import { TransactionColumns, TransactionTagPreview, useTransactionColumns } from "@/components/transaction-columns";
@@ -9263,9 +9264,13 @@ function TransactionsPageContent() {
                     ["Amount", formatTransactionAmount(Number(detailDraft?.amount ?? selectedTransaction.amount), detailDraft?.currency ?? selectedTransaction.currency)],
                     ["Tags", (selectedTransaction.tags ?? []).map((tag) => tag.name).join(", ") || "Add tags"],
                     ["Notes", detailDraft?.description.trim() || "Add a note"],
-                  ].map(([label, value]) => <div key={label}><dt>{label}</dt><dd><button type="button" onClick={() => beginDrawerEdit(label)}>{value}</button></dd></div>)}
+                  ].map(([label, value]) => <div key={label}><dt><TransactionDetailLabel label={label} /></dt><dd><button type="button" onClick={() => beginDrawerEdit(label)}>{value}</button></dd></div>)}
                 </dl>
-                <button className="button button-secondary button-small" type="button" onClick={() => beginDrawerEdit("Line Items")}>Edit / add line items</button>
+                <details className="transaction-line-items-accordion">
+                  <summary>Line Items <span>{detailReceiptLineItems.length}</span></summary>
+                  {detailReceiptLineItems.length ? detailReceiptLineItems.map((item, index) => <div className="transaction-line-items-accordion__row" key={index}><span>{item.description || `Line item ${index + 1}`}</span><strong>{formatTransactionAmount(getReceiptLineItemComputedAmount(item) ?? 0, item.currency || selectedTransaction.currency)}</strong></div>) : <p>No line items yet.</p>}
+                  <button className="button button-secondary button-small" type="button" onClick={() => beginDrawerEdit("Line Items")}>Edit / add line items</button>
+                </details>
               </div>
             )}
 

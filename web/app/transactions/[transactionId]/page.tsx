@@ -1,4 +1,5 @@
 "use client";
+import { TransactionDetailLabel } from "@/components/transaction-detail-label";
 import { AdviserFormAssist } from "@/components/adviser-form-assist";
 
 import { getTransactionReviewReasons } from "@/lib/transaction-review-reasons";
@@ -498,14 +499,14 @@ export default function TransactionDetailPage() {
             </section>
             ) : (
               <section className="transaction-detail-page__facts">
-                <button type="button" onClick={() => beginEditing("type")}><span>Type</span><strong>{draft.type === "credit" ? "Income" : draft.type === "transfer" ? "Transfer" : "Expense"}</strong></button>
-                <button type="button" onClick={() => beginEditing("name")}><span>Name</span><strong>{draft.merchantClean || transaction.merchantRaw}</strong></button>
-                <button type="button" onClick={() => beginEditing("account")}><span>Account</span><strong className="transaction-detail-page__fact-value-with-icon"><span className="transaction-detail-page__fact-icon" aria-hidden="true"><AccountBrandMark accountBrand={accountBrand} label={accountDisplayName} /></span>{accountDisplayName}</strong></button>
-                <button type="button" onClick={() => beginEditing("category")}><span>Category</span><strong className="transaction-detail-page__fact-value-with-icon"><CategoryBrandMark categoryName={selectedCategory?.name ?? transaction.categoryName ?? "Other"} size={24} radius={8} />{selectedCategory?.name ?? transaction.categoryName ?? "Other"}</strong></button>
-                <button type="button" onClick={() => beginEditing("tags")}><span>Tags</span><strong>{tagDraft.length > 0 ? tagDraft.join(", ") : "No tags"}</strong></button>
-                <button type="button" onClick={() => beginEditing("date")}><span>Date</span><strong>{new Date(`${draft.date}T00:00:00`).toLocaleDateString("en-PH", { month: "long", day: "numeric", year: "numeric" })}</strong></button>
-                <button type="button" onClick={() => beginEditing("amount")}><span>Amount</span><strong>{formatCurrencyAmount(Number(draft.amount || 0), draft.currency)}</strong></button>
-                <button type="button" className="transaction-detail-page__facts-notes" onClick={() => beginEditing("notes")}><span>Notes</span><strong>{draft.description.trim() || "No notes"}</strong></button>
+                <button type="button" onClick={() => beginEditing("type")}><TransactionDetailLabel label="Type" /><strong>{draft.type === "credit" ? "Income" : draft.type === "transfer" ? "Transfer" : "Expense"}</strong></button>
+                <button type="button" onClick={() => beginEditing("name")}><TransactionDetailLabel label="Name" /><strong>{draft.merchantClean || transaction.merchantRaw}</strong></button>
+                <button type="button" onClick={() => beginEditing("account")}><TransactionDetailLabel label="Account" /><strong className="transaction-detail-page__fact-value-with-icon"><span className="transaction-detail-page__fact-icon" aria-hidden="true"><AccountBrandMark accountBrand={accountBrand} label={accountDisplayName} /></span>{accountDisplayName}</strong></button>
+                <button type="button" onClick={() => beginEditing("category")}><TransactionDetailLabel label="Category" /><strong className="transaction-detail-page__fact-value-with-icon"><CategoryBrandMark categoryName={selectedCategory?.name ?? transaction.categoryName ?? "Other"} size={24} radius={8} />{selectedCategory?.name ?? transaction.categoryName ?? "Other"}</strong></button>
+                <button type="button" onClick={() => beginEditing("tags")}><TransactionDetailLabel label="Tags" /><strong>{tagDraft.length > 0 ? tagDraft.join(", ") : "No tags"}</strong></button>
+                <button type="button" onClick={() => beginEditing("date")}><TransactionDetailLabel label="Date" /><strong>{new Date(`${draft.date}T00:00:00`).toLocaleDateString("en-PH", { month: "long", day: "numeric", year: "numeric" })}</strong></button>
+                <button type="button" onClick={() => beginEditing("amount")}><TransactionDetailLabel label="Amount" /><strong>{formatCurrencyAmount(Number(draft.amount || 0), draft.currency)}</strong></button>
+                <button type="button" className="transaction-detail-page__facts-notes" onClick={() => beginEditing("notes")}><TransactionDetailLabel label="Notes" /><strong>{draft.description.trim() || "No notes"}</strong></button>
               </section>
             )}
 
@@ -564,11 +565,11 @@ export default function TransactionDetailPage() {
             )}
 
             {!editing ? (
-              <section className="transaction-detail-page__line-items-view" aria-labelledby="transaction-line-items-heading">
-                <div className="transaction-detail-page__line-items-head">
-                  <strong id="transaction-line-items-heading">Line Items</strong>
+              <details className="transaction-detail-page__line-items-view transaction-line-items-accordion">
+                <summary className="transaction-detail-page__line-items-head">
+                  <strong>Line Items</strong>
                   <span>{formatCurrencyAmount(receiptLineTotal, draft.currency)}</span>
-                </div>
+                </summary>
                 {draft.receiptLineItems.length > 0 ? (
                   <div className="transaction-detail-page__line-items-list">
                     {draft.receiptLineItems.map((item, index) => (
@@ -587,7 +588,7 @@ export default function TransactionDetailPage() {
                   </button>
                 )}
                 {draft.receiptLineItems.length > 0 ? <button className="button button-secondary button-small" type="button" onClick={() => beginEditing("line-items")}>Add line item</button> : null}
-              </section>
+              </details>
             ) : null}
 
             {!editing && getTransactionReviewReasons(transaction).length > 0 ? (
