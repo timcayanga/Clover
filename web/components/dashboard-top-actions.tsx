@@ -871,7 +871,7 @@ export function DashboardManualTransactionModal({
           <AdviserChat workspaceId={workspaceId} prompts={[]} isPro={isPro} surface="transactions" pageLabel="Add transactions: prepare editable drafts for review" />
         </div> : null}
         <div id="quick-entry-panel-upload" role="tabpanel" aria-labelledby="quick-entry-tab-upload" hidden={entryTab !== "upload"} className="transaction-creation-panel">
-          <h4>Add from a receipt or statement</h4><p>Choose files to review and import.</p>
+
           <UploadSourcePicker onSelect={files => { setEntryUploadFiles(files); setEntryUploadOpen(true); }} /><UploadSecurityCopy />
         </div>
       </section>

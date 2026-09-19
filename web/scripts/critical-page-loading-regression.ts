@@ -122,7 +122,7 @@ assert.match(
 );
 assert.match(
   reportsRangeSource,
-  /window\.location\.replace\(`\$\{pathname\}\?\$\{params\.toString\(\)\}`\)/,
+  /window\.location\.replace\(`\$\{pathname\}\?\$\{next\.toString\(\)\}`\)/,
   "Report range changes should use the fast document handoff instead of a slow RSC replacement.",
 );
 assert.doesNotMatch(reportsRangeSource, /router\.replace/);

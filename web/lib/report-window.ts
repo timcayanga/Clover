@@ -1,7 +1,9 @@
+import { previousYearDate } from "./report-filter-policy";
 export type ReportRange = "30d" | "90d" | "ytd";
 
 export type ReportWindowSearchParams = {
   range?: string;
+  compare?: string;
   from?: string;
   to?: string;
 };
@@ -71,7 +73,7 @@ const formatWindowDate = (date: Date) =>
     year: "numeric",
   }).format(date);
 
-export const resolveReportWindow = (anchor: Date, params?: ReportWindowSearchParams) => {
+const resolveBaseReportWindow = (anchor: Date, params?: ReportWindowSearchParams) => {
   const range = normalizeReportRange(params?.range);
   const customStart = parseDateInput(params?.from);
   const customEnd = parseDateInput(params?.to, true);
@@ -120,4 +122,11 @@ export const resolveReportWindow = (anchor: Date, params?: ReportWindowSearchPar
     to: undefined,
     isCustom: false,
   };
+};
+
+export const resolveReportWindow = (anchor: Date, params?: ReportWindowSearchParams) => {
+  const window = resolveBaseReportWindow(anchor, params);
+  return params?.compare === "year"
+    ? {...window, previousStart: previousYearDate(window.currentStart), previousEnd: previousYearDate(window.currentEnd)}
+    : window;
 };

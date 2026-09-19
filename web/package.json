@@ -179,7 +179,7 @@
     "qa:smoke-defects": "tsx scripts/smoke-defects-regression.ts",
     "qa:offline": "tsx scripts/mobile-offline-regression.ts",
     "qa:migrations": "tsx scripts/migration-runner-regression.ts",
-    "qa:report-net-worth": "tsx scripts/report-net-worth-regression.ts"
+    "qa:report-net-worth": "tsx scripts/report-net-worth-regression.ts && tsx scripts/report-filter-policy-regression.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1095.0",

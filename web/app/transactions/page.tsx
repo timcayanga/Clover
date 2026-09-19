@@ -8299,7 +8299,7 @@ function TransactionsPageContent() {
                                 radius={7}
                                 className="transactions-mobile-simple-row__category-icon"
                               />
-                              <span className="transactions-mobile-simple-row__text"><span className="transactions-mobile-simple-row__name-main">{merchantSummary}</span><span className="transactions-mobile-simple-row__meta">{categoryLabel} · {accountDisplayName}</span></span>
+                              <span className="transactions-mobile-simple-row__text"><span className="transactions-mobile-simple-row__name-main">{merchantSummary}</span><span className="transactions-mobile-simple-row__meta">{formatDate(transaction.date)} · {categoryLabel} · {accountDisplayName}</span></span>
                             </div>
                             <div className={`transactions-mobile-simple-row__amount-group ${amountToneClass}`}>
                               <span className={`transactions-mobile-simple-row__amount ${amountToneClass}`}>
@@ -9074,8 +9074,7 @@ function TransactionsPageContent() {
               <AdviserChat workspaceId={selectedWorkspaceId} prompts={[]} isPro={planTier === "pro"} surface="transactions" pageLabel="Add transactions: prepare editable drafts for review" />
             </div> : null}
             {true ? <div id="creation-panel-upload" role="tabpanel" aria-labelledby="creation-tab-upload" hidden={creationTab !== "upload"} className="transaction-creation-panel">
-              <h4>Add from a receipt or statement</h4>
-              <p>Choose a source to open it directly.</p>
+
               <UploadSourceButtons onFiles={openMobileFilePicker} onCamera={openPhotoCapture} onLibrary={openPhotoLibrary} /><UploadSecurityCopy />
             </div> : null}
           </section>
