@@ -126,7 +126,7 @@ export function Button({
       {!secondary ? (
         <LinearGradient
           pointerEvents="none"
-          colors={["#03A8C0", "#2CCFCA"]}
+          colors={["#03A8C0", "#34D3D0"]}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 0 }}
           style={[StyleSheet.absoluteFill, { borderRadius: 26 }]}

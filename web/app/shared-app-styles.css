@@ -7,6 +7,7 @@
   --app-title-font: 600 18px/27px var(--font-poppins), sans-serif;
   --app-section-font: 600 16px/24px var(--font-poppins), sans-serif;
   --app-action-font: 500 15px/22px var(--font-poppins), sans-serif;
+  --app-action-gradient: linear-gradient(90deg, #03a8c0, #34d3d0);
   --app-summary-value-font: 600 22px/33px var(--font-poppins), sans-serif;
   --app-supporting-font: 400 13px/20px var(--font-poppins), sans-serif;
 }
@@ -104,11 +105,24 @@
   min-height: var(--action-button-height) !important;
   height: auto !important;
   padding-block: 8px !important;
+  padding-inline: 16px !important;
+  gap: 8px;
   font: var(--app-action-font) !important;
   letter-spacing: 0 !important;
   text-transform: none;
   white-space: normal;
   text-align: center;
+}
+
+/* Match Clover/Button. Keep source-choice tiles and disabled actions distinct. */
+:is(.app-shell, [role="dialog"]) .button.button-primary:not(:disabled):not(.organize-upload-choices .button) {
+  background: var(--app-action-gradient) !important;
+  border-color: transparent;
+  color: #fff !important;
+}
+:is(.app-shell, [role="dialog"]) .button.button-primary:not(:disabled) .button-icon {
+  color: inherit;
+  flex-shrink: 0;
 }
 
 /* A 40px button includes its borders: 22px text + 16px padding + 2px border. */
