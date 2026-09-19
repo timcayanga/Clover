@@ -332,6 +332,7 @@ enum ContactInquiryStatus {
 }
 
 model User {
+  adviserConversations AdviserConversation[]
   mobileLocalAllowances MobileLocalAllowance[]
   mobileOfflineMutations MobileOfflineMutation[]
 
@@ -764,6 +765,7 @@ model ContactInquiry {
 }
 
 model Workspace {
+  adviserConversations AdviserConversation[]
   mobileOfflineMutations MobileOfflineMutation[]
 
   id                             String                          @id @default(cuid())
@@ -2308,4 +2310,17 @@ model MobileLocalAllowance {
   createdAt DateTime @default(now())
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
   @@index([userId, month])
+}
+
+model AdviserConversation {
+  id String @id
+  userId String
+  workspaceId String
+  title String
+  messages Json
+  revision Int @default(1)
+  updatedAt DateTime @default(now()) @updatedAt
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  @@index([userId, workspaceId, updatedAt(sort: Desc)])
 }

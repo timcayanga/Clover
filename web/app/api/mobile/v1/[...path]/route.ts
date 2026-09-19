@@ -186,6 +186,13 @@ async function handle(
       });
       return reply(await response.json(),response.status);
     }
+    if (operation === "adviser-conversations") {
+      const response = await withMobileRequestContext(userId, request, async () => {
+        const route = await import("@/app/api/adviser/conversations/route");
+        return request.method === "POST" ? route.POST(request) : route.GET(request);
+      });
+      return reply(await response.json(), response.status);
+    }
     if (operation === "adviser-chat") {
       const text = await request.text();
       if (new TextEncoder().encode(text).length > 100000) return reply({ error: "Please shorten the conversation." }, 413);

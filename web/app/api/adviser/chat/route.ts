@@ -1,3 +1,4 @@
+import { buildAdviserChart } from "@/lib/adviser-chart";
 import { adviserAttachmentIds } from "@/lib/adviser-attachments";
 import { loadAdviserAttachments } from "@/lib/adviser-attachments.server";
 import { isEntryRequest, simpleEntryRows } from "@/lib/adviser-entry-intent";
@@ -1084,6 +1085,7 @@ export async function POST(request: Request) {
           select: {
             id: true,
             accountId: true,
+            currency: true,
             date: true,
             createdAt: true,
             amount: true,
@@ -1295,6 +1297,7 @@ export async function POST(request: Request) {
     const allTransactions = allTransactionsQuery as Array<{
       id: string;
       accountId: string;
+      currency: string;
       date: Date;
       createdAt: Date;
       amount: unknown;
@@ -1396,6 +1399,7 @@ export async function POST(request: Request) {
         ? previousWindowTransactions
         : normalizedAllTransactions.filter((transaction) => transaction.date <= currentWindowStart);
 
+    const visualization = buildAdviserChart(latestIncomingQuestion, activeTransactions);
     const currentSummary = buildTransactionSummary(activeTransactions);
     const previousSummary = buildTransactionSummary(comparisonWindowTransactions);
     const allSummary = buildTransactionSummary(normalizedAllTransactions);
@@ -3010,6 +3014,7 @@ export async function POST(request: Request) {
         suggestions: suggestedQuestions,
         usage: usageForResponse(),
         grounding,
+        visualization,
         answerSource: "local",
       });
     }
@@ -3060,12 +3065,13 @@ export async function POST(request: Request) {
         suggestions: suggestedQuestions,
         usage: usageForResponse(),
         grounding,
+        visualization,
         answerSource: "local",
       });
     }
     if (!env.OPENAI_API_KEY) {
       await recordLocalResponse("openai_not_configured");
-      return NextResponse.json({ reply: fallbackReply, actions: fallbackActions, suggestions: suggestedQuestions, usage: usageForResponse(), grounding, degraded: true });
+      return NextResponse.json({ reply: fallbackReply, actions: fallbackActions, suggestions: suggestedQuestions, usage: usageForResponse(), visualization, grounding, degraded: true });
     }
 
     const cloverTokenUsage = await getCloverTokenUsage(user);
@@ -3410,7 +3416,7 @@ export async function POST(request: Request) {
           failureReason: error instanceof Error ? error.message : "request_failed",
         });
         await recordLocalResponse("tool_selection_failed");
-        return NextResponse.json({ reply: fallbackReply, actions: selectPrimaryAdviserAction(actions.length > 0 ? actions : fallbackActions), suggestions: suggestedQuestions, usage: usageForResponse(), grounding, degraded: true });
+        return NextResponse.json({ reply: fallbackReply, actions: selectPrimaryAdviserAction(actions.length > 0 ? actions : fallbackActions), suggestions: suggestedQuestions, usage: usageForResponse(), visualization, grounding, degraded: true });
       } finally {
         clearTimeout(timeout);
       }
@@ -3423,7 +3429,7 @@ export async function POST(request: Request) {
           failureReason: "provider_error",
         });
         await recordLocalResponse("tool_selection_provider_error");
-        return NextResponse.json({ reply: fallbackReply, actions: selectPrimaryAdviserAction(actions.length > 0 ? actions : fallbackActions), suggestions: suggestedQuestions, usage: usageForResponse(), grounding, degraded: true });
+        return NextResponse.json({ reply: fallbackReply, actions: selectPrimaryAdviserAction(actions.length > 0 ? actions : fallbackActions), suggestions: suggestedQuestions, usage: usageForResponse(), visualization, grounding, degraded: true });
       }
 
       const toolSelectionPayload = (await response.json()) as Record<string, unknown>;
@@ -4093,7 +4099,7 @@ export async function POST(request: Request) {
                     failureReason: "stream_completed_without_usage",
                   });
                 }
-                controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: "complete", usage: usageForResponse(), actions: responseActions, suggestions: suggestedQuestions, grounding })}\n\n`));
+                controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: "complete", usage: usageForResponse(), actions: responseActions, suggestions: suggestedQuestions, visualization, grounding })}\n\n`));
                 controller.close();
               } catch (error) {
                 console.error("Adviser upstream stream read failed", error instanceof Error ? error.message : error);
@@ -4115,7 +4121,7 @@ export async function POST(request: Request) {
               let index = 0;
               const emit = () => {
                 if (index >= chunks.length) {
-                  controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: "complete", usage: usageForResponse(), actions: responseActions, suggestions: suggestedQuestions, grounding })}\n\n`));
+                  controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: "complete", usage: usageForResponse(), actions: responseActions, suggestions: suggestedQuestions, visualization, grounding })}\n\n`));
                   controller.close();
                   return;
                 }
@@ -4137,7 +4143,7 @@ export async function POST(request: Request) {
 
     if (deterministicReply) {
       await recordLocalResponse("deterministic_goal_reply");
-      return NextResponse.json({ reply: deterministicReply, actions: responseActions, suggestions: suggestedQuestions, usage: usageForResponse(), grounding });
+      return NextResponse.json({ reply: deterministicReply, actions: responseActions, suggestions: suggestedQuestions, usage: usageForResponse(), visualization, grounding });
     }
 
     const finalController = new AbortController();
@@ -4158,7 +4164,7 @@ export async function POST(request: Request) {
         failureReason: error instanceof Error ? error.message : "request_failed",
       });
       await recordLocalResponse("final_response_failed");
-      return NextResponse.json({ reply: fallbackReply, actions: responseActions, suggestions: suggestedQuestions, usage: usageForResponse(), grounding, degraded: true });
+      return NextResponse.json({ reply: fallbackReply, actions: responseActions, suggestions: suggestedQuestions, usage: usageForResponse(), visualization, grounding, degraded: true });
     } finally {
       clearTimeout(finalTimeout);
     }
@@ -4171,13 +4177,13 @@ export async function POST(request: Request) {
         failureReason: "provider_error",
       });
       await recordLocalResponse("final_response_provider_error");
-      return NextResponse.json({ reply: fallbackReply, actions: responseActions, suggestions: suggestedQuestions, usage: usageForResponse(), grounding, degraded: true });
+      return NextResponse.json({ reply: fallbackReply, actions: responseActions, suggestions: suggestedQuestions, usage: usageForResponse(), visualization, grounding, degraded: true });
     }
 
     const finalPayload = (await finalResponse.json()) as Record<string, unknown>;
     await recordModelUsage(finalPayload, "final_response", finalStartedAt, { httpStatus: finalResponse.status });
     const reply = extractOutputText(finalPayload) || fallbackReply;
-    return NextResponse.json({ reply, actions: responseActions, suggestions: suggestedQuestions, usage: usageForResponse(), grounding });
+    return NextResponse.json({ reply, actions: responseActions, suggestions: suggestedQuestions, usage: usageForResponse(), visualization, grounding });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unable to generate an Adviser response.";
     return NextResponse.json({ error: message }, { status: 400 });

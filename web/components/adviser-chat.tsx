@@ -1,4 +1,7 @@
 "use client";
+import { parseAdviserChart, type AdviserChart } from "../../shared/adviser-chart";
+import { AdviserReportCard } from "./adviser-report-card";
+import { createAdviserHistoryHook } from "../../shared/use-adviser-history";
 import { AdviserInputTools } from "@/components/adviser-input-tools";
 
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -6,9 +9,9 @@ import { adviserFileAccept, adviserFileProblem, type AdviserAttachment } from "@
 import { AdviserEntryEditor } from "./adviser-entry-editor";
 import { readAdviserFormContext, clearAdviserFormContext } from "./adviser-form-assist";
 import { entryDraftSchema } from "@/lib/adviser-entry-schema";
-import { entryTransaction, type EntryDraft } from "@/lib/adviser-entry-types";
+import { type EntryDraft } from "@/lib/adviser-entry-types";
 import { readSelectedWorkspaceId, selectedWorkspaceEventName } from "@/lib/workspace-selection";
-const memorySessions = new Map<string,string>();
+
 
 import type { FormEvent, KeyboardEvent } from "react";
 import Link from "next/link";
@@ -17,6 +20,8 @@ import { trackAdviserInteraction } from "@/lib/adviser-interactions";
 import { capturePostHogClientEvent } from "@/components/posthog-analytics";
 import { formatCurrencyAmount } from "@/lib/currency-format";
 import type { AdviserPlanningDraft, AdviserPlanningSurface } from "@/lib/adviser-planning";
+
+const useAdviserHistory = createAdviserHistoryHook({useEffect,useRef,useState});
 
 export type AdviserPrompt = {
   id: string;
@@ -42,6 +47,7 @@ const getPromptEmoji = (group: string) => {
 type ChatMessage = {
   role: "user" | "assistant";
   content: string;
+  visualization?: AdviserChart;
 };
 
 type AdviserUsage = {
@@ -183,33 +189,23 @@ function ScopedAdviserChat({ prompts, storageKey = adviserChatStorageKey, initia
   const hasReachedLimit = usage !== null && !usage.unlimited && usage.remaining <= 0;
   const resetLabel = usage ? new Date(usage.resetsAt).toLocaleDateString(undefined, { month: "short", day: "numeric" }) : null;
 
+  const history = useAdviserHistory(workspaceId, true, async <T,>(path: string, body?: unknown): Promise<T> => {
+    const response = await fetch(`/api/${path}`, { cache: "no-store", ...(body ? {method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)} : {}) });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.error || "Unable to save chat history.");
+    return data;
+  }, () => crypto.randomUUID());
+  const [viewedChatId,setViewedChatId] = useState<string | undefined>();
+  const [historyOpen,setHistoryOpen] = useState(false);
+  useEffect(() => { setIsHydrated(true); }, []);
   useEffect(() => {
-    try {
-      const stored = memorySessions.get(storageKey);
-      if (stored) {
-        const parsed = JSON.parse(stored) as { messages?: ChatMessage[]; suggestions?: AdviserPrompt[]; grounding?: AdviserGrounding; planningDraft?: AdviserPlanningDraft; entryDraft?: EntryDraft; attachments?: AdviserAttachment[] };
-        if (Array.isArray(parsed.attachments)) setAttachments(parsed.attachments.slice(0,3).filter(file=>typeof file?.id === "string" && typeof file.name === "string" && typeof file.size === "number"));
-        const restoredEntry = entryDraftSchema.safeParse(parsed.entryDraft);
-        if (restoredEntry.success && restoredEntry.data.workspaceId === workspaceId) setEntryDraft(restoredEntry.data);
-        if (Array.isArray(parsed.messages)) {
-          setMessages(parsed.messages.filter((message) => (message?.role === "user" || message?.role === "assistant") && typeof message.content === "string").slice(-10));
-        }
-        if (Array.isArray(parsed.suggestions)) {
-          setSuggestedPrompts(parsed.suggestions.slice(0, 6));
-        }
-        if (parsed.grounding) {
-          setGrounding(parsed.grounding);
-        }
-        if (parsed.planningDraft?.kind === "budget" || parsed.planningDraft?.kind === "goal") {
-          setPlanningDraft(parsed.planningDraft);
-        }
-      }
-    } catch {
-      // A private browsing mode or malformed session should not block Adviser.
-    } finally {
-      setIsHydrated(true);
-    }
-  }, [storageKey]);
+    if (!history.active) return;
+    setViewedChatId(history.active.id);
+    setMessages(history.active.messages ?? []);setAttachments([]);setEntryDraft(null);setActions([]);setSuggestedPrompts([]);setGrounding(null);setPlanningDraft(null);setFeedbackByMessage({});setInput("");setError(null);setHistoryOpen(false);
+  }, [history.active]);
+  useEffect(() => {
+    if (viewedChatId === history.active?.id && !isSending && !history.busy && !history.error && messages.at(-1)?.role === "assistant" && messages.at(-1)?.content.trim()) void history.save(messages);
+  }, [messages, isSending, history.busy, history.error, viewedChatId, history.active?.id]);
 
   useEffect(() => {
     if (!isHydrated || !initialPrompt.trim()) {
@@ -229,20 +225,6 @@ function ScopedAdviserChat({ prompts, storageKey = adviserChatStorageKey, initia
     inputElement.style.height = `${Math.min(inputElement.scrollHeight, 160)}px`;
   }, [input]);
 
-  useEffect(() => {
-    if (!isHydrated) {
-      return;
-    }
-
-    try {
-      memorySessions.set(
-        storageKey,
-        JSON.stringify({ messages: messages.slice(-10), suggestions: suggestedPrompts.slice(0, 6), grounding, planningDraft, entryDraft, attachments })
-      );
-    } catch {
-      // Session persistence is helpful but never required for chat.
-    }
-  }, [grounding, isHydrated, messages, planningDraft, entryDraft, attachments, storageKey, suggestedPrompts]);
 
   const scrollToBottom = () => {
     const thread = threadRef.current;
@@ -255,7 +237,7 @@ function ScopedAdviserChat({ prompts, storageKey = adviserChatStorageKey, initia
 
   const sendMessage = async (text: string) => {
     const trimmed = text.trim() || (attachments.length ? "Help me understand the financial information in these attached files. Ask what I want to add before drafting entries." : "");
-    if (!trimmed || isSending || attaching || entryLocked) {
+    if (!trimmed || isSending || attaching || entryLocked || history.busy) {
       return;
     }
 
@@ -280,7 +262,7 @@ function ScopedAdviserChat({ prompts, storageKey = adviserChatStorageKey, initia
           // Preserve a longer on-device transcript for continuity, but send
           // only the recent conversational turn window to keep request memory
           // and model input tokens bounded.
-          messages: nextMessages.slice(-6),
+          messages: nextMessages.slice(-6).map(({role,content})=>({role,content})),
           stream: true,
           attachmentIds: attachments.map(file=>file.id),
           surface,
@@ -308,13 +290,14 @@ function ScopedAdviserChat({ prompts, storageKey = adviserChatStorageKey, initia
         let streamedUsage: AdviserUsage | undefined;
         let streamedGrounding: AdviserGrounding | undefined;
         let streamedPlanningDraft: AdviserPlanningDraft | undefined;
+        let streamedVisualization: AdviserChart | null = null;
 
         const handleEvent = (event: string) => {
           const dataLine = event.split("\n").find((line) => line.startsWith("data: "));
           if (!dataLine) {
             return;
           }
-          const data = JSON.parse(dataLine.slice(6)) as { type?: string; text?: string; usage?: AdviserUsage; actions?: AdviserAction[]; suggestions?: AdviserPrompt[]; grounding?: AdviserGrounding; planningDraft?: AdviserPlanningDraft };
+          const data = JSON.parse(dataLine.slice(6)) as { type?: string; text?: string; usage?: AdviserUsage; actions?: AdviserAction[]; suggestions?: AdviserPrompt[]; grounding?: AdviserGrounding; planningDraft?: AdviserPlanningDraft; visualization?: AdviserChart };
           if (data.type === "delta" && data.text) {
             streamedReply += data.text;
             setMessages((current) => current.map((message, index) => (index === assistantIndex ? { ...message, content: streamedReply } : message)));
@@ -325,6 +308,7 @@ function ScopedAdviserChat({ prompts, storageKey = adviserChatStorageKey, initia
             streamedUsage = data.usage;
             streamedGrounding = data.grounding;
             streamedPlanningDraft = data.planningDraft;
+            streamedVisualization = parseAdviserChart(data.visualization);
           }
         };
 
@@ -339,6 +323,7 @@ function ScopedAdviserChat({ prompts, storageKey = adviserChatStorageKey, initia
           }
         }
 
+        if (streamedVisualization) setMessages(current=>current.map((message,index)=>index===assistantIndex?{...message,visualization:streamedVisualization!}:message));
         if (streamedUsage) {
           setUsage(streamedUsage);
         }
@@ -360,7 +345,7 @@ function ScopedAdviserChat({ prompts, storageKey = adviserChatStorageKey, initia
         return;
       }
 
-      const payload = (await response.json().catch(() => null)) as { error?: string; usage?: AdviserUsage; actions?: AdviserAction[]; suggestions?: AdviserPrompt[]; reply?: string; grounding?: AdviserGrounding; planningDraft?: AdviserPlanningDraft } | null;
+      const payload = (await response.json().catch(() => null)) as { error?: string; usage?: AdviserUsage; actions?: AdviserAction[]; suggestions?: AdviserPrompt[]; reply?: string; grounding?: AdviserGrounding; planningDraft?: AdviserPlanningDraft; visualization?:AdviserChart } | null;
       if (payload?.usage) {
         setUsage(payload.usage);
       }
@@ -382,7 +367,7 @@ function ScopedAdviserChat({ prompts, storageKey = adviserChatStorageKey, initia
 
       const reply = payload.reply?.trim() || "I could not generate a response just now.";
 
-      setMessages((current) => [...current, { role: "assistant", content: reply }]);
+      setMessages((current) => [...current, { role: "assistant", content: reply, visualization: parseAdviserChart(payload.visualization) ?? undefined }]);
       const responseActions = (payload.actions ?? []).slice(0, 1);
       setActions(responseActions);
       const responseEntry = entryDraftSchema.safeParse(responseActions.find(action => action.type === "create_entries")?.payload);
@@ -482,7 +467,8 @@ function ScopedAdviserChat({ prompts, storageKey = adviserChatStorageKey, initia
   };
 
   const startNewConversation = () => {
-    if (entryLocked || isSending || attaching) return;
+    if (entryLocked || isSending || attaching || history.busy) return;
+    history.fresh();
     setAttachments([]);
     setEntryDraft(null);
     clearAdviserFormContext();
@@ -494,11 +480,7 @@ function ScopedAdviserChat({ prompts, storageKey = adviserChatStorageKey, initia
     setPlanningDraft(null);
     setPlanningDetailsOpen(false);
     setError(null);
-    try {
-      memorySessions.delete(storageKey);
-    } catch {
-      // Ignore storage failures; the visible conversation is still cleared.
-    }
+
   };
 
   const submitFeedback = (messageIndex: number, rating: "helpful" | "not_helpful") => {
@@ -537,7 +519,7 @@ function ScopedAdviserChat({ prompts, storageKey = adviserChatStorageKey, initia
   const composer = (
     <form className="adviser-chat__composer" onSubmit={handleSubmit}>
       <label className="sr-only" htmlFor="adviser-chat-input">
-        Ask Adviser anything
+        Ask Clover anything
       </label>
       {messages.length > 0 && visiblePrompts.length > 0 ? (
         <div className="adviser-chat__bottom-prompts" aria-label="Suggested follow-up questions">
@@ -556,7 +538,7 @@ function ScopedAdviserChat({ prompts, storageKey = adviserChatStorageKey, initia
         </div>
       ) : null}
       {attachments.length ? <div className="adviser-chat__attachments" aria-label="Attached files">{attachments.map(file=><span key={file.id}><span>{file.name}</span><button type="button" aria-label={`Remove ${file.name}`} disabled={isSending||attaching||entryLocked} onClick={()=>setAttachments(current=>current.filter(item=>item.id!==file.id))}>×</button></span>)}</div> : null}
-      <AdviserInputTools disabled={hasReachedLimit || isSending || attaching || entryLocked} onText={text => setInput(current => `${current}${current ? " " : ""}${text}`)} onPhoto={file => void attachFile(file)} />
+
       <div className="adviser-chat__composer-bar adviser-chat__composer-bar--files">
         <input ref={attachmentInput} type="file" accept={adviserFileAccept} hidden aria-label="Choose an Adviser attachment" onChange={event=>{void attachFile(event.target.files?.[0]);event.target.value="";}} />
         <button type="button" className="adviser-chat__attach" aria-label="Attach a file" title="Attach a file (up to 3.5 MB)" disabled={hasReachedLimit||isSending||attaching||entryLocked||attachments.length>=3} onClick={()=>attachmentInput.current?.click()}>+</button>
@@ -570,7 +552,8 @@ function ScopedAdviserChat({ prompts, storageKey = adviserChatStorageKey, initia
           placeholder="Ask Clover"
           disabled={hasReachedLimit || isSending || entryLocked}
         />
-        {(input.trim() || attachments.length) ? <button type="submit" className="adviser-chat__send" aria-label="Send message" disabled={hasReachedLimit||isSending||attaching||entryLocked}>↑</button> : null}
+        {!input.trim() && !attachments.length ? <AdviserInputTools compact disabled={hasReachedLimit || isSending || attaching || entryLocked} onText={text => setInput(current => `${current}${current ? " " : ""}${text}`)} onPhoto={file => void attachFile(file)} /> : null}
+        {(input.trim() || attachments.length) ? <button type="submit" className="adviser-chat__send" aria-label="Send message" disabled={hasReachedLimit||isSending||attaching||entryLocked||history.busy}>↑</button> : null}
         {attaching ? <span role="status" className="adviser-chat__status">Reading attachment…</span> : null}
         {isSending || error ? (
           <span className={`adviser-chat__status${isSending ? " adviser-chat__status--thinking" : ""}`}>
@@ -591,13 +574,25 @@ function ScopedAdviserChat({ prompts, storageKey = adviserChatStorageKey, initia
   const nonPlanningActions = actions.filter((action) => action.id !== planningDraft?.action?.id && action.type !== "create_entries");
 
   return (
+    <div className={`adviser-experience adviser-experience--${layout}`}>
+      <button className="button button-secondary adviser-history-toggle" type="button" aria-expanded={historyOpen} onClick={()=>setHistoryOpen(!historyOpen)}>Your chats</button>
+      <aside className={`adviser-history${historyOpen ? " is-open" : ""}`} aria-label="Chat history">
+        <h2>Adviser</h2>
+        <button className="button button-primary" type="button" disabled={isSending||attaching||entryLocked||history.busy} onClick={startNewConversation}>+ New chat</button>
+        <h3>Your chats</h3>
+        {history.busy ? <p role="status">Loading or saving chat…</p> : null}
+        {!history.conversations.length&&!history.busy ? <p>Your conversations will appear here.</p> : null}
+        {history.conversations.map(chat=><button key={chat.id} type="button" disabled={isSending||attaching||entryLocked||history.busy} onClick={()=>void history.open(chat.id)}><span>{chat.title}</span><small>{new Date(chat.updatedAt).toLocaleDateString(undefined,{month:"short",day:"numeric"})}</small></button>)}
+      </aside>
+      <div className="adviser-experience__main">
+      {history.error ? <p role="status">{history.error} <button type="button" onClick={()=>messages.length ? void history.save(messages) : history.retry()}>Retry</button></p> : null}
     <div className={`adviser-chat${layout === "workspace" ? " adviser-chat--workspace" : ""}${messages.length === 0 ? " adviser-chat--empty" : ""}`}>
       {layout === "embedded" || messages.length > 0 ? (
         <div className="adviser-chat__heading-row">
           {layout === "embedded" ? <p className="eyebrow adviser-chat__ask-label">Ask Clover</p> : <span />}
           {messages.length > 0 ? (
             <button type="button" className="adviser-chat__reset" onClick={startNewConversation}>
-              Start fresh
+              New chat
             </button>
           ) : null}
         </div>
@@ -613,7 +608,7 @@ function ScopedAdviserChat({ prompts, storageKey = adviserChatStorageKey, initia
         <div className="adviser-chat__welcome">
           <Image className="adviser-chat__welcome-mark" src="/clover-mark.svg" alt="" width={42} height={42} priority />
           <div className="adviser-chat__welcome-copy">
-            {layout === "workspace" ? <h2>Ask Clover anything about your finances.</h2> : null}
+            {layout === "workspace" ? <h2>{history.firstName.trim() ? `Hi ${history.firstName.trim()}! ` : ""}Ask Clover anything about your finances.</h2> : null}
             {layout === "embedded" ? <p className="adviser-chat__question-lead">Ask Clover anything about your finances.</p> : null}
           </div>
           {layout === "workspace" ? composer : null}
@@ -641,6 +636,7 @@ function ScopedAdviserChat({ prompts, storageKey = adviserChatStorageKey, initia
               className={`adviser-chat__message adviser-chat__message--${message.role}`}
             >
               <p>{message.content}</p>
+              {message.visualization ? <AdviserReportCard chart={message.visualization} /> : null}
               {message.role === "assistant" && message.content.trim() ? (
                 <div className="adviser-chat__feedback" aria-label="Rate this answer">
                   <span>Was this useful?</span>
@@ -669,7 +665,7 @@ function ScopedAdviserChat({ prompts, storageKey = adviserChatStorageKey, initia
         </div>
       ) : null}
 
-      {entryDraft ? <AdviserEntryEditor draft={entryDraft} onChange={setEntryDraft} onLockChange={setEntryLocked} onDiscard={() => setEntryDraft(null)} onSaved={() => { setEntryLocked(false); setEntryDraft(null); clearAdviserFormContext(); setMessages(current => [...current,{role:"assistant",content:"Your confirmed entries were saved in Clover."}]); }} /> : <button type="button" className="button button-secondary button-small" disabled={isSending || entryLocked} onClick={() => setEntryDraft({version:1,id:crypto.randomUUID(),workspaceId,sourceText:"Manual Adviser draft",confidence:0,accounts:[],transactions:[entryTransaction(crypto.randomUUID())],receipts:[]})}>New entry draft</button>}
+      {entryDraft ? <AdviserEntryEditor draft={entryDraft} onChange={setEntryDraft} onLockChange={setEntryLocked} onDiscard={() => setEntryDraft(null)} onSaved={() => { setEntryLocked(false); setEntryDraft(null); clearAdviserFormContext(); setMessages(current => [...current,{role:"assistant",content:"Your confirmed entries were saved in Clover."}]); }} /> : null}
       {planningDraft ? (
         <article className={`adviser-planning-card adviser-planning-card--${planningDraft.kind}`} aria-label={`${planningDraft.title} draft`}>
           <div className="adviser-planning-card__hero">
@@ -735,6 +731,8 @@ function ScopedAdviserChat({ prompts, storageKey = adviserChatStorageKey, initia
         </div>
       ) : null}
       {messages.length > 0 || layout === "embedded" ? composer : null}
+    </div>
+    </div>
     </div>
   );
 }
