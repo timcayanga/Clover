@@ -88,7 +88,7 @@
     "qa:context-corpus-learning": "tsx scripts/context-corpus-learning-regression.ts",
     "qa:data-loop": "tsx scripts/data-qa-regression.ts",
     "qa:budgeting": "tsx scripts/budgeting-regression.ts && tsx scripts/collection-loading-regression.ts",
-    "qa:investments": "tsx scripts/investments-regression.ts",
+    "qa:investments": "tsx scripts/investments-regression.ts && tsx scripts/investment-institution-summary-regression.ts",
     "qa:adviser-everyday": "tsx scripts/adviser-everyday-regression.ts",
     "qa:adviser-model-usage": "tsx scripts/adviser-model-usage-regression.ts",
     "qa:clover-token-usage": "tsx scripts/clover-token-usage-regression.ts",

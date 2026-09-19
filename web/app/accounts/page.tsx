@@ -1,4 +1,5 @@
 "use client";
+import { getInvestmentInstitutionSnapshotSummary } from "@/lib/investment-institution-summary";
 import { compactSummaryMoney } from "../../../shared/summary-format";
 import { InterfaceIcon } from "@/components/interface-icon";
 import { AdviserFormAssist } from "@/components/adviser-form-assist";
@@ -845,84 +846,6 @@ const getInvestmentInstitutionPreview = (accounts: Account[]) => {
 
   const assetCount = assetLabels.length || accounts.length;
   return `${assetCount} asset${assetCount === 1 ? "" : "s"}`;
-};
-
-const normalizeInvestmentAssetKey = (symbol: string | null | undefined, name: string) =>
-  (symbol?.trim() || name)
-    .toLowerCase()
-    .replace(/\bbitcoin segwit\b/g, "btc")
-    .replace(/[^a-z0-9]+/g, "")
-    .trim();
-
-const isAggregateInvestmentHolding = (name: string, institution: string) => {
-  const normalized = name.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
-  const normalizedInstitution = institution.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
-  return (
-    !normalized ||
-    normalized === normalizedInstitution ||
-    /^(?:portfolio|investments?|holdings?|assets?|dividends?|activity|transaction history)$/.test(normalized) ||
-    normalized === `${normalizedInstitution} wallet`
-  );
-};
-
-const getInvestmentInstitutionSnapshotSummary = (
-  institution: string,
-  currency: string,
-  accounts: Account[],
-  snapshots: AccountInvestmentSnapshot[]
-) => {
-  if (institution.toLowerCase() === "gsave") return null;
-  const accountIds = new Set(accounts.map((account) => account.id));
-  const normalizedInstitution = institution.toLowerCase().trim();
-  const latestSnapshots = new Map<string, AccountInvestmentSnapshot>();
-
-  for (const snapshot of snapshots) {
-    const snapshotCurrency = formatCurrencyCode(snapshot.currency || snapshot.documentImport?.currency || currency);
-    const snapshotInstitution = (
-      snapshot.account?.institution || snapshot.documentImport?.institution || snapshot.portfolioName || ""
-    ).toLowerCase();
-    if (
-      snapshotCurrency !== currency ||
-      ((!snapshot.account?.id || !accountIds.has(snapshot.account.id)) &&
-        !snapshotInstitution.includes(normalizedInstitution))
-    ) {
-      continue;
-    }
-    const identity = snapshot.account?.id || snapshotInstitution;
-    const current = latestSnapshots.get(identity);
-    if (!current || new Date(snapshot.updatedAt).getTime() > new Date(current.updatedAt).getTime()) {
-      latestSnapshots.set(identity, snapshot);
-    }
-  }
-
-  const values = new Map<string, { value: number; updatedAt: number }>();
-  for (const snapshot of latestSnapshots.values()) {
-    for (const holding of snapshot.holdings) {
-      if (isAggregateInvestmentHolding(holding.assetName, institution)) continue;
-      const key = normalizeInvestmentAssetKey(holding.assetSymbol, holding.assetName);
-      const value = Math.abs(parseAmount(holding.currentValue ?? holding.marketValue));
-      if (!key || !Number.isFinite(value)) continue;
-      const updatedAt = new Date(holding.updatedAt || snapshot.updatedAt).getTime();
-      const current = values.get(key);
-      if (!current || updatedAt >= current.updatedAt) values.set(key, { value, updatedAt });
-    }
-  }
-
-  for (const account of accounts) {
-    const key = normalizeInvestmentAssetKey(account.investmentSymbol, account.name);
-    if (!key || isAggregateInvestmentHolding(account.name, institution)) continue;
-    const value = Math.abs(parseAmount(account.balance));
-    // Account balances are the current projection. Snapshots remain immutable
-    // import evidence, but must not make the Accounts card disagree with the
-    // account-backed holding shown in Institution Details.
-    values.set(key, { value, updatedAt: new Date(account.updatedAt).getTime() });
-  }
-
-  if (values.size === 0) return null;
-  return {
-    balance: Array.from(values.values()).reduce((sum, row) => sum + row.value, 0).toFixed(2),
-    assetCount: values.size,
-  };
 };
 
 const formatAggregateAmount = (value: number, accounts: Array<{ currency: string }>) => {
