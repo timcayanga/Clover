@@ -1,3 +1,4 @@
+import { shouldRefineReceiptCore } from "@/lib/receipt-detail-refinement";
 import { Prisma } from "@prisma/client";
 import type { AccountType, ReviewStatus, TransactionType } from "@prisma/client";
 import { after } from "next/server";
@@ -12888,20 +12889,17 @@ export const processImportFileText = async (
         visible_slow_budget_ms: RECEIPT_VISIBLE_SLOW_BUDGET_MS,
         background_enrichment: true,
       });
-      const receiptAlreadyHasItemDetails = Boolean(
-        receiptDetails?.line_items.length || receiptDetails?.split_allocations.length
-      );
-      const localReceiptTextSuggestsMissingDetails =
-        /\b(?:qty|quantity|unit\s*price|subtotal|tax|vat|service\s*charge|discount|item(?:s)?|description)\b/i.test(textForParse) ||
-        (textForParse.match(/(?:^|\n).{2,80}\s(?:[$€£¥₱]|PHP|USD|EUR|GBP|THB|CNY|RMB)?\s*-?\d[\d,.]*\s*(?=\n|$)/gim)?.length ?? 0) >= 3;
-      const shouldRefineReceiptDetails = Boolean(
-        effectiveImportMode === "receipt" &&
-        openAiParsed?.audit.receiptCoreOnly &&
-        documentImportRecord?.id &&
-        pageImages?.length &&
-        !receiptAlreadyHasItemDetails &&
-        localReceiptTextSuggestsMissingDetails
-      );
+      // A core-only vision transcript intentionally omits item evidence.
+      // Inspect the original image after visibility even when that transcript
+      // lacks words such as subtotal or quantity.
+      const shouldRefineReceiptDetails = shouldRefineReceiptCore({
+        importMode: effectiveImportMode,
+        coreOnly: Boolean(openAiParsed?.audit.receiptCoreOnly),
+        hasDocument: Boolean(documentImportRecord?.id),
+        imageCount: pageImages?.length ?? 0,
+        itemCount: receiptDetails?.line_items.length ?? 0,
+        allocationCount: receiptDetails?.split_allocations.length ?? 0,
+      });
       if (shouldRefineReceiptDetails) {
         const coreReceiptDetails = receiptDetails;
         const coreReceiptValidationScore = openAiReceiptValidation?.score ?? 0;

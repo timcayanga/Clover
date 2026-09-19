@@ -60,3 +60,10 @@ void readFile(new URL("../components/global-import-activity.tsx", import.meta.ur
   assert.match(workerSource, /validateParsedImportRows\(\{ rows: rawRows, metadata: validationMetadata \}\)/);
   console.log("BPI credit-card safety regression passed.");
 });
+
+const paginatedText = `BPI\nSTATEMENT OF ACCOUNT\nCREDIT LIMIT 500,000.00\nCUSTOMER NUMBER 12349001\nSTATEMENT DATE SEPTEMBER 01, 2026\nTRANSACTION POST DATE DESCRIPTION AMOUNT\nAUG 01 AUG 01 Grocery Shop 10.00\nPage 1 of 2\nBPI CREDIT CARD STATEMENT OF ACCOUNT\nCUSTOMER NUMBER 12349001\nAUG 02 AUG 02 Coffee Shop 20.00\nBranch East\nPage 2/2`;
+const paginatedRows = parseImportText(paginatedText,'bpi-pages.pdf','application/pdf');
+assert.equal(paginatedRows.length,2);
+assert.deepEqual(paginatedRows.map(r=>Number(r.amount)),[10,20]);
+assert.ok(paginatedRows.every(r=>!/page|statement of account/i.test(r.merchantRaw ?? '')));
+assert.match(paginatedRows[1].merchantRaw ?? '',/Branch East/i,'Legitimate wrapped merchant text must remain');

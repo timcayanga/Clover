@@ -1,3 +1,4 @@
+import { shouldRefineReceiptCore } from "@/lib/receipt-detail-refinement";
 import { buildImportResultChecklist } from "../lib/import-result-summary";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
@@ -771,8 +772,8 @@ assert.ok(
 );
 assert.match(
   receiptFastHandoffSection,
-  /receiptAlreadyHasItemDetails[\s\S]{0,900}!receiptAlreadyHasItemDetails &&[\s\S]{0,100}localReceiptTextSuggestsMissingDetails/,
-  "post-visible receipt detail parsing should run only when independent local evidence shows missing details"
+  /shouldRefineReceiptCore\([\s\S]{0,700}coreOnly:[\s\S]{0,700}itemCount:/,
+  "core-only image receipts must refine missing items even when the sparse core transcript omits item clues"
 );
 assert.match(
   receiptFastHandoffSection,
@@ -859,3 +860,10 @@ assert.ok(buildImportResultChecklist({ rowsImported: 1, previewTransactions: [{ 
 assert.ok(buildImportResultChecklist({ rowsImported: 1 }).includes("Review status pending"));
 assert.ok(buildImportResultChecklist({ rowsImported: 1, previewTransactions: [{ categoryName: "Other", reviewStatus: "confirmed" }] }).includes("No transactions need review"));
 assert.ok(buildImportResultChecklist({ rowsImported: 10, previewTransactions: [{ categoryName: "Food", reviewStatus: "confirmed" }] }).includes("Review status pending"));
+
+const coreOnlyImage = { importMode: "receipt", coreOnly: true, hasDocument: true, imageCount: 1, itemCount: 0, allocationCount: 0 };
+assert.equal(shouldRefineReceiptCore(coreOnlyImage), true, "Sparse core-only text is not evidence that receipt items are absent");
+assert.equal(shouldRefineReceiptCore({...coreOnlyImage,itemCount:10}), false);
+assert.equal(shouldRefineReceiptCore({...coreOnlyImage,coreOnly:false}), false);
+assert.equal(shouldRefineReceiptCore({...coreOnlyImage,importMode:"statement"}), false);
+assert.equal(shouldRefineReceiptCore({...coreOnlyImage,imageCount:0}), false);

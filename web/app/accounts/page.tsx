@@ -1,6 +1,7 @@
 "use client";
 import { getInvestmentInstitutionSnapshotSummary } from "@/lib/investment-institution-summary";
 import { compactSummaryMoney } from "../../../shared/summary-format";
+import { AccountCreationForm } from "@/components/account-creation-form";
 import { InterfaceIcon } from "@/components/interface-icon";
 import { AdviserFormAssist } from "@/components/adviser-form-assist";
 import { useMobileCreationRoute } from "@/lib/use-mobile-creation-route";
@@ -1491,7 +1492,6 @@ function AccountsPageContent() {
   const [manualScheduleAmount, setManualScheduleAmount] = useState("");
   const [manualScheduleCounterparty, setManualScheduleCounterparty] = useState("");
   const [addAccountError, setAddAccountError] = useState<string | null>(null);
-  const [isSaving, setIsSaving] = useState(false);
   const [accountEditName, setAccountEditName] = useState("");
   const [accountEditInstitution, setAccountEditInstitution] = useState("");
   const [accountEditInvestmentSubtype, setAccountEditInvestmentSubtype] = useState<InvestmentSubtype>("stock");
@@ -4226,7 +4226,6 @@ function AccountsPageContent() {
       return;
     }
 
-    setIsSaving(true);
     try {
       const manualIsInvestment = manualType === "investment";
       const manualIsFixedIncome = manualIsInvestment && isFixedIncomeInvestmentSubtype(manualInvestmentSubtype);
@@ -4348,18 +4347,7 @@ function AccountsPageContent() {
       const nextError = error instanceof Error ? error.message : "Unable to create account.";
       setAddAccountError(nextError);
       setMessage(nextError);
-    } finally {
-      setIsSaving(false);
     }
-  };
-
-  const createManualAccount = async (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    await saveManualAccount({ keepOpen: false });
-  };
-
-  const createAnotherManualAccount = async () => {
-    await saveManualAccount({ keepOpen: true });
   };
 
   const exportCsv = () => {
@@ -5155,7 +5143,8 @@ function AccountsPageContent() {
             </div>
 
             <div className="accounts-add-grid">
-              <form className="accounts-manual-form" onSubmit={createManualAccount}>
+              <AccountCreationForm onSave={saveManualAccount}>
+                {(isSaving, createAnotherManualAccount) => (<>
                 <div
                   className="accounts-add-layout"
                   style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr)", gap: 12, width: "100%" }}
@@ -5412,7 +5401,8 @@ function AccountsPageContent() {
                     <p>{addAccountError}</p>
                   </div>
                 ) : null}
-              </form>
+              </>)}
+              </AccountCreationForm>
             </div>
           </section>
         </div>

@@ -73,3 +73,5 @@ These rules apply when an uploaded screenshot does not match a trained instituti
 ### Timestamped activity lists
 
 A transaction-history screen with multiple signed amounts represents separate events, not receipt line items. Keep date/time headings out of descriptions and retain repeated same-day purchases when timestamps differ. Generic layout rows remain pending review with raw source evidence.
+
+Unsigned activity amounts with explicit direction labels (for example Expense paid PHP 25.00) and multiple full dates are transaction history, not a single receipt. Support a date and merchant on the same line; retain review-required status for generic fallback rows.

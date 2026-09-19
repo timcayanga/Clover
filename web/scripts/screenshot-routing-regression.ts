@@ -544,3 +544,11 @@ assert.equal(shouldRouteToReview(requiredReviewRow), true, "AI confidence cannot
 assert.ok(buildImportReviewReasons(requiredReviewRow).includes("parser_review_required"));
 assert.equal(shouldRouteToReview({...requiredReviewRow, rawPayload: {}}), false);
 assert.equal(shouldRouteToReview({...requiredReviewRow, rawPayload: {parserArbitration: {requiresReview: true}}}), true);
+
+const unsignedHistory = `QA Wallet - Transaction History\nCurrency PHP\n${Array.from({length:10},(_,i)=>`Sep ${String(i+1).padStart(2,'0')}, 2026 QA Cafe ${i+1}\nExpense paid PHP 25.00`).join('\n')}`;
+assert.equal(isTransactionHistoryScreenshotText(unsignedHistory), true, 'Explicit direction labels must protect unsigned history from receipt aggregation');
+const unsignedRows = parseImportTextGenericOnly(unsignedHistory, 'history.png', 'image/png');
+assert.equal(unsignedRows.length, 10);
+assert.ok(unsignedRows.every(row => Number(row.amount) === 25 && row.type === 'expense' && row.rawPayload?.reviewRequired));
+assert.deepEqual(unsignedRows.map(row=>row.date), Array.from({length:10},(_,i)=>`2026-09-${String(i+1).padStart(2,'0')}`));
+assert.equal(isTransactionHistoryScreenshotText('Cafe receipt\nSeptember 19, 2026\nItem one PHP 25.00\nItem two PHP 25.00\nTOTAL PHP 50.00'), false);
