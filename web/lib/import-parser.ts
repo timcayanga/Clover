@@ -4047,7 +4047,7 @@ const bpiCreditCardStatementMetadata = (text: string): DetectedStatementMetadata
   const accountNumber = detectAccountNumberFromText(normalized) ?? "9001";
 
   return {
-    institution: "BPI Family Savings Bank",
+    institution: "Bank of the Philippine Islands",
     accountNumber,
     accountName: formatSimpleBankAccountName("BPI", accountNumber.slice(-4)),
     accountType: "credit_card",

@@ -16,3 +16,5 @@
 A “No VAT / discounts / service charges” footer is administrative text, not a modifier of the last purchased item. Preserve the final item and reconcile the item subtotal against the printed total.
 
 For core-only image receipts, the initial transcript intentionally omits item details. When no line items or allocations exist, refine from the original image after the core transaction becomes visible; absence of item keywords in that sparse transcript must not suppress refinement. Preserve confirmed transaction core values.
+
+Once item quantity and price/amount columns are separated, preserve numeric product-name suffixes (for example Test snack 01). A number remaining in the product name is not another price token to discard.

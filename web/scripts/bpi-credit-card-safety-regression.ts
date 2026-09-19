@@ -20,7 +20,7 @@ July 30 July 30 Card replacement example 9999999999 7,500.00
 `;
 
 const metadata = detectStatementMetadata(statementText, "BE20260728.pdf");
-assert.equal(metadata.institution, "BPI Family Savings Bank");
+assert.equal(metadata.institution, "Bank of the Philippine Islands");
 assert.equal(metadata.accountType, "credit_card");
 assert.equal(metadata.paymentDueDate, "2026-08-17T12:00:00.000Z");
 assert.equal(resolveImportFileExtractionCacheVersion("BE20260728.pdf"), "v12-bpi-card-ledger-r2");

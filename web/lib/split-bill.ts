@@ -899,11 +899,11 @@ const isLikelyReceiptBodyLine = (line: string) => {
   return /[A-Za-z]/.test(line) && line.length <= 80;
 };
 
-const cleanReceiptDescription = (line: string) =>
+const cleanReceiptDescription = (line: string, preserveNumericSuffix = false) =>
   normalizeWhitespace(line)
     .replace(/^[^A-Za-z0-9(]+/, "")
     .replace(/[^A-Za-z0-9)%]+$/g, "")
-    .replace(/\s+\d{1,3}(?:[.,]\d{2})?$/, "")
+    .replace(/\s+\d{1,3}(?:[.,]\d{2})?$/, (suffix) => preserveNumericSuffix ? suffix : "")
     .replace(/\s+\d+x\s*$/i, "")
     .replace(/\b\d{1,3}\s*x\s*/i, "")
     .replace(/\s*[~_=|•¦]{2,}\s*/g, " ")
@@ -1165,7 +1165,7 @@ const parseReceiptTableItemLine = (line: string) => {
   const amount = parseReceiptAmountToken(amountToken);
   const amountIndex = amountToken ? rest.lastIndexOf(amountToken) : -1;
   const descriptionSource = amountIndex >= 0 ? rest.slice(0, amountIndex) : rest;
-  const description = cleanReceiptDescription(descriptionSource);
+  const description = cleanReceiptDescription(descriptionSource, true);
   if (!description || description.length < 2 || amount === null) {
     return null;
   }
@@ -1365,7 +1365,7 @@ const extractReceiptItemFromLine = (line: string, pendingDescription?: string | 
   const combinedText = normalizeWhitespace(`${hasPendingDescription ? `${pendingDescription} ` : ""}${normalized}`);
   const columnMatch = combinedText.match(/^(?<description>[A-Za-z].+?)\s+(?<unitPrice>\d[\d,]*\.\d{2})\s+(?<amount>\d[\d,]*\.\d{2})$/i);
   if (columnMatch?.groups?.description) {
-    const description = cleanReceiptDescription(columnMatch.groups.description);
+    const description = cleanReceiptDescription(columnMatch.groups.description, true);
     const unitPrice = parseAmountValue(columnMatch.groups.unitPrice ?? null);
     const amountValue = parseAmountValue(columnMatch.groups.amount ?? null);
     const inferredQuantity =
@@ -1395,7 +1395,7 @@ const extractReceiptItemFromLine = (line: string, pendingDescription?: string | 
       continue;
     }
 
-    const description = cleanReceiptDescription(explicitQuantityMatch.groups.description);
+    const description = cleanReceiptDescription(explicitQuantityMatch.groups.description, true);
     const quantity = Number(explicitQuantityMatch.groups.quantity ?? NaN);
     const unitPrice = explicitQuantityMatch.groups.unitPrice ?? null;
     const amount = explicitQuantityMatch.groups.amount ?? null;

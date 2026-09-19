@@ -3442,32 +3442,34 @@ function TransactionsPageContent() {
             return next;
           });
         }
-
-        if (nextTransactionsSnapshot && previewTransactions.length > 0) {
-          const importedPreviewCurrencyCodes = previewTransactions
-            .map((transaction) => formatCurrencyCode(transaction.currency))
-            .filter(Boolean);
-          setWorkspaceCurrencyCodes((current) => Array.from(new Set([...current, ...importedPreviewCurrencyCodes])).sort());
-          setTransactionsSummary((current) =>
-            buildVisibleTransactionSummary(
-              nextTransactionsSnapshot ?? [],
-              {
-                ...current,
-                // The visible table is intentionally paged. Do not replace the
-                // known workspace total with the first page plus the optimistic
-                // import rows while the authoritative refresh is still in flight.
-                totalCount: Math.max(
-                  current.totalCount,
-                  getCachedTransactionsWorkspace(selectedWorkspaceId ?? "")?.totalCount ?? 0,
-                  getCachedTransactionsWorkspace(selectedWorkspaceId ?? "")?.summary?.totalCount ?? 0,
-                  nextTransactionsSnapshot?.length ?? 0
-                ),
-              },
-              accountNumberById
-            )
-          );
-        }
       });
+
+      // State updater callbacks may run when flushSync commits, after its callback.
+      // Derive the summary only once the merged transaction snapshot is available.
+      if (nextTransactionsSnapshot && previewTransactions.length > 0) {
+        const importedPreviewCurrencyCodes = previewTransactions
+          .map((transaction) => formatCurrencyCode(transaction.currency))
+          .filter(Boolean);
+        setWorkspaceCurrencyCodes((current) => Array.from(new Set([...current, ...importedPreviewCurrencyCodes])).sort());
+        setTransactionsSummary((current) =>
+          buildVisibleTransactionSummary(
+            nextTransactionsSnapshot ?? [],
+            {
+              ...current,
+              // The visible table is intentionally paged. Do not replace the
+              // known workspace total with the first page plus the optimistic
+              // import rows while the authoritative refresh is still in flight.
+              totalCount: Math.max(
+                current.totalCount,
+                getCachedTransactionsWorkspace(selectedWorkspaceId ?? "")?.totalCount ?? 0,
+                getCachedTransactionsWorkspace(selectedWorkspaceId ?? "")?.summary?.totalCount ?? 0,
+                nextTransactionsSnapshot?.length ?? 0
+              ),
+            },
+            accountNumberById
+          )
+        );
+      }
 
       persistSelectedCurrency(selectedWorkspaceId, "");
 

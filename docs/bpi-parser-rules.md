@@ -61,3 +61,5 @@ Use these rules for BPI savings and related statement imports.
 - Unexpected `Other` categories for BPI should be treated as a parser bug when the line item clearly matches one of the learned patterns above.
 
 - BPI credit-card page counters (`Page N of M` or `Page N/M`) and repeated card-statement headings end the current row segment. Never append footer/header text to the last merchant on a page; resume collecting transactions on the next page. Preserve legitimate wrapped merchant lines.
+
+BPI credit-card statement metadata uses Bank of the Philippine Islands. Do not label a BPI credit card as BPI Family Savings Bank; no confirmed historical account is renamed automatically.
