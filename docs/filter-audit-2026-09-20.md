@@ -15,8 +15,8 @@ Inspected visible filter-named controls across all three Screens pages: 326 node
 - Reused the existing exported Clover filter icon in Split Bills and Investments.
 - Added an accessible label for the mobile icon-only bill filter.
 - Normalized transaction filter portal actions (40px minimum, Poppins Medium 15/22) and presets (32px, 13/20), with wrapping for long selected labels.
-- Constrained report date columns, report summary labels, and bill filter selects to their available width.
-- Kept mobile Investment menus within viewport margins rather than positioning them with a negative right offset.
+- Constrained report date columns, report summary labels, and bill filter selects to their available width. Date fields stack below 380px so the complete date stays visible.
+- Kept mobile Investment menus within viewport margins rather than positioning them with a negative right offset. Covers both ordinary and portaled header placements; the 320px browser check caught the ordinary-header path.
 - Kept native filter behavior unchanged; existing shared native controls use the 40px action contract. Installed-device rendering was not verified in this pass.
 
 ## Validation

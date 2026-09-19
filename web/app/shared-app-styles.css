@@ -247,6 +247,7 @@
   }
   .app-filter-trigger__label { display: none; }
   .split-bill-list-toolbar input { flex: 1; min-width: 0; }
+  .content--investments .portfolio-filter-menu[data-open="true"] .portfolio-filter-menu__options,
   #investment-header-filter .portfolio-filter-menu[data-open="true"] .portfolio-filter-menu__options {
     position: fixed;
     top: calc(76px + env(safe-area-inset-top, 0px));
@@ -255,4 +256,7 @@
     width: min(340px, calc(100vw - 24px));
     max-height: calc(100dvh - 180px - env(safe-area-inset-top, 0px));
   }
+}
+@media (max-width: 380px) {
+  .reports-filter-dates { grid-template-columns: minmax(0, 1fr); }
 }
