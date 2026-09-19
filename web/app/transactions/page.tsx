@@ -1,5 +1,6 @@
 "use client";
 import { reconcileTransactionTotal } from "@/lib/transaction-mobile-pagination";
+import { TransactionTableEntry } from "@/components/transaction-table-entry";
 import { TransactionDetailLabel } from "@/components/transaction-detail-label";
 import { addTransactionCurrencyAmount, withTransactionCurrencyDelta } from "@/lib/transaction-currency-summary";
 import { UploadSourceButtons, UploadSecurityCopy } from "@/components/upload-source-buttons";
@@ -2281,6 +2282,8 @@ function TransactionsPageContent() {
   const [importSeedMode, setImportSeedMode] = useState<ImportImageMode>("statement");
   const [importBackgroundOnly, setImportBackgroundOnly] = useState(false);
   const [manualOpen, setManualOpen] = useState(false);
+  const [tableMode, setTableMode] = useState(false);
+  const [tableLocked, setTableLocked] = useState(false);
   const [creationTab, setCreationTab] = useState<"manual" | "ask" | "upload">("manual");
   const [creationChatVisited, setCreationChatVisited] = useState(false);
   const enlargedText = useEnlargedText();
@@ -2431,11 +2434,11 @@ function TransactionsPageContent() {
   const headerMenuRef = useRef<HTMLDivElement | null>(null);
   const manualModalStyle = useMemo<React.CSSProperties>(
     () => ({
-      width: isCompactViewport ? "100vw" : "640px",
+      width: isCompactViewport ? "100vw" : tableMode ? "1160px" : "640px",
       maxHeight: isCompactViewport ? "100dvh" : "calc(100dvh - 24px)",
       overflow: "auto",
     }),
-    [isCompactViewport]
+    [isCompactViewport, tableMode]
   );
 
   const markTransactionsHydrated = useCallback((workspaceId: string, updatedAt?: number | null) => {
@@ -5722,6 +5725,7 @@ function TransactionsPageContent() {
         }
 
         if (manualOpen) {
+          if (isSaving || tableLocked) return;
           setManualOpen(false);
           return;
         }
@@ -5793,6 +5797,8 @@ function TransactionsPageContent() {
     filterOpen,
     hasSelectedTransactions,
     manualOpen,
+    tableLocked,
+    isSaving,
     merchantRenameSuggestion,
     openBulkEdit,
     openManualAdd,
@@ -8627,7 +8633,7 @@ function TransactionsPageContent() {
       ) : null}
 
       {manualOpen ? (
-        <div className="modal-backdrop modal-backdrop--centered-mobile" role="presentation" onClick={() => { if (!isSaving) setManualOpen(false); }}>
+        <div className="modal-backdrop modal-backdrop--centered-mobile" role="presentation" onClick={() => { if (!isSaving && !tableLocked) setManualOpen(false); }}>
           <section
             className={`modal-card modal-card--manual transactions-entry--figma glass${enlargedText ? " modal-card--enlarged-text" : ""}`}
             ref={manualDialogRef}
@@ -8643,7 +8649,7 @@ function TransactionsPageContent() {
                 <p className="eyebrow">Transactions</p>
                 <h4 id="add-transaction-title">Add transaction</h4>
               </div>
-              <button className="icon-button" type="button" onClick={() => { if (!isSaving) setManualOpen(false); }} disabled={isSaving} aria-label="Close add transaction dialog">
+              <button className="icon-button" type="button" onClick={() => { if (!isSaving && !tableLocked) setManualOpen(false); }} disabled={isSaving || tableLocked} aria-label="Close add transaction dialog">
                 <InterfaceIcon name="close" />
               </button>
             </div>
@@ -8651,7 +8657,7 @@ function TransactionsPageContent() {
             {(
               <div className="transaction-creation-tabs" role="tablist" aria-label="How to add transactions">
                 {([['manual', 'Manual'], ['ask', 'Ask Clover'], ['upload', 'Upload']] as const).map(([tab, label]) => (
-                  <button key={tab} type="button" disabled={isSaving} role="tab" id={`creation-tab-${tab}`} aria-selected={creationTab === tab} aria-controls={`creation-panel-${tab}`} tabIndex={creationTab === tab ? 0 : -1} onKeyDown={(event) => {
+                  <button key={tab} type="button" disabled={isSaving || tableLocked} role="tab" id={`creation-tab-${tab}`} aria-selected={creationTab === tab} aria-controls={`creation-panel-${tab}`} tabIndex={creationTab === tab ? 0 : -1} onKeyDown={(event) => {
                     const tabs = ["manual", "ask", "upload"] as const;
                     const index = tabs.indexOf(tab);
                     const next = event.key === "ArrowRight" ? tabs[(index + 1) % 3] : event.key === "ArrowLeft" ? tabs[(index + 2) % 3] : event.key === "Home" ? tabs[0] : event.key === "End" ? tabs[2] : null;
@@ -8661,7 +8667,9 @@ function TransactionsPageContent() {
               </div>
             )}
             <div id="creation-panel-manual" role="tabpanel" aria-labelledby="creation-tab-manual" hidden={creationTab !== "manual"}>
-            <form onSubmit={saveManualTransaction}>
+            <div style={{display:"flex",justifyContent:"flex-end",marginBottom:12}}><button className="button button-secondary" type="button" disabled={isSaving || tableLocked} onClick={() => setTableMode(!tableMode)}>{tableMode ? "Single entry" : "▦ Table entry"}</button></div>
+            <div hidden={!tableMode}><TransactionTableEntry key={selectedWorkspaceId} workspaceId={selectedWorkspaceId} accounts={accounts} categories={categories} onLockChange={setTableLocked} onSaved={() => { if (selectedWorkspaceId) void loadTransactionsPage(selectedWorkspaceId, {background:true}); }} /></div>
+            <form onSubmit={saveManualTransaction} hidden={tableMode}>
 
               {manualSaveError ? <p role="alert">{manualSaveError}</p> : null}
               <fieldset disabled={isSaving} style={{ border: 0, padding: 0, margin: 0, minWidth: 0 }}>
