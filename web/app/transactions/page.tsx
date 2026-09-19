@@ -8794,7 +8794,10 @@ function TransactionsPageContent() {
                                   className={`transactions-manual-picker__option ${
                                     account.id === manualForm.accountId ? "is-selected" : ""
                                   }`}
-                                  onClick={() => {
+                                  onClick={(event) => {
+                                    // Closing removes the option before the enclosing label's default action.
+                                    // Prevent it from activating the picker trigger and reopening the menu.
+                                    event.preventDefault();
                                     setManualForm((current) => ({
                                       ...current,
                                       accountId: account.id,
