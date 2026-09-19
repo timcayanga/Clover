@@ -34,13 +34,28 @@ import {
   getGrowthScenarioResult,
   type GrowthScenario,
 } from "../../shared/growth-planner";
-const sample = { accounts: [] as AccountRecord[] };
+import { sampleInvestments as sample } from "../src/investment-sample";
+import {
+  projectPortfolio,
+  type PortfolioHolding,
+  recordedNumber,
+} from "../../shared/investment-portfolio";
+import {
+  HoldingRow,
+  InstitutionDetails,
+  SnapshotHoldingDetails,
+  ValuationHistory,
+} from "../src/investment-views";
+import { Choices } from "../src/transaction-entry";
 export default function Investments() {
   const session = useSession();
   const { width } = useWindowDimensions();
   const { colors } = useTheme();
   const { data, setData, error, reload } = usePlanData("investments", sample);
   const [tab, setTab] = useState("Overview");
+  const [institution, setInstitution] = useState<string | null>(null);
+  const [holding, setHolding] = useState<PortfolioHolding | null>(null);
+  const [portfolioView, setPortfolioView] = useState("assets");
   const [currency, setCurrency] = useState("");
   const [search, setSearch] = useState("");
   const [type, setType] = useState("all");
@@ -50,6 +65,8 @@ export default function Investments() {
   } | null>(null);
   useEffect(() => {
     setEditor(null);
+    setInstitution(null);
+    setHolding(null);
     setCurrency("");
     setType("all");
     setSearch("");
@@ -57,7 +74,10 @@ export default function Investments() {
     setTab("Overview");
   }, [session.profileId]);
   const accounts = data?.accounts ?? [];
-  const currencies = [...new Set(accounts.map((a) => a.currency))];
+  const holdings = session.demo
+    ? projectPortfolio(accounts, [])
+    : (data?.holdings ?? projectPortfolio(accounts, []));
+  const currencies = [...new Set(holdings.map((a) => a.currency))];
   const selectedCurrency = currencies.includes(currency)
     ? currency
     : (currencies[0] ?? "PHP");
@@ -69,23 +89,23 @@ export default function Investments() {
         .toLowerCase()
         .includes(search.toLowerCase()),
   );
-  const total = visible.reduce((n, a) => n + Number(a.balance ?? 0), 0);
-  const known = visible.filter(
-    (a) =>
-      (a.investmentCostBasis !== null && a.investmentCostBasis !== undefined) ||
-      (a.investmentPrincipal !== null && a.investmentPrincipal !== undefined),
+  const visibleHoldings = holdings.filter(
+    (h) =>
+      h.currency === selectedCurrency &&
+      (type === "all" || h.subtype === type) &&
+      `${h.name} ${h.institution} ${h.symbol}`
+        .toLowerCase()
+        .includes(search.toLowerCase()),
   );
-  const cost = known.reduce(
-    (n, a) => n + Number(a.investmentCostBasis ?? a.investmentPrincipal),
-    0,
+  const total = visibleHoldings.reduce((n, h) => n + Number(h.value ?? 0), 0);
+  const completeValue = visibleHoldings.every(
+    (h) => recordedNumber(h.value) !== null,
   );
-  const gain = known.reduce(
-    (n, a) =>
-      n +
-      Number(a.balance ?? 0) -
-      Number(a.investmentCostBasis ?? a.investmentPrincipal),
-    0,
+  const known = visibleHoldings.filter(
+    (h) => recordedNumber(h.value) !== null && recordedNumber(h.cost) !== null,
   );
+  const cost = known.reduce((n, h) => n + Number(h.cost), 0);
+  const gain = known.reduce((n, h) => n + Number(h.value) - Number(h.cost), 0);
   const pro =
     session.demo ||
     session.data?.entitlement.fullFeatureAccess ||
@@ -95,11 +115,18 @@ export default function Investments() {
       <AccountEditor
         initial={editor.account}
         defaultType="investment"
-        onClose={() => setEditor(null)}
+        defaultInstitution={institution ?? ""}
+        defaultCurrency={selectedCurrency}
+        onClose={() => {
+          setEditor(null);
+          if (!session.demo) reload();
+        }}
         onSaved={(record) => {
           setEditor(null);
+          setHolding(null);
           if (session.demo)
             setData((current) => ({
+              ...current!,
               accounts: record
                 ? [
                     ...(current?.accounts ?? []).filter(
@@ -115,62 +142,41 @@ export default function Investments() {
         }}
       />
     );
-  const row = (account: AccountRecord) => {
-    const basis = account.investmentCostBasis ?? account.investmentPrincipal;
-    const value = Number(account.balance ?? 0);
-    const delta =
-      basis === null || basis === undefined ? null : value - Number(basis);
-    return (
-      <Card key={account.id}>
-        <View style={{ flexDirection: "row", gap: 12, alignItems: "center" }}>
-          <Image
-            source={
-              investmentIcons[account.investmentSubtype ?? "other"] ??
-              investmentIcons.other
-            }
-            style={{ width: 36, height: 36 }}
-          />
-          <View style={{ flex: 1, gap: 4 }}>
-            <Text
-              style={{
-                fontFamily: "Poppins-SemiBold",
-                fontSize: 16,
-                color: colors.ink,
-              }}
-            >
-              {account.name}
-            </Text>
-            <Body>
-              {account.institution ?? "No institution"} ·{" "}
-              {(account.investmentSubtype ?? "other").replaceAll("_", " ")}
-            </Body>
-            <Body>
-              {account.investmentSymbol ?? ""}
-              {account.investmentQuantity
-                ? ` · ${account.investmentQuantity} units`
-                : ""}
-            </Body>
-          </View>
-        </View>
-        <Body muted={false}>{money(String(value), account.currency)}</Body>
-        <Text
-          style={{
-            color:
-              delta === null
-                ? colors.muted
-                : delta >= 0
-                  ? colors.positive
-                  : colors.danger,
-          }}
-        >
-          {delta === null
-            ? "Add purchase value to calculate returns"
-            : `${delta >= 0 ? "+" : ""}${money(String(delta), account.currency)}`}
-        </Text>
-        <PlanAction title="View asset" onPress={() => setEditor({ account })} />
-      </Card>
-    );
+  const openHolding = (item: PortfolioHolding) => {
+    if (item.source === "account") {
+      const account = accounts.find((a) => a.id === item.accountId);
+      if (account) setEditor({ account });
+    } else setHolding(item);
   };
+  if (holding)
+    return (
+      <SnapshotHoldingDetails
+        holding={holding}
+        history={data?.history ?? []}
+        onBack={() => setHolding(null)}
+        onAccount={() => {
+          const account = accounts.find((a) => a.id === holding.accountId);
+          if (account) setEditor({ account });
+        }}
+      />
+    );
+  if (institution)
+    return (
+      <InstitutionDetails
+        name={institution}
+        currency={selectedCurrency}
+        holdings={holdings.filter(
+          (h) =>
+            (h.institution || "Other investments") === institution &&
+            h.currency === selectedCurrency,
+        )}
+        history={data?.history ?? []}
+        onBack={() => setInstitution(null)}
+        onHolding={openHolding}
+        onChanged={session.demo ? undefined : reload}
+        onAdd={() => setEditor({ account: null })}
+      />
+    );
   return (
     <Screen gap={20}>
       <PlanHeader
@@ -238,10 +244,7 @@ export default function Investments() {
             />
           ))}
           <Body>Asset type</Body>
-          {[
-            "all",
-            ...new Set(accounts.map((a) => a.investmentSubtype ?? "other")),
-          ].map((t) => (
+          {["all", ...new Set(holdings.map((a) => a.subtype))].map((t) => (
             <PlanAction
               key={t}
               title={`${t.replaceAll("_", " ")}${t === type ? " ✓" : ""}`}
@@ -283,7 +286,11 @@ export default function Investments() {
           <View style={{ flexDirection: "row", gap: 8 }}>
             <SummaryCard
               title="Est. value"
-              value={compactSummaryMoney(total, selectedCurrency)}
+              value={
+                completeValue
+                  ? compactSummaryMoney(total, selectedCurrency)
+                  : "—"
+              }
             />
             <SummaryCard
               title="Gain/loss"
@@ -314,7 +321,26 @@ export default function Investments() {
             Recorded values in {selectedCurrency}. Missing purchase values are
             excluded from returns. Check your provider for live valuations.
           </Body>
-          {visible.length ? (
+          {visibleHoldings.length ? (
+            <ValuationHistory
+              history={data?.history ?? []}
+              accountIds={[
+                ...new Set(
+                  visibleHoldings.map(
+                    (h) => h.valuationAccountId ?? h.accountId,
+                  ),
+                ),
+              ]}
+              currency={selectedCurrency}
+            />
+          ) : null}
+          {data?.limited ? (
+            <Notice>
+              Showing the most recent available portfolio records. Older history
+              may be incomplete.
+            </Notice>
+          ) : null}
+          {visibleHoldings.length ? (
             <PlanAction
               title="View all holdings"
               onPress={() => setTab("Portfolio")}
@@ -347,8 +373,61 @@ export default function Investments() {
         </>
       ) : tab === "Portfolio" ? (
         <>
-          {visible.map(row)}
-          {!visible.length ? <Notice>No matching holdings.</Notice> : null}
+          <Choices
+            value={portfolioView}
+            options={[
+              { value: "assets", label: "Assets" },
+              { value: "institutions", label: "Institutions" },
+            ]}
+            onChange={setPortfolioView}
+          />
+          {portfolioView === "assets"
+            ? visibleHoldings.map((h) => (
+                <HoldingRow
+                  key={h.id}
+                  holding={h}
+                  onPress={() => openHolding(h)}
+                />
+              ))
+            : [
+                ...new Set(
+                  visibleHoldings.map(
+                    (h) => h.institution || "Other investments",
+                  ),
+                ),
+              ].map((name) => {
+                const members = visibleHoldings.filter(
+                  (h) => (h.institution || "Other investments") === name,
+                );
+                const value = members.every(
+                  (h) => recordedNumber(h.value) !== null,
+                )
+                  ? String(members.reduce((n, h) => n + Number(h.value), 0))
+                  : null;
+                return (
+                  <HoldingRow
+                    key={name}
+                    onPress={() => setInstitution(name)}
+                    holding={{
+                      id: name,
+                      accountId: members[0].accountId,
+                      source: "account",
+                      name,
+                      institution: name,
+                      subtype: "institution",
+                      symbol: `${members.length} holdings · ${selectedCurrency}`,
+                      currency: selectedCurrency,
+                      quantity: null,
+                      value,
+                      cost: null,
+                      date: null,
+                    }}
+                  />
+                );
+              })}
+          {!visibleHoldings.length ? (
+            <Notice>No matching holdings.</Notice>
+          ) : null}
         </>
       ) : tab.startsWith("Planner") ? (
         <NativePlanner currency={selectedCurrency} initial={total} />
@@ -358,22 +437,22 @@ export default function Investments() {
         <>
           <Card>
             <Body muted={false}>Allocation · {selectedCurrency}</Body>
-            {visible.length ? (
-              visible
+            {visibleHoldings.length ? (
+              visibleHoldings
                 .slice()
-                .sort((a, b) => Number(b.balance ?? 0) - Number(a.balance ?? 0))
+                .sort((a, b) => Number(b.value ?? 0) - Number(a.value ?? 0))
                 .map((a) => (
                   <View key={a.id} style={{ gap: 8 }}>
                     <Body>
                       {a.name} ·{" "}
                       {total > 0
-                        ? ((Number(a.balance ?? 0) / total) * 100).toFixed(1)
+                        ? ((Number(a.value ?? 0) / total) * 100).toFixed(1)
                         : 0}
                       %
                     </Body>
                     <Progress
                       value={
-                        total > 0 ? (Number(a.balance ?? 0) / total) * 100 : 0
+                        total > 0 ? (Number(a.value ?? 0) / total) * 100 : 0
                       }
                     />
                   </View>
@@ -385,8 +464,8 @@ export default function Investments() {
           <Card>
             <Body muted={false}>Return breakdown</Body>
             <Body>
-              {known.length} of {visible.length} holdings have a recorded
-              purchase value.
+              {known.length} of {visibleHoldings.length} holdings have a
+              recorded purchase value.
             </Body>
             <Body>Purchase value {money(String(cost), selectedCurrency)}</Body>
             <Body>
@@ -395,11 +474,17 @@ export default function Investments() {
             </Body>
             <Body>These are recorded results, not forecasts.</Body>
           </Card>
-          {visible
+          {visibleHoldings
             .slice()
-            .sort((a, b) => Number(b.balance ?? 0) - Number(a.balance ?? 0))
+            .sort((a, b) => Number(b.value ?? 0) - Number(a.value ?? 0))
             .slice(0, 5)
-            .map(row)}
+            .map((h) => (
+              <HoldingRow
+                key={h.id}
+                holding={h}
+                onPress={() => openHolding(h)}
+              />
+            ))}
         </>
       )}
     </Screen>

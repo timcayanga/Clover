@@ -16,6 +16,9 @@ export function mobileOperation(method: string, segments: string[]) {
   if (path === "settings/regional" && ["GET", "PATCH"].includes(method)) return "settings-regional";
   if (path === "split-bill-receipts/preview" && method === "POST") return "split-receipt-preview";
   if (["investments", "market-history", "market-news", "together-options", "reports"].includes(path) && method === "GET") return path;
+  if (segments.length === 3 && segments[0] === "accounts" && segments[2] === "history" && method === "GET") return "account-history";
+  if (segments.length === 3 && segments[0] === "accounts" && segments[2] === "purchases" && method === "POST") return "investment-purchase-create";
+  if (segments.length === 4 && segments[0] === "accounts" && segments[2] === "purchases" && method === "DELETE") return "investment-purchase-delete";
   if (segments.length === 2 && segments[0] === "accounts" && ["GET", "PATCH", "DELETE"].includes(method)) return "account";
   if (path === "recurring" && method === "POST") return "recurring-create";
   if (path === "recurring-suggestions/dismiss" && method === "POST") return "recurring-dismiss";

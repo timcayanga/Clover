@@ -1,3 +1,4 @@
+import { Children } from "react";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
 import { useAccess } from "./access";
@@ -242,9 +243,26 @@ export function Field({ label, ...props }: TextInputProps & { label: string }) {
 }
 export function Notice({ children }: { children: ReactNode }) {
   const { colors, styles, dark } = useTheme();
+  const content: ReactNode[] = [];
+  let text = "";
+  const flush = () => {
+    if (text) {
+      content.push(<Body key={`text-${content.length}`}>{text}</Body>);
+      text = "";
+    }
+  };
+  Children.toArray(children).forEach((child) => {
+    if (typeof child === "string" || typeof child === "number")
+      text += String(child);
+    else {
+      flush();
+      content.push(child);
+    }
+  });
+  flush();
   return (
-    <View accessibilityLiveRegion="polite" style={styles.notice}>
-      <Body>{children}</Body>
+    <View accessibilityLiveRegion="polite" style={[styles.notice, { gap: 12 }]}>
+      {content}
     </View>
   );
 }
@@ -865,7 +883,12 @@ export function DetailNavigation({
           )}
           {item.title !== "Add" ? (
             <Text
+              numberOfLines={1}
+              adjustsFontSizeToFit
+              minimumFontScale={0.8}
               style={{
+                maxWidth: "100%",
+                textAlign: "center",
                 fontFamily: "Poppins-Regular",
                 fontSize: 11,
                 color: colors.muted,
