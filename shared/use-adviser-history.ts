@@ -1,10 +1,17 @@
 import { parseAdviserChart, type AdviserChart } from "./adviser-chart";
-import type * as React from "react";
+// Applications inject their own React hooks. Keep the shared contract independent
+// of either application's React installation (including type-only imports).
+type StateUpdate<T> = T | ((previous: T) => T);
+type HistoryHooks = {
+  useState<T>(initial: T | (() => T)): [T, (update: StateUpdate<T>) => void];
+  useRef<T>(initial: T): { current: T };
+  useEffect(effect: () => void | (() => void), deps?: readonly unknown[]): void;
+};
 export type SavedChatMessage = { role: "user" | "assistant"; content: string; visualization?:AdviserChart };
 export type SavedConversation = {id:string;title:string;updatedAt:string;revision:number;messages?:SavedChatMessage[]};
 const serializeMessages=(messages:SavedChatMessage[])=>JSON.stringify(messages.map(({role,content,visualization})=>({role,content,...(parseAdviserChart(visualization)?{visualization:parseAdviserChart(visualization)}:{})})));
 type HistoryRequest = <T>(path:string, body?:unknown) => Promise<T>;
-export function createAdviserHistoryHook({useEffect,useRef,useState}: Pick<typeof React,"useRef"|"useState"> & {useEffect:(effect:()=>void|(()=>void),deps?:readonly unknown[])=>void}) {
+export function createAdviserHistoryHook({useEffect,useRef,useState}: HistoryHooks) {
 return function useAdviserHistory(scope:string, enabled:boolean, request:HistoryRequest, createId:()=>string) {
   const [conversations,setConversations] = useState<SavedConversation[]>([]);
   const [active,setActive] = useState<SavedConversation|null>(null);
