@@ -1,3 +1,4 @@
+import { organizeAccountLabels } from "@/lib/organize-account-label";
 import { reportFilterSelection, matchesReportSelection } from "@/lib/report-filter-policy";
 import { buildReportNetWorth } from "@/lib/report-net-worth-data";
 import { reportAccountBalance, buildReportBalanceSeries } from "@/lib/report-balances";
@@ -2277,10 +2278,11 @@ async function ReportsPageStream({ searchParams }: { searchParams?: Promise<{ ra
   const selectedCookie = (await cookies()).get(selectedWorkspaceKey)?.value;
   const filterProfile = profiles.find(profile => profile.id === selectedCookie) ?? profiles[0];
   const [filterAccounts, filterCategories] = filterProfile ? await Promise.all([
-    prisma.account.findMany({where:{workspaceId:filterProfile.id},select:{id:true,name:true,accountNumber:true,currency:true},orderBy:{name:"asc"}}),
+    prisma.account.findMany({where:{workspaceId:filterProfile.id},select:{id:true,name:true,accountNumber:true,currency:true,type:true,source:true,institution:true},orderBy:{name:"asc"}}),
     prisma.category.findMany({where:{workspaceId:filterProfile.id},select:{name:true},orderBy:{name:"asc"}}),
   ]) : [[], []];
-  const filterOptions = {profiles, currentProfile:filterProfile?.id ?? "", accounts:filterAccounts.map(account=>({id:account.id,name:[account.name,account.accountNumber?.slice(-4),account.currency].filter(Boolean).join(" · ")})), categories:filterCategories.map(category=>category.name)};
+  const filterAccountLabels = organizeAccountLabels(filterAccounts);
+  const filterOptions = {profiles, currentProfile:filterProfile?.id ?? "", accounts:filterAccounts.map(account=>({id:account.id,name:filterAccountLabels.get(account.id) ?? account.name})), categories:filterCategories.map(category=>category.name)};
   const reportWindow = resolveReportWindow(
     getCalendarDayEndInTimeZone(new Date(), normalizeRegionalPreferences(user.regionalPreferences).timeZone),
     resolvedSearchParams,

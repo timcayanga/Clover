@@ -1,6 +1,6 @@
 import type { CSSProperties } from "react";
 
-const icons: Record<string, string> = { Name: "name", Type: "type", Date: "date", Account: "account", Category: "category", Amount: "amount", Tags: "tags", Notes: "notes", Dates: "date", Accounts: "account", Categories: "category", Types: "type", Currency: "amount", Status: "type" };
+const icons: Record<string, string> = { Name: "name", Type: "type", Date: "date", Account: "account", Category: "category", Amount: "amount", Tags: "tags", Notes: "notes", Dates: "date", Accounts: "account", Categories: "category", Types: "type", Currency: "amount", Status: "type", Source: "notes", "Extraction confidence": "type" };
 
 export function TransactionDetailLabel({ label }: { label: string }) {
   const icon = icons[label];
