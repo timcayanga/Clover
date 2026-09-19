@@ -154,8 +154,8 @@ export default function Goals() {
                     <Body>{selected.progress.currentLabel}</Body>
                     <Progress value={selected.progress.progressPercent ?? 0} />
                     <Body>
-                      {Math.round(selected.progress.progressPercent ?? 0)}% of
-                      target
+                      {Math.round(selected.progress.progressPercent ?? 0)}% of{" "}
+                      {selected.cadence === "annual" ? "monthly pace" : "target"}
                     </Body>
                   </>
                 ) : (
@@ -166,7 +166,7 @@ export default function Goals() {
                 )}
               </Card>
               <Body>
-                Progress reflects recent activity in this Profile and currency.
+                Progress reflects the last 30 days in this Profile and currency.
                 It is not money reserved separately. Annual targets are shown as
                 a monthly pace.
               </Body>
@@ -425,8 +425,8 @@ export default function Goals() {
                     <Body>{goal.progress.currentLabel}</Body>
                     <Progress value={goal.progress.progressPercent ?? 0} />
                     <Body>
-                      {Math.round(goal.progress.progressPercent ?? 0)}% of
-                      target
+                      {Math.round(goal.progress.progressPercent ?? 0)}% of{" "}
+                      {goal.cadence === "annual" ? "monthly pace" : "target"}
                     </Body>
                   </>
                 ) : null}

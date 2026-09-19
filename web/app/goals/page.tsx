@@ -1,5 +1,6 @@
+import { mobileHomePeriods, homeDateKey } from "@/lib/mobile-home-periods";
 import { GoalDeleteButton } from "@/components/goal-delete-button";
-import { mobileGoals } from "@/lib/mobile-goals";
+import { mobileGoals, loadGoalActivity } from "@/lib/mobile-goals";
 import { PlanTabs } from "@/components/plan-tabs";
 import { CategoryBrandMark } from "@/components/category-brand-mark";
 import { cookies } from "next/headers";
@@ -18,7 +19,7 @@ import { PostHogEvent } from "@/components/posthog-analytics";
 import { GoalsEditor } from "@/components/goals-editor-modal";
 import { GoalInlineSetup } from "@/components/goal-inline-setup";
 import { InfoTooltip } from "@/components/info-tooltip";
-import { formatCurrencyAmount, formatCurrencyCode } from "@/lib/currency-format";
+import { formatCurrencyAmount } from "@/lib/currency-format";
 import {
   GOAL_OPTIONS,
   getFinancialExperienceProfile,
@@ -89,18 +90,6 @@ type MonthBucket = {
   income: number;
   expense: number;
   net: number;
-};
-
-type GoalSummary = {
-  income: number;
-  expense: number;
-  transfer: number;
-  expenseCategories: Map<string, number>;
-};
-
-type SummaryRow = {
-  type: string;
-  total: number | string | null;
 };
 
 type MonthlySummaryRow = {
@@ -291,62 +280,38 @@ async function GoalsPageStream({ goalId }: { goalId?: string }) {
       id: goal.id, name: goal.name, category: goal.category, amount: goal.targetAmount,
       currency: goal.currency, cadence: goal.cadence === "annual" ? "Annual" : "Monthly", emoji: "",
       progress: "progress" in goal ? goal.progress : undefined,
+      period: goal.activity ? `${homeDateKey(new Date(goal.activity.start))} to ${homeDateKey(new Date(+new Date(goal.activity.end) - 1))}` : undefined,
     }));
     return <RouteSplash label="goals"><CloverShell active="goals" title="Goals" mobileBackHref="/more" actions={<><Link href="/goals/new" className="button button-primary button-small accounts-toolbar-add" aria-label="Create goal"><span className="button-icon" aria-hidden="true">＋</span><span>Create goal</span></Link></>}><GoalDirectory goals={cards} /></CloverShell></RouteSplash>;
   }
   const savedGoal = goalId === "primary" ? null : await prisma.personalGoal.findFirst({ where: { id: goalId, workspaceId: resolvedWorkspace.id } });
   if (goalId !== "primary" && !savedGoal) notFound();
-  const goalFilterCurrency = savedGoal?.currency ?? null;
+  const profileCurrencies = await prisma.account.findMany({ where: { workspaceId: resolvedWorkspace.id }, select: { currency: true }, distinct: ["currency"] });
+  const goalCurrency = savedGoal?.currency ?? (profileCurrencies.length === 1 ? profileCurrencies[0].currency ?? "PHP" : "PHP");
+  const goalFilterCurrency = goalCurrency;
 
   const now = new Date();
-  const thirtyDaysAgo = new Date(now);
-  thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-  const sixtyDaysAgo = new Date(now);
-  sixtyDaysAgo.setDate(sixtyDaysAgo.getDate() - 60);
+  const goalPeriod = mobileHomePeriods(now).rolling(30);
+  const thirtyDaysAgo = goalPeriod.from;
+  const activityPromise = Promise.all([
+    loadGoalActivity(resolvedWorkspace.id, goalCurrency, goalPeriod),
+    loadGoalActivity(resolvedWorkspace.id, goalCurrency, { ...goalPeriod, from: goalPeriod.previousFrom, to: goalPeriod.previousTo }),
+  ]);
   const ninetyDaysAgo = new Date(now);
   ninetyDaysAgo.setDate(ninetyDaysAgo.getDate() - 90);
   const sixMonthsAgo = new Date(now.getFullYear(), now.getMonth() - 5, 1);
 
-  const [
-    currentSummaryRows,
-    previousSummaryRows,
+  const [[currentActivity, previousActivity], [
     ninetyDayMerchantRows,
     sixMonthSummaryRows,
     goalHistoryRows,
     currentWindowTransactionsQuery,
     investmentAccountRows,
-  ] = await loadCachedWorkspaceSummary({
+  ]] = await Promise.all([activityPromise, loadCachedWorkspaceSummary({
     workspaceId: resolvedWorkspace.id,
     area: "goals",
-    keyParts: [goalFilterCurrency ?? "all-currencies"],
+    keyParts: ["bounded-goal-details-v2", goalFilterCurrency, goalPeriod.to.toISOString()],
     load: () => Promise.all([
-    prisma.$queryRaw<SummaryRow[]>`
-      SELECT
-        "type",
-        COALESCE(SUM("amount"), 0)::float8 AS total
-      FROM "Transaction"
-      WHERE ("workspaceId" = ${resolvedWorkspace.id}
-        OR "accountId" IN (SELECT "id" FROM "Account" WHERE "workspaceId" = ${resolvedWorkspace.id}))
-        AND "isExcluded" = false
-        AND "deletedAt" IS NULL
-        AND "date" >= ${thirtyDaysAgo}
-        AND (${goalFilterCurrency}::text IS NULL OR COALESCE("currency", (SELECT "currency" FROM "Account" WHERE "id" = "Transaction"."accountId"), 'PHP') = ${goalFilterCurrency})
-      GROUP BY "type"
-    `,
-    prisma.$queryRaw<SummaryRow[]>`
-      SELECT
-        "type",
-        COALESCE(SUM("amount"), 0)::float8 AS total
-      FROM "Transaction"
-      WHERE ("workspaceId" = ${resolvedWorkspace.id}
-        OR "accountId" IN (SELECT "id" FROM "Account" WHERE "workspaceId" = ${resolvedWorkspace.id}))
-        AND "isExcluded" = false
-        AND "deletedAt" IS NULL
-        AND "date" >= ${sixtyDaysAgo}
-        AND "date" < ${thirtyDaysAgo}
-        AND (${goalFilterCurrency}::text IS NULL OR COALESCE("currency", (SELECT "currency" FROM "Account" WHERE "id" = "Transaction"."accountId"), 'PHP') = ${goalFilterCurrency})
-      GROUP BY "type"
-    `,
     prisma.$queryRaw<MerchantSummaryRow[]>`
       SELECT
         COALESCE(NULLIF("merchantClean", ''), "merchantRaw") AS label,
@@ -359,6 +324,7 @@ async function GoalsPageStream({ goalId }: { goalId?: string }) {
         AND "deletedAt" IS NULL
         AND "type" = 'expense'
         AND "date" >= ${ninetyDaysAgo}
+        AND "date" < ${goalPeriod.to}
         AND (${goalFilterCurrency}::text IS NULL OR COALESCE("currency", (SELECT "currency" FROM "Account" WHERE "id" = "Transaction"."accountId"), 'PHP') = ${goalFilterCurrency})
       GROUP BY 1
       HAVING COUNT(*) > 1
@@ -376,6 +342,7 @@ async function GoalsPageStream({ goalId }: { goalId?: string }) {
         AND "isExcluded" = false
         AND "deletedAt" IS NULL
         AND "date" >= ${sixMonthsAgo}
+        AND "date" < ${goalPeriod.to}
         AND (${goalFilterCurrency}::text IS NULL OR COALESCE("currency", (SELECT "currency" FROM "Account" WHERE "id" = "Transaction"."accountId"), 'PHP') = ${goalFilterCurrency})
       GROUP BY 1, 2
       ORDER BY 1 ASC, 2 ASC
@@ -398,7 +365,7 @@ async function GoalsPageStream({ goalId }: { goalId?: string }) {
     }),
     prisma.transaction.findMany({
       where: buildActiveWorkspaceTransactionWhere(resolvedWorkspace.id, {
-        date: { gte: thirtyDaysAgo },
+        date: { gte: thirtyDaysAgo, lt: goalPeriod.to },
         ...(goalFilterCurrency ? { currency: goalFilterCurrency } : {}),
       }),
       select: {
@@ -446,24 +413,10 @@ async function GoalsPageStream({ goalId }: { goalId?: string }) {
       },
     }),
     ]),
-  });
+  })]);
 
   const currentWindowTransactions = currentWindowTransactionsQuery as GoalTransaction[];
   const investmentAccounts = investmentAccountRows as InvestmentAccountSnapshot[];
-  const goalCurrencyCandidates = new Set<string>();
-  for (const transaction of currentWindowTransactions) {
-    if (typeof transaction.currency === "string" && transaction.currency.trim()) {
-      goalCurrencyCandidates.add(formatCurrencyCode(transaction.currency));
-    } else if (typeof transaction.account.currency === "string" && transaction.account.currency.trim()) {
-      goalCurrencyCandidates.add(formatCurrencyCode(transaction.account.currency));
-    }
-  }
-  for (const investment of investmentAccounts) {
-    if (typeof investment.currency === "string" && investment.currency.trim()) {
-      goalCurrencyCandidates.add(formatCurrencyCode(investment.currency));
-    }
-  }
-  const goalCurrency = savedGoal?.currency ?? (goalCurrencyCandidates.size === 1 ? Array.from(goalCurrencyCandidates)[0] : "PHP");
   const selectedGoalKey = savedGoal?.goalKey ?? user.primaryGoal?.trim() ?? null;
   const selectedGoal = getGoalDefinition(selectedGoalKey);
   const playbook = getGoalPlaybook(selectedGoalKey);
@@ -480,45 +433,8 @@ async function GoalsPageStream({ goalId }: { goalId?: string }) {
     ? playbook.heroSupport
     : experienceProfile.goalsSupport ?? "If onboarding skipped this step, you can define your first real monthly target right here.";
 
-  const currentSummary = currentSummaryRows.reduce<GoalSummary>(
-    (accumulator, row) => {
-      const amount = Number(row.total ?? 0);
-      if (row.type === "income") {
-        accumulator.income += amount;
-      } else if (row.type === "expense") {
-        accumulator.expense += amount;
-      } else {
-        accumulator.transfer += amount;
-      }
-      return accumulator;
-    },
-    {
-      income: 0,
-      expense: 0,
-      transfer: 0,
-      expenseCategories: new Map<string, number>(),
-    }
-  );
-
-  const previousSummary = previousSummaryRows.reduce<GoalSummary>(
-    (accumulator, row) => {
-      const amount = Number(row.total ?? 0);
-      if (row.type === "income") {
-        accumulator.income += amount;
-      } else if (row.type === "expense") {
-        accumulator.expense += amount;
-      } else {
-        accumulator.transfer += amount;
-      }
-      return accumulator;
-    },
-    {
-      income: 0,
-      expense: 0,
-      transfer: 0,
-      expenseCategories: new Map<string, number>(),
-    }
-  );
+  const currentSummary = { income: currentActivity.income, expense: currentActivity.spending };
+  const previousSummary = { income: previousActivity.income, expense: previousActivity.spending };
   const monthlyIncome = currentSummary.income > 0 ? currentSummary.income : null;
   const suggestedGoalTarget = getSuggestedGoalAmount(selectedGoalKey as GoalKey | null, monthlyIncome);
   const currentGoalPlan = normalizeGoalPlan(savedGoal?.goalPlan ?? user.goalPlan, selectedGoalKey as GoalKey | null, goalTargetAmount);
@@ -611,12 +527,10 @@ async function GoalsPageStream({ goalId }: { goalId?: string }) {
   }, 0);
   const investmentGainLoss = investmentHoldingsValue - investmentCostBasis;
   const investmentHoldingsCount = investmentAccounts.length;
-  const investmentFlow = currentWindowTransactions
-    .filter((transaction) => transaction.account.type === "investment" && transaction.type !== "income")
-    .reduce((sum, transaction) => sum + Math.abs(Number(transaction.amount)), 0);
+  const investmentFlow = currentActivity.investmentFlow;
   const goalProgress = getGoalProgressSnapshot({
     goalKey: selectedGoalKey as GoalKey | null,
-    targetAmount: savedGoal ? null : goalTargetAmount,
+    targetAmount: currentGoalPlan ? null : goalTargetAmount,
     goalPlan: currentGoalPlan,
     currentNet,
     currentSpend,
@@ -770,7 +684,7 @@ async function GoalsPageStream({ goalId }: { goalId?: string }) {
         actions={<Link href="/goals" className="button button-secondary plan-back">Back to Goals</Link>}
       >
         <section className="goals-page">
-          {savedGoal ? <p className="muted">Progress reflects this Profile’s recent financial activity in {goalCurrency}, not money reserved separately for this goal. Annual targets are shown as a monthly pace.</p> : null}
+          <p className="muted">Progress uses this Profile’s activity in {goalCurrency} from {homeDateKey(goalPeriod.from)} to {homeDateKey(new Date(+goalPeriod.to - 1))}. It is not money reserved separately for this goal. Annual targets are shown as a monthly pace.</p>
 <PlanTabs title={<h2 className="collection-detail-name">{currentGoalPlan?.purpose || selectedGoal.title}</h2>} tabs={[{key:"overview",label:"Overview",content:<>          {!hasGoalSelection ? (
             <section className="goals-blank-state glass">
               <span className="goals-blank-state__emoji" aria-hidden="true">🎯</span>

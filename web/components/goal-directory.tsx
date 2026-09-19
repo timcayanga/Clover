@@ -14,6 +14,7 @@ export type GoalCardData = {
   currency: string;
   cadence: string;
   emoji: string;
+  period?: string;
   progress?: {
     currentAmount: number | null;
     currentLabel: string;
@@ -92,13 +93,14 @@ export function GoalDirectory({ goals }: { goals: GoalCardData[] }) {
                       )}
                 </strong>
                 <small>{goal.progress.currentLabel}</small>
+                {goal.period ? <small>{goal.period}</small> : null}
                 <progress
                   value={goal.progress.progressPercent ?? 0}
                   max={100}
                   aria-label="Goal progress"
                 />
                 <span>
-                  {Math.round(goal.progress.progressPercent ?? 0)}% of target
+                  {Math.round(goal.progress.progressPercent ?? 0)}% of {goal.cadence === "Annual" ? "monthly pace" : "target"}
                 </span>
               </div>
             ) : null}

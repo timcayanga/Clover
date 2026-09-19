@@ -1,3 +1,4 @@
+import { getRollingWeekBuckets } from "@/lib/report-week-buckets";
 import { organizeAccountLabels } from "@/lib/organize-account-label";
 import { reportFilterSelection, matchesReportSelection } from "@/lib/report-filter-policy";
 import { buildReportNetWorth } from "@/lib/report-net-worth-data";
@@ -346,26 +347,6 @@ const getMonthBuckets = (anchor: Date) => {
   return buckets;
 };
 
-const getRollingWeekBuckets = (anchor: Date, count = 8) => {
-  return Array.from({ length: count }, (_, index) => {
-    const offset = count - index - 1;
-    const end = new Date(anchor);
-    end.setDate(end.getDate() - offset * 7);
-    const start = new Date(end);
-    start.setDate(start.getDate() - 6);
-    start.setHours(0, 0, 0, 0);
-
-    return {
-      key: `${start.toISOString().slice(0, 10)}:${end.toISOString().slice(0, 10)}`,
-      label: start.toLocaleDateString("en-PH", { month: "short", day: "numeric" }),
-      detailLabel: `${formatShortDate(start)} - ${formatShortDate(end)}`,
-      start,
-      end,
-      income: 0,
-      expense: 0,
-    };
-  });
-};
 
 function ReportsStreamFallback() {
   return <CloverLoadingScreen label="reports" />;
@@ -1305,37 +1286,13 @@ export async function ReportsStream({
     const currentMonthBucket = monthBuckets[monthBuckets.length - 1];
     const previousMonthBucket = monthBuckets[monthBuckets.length - 2] ?? monthBuckets[monthBuckets.length - 1];
     const monthlyNetChange = currentMonthBucket.net - previousMonthBucket.net;
-    const weeklySummaryEnd = currentWindowEnd;
-    const weeklySummaryStart = new Date(weeklySummaryEnd);
-    weeklySummaryStart.setDate(weeklySummaryStart.getDate() - 6);
-    const previousWeeklySummaryEnd = new Date(weeklySummaryStart);
-    previousWeeklySummaryEnd.setDate(previousWeeklySummaryEnd.getDate() - 1);
-    const previousWeeklySummaryStart = new Date(previousWeeklySummaryEnd);
-    previousWeeklySummaryStart.setDate(previousWeeklySummaryStart.getDate() - 6);
-    const summarizeReportTransactions = (transactions: ReportTransaction[]): WindowSummary =>
-      transactions.reduce(
-        (summary, transaction) => {
-          const magnitude = toReportMagnitude(transaction.amount);
-          const transactionType = getResolvedReportTransactionType(transaction);
-          if (transactionType === "income") {
-            summary.income += magnitude;
-          } else if (transactionType === "expense") {
-            summary.expense += magnitude;
-          } else {
-            summary.transfer += magnitude;
-          }
-          return summary;
-        },
-        { income: 0, expense: 0, transfer: 0, expenseCategories: new Map<string, number>() }
-      );
-    const weeklySummary = summarizeReportTransactions(
-      reportScopedTransactions.filter((transaction) => transaction.date >= weeklySummaryStart && transaction.date <= weeklySummaryEnd)
-    );
-    const previousWeeklySummary = summarizeReportTransactions(
-      reportScopedTransactions.filter(
-        (transaction) => transaction.date >= previousWeeklySummaryStart && transaction.date <= previousWeeklySummaryEnd
-      )
-    );
+    // Share the already-aggregated chart buckets so labels and figures cannot drift.
+    const weeklySummary = weeklyTrendBuckets[weeklyTrendBuckets.length - 1];
+    const previousWeeklySummary = weeklyTrendBuckets[weeklyTrendBuckets.length - 2];
+    const weeklySummaryStart = weeklySummary.start;
+    const weeklySummaryEnd = weeklySummary.end;
+    const previousWeeklySummaryStart = previousWeeklySummary.start;
+    const previousWeeklySummaryEnd = previousWeeklySummary.end;
     const weeklyNet = weeklySummary.income - weeklySummary.expense;
     const previousWeeklyNet = previousWeeklySummary.income - previousWeeklySummary.expense;
     const weeklyNetChange = weeklyNet - previousWeeklyNet;

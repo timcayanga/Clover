@@ -61,13 +61,16 @@ for (const file of [
 const goalsSource = source("app/goals/page.tsx");
 assert.match(goalsSource, /buildActiveWorkspaceTransactionWhere/);
 assert.ok(
-  (goalsSource.match(/"deletedAt" IS NULL/g) ?? []).length >= 4,
+  (goalsSource.match(/"deletedAt" IS NULL/g) ?? []).length >= 2,
   "Every raw Goals aggregate must exclude deleted transactions."
 );
 assert.ok(
-  (goalsSource.match(/SELECT "id" FROM "Account" WHERE "workspaceId"/g) ?? []).length >= 4,
+  (goalsSource.match(/SELECT "id" FROM "Account" WHERE "workspaceId"/g) ?? []).length >= 2,
   "Every raw Goals aggregate must retain account-linked legacy rows."
 );
+
+assert.match(goalsSource, /loadGoalActivity\(resolvedWorkspace.id, goalCurrency, goalPeriod\)/);
+assert.match(source("lib/mobile-goals.ts"), /buildActiveWorkspaceTransactionWhere\(workspaceId/);
 
 const dashboardSource = source("components/dashboard-page-content.tsx");
 assert.match(dashboardSource, /account\.source === "manual"/);
