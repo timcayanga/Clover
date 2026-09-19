@@ -124,14 +124,15 @@ export async function GET(_request: Request, { params }: { params: Promise<{ tra
       return NextResponse.json({ error: "Transaction not found" }, { status: 404 });
     }
 
+    const receiptRefresh = new URL(_request.url).searchParams.get("receiptRefresh") === "1";
     const [, accounts, categories] = await Promise.all([
       assertWorkspaceAccess(userId, transaction.workspaceId),
-      prisma.account.findMany({
+      receiptRefresh ? Promise.resolve([]) : prisma.account.findMany({
         where: { workspaceId: transaction.workspaceId, type: { not: "investment" } },
         orderBy: [{ name: "asc" }],
         select: { id: true, name: true, institution: true, accountNumber: true, type: true, currency: true },
       }),
-      prisma.category.findMany({
+      receiptRefresh ? Promise.resolve([]) : prisma.category.findMany({
         where: { workspaceId: transaction.workspaceId, isArchived: false },
         orderBy: [{ isSystem: "desc" }, { name: "asc" }],
         select: { id: true, name: true, type: true },
@@ -141,6 +142,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ tra
     return NextResponse.json({
       transaction: {
         id: transaction.id,
+        createdAt: transaction.createdAt.toISOString(),
         updatedAt: transaction.updatedAt.toISOString(),
         workspaceId: transaction.workspaceId,
         accountId: transaction.accountId,

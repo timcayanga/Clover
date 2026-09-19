@@ -18,3 +18,9 @@ Processing and status responses expose a server-clock anchor. Browser request/re
 Mobile file inputs now paint a local, accessible “Preparing upload” status before mounting the heavier transaction import surface. The two-frame handoff preserves the selected files, clears the input so the same file can be selected again, and cancels the pending frame on unmount. Empty selections do not start imports. This acknowledgement is only feedback, not proof that upload or parsing completed.
 
 Validation and live-run results are recorded separately; these changes alone do not mark speed cases Pass.
+
+## Early-open receipt defect
+
+A fresh receipt23 on staging commit 72f56bdf reproduced stale details: the drawer opened at 8.325s, the API later contained all ten items, but the open drawer still showed no items after processing settled and a further three seconds. This was a correctness diagnostic run during the local gate, not a speed baseline.
+
+Desktop drawer and mobile detail page now refresh only a newly imported, itemless receipt, stop when details arrive, abort on navigation, and stop after 60 seconds. Hidden tabs pause network requests. The dedicated read flag avoids fetching account/category lists on every refresh. Draft merging preserves edits and intentional clears; no financial records are modified by the refresh. Existing old/itemless receipts do not poll.

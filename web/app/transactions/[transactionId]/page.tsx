@@ -1,4 +1,5 @@
 "use client";
+import { usePendingReceiptDetails } from "@/lib/use-pending-receipt-details";
 import { TransactionDetailLabel } from "@/components/transaction-detail-label";
 import { AdviserFormAssist } from "@/components/adviser-form-assist";
 
@@ -18,7 +19,7 @@ import { SplitBillTransactionLinkFields } from "@/components/split-bill-transact
 import { TransactionCrossFeatureActions } from "@/components/transaction-cross-feature-actions";
 import { getAccountBrand } from "@/lib/account-brand";
 import type { AccountType } from "@/lib/domain-types";
-import { buildTransactionDetailDraft, type TransactionDetailDraftValue } from "@/lib/transaction-detail-draft";
+import { mergeRefreshedTransactionDetailDraft, buildTransactionDetailDraft, type TransactionDetailDraftValue } from "@/lib/transaction-detail-draft";
 import { buildTransactionUpdatePayload } from "@/lib/transaction-update-payload";
 import { getCurrencyCatalogCodes } from "@/lib/currencies";
 import { formatCurrencyAmount } from "@/lib/currency-format";
@@ -33,6 +34,7 @@ import {
 import { createSplitBillFromTransaction, type SplitBillTransactionLinkDraft } from "@/lib/split-bill-transaction-link";
 
 type Transaction = {
+  createdAt?: string;
   id: string;
   workspaceId: string;
   accountId: string;
@@ -177,6 +179,17 @@ export default function TransactionDetailPage() {
 
     return () => controller.abort();
   }, [transactionId]);
+
+  usePendingReceiptDetails(transaction, (fresh, baseline) => {
+    const draftFor = (entry: Transaction) => buildTransactionDetailDraft(entry, {
+      merchantClean: entry.merchantClean ?? entry.merchantRaw,
+      effectiveType: entry.type,
+      categoryId: entry.categoryId,
+      isTransfer: entry.type === "transfer" || entry.isTransfer,
+    });
+    setTransaction((current) => current?.id === fresh.id ? fresh : current);
+    setDraft((current) => current ? mergeRefreshedTransactionDetailDraft(current, draftFor(baseline), draftFor(fresh)) : current);
+  });
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {

@@ -18,6 +18,7 @@ import { readTransactionListContext, writeTransactionListContext } from "@/lib/t
 import { useMobileCreationRoute } from "@/lib/use-mobile-creation-route";
 import { useEnlargedText } from "@/lib/use-enlarged-text";
 
+import { usePendingReceiptDetails } from "@/lib/use-pending-receipt-details";
 import { ImportFileInput } from "@/components/import-file-input";
 import dynamic from "next/dynamic";
 import {
@@ -390,6 +391,7 @@ const pickPreferredAccountBrand = (
 type Category = TransactionPickerCategory & { type: "income" | "expense" | "transfer" };
 
 type Transaction = {
+  createdAt?: string;
   id: string;
   workspaceId: string;
   accountId: string;
@@ -5079,6 +5081,18 @@ function TransactionsPageContent() {
       // detail refresh or post-visible receipt enrichment is still settling.
     }
   };
+
+  usePendingReceiptDetails(selectedTransaction, (fresh, baseline) => {
+    const optionsFor = (entry: Transaction) => ({
+      categoryId: getDisplayCategoryIdForTransaction(entry),
+      type: getTransactionDisplayType(entry, accountNumberById.get(entry.accountId) ?? null, workspaceAccountNumbers),
+    });
+    setSelectedTransaction((current) => current?.id === fresh.id ? fresh : current);
+    setTransactions((current) => current.map((entry) => entry.id === fresh.id ? fresh : entry));
+    setDetailDraft((current) => current ? mergeRefreshedTransactionDetailDraft(
+      current, createDetailDraft(baseline, optionsFor(baseline)), createDetailDraft(fresh, optionsFor(fresh))
+    ) : current);
+  });
 
   const openTransactionDetail = (transaction: Transaction, { syncRoute = true }: { syncRoute?: boolean } = {}) => {
     if (syncRoute && isCompactViewport) {
