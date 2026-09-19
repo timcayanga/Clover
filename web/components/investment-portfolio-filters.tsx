@@ -35,7 +35,7 @@ export function InvestmentPortfolioFilters({ children, active }: { children: Rea
     <button ref={button} type="button" className="icon-button portfolio-filter-menu__trigger"
       aria-label={active ? "Filter portfolio (filters active)" : "Filter portfolio"}
       aria-expanded={open} aria-controls="portfolio-filter-options" onClick={() => setOpen(!open)}>
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true"><path d="M4 7h16M7 12h10M10 17h4" strokeLinecap="round" /></svg>
+      <img src="/assets/organize/filter.svg" width={18} height={18} alt="" />
       <span className="portfolio-filter-menu__label-text">Filters</span>
       {active ? <span className="portfolio-filter-menu__badge" aria-hidden="true" /> : null}
     </button>

@@ -409,11 +409,13 @@ export function SplitBillHome({
             />
             <button
               type="button"
-              className="button button-secondary"
+              className="button button-secondary app-filter-trigger"
+              aria-label="Filter bills"
               aria-expanded={filtersOpen}
               onClick={() => setFiltersOpen(!filtersOpen)}
             >
-              Filters
+              <img src="/assets/organize/filter.svg" width={18} height={18} alt="" />
+              <span className="app-filter-trigger__label">Filters</span>
             </button>
           </div>
           {filtersOpen ? (
