@@ -210,7 +210,7 @@ export function GrowthPlanner({ currency, initialPrincipal }: { currency: string
             {[0, 0.5, 1].map((ratio) => <line key={ratio} x1={chartLeft} x2={chartWidth - 18} y1={chartTop + plotHeight - ratio * plotHeight} y2={chartTop + plotHeight - ratio * plotHeight} />)}
             <polygon points={`${chartLeft},${chartTop + plotHeight} ${selectedLine} ${x(Math.max(selectedScenario.years, 5))},${chartTop + plotHeight}`} />
             <polyline points={selectedLine} />
-            {[0, 1, 3, 5, selectedScenario.years].filter((year, index, all) => year <= Math.max(selectedScenario.years, 5) && all.indexOf(year) === index).map((year) => <text key={year} x={x(year)} y={chartHeight - 8} textAnchor="middle">{year === 0 ? "Now" : `${year}y`}</text>)}
+            {[0, 1, 3, 5, selectedScenario.years].filter((year, index, all) => year <= Math.max(selectedScenario.years, 5) && all.indexOf(year) === index).map((year) => <text key={year} x={x(year)} y={chartHeight - 8} textAnchor={year === 0 ? "start" : year === Math.max(selectedScenario.years, 5) ? "end" : "middle"}>{year === 0 ? "Now" : `${year}y`}</text>)}
           </svg>
           <div className="growth-planner__milestones">
             {[1, 3, 5].map((year) => {

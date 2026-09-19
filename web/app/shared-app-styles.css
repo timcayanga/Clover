@@ -25,6 +25,7 @@
 
 .app-shell .content.content > :is(.topbar, .shell-compact-bar) h1,
 .app-shell .admin-page-header h1,
+.admin-root .admin-page-header h1,
 .app-shell .transaction-drawer__mobile-header h4 {
   font: var(--app-title-font) !important;
   letter-spacing: 0 !important;
@@ -259,4 +260,28 @@
 }
 @media (max-width: 380px) {
   .reports-filter-dates { grid-template-columns: minmax(0, 1fr); }
+}
+
+/* Keep footer actions reachable when the desktop viewport is shorter than
+ * the full navigation list. The list scrolls independently of the footer. */
+@media (min-width: 1101px) {
+  .app-shell > .sidebar > :is(.sidebar-header, .sidebar-footer) {
+    flex-shrink: 0;
+  }
+  .app-shell > .sidebar > .sidebar-nav--desktop {
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior-y: contain;
+    scrollbar-width: thin;
+  }
+}
+
+/* Axis endpoints stay inside the chart instead of centering over its edge. */
+.reports-money-chart__x-axis { gap: 8px; }
+.reports-money-chart__x-axis > span { min-width: 0; white-space: nowrap; }
+.reports-money-chart__x-axis > span:last-child { text-align: right; }
+.growth-planner__result { min-width: 0; }
+.growth-planner__result > :is(.eyebrow, .growth-planner__result-value, span) {
+  max-width: 100%;
+  overflow-wrap: anywhere;
 }
