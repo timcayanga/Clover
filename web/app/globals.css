@@ -64337,6 +64337,8 @@ html[data-theme="dark"] .adviser-planning-card__details dl div {
     background: transparent !important; box-shadow: none !important;
     border: 0 !important; backdrop-filter: none !important;
     position: static !important; inset: auto !important; transform: none !important;
+    /* Static flex items still honor z-index; keep picker menus above these actions. */
+    z-index: auto !important;
     width: 100% !important; display: flex !important; flex-wrap: wrap; gap: 8px;
   }
   .manual-form-actions__right { flex-wrap: wrap; max-width: 100%; }
