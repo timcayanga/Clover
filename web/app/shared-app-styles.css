@@ -74,6 +74,7 @@
 .app-shell .pill-link,
 .app-shell .plan-action-ask button {
   box-sizing: border-box;
+  align-self: start;
   min-height: var(--action-button-height) !important;
   height: auto !important;
   padding-block: 8px !important;
