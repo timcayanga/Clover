@@ -1,5 +1,5 @@
 import { SettingsPlan } from "../../src/settings-plan";
-import { Linking, Text } from "react-native";
+import { Linking } from "react-native";
 import { router } from "expo-router";
 import { useState } from "react";
 import { useSession } from "../../src/session";
@@ -7,20 +7,16 @@ import {
   Body,
   Button,
   Card,
-  Heading,
+  SectionTitle,
   Notice,
   Screen,
-  dateLabel,
-  useTheme,
 } from "../../src/ui";
 export default function Account() {
-  const { colors, styles, dark } = useTheme();
   const session = useSession();
   const [error, setError] = useState("");
   const access = session.data?.entitlement;
   return (
     <Screen>
-      <Heading>Your Clover account</Heading>
       <Button
         title="Settings"
         secondary
@@ -33,12 +29,7 @@ export default function Account() {
       />
       <SettingsPlan />
       <Card>
-        <Text
-          accessibilityRole="header"
-          style={{ fontSize: 20, color: colors.ink, fontWeight: "600" }}
-        >
-          Profiles
-        </Text>
+        <SectionTitle>Profiles</SectionTitle>
         <Body>Switch Profiles without combining their financial records.</Body>
         {session.data?.profiles.map((profile) => (
           <Button

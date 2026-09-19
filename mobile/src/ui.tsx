@@ -166,6 +166,11 @@ export function Heading({ children }: { children: ReactNode }) {
     </Text>
   );
 }
+/** Shared container heading, distinct from onboarding's larger headline. */
+export function SectionTitle({ children }: { children: ReactNode }) {
+  const { styles } = useTheme();
+  return <Text accessibilityRole="header" style={styles.sectionTitle}>{children}</Text>;
+}
 export function Body({
   children,
   muted = true,
@@ -667,6 +672,12 @@ const makeStyles = (colors: typeof lightColors) =>
       fontWeight: "700",
       color: colors.ink,
       letterSpacing: -0.7,
+    },
+    sectionTitle: {
+      fontFamily: "Poppins-SemiBold",
+      fontSize: 16,
+      lineHeight: 24,
+      color: "#7A879C",
     },
     body: {
       fontFamily: "Poppins-Regular",

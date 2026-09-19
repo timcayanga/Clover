@@ -1,0 +1,90 @@
+/* App typography and action contract. Imported after legacy page styles.
+ * Keep marketing headings, navigation icons and upload-choice cards distinct.
+ * Native controls retain larger touch targets around their 40px visual surface.
+ */
+:root {
+  --app-section-heading-color: #7a879c;
+  --app-title-font: 600 18px/27px var(--font-poppins), sans-serif;
+  --app-section-font: 600 16px/24px var(--font-poppins), sans-serif;
+  --app-action-font: 500 15px/22px var(--font-poppins), sans-serif;
+}
+
+.app-shell {
+  --font-heading: var(--font-poppins), sans-serif;
+}
+
+.app-shell .content.content > :is(.topbar, .shell-compact-bar) h1,
+.app-shell .admin-page-header h1,
+.app-shell .transaction-drawer__mobile-header h4 {
+  font: var(--app-title-font) !important;
+  letter-spacing: 0 !important;
+  text-transform: none;
+}
+
+/* Container headings are a role, not every h2 or label in the product. */
+.app-shell.app-shell :is(
+  .dashboard-home__section-title,
+  .dashboard-home__section-head :is(h2,h3,h4),
+  .dashboard-home__report-card-head .eyebrow,
+  .home-next-steps > .eyebrow,
+  .dashboard-home__insight-strip > .eyebrow,
+  .dashboard-home__budget-card > .eyebrow,
+  .accounts-group__title-row h5,
+  .recurring-redesign h2,
+  .recurring-calendar__eyebrow,
+  .recurring-overview-card__heading .eyebrow,
+  .reports-money-over-time__title,
+  .reports-subtab-title,
+  .report-card__head h4,
+  .settings-card h5,
+  .settings-action-card h5,
+  .settings-section__intro h4,
+  .settings-section-title,
+  .circles-section__head h3,
+  .goals-page .panel h4,
+  .budgeting-page .panel h4,
+  .panel-header :is(h3,h4),
+  .panel-head :is(h3,h4)
+) {
+  font: var(--app-section-font) !important;
+  color: var(--app-section-heading-color) !important;
+  letter-spacing: 0 !important;
+  text-transform: none !important;
+}
+
+.app-shell.app-shell :is(
+  .accounts-overview-card .eyebrow,
+  .metric__label,
+  .metric__label > span,
+  .transactions-footer-snapshot__metric-label,
+  .split-bill-pulse__metrics > article > span,
+  .split-bill-balance-dashboard > article > span,
+  .clover-summary-card > span,
+  .recurring-summary small
+) {
+  font: var(--app-section-font) !important;
+  color: var(--app-section-heading-color) !important;
+  letter-spacing: 0 !important;
+  text-transform: none !important;
+  text-align: center;
+}
+
+/* Exclude large source-choice cards and icon-only controls from CTA sizing. */
+:is(.app-shell, [role="dialog"]) .button:not(.organize-upload-choices .button):not(.icon-button),
+.app-shell .pill-link,
+.app-shell .plan-action-ask button {
+  box-sizing: border-box;
+  min-height: var(--action-button-height) !important;
+  height: auto !important;
+  padding-block: 8px !important;
+  font: var(--app-action-font) !important;
+  letter-spacing: 0 !important;
+  text-transform: none;
+  white-space: normal;
+  text-align: center;
+}
+
+/* A 40px button includes its borders: 22px text + 16px padding + 2px border. */
+.app-shell :is(.topbar-actions, .shell-compact-bar__actions) .button {
+  flex-shrink: 0;
+}
