@@ -1,4 +1,5 @@
 "use client";
+import { reconcileTransactionTotal } from "@/lib/transaction-mobile-pagination";
 import { TransactionDetailLabel } from "@/components/transaction-detail-label";
 import { addTransactionCurrencyAmount, withTransactionCurrencyDelta } from "@/lib/transaction-currency-summary";
 import { UploadSourceButtons, UploadSecurityCopy } from "@/components/upload-source-buttons";
@@ -436,6 +437,7 @@ type TransactionPageMeta = {
 };
 
 type TransactionListPayload = {
+  totalCountIsExact?: boolean;
   transactions?: Transaction[];
   totalCount?: number;
   summary?: TransactionPageMeta;
@@ -3011,12 +3013,13 @@ function TransactionsPageContent() {
       // length while the cached/previous summary already knows about older rows.
       // Keep the largest trustworthy count so mobile pagination is not marked
       // complete before those rows have been requested.
-      const knownServerTotalCount = hasServerSideFilters ? exactServerTotalCount : getKnownMobileTransactionTotal(
-        exactServerTotalCount,
-        transactionsSummary.totalCount,
-        Number.isFinite(cachedTotalCount) ? cachedTotalCount : 0
+      const knownServerTotalCount = hasServerSideFilters ? exactServerTotalCount : reconcileTransactionTotal(
+        exactServerTotalCount, fetchedTransactions.length,
+        getKnownMobileTransactionTotal(transactionsSummary.totalCount, cachedTotalCount),
+        payload?.totalCountIsExact === true
       );
       const hasRecentCachedTotalCount =
+        payload?.totalCountIsExact !== true &&
         cachedTotalCount > exactServerTotalCount &&
         Number.isFinite(Number(cachedWorkspaceSnapshot?.updatedAt)) &&
         Date.now() - Number(cachedWorkspaceSnapshot?.updatedAt) <= RECENT_TRANSACTION_CACHE_MAX_AGE_MS;
@@ -3088,7 +3091,7 @@ function TransactionsPageContent() {
                 : mergedTransactionsWithImports.length;
       const displayedTotalCount =
         !hasServerSideFilters && options?.preserveKnownTotal
-          ? Math.max(transactionsSummary.totalCount, serverDisplayedTotalCount)
+          ? reconcileTransactionTotal(serverDisplayedTotalCount, mergedTransactionsWithImports.length, transactionsSummary.totalCount, payload?.totalCountIsExact === true)
           : serverDisplayedTotalCount;
       if (shouldPreserveKnownTransactionsWhileImportSettles) {
         const fallbackCurrencyCodes =
@@ -3109,7 +3112,7 @@ function TransactionsPageContent() {
         setTransactions(mergeImportedWorkspaceTransactions(stableBaseTransactions, fetchedTransactions));
         setTransactionsSummary((currentSummary) => ({
           ...currentSummary,
-          totalCount: Math.max(currentSummary.totalCount, stableBaseTransactions.length),
+          totalCount: reconcileTransactionTotal(exactServerTotalCount, stableBaseTransactions.length, currentSummary.totalCount, payload?.totalCountIsExact === true),
           income: fallbackSummary?.income ?? currentSummary.income,
           spending: fallbackSummary?.spending ?? currentSummary.spending,
           transfers: fallbackSummary?.transfers ?? currentSummary.transfers,

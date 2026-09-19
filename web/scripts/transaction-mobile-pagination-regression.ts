@@ -1,3 +1,4 @@
+import { reconcileTransactionTotal } from "@/lib/transaction-mobile-pagination";
 import assert from "node:assert/strict";
 import {
   getKnownMobileTransactionTotal,
@@ -73,3 +74,8 @@ assert.equal(
 );
 
 console.log("[PASS] Mobile transaction pagination keeps the server page size and terminates on no progress.");
+
+assert.equal(reconcileTransactionTotal(111, 25, 121, true), 111, "Completed mixed imports must replace inflated cached totals");
+assert.equal(reconcileTransactionTotal(110, 111, 121, true), 111, "Visible pending rows remain counted during handoff");
+assert.equal(reconcileTransactionTotal(25, 25, 29, false), 29, "Legacy approximate counts retain the known larger scope");
+assert.equal(reconcileTransactionTotal(1000, 25, 1000, true), 1000, "A paged list retains the exact full ledger count");

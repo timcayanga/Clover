@@ -773,6 +773,7 @@ export async function GET(request: Request) {
     if (totalCount === 0) {
       return NextResponse.json({
         transactions: [],
+        totalCountIsExact: true,
         page: 1,
         pageSize: includeAll ? 0 : requestedPageSize ?? 25,
         totalCount: 0,
@@ -1193,6 +1194,7 @@ export async function GET(request: Request) {
 
       return NextResponse.json({
         transactions: await withTransactionTags(transactions, workspaceId),
+        totalCountIsExact: true,
         page: includeAll ? 1 : requestedPage,
         pageSize: includeAll ? totalCount : requestedPageSize ?? 25,
         totalCount,
@@ -1538,6 +1540,7 @@ export async function GET(request: Request) {
 
     return NextResponse.json({
       transactions: await withTransactionTags(pageTransactions, workspaceId),
+      totalCountIsExact: true,
       page: includeAll ? 1 : requestedPage,
       pageSize: includeAll ? summaryState.totalCount : requestedPageSize ?? 25,
       totalCount: summaryState.totalCount,

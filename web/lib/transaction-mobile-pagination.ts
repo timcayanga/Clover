@@ -41,3 +41,7 @@ export const isMobileTransactionPaginationExhausted = ({
     (totalCount > 0 && nextCount >= totalCount)
   );
 };
+
+/** Exact database counts can replace stale cache estimates while retaining visible optimistic rows. */
+export const reconcileTransactionTotal = (serverCount: number, visibleCount: number, knownCount: number, exact: boolean) =>
+  getKnownMobileTransactionTotal(serverCount, visibleCount, exact ? 0 : knownCount);
