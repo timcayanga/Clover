@@ -44,8 +44,16 @@ type EffectiveUserLimitsOptions = {
 
 const UNLIMITED_SYNTHETIC_USER_IDS = new Set(["staging-guest", "local-admin"]);
 
+// Dedicated disposable speed-QA identity. Never applies to production or
+// arbitrary previews; remove this entry when the staging speed suite is retired.
+export const hasStagingQaAccess = (user: { clerkUserId?: string | null }) =>
+  process.env.VERCEL_ENV === "preview" &&
+  process.env.CLOVER_DEPLOYMENT_ENVIRONMENT === "staging" &&
+  process.env.VERCEL_GIT_COMMIT_REF === "staging" &&
+  user.clerkUserId === "user_3JJ1IGtRLHyU8hwh7AIRM8xAh8z";
+
 export const hasUnlimitedPlanLimits = (user: { clerkUserId?: string | null }) =>
-  Boolean(user.clerkUserId && UNLIMITED_SYNTHETIC_USER_IDS.has(user.clerkUserId));
+  Boolean(user.clerkUserId && UNLIMITED_SYNTHETIC_USER_IDS.has(user.clerkUserId)) || hasStagingQaAccess(user);
 
 // Keep this rollout switch centralized so temporary unlimited access can be
 // restored to the plan defaults without changing every feature gate.

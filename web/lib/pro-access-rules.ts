@@ -11,6 +11,7 @@ export function addCalendarMonths(date: Date, months: number) {
 }
 
 export type AccessInput = {
+  stagingQaAccess?: boolean;
   planTier: "free" | "pro";
   planTierLocked: boolean;
   subscription: {
@@ -33,7 +34,7 @@ export function calculateProAccess(input: AccessInput, now = new Date()) {
     input.subscription?.status === "active" &&
     Boolean(input.subscription.interval);
   const paid = storePaid || renewing || Boolean(paidThrough && paidThrough > now);
-  const pro = input.planTierLocked
+  const pro = input.stagingQaAccess ? true : input.planTierLocked
     ? input.planTier === "pro"
     : paid || activeGrants.length > 0;
   let end: Date | null =
@@ -51,8 +52,10 @@ export function calculateProAccess(input: AccessInput, now = new Date()) {
     planTier: pro ? ("pro" as const) : ("free" as const),
     renewing,
     paidThrough,
-    accessEndsAt: input.planTierLocked || renewing ? null : end,
-    source: input.planTierLocked
+    accessEndsAt: input.stagingQaAccess || input.planTierLocked || renewing ? null : end,
+    source: input.stagingQaAccess
+      ? "staging QA override"
+      : input.planTierLocked
       ? "manual override"
       : paid && activeGrants.length
         ? "paid + complimentary"

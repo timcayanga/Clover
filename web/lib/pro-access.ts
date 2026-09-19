@@ -1,3 +1,4 @@
+import { hasStagingQaAccess } from "@/lib/user-limits";
 import { prisma } from "@/lib/prisma";
 import { calculateProAccess } from "@/lib/pro-access-rules";
 
@@ -13,6 +14,7 @@ export async function getProAccess(userId: string) {
   return {
     ...calculateProAccess({
       ...user,
+      stagingQaAccess: hasStagingQaAccess(user),
       subscription: user.billingSubscription,
       grants: user.proGrants,
     }),
@@ -37,6 +39,7 @@ export async function refreshProAccess(userId: string) {
   const user = await prisma.user.findUniqueOrThrow({
     where: { id: userId },
     select: {
+      clerkUserId: true,
       storeAccess: { select: { expiresAt: true, renewing: true } },
       planTier: true,
       planTierLocked: true,
@@ -51,6 +54,7 @@ export async function refreshProAccess(userId: string) {
   });
   const access = calculateProAccess({
     ...user,
+    stagingQaAccess: hasStagingQaAccess(user),
     subscription: user.billingSubscription,
     grants: user.proGrants,
   });
