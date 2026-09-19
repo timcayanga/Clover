@@ -1025,7 +1025,7 @@ const detectReceiptMerchantNameFromLines = (lines: string[]) => {
         return null;
       }
 
-      const cleaned = cleanReceiptDescription(line);
+      const cleaned = cleanReceiptDescription(line, true);
       if (!cleaned || cleaned.length < 3 || cleaned.length > 60 || !/[A-Za-z]{3}/.test(cleaned)) {
         return null;
       }
@@ -1075,25 +1075,16 @@ const detectReceiptMerchantNameFromLines = (lines: string[]) => {
 };
 
 const sanitizeReceiptMerchantName = (value: string) => {
-  const normalized = cleanReceiptDescription(value)
+  const normalized = cleanReceiptDescription(value, true)
     .replace(/^[^A-Za-z0-9]+/, "")
     .replace(/^(?:by|branch|store)\s*[:\-]\s*/i, "");
   if (!normalized) {
     return null;
   }
 
-  const parts = normalized.split(/\s+/).filter(Boolean);
-  const allowedShortLeadTokens = new Set(["el", "la", "le", "de", "di"]);
-  while (
-    parts.length > 1 &&
-    parts[0].replace(/[^A-Za-z0-9]/g, "").length <= 2 &&
-    (!/^[A-Za-z]+$/.test(parts[0]) || !allowedShortLeadTokens.has(parts[0].toLowerCase()))
-  ) {
-    parts.shift();
-  }
-
-  const cleaned = parts.join(" ").trim();
-  return cleaned || null;
+  // Short brand tokens and numeric branch/name suffixes are source identity,
+  // not receipt quantities or OCR noise. Keep them in the raw merchant name.
+  return normalized;
 };
 
 const parseReceiptAmountToken = (token: string | null | undefined) => {

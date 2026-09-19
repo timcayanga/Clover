@@ -2549,6 +2549,7 @@ const buildCompactReceiptCoreInputPayload = (params: {
     `File name: ${params.fileName ?? "unknown"}`,
     `File type: ${params.fileType ?? "unknown"}`,
     "Use only clearly visible evidence. Preserve the original date wording in parser_evidence.source_text.",
+    "Copy the complete printed business name verbatim into merchant_raw, including short brand tokens and numeric name or branch suffixes. Put any simplified display name only in merchant_clean. Do not drop part of a business name as receipt metadata.",
     "If this is not evidence of a completed financial transaction, return receipt_details null.",
     "Return only valid JSON matching the supplied schema.",
   ].join("\n");

@@ -870,3 +870,8 @@ assert.equal(shouldRefineReceiptCore({...coreOnlyImage,imageCount:0}), false);
 
 const numberedItems = parseReceiptText("QA Cafe Receipt 3\nSYNTHETIC QA RECEIPT - NOT VALID FOR PAYMENT\nDate: September 19, 2026\nReceipt: QA-20260919-R3\nCurrency: PHP Paid in cash\n1 Test snack 01 25.00\n1 Test snack 02 25.00\n1 Test snack 03 25.00\n1 Test snack 04 25.00\n1 Test snack 05 25.00\n1 Test snack 06 25.00\n1 Test snack 07 25.00\n1 Test snack 08 25.00\n1 Test snack 09 25.00\n1 Test snack 10 25.00\nSUBTOTAL PHP 250.00\nTOTAL PAID PHP 250.00\nNo VAT / discounts / service charges");
 assert.deepEqual(numberedItems.items.map(item => item.description), Array.from({length: 10}, (_, i) => `Test snack ${String(i + 1).padStart(2, "0")}`), "Already separated amounts must not cause numeric product suffixes to be removed");
+
+assert.equal(numberedItems.merchantName, "QA Cafe Receipt 3", "Receipt merchant identity retains short brand tokens and numeric suffixes");
+for (const merchant of ["SM Store", "7 Eleven", "Studio 54"]) {
+  assert.equal(parseReceiptText(`${merchant}\nDate: September 19, 2026\n1 Sandwich 25.00\nTOTAL PHP 25.00`).merchantName, merchant);
+}
