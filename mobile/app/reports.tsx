@@ -1,3 +1,4 @@
+import { CashFlowChart } from "../src/cash-flow-chart";
 import { ReportLineChart } from "../src/report-line-chart";
 import { ChartControls } from "../src/chart-controls";
 import { SpendingDonut } from "../src/spending-donut";
@@ -8,6 +9,7 @@ import { useSession } from "../src/session";
 import {
   Body,
   Card,
+  Field,
   CategoryMark,
   Icon,
   Notice,
@@ -38,10 +40,12 @@ type Report = {
   };
   balances?: {
     currency: string;
+    range?:{date:string;balance:number}[];
     weekly: { date: string; balance: number }[];
     monthly: { date: string; balance: number }[];
     accountCount: number;
   };
+  details?:{from:string;to:string;comparison:string;current:Totals;previous:Totals;days:(Totals&{date:string})[];categories:{name:string;amount:number}[];pace:{date:string;current:number;previous:number}[];merchants:{name:string;amount:number;count:number}[];repeats:{name:string;amount:number;count:number}[];flows:{account:string;income:number;expense:number}[]};
   reviewCount: number;
 };
 const sampleDays = [
@@ -87,6 +91,12 @@ const sample: Report = {
   balances: {
     currency: "PHP",
     accountCount: 4,
+    range: [
+      { date: "2026-09-01", balance: 141000 },
+      { date: "2026-09-06", balance: 132000 },
+      { date: "2026-09-10", balance: 137000 },
+      { date: "2026-09-12", balance: 143000 },
+    ],
     weekly: [
       { date: "2026-09-10", balance: 137000 },
       { date: "2026-09-12", balance: 143000 },
@@ -98,6 +108,16 @@ const sample: Report = {
       { date: "2026-09-12", balance: 143000 },
     ],
   },
+  details: {
+    from: "2026-09-01", to: "2026-09-12", comparison: "previous",
+    current: {income:65000,expense:42000}, previous:{income:60000,expense:40000},
+    days: sampleDays,
+    categories: [{name:"Housing",amount:15000},{name:"Food & Dining",amount:9000},{name:"Groceries",amount:6000},{name:"Other",amount:5000},{name:"Transport",amount:4000},{name:"Subscriptions",amount:3000}],
+    pace: sampleDays.map((d,i)=>({date:d.date,current:sampleDays.slice(0,i+1).reduce((n,p)=>n+p.expense,0),previous:[6000,14000,24000,40000][i]})),
+    merchants:[{name:"Sample grocery",amount:6000,count:4},{name:"Sample cafe",amount:3000,count:3}],
+    repeats:[{name:"Sample cafe",amount:3000,count:3}],
+    flows:[{account:"Sample bank",income:43000,expense:31000},{account:"Sample wallet",income:22000,expense:11000}],
+  },
   reviewCount: 0,
 };
 export default function Reports() {
@@ -106,15 +126,18 @@ export default function Reports() {
   const [currency, setCurrency] = useState("PHP");
   const [tab, setTab] = useState("Overview");
   const [period, setPeriod] = useState<"weekly" | "monthly">("monthly");
+  const [from,setFrom]=useState("");const [to,setTo]=useState("");const [comparison,setComparison]=useState("previous");const [range,setRange]=useState("");
   const [filters, setFilters] = useState(false);
   const [chart, setChart] = useState("Donut");
   const { data, error, reload } = usePlanData(
-    `reports?currency=${currency}`,
+    `reports?currency=${currency}${range}`,
     sample,
   );
-  const summary = data?.[period];
+  const summary = data?.details?{...data.details.current,previous:data.details.previous}:data?.[period];
+  const categories=data?.details?.categories??data?.categories??[];
+  const expenseTotal=summary?.expense??0;
   const balancePoints =
-    data?.balances?.currency === currency ? data.balances[period] : [];
+    data?.balances?.currency === currency ? (data.details?data.balances.range??[]:data.balances[period]) : [];
   const latestBalance = balancePoints.at(-1);
   const net = (summary?.income ?? 0) - (summary?.expense ?? 0);
   return (
@@ -151,11 +174,15 @@ export default function Reports() {
               onPress={() => setCurrency(value)}
             />
           ))}
-          <Body>Comparison window</Body>
-          <PlanAction title="Last 7 days" onPress={() => setPeriod("weekly")} />
+          <Field label="From (YYYY-MM-DD, optional)" value={from} onChangeText={setFrom}/>
+          <Field label="To (YYYY-MM-DD, optional)" value={to} onChangeText={setTo}/>
+          <PlanAction title={`Previous period${comparison==="previous"?" ✓":""}`} onPress={()=>setComparison("previous")}/>
+          <PlanAction title={`Previous year${comparison==="year"?" ✓":""}`} onPress={()=>setComparison("year")}/>
+          <Body>Quick ranges</Body>
+          <PlanAction title="Last 7 days" onPress={() => {setPeriod("weekly");setFrom(new Date(Date.now()-6*86400000).toISOString().slice(0,10));setTo(new Date().toISOString().slice(0,10));}} />
           <PlanAction
             title="Last 30 days"
-            onPress={() => setPeriod("monthly")}
+            onPress={() => {setPeriod("monthly");setFrom(new Date(Date.now()-29*86400000).toISOString().slice(0,10));setTo(new Date().toISOString().slice(0,10));}}
           />
           <Body>
             Transfers are excluded from income and spending. Dates use
@@ -164,7 +191,7 @@ export default function Reports() {
           <PlanAction
             title="Apply filters"
             tone="primary"
-            onPress={() => setFilters(false)}
+            onPress={() => {setRange(`${from?`&from=${encodeURIComponent(from)}`:""}${to?`&to=${encodeURIComponent(to)}`:""}&comparison=${comparison}`);setFilters(false);}}
           />
         </Card>
       ) : null}
@@ -278,7 +305,7 @@ export default function Reports() {
             </Text>
             <Body>
               Tracked account balance · {currency} ·{" "}
-              {period === "weekly" ? "Last 7 days" : "Last 30 days"}
+              {data.details?`${data.details.from} – ${data.details.to}`:period === "weekly" ? "Last 7 days" : "Last 30 days"}
             </Body>
             {latestBalance ? (
               <Text
@@ -376,12 +403,12 @@ export default function Reports() {
               <ChartControls value={chart} onChange={setChart} />
             </View>
           </View>
-          <Body>This calendar month · {currency}</Body>
+          <Body>{data.details?`${data.details.from} – ${data.details.to}`:"This calendar month"} · {currency}</Body>
           {chart === "Donut" ? (
-            <SpendingDonut categories={data.categories} currency={currency} />
+            <SpendingDonut categories={categories} currency={currency} />
           ) : null}
-          {data.categories.length ? (
-            data.categories.map((category) => (
+          {chart==="Table"?<View><View style={{flexDirection:"row",paddingVertical:10,borderBottomWidth:1,borderColor:colors.line}}><Text style={{flex:2,color:colors.muted}}>Category</Text><Text style={{flex:1,color:colors.muted,textAlign:"right"}}>Amount</Text><Text style={{width:55,color:colors.muted,textAlign:"right"}}>Share</Text></View>{categories.map(c=><View key={c.name} style={{flexDirection:"row",paddingVertical:12,borderBottomWidth:1,borderColor:colors.line,gap:8}}><Text style={{flex:2,color:colors.ink,fontFamily:"Poppins-Regular"}}>{c.name}</Text><Text style={{flex:1,color:colors.ink,textAlign:"right",fontFamily:"Poppins-Regular"}}>{money(String(c.amount),currency)}</Text><Text style={{width:55,color:colors.ink,textAlign:"right"}}>{expenseTotal?(c.amount/expenseTotal*100).toFixed(1):0}%</Text></View>)}</View>:categories.length ? (
+            categories.map((category) => (
               <View key={category.name} style={{ gap: 8 }}>
                 <View style={{ flexDirection: "row", gap: 8 }}>
                   <CategoryMark name={category.name} />
@@ -389,16 +416,16 @@ export default function Reports() {
                 </View>
                 <Body>
                   {money(String(category.amount), currency)} ·{" "}
-                  {data.month.expense
-                    ? ((category.amount / data.month.expense) * 100).toFixed(1)
+                  {expenseTotal
+                    ? ((category.amount / expenseTotal) * 100).toFixed(1)
                     : 0}
                   % of spending
                 </Body>
                 {chart === "Bars" ? (
                   <Progress
                     value={
-                      data.month.expense
-                        ? (category.amount / data.month.expense) * 100
+                      expenseTotal
+                        ? (category.amount / expenseTotal) * 100
                         : 0
                     }
                   />
@@ -415,6 +442,7 @@ export default function Reports() {
         </Card>
       ) : tab === "Trends" ? (
         <>
+          {data.details?<><Card><Body muted={false}>Spending pace</Body><ReportLineChart currency={currency} series={[{name:"Selected period",color:colors.teal,points:data.details.pace.map(p=>({date:p.date,value:p.current}))},{name:"Comparison period",color:colors.muted,points:data.details.pace.map(p=>({date:p.date,value:p.previous}))}]}/><Body>Cumulative spending compared at the same elapsed day.</Body></Card><Card><Body muted={false}>Income and spending</Body><ReportLineChart currency={currency} series={[{name:"Income",color:colors.positive,points:data.details.days.map(p=>({date:p.date,value:p.income}))},{name:"Spending",color:colors.danger,points:data.details.days.map(p=>({date:p.date,value:p.expense}))}]}/></Card><Card><Body muted={false}>Biggest merchants</Body>{data.details.merchants.map(m=><Body key={m.name}>{m.name} · {money(String(m.amount),currency)} · {m.count} transactions</Body>)}</Card><Card><Body muted={false}>Repeat bills</Body><Body>Repeated merchants on different days. These are observations, not confirmed recurring bills.</Body>{data.details.repeats.length?data.details.repeats.map(m=><Body key={m.name}>{m.name} · {m.count} payments · {money(String(m.amount),currency)}</Body>):<Body>No repeated merchants in this period.</Body>}</Card></>:null}
           <Card>
             <Body muted={false}>Weekly Summary</Body>
             <Body>
@@ -452,7 +480,7 @@ export default function Reports() {
         <>
           <Card>
             <Body muted={false}>Cash flow</Body>
-            <Body>Income → Accounts → Expenses</Body>
+            <CashFlowChart flows={data.details?.flows??[]} currency={currency}/>
             <Body>Income {money(String(summary.income), currency)}</Body>
             <Body>Expenses {money(String(summary.expense), currency)}</Body>
             <Body>

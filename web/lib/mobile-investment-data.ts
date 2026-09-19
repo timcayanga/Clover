@@ -1,3 +1,5 @@
+import { getLocalInvestmentLogo } from "./investment-assets";
+import type { InvestmentSubtype } from "./investments";
 import { prisma } from "./prisma";
 import { hasCompatibleTable } from "./data-engine";
 import {
@@ -129,7 +131,7 @@ export async function loadMobileInvestments(workspaceId: string) {
     holdings: projectPortfolio(
       accounts as PortfolioAccount[],
       snapshots.slice(0, 200),
-    ),
+    ).map(holding=>({...holding,logoUrl:getLocalInvestmentLogo({name:holding.name,symbol:holding.symbol,currency:holding.currency,subtype:holding.subtype as InvestmentSubtype})})),
     history,
     limited: rows.length > 1000 || snapshots.length > 200,
   };

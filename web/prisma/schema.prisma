@@ -851,6 +851,7 @@ model Account {
   statementCheckpoints    AccountStatementCheckpoint[]
   financialCommitments    FinancialCommitment[]
   accountRules            AccountRule[]
+  investmentTrades        InvestmentTrade[]
   investmentPurchases     InvestmentPurchase[]
   investmentDividends     InvestmentDividend[]
   receiptDocuments        ReceiptDocument[]
@@ -2323,4 +2324,32 @@ model AdviserConversation {
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
   workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   @@index([userId, workspaceId, updatedAt(sort: Desc)])
+}
+
+model InvestmentTrade {
+ id String @id
+ accountId String
+ assetName String
+ tradedAt DateTime
+ kind String
+ quantity Decimal @db.Decimal(18,8)
+ amount Decimal @db.Decimal(18,2)
+ costBasis Decimal @db.Decimal(18,2)
+ currency String
+ note String @default("")
+ revision Int @default(1)
+ deletedAt DateTime?
+ updatedAt DateTime @default(now())
+ account Account @relation(fields:[accountId],references:[id],onDelete:Cascade)
+ revisions InvestmentTradeRevision[]
+ @@index([accountId,tradedAt(sort:Desc)])
+}
+model InvestmentTradeRevision {
+ id String @id
+ tradeId String
+ actorUserId String
+ before Json?
+ after Json
+ createdAt DateTime @default(now())
+ trade InvestmentTrade @relation(fields:[tradeId],references:[id],onDelete:Cascade)
 }

@@ -1,3 +1,4 @@
+import { TradeLedger } from "./trade-ledger";
 import { useCallback, useState } from "react";
 import { useFocusEffect, router } from "expo-router";
 import { Pressable, Text, View } from "react-native";
@@ -228,6 +229,7 @@ export function AccountHistory({
   };
   return (
     <View style={{ gap: 12 }}>
+      {investment?<TradeLedger key={`${session.profileId}:${accountId}`} accountId={accountId} currency={currency} onChanged={()=>{setRevision(v=>v+1);onChanged?.();}}/>:null}
       <View
         style={{
           flexDirection: "row",
@@ -276,7 +278,7 @@ export function AccountHistory({
       ) : null}
       {investment ? (
         <Body>
-          Activity includes recorded buys, sells, transfers and reinvestments.
+          Activity shows imported investment transactions.
           Purchases and dividends show separately recorded entries.
         </Body>
       ) : null}

@@ -46,7 +46,12 @@ export function notificationDestination(href: string): string | null {
   }
   // Don't discard tokens or unknown query options, which may identify a workflow
   // unavailable in native (for example accepting a Circle invitation).
+  const detailQuery:Record<string,[string,string]>={"/budgeting":["budget","/budgeting?budgetId="],"/goals":["goal","/goals?goalId="],"/circles":["circle","/circles?circleId="]};
+  const query=detailQuery[path];
+  if(query&&url.searchParams.size===1){const id=url.searchParams.get(query[0]);if(id&&/^[a-zA-Z0-9_-]+$/.test(id))return query[1]+encodeURIComponent(id);}
   if (url.search) return null;
+  const nativeDetail=path.match(/^\/(accounts|budgeting|budgets|goals|circles)\/([a-zA-Z0-9_-]+)$/);
+  if(nativeDetail){const [,kind,id]=nativeDetail;return kind==="accounts"?`/(tabs)/accounts?accountId=${id}`:kind==="goals"?`/goals?goalId=${id}`:kind==="circles"?`/circles?circleId=${id}`:`/budgeting?budgetId=${id}`;}
   if (routes[path]) return routes[path];
   const detail = path.match(
     /^\/(transactions|imports|import|split-bill)\/([a-zA-Z0-9_-]+)$/,

@@ -334,11 +334,13 @@ export function Progress({ value }: { value: number }) {
         overflow: "hidden",
       }}
     >
-      <View
+      <LinearGradient
+        colors={["#00AEC4", "#68E3BD"]}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 0 }}
         style={{
           height: 10,
           width: `${Math.max(0, Math.min(100, value))}%`,
-          backgroundColor: colors.bright,
         }}
       />
     </View>

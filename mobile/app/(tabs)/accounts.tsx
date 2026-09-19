@@ -38,7 +38,9 @@ function AccountsContent() {
   const [query, setQuery] = useState("");
   const [selected, setSelected] = useState<Account | null>(null);
   const [adding, setAdding] = useState(false);
-  const { add } = useLocalSearchParams<{ add?: string }>();
+  const { add,accountId } = useLocalSearchParams<{ add?: string;accountId?:string }>();
+  const [openedAccount,setOpenedAccount]=useState("");
+  useEffect(()=>{if(accountId&&accountId!==openedAccount){const found=accounts.find(a=>a.id===accountId);if(found){setOpenedAccount(accountId);setSelected(found);}}},[accountId,accounts,openedAccount]);
   const navigation = useNavigation();
   useEffect(() => {
     if (add) {

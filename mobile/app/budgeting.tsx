@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { router } from "expo-router";
+import { router, useLocalSearchParams } from "expo-router";
 import { Text, View } from "react-native";
 import { useSession } from "../src/session";
 import {
@@ -65,6 +65,8 @@ const optionSample = {
 };
 export default function Budgeting() {
   const session = useSession();
+  const params=useLocalSearchParams<{budgetId?:string}>();
+  const opened=useRef("");
   const { colors, dark } = useTheme();
   const { data, setData, error, reload } = usePlanData("budgets", sample);
   const [selected, setSelected] = useState<Budget | null>(null);
@@ -79,6 +81,7 @@ export default function Budgeting() {
     setSelected(null);
     setEditor(null);
   }, [session.profileId]);
+  useEffect(()=>{const id=params.budgetId;const token=`${session.profileId}:${id}`;if(id&&data&&opened.current!==token){const found=data.budgets.find(item=>item.id===id);if(found){opened.current=token;setSelected(found);}}},[params.budgetId,data,session.profileId]);
   useEffect(() => {
     let active = true;
     setHistory(null);

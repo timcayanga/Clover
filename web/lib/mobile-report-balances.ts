@@ -13,9 +13,10 @@ export async function mobileReportBalances(
   workspaceId: string,
   currency: string,
   now = new Date(),
+  window?:{start:Date;end:Date},
 ) {
   const { rolling, tomorrow } = mobileHomePeriods(now);
-  const from = rolling(30).from;
+  const from = window && window.start<rolling(30).from?window.start:rolling(30).from;
   const [accounts, movements] = await Promise.all([
     prisma.account.findMany({
       where: { workspaceId, currency },
@@ -106,6 +107,7 @@ export async function mobileReportBalances(
     ).find((series) => series.currency === currency)?.points ?? [];
   return {
     currency,
+    range:window?buildReportBalanceSeries(balances,datedMovements,getCalendarDayEndInTimeZone(window.start,"Asia/Manila"),getCalendarDayEndInTimeZone(window.end,"Asia/Manila"),asOf).find(series=>series.currency===currency)?.points??[]:[],
     weekly: points(7),
     monthly: points(30),
     accountCount: accounts.length,

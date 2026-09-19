@@ -1,3 +1,4 @@
+import { HoldingLogo } from "./holding-logo";
 import { useEffect, useState } from "react";
 import {
   Image,
@@ -43,10 +44,7 @@ export function HoldingRow({
         borderBottomColor: colors.line,
       }}
     >
-      <Image
-        source={investmentIcons[holding.subtype] ?? investmentIcons.other}
-        style={{ width: 40, height: 40, borderRadius: 12 }}
-      />
+      <HoldingLogo key={holding.id} holding={holding}/>
       <View style={{ flex: 1, minWidth: 0 }}>
         <Text
           style={{
@@ -294,10 +292,7 @@ export function SnapshotHoldingDetails({
     <Screen>
       <PlanHeader title="Asset Details" titleInset={52} back={onBack} />
       <Card>
-        <Image
-          source={investmentIcons[holding.subtype] ?? investmentIcons.other}
-          style={{ width: 44, height: 44, borderRadius: 12 }}
-        />
+        <HoldingLogo key={holding.id} holding={holding}/>
         <Text
           style={{
             fontFamily: "Poppins-SemiBold",

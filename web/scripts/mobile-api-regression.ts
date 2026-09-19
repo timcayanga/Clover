@@ -129,7 +129,13 @@ async function main() {
   assert.ok(routeSource.includes('where: { id: body.categoryId, workspaceId'));
   assert.equal(mobileOperation("POST", ["billing", "checkout"]), null);
   assert.equal(mobileOperation("GET", ["admin", "users"]), null);
-  assert.equal(mobileOperation("POST", ["imports", "abc", "confirm"]), null);
+  assert.equal(mobileOperation("POST", ["imports", "abc", "confirm"]), "import-confirm");
+  assert.equal(mobileOperation("GET", ["imports", "abc", "review"]), "import-review");
+  assert.equal(mobileOperation("DELETE", ["imports", "abc", "confirm"]), null);
+  assert.ok(routeSource.includes('row.workspaceId !== workspaceId'));
+  assert.ok(routeSource.includes('where:{id:payload.accountId,workspaceId}'));
+  assert.ok(routeSource.includes('withMobileRequestContext(userId,forwarded'));
+
   const request = new Request(
     "https://staging.clover.ph/api/mobile/v1/transactions/abc",
     { method: "PATCH" },

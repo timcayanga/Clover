@@ -1,3 +1,4 @@
+import { resolveImportModalStatusDecision } from "./import-modal-status";
 import { parseAdviserChart } from "../../shared/adviser-chart";
 import { parseReceiptLineItemsFromPayload } from "./receipt-line-items";
 import { entryDraftSchema } from "./adviser-entry-schema";
@@ -158,6 +159,7 @@ export function mobileApiResponse(operation: string, value: unknown) {
     };
   if (operation === "import-status")
     return {
+      progress:resolveImportModalStatusDecision({importMode:"statement",...record(data.importFile),...pick(data,["visibleImportComplete","confirmedTransactionsCount","parsedRowsCount"])}).progress,
       importFile: pick(data.importFile, [
         "id",
         "fileName",

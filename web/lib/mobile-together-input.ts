@@ -4,6 +4,7 @@ import { circleTypes } from "./circles";
 
 export const mobileCircleInput = z
   .object({
+    avatarUrl: z.string().max(200000).regex(/^data:image\/(jpeg|png);base64,[A-Za-z0-9+/=]+$/).nullable().optional(),
     name: z.string().trim().min(1).max(100),
     type: z.enum(circleTypes),
     description: z.string().trim().max(300),

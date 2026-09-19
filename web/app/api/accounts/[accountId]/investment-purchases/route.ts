@@ -133,6 +133,8 @@ export async function POST(request: Request, { params }: { params: Promise<{ acc
     }
 
     const purchase = await prisma.$transaction(async (tx) => {
+      await tx.$queryRaw`SELECT "id" FROM "Account" WHERE "id"=${accountId} FOR UPDATE`;
+      const lockedAccount=await tx.account.findUniqueOrThrow({where:{id:accountId}});
       const created = await tx.investmentPurchase.create({
         data: {
           accountId,
@@ -146,10 +148,10 @@ export async function POST(request: Request, { params }: { params: Promise<{ acc
 
       const summaryField = isFixedIncomeInvestmentSubtype(account.investmentSubtype) ? "investmentPrincipal" : "investmentCostBasis";
       const currentSummary = Number(
-        summaryField === "investmentPrincipal" ? account.investmentPrincipal?.toString() ?? 0 : account.investmentCostBasis?.toString() ?? 0
+        summaryField === "investmentPrincipal" ? lockedAccount.investmentPrincipal?.toString() ?? 0 : lockedAccount.investmentCostBasis?.toString() ?? 0
       );
       const nextSummary = new Prisma.Decimal(currentSummary).plus(new Prisma.Decimal(totalCost));
-      const currentQuantity = new Prisma.Decimal(account.investmentQuantity?.toString() ?? 0);
+      const currentQuantity = new Prisma.Decimal(lockedAccount.investmentQuantity?.toString() ?? 0);
       const nextQuantity = quantity === null ? currentQuantity : currentQuantity.plus(new Prisma.Decimal(quantity));
 
       await tx.account.update({

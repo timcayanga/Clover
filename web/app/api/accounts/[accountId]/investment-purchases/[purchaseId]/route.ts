@@ -57,6 +57,8 @@ export async function DELETE(_request: Request, { params }: { params: Promise<{ 
     }
 
     await prisma.$transaction(async (tx) => {
+      await tx.$queryRaw`SELECT "id" FROM "Account" WHERE "id"=${accountId} FOR UPDATE`;
+      const lockedAccount=await tx.account.findUniqueOrThrow({where:{id:accountId}});
       await tx.investmentPurchase.delete({
         where: { id: purchaseId },
       });
@@ -64,12 +66,14 @@ export async function DELETE(_request: Request, { params }: { params: Promise<{ 
       const totalCost = new Prisma.Decimal(purchase.totalCost?.toString() ?? 0);
       const summaryField = isFixedIncomeInvestmentSubtype(account.investmentSubtype) ? "investmentPrincipal" : "investmentCostBasis";
       const currentSummary = Number(
-        summaryField === "investmentPrincipal" ? account.investmentPrincipal?.toString() ?? 0 : account.investmentCostBasis?.toString() ?? 0
+        summaryField === "investmentPrincipal" ? lockedAccount.investmentPrincipal?.toString() ?? 0 : lockedAccount.investmentCostBasis?.toString() ?? 0
       );
-      const nextSummary = Math.max(0, currentSummary - Number(totalCost.toString()));
-      const currentQuantity = new Prisma.Decimal(account.investmentQuantity?.toString() ?? 0);
+      if(currentSummary < Number(totalCost))throw new Error("This purchase cost is already consumed by later trades. Review the trading history before deleting it.");
+      const nextSummary = currentSummary - Number(totalCost.toString());
+      const currentQuantity = new Prisma.Decimal(lockedAccount.investmentQuantity?.toString() ?? 0);
       const purchaseQuantity = new Prisma.Decimal(purchase.quantity?.toString() ?? 0);
-      const nextQuantity = Prisma.Decimal.max(0, currentQuantity.minus(purchaseQuantity));
+      if(currentQuantity.lessThan(purchaseQuantity))throw new Error("These units are already consumed by later trades. Review the trading history before deleting this purchase.");
+      const nextQuantity = currentQuantity.minus(purchaseQuantity);
 
       await tx.account.update({
         where: { id: accountId },

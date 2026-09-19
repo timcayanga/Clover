@@ -16,6 +16,7 @@ export function mobileOperation(method: string, segments: string[]) {
   if (path === "settings/regional" && ["GET", "PATCH"].includes(method)) return "settings-regional";
   if (path === "split-bill-receipts/preview" && method === "POST") return "split-receipt-preview";
   if (["investments", "market-history", "market-news", "together-options", "reports"].includes(path) && method === "GET") return path;
+  if (segments.length === 3 && segments[0] === "accounts" && segments[2] === "trades" && ["GET","POST","DELETE"].includes(method)) return "investment-trades";
   if (segments.length === 3 && segments[0] === "accounts" && segments[2] === "history" && method === "GET") return "account-history";
   if (segments.length === 3 && segments[0] === "accounts" && segments[2] === "purchases" && method === "POST") return "investment-purchase-create";
   if (segments.length === 4 && segments[0] === "accounts" && segments[2] === "purchases" && method === "DELETE") return "investment-purchase-delete";
@@ -28,6 +29,8 @@ export function mobileOperation(method: string, segments: string[]) {
   if (path === "adviser/entries" && ["GET", "POST"].includes(method)) return "adviser-entries";
   if (path === "adviser/conversations" && ["GET", "POST"].includes(method)) return "adviser-conversations";
   if (path === "adviser/chat" && method === "POST") return "adviser-chat";
+  if (segments.length === 3 && segments[0] === "circles" && segments[2] === "archive" && method === "POST") return "circle-archive";
+  if (segments.length === 3 && segments[0] === "circles" && segments[2] === "resources" && method === "POST") return "circle-resource";
   if (path === "circles" && ["GET", "POST"].includes(method)) return "circles";
   if (segments.length === 2 && segments[0] === "circles" && ["GET", "PATCH"].includes(method)) return "circle";
   if (segments.length === 2 && segments[0] === "split-bill-payment-profiles" && method === "DELETE") return "payment-profile-delete";
@@ -55,6 +58,8 @@ export function mobileOperation(method: string, segments: string[]) {
   )
     return "transaction";
   if (segments.length === 3 && segments[0] === "imports") {
+    if (method === "GET" && segments[2] === "review") return "import-review";
+    if (method === "POST" && segments[2] === "confirm") return "import-confirm";
     if (method === "GET" && segments[2] === "status") return "import-status";
     if (method === "POST" && segments[2] === "process") return "import-process";
     if (method === "POST" && segments[2] === "resume") return "import-resume";

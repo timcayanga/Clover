@@ -1,3 +1,5 @@
+import { Progress } from "../../src/plan-ui";
+import { ImportReview } from "../../src/import-review";
 import { OfflineFilePanel } from "../../src/offline/file-panel";
 import { router, useLocalSearchParams } from "expo-router";
 import { useEffect, useRef, useState } from "react";
@@ -52,6 +54,7 @@ export default function ImportDetail() {
         }
       : null,
   );
+  const [review,setReview]=useState(false);
   const [duplicateId, setDuplicateId] = useState<string | null>(null);
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
@@ -163,6 +166,7 @@ export default function ImportDetail() {
     queued,
   ]);
   if (!access.active) return null;
+  if(review)return <ImportReview key={`${profileId}:${id}`} id={id} onClose={()=>{setReview(false);setRevision(v=>v+1);}}/>;
   if (queued) return <OfflineFilePanel key={queued.id} file={queued} />;
   const upload = async () => {
     if (lock.current || !uri || !correctProfile) return;
@@ -282,10 +286,7 @@ export default function ImportDetail() {
                 {status?.importFile.processingMessage ??
                   "Clover is receiving and reading your file. You can check this import again without uploading another copy."}
               </Body>
-              <Body>
-                No estimated percentage is shown before Clover confirms the
-                result.
-              </Body>
+              <Progress value={status?.progress??(uploading?30:10)}/><Body>{status?.progress??(uploading?30:10)}% · Import milestone</Body>
             </Card>
           )}
           {complete && (
@@ -297,7 +298,7 @@ export default function ImportDetail() {
               </Text>
               <Body>
                 {reviewOnly
-                  ? `${status?.parsedRowsCount} records parsed. Review and confirm them on the Clover website.`
+                  ? `${status?.parsedRowsCount} records parsed. Review them before confirming.`
                   : `${visibleRows} transactions available${demo ? " in this sample" : ""}.`}
               </Body>
               {visibleRows > 0 && (
@@ -306,12 +307,10 @@ export default function ImportDetail() {
                   onPress={() => router.replace("/(tabs)/transactions")}
                 />
               )}
-              <Body>
-                Review any flagged records. Final import confirmation remains
-                available on the Clover website in this preview.
-              </Body>
+              {!demo && (status?.parsedRowsCount??0)>0 ? <Button title="Review import" onPress={()=>setReview(true)}/> : null}
             </Card>
           )}
+          {!demo && !complete && (status?.parsedRowsCount??0)>0 ? <Button title="Review parsed records" onPress={()=>setReview(true)}/> : null}
           {error ? <Notice>{error}</Notice> : null}
           {started && !complete && !uploading && (
             <>

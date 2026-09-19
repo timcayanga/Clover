@@ -1,6 +1,8 @@
+import { CircleResourceEditor, type CircleAction } from "../src/circle-resource-editor";
+import * as ImagePicker from "expo-image-picker";
 import { LinearGradient } from "expo-linear-gradient";
 import { SplitGroupDetails } from "../src/split-group-details";
-import { router } from "expo-router";
+import { router, useLocalSearchParams } from "expo-router";
 import { useEffect, useState, useRef } from "react";
 import { Image, Text, View } from "react-native";
 import { useSession } from "../src/session";
@@ -31,11 +33,14 @@ type Circle = {
   color: string;
   avatarUrl?: string | null;
   role: string;
+  isOwner?:boolean;
+  commitments?:{id:string;title:string;amount:number;currency:string;isActive:boolean}[];
+  contributions?:{id:string;memberName:string;amount:number;currency:string;contributionDate:string}[];
   memberCount: number;
   splitBillGroupId?: string | null;
   expenseTotalThisMonth: number;
   contributionTotalThisMonth: number;
-  members?: { id: string; displayName: string; role: string; status: string }[];
+  members?: { id: string; displayName: string; role: string; status: string; isOwner?:boolean }[];
   budgets?: {
     id: string;
     name: string;
@@ -66,9 +71,13 @@ type Circle = {
 const sample = { circles: [] as Circle[] };
 export default function Circles() {
   const session = useSession();
+  const params=useLocalSearchParams<{circleId?:string}>();
+  const opened=useRef("");
   const { colors, dark } = useTheme();
   const { data, setData, error, reload } = usePlanData("circles", sample);
   const [selected, setSelected] = useState<Circle | null>(null);
+  const [resource,setResource]=useState<CircleAction|null>(null);
+  const [deleteConfirm,setDeleteConfirm]=useState(false);
   const [memberDetail,setMemberDetail] = useState<string|null>(null);
   const [tab, setTab] = useState("Overview");
   const [search, setSearch] = useState("");
@@ -81,9 +90,11 @@ export default function Circles() {
   const [revision, setRevision] = useState(0);
   useEffect(() => {
     setSelected(null);
+    setResource(null);
     setEditor(null);
     setSearch("");
   }, [session.profileId]);
+  useEffect(()=>{const id=params.circleId;const token=`${session.profileId}:${id}`;if(id&&data&&opened.current!==token){const found=data.circles.find(item=>item.id===id);if(found){opened.current=token;setSelected(found);}}},[params.circleId,data,session.profileId]);
   const selectedId = selected?.id;
   useEffect(() => {
     if (!selectedId || session.demo) return;
@@ -110,6 +121,7 @@ export default function Circles() {
       active = false;
     };
   }, [selectedId, session.demo, session.profileId, session.request, revision]);
+  if(resource&&selected)return <CircleResourceEditor key={`${session.profileId}:${selected.id}:${resource.action}:${resource.id??"new"}`} circleId={selected.id} currency={selected.currency} initial={resource} onClose={()=>setResource(null)} onSaved={()=>{setResource(null);setRevision(v=>v+1);reload();}}/>;
   if(memberDetail && selected?.splitBillGroupId) return <SplitGroupDetails group={{id:selected.splitBillGroupId,name:selected.name,members:[]}} person={memberDetail} onClose={()=>setMemberDetail(null)} onBill={id=>{setMemberDetail(null);router.push({pathname:"/split-bills",params:{billId:id}});}} onChanged={reload}/>;
   if (editor)
     return (
@@ -163,6 +175,8 @@ export default function Circles() {
               "Expenses",
               "Budgets",
               "Goals",
+              "Commitments",
+              "Contributions",
               "Activity",
               "People",
             ]}
@@ -189,6 +203,7 @@ export default function Circles() {
                 Only data shared with this Circle is shown. Personal accounts
                 stay private.
               </Body>
+              {selected.isOwner?<><PlanAction title="Archive Circle" tone="delete" onPress={()=>setDeleteConfirm(true)}/>{deleteConfirm?<Card><Body>Archive this Circle? Shared history and personal transactions are preserved.</Body><PlanAction title="Confirm archive" tone="delete" disabled={loading} onPress={()=>{setLoading(true);void session.request(`circles/${selected.id}/archive?workspaceId=${encodeURIComponent(session.profileId)}`,{method:"POST"}).then(()=>{setSelected(null);setDeleteConfirm(false);reload();}).catch(e=>setDetailError(e.message)).finally(()=>setLoading(false));}}/><PlanAction title="Keep Circle" onPress={()=>setDeleteConfirm(false)}/></Card>:null}</>:null}
               {selected.role === "organizer" ? (
                 <PlanAction
                   title="Edit Circle"
@@ -199,6 +214,7 @@ export default function Circles() {
             </>
           ) : tab === "Expenses" ? (
             <>
+              {selected.role!=="participant"?<PlanAction title="+ Share an expense" tone="primary" onPress={()=>setResource({action:"share_transaction"})}/>:null}
               {selected.expenses?.length ? (
                 selected.expenses.map((item) => (
                   <Card key={item.id}>
@@ -208,6 +224,7 @@ export default function Circles() {
                       {item.date.slice(0, 10)} ·{" "}
                       {item.visibility.replaceAll("_", " ")}
                     </Body>
+                    {item.kind!=="split_bill"&&selected.role!=="participant"?<PlanAction title="Stop sharing" onPress={()=>setResource({action:"unshare_transaction",id:item.id})}/>:null}
                     {item.kind === "split_bill" ? <PlanAction title="View bill" onPress={()=>router.push({pathname:"/split-bills",params:{billId:item.id}})}/> : null}
                   </Card>
                 ))
@@ -215,8 +232,11 @@ export default function Circles() {
                 <Notice>No shared expenses yet.</Notice>
               )}
             </>
+          ) : tab === "Commitments" || tab === "Contributions" ? (
+            <>{selected.role!=="participant"?<PlanAction title={tab==="Commitments"?"+ Add commitment":"+ Add contribution"} tone="primary" onPress={()=>setResource({action:tab==="Commitments"?"create_commitment":"add_contribution"})}/>:null}{tab==="Commitments"?selected.commitments?.map(item=><Card key={item.id}><Body muted={false}>{item.title}</Body><Body>{money(String(item.amount??0),item.currency)}</Body>{selected.role!=="participant"?<PlanAction title="Edit commitment" onPress={()=>setResource({...item,action:"update_commitment"})}/>:null}</Card>):selected.contributions?.map(item=><Card key={item.id}><Body>{item.memberName} · {money(String(item.amount),item.currency)}</Body><Body>{item.contributionDate?.slice(0,10)}</Body></Card>)}</>
           ) : tab === "Budgets" || tab === "Goals" ? (
             <>
+              {selected.role!=="participant"?<PlanAction title={tab==="Budgets"?"+ Add budget":"+ Add goal"} tone="primary" onPress={()=>setResource({action:tab==="Budgets"?"create_budget":"create_goal"})}/>:null}
               {(tab === "Budgets" ? selected.budgets : selected.goals)
                 ?.length ? (
                 (tab === "Budgets" ? selected.budgets : selected.goals)!.map(
@@ -234,6 +254,7 @@ export default function Circles() {
                         )}{" "}
                         of {money(String(item.targetAmount), item.currency)}
                       </Body>
+                      {selected.role!=="participant"?<PlanAction title={tab==="Budgets"?"Edit budget":"Edit goal"} onPress={()=>setResource({...item,action:tab==="Budgets"?"update_budget":"update_goal"})}/>:null}
                       <Progress value={item.progressPercent} />
                       <Body>{Math.round(item.progressPercent)}%</Body>
                     </Card>
@@ -258,9 +279,11 @@ export default function Circles() {
             </>
           ) : (
             <>
+              {selected.role==="organizer"?<PlanAction title="+ Add person" tone="primary" onPress={()=>setResource({action:"add_participant"})}/>:null}
               {selected.members?.map((member) => (
                 <Card key={member.id}>
                   <Body muted={false}>{member.displayName}</Body>
+                  {selected.role==="organizer"?<PlanAction title="Edit person" onPress={()=>setResource({...member,action:"update_member"})}/>:null}
                   {selected.splitBillGroupId ? <PlanAction title="View member balances" onPress={()=>setMemberDetail(member.displayName)}/> : null}
                   <Body>
                     {member.role} · {member.status}
@@ -375,6 +398,7 @@ function CircleEditor({
   const [kind, setKind] = useState(initial?.type ?? type ?? "household");
   const [description, setDescription] = useState(initial?.description ?? "");
   const [currency, setCurrency] = useState(initial?.currency ?? "PHP");
+  const [avatar,setAvatar]=useState<string|null|undefined>(undefined);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const inFlight = useRef(false);
@@ -401,6 +425,7 @@ function CircleEditor({
         description,
         currency,
         color: initial?.color ?? "teal",
+        ...(avatar!==undefined?{avatarUrl:avatar}:{}),
       };
       const result = session.demo
         ? { circleId: initial?.id ?? `demo-${Date.now()}` }
@@ -435,6 +460,9 @@ function CircleEditor({
           if (!busy) onClose();
         }}
       />
+      {(avatar===undefined?initial?.avatarUrl:avatar)?<Image source={{uri:(avatar===undefined?initial?.avatarUrl:avatar)??""}} style={{width:96,height:96,borderRadius:24}}/>:null}
+      <PlanAction title="Choose Circle photo" onPress={()=>{void ImagePicker.launchImageLibraryAsync({mediaTypes:["images"],allowsEditing:true,aspect:[1,1],quality:0.2,base64:true}).then(r=>{if(!r.canceled&&r.assets[0].base64){const value=`data:image/jpeg;base64,${r.assets[0].base64}`;if(value.length>200000)setError("Choose a smaller image (under 150 KB).");else setAvatar(value);}}).catch(e=>setError(e.message));}}/>
+      <PlanAction title="Remove photo" onPress={()=>setAvatar(null)}/>
       <Field
         label="Circle name"
         value={name}

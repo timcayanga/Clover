@@ -49,6 +49,7 @@ export type Bootstrap = {
   };
 };
 export type ImportStatus = {
+  progress?:number;
   importFile: {
     id: string;
     fileName: string;

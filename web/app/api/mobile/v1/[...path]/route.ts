@@ -252,9 +252,13 @@ async function handle(
       const {mobileHome} = await import("@/lib/mobile-home");
       const {loadReportNetWorth} = await import("@/lib/report-net-worth");
       const { mobileReportBalances } = await import("@/lib/mobile-report-balances");
+      const {nativeReportWindow,nativeReportDetails}=await import("@/lib/native-report-details");
+      const window=nativeReportWindow(url.searchParams);
+      const access=await getProAccess(user.id);
+      const details=await nativeReportDetails(workspaceId,currency,window,hasFullFeatureAccess(access.planTier));
       const now = new Date();
-      const [data, netWorth, balances] = await Promise.all([mobileHome(workspaceId,currency),loadReportNetWorth(workspaceId,currency,new Date(+now-90*86400000),now),mobileReportBalances(workspaceId,currency,now)]);
-      return reply({...data,netWorth,balances});
+      const [data, netWorth, balances] = await Promise.all([mobileHome(workspaceId,currency),loadReportNetWorth(workspaceId,currency,window.start,window.end),mobileReportBalances(workspaceId,currency,now,window)]);
+      return reply({...data,netWorth,balances,details});
     }
     if (operation === "together-options") {
       const [groups, people, profiles] = await Promise.all([
@@ -266,6 +270,17 @@ async function handle(
     }
     if (operation === "investments") {
       return reply(await (await import("@/lib/mobile-investment-data")).loadMobileInvestments(workspaceId));
+    }
+    if(operation === "investment-trades") {
+      const account=await prisma.account.findFirst({where:{id:path[1],workspaceId,type:"investment"},select:{id:true}});
+      if(!account)return reply({error:"Investment account not found."},404);
+      const {listInvestmentTrades,saveInvestmentTrade}=await import("@/lib/investment-trade-store");
+      if(request.method==="GET")return reply(await listInvestmentTrades(account.id,z.coerce.number().int().min(1).max(10000).parse(url.searchParams.get("page")??1)));
+      const text=await request.text();if(new TextEncoder().encode(text).length>8000)return reply({error:"Trade details are too long."},413);
+      const {investmentTradeInput}=await import("@/lib/investment-trade-input");
+      const result=await saveInvestmentTrade(workspaceId,account.id,user.id,investmentTradeInput.parse(JSON.parse(text)),request.method==="DELETE");
+      (await import("@/lib/workspace-summary-cache")).invalidateWorkspaceSummaryCache(workspaceId);
+      return reply(result);
     }
     if (["account-history", "investment-purchase-create", "investment-purchase-delete"].includes(operation)) {
       const account = await prisma.account.findFirst({where:{id:path[1],workspaceId},select:{id:true,type:true,currency:true,balance:true,updatedAt:true}});
@@ -394,10 +409,44 @@ async function handle(
       )
         return reply({ error: "Import not found" }, 404);
     }
+    if (operation === "import-review") {
+      const page=z.coerce.number().int().min(1).max(10000).parse(url.searchParams.get("page")??1);
+      const [items,totalCount,accounts,file]=await Promise.all([
+        prisma.parsedTransaction.findMany({where:{importFileId:path[1],workspaceId},orderBy:[{createdAt:"asc"},{id:"asc"}],skip:(page-1)*30,take:30,select:{id:true,date:true,amount:true,currency:true,merchantRaw:true,merchantClean:true,type:true,categoryName:true,confidence:true,categoryReason:true}}),
+        prisma.parsedTransaction.count({where:{importFileId:path[1],workspaceId}}),
+        prisma.account.findMany({where:{workspaceId},select:{id:true,name:true,currency:true}}),
+        prisma.importFile.findFirst({where:{id:path[1],workspaceId},select:{status:true,processingPhase:true,accountId:true}})
+      ]);
+      return reply({items,totalCount,page,accounts,file});
+    }
+    if (operation === "import-confirm") {
+      const text=await request.text();if(new TextEncoder().encode(text).length>8000)return reply({error:"Details are too large."},413);
+      const payload=z.object({accountId:z.string().min(1).max(200).nullable().optional()}).strict().parse(JSON.parse(text));
+      if(payload.accountId && !await prisma.account.findFirst({where:{id:payload.accountId,workspaceId},select:{id:true}}))return reply({error:"Choose an account in this Profile."},400);
+      const forwarded=new Request(request.url,{method:"POST",headers:request.headers,body:JSON.stringify(payload)});
+      const result=await withMobileRequestContext(userId,forwarded,async()=> (await import("@/app/api/imports/[importId]/confirm/route")).POST(forwarded,{params:Promise.resolve({importId:path[1]})}));
+      const body=await result.json();
+      return reply(result.ok?{ok:true,status:body.result?.status,imported:body.result?.imported}:{error:body.error??"Unable to confirm import."},result.status);
+    }
+    if(operation === "circle-archive") {
+      const {getCircleAccess}=await import("@/lib/circle-access");
+      const access=await getCircleAccess(path[1],user.id,"organizer");
+      if(!access.isOwner)return reply({error:"Only the Circle owner can archive this Circle."},403);
+      await prisma.$transaction(async tx=>{await tx.circle.update({where:{id:path[1]},data:{archivedAt:new Date()}});await tx.circleActivity.create({data:{circleId:path[1],actorUserId:user.id,action:"circle_archived",summary:"Circle archived. Shared history is preserved."}});});
+      (await import("@/lib/workspace-summary-cache")).invalidateUserSummaryCache(user.id,"circles");return reply({ok:true});
+    }
+    if(operation === "circle-resource") {
+      const text=await request.text();if(new TextEncoder().encode(text).length>100000)return reply({error:"Details are too large."},413);
+      const forwarded=new Request(request.url,{method:"POST",headers:request.headers,body:text});
+      const result=await withMobileRequestContext(userId,forwarded,async()=> (await import("@/app/api/circles/[circleId]/resources/route")).POST(forwarded,{params:Promise.resolve({circleId:path[1]})}));
+      const body=await result.json();
+      if(result.ok)(await import("@/lib/workspace-summary-cache")).invalidateUserSummaryCache(user.id,"circles");
+      return reply(result.ok?{ok:true}:{error:body.error??"Unable to update Circle."},result.status);
+    }
     let forwarded = request;
     if ((operation === "circles" && request.method === "POST") || (operation === "circle" && request.method === "PATCH") || (operation === "split-bills" && request.method === "POST")) {
       const text = await request.text();
-      if (new TextEncoder().encode(text).length > (operation === "split-bills" ? 300000 : 12000)) return reply({ error: "Details are too large." }, 413);
+      if (new TextEncoder().encode(text).length > (operation === "split-bills" ? 300000 : 250000)) return reply({ error: "Details are too large." }, 413);
       let input: unknown;
       try { input = JSON.parse(text); } catch { return reply({ error: "Check the entered details." }, 400); }
       const body = operation === "split-bills" ? mobileSplitBillPayload(mobileSplitBillInput.parse(input)) : mobileCircleInput.parse(input);

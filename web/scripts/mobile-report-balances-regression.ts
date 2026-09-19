@@ -97,6 +97,7 @@ async function main() {
       "accountCount",
       "currency",
       "monthly",
+      "range",
       "weekly",
     ]);
     accounts = [];
