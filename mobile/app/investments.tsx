@@ -1,13 +1,8 @@
+import { Text } from "../src/app-text";
 import { LinearGradient } from "expo-linear-gradient";
 import { compactSummaryMoney } from "../../shared/summary-format";
 import { useEffect, useState } from "react";
-import {
-  Image,
-  Pressable,
-  Text,
-  View,
-  useWindowDimensions,
-} from "react-native";
+import { Image, Pressable, View, useWindowDimensions } from "react-native";
 import { router } from "expo-router";
 import { useSession } from "../src/session";
 import { AccountEditor, type AccountRecord } from "../src/account-editor";

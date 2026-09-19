@@ -1,3 +1,4 @@
+import { Text } from "../src/app-text";
 import { resourceCache } from "@clerk/expo/resource-cache";
 import { disconnectStoreAccount } from "../src/store-billing";
 import { DisplayPreferences } from "../src/display-preferences";
@@ -7,7 +8,7 @@ import { Stack, usePathname, router } from "expo-router";
 import { useFonts } from "expo-font";
 import { StatusBar } from "expo-status-bar";
 import { useRef, useState, type ReactNode } from "react";
-import { AppState, Platform, StyleSheet, Text, View } from "react-native";
+import { AppState, Platform, StyleSheet, View } from "react-native";
 import { useEffect } from "react";
 import { SafeAreaProvider, SafeAreaView } from "react-native-safe-area-context";
 import { AccessContext, useAccess } from "../src/access";
@@ -227,6 +228,7 @@ function AuthenticatedApp() {
 }
 export default function RootLayout() {
   const [fontsLoaded, fontError] = useFonts({
+    "Poppins-Bold": require("../assets/fonts/Poppins-Bold.ttf"),
     "Poppins-Medium": require("../assets/fonts/Poppins-Medium.ttf"),
     "Poppins-Regular": require("../assets/fonts/Poppins-Regular.ttf"),
     "Poppins-SemiBold": require("../assets/fonts/Poppins-SemiBold.ttf"),

@@ -52,3 +52,5 @@ export type EntryDraft = {
   transactions: EntryTransaction[];
   receipts: EntryReceipt[];
 };
+
+export type EntryFormContext = {kind:"transaction"|"account"|"investment"|"receipt"|"recurring"|"split"|"trade";recordId?:string;focusedField?:string;fields:Record<string,string>;errors?:string[]};

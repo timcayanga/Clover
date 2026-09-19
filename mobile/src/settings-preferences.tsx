@@ -1,5 +1,6 @@
+import { Text } from "./app-text";
 import { useEffect, useRef, useState } from "react";
-import { Switch, Text, View } from "react-native";
+import { Switch, View } from "react-native";
 import {
   defaultAppPreferences,
   type AppPreferences,

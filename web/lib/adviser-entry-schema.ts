@@ -70,6 +70,7 @@ export const entryDraftSchema = z
   })
   .strict();
 const allowedFields = [
+  "assetName", "quantity", "costBasis", "kind", "title", "dueDate", "recurrence", "counterparty", "notes", "people",
   "name",
   "institution",
   "type",
@@ -93,7 +94,7 @@ const allowedFields = [
 ];
 export const entryFormSchema = z
   .object({
-    kind: z.enum(["transaction", "account", "investment", "receipt"]),
+    kind: z.enum(["transaction", "account", "investment", "receipt", "recurring", "split", "trade"]),
     recordId: identifier.optional(),
     focusedField: z.string().max(80).optional(),
     fields: z

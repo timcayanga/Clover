@@ -1,3 +1,4 @@
+import { Text, TextInput } from "./app-text";
 import { useSession } from "./session";
 import {
   ExpoSpeechRecognitionModule,
@@ -5,7 +6,7 @@ import {
 } from "expo-speech-recognition";
 import { useFocusEffect } from "expo-router";
 import { useCallback, useState } from "react";
-import { Image, Pressable, Text, TextInput, View } from "react-native";
+import { Image, Pressable, View } from "react-native";
 import { Icon, Notice, useTheme } from "./ui";
 export function AdviserInputTools({
   disabled,

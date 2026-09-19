@@ -1,13 +1,8 @@
+import { Text } from "../../src/app-text";
 import { SummaryCard } from "../../src/plan-ui";
 import { router, useFocusEffect, useLocalSearchParams } from "expo-router";
 import { useCallback, useEffect, useRef, useState } from "react";
-import {
-  ActivityIndicator,
-  FlatList,
-  Pressable,
-  Text,
-  View,
-} from "react-native";
+import { ActivityIndicator, FlatList, Pressable, View } from "react-native";
 import { Choices } from "../../src/transaction-entry";
 import { useSession } from "../../src/session";
 import type { Transaction, TransactionPage } from "../../src/types";

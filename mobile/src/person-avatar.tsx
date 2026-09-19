@@ -1,5 +1,6 @@
+import { Text } from "./app-text";
 import { useEffect, useState } from "react";
-import { Image, Text } from "react-native";
+import { Image } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { avatarGradient } from "../../shared/visual-identity";
 export function PersonAvatar({

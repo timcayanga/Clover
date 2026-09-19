@@ -1,0 +1,78 @@
+.add-entry-methods {
+  display: grid;
+  gap: 16px;
+  min-width: 0;
+  width: 100%;
+}
+.add-entry-methods [hidden] {
+  display: none !important;
+}
+.add-entry-methods .transaction-creation-tabs {
+  display: flex;
+  padding: 4px;
+  border-radius: 999px;
+  background: var(--surface-2, #ecf4f5);
+  gap: 4px;
+}
+.add-entry-methods .transaction-creation-tabs > button {
+  flex: 1;
+  min-width: 0;
+  height: 40px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--text, #40545e);
+  font: var(--app-action-font);
+}
+.add-entry-methods .transaction-creation-tabs > button[aria-selected="true"] {
+  background: linear-gradient(100deg, #03a8c0, #34d3d0);
+  color: #fff;
+}
+.add-entry-methods [role="tabpanel"] > p {
+  font-size: 13px;
+  color: var(--muted, #7a879c);
+}
+.add-entry-methods [role="tabpanel"] > h4 {
+  font-size: 16px;
+}
+.add-entry-methods .button {
+  height: 40px;
+  min-height: 40px;
+  font-size: 15px;
+}
+.add-entry-methods .adviser-chat {
+  max-width: 100%;
+}
+.add-entry-methods .accounts-add-grid {
+  width: 100%;
+}
+@media (max-width: 767px) {
+  .accounts-add-modal:has(.add-entry-methods),
+  .recurring-create:has(.add-entry-methods),
+  .split-bill-manual-modal:has(.add-entry-methods) {
+    border-radius: 24px 24px 0 0;
+    max-height: calc(100dvh - 90px);
+    overflow: auto;
+  }
+  .modal-backdrop:has(.add-entry-methods) {
+    align-items: flex-end;
+    padding-bottom: calc(64px + env(safe-area-inset-bottom, 0px));
+  }
+}
+.add-entry-methods .transaction-creation-tabs.transaction-creation-tabs button {
+  height: 40px !important;
+  min-height: 40px !important;
+  font-family: var(--font-poppins), sans-serif;
+  font-size: 15px !important;
+  flex-direction: row;
+}
+.add-entry-methods .organize-upload-choices .button {
+  height: auto;
+  min-height: 80px;
+}
+@media (min-width: 768px) {
+  .organize-upload-choices .organize-upload-choice--camera,
+  .organize-upload-choices .organize-upload-choice--library {
+    display: none !important;
+  }
+}

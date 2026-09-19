@@ -1,4 +1,5 @@
 "use client";
+import { AddEntryMethods } from "@/components/add-entry-methods";
 import Link from "next/link";
 
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type FormEvent } from "react";
@@ -1942,6 +1943,7 @@ export default function InvestmentInstitutionDetailPage() {
             </div>
           </div>
 
+          <AddEntryMethods key={workspaceId} enabled={!editingTrade} kind="trade" workspaceId={workspaceId} accounts={sortedAccounts} disabled={savingTrade} formContext={{kind:"trade",fields:{assetName:tradeDraft.assetName,date:tradeDraft.date,type:tradeDraft.type,amount:tradeDraft.amount,currency:tradeDraft.currency,quantity:tradeDraft.units,notes:tradeDraft.description}}} onReviewForm={({fields:f})=>setTradeDraft(current=>({...current,assetName:f.assetName??current.assetName,date:f.date??current.date,type:["buy","sell","dividend","reinvested_dividend","transfer"].includes(f.type)?f.type as InvestmentActivityKind:current.type,amount:f.amount??current.amount,currency:f.currency??current.currency,units:f.quantity??current.units,description:f.notes??current.description}))}>
           <form className="institution-trade-editor" onSubmit={saveTrade}>
             <div className="institution-asset-editor__grid">
               <label className="settings-field">
@@ -2036,6 +2038,7 @@ export default function InvestmentInstitutionDetailPage() {
               </button>
             </div>
           </form>
+          </AddEntryMethods>
 
           {transactions.length === 0 ? (
             <p className="institution-detail-empty">

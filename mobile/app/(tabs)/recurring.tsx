@@ -1,6 +1,7 @@
+import { Text } from "../../src/app-text";
 import { useFocusEffect, useLocalSearchParams } from "expo-router";
 import { useCallback, useEffect, useState } from "react";
-import { Pressable, Text, View } from "react-native";
+import { Pressable, View } from "react-native";
 import { useSession } from "../../src/session";
 import { Choices } from "../../src/transaction-entry";
 import {

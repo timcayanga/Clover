@@ -1,6 +1,7 @@
+import { Text } from "../src/app-text";
 import { useEffect, useRef, useState } from "react";
 import { router, useLocalSearchParams } from "expo-router";
-import { Text, View } from "react-native";
+import { View } from "react-native";
 import { useSession } from "../src/session";
 import {
   Body,

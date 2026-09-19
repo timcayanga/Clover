@@ -1,3 +1,4 @@
+import { Text } from "../../src/app-text";
 import { createAdviserHistoryHook } from "../../../shared/use-adviser-history";
 import { parseAdviserChart, type AdviserChart } from "../../../shared/adviser-chart";
 import { AdviserReportCard } from "../../src/adviser-report-card";
@@ -15,14 +16,7 @@ import { useLocalSearchParams } from "expo-router";
 import { Body, Card, Icon, Notice, Screen, useTheme } from "../../src/ui";
 import { PlanAction } from "../../src/plan-ui";
 import { useSession } from "../../src/session";
-import {
-  Image,
-  KeyboardAvoidingView,
-  Platform,
-  Pressable,
-  Text,
-  View,
-} from "react-native";
+import { Image, KeyboardAvoidingView, Platform, Pressable, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 const useAdviserHistory = createAdviserHistoryHook({useEffect,useRef,useState});
 

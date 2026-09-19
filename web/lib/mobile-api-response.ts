@@ -1,3 +1,4 @@
+import { parseAddFormDraft } from "../../shared/add-form-draft";
 import { resolveImportModalStatusDecision } from "./import-modal-status";
 import { parseAdviserChart } from "../../shared/adviser-chart";
 import { parseReceiptLineItemsFromPayload } from "./receipt-line-items";
@@ -85,6 +86,7 @@ export function mobileApiResponse(operation: string, value: unknown) {
     ...pick(data, ["reply", "degraded", "scopeRejected", "answerSource"]),
     ...(parseAdviserChart(data.visualization) ? {visualization:parseAdviserChart(data.visualization)} : {}),
     ...(projectAdviserDeviceContext(data.deviceContext) ? { deviceContext: projectAdviserDeviceContext(data.deviceContext) } : {}),
+    formDraft: Array.isArray(data.actions) ? data.actions.filter(action=>record(action).type==="prepare_form").map(action=>parseAddFormDraft(record(action).payload)).find(Boolean) : undefined,
     entryDraft: Array.isArray(data.actions) ? data.actions.filter(action => record(action).type === "create_entries").map(action => entryDraftSchema.safeParse(record(action).payload)).find(result => result.success)?.data : undefined,
     suggestions: rows(data.suggestions, ["id", "label", "prompt"]),
     ...(data.grounding ? { grounding: pick(data.grounding, ["transactionCount", "historyThrough"]) } : {}),

@@ -1,4 +1,5 @@
-import { View, Text } from "react-native";
+import { Text } from "./app-text";
+import { View } from "react-native";
 import Svg, { Circle } from "react-native-svg";
 import { useTheme, money } from "./ui";
 const palette = [

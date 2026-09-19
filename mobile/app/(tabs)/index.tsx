@@ -1,9 +1,10 @@
+import { Text } from "../../src/app-text";
 import { HomeChart } from "../../src/home-chart";
 import { router, useFocusEffect } from "expo-router";
 import { LinearGradient } from "expo-linear-gradient";
 import * as SecureStore from "expo-secure-store";
 import { useCallback, useEffect, useState } from "react";
-import { Platform, Pressable, Text, View } from "react-native";
+import { Platform, Pressable, View } from "react-native";
 import { useSession } from "../../src/session";
 import {
   Body,

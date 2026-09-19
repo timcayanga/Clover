@@ -1,12 +1,14 @@
+import { Text } from "./app-text";
+import { parseAddFormDraft, type AddFormDraft } from "../../shared/add-form-draft";
 import { suggestLocalCategory } from "./offline/local-tools";
 import type { Transaction } from "./types";
 import * as ImagePicker from "expo-image-picker";
 import { AdviserInputTools } from "./adviser-input-tools";
 import { ApiError } from "./api";
 import * as Crypto from "expo-crypto";
-import type { EntryDraft } from "./adviser-entry-types";
+import type { EntryDraft, EntryFormContext } from "./adviser-entry-types";
 import { useEffect, useRef, useState } from "react";
-import { Platform, Pressable, Text, View } from "react-native";
+import { Platform, Pressable, View } from "react-native";
 import { useSession } from "./session";
 import { Body, Button, Card, Field, Notice, useTheme } from "./ui";
 
@@ -423,11 +425,9 @@ type Suggestion = {
   description: string;
   payload: Partial<TransactionDraft>;
 };
-export function TransactionChat({
-  onReview,
-}: {
-  onReview: (draft: TransactionDraft) => void;
-}) {
+export function TransactionChat({onReview, context, page="transactions", intro, onDraft, onReviewForm}: {onReview:(draft:TransactionDraft)=>void;context?:EntryFormContext;page?:string;intro?:string;onDraft?:(draft:EntryDraft)=>void;onReviewForm?:(draft:AddFormDraft)=>void;}) {
+  const [preparedForm,setPreparedForm]=useState<AddFormDraft|null>(null);
+  const [prepared,setPrepared]=useState<EntryDraft|null>(null);
   const { colors, styles, dark } = useTheme();
   const session = useSession();
   const [input, setInput] = useState("");
@@ -517,17 +517,21 @@ export function TransactionChat({
       const result = await session.request<{
         reply: string;
         entryDraft?: EntryDraft;
+        formDraft?: AddFormDraft;
       }>(`adviser/chat?workspaceId=${encodeURIComponent(session.profileId)}`, {
         method: "POST",
         body: JSON.stringify({
           messages: next.slice(-6),
-          page: "transactions",
+          page,
+          formContext: context,
           clientDate: today(),
           attachmentIds: attachments.map((item) => item.id),
         }),
       });
       setMessages([...next, { role: "assistant", content: result.reply }]);
       const entry = result.entryDraft;
+      setPrepared(entry || null);
+      setPreparedForm(parseAddFormDraft(result.formDraft));
       setActions(
         entry?.transactions.map((transaction) => ({
           id: transaction.key,
@@ -584,8 +588,7 @@ export function TransactionChat({
       {attaching ? <Body>Reading photo…</Body> : null}
       <Body muted={false}>Tell Clover what to add</Body>
       <Body>
-        For example: “Lunch ₱250 with cash, groceries ₱1,200 from BPI.” Review
-        each draft before saving.
+        {intro || "For example: Lunch ₱250 with cash, groceries ₱1,200 from BPI. Review each draft before saving."}
       </Body>
       {messages.map((message, index) => (
         <Card
@@ -598,7 +601,9 @@ export function TransactionChat({
           <Body muted={false}>{message.content}</Body>
         </Card>
       ))}
-      {actions.map((action) => (
+      {preparedForm && onReviewForm ? <Button title="Review in Manual" onPress={()=>{onReviewForm(preparedForm);setPreparedForm(null);}}/> : null}
+      {prepared && onDraft ? <Button title="Review draft in Manual" onPress={()=>{onDraft(prepared);setPrepared(null);}}/> : null}
+      {(onDraft ? [] : actions).map((action) => (
         <Card key={action.id}>
           <Body>{action.description}</Body>
           <Button

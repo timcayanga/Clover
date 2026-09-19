@@ -1,3 +1,4 @@
+import { AddEntryMethods } from "./add-entry-methods";
 import { useEffect, useRef, useState } from "react";
 import { Body, Button, Card, Field, Notice, Screen } from "./ui";
 import { AssetSnapshot } from "./asset-snapshot";
@@ -286,6 +287,7 @@ export function AccountEditor({
       {loading ? (
         <Body>Loading account details…</Body>
       ) : editing ? (
+        <AddEntryMethods enabled={!record} key={record?.id || "new"} kind={draft.type==="investment"?"investment":"account"} disabled={busy} context={{kind:draft.type==="investment"?"investment":"account",fields:{name:draft.name||"",institution:draft.institution||"",type:draft.type||"bank",currency:draft.currency||"PHP",balance:draft.balance||"",investmentSubtype:draft.investmentSubtype||"",investmentSymbol:draft.investmentSymbol||"",investmentQuantity:draft.investmentQuantity||"",investmentCostBasis:draft.investmentCostBasis||""}}} onDraft={proposal=>{const account=proposal.accounts[0];if(account)setDraft(current=>({...current,...account}));}}>
         <Card>
           <Choices
             value={draft.type}
@@ -339,6 +341,7 @@ export function AccountEditor({
             }
           />
         </Card>
+        </AddEntryMethods>
       ) : record ? (
         <Card>
           {record.type === "investment" ? (

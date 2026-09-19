@@ -1,5 +1,6 @@
+import { Text } from "./app-text";
 import { useEffect, useRef, useState } from "react";
-import { Linking, Text } from "react-native";
+import { Linking } from "react-native";
 import type { PurchasesPackage } from "react-native-purchases";
 import { useSession } from "./session";
 import { Body, Button, Card, Notice, dateLabel, useTheme } from "./ui";

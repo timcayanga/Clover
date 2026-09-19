@@ -1,3 +1,4 @@
+import { Text } from "../src/app-text";
 import { router } from "expo-router";
 import * as Crypto from "expo-crypto";
 import {
@@ -11,7 +12,7 @@ import {
 } from "../src/offline/local-ai";
 import type { Allowance } from "../src/offline/local-allowance";
 import { useEffect, useState } from "react";
-import { Alert, Text, View } from "react-native";
+import { Alert, View } from "react-native";
 import { useSession } from "../src/session";
 import { Body, Button, Card, Heading, Notice, Screen } from "../src/ui";
 import type { OfflineMutation } from "../src/offline/types";

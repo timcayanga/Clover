@@ -1,3 +1,4 @@
+import { AddEntryMethods } from "./add-entry-methods";
 import { useEffect, useRef, useState } from "react";
 import * as Crypto from "expo-crypto";
 import { useSession } from "./session";
@@ -142,7 +143,49 @@ export function TradeLedger({
       </Body>
       {error ? <Notice>{error}</Notice> : null}
       {draft ? (
-        <>
+        <AddEntryMethods
+          kind="trade"
+          enabled={draft.revision === 0}
+          disabled={busy || Boolean(confirmation)}
+          context={{
+            kind: "trade",
+            fields: {
+              assetName: draft.assetName,
+              date: draft.date,
+              type: draft.kind,
+              quantity: draft.quantity,
+              amount: draft.amount,
+              currency,
+              costBasis: draft.costBasis,
+              notes: draft.note,
+            },
+          }}
+          onReviewForm={({ fields: f }) => {
+            if (f.type && !kinds.some((k) => k.value === f.type)) {
+              setError(
+                "Choose a supported trade type in Manual before saving.",
+              );
+              return;
+            }
+            setConfirmation(null);
+            setDraft((current) =>
+              current
+                ? {
+                    ...current,
+                    assetName: f.assetName ?? current.assetName,
+                    date: f.date ?? current.date,
+                    kind: kinds.some((k) => k.value === f.type)
+                      ? f.type
+                      : current.kind,
+                    quantity: f.quantity ?? current.quantity,
+                    amount: f.amount ?? current.amount,
+                    costBasis: f.costBasis ?? current.costBasis,
+                    note: f.notes ?? current.note,
+                  }
+                : null,
+            );
+          }}
+        >
           <Choices
             value={draft.kind}
             options={kinds}
@@ -229,7 +272,7 @@ export function TradeLedger({
               onPress={() => setConfirmation("delete")}
             />
           ) : null}
-        </>
+        </AddEntryMethods>
       ) : (
         <>
           <PlanAction

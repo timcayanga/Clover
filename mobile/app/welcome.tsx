@@ -1,14 +1,6 @@
+import { Text } from "../src/app-text";
 import { useEffect, useRef, useState } from "react";
-import {
-  Image,
-  Platform,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  View,
-  useWindowDimensions,
-} from "react-native";
+import { Image, Platform, Pressable, ScrollView, StyleSheet, View, useWindowDimensions } from "react-native";
 import * as SecureStore from "expo-secure-store";
 import { LinearGradient } from "expo-linear-gradient";
 import { useSafeAreaInsets } from "react-native-safe-area-context";

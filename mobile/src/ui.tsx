@@ -1,3 +1,4 @@
+import { Text, TextInput } from "./app-text";
 import { Children } from "react";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
@@ -5,21 +6,7 @@ import { useAccess } from "./access";
 import { useDisplayPreferences } from "./display-preferences";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { router } from "expo-router";
-import {
-  Image,
-  Modal,
-  Linking,
-  useColorScheme,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  View,
-  type ColorValue,
-  type TextInputProps,
-  type ViewStyle,
-} from "react-native";
+import { Image, Modal, Linking, useColorScheme, Pressable, ScrollView, StyleSheet, View, type ColorValue, type TextInputProps, type ViewStyle } from "react-native";
 import {
   useEffect,
   useRef,
@@ -139,7 +126,7 @@ export function Button({
       {!secondary ? (
         <LinearGradient
           pointerEvents="none"
-          colors={["#03A8C0", "#2CCFCA"]}
+          colors={["#03A8C0", "#34D3D0"]}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 0 }}
           style={[StyleSheet.absoluteFill, { borderRadius: 26 }]}
@@ -667,9 +654,9 @@ const makeStyles = (colors: typeof lightColors) =>
       flexGrow: 1,
     },
     heading: {
+      fontFamily: "Poppins-SemiBold",
       fontSize: 30,
       lineHeight: 37,
-      fontWeight: "700",
       color: colors.ink,
       letterSpacing: -0.7,
     },
@@ -722,6 +709,7 @@ const makeStyles = (colors: typeof lightColors) =>
       textAlign: "center",
     },
     input: {
+      fontFamily: "Poppins-Regular",
       padding: 15,
       minHeight: 52,
       borderWidth: 1,

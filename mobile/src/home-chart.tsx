@@ -1,5 +1,6 @@
+import { Text } from "./app-text";
 import { useState } from "react";
-import { Pressable, ScrollView, Text, View } from "react-native";
+import { Pressable, ScrollView, View } from "react-native";
 import { Body, money, useTheme } from "./ui";
 type Day = { date: string; income: number; expense: number };
 export function HomeChart({

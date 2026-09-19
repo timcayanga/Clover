@@ -1,3 +1,4 @@
+import { AddEntryMethods } from "./add-entry-methods";
 import { useEffect, useRef, useState } from "react";
 import { Body, Button, Card, Field, Heading, Notice, Screen } from "./ui";
 import { Choices } from "./transaction-entry";
@@ -252,6 +253,7 @@ export function RecurringEditor({
         </Notice>
       ) : null}
       {error ? <Notice>{error}</Notice> : null}
+      <AddEntryMethods enabled={!initial} kind="recurring" disabled={busy} context={{kind:"recurring",fields:{kind:draft.kind,title:draft.title,amount:draft.amount,currency:draft.currency,dueDate:draft.dueDate,recurrence:draft.recurrence,counterparty:draft.counterparty,accountId:draft.accountId,notes:draft.notes}}} onReviewForm={({fields})=>setDraft(current=>({...current,...fields,kind:recurringKinds.some(k=>k.value===fields.kind)?fields.kind:current.kind}))}>
       <Card>
         <Choices
           value={draft.kind}
@@ -412,6 +414,7 @@ export function RecurringEditor({
         />
         <Button title="Cancel" secondary disabled={busy} onPress={onClose} />
       </Card>
+      </AddEntryMethods>
     </Screen>
   );
 }

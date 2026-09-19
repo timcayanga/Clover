@@ -1,4 +1,7 @@
 "use client";
+import { SplitBillImportModal } from "./split-bill-import-modal";
+import { readSelectedWorkspaceId } from "@/lib/workspace-selection";
+import { AddEntryMethods } from "@/components/add-entry-methods";
 
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
@@ -43,6 +46,7 @@ async function readJsonResponse<T>(response: Response): Promise<T> {
 }
 
 export function SplitBillManualModal({ open, currentUserName, people, groups, onClose, onSaved }: SplitBillManualModalProps) {
+  const [entryUpload,setEntryUpload]=useState(false);
   const [selectedPeople, setSelectedPeople] = useState<string[]>([]);
   const [selectedGroupId, setSelectedGroupId] = useState<string | null>(null);
   const [query, setQuery] = useState("");
@@ -275,6 +279,7 @@ export function SplitBillManualModal({ open, currentUserName, people, groups, on
           </button>
         </div>
 
+        <AddEntryMethods kind="split" workspaceId={readSelectedWorkspaceId() || undefined} disabled={isSaving} formContext={{kind:"split",fields:{title:description,amount,currency,date:billDate,people:selectedPeople.join("\n")}}} onReviewForm={({fields:f})=>{if(f.title!==undefined)setDescription(f.title);if(f.amount!==undefined)setAmount(f.amount);if(f.currency!==undefined)setCurrency(f.currency);if(f.date!==undefined)setBillDate(f.date);if(f.people!==undefined)setSelectedPeople(f.people.split("\n").map(s=>s.trim()).filter(Boolean));}} onUpload={()=>setEntryUpload(true)}>
         <label className="settings-field">
           <span>Description</span>
           <input
@@ -411,7 +416,9 @@ export function SplitBillManualModal({ open, currentUserName, people, groups, on
             {isSaving ? "Saving..." : "Save bill"}
           </button>
         </div>
+        </AddEntryMethods>
       </section>
+      <SplitBillImportModal open={entryUpload} currentUserName={currentUserName} onClose={()=>setEntryUpload(false)} onSaved={bill=>{setEntryUpload(false);onSaved?.(bill);onClose();}}/>
     </div>,
     document.body
   );

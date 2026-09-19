@@ -7,9 +7,19 @@
   --app-title-font: 600 18px/27px var(--font-poppins), sans-serif;
   --app-section-font: 600 16px/24px var(--font-poppins), sans-serif;
   --app-action-font: 500 15px/22px var(--font-poppins), sans-serif;
+  --app-action-gradient: linear-gradient(90deg, #03a8c0, #34d3d0);
+  --app-summary-value-font: 600 22px/33px var(--font-poppins), sans-serif;
+  --app-supporting-font: 400 13px/20px var(--font-poppins), sans-serif;
 }
 
-.app-shell {
+
+.app-shell,
+.modal-backdrop,
+.modal-card,
+.transaction-drawer,
+.shell-profile-drawer,
+.adviser-chat,
+.reports-filter-dialog {
   --font-heading: var(--font-poppins), sans-serif;
 }
 
@@ -44,7 +54,9 @@
   .goals-page .panel h4,
   .budgeting-page .panel h4,
   .panel-header :is(h3,h4),
-  .panel-head :is(h3,h4)
+  .panel-head :is(h3,h4),
+  .admin-users__table-head :is(h2,h3,h4),
+  .admin-compact-panel__head :is(h2,h3,h4)
 ) {
   font: var(--app-section-font) !important;
   color: var(--app-section-heading-color) !important;
@@ -69,6 +81,22 @@
   text-align: center;
 }
 
+/* Portals sit outside the app shell and must carry the same text roles. */
+.modal-card .modal-head :is(h2,h3,h4),
+.transactions-entry--figma .modal-head h4 {
+  font: var(--app-title-font);
+  letter-spacing: 0;
+}
+.add-entry-methods [role="tabpanel"] > h4 {
+  font: var(--app-section-font);
+}
+.app-shell :is(.accounts-overview-card__amount, .transactions-footer-snapshot__metric-value, .clover-summary-card > strong) {
+  font: var(--app-summary-value-font);
+}
+.app-shell .clover-summary-card > small {
+  font: var(--app-supporting-font);
+}
+
 /* Exclude large source-choice cards and icon-only controls from CTA sizing. */
 :is(.app-shell, [role="dialog"]) .button:not(.organize-upload-choices .button):not(.icon-button),
 .app-shell .pill-link,
@@ -78,11 +106,24 @@
   min-height: var(--action-button-height) !important;
   height: auto !important;
   padding-block: 8px !important;
+  padding-inline: 16px !important;
+  gap: 8px;
   font: var(--app-action-font) !important;
   letter-spacing: 0 !important;
   text-transform: none;
   white-space: normal;
   text-align: center;
+}
+
+/* Match Clover/Button. Keep source-choice tiles and disabled actions distinct. */
+:is(.app-shell, [role="dialog"]) .button.button-primary:not(:disabled):not(.organize-upload-choices .button) {
+  background: var(--app-action-gradient) !important;
+  border-color: transparent;
+  color: #fff !important;
+}
+:is(.app-shell, [role="dialog"]) .button.button-primary:not(:disabled) .button-icon {
+  color: inherit;
+  flex-shrink: 0;
 }
 
 /* A 40px button includes its borders: 22px text + 16px padding + 2px border. */
@@ -150,4 +191,72 @@
 @media(max-width:1100px) {
  .adviser-input-tools--compact { position: absolute; right: 5px; top: 5px; z-index: 2; }
  .adviser-input-notice { position: absolute; top: 100%; left: 0; right: 0; z-index: 3; padding: 10px; background: var(--surface); border: 1px solid var(--stroke); border-radius: 12px; font-size: 12px; }
+}
+
+/* Filter controls: compact presets, contained labels, and shared icon buttons.
+ * Transaction panels are portals outside .app-shell, so include them explicitly. */
+.transactions-header-overlay .button {
+  box-sizing: border-box;
+  min-height: 40px;
+  height: auto;
+  padding: 8px 16px;
+  font: var(--app-action-font);
+  max-width: 100%;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+.transactions-header-overlay .button-primary {
+  background: var(--app-action-gradient);
+  color: #fff;
+}
+.transactions-filters-overlay :is(.transactions-active-filters, .transactions-filter-presets) .button {
+  min-height: 32px;
+  padding: 5px 10px;
+  font: 500 13px/20px var(--font-poppins), sans-serif;
+  gap: 6px;
+}
+.transactions-filters-overlay :is(.transactions-active-filters, .transactions-filter-presets) svg {
+  flex-shrink: 0;
+}
+.transaction-filter-row .transactions-filter-pill {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.transaction-filter-row .transactions-filter-pill[aria-pressed="true"]::after {
+  flex-shrink: 0;
+}
+.reports-filter-dates { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.reports-filter-dialog :is(summary, label),
+.portfolio-filter-menu__options :is(label, button) {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.reports-filter-dialog summary span { min-width: 0; text-align: right; }
+.split-bill-list-filters label { display: grid; gap: 6px; flex: 1 1 140px; min-width: 0; }
+.split-bill-list-filters select { width: 100%; min-width: 0; max-width: 100%; }
+.app-filter-trigger img, .portfolio-filter-menu__trigger img { width: 18px; height: 18px; flex-shrink: 0; }
+@media (max-width: 1100px) {
+  .app-shell .content .split-bill-list-toolbar .button.app-filter-trigger,
+  .content--investments .portfolio-filter-menu__trigger {
+    flex: 0 0 40px;
+    width: 40px !important;
+    min-width: 40px !important;
+    height: 40px !important;
+    padding: 0 !important;
+    justify-content: center;
+  }
+  .app-filter-trigger__label { display: none; }
+  .split-bill-list-toolbar input { flex: 1; min-width: 0; }
+  .content--investments .portfolio-filter-menu[data-open="true"] .portfolio-filter-menu__options,
+  #investment-header-filter .portfolio-filter-menu[data-open="true"] .portfolio-filter-menu__options {
+    position: fixed;
+    top: calc(76px + env(safe-area-inset-top, 0px));
+    left: auto;
+    right: 12px;
+    width: min(340px, calc(100vw - 24px));
+    max-height: calc(100dvh - 180px - env(safe-area-inset-top, 0px));
+  }
+}
+@media (max-width: 380px) {
+  .reports-filter-dates { grid-template-columns: minmax(0, 1fr); }
 }

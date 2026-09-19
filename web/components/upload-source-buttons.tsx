@@ -30,7 +30,7 @@ export function UploadSourceButtons({
       ).map(([key, label, onClick]) => (
         <button
           key={key}
-          className="button button-secondary"
+          className={`button button-secondary organize-upload-choice--${key}`}
           type="button"
           onClick={() => {
             setCameraHelp(key === "camera");
@@ -68,13 +68,16 @@ export function UploadSourcePicker({
       <input
         ref={files}
         className="hidden-file-input"
+        hidden
         type="file"
         multiple
+        accept=".pdf,.png,.jpg,.jpeg,.xls,.xlsx,.csv,.heic"
         onChange={(e) => selected(e.currentTarget)}
       />
       <input
         ref={camera}
         className="hidden-file-input"
+        hidden
         type="file"
         accept="image/*"
         capture="environment"
@@ -83,6 +86,7 @@ export function UploadSourcePicker({
       <input
         ref={library}
         className="hidden-file-input"
+        hidden
         type="file"
         accept="image/*"
         multiple

@@ -1,4 +1,5 @@
 "use client";
+import { AddEntryMethods } from "@/components/add-entry-methods";
 import { AdviserFormAssist } from "@/components/adviser-form-assist";
 import { useMobileCreationRoute } from "@/lib/use-mobile-creation-route";
 
@@ -3985,7 +3986,7 @@ export default function InvestmentsPage() {
             <div className="modal-head">
               <div>
                 <p className="eyebrow">Investments</p>
-                <h4 id="add-investment-title">Add an investment</h4>
+                <h4 id="add-investment-title">Add holding</h4>
                 <p className="panel-muted" style={{ margin: "6px 0 0" }}>
                   Start with the basics first. Add extra details only if you need them.
                 </p>
@@ -4003,6 +4004,7 @@ export default function InvestmentsPage() {
               </button>
             </div>
 
+            <AddEntryMethods key={selectedWorkspaceId} kind="investments" workspaceId={selectedWorkspaceId}>
             <div className="accounts-add-grid">
               <form className="accounts-manual-form" onSubmit={createManualInvestment}>
 <AdviserFormAssist workspaceId={selectedWorkspaceId} context={{kind: "investment", fields: {name:manualName,institution:manualInstitution,type:"investment",currency:manualCurrency,balance:manualBalance,investmentSubtype:manualInvestmentSubtype,investmentSymbol:manualInvestmentSymbol,investmentQuantity:manualInvestmentQuantity,investmentCostBasis:manualInvestmentCostBasis}}} />
@@ -4160,6 +4162,7 @@ export default function InvestmentsPage() {
                 </button>
               </form>
             </div>
+            </AddEntryMethods>
             </section>
           </div>
         ) : null}

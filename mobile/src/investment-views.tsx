@@ -1,12 +1,7 @@
+import { Text } from "./app-text";
 import { HoldingLogo } from "./holding-logo";
 import { useEffect, useState } from "react";
-import {
-  Image,
-  Pressable,
-  Text,
-  View,
-  useWindowDimensions,
-} from "react-native";
+import { Image, Pressable, View, useWindowDimensions } from "react-native";
 import {
   type PortfolioHolding,
   type RecordedValuation,

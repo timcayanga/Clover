@@ -1,4 +1,6 @@
 "use client";
+import { parseAddFormDraft, type AddFormDraft } from "../../shared/add-form-draft";
+import type { EntryFormContext } from "@/lib/adviser-entry-types";
 import { parseAdviserChart, type AdviserChart } from "../../shared/adviser-chart";
 import { AdviserReportCard } from "./adviser-report-card";
 import { createAdviserHistoryHook } from "../../shared/use-adviser-history";
@@ -84,6 +86,8 @@ type AdviserAction = {
 };
 
 type AdviserChatProps = {
+  formContext?: EntryFormContext;
+  onReviewForm?: (draft:AddFormDraft)=>void;
   workspaceId?: string;
   prompts: AdviserPrompt[];
   isPro: boolean;
@@ -159,7 +163,7 @@ export function AdviserChat(props: AdviserChatProps) {
   }, [props.workspaceId]);
   return scope ? <ScopedAdviserChat key={scope} {...props} workspaceId={scope} storageKey={`${adviserChatStorageKey}:${scope}`} /> : <p>Choose a Profile to ask Adviser.</p>;
 }
-function ScopedAdviserChat({ prompts, storageKey = adviserChatStorageKey, initialPrompt = "", layout = "embedded", surface = "general", pageLabel, workspaceId }: AdviserChatProps & {workspaceId:string}) {
+function ScopedAdviserChat({ prompts, storageKey = adviserChatStorageKey, initialPrompt = "", layout = "embedded", surface = "general", pageLabel, workspaceId, formContext, onReviewForm }: AdviserChatProps & {workspaceId:string}) {
   const [entryDraft,setEntryDraft] = useState<EntryDraft|null>(null);
   const [entryLocked,setEntryLocked] = useState(false);
 
@@ -270,7 +274,7 @@ function ScopedAdviserChat({ prompts, storageKey = adviserChatStorageKey, initia
           activeDraft: entryDraft ? undefined : planningDraft,
           entryDraft: entryDraft || undefined,
           clientDate: `${new Date().getFullYear()}-${String(new Date().getMonth()+1).padStart(2,"0")}-${String(new Date().getDate()).padStart(2,"0")}`,
-          formContext: readAdviserFormContext(workspaceId),
+          formContext: formContext ?? readAdviserFormContext(workspaceId),
         }),
       });
 
@@ -571,7 +575,7 @@ function ScopedAdviserChat({ prompts, storageKey = adviserChatStorageKey, initia
     ? String(planningDraft.payload.cadence || ((planningDraft.payload.goalPlan as Record<string, unknown> | undefined)?.cadence ?? "monthly"))
     : "monthly";
   const planningCadenceLabel = planningCadence === "annual" ? "Yearly" : planningCadence === "quarterly" ? "Quarterly" : planningCadence === "biweekly" ? "Every 2 weeks" : planningCadence.charAt(0).toUpperCase() + planningCadence.slice(1);
-  const nonPlanningActions = actions.filter((action) => action.id !== planningDraft?.action?.id && action.type !== "create_entries");
+  const nonPlanningActions = actions.filter((action) => action.id !== planningDraft?.action?.id && action.type !== "create_entries" && action.type !== "prepare_form");
 
   return (
     <div className={`adviser-experience adviser-experience--${layout}`}>
@@ -665,6 +669,7 @@ function ScopedAdviserChat({ prompts, storageKey = adviserChatStorageKey, initia
         </div>
       ) : null}
 
+      {onReviewForm ? actions.filter(a=>a.type==="prepare_form").map(action=>{const draft=parseAddFormDraft(action.payload);return draft?<button key={action.id} className="button button-primary" type="button" onClick={()=>{onReviewForm(draft);setActions(current=>current.filter(a=>a.id!==action.id));}}>Review in Manual</button>:null;}) : null}
       {entryDraft ? <AdviserEntryEditor draft={entryDraft} onChange={setEntryDraft} onLockChange={setEntryLocked} onDiscard={() => setEntryDraft(null)} onSaved={() => { setEntryLocked(false); setEntryDraft(null); clearAdviserFormContext(); setMessages(current => [...current,{role:"assistant",content:"Your confirmed entries were saved in Clover."}]); }} /> : null}
       {planningDraft ? (
         <article className={`adviser-planning-card adviser-planning-card--${planningDraft.kind}`} aria-label={`${planningDraft.title} draft`}>

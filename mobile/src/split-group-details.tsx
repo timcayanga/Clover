@@ -1,6 +1,7 @@
+import { Text } from "./app-text";
 import { PersonAvatar } from "./person-avatar";
 import { useState } from "react";
-import { View, Text, Pressable } from "react-native";
+import { View, Pressable } from "react-native";
 import { useSession } from "./session";
 import { Body, Card, Field, Notice, Screen, money, useTheme } from "./ui";
 import {

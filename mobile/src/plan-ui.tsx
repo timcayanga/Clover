@@ -1,7 +1,8 @@
+import { Text } from "./app-text";
 import { LinearGradient } from "expo-linear-gradient";
 import { useEffect, useState, useCallback, type ReactNode } from "react";
 import { router, useFocusEffect } from "expo-router";
-import { Platform, Pressable, Text, View } from "react-native";
+import { Platform, Pressable, View } from "react-native";
 import { useSession } from "./session";
 import { Icon, useTheme } from "./ui";
 /** Square at normal text size, but grows rather than clipping larger text. */

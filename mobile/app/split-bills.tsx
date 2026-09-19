@@ -1,10 +1,12 @@
+import { Text } from "../src/app-text";
+import { AddEntryMethods } from "../src/add-entry-methods";
 import { LinearGradient } from "expo-linear-gradient";
 import { PersonAvatar } from "../src/person-avatar";
 import { AccountTypeMark } from "../src/account-type-mark";
 import { SplitGroupDetails, type SplitGroup } from "../src/split-group-details";
 import * as DocumentPicker from "expo-document-picker";
 import { BillDetails, type BillItem } from "../src/bill-details";
-import { Platform, View, Text, Pressable, Image } from "react-native";
+import { Platform, View, Pressable, Image } from "react-native";
 import { fileProblem, removeUploadCopy } from "../src/upload";
 import { useEffect, useRef, useState } from "react";
 import { router, useLocalSearchParams } from "expo-router";
@@ -782,12 +784,7 @@ function BillEditor({
           if (!busy) onClose();
         }}
       />
-      <PlanAction
-        title={busy ? "Please wait…" : "Choose receipt"}
-        disabled={busy}
-        tone="primary"
-        onPress={() => void uploadReceipt()}
-      />
+      <AddEntryMethods kind="split" disabled={busy} context={{kind:"split",fields:{title,amount:total,currency,date,people:names}}} onReviewForm={({fields:f})=>{if(f.title!==undefined)setTitle(f.title);if(f.amount!==undefined)setTotal(f.amount);if(f.currency!==undefined)setCurrency(f.currency);if(f.date!==undefined)setDate(f.date);if(f.people!==undefined){setNames(f.people);setPayer(null);}}} onUpload={()=>void uploadReceipt()}>
       {receipt ? (
         <Card>
           <Body>
@@ -860,6 +857,7 @@ function BillEditor({
         disabled={busy}
         onPress={() => void save()}
       />
+      </AddEntryMethods>
     </Screen>
   );
 }
