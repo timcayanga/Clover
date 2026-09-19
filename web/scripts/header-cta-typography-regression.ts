@@ -6,7 +6,7 @@ const css = readFileSync(resolve(process.cwd(), "app/globals.css"), "utf8");
 
 assert.match(
   css,
-  /--action-button-height: 32px;[\s\S]*?--action-button-padding-inline: 10px;[\s\S]*?--action-button-font-size: 0\.78rem;[\s\S]*?--action-button-font-size-compact: 0\.72rem;[\s\S]*?--action-button-font-weight: 600;/,
+  /--action-button-height: 40px;[\s\S]*?--action-button-padding-inline: 14px;[\s\S]*?--action-button-font-size: 15px;[\s\S]*?--action-button-font-size-compact: 15px;[\s\S]*?--action-button-font-weight: 500;/,
   "Shared action-button typography tokens must remain aligned with Add transaction."
 );
 assert.match(

@@ -1948,11 +1948,11 @@ html[data-theme="dark"] .recurring-calendar__event[data-kind="reminder"] {
   --radius-sm: 16px;
   --focus-ring: 0 0 0 4px rgba(3, 168, 192, 0.18);
   --page-shell: rgba(255, 255, 255, 0.84);
-  --action-button-height: 32px;
-  --action-button-padding-inline: 10px;
-  --action-button-font-size: 0.78rem;
-  --action-button-font-size-compact: 0.72rem;
-  --action-button-font-weight: 600;
+  --action-button-height: 40px;
+  --action-button-padding-inline: 14px;
+  --action-button-font-size: 15px;
+  --action-button-font-size-compact: 15px;
+  --action-button-font-weight: 500;
 }
 
 /* Mobile Settings is a focused detail view: labels stay left and controls stay right. */
