@@ -659,6 +659,12 @@ export async function ReportsStream({
     ])).filter(Boolean).sort();
     // Fetch once above, then compute every monetary report within one currency.
     // This also keeps category shares, comparisons and Adviser context coherent.
+    const reportTimeZone = normalizeRegionalPreferences(user.regionalPreferences).timeZone;
+    const reportBalanceMovements = reportAllTransactions.map(transaction => ({
+      ...transaction, accountId: transaction.account.id,
+      date: getCalendarDayEndInTimeZone(transaction.date, reportTimeZone),
+      amount: String(transaction.amount), rawPayload: transaction.rawPayload as Parameters<typeof buildReportBalanceSeries>[1][number]["rawPayload"],
+    }));
     const renderCurrencyReport = async (requestedCurrency: string | null) => {
     const buildTransactionsHref = (params: Record<string, string>) => `/transactions?${new URLSearchParams({ ...params, ...(requestedCurrency ? { currency: requestedCurrency } : {}) }).toString()}`;
     const currencyScopedTransactions = requestedCurrency
@@ -1313,9 +1319,7 @@ export async function ReportsStream({
     const weeklySummaryLabel = `${formatShortDate(weeklySummaryStart)} - ${formatShortDate(weeklySummaryEnd)}`;
     const netWorthHistory = buildReportNetWorth(netWorthAccounts, requestedCurrency ?? "MIXED", currentWindowStart, currentWindowEnd);
     const reportMoneySeries = buildReportBalanceSeries(workspaceAccountSummaries,
-      reportAllTransactions.map(transaction => ({ ...transaction, accountId: transaction.account.id,
-        date: getCalendarDayEndInTimeZone(transaction.date, normalizeRegionalPreferences(user.regionalPreferences).timeZone),
-        amount: String(transaction.amount), rawPayload: transaction.rawPayload as Parameters<typeof buildReportBalanceSeries>[1][number]["rawPayload"] })),
+      reportBalanceMovements,
       currentWindowStart, currentWindowEnd, balanceAsOf);
     const reportCategorySegments = reportExpenseDisplayCategories.map(([categoryName, amount]) => ({
       categoryName,

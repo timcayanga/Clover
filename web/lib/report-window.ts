@@ -20,23 +20,24 @@ export const normalizeReportRange = (value: string | undefined): ReportRange => 
   return "30d";
 };
 
-export const getCalendarDayEndInTimeZone = (instant: Date, timeZone: string) => {
-  let parts: Intl.DateTimeFormatPart[];
+// Reuse only the locale machinery, never dates or report data.
+const dayFormatters = new Map<string, Intl.DateTimeFormat>();
+const getDayFormatter = (timeZone: string): Intl.DateTimeFormat => {
+  const cached = dayFormatters.get(timeZone);
+  if (cached) return cached;
+  let formatter: Intl.DateTimeFormat;
   try {
-    parts = new Intl.DateTimeFormat("en-US", {
-      timeZone,
-      year: "numeric",
-      month: "2-digit",
-      day: "2-digit",
-    }).formatToParts(instant);
+    formatter = new Intl.DateTimeFormat("en-US", { timeZone, year: "numeric", month: "2-digit", day: "2-digit" });
   } catch {
-    parts = new Intl.DateTimeFormat("en-US", {
-      timeZone: "UTC",
-      year: "numeric",
-      month: "2-digit",
-      day: "2-digit",
-    }).formatToParts(instant);
+    return getDayFormatter("UTC");
   }
+  if (dayFormatters.size >= 32) dayFormatters.delete(dayFormatters.keys().next().value!);
+  dayFormatters.set(timeZone, formatter);
+  return formatter;
+};
+
+export const getCalendarDayEndInTimeZone = (instant: Date, timeZone: string) => {
+  const parts = getDayFormatter(timeZone).formatToParts(instant);
 
   const value = (type: Intl.DateTimeFormatPartTypes) => Number(parts.find((part) => part.type === type)?.value);
   const year = value("year");

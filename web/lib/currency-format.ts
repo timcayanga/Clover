@@ -7,12 +7,21 @@ const normalizeCurrencyCode = (value?: string | null) => {
   return normalized || "PHP";
 };
 
+// Formatters contain no financial data. Bound the cache for caller-supplied locales.
+const amountFormatters = new Map<string, Intl.NumberFormat>();
+const getAmountFormatter = (locale: string) => {
+  let formatter = amountFormatters.get(locale);
+  if (!formatter) {
+    formatter = new Intl.NumberFormat(locale, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    if (amountFormatters.size >= 16) amountFormatters.delete(amountFormatters.keys().next().value!);
+    amountFormatters.set(locale, formatter);
+  }
+  return formatter;
+};
+
 // Intl preserves decimal strings without first rounding them through a Number.
 const formatPlainAmount = (value: number | string, locale = DEFAULT_LOCALE) =>
-  new Intl.NumberFormat(locale, {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  }).format(value as number);
+  getAmountFormatter(locale).format(value as number);
 
 const shouldUseSpacing = (symbol: string) => symbol.length > 2 && !symbol.endsWith("$");
 
