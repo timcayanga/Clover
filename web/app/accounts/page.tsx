@@ -1786,6 +1786,14 @@ function AccountsPageContent() {
     }
 
     try {
+      // Account inventory and ledger reads are independent; do not serialize their network waits.
+      const workspaceTransactionsPromise = fetchJsonOnce<{ transactions?: Transaction[] }>({
+            key: `accounts:transactions:${workspaceId}:light`,
+            route: "accounts.transactions",
+            workspaceId,
+            detail: options?.awaitHydration ? "awaitHydration" : "background",
+            input: `/api/transactions?workspaceId=${encodeURIComponent(workspaceId)}&pageSize=all&summaryMode=light`,
+          } ).catch(() => null);
       const accountsResponse = await fetchJsonOnce<{
         accounts?: Account[];
         accountRules?: AccountRule[];
@@ -2061,13 +2069,8 @@ function AccountsPageContent() {
 
       backgroundTasks.push((async () => {
         try {
-          const transactionsResponse = await fetchJsonOnce<{ transactions?: Transaction[] }>({
-            key: `accounts:transactions:${workspaceId}:light`,
-            route: "accounts.transactions",
-            workspaceId,
-            detail: options?.awaitHydration ? "awaitHydration" : "background",
-            input: `/api/transactions?workspaceId=${encodeURIComponent(workspaceId)}&pageSize=all&summaryMode=light`,
-          });
+          const transactionsResponse = await workspaceTransactionsPromise;
+          if (!transactionsResponse) return;
           if (workspaceLoadSeqRef.current !== loadSeq) {
             return;
           }

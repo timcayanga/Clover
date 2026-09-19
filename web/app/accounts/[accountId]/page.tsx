@@ -17,6 +17,7 @@ import { formatUploadAccountDisplayName, getAccountCardName, getAccountDisplayNa
 import { getAccountBrand } from "@/lib/account-brand";
 import { getLuxuryAccountCardClass } from "@/lib/account-card-luxury";
 import { getInvestmentAssetBrand } from "@/lib/investment-assets";
+import { projectPagedAccountBalance, type AccountBalanceAnchor } from "@/lib/paged-account-balance";
 import { deriveReconciledBalance, normalizeAccountBalanceSign, type BalanceLikeTransaction } from "@/lib/account-balance";
 import { isAccountBalanceCheckpointEvidence } from "@/lib/account-balance-projection";
 import { formatCurrencyAmount } from "@/lib/currency-format";
@@ -1014,6 +1015,7 @@ function AccountDetailPageContent() {
 
   const [account, setAccount] = useState<Account | null>(null);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [balanceAnchor, setBalanceAnchor] = useState<AccountBalanceAnchor<Transaction> | null>(null);
   const [categories, setCategories] = useState<Category[]>([]);
   const [transactionPage, setTransactionPage] = useState(1);
   const [transactionTotalCount, setTransactionTotalCount] = useState(0);
@@ -1739,6 +1741,8 @@ function AccountDetailPageContent() {
               transactions?: Transaction[];
               page?: number;
               totalCount?: number;
+              manualLedgerBalance?: string | null;
+              ledgerOpeningBalance?: string | null;
             } | null;
 
             if (!cancelled) {
@@ -1751,6 +1755,10 @@ function AccountDetailPageContent() {
                   : cachedTransactions.length > 0
                     ? cachedTransactions
                     : [];
+              setBalanceAnchor(typeof transactionsPayload?.manualLedgerBalance === "string" ? {
+                accountId: nextAccount.id, balance: transactionsPayload.manualLedgerBalance,
+                openingBalance: transactionsPayload.ledgerOpeningBalance ?? nextAccount.balance, rows: mergedTransactions,
+              } : null);
               setTransactions(mergedTransactions);
               setTransactionPage(typeof transactionsPayload?.page === "number" ? transactionsPayload.page : 1);
               setTransactionTotalCount(
@@ -2003,7 +2011,9 @@ function AccountDetailPageContent() {
         checkpointBalance ??
         (shouldPreserveImportedBalance
           ? account?.balance ?? cachedImportedBalance ?? null
-          : deriveReconciledBalance({
+          : account?.source === "manual" && balanceAnchor?.accountId === account.id
+            ? projectPagedAccountBalance(balanceAnchor, account.balance, transactions)
+            : deriveReconciledBalance({
               balance: account?.balance ?? cachedImportedBalance ?? null,
               transactions: transactions as BalanceLikeTransaction[],
               checkpoints: checkpoint ? [checkpoint] : [],
@@ -2012,7 +2022,7 @@ function AccountDetailPageContent() {
 
       return normalizeAccountBalanceSign(account?.type ?? "", parseAmount(reconciledValue));
     },
-    [account?.balance, account?.source, account?.type, cachedImportedBalance, latestCheckpoint, transactions]
+    [account?.balance, account?.source, account?.type, account?.id, balanceAnchor, cachedImportedBalance, latestCheckpoint, transactions]
   );
   const checkpointBalance =
     latestCheckpoint?.status !== "mismatch" &&
@@ -3039,6 +3049,7 @@ function AccountDetailPageContent() {
 
       const payload = (await response.json()) as { transactions?: Transaction[]; page?: number; totalCount?: number } | null;
       const nextTransactions = Array.isArray(payload?.transactions) ? payload.transactions : [];
+      setBalanceAnchor(current => current?.accountId === account.id ? { ...current, rows: [...current.rows, ...nextTransactions] } : current);
       setTransactions((current) => [...current, ...nextTransactions]);
       setTransactionPage(typeof payload?.page === "number" ? payload.page : nextPage);
       if (typeof payload?.totalCount === "number") {
@@ -3483,6 +3494,7 @@ function AccountDetailPageContent() {
       }
 
       setTransactions((current) => current.filter((transaction) => transaction.merchantRaw === "Beginning balance"));
+      setBalanceAnchor(null);
       setTransactionTotalCount(0);
       setTransactionPage(1);
       setImportFiles([]);

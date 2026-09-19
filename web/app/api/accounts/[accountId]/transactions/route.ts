@@ -1,3 +1,4 @@
+import { mobileAccountBalances } from "@/lib/mobile-account-balances";
 import { NextResponse } from "next/server";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
@@ -544,7 +545,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ acco
 
     const account = await prisma.account.findUnique({
       where: { id: accountId },
-      select: { id: true, workspaceId: true, name: true, institution: true, type: true, accountNumber: true, currency: true, source: true },
+      select: { id: true, workspaceId: true, name: true, institution: true, type: true, accountNumber: true, currency: true, source: true, balance: true },
     });
 
     if (!account) {
@@ -576,7 +577,10 @@ export async function GET(request: Request, { params }: { params: Promise<{ acco
     });
     const skip = (page - 1) * pageSize;
 
-    const [totalCount, rows] = await Promise.all([
+    const [manualBalances, totalCount, rows] = await Promise.all([
+      page === 1 && account.source === "manual" && account.type !== "investment"
+        ? mobileAccountBalances(account.workspaceId, [account.id])
+        : Promise.resolve(new Map<string, string | null>()),
       prisma.transaction.count({ where }),
       prisma.transaction.findMany({
         where,
@@ -642,6 +646,8 @@ export async function GET(request: Request, { params }: { params: Promise<{ acco
 
     return NextResponse.json({
       transactions,
+      manualLedgerBalance: manualBalances.get(account.id) ?? null,
+      ledgerOpeningBalance: account.balance?.toString() ?? null,
       page,
       pageSize,
       totalCount: Math.max(transactions.length, totalCount - collapsedDuplicateCount),

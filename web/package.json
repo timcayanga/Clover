@@ -101,7 +101,7 @@
     "qa:admin-behavior-analytics": "tsx scripts/admin-behavior-analytics-regression.ts",
     "qa:supabase-security": "tsx scripts/supabase-security-regression.ts",
     "qa:integration-security": "tsx scripts/integration-security-regression.ts",
-    "qa:account-balance-sign": "tsx scripts/account-balance-sign-regression.ts",
+    "qa:account-balance-sign": "tsx scripts/account-balance-sign-regression.ts && tsx scripts/paged-account-balance-regression.ts",
     "qa:transaction-summary": "tsx scripts/transaction-summary-regression.ts",
     "qa:transaction-details": "tsx scripts/transaction-detail-page-regression.ts",
     "qa:manual-transaction-entry": "tsx scripts/manual-transaction-entry-regression.ts",
