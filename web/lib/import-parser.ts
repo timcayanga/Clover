@@ -3336,7 +3336,7 @@ const buildGenericScreenshotHoldingRows = (
 export const isTransactionHistoryScreenshotText = (text: string) => {
   if (!/\b(?:transaction\s+history|past\s+transactions|recent\s+transactions|account\s+activity)\b/i.test(text)) return false;
   const lines = splitStatementLines(text);
-  const datedLines = lines.filter((line) => /\b(?:\d{4}[-/]\d{1,2}[-/]\d{1,2}|\d{1,2}\s+[A-Za-z]{3,9}\s+\d{4}|[A-Za-z]{3,9}\s+\d{1,2},?\s+\d{4})\b/.test(line));
+  const datedLines = lines.filter((line) => /\b(?:\d{4}[-/]\d{1,2}[-/]\d{1,2}|\d{1,2}\s+[A-Za-z]{3,9}\s+\d{4}|[A-Za-z]{3,9}\s+\d{1,2}(?:,\s*|\s+)\d{4})\b/.test(line));
   const signedAmounts = lines.filter((line) => /[+-]\s*(?:(?:[A-Z]{3}|₱|\$|€|£)\s*)?\d[\d,]*\.\d{2}\b/.test(line));
   const directedAmounts = lines.filter((line) =>
     /\b(?:expense|paid|purchase|payment|received|deposit|withdrawal|refund)\b/i.test(line) &&
@@ -3362,16 +3362,16 @@ const parseGenericMobileScreenshotTransactionRows = (
   // description intact and retain the existing review-required disposition.
   const lines = splitStatementLines(text).map((line) => normalizeScreenshotSummaryLine(line)).filter(Boolean)
     .flatMap((line) => {
-      const inline = line.match(/^([A-Za-z]{3,9}\s+\d{1,2},?\s+\d{4}|\d{4}[-/]\d{1,2}[-/]\d{1,2})\s+(.+)$/);
+      const inline = line.match(/^([A-Za-z]{3,9}\s+\d{1,2}(?:,\s*|\s+)\d{4}|\d{4}[-/]\d{1,2}[-/]\d{1,2})\s+(.+)$/);
       return inline && parseDateValue(inline[1]) ? [inline[1], inline[2]] : [line];
     });
   const datePattern = new RegExp(
-    `^(?:(?:Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday),?\\s+)?(?:(?:(?:${monthNamePattern})\\s+\\d{1,2}|\\d{1,2}\\s+(?:${monthNamePattern})),?\\s+\\d{4}|\\d{4}[-/.]\\d{1,2}[-/.]\\d{1,2}|\\d{1,2}[-/.]\\d{1,2}[-/.]\\d{2,4})$`,
+    `^(?:(?:Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday),?\\s+)?(?:(?:(?:${monthNamePattern})\\s+\\d{1,2}|\\d{1,2}\\s+(?:${monthNamePattern}))(?:,\\s*|\\s+)\\d{4}|\\d{4}[-/.]\\d{1,2}[-/.]\\d{1,2}|\\d{1,2}[-/.]\\d{1,2}[-/.]\\d{2,4})$`,
     "i"
   );
   const amountPattern = /([+-])?\s*(?:PHP|USD|EUR|GBP|SGD|AED|AUD|CAD|JPY|HKD|CNY|THB|INR|KRW|BRL|MXN|ZAR|RUB|TRY|PLN|SEK|NOK|DKK|ILS|VND|IDR|MYR|TWD|BDT|SAR|QAR|₱|£|€|¥|₹|฿|₩|\$)?\s*([0-9][0-9,]*\.\d{2})/i;
   const statusPattern = /^(?:successful|completed|pending|failed|posted|reverted)$/i;
-  const dateOnly = (line: string) => line.replace(/^(?:Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday),?\s+/i, "").replace(/,/g, "");
+  const dateOnly = (line: string) => line.replace(/^(?:Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday),?\s+/i, "").replace(/,/g, " ");
   const rows: ParsedImportRow[] = [];
   const seen = new Set<string>();
   let currentDate: string | null = null;

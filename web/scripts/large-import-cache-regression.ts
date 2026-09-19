@@ -39,6 +39,7 @@ let cacheEvents = 0;
 
 void (async () => {
   const {
+    mergeImportedWorkspaceTransactions,
     accountsWorkspaceCacheKey,
     getCachedTransactionsWorkspace,
     persistTransactionsWorkspaceCache,
@@ -48,6 +49,18 @@ void (async () => {
   } = await import("@/lib/workspace-cache");
   const { BETA_FULL_ACCESS_ENABLED, hasFullFeatureAccess } = await import("@/lib/beta-access");
   const { getPlanDefaultLimits } = await import("@/lib/user-limits");
+
+  const preview = { id: "optimistic-file-0", importFileId: "file", sourceRowIndex: 1,
+    date: "2026-09-01", amount: "25", merchantRaw: "QA Cafe", type: "expense", currency: "PHP" };
+  const saved = { ...preview, id: "saved-1", rawPayload: {
+    sourceImportFileId: "file", sourceRowIndex: 1, kind: "generic_mobile_screenshot_transaction",
+    source: "generic_mobile_screenshot" }, warningReason: "Import needs review" };
+  const merged = mergeImportedWorkspaceTransactions([preview], [saved]);
+  assert.equal(merged.length, 1, "Saved screenshot replaces its optimistic row despite metadata differences");
+  assert.equal(merged[0].id, "saved-1");
+  assert.equal(mergeImportedWorkspaceTransactions(merged, [preview])[0].id, "saved-1", "Late preview cannot replace a saved row");
+  const repeated = { ...saved, id: "saved-2", sourceRowIndex: 2, rawPayload: { ...saved.rawPayload, sourceRowIndex: 2 } };
+  assert.equal(mergeImportedWorkspaceTransactions([saved], [repeated]).length, 2, "Identical purchases on different source rows remain distinct");
 
   const transactions = Array.from({ length: 1_200 }, (_, index) => ({
     id: `large-transaction-${index}`,

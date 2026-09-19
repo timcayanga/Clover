@@ -552,3 +552,8 @@ assert.equal(unsignedRows.length, 10);
 assert.ok(unsignedRows.every(row => Number(row.amount) === 25 && row.type === 'expense' && row.rawPayload?.reviewRequired));
 assert.deepEqual(unsignedRows.map(row=>row.date), Array.from({length:10},(_,i)=>`2026-09-${String(i+1).padStart(2,'0')}`));
 assert.equal(isTransactionHistoryScreenshotText('Cafe receipt\nSeptember 19, 2026\nItem one PHP 25.00\nItem two PHP 25.00\nTOTAL PHP 50.00'), false);
+
+const compactDateHistory = unsignedHistory.replace(/, 2026/g, ",2026");
+assert.equal(isTransactionHistoryScreenshotText(compactDateHistory), true);
+const compactDateRows = parseImportTextGenericOnly(compactDateHistory, "history.png", "image/png");
+assert.deepEqual(compactDateRows.map(row => [row.date, row.merchantRaw]), unsignedRows.map(row => [row.date, row.merchantRaw]), "Compact OCR dates must not join adjacent merchants");

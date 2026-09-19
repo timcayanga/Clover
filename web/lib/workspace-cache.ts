@@ -1039,11 +1039,6 @@ const getMobileScreenshotTransactionSignature = (entry: CachedRecord | ImportedW
 };
 
 const getImportedTransactionSignature = (entry: CachedRecord | ImportedWorkspaceTransaction) => {
-  const screenshotSignature = getMobileScreenshotTransactionSignature(entry);
-  if (screenshotSignature) {
-    return screenshotSignature;
-  }
-
   const importFileId = getImportedTransactionImportFileId(entry);
   const sourceRowIndex = getImportedTransactionSourceRowIndex(entry);
   const statementFingerprint = getImportedTransactionStatementFingerprint(entry);
@@ -1054,6 +1049,10 @@ const getImportedTransactionSignature = (entry: CachedRecord | ImportedWorkspace
   if (statementFingerprint && sourceRowIndex !== null) {
     return `statement:${statementFingerprint}:${sourceRowIndex}`;
   }
+
+  // Match previews and saved screenshots by durable identity before metadata.
+  const screenshotSignature = getMobileScreenshotTransactionSignature(entry);
+  if (screenshotSignature) return screenshotSignature;
 
   // Do not fuzzy-dedupe statement rows by date/amount/merchant. Real statements
   // often contain repeated same-day transactions, and collapsing them makes rows
@@ -1219,6 +1218,9 @@ const mergeImportedAccount = <T extends CachedRecord>(
 };
 
 const mergeImportedTransactionRecord = <T extends CachedRecord>(current: T, incoming: ImportedWorkspaceTransaction) => {
+  // A late preview must not turn a saved transaction back into an optimistic row.
+  if (String(incoming.id ?? "").startsWith("optimistic-") &&
+      current.id && !String(current.id).startsWith("optimistic-")) return current;
   // A refreshed saved row is authoritative, including cleared notes/categories.
   // Import fallbacks below are only for provisional parsing results.
   if (hasTransactionUserEdits(incoming)) return { ...current, ...incoming } as T;

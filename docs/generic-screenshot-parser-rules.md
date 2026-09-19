@@ -11,8 +11,8 @@ These rules apply when an uploaded screenshot does not match a trained instituti
 
 ## Mobile activity screens
 
-- Recognize a generic activity/transaction screen only when it contains both transaction-history signals and signed monetary values.
-- Pair a date header, following description lines, and the next signed amount conservatively.
+- Recognize a generic activity/transaction screen only when it contains both transaction-history signals and signed monetary values or explicit direction labels such as Expense paid.
+- Pair a date header, following description lines, and the next amount conservatively. OCR may omit whitespace after the comma in a full date (for example, Sep 07,2026); it must still start a new transaction block.
 - Emit low-confidence, review-required rows with `rawPayload.kind = generic_mobile_screenshot_transaction`.
 - Never let the generic fallback override a trained parser, a deterministic statement parser, or confirmed financial data.
 
