@@ -1,4 +1,5 @@
 "use client";
+import { addTransactionCurrencyAmount, withTransactionCurrencyDelta } from "@/lib/transaction-currency-summary";
 import { UploadSourceButtons, UploadSecurityCopy } from "@/components/upload-source-buttons";
 import { TransactionColumns, TransactionTagPreview, useTransactionColumns } from "@/components/transaction-columns";
 import { organizeAccountLabels } from "@/lib/organize-account-label";
@@ -638,6 +639,7 @@ const buildVisibleTransactionSummary = (
     transfers: 0,
     review: fallback?.review ?? 0,
     currencyCodes: fallback?.currencyCodes ?? getWorkspaceCurrencyCodes(transactions),
+    currencyTotals: {},
     topCategory: fallback?.topCategory ?? null,
     topAccount: fallback?.topAccount ?? null,
     firstTransactionDate: fallback?.firstTransactionDate ?? null,
@@ -662,6 +664,7 @@ const buildVisibleTransactionSummary = (
       workspaceAccountNumbers
     );
 
+    addTransactionCurrencyAmount(summary.currencyTotals!, transaction.currency, effectiveType, amount);
     if (effectiveType === "income") {
       summary.income += amount;
     } else if (effectiveType === "transfer") {
@@ -3169,6 +3172,7 @@ function TransactionsPageContent() {
             transfers: typeof summaryPayload.transfers === "number" ? summaryPayload.transfers : visibleSummaryFallback?.transfers ?? 0,
             review: typeof summaryPayload.review === "number" ? summaryPayload.review : 0,
             currencyCodes: nextCurrencyCodes,
+            currencyTotals: summaryPayload.currencyTotals ?? visibleSummaryFallback?.currencyTotals,
             topCategory: Array.isArray(summaryPayload.topCategory) ? summaryPayload.topCategory : null,
             topAccount: Array.isArray(summaryPayload.topAccount) ? summaryPayload.topAccount : null,
             firstTransactionDate:
@@ -3191,6 +3195,7 @@ function TransactionsPageContent() {
             transfers: visibleSummaryFallback?.transfers ?? 0,
             review: 0,
             currencyCodes: nextCurrencyCodes,
+            currencyTotals: visibleSummaryFallback?.currencyTotals,
             topCategory: null,
             topAccount: null,
             firstTransactionDate: null,
@@ -5819,6 +5824,7 @@ function TransactionsPageContent() {
     setIsSaving(true);
     let optimisticTransactionId = "";
     let optimisticTransactionAmount = 0;
+    let optimisticTransactionCurrency = manualForm.currency;
     let optimisticTransactionType: Transaction["type"] = "expense";
     let resolvedAccountId = "";
     try {
@@ -5910,6 +5916,7 @@ function TransactionsPageContent() {
       optimisticTransactionId = optimisticTransaction.id;
       optimisticTransactionAmount = Number(optimisticTransaction.amount);
       optimisticTransactionType = optimisticTransaction.type;
+      optimisticTransactionCurrency = optimisticTransaction.currency;
 
       flushSync(() => {
         setTransactionsPage(1);
@@ -5917,6 +5924,7 @@ function TransactionsPageContent() {
         setTransactionsSummary((current) => ({
           ...current,
           totalCount: current.totalCount + 1,
+          currencyTotals: withTransactionCurrencyDelta(current.currencyTotals, optimisticTransactionCurrency, optimisticTransactionType, optimisticTransactionAmount),
           income: current.income + (optimisticTransaction.type === "income" ? optimisticTransactionAmount : 0),
           spending: current.spending + (optimisticTransaction.type === "expense" ? optimisticTransactionAmount : 0),
           transfers: current.transfers + (optimisticTransaction.type === "transfer" ? optimisticTransactionAmount : 0),
@@ -6007,6 +6015,7 @@ function TransactionsPageContent() {
         setTransactionsSummary((current) => ({
           ...current,
           totalCount: Math.max(0, current.totalCount - 1),
+          currencyTotals: withTransactionCurrencyDelta(current.currencyTotals, optimisticTransactionCurrency, optimisticTransactionType, -optimisticTransactionAmount),
           income: current.income - (optimisticTransactionType === "income" ? optimisticTransactionAmount : 0),
           spending: current.spending - (optimisticTransactionType === "expense" ? optimisticTransactionAmount : 0),
           transfers: current.transfers - (optimisticTransactionType === "transfer" ? optimisticTransactionAmount : 0),
