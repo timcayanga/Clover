@@ -1,6 +1,6 @@
 import { buildActiveWorkspaceTransactionWhere } from "@/lib/transaction-query";
 import { mobileHomePeriods } from "@/lib/mobile-home-periods";
-import { resolveFinancialTransactionType } from "@/lib/transaction-directions";
+import { goalActivityTotals } from "@/lib/goal-activity-totals";
 import { prisma } from "@/lib/prisma";
 import {
   getGoalDefinition,
@@ -13,8 +13,8 @@ import { invalidateWorkspaceSummaryCache } from "@/lib/workspace-summary-cache";
 
 // Authentication and explicit Profile ownership are checked by the gateway.
 // Never infer the native Profile from browser cookies.
-export async function loadGoalActivity(workspaceId: string, currency: string) {
-  const { from: start, to: end } = mobileHomePeriods().rolling(30);
+export async function loadGoalActivity(workspaceId: string, currency: string, period = mobileHomePeriods().rolling(30)) {
+  const { from: start, to: end } = period;
   const rows = await prisma.transaction.findMany({
     where: buildActiveWorkspaceTransactionWhere(workspaceId, {
       currency,
@@ -28,21 +28,7 @@ export async function loadGoalActivity(workspaceId: string, currency: string) {
       account: { select: { type: true } },
     },
   });
-  const totals = rows.reduce(
-    (sum, row) => {
-      const type = resolveFinancialTransactionType({
-        ...row,
-        categoryName: row.category?.name,
-      });
-      const amount = Math.abs(Number(row.amount));
-      if (type === "income") sum.income += amount;
-      if (type === "expense") sum.spending += amount;
-      if (row.account.type === "investment" && type !== "income")
-        sum.investmentFlow += amount;
-      return sum;
-    },
-    { income: 0, spending: 0, investmentFlow: 0 },
-  );
+  const totals = goalActivityTotals(rows);
   return { ...totals, start: start.toISOString(), end: end.toISOString() };
 }
 export async function mobileGoals(workspaceId: string, userId: string) {
@@ -160,7 +146,7 @@ export async function mobileGoals(workspaceId: string, userId: string) {
             return getGoalProgressSnapshot(
               {
                 goalKey: user.primaryGoal as GoalKey,
-                targetAmount: user.goalTargetAmount
+                targetAmount: plan ? null : user.goalTargetAmount
                   ? Number(user.goalTargetAmount)
                   : null,
                 goalPlan: plan,
