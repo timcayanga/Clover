@@ -83,27 +83,17 @@ export const probeFilePasswordProtection = async (file: File) => {
     if (hasPdfEncryptionMarker(data)) {
       // Warm the reader while the user enters the password so validation does
       // not pay the chunk-loading cost after they press Unlock file.
-      void loadPdfJs();
+      void loadPdfJs().catch(() => undefined);
       return true;
     }
 
-    const { pdfjs } = await loadPdfJs();
-    const loadingTask = pdfjs.getDocument({
-      data,
-      password: PDF_PASSWORD_PROBE,
-      standardFontDataUrl: pdfjsStandardFontDataUrl,
-    } as any);
-
-    try {
-      const pdf = await withTimeout(loadingTask.promise, CLIENT_PDF_PASSWORD_PROBE_TIMEOUT_MS);
-      await loadingTask.destroy();
-      return false;
-    } catch (error) {
-      await loadingTask.destroy().catch(() => undefined);
-      return isPdfPasswordError(error);
-    }
+    // Preflight must not open an unencrypted PDF just to discover that it has
+    // no password. Loading PDF.js and its worker delays the first upload by
+    // seconds. Unusual/escaped encryption dictionaries are still validated by
+    // the authoritative server reader, which can request a password.
+    return false;
   } catch {
-    // The server remains authoritative if the browser cannot run PDF.js.
+    // The server remains authoritative if local file inspection fails.
     return false;
   }
 };
