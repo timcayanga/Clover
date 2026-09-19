@@ -2136,7 +2136,9 @@ function AccountDetailPageContent() {
   const hasVisibleBalance = hasMeaningfulBalance(account?.balance);
   // A manual account stores its opening balance; its current balance also
   // needs the complete ledger projection. Cached rows may be only one page.
-  const isManualBalancePending = Boolean(account && account.source === "manual" &&
+  // Receipt publication can temporarily label cached Cash as upload-sourced;
+  // it still needs its ledger before an opening balance is shown as current.
+  const isManualBalancePending = Boolean(account && (account.source === "manual" || account.type === "cash") &&
     account.type !== "investment" && ledgerReadyAccountId !== account.id);
   const isPendingBalance = isManualBalancePending || (
     account?.source === "upload" &&
