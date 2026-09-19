@@ -1,3 +1,4 @@
+import { parseAdviserChart } from "../../shared/adviser-chart";
 import { parseReceiptLineItemsFromPayload } from "./receipt-line-items";
 import { entryDraftSchema } from "./adviser-entry-schema";
 import { projectAdviserDeviceContext } from "./adviser-device-context";
@@ -81,6 +82,7 @@ export function mobileApiResponse(operation: string, value: unknown) {
   if (operation === "split-receipt-preview") return { receiptStorageKey: data.receiptStorageKey, preview: pick(data.preview, ["merchantName", "billDate", "currency", "total", "receiptText", "confidence", "requiresReview", "currencyWarning", "items"]) };
   if (operation === "adviser-chat") return {
     ...pick(data, ["reply", "degraded", "scopeRejected", "answerSource"]),
+    ...(parseAdviserChart(data.visualization) ? {visualization:parseAdviserChart(data.visualization)} : {}),
     ...(projectAdviserDeviceContext(data.deviceContext) ? { deviceContext: projectAdviserDeviceContext(data.deviceContext) } : {}),
     entryDraft: Array.isArray(data.actions) ? data.actions.filter(action => record(action).type === "create_entries").map(action => entryDraftSchema.safeParse(record(action).payload)).find(result => result.success)?.data : undefined,
     suggestions: rows(data.suggestions, ["id", "label", "prompt"]),

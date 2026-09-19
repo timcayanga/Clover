@@ -22,10 +22,12 @@ type SpeechWindow = Window & {
   webkitSpeechRecognition?: new () => Recognition;
 };
 export function AdviserInputTools({
+  compact = false,
   disabled,
   onText,
   onPhoto,
 }: {
+  compact?: boolean;
   disabled: boolean;
   onText: (text: string) => void;
   onPhoto: (file: File) => void;
@@ -75,25 +77,25 @@ export function AdviserInputTools({
   };
   return (
     <>
-      <div className="adviser-input-tools">
-        <img src="/assets/organize/clover.svg" alt="Clover" />
+      <div className={compact ? "adviser-input-tools adviser-input-tools--compact" : "adviser-input-tools"}>
         <button
           type="button"
           disabled={disabled}
+          aria-label={listening ? "Stop listening" : "Speak"}
           aria-pressed={listening}
           onClick={speak}
         >
           <img src="/assets/organize/microphone.svg" alt="" />
-          {listening ? "Stop listening" : "Speak"}
+          {!compact ? (listening ? "Stop listening" : "Speak") : null}
         </button>
-        <button
+        {!compact ? <button
           type="button"
           disabled={disabled}
           onClick={() => photo.current?.click()}
         >
           <img src="/assets/organize/camera.svg" alt="" />
           Take photo
-        </button>
+        </button> : null}
         <input
           ref={photo}
           type="file"
@@ -108,7 +110,7 @@ export function AdviserInputTools({
         />
       </div>
       {notice || listening ? (
-        <p role="status">
+        <p role="status" className={compact ? "adviser-input-notice" : undefined}>
           {listening
             ? "Listening… Your words will be added for you to review before sending."
             : notice}

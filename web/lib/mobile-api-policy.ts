@@ -26,6 +26,7 @@ export function mobileOperation(method: string, segments: string[]) {
   if (segments.length === 3 && segments[0] === "recurring" && segments[2] === "completion" && method === "PATCH") return "recurring-completion";
   if (path === "adviser/attachments" && method === "POST") return "adviser-attachments";
   if (path === "adviser/entries" && ["GET", "POST"].includes(method)) return "adviser-entries";
+  if (path === "adviser/conversations" && ["GET", "POST"].includes(method)) return "adviser-conversations";
   if (path === "adviser/chat" && method === "POST") return "adviser-chat";
   if (path === "circles" && ["GET", "POST"].includes(method)) return "circles";
   if (segments.length === 2 && segments[0] === "circles" && ["GET", "PATCH"].includes(method)) return "circle";
