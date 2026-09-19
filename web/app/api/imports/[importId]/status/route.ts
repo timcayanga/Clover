@@ -496,7 +496,9 @@ export async function GET(_request: Request, { params }: { params: Promise<{ imp
       });
     }
 
-    return NextResponse.json(snapshot);
+    // Bracket this server clock anchor with client request/response times when
+    // comparing UI propagation; the network round trip bounds clock uncertainty.
+    return NextResponse.json(snapshot, { headers: { "X-Clover-Server-Time": String(Date.now()) } });
   } catch (error) {
     if (isTransientDataError(error)) {
       console.warn("[import-status] database temporarily unavailable", summarizeErrorForLog(error));

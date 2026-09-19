@@ -620,7 +620,7 @@ assert.match(
 );
 assert.match(
   workerSource,
-  /launching receipt vision before routing[\s\S]{0,1000}?earlyReceiptVisionPromise = parseImportTextWithOpenAIFallback\([\s\S]{0,600}?receiptCoreOnly: true/,
+  /launching receipt vision before routing[\s\S]{0,1000}?earlyReceiptVisionPromise = measureImportTiming\(importFileId, "receipt_core_vision", \(\) => parseImportTextWithOpenAIFallback\([\s\S]{0,600}?receiptCoreOnly: true/,
   "ordinary receipt vision should overlap parser routing and cache/database work"
 );
 assert.match(

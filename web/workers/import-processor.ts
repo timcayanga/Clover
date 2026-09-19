@@ -1,3 +1,4 @@
+import { startImportTiming, measureImportTiming } from "@/lib/import-timing";
 import { shouldRefineReceiptCore } from "@/lib/receipt-detail-refinement";
 import { Prisma } from "@prisma/client";
 import type { AccountType, ReviewStatus, TransactionType } from "@prisma/client";
@@ -7658,6 +7659,7 @@ export const processImportEnrichmentJobs = async (options: {
 
     const leaseToken = job.leaseToken;
     try {
+      const finishEnrichmentTiming = startImportTiming(job.importFileId, "enrichment_attempt");
       const enrichmentStartedAt = Date.now();
       const attempt = Math.max(1, Number(job.attempts ?? 1));
       const deadlineAt = Date.now() + 60_000;
@@ -8047,6 +8049,7 @@ export const processImportEnrichmentJobs = async (options: {
             processingPhase: "complete",
             processingMessage: "Some transaction details need review.",
           });
+          finishEnrichmentTiming();
           results.push({ importFileId: job.importFileId, status: "done", processedRows, totalRows });
         } else {
           await completeImportEnrichmentJob({ id: job.id, totalRows, workerId, leaseToken });
@@ -8054,6 +8057,7 @@ export const processImportEnrichmentJobs = async (options: {
             processingPhase: "complete",
             processingMessage: "Transaction details finalized.",
           });
+          finishEnrichmentTiming();
           results.push({ importFileId: job.importFileId, status: "done", processedRows, totalRows });
         }
       } else {
@@ -8483,7 +8487,7 @@ export const processImportFileText = async (
       /landbank|land bank|eastwest|chinabank|china bank/i.test(fileName)
     ) &&
     String(importFile.storageKey ?? "")
-      ? readImportedFileTextWithCacheInfo(
+      ? measureImportTiming(importFileId, "text_extraction", () => readImportedFileTextWithCacheInfo(
           {
             storageKey: String(importFile.storageKey),
             fileType,
@@ -8494,7 +8498,7 @@ export const processImportFileText = async (
           },
           options.password,
           options.pdfJsBaseUrl
-        )
+        ))
           .then((value) => ({ value, error: null as unknown }))
           .catch((error: unknown) => ({ value: null, error }))
       : null;
@@ -9200,7 +9204,7 @@ export const processImportFileText = async (
         }
         textCacheInfo =
           earlyTextCacheResult?.value ??
-          (await readImportedFileTextWithCacheInfo(
+          (await measureImportTiming(importFileId, "text_extraction", () => readImportedFileTextWithCacheInfo(
             {
               storageKey,
               fileType,
@@ -9211,7 +9215,7 @@ export const processImportFileText = async (
             },
             options.password,
             options.pdfJsBaseUrl
-          ));
+          )));
         text = textCacheInfo.text;
       } catch (error) {
         if (isPdfPasswordError(error)) {
@@ -9226,6 +9230,7 @@ export const processImportFileText = async (
     }
   }
 
+  const finishParsingTiming = startImportTiming(importFileId, "parsing_to_candidate_commit");
   if (!trainedReceiptDetails && fileType === "application/pdf" && text.trim()) {
     deterministicAirlineReceiptPreview = parseAirlineTicketReceiptText(text);
     if (deterministicAirlineReceiptPreview) {
@@ -9342,7 +9347,7 @@ export const processImportFileText = async (
       receiptImagePreparationMs,
       imagePreparationOverlappedWithPreflight: Boolean(eagerReceiptImagePromise),
     });
-    earlyReceiptVisionPromise = parseImportTextWithOpenAIFallback({
+    earlyReceiptVisionPromise = measureImportTiming(importFileId, "receipt_core_vision", () => parseImportTextWithOpenAIFallback({
       text: "",
       fileName,
       fileType,
@@ -9354,7 +9359,7 @@ export const processImportFileText = async (
       importMode: "receipt",
       receiptCoreOnly: true,
       onUsage: recordOpenAIImportUsage,
-    }).catch((error) => {
+    })).catch((error) => {
       console.warn("Early receipt vision failed; retaining standard fallback path", {
         importFileId,
         error,
@@ -9415,7 +9420,7 @@ export const processImportFileText = async (
         (/\bbalances\b/i.test(text) && /\bcrypto\b/i.test(text));
       if (looksLikePdaxPortfolio && storageKey) {
         try {
-          const deterministicTextCache = await readImportedFileTextWithCacheInfo(
+          const deterministicTextCache = await measureImportTiming(importFileId, "text_extraction", () => readImportedFileTextWithCacheInfo(
             {
               storageKey,
               fileType,
@@ -9426,7 +9431,7 @@ export const processImportFileText = async (
             },
             options.password,
             options.pdfJsBaseUrl
-          );
+          ));
           const deterministicText = normalizeStatementImageOcrText(deterministicTextCache.text);
           const deterministicPdaxRows = parseImportText(deterministicText, fileName, fileType, {
             institution: "PDAX",
@@ -9910,7 +9915,7 @@ export const processImportFileText = async (
           const prefetchedAssets = fallbackAssetPrefetchPromise ? await fallbackAssetPrefetchPromise : null;
           const earlyPageImages = prefetchedAssets?.pageImages ?? pageImages ?? null;
           const earlyPdfFileDataBase64 = prefetchedAssets?.pdfFileDataBase64 ?? pdfFileDataBase64 ?? null;
-          return parseImportTextWithOpenAIFallback({
+          return measureImportTiming(importFileId, "model_extraction_and_parse", () => parseImportTextWithOpenAIFallback({
             text: textForParse,
             fileName,
             fileType,
@@ -9924,7 +9929,7 @@ export const processImportFileText = async (
             timeoutMs: preliminaryWiseImageStatement ? 60_000 : null,
             retryTimeoutMs: preliminaryWiseImageStatement ? 20_000 : null,
             onUsage: recordOpenAIImportUsage,
-          }).catch((error) => {
+          })).catch((error) => {
             console.warn("Early backup parser kickoff failed; falling back to standard handoff path", {
               importFileId,
               error,
@@ -10808,7 +10813,7 @@ export const processImportFileText = async (
           ? await earlyReceiptVisionPromise
           : importMode === "statement" && earlyOpenAiFallbackPromise
           ? await earlyOpenAiFallbackPromise
-          : await parseImportTextWithOpenAIFallback({
+          : await measureImportTiming(importFileId, "model_extraction_and_parse", () => parseImportTextWithOpenAIFallback({
               text: textForParse,
               fileName,
               fileType,
@@ -10827,9 +10832,9 @@ export const processImportFileText = async (
               retryTimeoutMs: isWiseImageStatement ? 20_000 : null,
               receiptCoreOnly: effectiveImportMode === "receipt" && !receiptNeedsCompleteFirstPass,
               onUsage: recordOpenAIImportUsage,
-            });
+            }));
       if (!openAiParsed && importMode === "receipt" && earlyReceiptVisionPromise) {
-        openAiParsed = await parseImportTextWithOpenAIFallback({
+        openAiParsed = await measureImportTiming(importFileId, "model_extraction_and_parse", () => parseImportTextWithOpenAIFallback({
           text: textForParse,
           fileName,
           fileType,
@@ -10841,7 +10846,7 @@ export const processImportFileText = async (
           importMode: effectiveImportMode,
           receiptCoreOnly: effectiveImportMode === "receipt" && !receiptNeedsCompleteFirstPass,
           onUsage: recordOpenAIImportUsage,
-        });
+        }));
       }
       backupParserRaceResolved = Boolean(importMode === "statement" && earlyOpenAiFallbackPromise);
     }
@@ -11088,7 +11093,7 @@ export const processImportFileText = async (
       // cannot recover a usable merchant/date/total payload.
       const transcriptParsed = transcriptPreviewDetails
         ? null
-        : await parseImportTextWithOpenAIFallback({
+        : await measureImportTiming(importFileId, "model_extraction_and_parse", () => parseImportTextWithOpenAIFallback({
             text: transcriptNormalized,
             fileName,
             fileType,
@@ -11101,7 +11106,7 @@ export const processImportFileText = async (
             timeoutMs: 20_000,
             retryTimeoutMs: 15_000,
             onUsage: recordOpenAIImportUsage,
-          });
+          }));
 
       const transcriptReceiptDetails =
         transcriptParsed?.receiptDetails && countReceiptDetailSignals(transcriptParsed.receiptDetails) > 0
@@ -11235,7 +11240,7 @@ export const processImportFileText = async (
 
     if (transcript?.transcript.trim()) {
       const transcriptImportMode = normalizeImportImageMode(transcript.documentType);
-      const transcriptParsed = await parseImportTextWithOpenAIFallback({
+      const transcriptParsed = await measureImportTiming(importFileId, "model_extraction_and_parse", () => parseImportTextWithOpenAIFallback({
         text: normalizeStatementImageOcrText(transcript.transcript),
         fileName,
         fileType,
@@ -11246,7 +11251,7 @@ export const processImportFileText = async (
         preferPrimary: true,
         importMode: transcriptImportMode,
         onUsage: recordOpenAIImportUsage,
-      });
+      }));
 
       const shouldAdoptTranscriptParse = (() => {
         if (!transcriptParsed) {
@@ -12059,6 +12064,7 @@ export const processImportFileText = async (
   if (rawFileReady) {
     await rawFileReady;
   }
+  const finishCandidateWriteTiming = startImportTiming(importFileId, "candidate_persistence");
   if (await hasCompatibleTable("ParsedTransaction")) {
     await prisma.parsedTransaction.deleteMany({
       where: { importFileId },
@@ -12074,6 +12080,8 @@ export const processImportFileText = async (
     parsedRowsCount: rows.length,
   });
   const parsedRowsPersistedAt = Date.now();
+  finishCandidateWriteTiming();
+  finishParsingTiming();
 
   const documentImportSourceMetadata = {
     importMode: effectiveImportMode,
@@ -12905,9 +12913,12 @@ export const processImportFileText = async (
         const coreReceiptValidationScore = openAiReceiptValidation?.score ?? 0;
         const receiptDocumentImportId = documentImportRecord!.id;
         const receiptPages = pageImages!;
+        const finishReceiptQueueTiming = startImportTiming(importFileId, "receipt_detail_queue");
         schedulePostVisibleImportWork(`receipt-details:${importFileId}`, async () => {
+          finishReceiptQueueTiming();
+          const finishReceiptDetailTiming = startImportTiming(importFileId, "receipt_detail_enrichment");
           const detailStartedAt = Date.now();
-          const refined = await parseImportTextWithOpenAIFallback({
+          const refined = await measureImportTiming(importFileId, "model_extraction_and_parse", () => parseImportTextWithOpenAIFallback({
             text: textForParse,
             fileName,
             fileType,
@@ -12922,7 +12933,7 @@ export const processImportFileText = async (
             timeoutMs: 30_000,
             retryTimeoutMs: 18_000,
             onUsage: recordOpenAIImportUsage,
-          });
+          }));
           const refinedDetails = refined?.receiptDetails ?? null;
           if (!refinedDetails) return;
           const refinedValidation = assessReceiptExtractionQuality({
@@ -12945,6 +12956,7 @@ export const processImportFileText = async (
             !Array.isArray(existingReceiptDocument.rawPayload)
               ? (existingReceiptDocument.rawPayload as Record<string, unknown>)
               : {};
+          const finishReceiptWriteTiming = startImportTiming(importFileId, "receipt_detail_persistence");
           await upsertReceiptDocumentCompat({
             workspaceId: String(importFile.workspaceId),
             documentImportId: receiptDocumentImportId,
@@ -13010,6 +13022,8 @@ export const processImportFileText = async (
               });
             }
           }
+          finishReceiptWriteTiming();
+          finishReceiptDetailTiming();
           emitImportProcessingEvent("import_processing_completed", {
             processing_status: "done",
             processing_phase: "receipt_details_enriched",
@@ -13950,6 +13964,7 @@ export const confirmImportFile = async (
           fallbackType: "expense",
         }),
       ]);
+      let finishReceiptCoreWriteTiming: ReturnType<typeof startImportTiming> | null = null;
       let createdTransactionId = receiptDocument?.transactionId ?? null;
       let existingReceiptTransaction:
         | {
@@ -13970,6 +13985,7 @@ export const confirmImportFile = async (
         if (existingReceiptTransaction?.id) {
           createdTransactionId = existingReceiptTransaction.id;
         } else {
+          finishReceiptCoreWriteTiming = startImportTiming(importFileId, "receipt_core_persistence");
           const insertedTransaction = await insertTransactionCompat({
             workspaceId: String(importFile.workspaceId),
             accountId: cashAccountId,
@@ -14100,6 +14116,7 @@ export const confirmImportFile = async (
           processingMessage: "Receipt is ready. Clover is refining names and categories in the background.",
           confirmedTransactionsCount: 1,
         });
+        finishReceiptCoreWriteTiming?.();
         console.info("[import-performance] receipt core visible", {
           importFileId,
           transactionId: createdTransactionId,
@@ -14933,6 +14950,7 @@ export const confirmImportFile = async (
   };
 
   let confirmationLockAcquiredAt: number | null = null;
+  const finishConfirmationTiming = startImportTiming(importFileId, "normalized_transaction_commit");
   const confirmationTransactionRequestedAt = Date.now();
   let confirmationTransactionCallbackStartedAt: number | null = null;
   let confirmationReadSnapshotReadyAt: number | null = null;
@@ -16250,6 +16268,7 @@ export const confirmImportFile = async (
     };
   }, { maxWait: 15_000, timeout: 30_000 });
   const transactionCommittedAt = Date.now();
+  finishConfirmationTiming();
 
   if (multiAccountImport) {
     const resolvedAccountIdsForCleanup = resolvedAccounts.map((entry) => entry.id);

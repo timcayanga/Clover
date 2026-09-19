@@ -1,3 +1,4 @@
+import { startImportTiming, measureImportTiming } from "@/lib/import-timing";
 import { isLocalDevHost, requireAuth } from "@/lib/auth";
 import { buildImportKey } from "@/lib/import-keys";
 import { formatUploadAccountDisplayName } from "@/lib/account-display";
@@ -1303,6 +1304,7 @@ const readImportMode = (value: unknown): ImportImageMode | null => {
 };
 
 const readImportedStatementTextWithCache = async (params: {
+  importFileId: string;
   storageKey: string;
   fileType: string;
   fileName: string;
@@ -1311,7 +1313,7 @@ const readImportedStatementTextWithCache = async (params: {
   sourceBytes?: Uint8Array | null;
 }, password?: string, pdfJsBaseUrl?: string | null, importFileTextPromise?: Promise<typeof import("@/lib/import-file-text.server")>) => {
   const { readImportedFileTextWithCacheInfo } = await (importFileTextPromise ?? import("@/lib/import-file-text.server"));
-  return readImportedFileTextWithCacheInfo(
+  return measureImportTiming(params.importFileId, "text_extraction", () => readImportedFileTextWithCacheInfo(
     {
       storageKey: params.storageKey,
       fileType: params.fileType,
@@ -1322,7 +1324,15 @@ const readImportedStatementTextWithCache = async (params: {
     },
     password,
     pdfJsBaseUrl
-  );
+  ));
+};
+
+// The browser brackets this clock anchor with request/response timestamps.
+// It belongs to the same runtime clock as this request's processing spans.
+const importJsonResponse: typeof NextResponse.json = (body, init) => {
+  const headers = new Headers(init?.headers);
+  headers.set("X-Clover-Server-Time", String(Date.now()));
+  return NextResponse.json(body, { ...init, headers });
 };
 
 export async function POST(_request: Request, { params }: { params: Promise<{ importId: string }> }) {
@@ -1410,7 +1420,7 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
           statusSnapshot.importFile.processingPhase === "reading_account_details" ||
           statusSnapshot.importFile.processingPhase === "reconciling")
       ) {
-        return NextResponse.json(
+        return importJsonResponse(
           {
             ok: true,
             queued: true,
@@ -1447,7 +1457,7 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
       const committedAccountInventoryComplete =
         result.status === "done" && visibleRows === 0 && accountSummaries.length > 0;
 
-      return NextResponse.json({
+      return importJsonResponse({
         ok: true,
         queued: false,
         processed: true,
@@ -1481,6 +1491,7 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
         rawFileReady?: Promise<unknown> | null;
       }
     ) => {
+      const finishQueueTiming = startImportTiming(importId, "post_response_queue");
       stage = "scheduling background processing";
       try {
         await updateImportFileCompat(importId, {
@@ -1512,7 +1523,8 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
                 processingPhase: "reading_account_details",
                 processingMessage: options?.processingMessage ?? "Starting screenshot import...",
               }).catch(() => null);
-              await processImportFileText(importId, {
+              finishQueueTiming();
+            await processImportFileText(importId, {
                 password,
                 actorUserId: userId,
                 qaSource: "import_processing",
@@ -1549,7 +1561,7 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
             options?.processingMessage ??
             "Clover is waiting for the background reader, then it will finish processing this file.",
         });
-        return NextResponse.json(
+        return importJsonResponse(
           {
             ok: true,
             queued: true,
@@ -1567,7 +1579,7 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
       }
 
       queued = true;
-      return NextResponse.json({
+      return importJsonResponse({
         ok: true,
         queued,
         processed: false,
@@ -1588,6 +1600,7 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
         sourceBytes?: Uint8Array | null;
       }
     ) => {
+      const finishQueueTiming = startImportTiming(importId, "post_response_queue");
       stage = "scheduling background processing";
       if (localDev) {
         // Local processing is queued into a separate worker process and cannot
@@ -1625,6 +1638,7 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
               processingPhase: "reading_account_details",
               processingMessage: options?.processingMessage ?? "Starting screenshot import...",
             }).catch(() => null);
+            finishQueueTiming();
             await processImportFileText(importId, {
               password,
               actorUserId: userId,
@@ -1655,7 +1669,7 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
       });
 
       queued = true;
-      return NextResponse.json({
+      return importJsonResponse({
         ok: true,
         queued,
         processed: false,
@@ -1671,6 +1685,7 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
       bankName?: string | null,
       options?: { sourceBytes?: Uint8Array | null; rawFileReady?: Promise<unknown> | null }
     ) => {
+      const finishQueueTiming = startImportTiming(importId, "receipt_processing_queue");
       stage = "scheduling receipt processing";
       await updateImportFileCompat(importId, {
         status: "processing",
@@ -1681,6 +1696,7 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
       after(async () => {
         try {
           const { confirmImportFile, processImportFileText } = await importProcessorPromise;
+          finishQueueTiming();
           const result = await processImportFileText(importId, {
             password,
             actorUserId: userId,
@@ -1804,7 +1820,7 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
       });
 
       queued = true;
-      return NextResponse.json({
+      return importJsonResponse({
         ok: true,
         queued,
         processed: false,
@@ -1849,7 +1865,7 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
       password = typeof formPassword === "string" && formPassword.length > 0 ? formPassword : undefined;
 
       if (!uploadedFile || typeof uploadedFile !== "object" || typeof (uploadedFile as { arrayBuffer?: unknown }).arrayBuffer !== "function") {
-        return NextResponse.json({ error: "Missing uploaded file." }, { status: 400 });
+        return importJsonResponse({ error: "Missing uploaded file." }, { status: 400 });
       }
 
       const file = uploadedFile as File;
@@ -1898,12 +1914,12 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
         importMode,
       });
       if (validationError) {
-        return NextResponse.json({ error: validationError }, { status: 400 });
+        return importJsonResponse({ error: validationError }, { status: 400 });
       }
 
       if (!importFile) {
         if (!formWorkspaceId) {
-          return NextResponse.json({ error: "workspaceId is required" }, { status: 400 });
+          return importJsonResponse({ error: "workspaceId is required" }, { status: 400 });
         }
 
         stage = "creating import record";
@@ -1920,12 +1936,12 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
           const tokenUsage = await getCloverTokenUsage(user);
           const tokenLimitError = getCloverTokenLimitError(tokenUsage);
           if (tokenLimitError) {
-            return NextResponse.json(tokenLimitError, { status: 403 });
+            return importJsonResponse(tokenLimitError, { status: 403 });
           }
           const effectiveLimits = getEffectiveUserLimits(user);
           if (effectiveLimits.monthlyUploadLimit !== null && currentMonthUploads >= effectiveLimits.monthlyUploadLimit) {
             const isFreePlan = user.planTier === "free";
-            return NextResponse.json(
+            return importJsonResponse(
               {
                 error: isFreePlan
                   ? `Free includes up to ${effectiveLimits.monthlyUploadLimit} monthly uploads. Upgrade to Pro to import more files this month.`
@@ -1950,7 +1966,7 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
         });
 
         if (!importFile) {
-          return NextResponse.json({ error: "Unable to create import record." }, { status: 400 });
+          return importJsonResponse({ error: "Unable to create import record." }, { status: 400 });
         }
       } else {
         if (!localDev) {
@@ -1971,7 +1987,7 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
               importFile: (await fetchImportFileCompat(importId)) ?? importFile,
               promoteFailedVisibleImport: true,
             });
-            return NextResponse.json({
+            return importJsonResponse({
               ok: true,
               queued: false,
               processed: true,
@@ -2016,7 +2032,7 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
         bytes,
       });
       if (byteValidationError) {
-        return NextResponse.json({ error: byteValidationError }, { status: 400 });
+        return importJsonResponse({ error: byteValidationError }, { status: 400 });
       }
       const fileFingerprint = makeImportFileBytesFingerprint(bytes);
       // Start durable storage immediately. The previous cross-import raw-file
@@ -2162,7 +2178,7 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
               confirmedTransactionsCount: canonicalConfirmedRows,
             });
 
-            return NextResponse.json({
+            return importJsonResponse({
               ok: true,
               queued: canonicalStillProcessing,
               processed: !canonicalStillProcessing,
@@ -2290,7 +2306,7 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
           importFile: (await fetchImportFileCompat(importId)) ?? importFile,
           promoteFailedVisibleImport: true,
         });
-        return NextResponse.json({
+        return importJsonResponse({
           ok: true,
           queued: false,
           processed: true,
@@ -2492,7 +2508,7 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
             processingMessage: "Clover found that this statement was already imported and skipped it.",
           });
 
-          return NextResponse.json({
+          return importJsonResponse({
             ok: true,
             queued: false,
             processed: true,
@@ -2535,6 +2551,7 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
         try {
           preflightText = await readImportedStatementTextWithCache(
             {
+              importFileId: importId,
               storageKey: String(importFile.storageKey ?? buildImportKey(importFile.workspaceId as string, importFile.fileName)),
               fileType: effectiveFileType || "application/octet-stream",
               fileName: effectiveFileName,
@@ -2743,7 +2760,7 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
           await updateImportFileCompat(importId, {
             status: "failed",
           });
-          return NextResponse.json(
+          return importJsonResponse(
             {
               error: "Unable to queue import processing",
               stage,
@@ -2768,6 +2785,7 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
         try {
           preflightText ??= await readImportedStatementTextWithCache(
             {
+              importFileId: importId,
               storageKey: String(importFile.storageKey ?? buildImportKey(importFile.workspaceId as string, importFile.fileName)),
               fileType: effectiveFileType || "application/octet-stream",
               fileName: effectiveFileName,
@@ -2918,7 +2936,7 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
             statusSnapshot.importFile.processingPhase === "reading_account_details" ||
             statusSnapshot.importFile.processingPhase === "reconciling")
         ) {
-          return NextResponse.json(
+          return importJsonResponse(
             {
               ok: true,
               queued: true,
@@ -2974,7 +2992,7 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
           visibleRows,
         });
 
-        return NextResponse.json({
+        return importJsonResponse({
           ok: true,
           queued: false,
           processed: true,
@@ -3016,7 +3034,7 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
         await updateImportFileCompat(importId, {
           status: "failed",
         });
-        return NextResponse.json(
+        return importJsonResponse(
           {
             error: "Unable to queue import processing",
             stage,
@@ -3027,7 +3045,7 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
     } else {
       stage = "loading import record";
       if (!importFile) {
-        return NextResponse.json({ error: "Import not found" }, { status: 404 });
+        return importJsonResponse({ error: "Import not found" }, { status: 404 });
       }
 
       await assertWorkspaceAccess(userId, importFile.workspaceId as string);
@@ -3046,7 +3064,7 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
             importFile: (await fetchImportFileCompat(importId)) ?? importFile,
             promoteFailedVisibleImport: true,
           });
-          return NextResponse.json({
+          return importJsonResponse({
             ok: true,
             queued: false,
             processed: true,
@@ -3085,7 +3103,7 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
       });
 
       if (!text) {
-        return NextResponse.json({ error: "Missing extracted statement text." }, { status: 400 });
+        return importJsonResponse({ error: "Missing extracted statement text." }, { status: 400 });
       }
 
       stage = "updating import status";
@@ -3137,7 +3155,7 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
       const committedAccountInventoryComplete =
         result.status === "done" && visibleRows === 0 && accountSummaries.length > 0;
 
-      return NextResponse.json({
+      return importJsonResponse({
         ok: true,
         queued: false,
         processed: true,
@@ -3200,7 +3218,7 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
           });
         });
 
-        return NextResponse.json(
+        return importJsonResponse(
           {
             error: "Clover could not save this import because the database was temporarily busy. Please try again.",
             code: "I-107",
@@ -3235,7 +3253,7 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
         });
       });
 
-      return NextResponse.json(
+      return importJsonResponse(
         {
           ok: true,
           queued: true,
@@ -3260,7 +3278,7 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
           processingMessage: passwordMessage,
         }).catch(() => null);
 
-        return NextResponse.json(
+        return importJsonResponse(
           {
             error: passwordMessage,
             code: "IMPORT_PASSWORD_REQUIRED",
@@ -3274,7 +3292,7 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
       if (isNonFinancialUploadError(error)) {
         await persistNonFinancialImport(importId, error);
 
-        return NextResponse.json(
+        return importJsonResponse(
           {
             error: errorMessage,
             code: "I-108",
@@ -3301,7 +3319,7 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
           processingMessage: "Transactions are visible. Clover is cleaning up names and categories in the background.",
           confirmedTransactionsCount: savedTransactionsCount,
         }).catch(() => null);
-        return NextResponse.json({
+        return importJsonResponse({
           ok: true,
           queued: false,
           processed: true,
@@ -3370,7 +3388,7 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
                 parsedRowsCount: 0,
                 confirmedTransactionsCount: 0,
               }).catch(() => null);
-              return NextResponse.json(
+              return importJsonResponse(
                 {
                   error: getVisualImportRepairMessage(visualRecoveryMode),
                   stage,
@@ -3397,7 +3415,7 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
               importMode: retryImportMode,
               pdfJsBaseUrl: new URL(_request.url).origin,
             });
-            return NextResponse.json({
+            return importJsonResponse({
               ok: true,
               queued: true,
               processed: false,
@@ -3427,7 +3445,7 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
                 parsedRowsCount: 0,
                 confirmedTransactionsCount: 0,
               }).catch(() => null);
-              return NextResponse.json(
+              return importJsonResponse(
                 {
                   ok: true,
                   queued: true,
@@ -3460,7 +3478,7 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
         responsePlanTier = /upgrade to pro/i.test(errorMessage) ? "free" : /on pro/i.test(errorMessage) ? "pro" : "unknown";
       }
 
-      return NextResponse.json(
+      return importJsonResponse(
         {
           error: errorMessage,
           stage,
@@ -3472,7 +3490,7 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
       );
     }
 
-    return NextResponse.json(
+    return importJsonResponse(
       {
         error: localDev && error instanceof Error ? errorMessage : "Unable to process import",
         stage,

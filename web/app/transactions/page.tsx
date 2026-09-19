@@ -17,6 +17,7 @@ import { readTransactionListContext, writeTransactionListContext } from "@/lib/t
 import { useMobileCreationRoute } from "@/lib/use-mobile-creation-route";
 import { useEnlargedText } from "@/lib/use-enlarged-text";
 
+import { ImportFileInput } from "@/components/import-file-input";
 import dynamic from "next/dynamic";
 import {
   useCallback,
@@ -4083,23 +4084,8 @@ function TransactionsPageContent() {
     input.click();
   };
 
-  const handleMobileFileChange = (event: ChangeEvent<HTMLInputElement>) => {
-    const files = event.target.files ? Array.from(event.target.files) : [];
-    event.target.value = "";
-    if (files.length === 0) {
-      return;
-    }
-
-    openImportFiles(files);
-  };
-
-  const handlePhotoCaptureChange = (event: ChangeEvent<HTMLInputElement>) => {
-    const files = event.target.files ? Array.from(event.target.files) : [];
-    event.target.value = "";
-    if (files.length === 0) {
-      return;
-    }
-
+  const handleMobileFiles = (files: File[]) => openImportFiles(files);
+  const handlePhotoCaptureChange = (files: File[]) => {
     openImportFiles(files, false, "receipt");
   };
 
@@ -7670,34 +7656,34 @@ function TransactionsPageContent() {
       mobileTrailingAction={<button className="icon-button" type="button" aria-label="Add transaction" onClick={() => void openManualAdd()}><ActionIcon name="plus" /></button>}
       actions={transactionsShellActions}
     >
-      <input
+      <ImportFileInput
         ref={addFileInputRef}
         className="hidden-file-input"
         type="file"
         accept=".csv,.tsv,.pdf,.jpg,.jpeg,.png,.webp,.heic,.heif"
         multiple
-        onChange={handleMobileFileChange}
+        onFiles={handleMobileFiles}
         aria-hidden="true"
         tabIndex={-1}
       />
 
-      <input
+      <ImportFileInput
         ref={addPhotoInputRef}
         className="hidden-file-input"
         type="file"
         accept="image/*"
         capture="environment"
-        onChange={handlePhotoCaptureChange}
+        onFiles={handlePhotoCaptureChange}
         aria-hidden="true"
         tabIndex={-1}
       />
-      <input
+      <ImportFileInput
         ref={addPhotoLibraryInputRef}
         className="hidden-file-input"
         type="file"
         accept="image/*"
         multiple
-        onChange={handlePhotoCaptureChange}
+        onFiles={handlePhotoCaptureChange}
         aria-hidden="true"
         tabIndex={-1}
       />
