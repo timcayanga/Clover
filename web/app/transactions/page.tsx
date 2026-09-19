@@ -8762,13 +8762,14 @@ function TransactionsPageContent() {
                   <span className="transactions-manual-inline-row__icon transactions-manual-inline-row__icon--account" aria-hidden="true">
                     <AccountBrandMark accountBrand={manualSelectedAccountBrand} label={manualSelectedAccount ? getAccountDisplayName(manualSelectedAccount) : "Cash"} />
                   </span>
-                  <label className="transactions-manual-field transactions-manual-field--embedded-label transactions-manual-inline-row__field">
+                  <div className="transactions-manual-field transactions-manual-field--embedded-label transactions-manual-inline-row__field">
                     <span className="transactions-manual-field__label">{manualForm.type === "transfer" ? "From account" : "Account"}</span>
                     <div className="transactions-manual-picker">
                       <div className="transactions-manual-picker__control">
                         <button
                           type="button"
                           className="transactions-manual-picker__button transactions-manual-picker__button--plain"
+                          aria-label={manualForm.type === "transfer" ? "From account" : "Account"}
                           aria-expanded={manualAccountMenuOpen}
                           onClick={() => {
                             setManualCategoryMenuOpen(false);
@@ -8794,10 +8795,7 @@ function TransactionsPageContent() {
                                   className={`transactions-manual-picker__option ${
                                     account.id === manualForm.accountId ? "is-selected" : ""
                                   }`}
-                                  onClick={(event) => {
-                                    // Closing removes the option before the enclosing label's default action.
-                                    // Prevent it from activating the picker trigger and reopening the menu.
-                                    event.preventDefault();
+                                  onClick={() => {
                                     setManualForm((current) => ({
                                       ...current,
                                       accountId: account.id,
@@ -8820,7 +8818,7 @@ function TransactionsPageContent() {
                         ) : null}
                       </div>
                     </div>
-                  </label>
+                  </div>
                 </div>
 
                 {manualForm.type === "transfer" ? (
@@ -8852,7 +8850,7 @@ function TransactionsPageContent() {
                       className="transactions-manual-inline-row__icon-badge"
                     />
                   </span>
-                  <label className="transactions-manual-field transactions-manual-field--embedded-label transactions-manual-inline-row__field">
+                  <div className="transactions-manual-field transactions-manual-field--embedded-label transactions-manual-inline-row__field">
                     <span className="transactions-manual-field__label">Category</span>
                     <TransactionCategoryPicker
                       categories={categories}
@@ -8863,7 +8861,7 @@ function TransactionsPageContent() {
                         setManualForm((current) => ({ ...current, categoryId: category.id }));
                       }}
                     />
-                  </label>
+                  </div>
                 </div> : null}
 
                 <label className="transactions-manual-field transactions-manual-field--embedded-label transactions-manual-date">
