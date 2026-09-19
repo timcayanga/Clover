@@ -34,6 +34,12 @@ async function main() {
   );
   assert.equal(mobileSessionUser({ sub: "user" }), null);
   assert.equal(mobileOperation("GET", ["bootstrap"]), "bootstrap");
+  assert.equal(mobileOperation("GET", ["accounts","one","history"]), "account-history");
+  assert.equal(mobileOperation("POST", ["accounts","one","history"]), null);
+  assert.equal(mobileOperation("POST", ["accounts","one","purchases"]), "investment-purchase-create");
+  assert.equal(mobileOperation("DELETE", ["accounts","one","purchases","two"]), "investment-purchase-delete");
+  assert.equal(mobileOperation("PATCH", ["accounts","one","purchases","two"]), null);
+
   assert.equal(mobileOperation("POST", ["adviser", "chat"]), "adviser-chat");
   assert.equal(mobileOperation("GET", ["adviser", "chat"]), null);
   const chat = mobileApiResponse("adviser-chat", { reply: "Example", grounding: { transactionCount: 42, historyThrough: "2026-09-15T00:00:00Z", rawPayload: "private", accountNumber: "private" }, suggestions: [{ id: "follow-up", label: "Compare spending", prompt: "Compare my spending", secret: "private" }] }) as { grounding: unknown; suggestions: unknown };

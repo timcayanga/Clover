@@ -258,8 +258,51 @@ async function handle(
       return reply({groups,people,profiles});
     }
     if (operation === "investments") {
-      const accounts = await prisma.account.findMany({ where: { workspaceId, type: "investment" }, orderBy: { name: "asc" }, select: { id:true, name:true, institution:true, type:true, currency:true, balance:true, investmentSubtype:true, investmentSymbol:true, investmentQuantity:true, investmentCostBasis:true, investmentPrincipal:true, investmentStartDate:true, investmentMaturityDate:true, investmentInterestRate:true, investmentMaturityValue:true } });
-      return reply({ accounts });
+      return reply(await (await import("@/lib/mobile-investment-data")).loadMobileInvestments(workspaceId));
+    }
+    if (["account-history", "investment-purchase-create", "investment-purchase-delete"].includes(operation)) {
+      const account = await prisma.account.findFirst({where:{id:path[1],workspaceId},select:{id:true,type:true,currency:true,balance:true,updatedAt:true}});
+      if (!account) return reply({error:"Account not found in this Profile."},404);
+      if(operation === "account-history") {
+        const kind = z.enum(["activity","purchases","dividends","valuations"]).parse(url.searchParams.get("kind")??"activity");
+        const page = z.coerce.number().int().min(1).max(10000).parse(url.searchParams.get("page")??1);
+        if(kind === "activity") {
+          const query = new URL(request.url); query.search="";
+          query.searchParams.set("workspaceId",workspaceId); query.searchParams.set("accounts",account.id); query.searchParams.set("page",String(page)); query.searchParams.set("pageSize","30"); query.searchParams.set("summaryMode","light");
+          const forwarded = new Request(query,{headers:request.headers});
+          const result = await withMobileRequestContext(userId,forwarded,async()=> (await import("@/app/api/transactions/route")).GET(forwarded));
+          const data = await result.json();
+          return reply(mobileApiResponse("transactions",data),result.status);
+        }
+        if(account.type !== "investment") return reply({error:"Choose an investment account."},400);
+        if(kind === "valuations") {
+          const rows=await prisma.investmentSnapshot.findMany({where:{workspaceId,accountId:account.id},orderBy:[{snapshotDate:"desc"},{updatedAt:"desc"}],take:201,select:{snapshotDate:true,updatedAt:true,totalValue:true,currency:true}});
+          const history=rows.slice(0,200).filter(r=>r.totalValue!==null).map(r=>({accountId:account.id,date:(r.snapshotDate??r.updatedAt).toISOString(),currency:r.currency,value:Number(r.totalValue)}));
+          if(!rows.length && account.balance!==null) history.push({accountId:account.id,date:account.updatedAt.toISOString(),currency:account.currency,value:Number(account.balance)});
+          return reply({history,limited:rows.length>200});
+        }
+        const skip=(page-1)*30;
+        if(kind === "purchases") {
+          const [rows,totalCount]=await Promise.all([prisma.investmentPurchase.findMany({where:{accountId:account.id},orderBy:[{purchasedAt:"desc"},{id:"desc"}],skip,take:30,select:{id:true,purchasedAt:true,quantity:true,totalCost:true,currency:true,note:true}}),prisma.investmentPurchase.count({where:{accountId:account.id}})]);
+          return reply({items:rows.map(r=>({id:r.id,date:r.purchasedAt.toISOString(),quantity:r.quantity?.toString()??null,amount:r.totalCost?.toString()??null,currency:r.currency,note:r.note,label:"Buy"})),totalCount,page});
+        }
+        const [rows,totalCount]=await Promise.all([prisma.investmentDividend.findMany({where:{accountId:account.id},orderBy:[{paidAt:"desc"},{id:"desc"}],skip,take:30,select:{id:true,paidAt:true,amount:true,currency:true,note:true}}),prisma.investmentDividend.count({where:{accountId:account.id}})]);
+        return reply({items:rows.map(r=>({id:r.id,date:r.paidAt.toISOString(),amount:r.amount?.toString()??null,currency:r.currency,note:r.note,label:"Dividend"})),totalCount,page});
+      }
+      if(account.type !== "investment") return reply({error:"Choose an investment account."},400);
+      if(operation === "investment-purchase-delete") {
+        if(!(await prisma.investmentPurchase.findFirst({where:{id:path[3],accountId:account.id},select:{id:true}}))) return reply({error:"Trade not found in this account."},404);
+        const result=await withMobileRequestContext(userId,request,async()=> (await import("@/app/api/accounts/[accountId]/investment-purchases/[purchaseId]/route")).DELETE(request,{params:Promise.resolve({accountId:account.id,purchaseId:path[3]})}));
+        return reply(result.ok?{ok:true}:{error:"Unable to delete this purchase."},result.status);
+      }
+      const schema=z.object({purchasedAt:z.string().regex(/^\d{4}-\d{2}-\d{2}$/).refine(v=>Number.isFinite(Date.parse(v))&&new Date(v).toISOString().slice(0,10)===v),totalCost:z.coerce.number().finite().positive(),quantity:z.coerce.number().finite().positive().optional(),note:z.string().trim().max(1000).optional()}).strict();
+      const text=await request.text(); if(new TextEncoder().encode(text).length>4096)return reply({error:"Trade details are too long."},413);
+      let input:unknown; try { input=JSON.parse(text); } catch { return reply({error:"Please check the purchase details."},400); }
+      const payload=schema.parse(input);
+      const headers = new Headers(request.headers); headers.delete("cookie"); headers.delete("content-length"); headers.set("content-type","application/json");
+      const forwarded=new Request(request.url,{method:"POST",headers,body:JSON.stringify({...payload,currency:account.currency})});
+      const result=await withMobileRequestContext(userId,forwarded,async()=> (await import("@/app/api/accounts/[accountId]/investment-purchases/route")).POST(forwarded,{params:Promise.resolve({accountId:account.id})}));
+      return reply(result.ok?{ok:true}:{error:"Unable to save this purchase."},result.status);
     }
     if (operation === "market-history" || operation === "market-news") {
       const access = await getProAccess(user.id);

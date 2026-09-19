@@ -63,6 +63,14 @@ function AccountsContent() {
         ? Promise.resolve({
             accounts: [
               {
+                id: "BPI Savings",
+                name: "BPI Savings",
+                institution: "BPI",
+                type: "bank",
+                currency: "PHP",
+                balance: "48230.75",
+              },
+              {
                 id: "sample",
                 name: "Sample cash",
                 institution: null,

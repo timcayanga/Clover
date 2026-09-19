@@ -48,7 +48,22 @@ export default function TabLayout() {
               borderTopColor: colors.line,
               backgroundColor: colors.white,
             },
-            tabBarLabel: ({ children, color }) => <Text style={{fontFamily:"Poppins-Regular",fontSize:11,color,textAlign:"center"}}>{children}</Text>,
+            tabBarLabel: ({ children, color }) => (
+              <Text
+                numberOfLines={1}
+                adjustsFontSizeToFit
+                minimumFontScale={0.8}
+                style={{
+                  fontFamily: "Poppins-Regular",
+                  fontSize: 11,
+                  color,
+                  textAlign: "center",
+                  maxWidth: "100%",
+                }}
+              >
+                {children}
+              </Text>
+            ),
             tabBarLabelStyle: { fontSize: 11, fontFamily: "Poppins-Regular" },
           }}
         >

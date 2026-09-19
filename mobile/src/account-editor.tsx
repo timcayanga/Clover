@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import { Body, Button, Card, Field, Notice, Screen } from "./ui";
 import { AssetSnapshot } from "./asset-snapshot";
+import { AccountValuationHistory } from "./investment-views";
+import { AccountHistory } from "./account-history";
 import { AccountIdentity } from "./account-identity";
 import { PlanAction, PlanHeader } from "./plan-ui";
 import { Choices } from "./transaction-entry";
@@ -88,16 +90,21 @@ const numericFields = new Set([
 export function AccountEditor({
   initial,
   defaultType = "bank",
+  defaultInstitution = "",
+  defaultCurrency = "PHP",
   onClose,
   onSaved,
 }: {
   initial: AccountRecord | null;
   defaultType?: string;
+  defaultInstitution?: string;
+  defaultCurrency?: string;
   onClose: () => void;
   onSaved: (record: AccountRecord | null) => void;
 }) {
   const session = useSession();
   const [record, setRecord] = useState(initial);
+  const [historyRevision, setHistoryRevision] = useState(0);
   const [editing, setEditing] = useState(!initial);
   const [loading, setLoading] = useState(Boolean(initial && !session.demo));
   const [busy, setBusy] = useState(false);
@@ -105,9 +112,9 @@ export function AccountEditor({
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [draft, setDraft] = useState<Record<string, string>>({
     name: "",
-    institution: "",
+    institution: defaultInstitution,
     type: defaultType,
-    currency: "PHP",
+    currency: defaultCurrency,
     balance: "",
   });
   const alive = useRef(true);
@@ -130,7 +137,13 @@ export function AccountEditor({
     return () => {
       alive.current = false;
     };
-  }, [initial?.id, session.demo, session.profileId, session.request]);
+  }, [
+    initial?.id,
+    session.demo,
+    session.profileId,
+    session.request,
+    historyRevision,
+  ]);
   const beginEdit = () => {
     const values: Record<string, string> = {};
     for (const field of [...Object.keys(labels), "type"]) {
@@ -355,6 +368,22 @@ export function AccountEditor({
                 ))}
             </>
           )}
+          {record.type === "investment" ? (
+            <AccountValuationHistory
+              key={`valuation-${record.id}`}
+              accountId={record.id}
+              currency={record.currency}
+            />
+          ) : null}
+          <AccountHistory
+            key={record.id}
+            accountId={record.id}
+            investment={record.type === "investment"}
+            currency={record.currency}
+            onChanged={() => {
+              if (!session.demo) setHistoryRevision((v) => v + 1);
+            }}
+          />
           <PlanAction
             title="Delete account"
             tone="delete"
