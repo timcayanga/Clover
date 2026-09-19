@@ -124,7 +124,7 @@
     "qa:environment-readiness": "tsx scripts/check-environment-readiness.ts",
     "qa:dependency-boundaries": "tsx scripts/dependency-boundary-regression.ts",
     "qa:environment-isolation": "tsx scripts/environment-isolation-regression.ts",
-    "qa:critical-page-loading": "tsx scripts/critical-page-loading-regression.ts && tsx scripts/summary-cache-dates-regression.ts",
+    "qa:critical-page-loading": "npm run qa:report-net-worth && tsx scripts/critical-page-loading-regression.ts && tsx scripts/summary-cache-dates-regression.ts",
     "qa:in-app-notifications": "tsx scripts/in-app-notifications-regression.ts",
     "qa:browser-compatibility": "tsx scripts/browser-compatibility-regression.ts",
     "qa:ui-consistency": "tsx scripts/ui-theme-consistency-regression.ts && tsx scripts/account-dropdown-audit.ts",
@@ -178,7 +178,8 @@
     "qa:clerk-identity": "NODE_ENV=production CLOVER_DEPLOYMENT_ENVIRONMENT=staging CLERK_SECRET_KEY=sk_test_disposable_fixture tsx --require ./scripts/clerk-identity-fixture-preload.cjs scripts/clerk-identity-fixture.ts",
     "qa:smoke-defects": "tsx scripts/smoke-defects-regression.ts",
     "qa:offline": "tsx scripts/mobile-offline-regression.ts",
-    "qa:migrations": "tsx scripts/migration-runner-regression.ts"
+    "qa:migrations": "tsx scripts/migration-runner-regression.ts",
+    "qa:report-net-worth": "tsx scripts/report-net-worth-regression.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1095.0",

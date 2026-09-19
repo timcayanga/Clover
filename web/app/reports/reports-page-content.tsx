@@ -1,6 +1,7 @@
+import { buildReportNetWorth } from "@/lib/report-net-worth-data";
 import { reportAccountBalance, buildReportBalanceSeries } from "@/lib/report-balances";
 import { ReportChartSwitch } from "@/components/report-chart-switch";
-import { loadReportNetWorth } from "@/lib/report-net-worth";
+import { loadReportNetWorthAccounts } from "@/lib/report-net-worth";
 import nextDynamic from "next/dynamic";
 import Link from "next/link";
 import { cookies } from "next/headers";
@@ -485,10 +486,11 @@ export async function ReportsStream({
       latestImport,
       importStatusRows,
       parsedReportRowCandidates,
+      netWorthAccounts,
     ] = await loadCachedWorkspaceSummary({
       workspaceId: selectedWorkspaceId,
       area: "reports",
-      keyParts: [reportQueryStart.toISOString(), reportQueryEnd.toISOString(), needsAdvancedData ? "advanced" : "core", requestedAccountId ?? "all-accounts"],
+      keyParts: ["with-balance-history-v1", reportQueryStart.toISOString(), reportQueryEnd.toISOString(), needsAdvancedData ? "advanced" : "core", requestedAccountId ?? "all-accounts"],
       load: () => Promise.all([
       prisma.transaction.findMany({
         where: buildActiveWorkspaceTransactionWhere(selectedWorkspaceId, {
@@ -603,6 +605,7 @@ export async function ReportsStream({
           orderBy: [{ date: "desc" }, { createdAt: "desc" }],
         })
         .catch(() => []),
+      loadReportNetWorthAccounts(selectedWorkspaceId, requestedAccountId),
       ]),
     });
 
@@ -657,7 +660,6 @@ export async function ReportsStream({
     // Fetch once above, then compute every monetary report within one currency.
     // This also keeps category shares, comparisons and Adviser context coherent.
     const renderCurrencyReport = async (requestedCurrency: string | null) => {
-    const netWorthPromise = loadReportNetWorth(selectedWorkspaceId, requestedCurrency ?? "MIXED", currentWindowStart, currentWindowEnd, requestedAccountId);
     const buildTransactionsHref = (params: Record<string, string>) => `/transactions?${new URLSearchParams({ ...params, ...(requestedCurrency ? { currency: requestedCurrency } : {}) }).toString()}`;
     const currencyScopedTransactions = requestedCurrency
       ? reportAllTransactions.filter(
@@ -1309,7 +1311,7 @@ export async function ReportsStream({
     const previousWeeklyNet = previousWeeklySummary.income - previousWeeklySummary.expense;
     const weeklyNetChange = weeklyNet - previousWeeklyNet;
     const weeklySummaryLabel = `${formatShortDate(weeklySummaryStart)} - ${formatShortDate(weeklySummaryEnd)}`;
-    const netWorthHistory = await netWorthPromise;
+    const netWorthHistory = buildReportNetWorth(netWorthAccounts, requestedCurrency ?? "MIXED", currentWindowStart, currentWindowEnd);
     const reportMoneySeries = buildReportBalanceSeries(workspaceAccountSummaries,
       reportAllTransactions.map(transaction => ({ ...transaction, accountId: transaction.account.id,
         date: getCalendarDayEndInTimeZone(transaction.date, normalizeRegionalPreferences(user.regionalPreferences).timeZone),
@@ -1602,7 +1604,7 @@ export async function ReportsStream({
         {requestedAccountId ? (
           <div className="reports-account-scope">
             <span>Account: {workspaceAccountSnapshots[0]?.name ?? "Account unavailable in this profile"}</span>
-            <Link className="button button-secondary button-small" href="/reports" prefetch={false}>View all accounts</Link>
+            <a className="button button-secondary button-small" href="/reports">View all accounts</a>
           </div>
         ) : null}
         <PostHogEvent
