@@ -1,4 +1,5 @@
 "use client";
+import { TransactionTableEntry } from "@/components/transaction-table-entry";
 import { UploadSourcePicker, UploadSecurityCopy } from "@/components/upload-source-buttons";
 
 import dynamic from "next/dynamic";
@@ -100,6 +101,8 @@ export function DashboardManualTransactionModal({
 }) {
   const router = useRouter();
   const initialAccount = accounts.find((account) => account.id === initialAccountId) ?? accounts[0] ?? null;
+  const [tableMode, setTableMode] = useState(false);
+  const [tableLocked, setTableLocked] = useState(false);
   const [entryTab, setEntryTab] = useState<"manual" | "ask" | "upload">("manual");
   const [askVisited, setAskVisited] = useState(false);
   const [isPro, setIsPro] = useState(false);
@@ -140,11 +143,11 @@ export function DashboardManualTransactionModal({
   const categoryButtonRef = useRef<HTMLButtonElement | null>(null);
   const manualModalStyle = useMemo<CSSProperties>(
     () => ({
-      width: "min(640px, calc(100vw - 24px))",
+      width: tableMode ? "min(1160px, calc(100vw - 24px))" : "min(640px, calc(100vw - 24px))",
       maxHeight: "calc(100dvh - 24px)",
       overflow: "auto",
     }),
-    []
+    [tableMode]
   );
 
   useEffect(() => {
@@ -301,6 +304,7 @@ export function DashboardManualTransactionModal({
   const previewLabel = formatCurrencyAmount(Number(form.amount || 0), form.currency || selectedAccount?.currency || "PHP");
 
   const handleClose = () => {
+    if (tableLocked) return;
     setAccountMenuOpen(false);
     setCategoryMenuOpen(false);
     setManualMoreOpen(false);
@@ -489,14 +493,16 @@ export function DashboardManualTransactionModal({
 
 
         <div className="transaction-creation-tabs" role="tablist" aria-label="How to add transactions">
-          {(["manual", "ask", "upload"] as const).map((tab, index) => <button key={tab} type="button" disabled={isSaving} role="tab" id={`quick-entry-tab-${tab}`} aria-controls={`quick-entry-panel-${tab}`} aria-selected={entryTab === tab} tabIndex={entryTab === tab ? 0 : -1} onClick={() => { setEntryTab(tab); if (tab === "ask") setAskVisited(true); }} onKeyDown={event => {
+          {(["manual", "ask", "upload"] as const).map((tab, index) => <button key={tab} type="button" disabled={isSaving || tableLocked} role="tab" id={`quick-entry-tab-${tab}`} aria-controls={`quick-entry-panel-${tab}`} aria-selected={entryTab === tab} tabIndex={entryTab === tab ? 0 : -1} onClick={() => { setEntryTab(tab); if (tab === "ask") setAskVisited(true); }} onKeyDown={event => {
             const tabs = ["manual", "ask", "upload"] as const;
             const next = event.key === "ArrowRight" ? tabs[(index + 1) % 3] : event.key === "ArrowLeft" ? tabs[(index + 2) % 3] : event.key === "Home" ? tabs[0] : event.key === "End" ? tabs[2] : null;
             if (next) { event.preventDefault(); setEntryTab(next); if (next === "ask") setAskVisited(true); document.getElementById(`quick-entry-tab-${next}`)?.focus(); }
           }}><img src={`/assets/organize/method-${tab}.svg`} alt="" width="20" height="20" />{tab === "manual" ? "Manual" : tab === "ask" ? "Ask Clover" : "Upload"}</button>)}
         </div>
         <div id="quick-entry-panel-manual" role="tabpanel" aria-labelledby="quick-entry-tab-manual" hidden={entryTab !== "manual"}>
-        <form onSubmit={handleSubmit}>
+        <div style={{display:"flex",justifyContent:"flex-end",marginBottom:12}}><button className="button button-secondary" type="button" disabled={isSaving || tableLocked} onClick={() => setTableMode(!tableMode)}>{tableMode ? "Single entry" : "▦ Table entry"}</button></div>
+        <div hidden={!tableMode}><TransactionTableEntry workspaceId={workspaceId} accounts={accounts} categories={categories} onSaved={() => router.refresh()} onLockChange={setTableLocked} /></div>
+        <form onSubmit={handleSubmit} hidden={tableMode}>
           <div className="manual-form-layout manual-form-layout--compact dashboard-manual-form" data-transaction-type={form.type}>
             <div className="transactions-manual-type-toggle" role="group" aria-label="Transaction type">
               <button

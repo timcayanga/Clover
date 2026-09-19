@@ -18,7 +18,7 @@ export function simpleEntryRows(question: string, context?: EntryFormContext) {
     lines.length > 50 ||
     context?.kind === "account" ||
     context?.kind === "investment" ||
-    context?.kind === "receipt"
+    context?.kind === "receipt" || context?.kind === "recurring" || context?.kind === "split" || context?.kind === "trade"
   )
     return null;
   const rows = [];
@@ -47,6 +47,7 @@ export function isEntryRequest(
   context?: EntryFormContext,
   draft?: EntryDraft,
 ) {
+  if (context?.kind === "recurring" || context?.kind === "split" || context?.kind === "trade") return true;
   if (
     draft &&
     !/\b(?:weather|joke|poem|politics|recipe|write code)\b/i.test(question)

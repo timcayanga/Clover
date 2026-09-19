@@ -1,4 +1,5 @@
 "use client";
+import { AddEntryMethods } from "@/components/add-entry-methods";
 
 import { useEffect, useRef, useState } from "react";
 import { CurrencySelector } from "@/components/currency-selector";
@@ -75,6 +76,7 @@ export function RecurringCreateForm({workspaceId,initialKind,accounts,categoryOp
   };
   return <div className="recurring-add-modal" role="presentation" onClick={()=>{if(!saving)onClose();}}><section ref={card} className="panel recurring-add-modal__card recurring-create" role={creationPage?"region":"dialog"} aria-modal={creationPage?undefined:true} aria-label="Add recurring" onClick={e=>e.stopPropagation()}>
     <header><h2>Add recurring</h2><button type="button" className="recurring-modal-close" aria-label="Close add recurring" disabled={saving} onClick={onClose}><InterfaceIcon name="close" size={20}/></button></header>
+    <AddEntryMethods kind="recurring" workspaceId={workspaceId} accounts={accounts} disabled={saving} formContext={{kind:"recurring",fields:{kind,title,amount,currency,dueDate,recurrence,counterparty,accountId,notes}}} onReviewForm={({fields:f})=>{if(f.title!==undefined)setTitle(f.title);if(f.amount!==undefined)setAmount(f.amount);if(f.currency!==undefined)setCurrency(f.currency);if(f.dueDate!==undefined)setDueDate(f.dueDate);if(f.recurrence&&commitmentRecurrenceOptions.some(o=>o.value===f.recurrence))setRecurrence(f.recurrence);if(f.kind&&types.some(([k])=>k===f.kind))setKind(f.kind as Kind);if(f.counterparty!==undefined)setCounterparty(f.counterparty);if(f.accountId&&accounts.some(a=>a.id===f.accountId))setAccountId(f.accountId);if(f.notes!==undefined)setNotes(f.notes);}}>
     <form onSubmit={submit}>
       <fieldset className="recurring-create__types" disabled={saving}><legend className="sr-only">Recurring type</legend>{types.map(([value,label])=><button key={value} type="button" aria-pressed={kind===value} onClick={()=>changeKind(value)}>{label}</button>)}</fieldset>
       <label className="settings-field"><span>{variable?"Estimated payment amount · optional":labels[0]}</span><div className="recurring-create__amount"><input aria-label={labels[0]} inputMode="decimal" value={amount} onChange={e=>setAmount(e.target.value)} placeholder="0.00" required={!variable}/><CurrencySelector value={currency} onChange={setCurrency} options={getCurrencyCatalogCodes()} ariaLabel="Select commitment currency" showCurrencyCode /></div></label>
@@ -103,5 +105,6 @@ export function RecurringCreateForm({workspaceId,initialKind,accounts,categoryOp
       <button className="button button-primary recurring-create__save" type="submit" disabled={saving}>{saving?"Saving…":labels[5]}</button>
       <small className="recurring-create__disclaimer">Tracking only. No money moves when you save.</small>
     </form>
+    </AddEntryMethods>
   </section></div>;
 }

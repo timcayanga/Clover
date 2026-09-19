@@ -175,6 +175,10 @@ async function handle(
       const response = await withMobileRequestContext(userId,request,async()=> (await import("@/app/api/adviser/attachments/route")).POST(request));
       return reply(await response.json(),response.status);
     }
+    if (operation === "transaction-batch") {
+      const response = await withMobileRequestContext(userId, request, async () => (await import("@/app/api/transactions/batch/route")).POST(request));
+      return reply(await response.json(), response.status);
+    }
     if (operation === "adviser-entries") {
       const text = request.method === "POST" ? await request.text() : undefined;
       if (text && new TextEncoder().encode(text).length > 100000) return reply({error:"Please shorten this draft."},413);

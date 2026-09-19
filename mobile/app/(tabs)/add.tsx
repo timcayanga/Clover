@@ -1,3 +1,4 @@
+import { TransactionTableEntry } from "../../src/transaction-table-entry";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
 import * as DocumentPicker from "expo-document-picker";
@@ -33,6 +34,7 @@ export default function Add() {
   const { colors, dark } = useTheme();
   const insets = useSafeAreaInsets();
   const session = useSession();
+  const [tableMode,setTableMode]=useState(false);
   const [tab, setTab] = useState("manual");
   const [draft, setDraft] = useState(emptyTransaction);
   const { entry, picker } = useLocalSearchParams<{
@@ -293,7 +295,9 @@ export default function Add() {
           ))}
         </View>
         <View style={{ display: tab === "manual" ? "flex" : "none" }}>
-          <ManualTransaction draft={draft} onChange={setDraft} />
+          <Button secondary title={tableMode?"Single entry":"▦ Table entry"} onPress={()=>setTableMode(!tableMode)}/>
+          <View style={{display:tableMode?"none":"flex"}}><ManualTransaction draft={draft} onChange={setDraft} /></View>
+          <View style={{display:tableMode?"flex":"none"}}><TransactionTableEntry key={session.profileId}/></View>
         </View>
         <View style={{ display: tab === "ask" ? "flex" : "none" }}>
           {tab === "ask" ? (

@@ -53,7 +53,7 @@ export type EntryDraft = {
   receipts: EntryReceipt[];
 };
 export type EntryFormContext = {
-  kind: "transaction" | "account" | "investment" | "receipt";
+  kind: "transaction" | "account" | "investment" | "receipt" | "recurring" | "split" | "trade";
   recordId?: string;
   focusedField?: string;
   fields: Record<string, string>;

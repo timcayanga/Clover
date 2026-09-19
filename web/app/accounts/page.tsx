@@ -1,4 +1,5 @@
 "use client";
+import { AddEntryMethods } from "@/components/add-entry-methods";
 import { getInvestmentInstitutionSnapshotSummary } from "@/lib/investment-institution-summary";
 import { compactSummaryMoney } from "../../../shared/summary-format";
 import { AccountCreationForm } from "@/components/account-creation-form";
@@ -5141,6 +5142,7 @@ function AccountsPageContent() {
               </button>
             </div>
 
+            <AddEntryMethods key={selectedWorkspaceId} kind="accounts" workspaceId={selectedWorkspaceId} accounts={accounts}>
             <div className="accounts-add-grid">
               <AccountCreationForm onSave={saveManualAccount}>
                 {(isSaving, createAnotherManualAccount) => (<>
@@ -5403,6 +5405,7 @@ function AccountsPageContent() {
               </>)}
               </AccountCreationForm>
             </div>
+            </AddEntryMethods>
           </section>
         </div>
       ) : null}
