@@ -144,12 +144,12 @@ const getReportTransactionCategoryName = (transaction: ReportTransaction) =>
     type: transaction.type,
   }) ?? "Uncategorized";
 
-const getReportTransactionType = (transaction: ReportTransaction) =>
+const getReportTransactionType = (transaction: ReportTransaction, categoryName = getReportTransactionCategoryName(transaction)) =>
   resolveFinancialTransactionType({
     type: transaction.type,
     amount: transaction.amount,
     isTransfer: transaction.isTransfer,
-    categoryName: getReportTransactionCategoryName(transaction),
+    categoryName,
     merchantRaw: transaction.merchantRaw,
     merchantClean: transaction.merchantClean,
     description: transaction.description,
@@ -167,8 +167,8 @@ const reportSankeyExcludedMerchantMatchers = [
 ];
 const reportSankeyExcludedCategoryNames = new Set(["income", "financial", "cash & atm"]);
 
-const isReportMerchantEligible = (transaction: ReportTransaction) => {
-  const categoryName = getReportTransactionCategoryName(transaction).trim().toLowerCase();
+const isReportMerchantEligible = (transaction: ReportTransaction, resolvedCategoryName = getReportTransactionCategoryName(transaction)) => {
+  const categoryName = resolvedCategoryName.trim().toLowerCase();
   if (reportSankeyExcludedCategoryNames.has(categoryName)) {
     return false;
   }
@@ -636,6 +636,13 @@ export async function ReportsStream({
       ...normalizedReportTransactions,
       ...mapParsedRowsToReportTransactions(parsedReportRows),
     ].sort((left, right) => right.date.getTime() - left.date.getTime());
+    // Reuse deterministic presentation decisions only within this render. Each
+    // request receives fresh lookups, so edits and workspace changes cannot reuse
+    // another request's categories or transaction directions.
+    const reportCategoryNames = new Map(reportAllTransactions.map(transaction => [
+      transaction, getReportTransactionCategoryName(transaction),
+    ]));
+    const reportCategoryName = (transaction: ReportTransaction) => reportCategoryNames.get(transaction)!;
     const reportTypeOverrides = getTransactionSummaryTypeOverrides(
       reportAllTransactions.map((transaction) => ({
         id: transaction.id,
@@ -646,15 +653,17 @@ export async function ReportsStream({
         currency: transaction.account.currency,
         type: transaction.type,
         isTransfer: transaction.isTransfer,
-        categoryName: getReportTransactionCategoryName(transaction),
+        categoryName: reportCategoryName(transaction),
         merchantRaw: transaction.merchantRaw,
         merchantClean: transaction.merchantClean,
         description: transaction.description,
         rawPayload: transaction.rawPayload,
       }))
     );
-    const getResolvedReportTransactionType = (transaction: ReportTransaction) =>
-      reportTypeOverrides.get(transaction.id) ?? getReportTransactionType(transaction);
+    const reportTransactionTypes = new Map(reportAllTransactions.map(transaction => [
+      transaction, reportTypeOverrides.get(transaction.id) ?? getReportTransactionType(transaction, reportCategoryName(transaction)),
+    ]));
+    const getResolvedReportTransactionType = (transaction: ReportTransaction) => reportTransactionTypes.get(transaction)!;
     const isResolvedReportSpendingTransaction = (transaction: ReportTransaction) =>
       getResolvedReportTransactionType(transaction) === "expense";
     const requestedFilter = searchParams?.filter?.trim().toLowerCase() ?? "";
@@ -681,7 +690,7 @@ export async function ReportsStream({
       : reportAllTransactions;
     const reportScopedTransactions = requestedFilter
       ? currencyScopedTransactions.filter((transaction) => {
-          const category = getReportTransactionCategoryName(transaction).toLowerCase();
+          const category = reportCategoryName(transaction).toLowerCase();
           const merchant = normalizeMerchant(transaction.merchantClean ?? transaction.merchantRaw).toLowerCase();
           const account = transaction.account.name.toLowerCase();
           return category.includes(requestedFilter) || merchant.includes(requestedFilter) || account.includes(requestedFilter);
@@ -692,7 +701,7 @@ export async function ReportsStream({
       spendingPaceTransactions.map((transaction) => ({
         date: transaction.date,
         amount: toReportMagnitude(transaction.amount),
-        category: getReportTransactionCategoryName(transaction),
+        category: reportCategoryName(transaction),
       })),
       currentWindowEnd
     );
@@ -741,7 +750,7 @@ export async function ReportsStream({
         }
 
         if (transactionType === "expense") {
-          const categoryName = getReportTransactionCategoryName(transaction);
+          const categoryName = reportCategoryName(transaction);
           accumulator.expenseCategories.set(
             categoryName,
             (accumulator.expenseCategories.get(categoryName) ?? 0) + magnitude
@@ -771,7 +780,7 @@ export async function ReportsStream({
         }
 
         if (transactionType === "expense") {
-          const categoryName = getReportTransactionCategoryName(row);
+          const categoryName = reportCategoryName(row);
           accumulator.expenseCategories.set(
             categoryName,
             (accumulator.expenseCategories.get(categoryName) ?? 0) + magnitude
@@ -945,7 +954,7 @@ export async function ReportsStream({
     const reportExpenseTransactions = reportDisplayTransactions.filter(isResolvedReportSpendingTransaction);
     const reportExpenseCategories = reportExpenseTransactions.reduce(
       (totals, transaction) => {
-        const categoryName = getReportTransactionCategoryName(transaction);
+        const categoryName = reportCategoryName(transaction);
         totals.set(categoryName, (totals.get(categoryName) ?? 0) + Math.abs(Number(transaction.amount)));
         return totals;
       },
@@ -1000,7 +1009,7 @@ export async function ReportsStream({
       if (!reportSankeyAccountIncome.has(accountKey)) {
         reportSankeyAccountIncome.set(accountKey, { id: accountKey, label: accountLabel, amount: 0 });
       }
-      const categoryLabel = getReportTransactionCategoryName(transaction);
+      const categoryLabel = reportCategoryName(transaction);
       const categoryKey = normalizeMerchant(categoryLabel);
       const amount = Math.abs(Number(transaction.amount));
       const accountExpenseMap = reportSankeyAccountExpenseByCategory.get(accountKey) ?? new Map();
@@ -1187,10 +1196,10 @@ export async function ReportsStream({
 
     const reportRecentTransactions = reportCurrentWindowTransactions.length > 0 ? reportCurrentWindowTransactions : reportDisplayTransactions;
     const reportRecentExpenseTransactions = reportRecentTransactions.filter(
-      (transaction) => getResolvedReportTransactionType(transaction) === "expense" && isReportMerchantEligible(transaction)
+      (transaction) => getResolvedReportTransactionType(transaction) === "expense" && isReportMerchantEligible(transaction, reportCategoryName(transaction))
     );
     const reportHistoricalExpenseTransactions = reportHistoricalTransactions.filter(
-      (transaction) => getResolvedReportTransactionType(transaction) === "expense" && isReportMerchantEligible(transaction)
+      (transaction) => getResolvedReportTransactionType(transaction) === "expense" && isReportMerchantEligible(transaction, reportCategoryName(transaction))
     );
 
     const recentMerchantSpend = new Map<
@@ -1222,7 +1231,7 @@ export async function ReportsStream({
       if (!label) return;
       const key = normalizeMerchant(label);
       const amount = Math.abs(Number(transaction.amount));
-      const categoryName = getReportTransactionCategoryName(transaction);
+      const categoryName = reportCategoryName(transaction);
       const existing = recentMerchantSpend.get(key) ?? { label, amount: 0, count: 0, categoryAmounts: new Map<string, number>() };
       existing.amount += amount;
       existing.count += 1;
@@ -1368,7 +1377,7 @@ export async function ReportsStream({
             return sum;
           }
 
-          const categoryName = getReportTransactionCategoryName(transaction);
+          const categoryName = reportCategoryName(transaction);
           return categoryName === topCategoryName ? sum + Math.abs(Number(transaction.amount)) : sum;
         }, 0)
       : 0;
