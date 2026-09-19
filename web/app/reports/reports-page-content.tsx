@@ -481,16 +481,13 @@ export async function ReportsStream({
 
     const requestedAccountId = searchParams?.accountId?.trim() || undefined;
     const [
-      reportTransactions,
-      workspaceAccountSnapshots,
-      latestImport,
-      importStatusRows,
-      parsedReportRowCandidates,
-      netWorthAccounts,
-    ] = await loadCachedWorkspaceSummary({
+      [reportTransactions, latestImport, importStatusRows, parsedReportRowCandidates],
+      [workspaceAccountSnapshots, netWorthAccounts],
+    ] = await Promise.all([
+    loadCachedWorkspaceSummary({
       workspaceId: selectedWorkspaceId,
       area: "reports",
-      keyParts: ["with-balance-history-v1", reportQueryStart.toISOString(), reportQueryEnd.toISOString(), needsAdvancedData ? "advanced" : "core", requestedAccountId ?? "all-accounts"],
+      keyParts: ["range-data-v2", reportQueryStart.toISOString(), reportQueryEnd.toISOString(), needsAdvancedData ? "advanced" : "core", requestedAccountId ?? "all-accounts"],
       load: () => Promise.all([
       prisma.transaction.findMany({
         where: buildActiveWorkspaceTransactionWhere(selectedWorkspaceId, {
@@ -526,25 +523,6 @@ export async function ReportsStream({
         },
         orderBy: { date: "desc" },
       }),
-      (prisma.account.findMany({
-            where: {
-              workspaceId: selectedWorkspaceId,
-              ...(requestedAccountId ? { id: requestedAccountId } : {}),
-            },
-            select: {
-              id: true,
-              name: true,
-              accountNumber: true,
-              balance: true,
-              currency: true,
-              type: true,
-              source: true,
-              transactions: { where: { deletedAt: null, isExcluded: false, account: { source: "manual" } },
-                select: { amount: true, currency: true, type: true, date: true, createdAt: true, merchantRaw: true, merchantClean: true, description: true, rawPayload: true } },
-              statementCheckpoints: { select: { endingBalance: true, status: true, statementEndDate: true, createdAt: true, sourceMetadata: true }, orderBy: { createdAt: "desc" }, take: 50 },
-            },
-            orderBy: [{ balance: "desc" }, { updatedAt: "desc" }],
-          }).then(accounts => accounts.map(account => ({ id: account.id, name: account.name, accountNumber: account.accountNumber, currency: account.currency, type: account.type, balance: reportAccountBalance({ ...account, transactions: account.transactions.map(t => ({ ...t, amount: t.amount.toString(), rawPayload: t.rawPayload as Parameters<typeof reportAccountBalance>[0]["transactions"][number]["rawPayload"] })) }) }))) as Promise<WorkspaceAccountSnapshot[]>),
       needsAdvancedData
         ? prisma.importFile.findFirst({
             where: { workspaceId: selectedWorkspaceId, ...(requestedAccountId ? { accountId: requestedAccountId } : {}) },
@@ -605,9 +583,38 @@ export async function ReportsStream({
           orderBy: [{ date: "desc" }, { createdAt: "desc" }],
         })
         .catch(() => []),
-      loadReportNetWorthAccounts(selectedWorkspaceId, requestedAccountId),
       ]),
-    });
+    }),
+    // Account evidence is independent of the selected report date range. Keep
+    // this cache beside (not inside) the range cache so their lifetimes do not stack.
+    loadCachedWorkspaceSummary({
+      workspaceId: selectedWorkspaceId,
+      area: "reports",
+      keyParts: ["account-evidence-v1", requestedAccountId ?? "all-accounts"],
+      load: () => Promise.all([
+        (prisma.account.findMany({
+            where: {
+              workspaceId: selectedWorkspaceId,
+              ...(requestedAccountId ? { id: requestedAccountId } : {}),
+            },
+            select: {
+              id: true,
+              name: true,
+              accountNumber: true,
+              balance: true,
+              currency: true,
+              type: true,
+              source: true,
+              transactions: { where: { deletedAt: null, isExcluded: false, account: { source: "manual" } },
+                select: { amount: true, currency: true, type: true, date: true, createdAt: true, merchantRaw: true, merchantClean: true, description: true, rawPayload: true } },
+              statementCheckpoints: { select: { endingBalance: true, status: true, statementEndDate: true, createdAt: true, sourceMetadata: true }, orderBy: { createdAt: "desc" }, take: 50 },
+            },
+            orderBy: [{ balance: "desc" }, { updatedAt: "desc" }],
+          }).then(accounts => accounts.map(account => ({ id: account.id, name: account.name, accountNumber: account.accountNumber, currency: account.currency, type: account.type, balance: reportAccountBalance({ ...account, transactions: account.transactions.map(t => ({ ...t, amount: t.amount.toString(), rawPayload: t.rawPayload as Parameters<typeof reportAccountBalance>[0]["transactions"][number]["rawPayload"] })) }) }))) as Promise<WorkspaceAccountSnapshot[]>),
+        loadReportNetWorthAccounts(selectedWorkspaceId, requestedAccountId),
+      ]),
+    }),
+    ]);
 
     const importCountByStatus = new Map(
       importStatusRows.map((row) => [row.status, Number(row._count._all ?? 0)])

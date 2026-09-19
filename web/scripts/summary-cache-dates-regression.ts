@@ -72,6 +72,23 @@ async function main() {
       assertUsable(await loadCachedUserSummary({ userId: "demo-user", area: "circles", load }));
     }
     assert.equal(loads, 4, "User-scoped cache hits must preserve types too.");
+    let accountLoads = 0;
+    const accountEvidence = (workspaceId: string, accountId = "all-accounts") => loadCachedWorkspaceSummary({
+      workspaceId, area: "reports", keyParts: ["account-evidence-v1", accountId],
+      load: async () => { accountLoads++; return { accountId, updatedAt: new Date("2026-09-19T00:00:00Z"), balance: new Decimal("20340.00") }; },
+    });
+    for (const range of ["previous-month", "twelve-months"]) {
+      const [, evidence] = await Promise.all([
+        loadCachedWorkspaceSummary({ workspaceId: "range-qa", area: "reports", keyParts: ["range-data-v2", range], load: async () => ({ range }) }),
+        accountEvidence("range-qa"),
+      ]);
+      assert.equal(evidence.balance.toString(), "20340");
+      assert.equal(evidence.updatedAt.toISOString(), "2026-09-19T00:00:00.000Z");
+    }
+    assert.equal(accountLoads, 1, "Changing only report dates reuses account evidence.");
+    assert.equal((await accountEvidence("range-qa", "bank-a")).accountId, "bank-a");
+    await accountEvidence("another-workspace");
+    assert.equal(accountLoads, 3, "Account scopes and workspaces cannot share cached evidence.");
     assert.ok([...entries.keys()].every(key => key.includes("v2-typed")), "Old untyped entries must not be reused.");
     assert.ok(tags.some(value => value.includes("clover:workspace-summary:demo-a:reports")));
     assert.ok(tags.some(value => value.includes("clover:user-summary:demo-user:circles")));
