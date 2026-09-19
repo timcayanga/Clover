@@ -1,6 +1,7 @@
+import { Text } from "./app-text";
 import type { AddFormDraft } from "../../shared/add-form-draft";
 import { useState, type ReactNode } from "react";
-import { View, Pressable, Text } from "react-native";
+import { View, Pressable } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { router } from "expo-router";
 import { Body, Button, useTheme } from "./ui";
@@ -68,7 +69,7 @@ export function AddEntryMethods({
             >
               <Text
                 style={{
-                  fontFamily: "Poppins_500Medium",
+                  fontFamily: "Poppins-Medium",
                   fontSize: 15,
                   color: tab === method ? "white" : colors.ink,
                 }}

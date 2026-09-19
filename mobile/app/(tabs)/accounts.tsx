@@ -1,3 +1,4 @@
+import { Text } from "../../src/app-text";
 import { AccountTypeMark } from "../../src/account-type-mark";
 import { accountRowColors } from "../../../shared/visual-identity";
 import {
@@ -8,7 +9,7 @@ import {
 import { SummaryCard } from "../../src/plan-ui";
 import { LinearGradient } from "expo-linear-gradient";
 import { useCallback, useEffect, useLayoutEffect, useState } from "react";
-import { Pressable, Text, View } from "react-native";
+import { Pressable, View } from "react-native";
 import { useSession } from "../../src/session";
 import {
   AppHeader,

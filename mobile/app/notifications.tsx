@@ -1,7 +1,8 @@
+import { Text } from "../src/app-text";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { notificationDestination } from "../src/notification-destination";
 import { router, type Href } from "expo-router";
-import { Linking, Text, View } from "react-native";
+import { Linking, View } from "react-native";
 import { apiBase } from "../src/api";
 import { useSession } from "../src/session";
 import { Body, Button, Card, Notice, Screen, useTheme } from "../src/ui";

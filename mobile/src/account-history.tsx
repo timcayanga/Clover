@@ -1,7 +1,8 @@
+import { Text } from "./app-text";
 import { TradeLedger } from "./trade-ledger";
 import { useCallback, useState } from "react";
 import { useFocusEffect, router } from "expo-router";
-import { Pressable, Text, View } from "react-native";
+import { Pressable, View } from "react-native";
 import { useSession } from "./session";
 import {
   Body,

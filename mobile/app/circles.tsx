@@ -1,10 +1,11 @@
+import { Text } from "../src/app-text";
 import { CircleResourceEditor, type CircleAction } from "../src/circle-resource-editor";
 import * as ImagePicker from "expo-image-picker";
 import { LinearGradient } from "expo-linear-gradient";
 import { SplitGroupDetails } from "../src/split-group-details";
 import { router, useLocalSearchParams } from "expo-router";
 import { useEffect, useState, useRef } from "react";
-import { Image, Text, View } from "react-native";
+import { Image, View } from "react-native";
 import { useSession } from "../src/session";
 import {
   Body,

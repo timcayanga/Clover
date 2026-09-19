@@ -1,10 +1,5 @@
-import {
-  Image,
-  Pressable,
-  Text,
-  View,
-  useWindowDimensions,
-} from "react-native";
+import { Text } from "./app-text";
+import { Image, Pressable, View, useWindowDimensions } from "react-native";
 import type { AccountRecord } from "./account-editor";
 import { investmentIcons } from "./investment-icons";
 import { Body, Icon, money, useTheme } from "./ui";

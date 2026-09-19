@@ -1,4 +1,5 @@
-import { Pressable, Text, View, useWindowDimensions } from "react-native";
+import { Text } from "./app-text";
+import { Pressable, View, useWindowDimensions } from "react-native";
 import type { AccountRecord } from "./account-editor";
 import { accountRowColors } from "../../shared/visual-identity";
 import { AccountTypeMark } from "./account-type-mark";

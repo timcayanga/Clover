@@ -1,9 +1,10 @@
+import { Text } from "../src/app-text";
 import { CashFlowChart } from "../src/cash-flow-chart";
 import { ReportLineChart } from "../src/report-line-chart";
 import { ChartControls } from "../src/chart-controls";
 import { SpendingDonut } from "../src/spending-donut";
 import { useState } from "react";
-import { Pressable, Text, View } from "react-native";
+import { Pressable, View } from "react-native";
 import { router } from "expo-router";
 import { useSession } from "../src/session";
 import {

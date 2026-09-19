@@ -1,6 +1,7 @@
+import { Text } from "../src/app-text";
 import { useEffect, useRef, useState } from "react";
 import { router } from "expo-router";
-import { Image, Pressable, Text, View } from "react-native";
+import { Image, Pressable, View } from "react-native";
 import { useSession } from "../src/session";
 import {
   Body,

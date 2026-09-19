@@ -1,6 +1,7 @@
+import { Text } from "./app-text";
 import { useEffect, useRef, useState } from "react";
 import { apiBase } from "./api";
-import { Pressable, View, Text, Share } from "react-native";
+import { Pressable, View, Share } from "react-native";
 import { useSession } from "./session";
 import { Body, Card, Field, Notice, useTheme, money } from "./ui";
 import { PlanAction, SummaryCard } from "./plan-ui";

@@ -1,5 +1,6 @@
+import { Text } from "../../src/app-text";
 import { Tabs } from "expo-router";
-import { Text, View } from "react-native";
+import { View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAccess } from "../../src/access";
 import { useSession } from "../../src/session";

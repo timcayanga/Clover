@@ -1,4 +1,5 @@
-import { View, Text, Pressable } from "react-native";
+import { Text } from "./app-text";
+import { View, Pressable } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { router } from "expo-router";
 import type { AdviserChart } from "../../shared/adviser-chart";

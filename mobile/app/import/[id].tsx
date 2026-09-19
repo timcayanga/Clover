@@ -1,9 +1,10 @@
+import { Text } from "../../src/app-text";
 import { Progress } from "../../src/plan-ui";
 import { ImportReview } from "../../src/import-review";
 import { OfflineFilePanel } from "../../src/offline/file-panel";
 import { router, useLocalSearchParams } from "expo-router";
 import { useEffect, useRef, useState } from "react";
-import { ActivityIndicator, AppState, Text } from "react-native";
+import { ActivityIndicator, AppState } from "react-native";
 import { useAccess } from "../../src/access";
 import { useSession } from "../../src/session";
 import type { ImportStatus } from "../../src/types";

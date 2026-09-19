@@ -22,9 +22,7 @@
   border-radius: 999px;
   background: transparent;
   color: var(--text, #40545e);
-  font:
-    500 15px Poppins,
-    sans-serif;
+  font: var(--app-action-font);
 }
 .add-entry-methods .transaction-creation-tabs > button[aria-selected="true"] {
   background: linear-gradient(100deg, #03a8c0, #34d3d0);

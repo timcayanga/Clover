@@ -1,7 +1,8 @@
+import { Text } from "../../src/app-text";
 import { ChoiceField } from "../../src/transaction-entry";
 import { router, useLocalSearchParams } from "expo-router";
 import { useEffect, useState } from "react";
-import { Alert, KeyboardAvoidingView, Platform, Text, View } from "react-native";
+import { Alert, KeyboardAvoidingView, Platform, View } from "react-native";
 import { useAccess } from "../../src/access";
 import { useSession } from "../../src/session";
 import type { Transaction } from "../../src/types";

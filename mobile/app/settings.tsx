@@ -1,6 +1,7 @@
+import { Text } from "../src/app-text";
 import { useEffect, useState } from "react";
 import { router, useLocalSearchParams } from "expo-router";
-import { Text } from "react-native";
+import {} from "react-native";
 import { useSession } from "../src/session";
 import { useDisplayPreferences } from "../src/display-preferences";
 import { Body, Button, Card, Field, Notice, Screen, useTheme } from "../src/ui";

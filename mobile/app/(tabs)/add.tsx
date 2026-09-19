@@ -1,3 +1,4 @@
+import { Text } from "../../src/app-text";
 import { TransactionTableEntry } from "../../src/transaction-table-entry";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
@@ -7,7 +8,7 @@ import * as Crypto from "expo-crypto";
 import { File } from "expo-file-system";
 import { router, useFocusEffect, useLocalSearchParams } from "expo-router";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Alert, KeyboardAvoidingView, Platform, View, Pressable, Text, Image } from "react-native";
+import { Alert, KeyboardAvoidingView, Platform, View, Pressable, Image } from "react-native";
 import {
   Choices,
   ManualTransaction,

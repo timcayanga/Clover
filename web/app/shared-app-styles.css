@@ -7,9 +7,17 @@
   --app-title-font: 600 18px/27px var(--font-poppins), sans-serif;
   --app-section-font: 600 16px/24px var(--font-poppins), sans-serif;
   --app-action-font: 500 15px/22px var(--font-poppins), sans-serif;
+  --app-summary-value-font: 600 22px/33px var(--font-poppins), sans-serif;
+  --app-supporting-font: 400 13px/20px var(--font-poppins), sans-serif;
 }
 
-.app-shell {
+.app-shell,
+.modal-backdrop,
+.modal-card,
+.transaction-drawer,
+.shell-profile-drawer,
+.adviser-chat,
+.reports-filter-dialog {
   --font-heading: var(--font-poppins), sans-serif;
 }
 
@@ -44,7 +52,9 @@
   .goals-page .panel h4,
   .budgeting-page .panel h4,
   .panel-header :is(h3,h4),
-  .panel-head :is(h3,h4)
+  .panel-head :is(h3,h4),
+  .admin-users__table-head :is(h2,h3,h4),
+  .admin-compact-panel__head :is(h2,h3,h4)
 ) {
   font: var(--app-section-font) !important;
   color: var(--app-section-heading-color) !important;
@@ -67,6 +77,22 @@
   letter-spacing: 0 !important;
   text-transform: none !important;
   text-align: center;
+}
+
+/* Portals sit outside the app shell and must carry the same text roles. */
+.modal-card .modal-head :is(h2,h3,h4),
+.transactions-entry--figma .modal-head h4 {
+  font: var(--app-title-font);
+  letter-spacing: 0;
+}
+.add-entry-methods [role="tabpanel"] > h4 {
+  font: var(--app-section-font);
+}
+.app-shell :is(.accounts-overview-card__amount, .transactions-footer-snapshot__metric-value, .clover-summary-card > strong) {
+  font: var(--app-summary-value-font);
+}
+.app-shell .clover-summary-card > small {
+  font: var(--app-supporting-font);
 }
 
 /* Exclude large source-choice cards and icon-only controls from CTA sizing. */

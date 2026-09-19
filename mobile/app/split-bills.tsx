@@ -1,3 +1,4 @@
+import { Text } from "../src/app-text";
 import { AddEntryMethods } from "../src/add-entry-methods";
 import { LinearGradient } from "expo-linear-gradient";
 import { PersonAvatar } from "../src/person-avatar";
@@ -5,7 +6,7 @@ import { AccountTypeMark } from "../src/account-type-mark";
 import { SplitGroupDetails, type SplitGroup } from "../src/split-group-details";
 import * as DocumentPicker from "expo-document-picker";
 import { BillDetails, type BillItem } from "../src/bill-details";
-import { Platform, View, Text, Pressable, Image } from "react-native";
+import { Platform, View, Pressable, Image } from "react-native";
 import { fileProblem, removeUploadCopy } from "../src/upload";
 import { useEffect, useRef, useState } from "react";
 import { router, useLocalSearchParams } from "expo-router";

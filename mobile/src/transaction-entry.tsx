@@ -1,3 +1,4 @@
+import { Text } from "./app-text";
 import { parseAddFormDraft, type AddFormDraft } from "../../shared/add-form-draft";
 import { suggestLocalCategory } from "./offline/local-tools";
 import type { Transaction } from "./types";
@@ -7,7 +8,7 @@ import { ApiError } from "./api";
 import * as Crypto from "expo-crypto";
 import type { EntryDraft, EntryFormContext } from "./adviser-entry-types";
 import { useEffect, useRef, useState } from "react";
-import { Platform, Pressable, Text, View } from "react-native";
+import { Platform, Pressable, View } from "react-native";
 import { useSession } from "./session";
 import { Body, Button, Card, Field, Notice, useTheme } from "./ui";
 

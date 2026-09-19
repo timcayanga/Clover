@@ -1,5 +1,6 @@
+import { Text } from "./app-text";
 import { useId, useState } from "react";
-import { View, Text, Pressable } from "react-native";
+import { View, Pressable } from "react-native";
 import Svg, {
   Circle,
   Defs,
