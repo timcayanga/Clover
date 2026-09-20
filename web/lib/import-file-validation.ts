@@ -1,5 +1,3 @@
-import { isCompletedNativeUpload } from "./native-upload-validation";
-import { NATIVE_UPLOAD_MAX_SIZE } from "../../shared/native-upload";
 import {
   PUBLIC_IMPORT_CONTENT_TYPES,
   PUBLIC_IMPORT_EXTENSIONS,
@@ -50,7 +48,7 @@ export const validateImportFile = (params: {
   fileSize: number;
   contentType?: string | null;
   importMode?: ImportImageMode | null;
-}) => {
+}, limits?: {maximumBytes:number;maximumLabel:string}) => {
   if (!params.fileName.trim()) {
     return "File name is required.";
   }
@@ -59,9 +57,9 @@ export const validateImportFile = (params: {
     return "File is empty.";
   }
 
-  const maxSize = isCompletedNativeUpload() ? NATIVE_UPLOAD_MAX_SIZE : MAX_IMPORT_FILE_SIZE;
+  const maxSize = limits?.maximumBytes ?? MAX_IMPORT_FILE_SIZE;
   if (params.fileSize > maxSize) {
-    return `Uploaded files must be ${isCompletedNativeUpload() ? "25 MB" : MAX_IMPORT_FILE_SIZE_LABEL} or smaller.`;
+    return `Uploaded files must be ${limits?.maximumLabel ?? MAX_IMPORT_FILE_SIZE_LABEL} or smaller.`;
   }
 
   if (!isSupportedImportFile(params.fileName, params.contentType, { importMode: params.importMode ?? null })) {

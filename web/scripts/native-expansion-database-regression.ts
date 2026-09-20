@@ -16,7 +16,7 @@ import {
   nativeUploadRequest,
   cleanupExpiredNativeUploads,
 } from "../lib/native-upload-store";
-import { validateImportFile } from "../lib/import-file-validation";
+import { validateServerImportFile as validateImportFile } from "../lib/native-upload-validation";
 import { withCompletedNativeUpload } from "../lib/native-upload-validation";
 import { NATIVE_UPLOAD_PART_SIZE } from "../../shared/native-upload";
 const database = new URL(process.env.DATABASE_URL ?? "");
