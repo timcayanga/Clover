@@ -97,6 +97,51 @@ assert.equal(outgoing[0][2].device_model, "Pixel");
 requestHeaders = null; outgoing = [];
 await serverModule.exports.capturePostHogServerEvent("import_processing_completed", "test-user");
 assert.equal(outgoing[0][2].platform, "server");
+// Execute native setup under a React Native-shaped environment (no AbortSignal.timeout).
+for (const platform of ["ios", "android"]) {
+  const captures: any[] = [], identities: string[] = [];
+  let resets = 0, sdkOptions: any, nativeSink: any;
+  class PostHogStub {
+    constructor(_key: string, options: any) { sdkOptions = options; }
+    async ready() {}
+    reset() { resets++; }
+    identify(id: string) { identities.push(id); }
+    register() {}
+    capture(event: string, properties: any) { captures.push({event,properties}); }
+    async flush() {}
+  }
+  const nativeModule = { exports: {} as any };
+  const code = ts.transpileModule(readFileSync("../mobile/src/analytics.ts", "utf8"), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, esModuleInterop: true } }).outputText;
+  vm.runInNewContext(code, { exports: nativeModule.exports, AbortController, AbortSignal: {}, setTimeout, clearTimeout,
+    fetch: async () => Response.json({ key: "public-test-token", host: "https://example.invalid", environment: "staging", epoch: {analytics_epoch:"test-epoch"} }),
+    require: (id: string) => {
+      if (id === "posthog-react-native") return PostHogStub;
+      if (id === "expo-application") return { nativeApplicationVersion: "1.0", nativeBuildVersion: "10" };
+      if (id === "expo-device") return { DeviceType: {TABLET:2}, deviceType:1, modelName:"test-model", osName:platform, osVersion:"test-os", isDevice:false };
+      if (id === "expo-constants") return { expoConfig: {version:"1.0"} };
+      if (id === "react-native") return { Platform: {OS:platform, Version:"test-os"} };
+      if (id === "./api-base") return {apiBase:()=>"https://example.invalid"};
+      if (id.endsWith("shared/analytics")) return { setTelemetrySink:(next:any)=>{nativeSink=next;}, setTelemetryHeaderProvider:()=>{}, clearPendingTelemetry:()=>{} };
+      throw Error(id);
+    }
+  });
+  nativeModule.exports.identifyNativeAnalytics("user-a");
+  assert.equal(await nativeModule.exports.initializeNativeAnalytics(), true, `native setup must initialize on ${platform} without browser-only AbortSignal helpers`);
+  nativeSink("flow_started", {operation:"POST /accounts"});
+  assert.equal(captures.at(-1).properties.platform, platform);
+  assert.equal(captures.at(-1).properties.analytics_epoch, "test-epoch");
+  assert.equal(nativeModule.exports.analyticsHeaders()["x-clover-platform"], platform);
+  nativeModule.exports.identifyNativeAnalytics(null);
+  nativeModule.exports.identifyNativeAnalytics("user-b");
+  assert.deepEqual(identities, ["staging:user-a", "staging:user-b"]);
+  assert.equal(resets, 2);
+  assert.equal(sdkOptions.maxQueueSize, 500);
+  assert.equal(sdkOptions.enableSessionReplay, false);
+  const redacted = sdkOptions.before_send({properties:{url:"private",$device_name:"private",device_model:"test-model"}});
+  assert.equal(redacted.properties.url, undefined);
+  assert.equal(redacted.properties.$device_name, undefined);
+  assert.equal(redacted.properties.device_model,"test-model");
+}
 // Every static page/screen segment must remain distinguishable after redaction.
 let pages = 0;
 for (const root of [path.resolve("app"), path.resolve("../mobile/app")]) {

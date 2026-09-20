@@ -45,8 +45,10 @@ export async function initializeNativeAnalytics() {
   if (client) return true;
   if (initializing) return initializing;
   initializing = (async () => {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 5000);
     try {
-      const response = await fetch(`${apiBase()}/api/analytics/config`, { signal: AbortSignal.timeout(5000) });
+      const response = await fetch(`${apiBase()}/api/analytics/config`, { signal: controller.signal });
       if (!response.ok) return false;
       const config = await response.json();
       if (typeof config.key !== "string" || !config.key || typeof config.host !== "string" || !config.host.startsWith("https://")) return false;
@@ -79,7 +81,7 @@ export async function initializeNativeAnalytics() {
       client.capture("session_started", compact(deviceContext()));
       return true;
     } catch { return false; }
-    finally { initializing = undefined; }
+    finally { clearTimeout(timer); initializing = undefined; }
   })();
   return initializing;
 }
