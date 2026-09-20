@@ -115,6 +115,18 @@ void (async () => {
   assert.equal(afterMetadata?.summary?.totalCount, 1, "Late category hydration must preserve populated summary totals");
   assert.equal(afterMetadata?.categories[0]?.name, "Food & Dining");
 
+  const staleVersion = (getCachedTransactionsWorkspace("empty-before-import")?.updatedAt ?? 0) - 1;
+  const rejectedVersion = persistTransactionsWorkspaceCache("empty-before-import", {
+    accounts: [{id: "cash"}], categories: [], imports: [], transactions: [], totalCount: 0,
+  }, {expectedUpdatedAt: staleVersion});
+  assert.equal(rejectedVersion, 0, "An effect from an older render must yield to a newer import snapshot");
+  assert.equal(getCachedTransactionsWorkspace("empty-before-import")?.transactions.length, 1);
+  const currentVersion = getCachedTransactionsWorkspace("empty-before-import")!.updatedAt;
+  assert.ok(persistTransactionsWorkspaceCache("empty-before-import", {
+    accounts: [{id: "cash"}], categories: [], imports: [], transactions: [], totalCount: 0,
+  }, {expectedUpdatedAt: currentVersion}) > 0, "A current authoritative empty result can still clear deleted rows");
+  assert.equal(getCachedTransactionsWorkspace("empty-before-import")?.transactions.length, 0);
+
   syncImportedWorkspaceAccountCaches("manual-cash", {id: "cash", name: "Cash", type: "cash", currency: "PHP", source: "manual", balance: "1000"});
   syncImportedWorkspaceAccountCaches("manual-cash", {id: "cash", name: "Cash", type: "cash", currency: "PHP", source: "upload", balance: "750"});
   const preservedCash = getCachedAccountsWorkspace("manual-cash")?.accounts.find(a => a.id === "cash");
