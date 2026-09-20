@@ -50,6 +50,10 @@ export function ModalKeyboardController() {
       }
 
       if (event.key === "Escape") {
+        // Let an open nested picker consume Escape before dismissing its dialog.
+        if (event.target instanceof Element && event.target.closest('[data-escape-dismiss="local"]')) {
+          return;
+        }
         const closeControl = findDismissControl(modal);
         if (!closeControl) {
           return;
