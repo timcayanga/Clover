@@ -46,11 +46,20 @@ const UNLIMITED_SYNTHETIC_USER_IDS = new Set(["staging-guest", "local-admin"]);
 
 // Dedicated disposable speed-QA identity. Never applies to production or
 // arbitrary previews; remove this entry when the staging speed suite is retired.
-export const hasStagingQaAccess = (user: { clerkUserId?: string | null }) =>
+const isStagingQaDeployment = () =>
   process.env.VERCEL_ENV === "preview" &&
   process.env.CLOVER_DEPLOYMENT_ENVIRONMENT === "staging" &&
-  process.env.VERCEL_GIT_COMMIT_REF === "staging" &&
+  process.env.VERCEL_GIT_COMMIT_REF === "staging";
+
+export const hasStagingQaAccess = (user: { clerkUserId?: string | null }) =>
+  isStagingQaDeployment() &&
   user.clerkUserId === "user_3JJ1IGtRLHyU8hwh7AIRM8xAh8z";
+
+// Owner-authorized Pro access for staging UI verification. This grants no Admin
+// role or unlimited usage, and never applies to production or other previews.
+export const hasStagingProAccess = (user: { clerkUserId?: string | null; email?: string | null }) =>
+  hasStagingQaAccess(user) ||
+  (isStagingQaDeployment() && user.email?.trim().toLowerCase() === "timcayanga@gmail.com");
 
 export const hasUnlimitedPlanLimits = (user: { clerkUserId?: string | null }) =>
   Boolean(user.clerkUserId && UNLIMITED_SYNTHETIC_USER_IDS.has(user.clerkUserId)) || hasStagingQaAccess(user);
