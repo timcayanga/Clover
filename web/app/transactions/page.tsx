@@ -1554,7 +1554,8 @@ const getImportedTransactionsToPreserve = (transactions: Transaction[]) =>
 
 const persistTransactionsWorkspaceCache = (
   workspaceId: string,
-  snapshot: Omit<TransactionsWorkspaceCacheSnapshot, "workspaceId" | "updatedAt">
+  snapshot: Omit<TransactionsWorkspaceCacheSnapshot, "workspaceId" | "updatedAt">,
+  options?: Parameters<typeof persistTransactionsWorkspaceCacheShared>[2]
 ) => {
   if (!workspaceId) {
     return null;
@@ -1562,6 +1563,7 @@ const persistTransactionsWorkspaceCache = (
 
   const cache = readTransactionsWorkspaceCache();
   const existingSnapshot = cache?.snapshots[workspaceId] ?? null;
+  if (options && (existingSnapshot?.updatedAt ?? 0) > options.expectedUpdatedAt) return 0;
   const incomingHasData =
     snapshot.accounts.length > 0 ||
     snapshot.transactions.length > 0 ||
@@ -1588,7 +1590,7 @@ const persistTransactionsWorkspaceCache = (
     ...snapshot,
     transactions: mergedTransactions,
     totalCount: snapshot.totalCount,
-  });
+  }, options);
 };
 
 const getTransactionUserNote = (
