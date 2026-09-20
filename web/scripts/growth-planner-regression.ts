@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { buildGrowthAdviserPrompt, getGrowthScenarioResult, projectGrowthScenarioAtYear, type GrowthScenario } from "../lib/growth-planner";
+import { growthComparison, makeScenario, buildGrowthAdviserPrompt, getGrowthScenarioResult, projectGrowthScenarioAtYear, type GrowthScenario } from "../lib/growth-planner";
 
 const scenario: GrowthScenario = {
   id: "td",
@@ -35,3 +35,15 @@ const noReinvestment = projectGrowthScenarioAtYear({ ...scenario, reinvestEarnin
 assert.equal(noReinvestment.endingValue, 120_000, "non-reinvested earnings should use simple growth");
 
 console.log("Growth planner regression checks passed.");
+
+const comparison = growthComparison([{...scenario,years:1}, {...makeScenario("savings",100000,1),years:10}]);
+assert.equal(comparison.horizon,10);
+assert.equal(comparison.series[0].points.at(-1)?.year,1,"Short-term lines must stop at maturity");
+assert.equal(comparison.series[1].points.at(-1)?.year,10);
+assert.equal(comparison.series[0].points[0].endingValue,100000);
+assert.equal(comparison.series[0].points.at(-1)?.endingValue,104000);
+assert(comparison.maximum >= Math.max(...comparison.series.flatMap(s=>s.points.map(p=>p.endingValue))));
+const loss = growthComparison([{...scenario,annualRate:-100}]);
+assert(loss.series[0].points.every(p=>Number.isFinite(p.endingValue)&&p.endingValue>=0));
+assert.equal(loss.maximum,100000,"Starting principal belongs in the scale for declining returns");
+assert.deepEqual(growthComparison([]),{horizon:1,maximum:1,series:[]});

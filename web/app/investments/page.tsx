@@ -1795,7 +1795,7 @@ export default function InvestmentsPage() {
   );
   const growthDisplayCurrency = portfolioCurrencyFilter === "ALL"
     ? formatCurrencyCode(defaultCurrency)
-    : selectedCurrencyCodes[0] ?? portfolioCurrencyFilter ?? "PHP";
+    : selectedCurrencyCodes[0] || portfolioCurrencyFilter || formatCurrencyCode(defaultCurrency);
   const estimatedPortfolioTotals = useMemo(() => {
     if (!usesPortfolioFxEstimates) {
       return portfolioTotals;

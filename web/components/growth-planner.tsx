@@ -5,6 +5,7 @@ import { useEffect, useMemo, useState } from "react";
 import { formatCurrencyAmount } from "@/lib/currency-format";
 import {
   GROWTH_LIQUIDITY_LABELS,
+  productDefaults, makeScenario, growthComparison, GROWTH_COLORS,
   GROWTH_PRODUCT_LABELS,
   buildGrowthAdviserPrompt,
   getGrowthScenarioResult,
@@ -15,24 +16,6 @@ import {
 } from "@/lib/growth-planner";
 
 const storageKey = "clover.growth-planner.scenarios.v1";
-
-const productDefaults: Record<GrowthProductType, Pick<GrowthScenario, "annualRate" | "compoundingPerYear" | "taxRate" | "liquidity" | "lockMonths" | "reinvestEarnings">> = {
-  time_deposit: { annualRate: 4.5, compoundingPerYear: 1, taxRate: 20, liquidity: "maturity", lockMonths: 12, reinvestEarnings: true },
-  bond: { annualRate: 5, compoundingPerYear: 2, taxRate: 20, liquidity: "limited", lockMonths: 12, reinvestEarnings: true },
-  savings: { annualRate: 2.5, compoundingPerYear: 12, taxRate: 20, liquidity: "anytime", lockMonths: 0, reinvestEarnings: true },
-  custom: { annualRate: 4, compoundingPerYear: 1, taxRate: 0, liquidity: "limited", lockMonths: 0, reinvestEarnings: true },
-};
-
-const makeScenario = (productType: GrowthProductType, principal: number, index: number): GrowthScenario => ({
-  id: `${productType}-${index}`,
-  name: GROWTH_PRODUCT_LABELS[productType],
-  productType,
-  principal,
-  years: 5,
-  annualFeeRate: 0,
-  earlyWithdrawalPenalty: 0,
-  ...productDefaults[productType],
-});
 
 const readNumber = (value: string) => {
   const parsed = Number(value);
@@ -79,12 +62,12 @@ export function GrowthPlanner({ currency, initialPrincipal }: { currency: string
   const selectedScenario = scenarios.find((scenario) => scenario.id === selectedId) ?? scenarios[0];
   const results = useMemo(() => scenarios.map(getGrowthScenarioResult), [scenarios]);
   const selectedResult = results.find((result) => result.scenario.id === selectedScenario?.id) ?? results[0];
-  const maximumValue = Math.max(1, ...results.flatMap((result) => result.projections.map((projection) => projection.endingValue)));
+  const chart = growthComparison(scenarios);
   const adviserPrompt = buildGrowthAdviserPrompt(scenarios, currency);
   const adviserHref = `/adviser?prompt=${encodeURIComponent(adviserPrompt)}`;
 
   const updateScenario = (patch: Partial<GrowthScenario>) => {
-    setScenarios((current) => current.map((scenario) => scenario.id === selectedScenario.id ? normalizeGrowthScenario({ ...scenario, ...patch }) : scenario));
+    setScenarios((current) => current.map((scenario) => scenario.id === selectedScenario.id ? { ...normalizeGrowthScenario({ ...scenario, ...patch }), name: patch.name ?? scenario.name } : scenario));
   };
 
   const changeProduct = (productType: GrowthProductType) => {
@@ -111,20 +94,8 @@ export function GrowthPlanner({ currency, initialPrincipal }: { currency: string
 
   if (!selectedScenario || !selectedResult) return null;
 
-  const chartWidth = 640;
-  const chartHeight = 220;
-  const chartLeft = 34;
-  const chartBottom = 28;
-  const chartTop = 18;
-  const plotHeight = chartHeight - chartTop - chartBottom;
-  const plotWidth = chartWidth - chartLeft - 18;
-  const x = (year: number) => chartLeft + (year / Math.max(selectedScenario.years, 5)) * plotWidth;
-  const y = (value: number) => chartTop + plotHeight - (value / maximumValue) * plotHeight;
-  const years = Array.from({ length: Math.max(selectedScenario.years, 5) + 1 }, (_, index) => index);
-  const selectedLine = years.map((year) => {
-    const projection = year === 0 ? { endingValue: selectedScenario.principal } : getGrowthScenarioResult({ ...selectedScenario, years: year }).selectedProjection;
-    return `${x(year)},${y(projection.endingValue)}`;
-  }).join(" ");
+  const x = (year: number) => 4 + year / chart.horizon * 632;
+  const y = (value: number) => 8 + 180 * (1 - value / chart.maximum);
 
   return (
     <section className="growth-planner" aria-labelledby="growth-planner-title">
@@ -205,15 +176,22 @@ export function GrowthPlanner({ currency, initialPrincipal }: { currency: string
           <p className="eyebrow">Projected value</p>
           <strong className="growth-planner__result-value">{formatCurrencyAmount(selectedResult.selectedProjection.endingValue, currency)}</strong>
           <span>after {selectedScenario.years} year{selectedScenario.years === 1 ? "" : "s"}</span>
-          <svg className="growth-planner__chart" viewBox={`0 0 ${chartWidth} ${chartHeight}`} role="img" aria-label={`${selectedScenario.name} projected growth over ${selectedScenario.years} years`}>
-            <defs><linearGradient id="growth-planner-fill" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#35b878" stopOpacity="0.26" /><stop offset="100%" stopColor="#35b878" stopOpacity="0" /></linearGradient></defs>
-            {[0, 0.5, 1].map((ratio) => <line key={ratio} x1={chartLeft} x2={chartWidth - 18} y1={chartTop + plotHeight - ratio * plotHeight} y2={chartTop + plotHeight - ratio * plotHeight} />)}
-            <polygon points={`${chartLeft},${chartTop + plotHeight} ${selectedLine} ${x(Math.max(selectedScenario.years, 5))},${chartTop + plotHeight}`} />
-            <polyline points={selectedLine} />
-            {[0, 1, 3, 5, selectedScenario.years].filter((year, index, all) => year <= Math.max(selectedScenario.years, 5) && all.indexOf(year) === index).map((year) => <text key={year} x={x(year)} y={chartHeight - 8} textAnchor={year === 0 ? "start" : year === Math.max(selectedScenario.years, 5) ? "end" : "middle"}>{year === 0 ? "Now" : `${year}y`}</text>)}
+          <div className="growth-planner__chart-scale"><span>{currency}</span><span>Up to {formatCurrencyAmount(chart.maximum, currency)}</span></div>
+          <svg className="growth-planner__chart" viewBox="0 0 640 200" preserveAspectRatio="none" role="img" aria-label="Projected growth for all comparison scenarios. Each line ends at its selected term.">
+            <defs><linearGradient id="growth-planner-fill" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#009caf" stopOpacity="0.18" /><stop offset="100%" stopColor="#009caf" stopOpacity="0" /></linearGradient></defs>
+            {[0, 0.5, 1].map(ratio => <line key={ratio} x1="4" x2="636" y1={y(ratio * chart.maximum)} y2={y(ratio * chart.maximum)} />)}
+            {chart.series.map(({scenario, points}, index) => {
+              const line = points.map(p => `${x(p.year)},${y(p.endingValue)}`).join(" ");
+              return <g key={scenario.id}>
+                {scenario.id === selectedScenario.id && <polygon points={`${x(0)},188 ${line} ${x(scenario.years)},188`} />}
+                <polyline points={line} vectorEffect="non-scaling-stroke" style={{stroke: GROWTH_COLORS[index], strokeWidth: scenario.id === selectedScenario.id ? 3 : 2}} />
+              </g>;
+            })}
           </svg>
+          <div className="growth-planner__chart-axis"><span>Now</span><span>{chart.horizon / 2}y</span><span>{chart.horizon}y</span></div>
+          <div className="growth-planner__legend">{chart.series.map(({scenario}, index) => <span key={scenario.id}><i style={{background: GROWTH_COLORS[index]}} />{scenario.name} · {scenario.years}y</span>)}</div>
           <div className="growth-planner__milestones">
-            {[1, 3, 5].map((year) => {
+            {[1, 3, 5].filter(year => year <= selectedScenario.years).map((year) => {
               const projection = selectedResult.projections.find((item) => item.year === year) ?? getGrowthScenarioResult({ ...selectedScenario, years: year }).selectedProjection;
               return <div key={year}><span>{year} year{year === 1 ? "" : "s"}</span><strong>{formatCurrencyAmount(projection.endingValue, currency)}</strong></div>;
             })}
@@ -223,8 +201,9 @@ export function GrowthPlanner({ currency, initialPrincipal }: { currency: string
             <div><dt>Effective annual return</dt><dd>{(selectedResult.effectiveAnnualRate * 100).toFixed(2)}%</dd></div>
             <div><dt>Liquidity</dt><dd><span className={`growth-planner__liquidity growth-planner__liquidity--${selectedResult.liquidityLabel.toLowerCase()}`}>{selectedResult.liquidityLabel}</span></dd></div>
             <div><dt>Earliest access</dt><dd>{selectedResult.accessLabel}</dd></div>
+            <div><dt>Early exit penalty</dt><dd>{selectedScenario.earlyWithdrawalPenalty}% (not deducted)</dd></div>
           </dl>
-          <Link className="button button-primary" href={adviserHref}>Ask Adviser about these scenarios</Link>
+          <Link className="button button-primary" href={adviserHref}>Ask Clover</Link>
         </article>
       </div>
 

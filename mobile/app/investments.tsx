@@ -25,10 +25,7 @@ import {
   usePlanData,
 } from "../src/plan-ui";
 import { investmentIcons } from "../src/investment-icons";
-import {
-  getGrowthScenarioResult,
-  type GrowthScenario,
-} from "../../shared/growth-planner";
+import { NativePlanner } from "../src/growth-planner";
 import { sampleInvestments as sample } from "../src/investment-sample";
 import {
   projectPortfolio,
@@ -425,7 +422,11 @@ export default function Investments() {
           ) : null}
         </>
       ) : tab.startsWith("Planner") ? (
-        <NativePlanner currency={selectedCurrency} initial={total} />
+        <NativePlanner
+          key={`${session.profileId}:${selectedCurrency}`}
+          currency={selectedCurrency}
+          initial={total}
+        />
       ) : tab.startsWith("Markets") ? (
         <NativeMarkets accounts={accounts} />
       ) : (
@@ -483,152 +484,6 @@ export default function Investments() {
         </>
       )}
     </Screen>
-  );
-}
-function NativePlanner({
-  currency,
-  initial,
-}: {
-  currency: string;
-  initial: number;
-}) {
-  const [principal, setPrincipal] = useState(String(initial || 10000));
-  const [rate, setRate] = useState("5");
-  const [years, setYears] = useState("5");
-  const [tax, setTax] = useState("20");
-  const [fee, setFee] = useState("0");
-  const [reinvest, setReinvest] = useState(true);
-  const [saved, setSaved] = useState<GrowthScenario[]>([]);
-  const scenario: GrowthScenario = {
-    id: "draft",
-    name: "My scenario",
-    productType: "custom",
-    principal: Number(principal),
-    annualRate: Number(rate),
-    years: Number(years),
-    compoundingPerYear: 12,
-    taxRate: Number(tax),
-    annualFeeRate: Number(fee),
-    reinvestEarnings: reinvest,
-    liquidity: "anytime",
-    lockMonths: 0,
-    earlyWithdrawalPenalty: 0,
-  };
-  const valid =
-    [principal, rate, years, tax, fee].every(
-      (v) => v.trim() !== "" && Number.isFinite(Number(v)),
-    ) &&
-    Number(principal) >= 0 &&
-    Number(years) >= 1 &&
-    Number(years) <= 50 &&
-    Number(tax) >= 0 &&
-    Number(tax) <= 100 &&
-    Number(fee) >= 0 &&
-    Number(fee) <= 100;
-  const result = getGrowthScenarioResult(scenario);
-  return (
-    <>
-      <Card>
-        <Body muted={false}>Compare possible growth</Body>
-        <Field
-          label="Starting amount"
-          value={principal}
-          onChangeText={setPrincipal}
-          keyboardType="decimal-pad"
-        />
-        <Field
-          label="Annual return assumption (%)"
-          value={rate}
-          onChangeText={setRate}
-          keyboardType="decimal-pad"
-        />
-        <Field
-          label="Years (1–50)"
-          value={years}
-          onChangeText={setYears}
-          keyboardType="number-pad"
-        />
-        <Field
-          label="Tax on earnings (%)"
-          value={tax}
-          onChangeText={setTax}
-          keyboardType="decimal-pad"
-        />
-        <Field
-          label="Annual fee (%)"
-          value={fee}
-          onChangeText={setFee}
-          keyboardType="decimal-pad"
-        />
-        <PlanAction
-          title={reinvest ? "Reinvest earnings ✓" : "Withdraw earnings"}
-          onPress={() => setReinvest(!reinvest)}
-        />
-        <Body>
-          Monthly compounding. Scenario assumptions are illustrative and are not
-          guaranteed returns.
-        </Body>
-      </Card>
-      {valid ? (
-        <Card>
-          <Body muted={false}>
-            Estimated value{" "}
-            {money(String(result.selectedProjection.endingValue), currency)}
-          </Body>
-          {result.projections.map((p) => (
-            <View key={p.year} style={{ gap: 8 }}>
-              <Body>
-                Year {p.year}: {money(String(p.endingValue), currency)}
-              </Body>
-              <Progress
-                value={
-                  result.selectedProjection.endingValue > 0
-                    ? (p.endingValue / result.selectedProjection.endingValue) *
-                      100
-                    : 0
-                }
-              />
-            </View>
-          ))}
-          <PlanAction
-            title="Add to comparison"
-            onPress={() =>
-              setSaved((current) => [
-                ...current.slice(-3),
-                {
-                  ...scenario,
-                  id: String(Date.now()),
-                  name: `Scenario ${current.length + 1}`,
-                },
-              ])
-            }
-          />
-        </Card>
-      ) : (
-        <Notice>Enter valid scenario inputs.</Notice>
-      )}
-      {saved.map((s) => (
-        <Card key={s.id}>
-          <Body muted={false}>{s.name}</Body>
-          <Body>
-            {s.annualRate}% assumed return · {s.years} years
-          </Body>
-          <Body>
-            {money(
-              String(getGrowthScenarioResult(s).selectedProjection.endingValue),
-              currency,
-            )}
-          </Body>
-          <PlanAction
-            title="Remove scenario"
-            onPress={() =>
-              setSaved((current) => current.filter((item) => item.id !== s.id))
-            }
-          />
-        </Card>
-      ))}
-      {saved.length ? <Body>Comparisons remain in this session.</Body> : null}
-    </>
   );
 }
 function NativeMarkets({ accounts }: { accounts: AccountRecord[] }) {
