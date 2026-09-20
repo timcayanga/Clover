@@ -598,7 +598,7 @@ const isReceiptDateLine = (line: string) =>
   /\b\d{2,4}\b/.test(line);
 
 const isReceiptAdministrativeLine = (line: string) =>
-  /\b(?:trans(?:action)?\s*no|trans\s*no|ref(?:erence)?\s*no|permit\s*no|serial\s*n[bo0]|or\s*no|invoice\s*no|guest\s*count|cust(?:omer)?\s*count|cashier|server|tin\b|bir\b|accre\.?\s*no|table\s*no|print\s*cnt|terminal|branch|poblacion|makati city|quezon city|this serves as an official receipt)\b/i.test(
+  /\b(?:trans(?:action)?\s*no|trans\s*no|ref(?:erence)?\s*no|permit\s*no|serial\s*n[bo0]|or\s*no|invoice\s*no|guest\s*count|cust(?:omer)?\s*count|cashier|server|tin\b|bir\b|accre\.?\s*no|table\s*no|print\s*cnt|terminal|branch|poblacion|makati city|quezon city|this serves as an official receipt|not valid for payment)\b/i.test(
     line
   );
 
@@ -1021,7 +1021,13 @@ const detectReceiptMerchantNameFromLines = (lines: string[]) => {
         return null;
       }
 
-      if (parseAmountFromLine(line) !== null) {
+      // A leading merchant/branch name may end in an integer (e.g. Cafe 103).
+      // Before dated receipt metadata, that suffix is identity rather than a
+      // price. Decimal/currency amounts and quantity-led product rows still fail.
+      const numericMerchantHeader = index === 0 && detectCurrencyMentionsFromText(line).length === 0 &&
+        /^[A-Za-z][A-Za-z &'./-]*\s\d{3,}$/.test(line) &&
+        lines.slice(1, 5).some((entry) => isReceiptDateLine(entry));
+      if (parseAmountFromLine(line) !== null && !numericMerchantHeader) {
         return null;
       }
 

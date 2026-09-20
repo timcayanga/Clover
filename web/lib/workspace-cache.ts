@@ -1183,20 +1183,21 @@ const mergeImportedAccount = <T extends CachedRecord>(
     currentBalanceValue !== 0 &&
     incomingBalanceValue === 0;
 
+  const preserveManualOpening = current.source === "manual" && account.source === "upload";
   const merged: CachedRecord = {
     ...current,
     ...account,
     name: incomingName || currentName || account.name || current.name,
     institution: incomingInstitution || currentInstitution || account.institution || current.institution,
     accountNumber: incomingAccountNumber || currentAccountNumber || account.accountNumber || current.accountNumber,
-    balance: shouldPreserveCurrentBalance
+    balance: preserveManualOpening || shouldPreserveCurrentBalance
       ? current.balance
       : incomingHasMeaningfulBalance
         ? account.balance
         : currentHasMeaningfulBalance
           ? current.balance
           : account.balance ?? current.balance ?? null,
-    source:
+    source: preserveManualOpening ? current.source :
       typeof account.source === "string" && account.source.trim()
         ? account.source
         : typeof current.source === "string" && current.source.trim()
@@ -1994,6 +1995,23 @@ export const persistTransactionsWorkspaceCache = (
   return updatedAt;
 };
 
+// Category refreshes are metadata-only. An older Accounts snapshot must not
+// replace transaction rows, totals, or paging that arrived during the request.
+export const syncWorkspaceCategoryCache = (workspaceId: string, categories: CachedRecord[]) => {
+  const current = getCachedTransactionsWorkspace(workspaceId);
+  return persistTransactionsWorkspaceCache(workspaceId, {
+    accounts: current?.accounts ?? [],
+    transactions: current?.transactions ?? [],
+    imports: current?.imports ?? [],
+    totalCount: current?.totalCount,
+    summary: current?.summary,
+    page: current?.page,
+    pageSize: current?.pageSize,
+    currencyCodes: current?.currencyCodes,
+    categories,
+  });
+};
+
 export const syncImportedWorkspaceAccountCaches = (
   workspaceId: string,
   account: ImportedWorkspaceAccount,
@@ -2076,6 +2094,18 @@ export const syncImportedWorkspaceTransactionCaches = (
     transactions: mergeImportedTransactions(transactionsCache?.snapshots[workspaceId]?.transactions ?? [], transactions),
     imports: transactionsCache?.snapshots[workspaceId]?.imports ?? [],
   };
+
+  // A preview may extend a previously empty/paged snapshot. Retain known
+  // totals, but never advertise fewer rows than this merged snapshot contains.
+  const mergedCount = Math.max(
+    nextTransactionsSnapshot.totalCount ?? 0,
+    typeof nextTransactionsSnapshot.summary?.totalCount === "number" ? nextTransactionsSnapshot.summary.totalCount : 0,
+    nextTransactionsSnapshot.transactions.length
+  );
+  nextTransactionsSnapshot.totalCount = mergedCount;
+  if (nextTransactionsSnapshot.summary) {
+    nextTransactionsSnapshot.summary = {...nextTransactionsSnapshot.summary, totalCount: mergedCount};
+  }
 
   writeJsonCache(accountsWorkspaceCacheKey, {
     selectedWorkspaceId: workspaceId,

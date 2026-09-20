@@ -7892,12 +7892,15 @@ export function ImportFilesModal({
       await Promise.all(Array.from({ length: workerCount }, () => runWorker()));
       return results;
     };
+    // PDF.js startup and advisory parsing can monopolize the browser thread.
+    // Send PDFs straight to the authoritative server reader; password probing
+    // above still runs before upload. Only lightweight delimited files preparse.
     const hasBrowserParsableStatements = itemsToProcess.some((item) => {
       const mode = item.importMode ?? "statement";
       const lowerName = item.file.name.toLowerCase();
       return (
         mode === "statement" &&
-        (lowerName.endsWith(".pdf") || /\.(?:csv|tsv)$/.test(lowerName)) &&
+        /\.(?:csv|tsv)$/.test(lowerName) &&
         !shouldSkipClientStatementPreparse(item.file.name)
       );
     });
@@ -7906,7 +7909,7 @@ export function ImportFilesModal({
 
     if (hasBrowserParsableStatements) {
       for (const item of itemsToProcess) {
-        if (shouldSkipClientStatementPreparse(item.file.name)) {
+        if (!/\.(?:csv|tsv)$/i.test(item.file.name) || shouldSkipClientStatementPreparse(item.file.name)) {
           continue;
         }
         void preparsePendingItemLocally(item.id);

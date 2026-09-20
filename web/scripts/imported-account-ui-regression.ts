@@ -701,6 +701,13 @@ const main = () => {
     "A partial same-import server refresh should retain unmatched optimistic rows until the full import settles."
   );
 
+  const cash = {id: "cash", name: "Cash", institution: "Cash", accountNumber: null, type: "cash", currency: "PHP", source: "manual", balance: "1000"};
+  for (const options of [{}, {preferCurrentImportedSnapshot: true}, {preserveNonZeroOptimisticBalance: true}]) {
+    const [mergedCash] = mergeAccountsWithOptimisticImports([cash], [{...cash, source: "upload", balance: "750"}], options);
+    assert.equal(mergedCash.source, "manual", "Persisted Cash source must beat an import preview");
+    assert.equal(mergedCash.balance, "1000", "Persisted opening balance must be retained for reconciliation");
+  }
+
   console.log("[PASS] imported-account-ui regression");
 };
 

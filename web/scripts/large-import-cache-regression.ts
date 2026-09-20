@@ -45,6 +45,7 @@ void (async () => {
     persistTransactionsWorkspaceCache,
     getCachedAccountsWorkspace,
     syncImportedWorkspaceAccountCaches,
+    syncWorkspaceCategoryCache,
     syncImportedWorkspaceTransactionCaches,
   } = await import("@/lib/workspace-cache");
   const { BETA_FULL_ACCESS_ENABLED, hasFullFeatureAccess } = await import("@/lib/beta-access");
@@ -103,6 +104,22 @@ void (async () => {
   syncImportedWorkspaceAccountCaches("receipt-workspace", {id: "cash", workspaceId: "receipt-workspace", name: "Cash", institution: "Cash", currency: "PHP", type: "cash", balance: "1000"});
   assert.deepEqual(getCachedTransactionsWorkspace("receipt-workspace")?.summary, receiptSummary, "Account publication must retain transaction summary and paging");
   assert.equal(getCachedTransactionsWorkspace("receipt-workspace")?.pageSize, 25);
+
+  persistTransactionsWorkspaceCache("empty-before-import", {accounts: [], categories: [], imports: [], transactions: [], totalCount: 0, summary: {...receiptSummary, totalCount: 0}});
+  syncImportedWorkspaceTransactionCaches("empty-before-import", [receiptRow]);
+  assert.equal(getCachedTransactionsWorkspace("empty-before-import")?.totalCount, 1, "Imported rows cannot retain an empty list count");
+  assert.equal(getCachedTransactionsWorkspace("empty-before-import")?.summary?.totalCount, 1, "Summary count includes the imported row immediately");
+  syncWorkspaceCategoryCache("empty-before-import", [{id: "food", name: "Food & Dining"}]);
+  const afterMetadata = getCachedTransactionsWorkspace("empty-before-import");
+  assert.equal(afterMetadata?.transactions.length, 1, "Late category hydration must preserve newly imported rows");
+  assert.equal(afterMetadata?.summary?.totalCount, 1, "Late category hydration must preserve populated summary totals");
+  assert.equal(afterMetadata?.categories[0]?.name, "Food & Dining");
+
+  syncImportedWorkspaceAccountCaches("manual-cash", {id: "cash", name: "Cash", type: "cash", currency: "PHP", source: "manual", balance: "1000"});
+  syncImportedWorkspaceAccountCaches("manual-cash", {id: "cash", name: "Cash", type: "cash", currency: "PHP", source: "upload", balance: "750"});
+  const preservedCash = getCachedAccountsWorkspace("manual-cash")?.accounts.find(a => a.id === "cash");
+  assert.equal(preservedCash?.source, "manual", "Receipt preview cannot change an existing manual account source");
+  assert.equal(preservedCash?.balance, "1000", "Manual opening balance must not become a reconciled receipt preview");
 
   assert.equal(BETA_FULL_ACCESS_ENABLED, false, "Beta full access must remain disabled after plan enforcement is restored.");
   assert.deepEqual(getPlanDefaultLimits("free"), {

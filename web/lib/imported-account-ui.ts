@@ -346,7 +346,8 @@ export const mergeAccountsWithOptimisticImports = <TAccount extends ImportedAcco
       return matchesImportedAccountIdentity(currentAccount, account);
     });
 
-    if (!optimistic) {
+    // Receipt previews describe activity, not a replacement opening balance.
+    if (!optimistic || account.source === "manual") {
       return account;
     }
 

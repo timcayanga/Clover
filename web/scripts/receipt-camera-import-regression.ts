@@ -872,6 +872,14 @@ const numberedItems = parseReceiptText("QA Cafe Receipt 3\nSYNTHETIC QA RECEIPT 
 assert.deepEqual(numberedItems.items.map(item => item.description), Array.from({length: 10}, (_, i) => `Test snack ${String(i + 1).padStart(2, "0")}`), "Already separated amounts must not cause numeric product suffixes to be removed");
 
 assert.equal(numberedItems.merchantName, "QA Cafe Receipt 3", "Receipt merchant identity retains short brand tokens and numeric suffixes");
-for (const merchant of ["SM Store", "7 Eleven", "Studio 54"]) {
+for (const merchant of ["SM Store", "7 Eleven", "Studio 54", "Studio 103", "QA Cafe Receipt 103"]) {
   assert.equal(parseReceiptText(`${merchant}\nDate: September 19, 2026\n1 Sandwich 25.00\nTOTAL PHP 25.00`).merchantName, merchant);
 }
+
+assert.ok(buildImportResultChecklist({ rowsImported: 1, previewTransactions: [{ id: "optimistic-file-0", categoryName: "Food", reviewStatus: "pending_review" }] }).includes("Review status pending"), "Advisory parsed rows cannot claim a persisted review requirement");
+assert.ok(buildImportResultChecklist({ rowsImported: 1, previewTransactions: [{ id: "saved-row", categoryName: "Food", reviewStatus: "pending_review" }] }).includes("1 transaction needs review"), "Actual reviewable rows must keep their warning");
+
+const numericMerchantReceipt = parseReceiptText("QA Cafe Receipt 103\nSYNTETIC QA RECEIPT - NOT VALID FOR PAYMENT\nDate: September 19, 2026\nReceipt: QA-R103\nCurrency: PHP Paid in cash\n" + Array.from({length:10},(_,i)=>`1 Test snack ${String(i+1).padStart(2,"0")} 25.00`).join("\n") + "\nSUBTOTAL PHP 250.00\nTOTAL PAID PHP 250.00");
+assert.equal(numericMerchantReceipt.merchantName,"QA Cafe Receipt 103");
+assert.equal(numericMerchantReceipt.items.length,10);
+assert.equal(numericMerchantReceipt.items.reduce((sum,item)=>sum+Number(item.amount),0),250);
