@@ -5,7 +5,6 @@ import { InterfaceIcon } from "@/components/interface-icon";
 
 import type { ChangeEvent } from "react";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { flushSync } from "react-dom";
 import { createPortal } from "react-dom";
 import Link from "next/link";
 import { containDialogFocus } from "@/lib/dialog-focus";
@@ -1553,8 +1552,11 @@ export function ImportFilesModal({
     let additions: QueuedFile[] = [];
     let queuedItemsSnapshot: QueuedFile[] | null = null;
     const shouldLaunchInBackground = Boolean(options?.launchInBackground || backgroundOnly || launchInBackground);
-      flushSync(() => {
-        setItems((current) => {
+    // initialFiles enters here from an effect. React may defer functional state
+    // updaters there even inside flushSync, so compute the handoff synchronously
+    // from the queue ref before scheduling its render.
+    const current = itemsRef.current;
+    {
         // A file that never reached the server must remain retryable. Replace a
         // stale copy of the same selection instead of silently treating it as a
         // duplicate forever.
@@ -1670,10 +1672,9 @@ export function ImportFilesModal({
         });
       }
 
-          queuedItemsSnapshot = [...retainedCurrent, ...additions];
-          return queuedItemsSnapshot;
-        });
-      });
+      queuedItemsSnapshot = [...retainedCurrent, ...additions];
+      setItems(queuedItemsSnapshot);
+    }
 
     // Keep the imperative upload handoff synchronized with the queue immediately;
     // the passive items effect may not have run before the zero-delay starter.
