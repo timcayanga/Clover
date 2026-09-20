@@ -7618,6 +7618,7 @@ function TransactionsPageContent() {
       </button>
     </div>
   );
+  const transactionCacheVersionAtRender = transactionsHydrationVersionRef.current.get(selectedWorkspaceId) ?? 0;
   useEffect(() => {
     // This cache is shared with unfiltered workspace views. Never publish a
     // filtered subset and its totals as though it were the full workspace.
@@ -7637,12 +7638,16 @@ function TransactionsPageContent() {
         totalCount: transactionsSummary.totalCount,
         currencyCodes: workspaceCurrencyCodes,
         summary: transactionsSummary,
-      });
-      markTransactionsHydrated(selectedWorkspaceId, updatedAt);
+      }, { expectedUpdatedAt: transactionCacheVersionAtRender });
+      if (updatedAt === 0) {
+        hydrateWorkspaceFromCache(selectedWorkspaceId);
+      } else {
+        markTransactionsHydrated(selectedWorkspaceId, updatedAt);
+      }
     } finally {
       publishingTransactionsCacheRef.current = false;
     }
-  }, [accounts, categories, imports, isWorkspaceDataReady, selectedWorkspaceId, transactions, transactionsPage, transactionsPageSize, transactionsSummary, workspaceCurrencyCodes, hasActiveTransactionFilters]);
+  }, [accounts, categories, imports, isWorkspaceDataReady, selectedWorkspaceId, transactions, transactionsPage, transactionsPageSize, transactionsSummary, workspaceCurrencyCodes, hasActiveTransactionFilters, transactionCacheVersionAtRender]);
 
   useEffect(() => {
     if (bulkDeleteConfirmOpen) {

@@ -1945,7 +1945,8 @@ export const findCachedTransactionsForAccount = (
 
 export const persistTransactionsWorkspaceCache = (
   workspaceId: string,
-  snapshot: Omit<TransactionsWorkspaceCacheSnapshot, "workspaceId" | "updatedAt">
+  snapshot: Omit<TransactionsWorkspaceCacheSnapshot, "workspaceId" | "updatedAt">,
+  options?: { expectedUpdatedAt: number }
 ): number => {
   if (!workspaceId) {
     return 0;
@@ -1953,6 +1954,9 @@ export const persistTransactionsWorkspaceCache = (
 
   const cache = readTransactionsWorkspaceCache();
   const existingSnapshot = cache?.snapshots[workspaceId] ?? null;
+  // React effects may publish a render that predates a cross-tab import.
+  // Reject that write; the caller hydrates the newer snapshot instead.
+  if (options && (existingSnapshot?.updatedAt ?? 0) > options.expectedUpdatedAt) return 0;
   if (shouldPreservePopulatedSnapshot(existingSnapshot, snapshot)) {
     return existingSnapshot?.updatedAt ?? 0;
   }
