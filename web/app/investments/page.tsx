@@ -3278,7 +3278,7 @@ export default function InvestmentsPage() {
           </>
         ) : selectedTab === "planner" ? (
           <GrowthPlanner
-            currency={selectedCurrencyCodes[0] ?? portfolioCurrencyFilter ?? defaultCurrency ?? "PHP"}
+            currency={growthDisplayCurrency}
             initialPrincipal={canAggregateSelectedCurrency && estimatedPortfolioTotals.currentValue > 0 ? estimatedPortfolioTotals.currentValue : 100_000}
           />
         ) : selectedTab === "market" ? (
