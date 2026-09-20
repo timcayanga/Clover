@@ -104,6 +104,16 @@ void (async () => {
   assert.deepEqual(getCachedTransactionsWorkspace("receipt-workspace")?.summary, receiptSummary, "Account publication must retain transaction summary and paging");
   assert.equal(getCachedTransactionsWorkspace("receipt-workspace")?.pageSize, 25);
 
+  persistTransactionsWorkspaceCache("empty-before-import", {accounts: [], categories: [], imports: [], transactions: [], totalCount: 0, summary: {...receiptSummary, totalCount: 0}});
+  syncImportedWorkspaceTransactionCaches("empty-before-import", [receiptRow]);
+  assert.equal(getCachedTransactionsWorkspace("empty-before-import")?.totalCount, 1, "Imported rows cannot retain an empty list count");
+  assert.equal(getCachedTransactionsWorkspace("empty-before-import")?.summary?.totalCount, 1, "Summary count includes the imported row immediately");
+  syncImportedWorkspaceAccountCaches("manual-cash", {id: "cash", name: "Cash", type: "cash", currency: "PHP", source: "manual", balance: "1000"});
+  syncImportedWorkspaceAccountCaches("manual-cash", {id: "cash", name: "Cash", type: "cash", currency: "PHP", source: "upload", balance: "750"});
+  const preservedCash = getCachedAccountsWorkspace("manual-cash")?.accounts.find(a => a.id === "cash");
+  assert.equal(preservedCash?.source, "manual", "Receipt preview cannot change an existing manual account source");
+  assert.equal(preservedCash?.balance, "1000", "Manual opening balance must not become a reconciled receipt preview");
+
   assert.equal(BETA_FULL_ACCESS_ENABLED, false, "Beta full access must remain disabled after plan enforcement is restored.");
   assert.deepEqual(getPlanDefaultLimits("free"), {
     accountLimit: 5,
