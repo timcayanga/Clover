@@ -1,3 +1,4 @@
+import { emptyInvestmentRow, populatedInvestmentRow, investmentRowIssue, normalizeInvestmentTableCell } from "@/lib/investment-table-entry";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
@@ -736,3 +737,14 @@ assert.equal(
 );
 
 console.log(`Investment regression passed: ${classificationCases.length + 88} checks.`);
+
+const emptyInvestment = emptyInvestmentRow("row-1", "PHP");
+assert.equal(populatedInvestmentRow(emptyInvestment), false, "Default type/currency must not save a blank row.");
+const tableInvestment = { ...emptyInvestment, name: "Example fund", balance: "0" };
+assert.equal(investmentRowIssue(tableInvestment, ["PHP", "USD"]), "", "Zero is a valid explicitly entered valuation.");
+for (const balance of ["", "-1", "Infinity", "NaN", "100oops"]) assert.ok(investmentRowIssue({ ...tableInvestment, balance }, ["PHP"]));
+assert.ok(investmentRowIssue({ ...tableInvestment, investmentSubtype: "unknown" }, ["PHP"]));
+assert.ok(investmentRowIssue({ ...tableInvestment, currency: "ZZZ" }, ["PHP"]));
+assert.equal(normalizeInvestmentTableCell("balance", "₱1,250.50"), "1250.50");
+assert.equal(normalizeInvestmentTableCell("investmentSubtype", "Stocks"), "stock");
+assert.equal(normalizeInvestmentTableCell("currency", " usd "), "USD");

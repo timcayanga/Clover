@@ -199,7 +199,7 @@ export function AddEntryMethods({
             ? "Upload a receipt"
             : "Upload statements, receipts, and screenshots"}
         </h4>
-        {kind !== "accounts" && kind !== "recurring" ? <p>{info.upload}</p> : null}
+        {kind !== "accounts" && kind !== "recurring" && kind !== "investments" ? <p>{info.upload}</p> : null}
         {onUpload ? (
           <button
             className="button button-primary"

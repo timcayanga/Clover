@@ -4003,6 +4003,10 @@ export async function POST(request: Request) {
       });
     }
 
+    if (existingAccount && body?.createOnly === true) {
+      return NextResponse.json({ error: "An investment with this name, institution and currency already exists. Review it in your portfolio or use a distinct name." }, { status: 409 });
+    }
+
     if (existingAccount) {
       if (normalizedCurrency) {
         await ensureWorkspaceCashAccount(workspaceId, normalizedCurrency);

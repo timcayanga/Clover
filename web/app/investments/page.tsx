@@ -1,6 +1,6 @@
 "use client";
 import { AddEntryMethods } from "@/components/add-entry-methods";
-import { AdviserFormAssist } from "@/components/adviser-form-assist";
+import { InvestmentTableEntry } from "@/components/investment-table-entry";
 import { useMobileCreationRoute } from "@/lib/use-mobile-creation-route";
 
 import Link from "next/link";
@@ -1074,6 +1074,8 @@ export default function InvestmentsPage() {
   const [portfolioView, setPortfolioView] = useState<PortfolioView>("all");
   const [selectedOverviewMixKey, setSelectedOverviewMixKey] = useState("");
   const [addOpen, setAddOpen] = useState(false);
+  const [manualEntryMode, setManualEntryMode] = useState<"single" | "table">("single");
+  const [investmentRefresh, setInvestmentRefresh] = useState(0);
   const mobileCreation = useMobileCreationRoute(addOpen, setAddOpen, "/investments");
   const [selectedInvestmentAssetId, setSelectedInvestmentAssetId] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
@@ -1134,7 +1136,7 @@ export default function InvestmentsPage() {
     }
 
     const closeOnEscape = (event: KeyboardEvent) => {
-      if (event.key !== "Escape") {
+      if (event.key !== "Escape" || isSaving) {
         return;
       }
 
@@ -1144,7 +1146,7 @@ export default function InvestmentsPage() {
 
     window.addEventListener("keydown", closeOnEscape);
     return () => window.removeEventListener("keydown", closeOnEscape);
-  }, [addOpen]);
+  }, [addOpen, isSaving]);
 
   useEffect(() => {
     setPortfolioCurrencyFilter("");
@@ -1291,7 +1293,7 @@ export default function InvestmentsPage() {
     return () => {
       cancelled = true;
     };
-  }, [selectedWorkspaceId]);
+  }, [selectedWorkspaceId, investmentRefresh]);
 
   useEffect(() => {
     if (!selectedWorkspaceId || typeof window === "undefined") {
@@ -2809,7 +2811,7 @@ export default function InvestmentsPage() {
 
     const name = manualName.trim();
     if (!name) {
-      setMessage("Holding name is required.");
+      setMessage("Investment name is required.");
       return;
     }
 
@@ -3971,9 +3973,9 @@ export default function InvestmentsPage() {
         ) : null}
 
         {addOpen ? (
-          <div className="modal-backdrop modal-backdrop--investments-add" role="presentation" onClick={() => setAddOpen(false)}>
+          <div className="modal-backdrop modal-backdrop--investments-add" role="presentation" onClick={() => { if (!isSaving) setAddOpen(false); }}>
             <section
-            className="modal-card modal-card--wide accounts-add-modal investments-add-modal glass"
+            className={`modal-card modal-card--wide accounts-add-modal investments-add-modal glass${manualEntryMode === "table" ? " investments-add-modal--table" : ""}`}
             role={mobileCreation ? "region" : "dialog"}
             aria-modal={mobileCreation ? undefined : true}
             aria-labelledby="add-investment-title"
@@ -3982,10 +3984,7 @@ export default function InvestmentsPage() {
             <div className="modal-head">
               <div>
                 <p className="eyebrow">Investments</p>
-                <h4 id="add-investment-title">Add holding</h4>
-                <p className="panel-muted" style={{ margin: "6px 0 0" }}>
-                  Start with the basics first. Add extra details only if you need them.
-                </p>
+                <h4 id="add-investment-title">Add Investment</h4>
               </div>
               <button
                 className="icon-button"
@@ -3994,27 +3993,20 @@ export default function InvestmentsPage() {
                   setManualMoreOpen(false);
                   setAddOpen(false);
                 }}
+                disabled={isSaving}
                 aria-label="Close add investment"
               >
                 ×
               </button>
             </div>
 
-            <AddEntryMethods key={selectedWorkspaceId} kind="investments" workspaceId={selectedWorkspaceId}>
+            <AddEntryMethods key={selectedWorkspaceId} kind="investments" workspaceId={selectedWorkspaceId} disabled={isSaving}>
+            <div className="investments-entry-toolbar"><button type="button" className="button button-secondary button-small" disabled={isSaving} onClick={() => setManualEntryMode(mode => mode === "single" ? "table" : "single")}><span aria-hidden="true">▦</span> {manualEntryMode === "single" ? "Table Entry" : "Single Entry"}</button></div>
+            <div hidden={manualEntryMode !== "table"}>{selectedWorkspaceId ? <InvestmentTableEntry key={selectedWorkspaceId} workspaceId={selectedWorkspaceId} currencies={currencyCatalogCodes} currency={manualCurrency} onBusyChange={setIsSaving} onSaved={() => setInvestmentRefresh(value => value + 1)} /> : null}</div>
+            <div hidden={manualEntryMode !== "single"}>
             <div className="accounts-add-grid">
               <form className="accounts-manual-form" onSubmit={createManualInvestment}>
-<AdviserFormAssist workspaceId={selectedWorkspaceId} context={{kind: "investment", fields: {name:manualName,institution:manualInstitution,type:"investment",currency:manualCurrency,balance:manualBalance,investmentSubtype:manualInvestmentSubtype,investmentSymbol:manualInvestmentSymbol,investmentQuantity:manualInvestmentQuantity,investmentCostBasis:manualInvestmentCostBasis}}} />
-                <label>
-                  Holding name
-                  <input value={manualName} onChange={(event) => setManualName(event.target.value)} placeholder="Example: Bitcoin or BPI" />
-                </label>
-                <InstitutionAutocomplete
-                  label="Institution"
-                  value={manualInstitution}
-                  onChange={setManualInstitution}
-                  placeholder="Example: COL Financial"
-                  variant="investment"
-                />
+
                 <div className="accounts-manual-form__field">
                   <label htmlFor="manual-investment-subtype">Investment type</label>
                   <select
@@ -4038,6 +4030,17 @@ export default function InvestmentsPage() {
                     </button>
                   ) : null}
                 </div>
+                <label>
+                  Investment name
+                  <input value={manualName} onChange={(event) => setManualName(event.target.value)} placeholder="Example: Bitcoin or BPI" />
+                </label>
+                <InstitutionAutocomplete
+                  label="Institution"
+                  value={manualInstitution}
+                  onChange={setManualInstitution}
+                  placeholder="Example: COL Financial"
+                  variant="investment"
+                />
                 <div className="investments-add-modal__money-row">
                   <div className="accounts-form-currency-field">
                     <span className="investments-add-modal__field-label">Currency</span>
@@ -4154,9 +4157,10 @@ export default function InvestmentsPage() {
                 </div>
 
                 <button className="button button-primary" type="submit" disabled={isSaving || !selectedWorkspaceId}>
-                  {isSaving ? "Saving..." : "Create investment"}
+                  {isSaving ? "Saving..." : "Add Investment"}
                 </button>
               </form>
+            </div>
             </div>
             </AddEntryMethods>
             </section>
