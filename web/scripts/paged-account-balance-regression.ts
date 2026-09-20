@@ -19,3 +19,5 @@ assert.equal(projectPagedAccountBalance(extended,'10000',[{...page[0],amount:'15
 assert.equal(normalizeAccountBalanceSign('credit_card',Number(projectPagedAccountBalance(anchor,'10000',page))),-20340);
 assert.equal(anchor.balance,total);assert.equal(page[0].amount,'100');
 console.log('Paged account balance regression passed: full858row ledger, pagination, edits, deletes, exclusions, new rows, opening edits and liability signs.');
+
+assert.equal(projectPagedAccountBalance({ accountId: "cash", balance: "1000", openingBalance: "1000", rows: [] }, "1000", [{ id: "receipt", amount: "250", type: "expense", isExcluded: false }]), "750.00", "An imported receipt adjusts an already-open manual Cash ledger");
