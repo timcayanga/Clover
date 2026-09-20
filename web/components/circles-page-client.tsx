@@ -134,7 +134,7 @@ function CircleTitleTabs({
     <div className="circles-title-tabs-wrap">
       <div
         ref={containerRef}
-        className="animated-tabs investments-tabs circles-title-tabs circles-title-tabs--editable"
+        className="clover-tabs animated-tabs investments-tabs circles-title-tabs circles-title-tabs--editable"
         role="tablist"
         aria-label="Your Circles"
       >

@@ -66354,3 +66354,65 @@ html[data-theme="dark"] .content.content--reports .reports-range-menu__summary {
 .investments-add-modal .investments-add-modal__currency-selector { min-width:0; }
 .investments-add-modal .investments-add-modal__currency-selector .currency-selector__button { min-width:0!important; max-width:100%; }
 .investment-table-entry > footer { display:flex; align-items:center; justify-content:space-between; gap:16px; flex-wrap:wrap; }
+
+/* Shared navigation tabs: page headers and nested sections use the same tokens.
+   Creation method switches remain the separate segmented-control variant. */
+:root {
+ --clover-tab-height:40px;
+ --clover-tab-font-size:13px;
+ --clover-tab-icon-size:14px;
+ --clover-tab-padding:10px;
+ --clover-tab-gap:6px;
+}
+.clover-tabs.clover-tabs {
+ display:flex!important; flex-flow:row nowrap!important; align-items:flex-end!important;
+ gap:0!important; padding:0!important; margin:0; min-width:0!important;
+ max-width:100%; height:var(--clover-tab-height)!important; min-height:var(--clover-tab-height)!important;
+ border:0!important; border-bottom:1px solid var(--stroke,#d1e0e5)!important;
+ border-radius:0!important; background:transparent!important; box-shadow:none!important;
+ overflow-x:auto!important; overflow-y:hidden!important; scrollbar-width:none;
+}
+.clover-tabs::-webkit-scrollbar { display:none; }
+:is(.content,.shell-mobile-subheader) .clover-tabs.clover-tabs > :is(button,.animated-tabs__tab) {
+ display:inline-flex!important; flex:0 0 auto!important; flex-direction:row!important;
+ align-items:center!important; justify-content:center!important; gap:var(--clover-tab-gap)!important;
+ box-sizing:border-box; width:auto!important; min-width:max-content!important; max-width:none!important;
+ height:var(--clover-tab-height)!important; min-height:var(--clover-tab-height)!important;
+ padding:8px var(--clover-tab-padding)!important; margin:0!important;
+ border:1px solid transparent!important; border-radius:10px 10px 0 0!important;
+ background:transparent!important; box-shadow:none!important; transform:none!important;
+ font:500 var(--clover-tab-font-size)/20px var(--font-poppins),sans-serif!important;
+ letter-spacing:0!important; text-transform:none!important; white-space:nowrap!important;
+ color:var(--muted)!important; opacity:1!important;
+}
+:is(.content,.shell-mobile-subheader) .clover-tabs.clover-tabs > :is(.is-active,.is-selected,[aria-selected="true"]) {
+ color:var(--accent)!important; background:var(--surface)!important;
+ border-color:var(--stroke,#d1e0e5)!important; border-bottom-color:var(--surface)!important;
+}
+:is(.content,.shell-mobile-subheader) .clover-tabs.clover-tabs > :is(button,.animated-tabs__tab):hover { background:color-mix(in srgb,var(--accent) 6%,var(--surface))!important; }
+:is(.content,.shell-mobile-subheader) .clover-tabs.clover-tabs > :is(button,.animated-tabs__tab):focus-visible { outline:2px solid var(--accent)!important; outline-offset:-3px; }
+:is(.content,.shell-mobile-subheader) .clover-tabs.clover-tabs > :is(button:disabled,.is-locked) { opacity:.55!important; }
+.clover-tabs .animated-tabs__indicator { display:none!important; }
+:is(.content,.shell-mobile-subheader) .clover-tabs.clover-tabs :is(.animated-tabs__label,.recurring-tab-label) {
+ font:inherit!important; color:inherit!important; letter-spacing:0!important; text-transform:none!important;
+ max-width:none!important; overflow:visible!important; text-overflow:clip!important; flex-shrink:0;
+}
+:is(.content,.shell-mobile-subheader) .clover-tabs.clover-tabs :is(.animated-tabs__icon,.recurring-tab-icon),
+:is(.content,.shell-mobile-subheader) .clover-tabs.clover-tabs > :is(button,.animated-tabs__tab) svg {
+ display:inline-flex!important; width:var(--clover-tab-icon-size)!important; height:var(--clover-tab-icon-size)!important;
+ min-width:var(--clover-tab-icon-size)!important; min-height:var(--clover-tab-icon-size)!important; flex-shrink:0;
+}
+:is(.content,.shell-mobile-subheader) .clover-tabs.clover-tabs .animated-tabs__badge {
+ position:static!important; display:inline-flex!important; align-items:center; justify-content:center;
+ width:auto!important; height:16px!important; padding:1px 5px!important; margin:0!important;
+ border:0!important; border-radius:8px!important; font:600 10px/14px var(--font-poppins),sans-serif!important;
+ letter-spacing:0!important; text-transform:capitalize!important;
+ color:var(--accent-strong)!important; background:color-mix(in srgb,var(--accent) 12%,transparent)!important;
+}
+.clover-tabs .circles-title-tab__name { font:inherit!important; color:inherit!important; }
+@media(max-width:1100px) {
+ :root { --clover-tab-font-size:12px; --clover-tab-height:44px; --clover-tab-padding:10px; --clover-tab-icon-size:14px; }
+ .shell-mobile-subheader .clover-tabs.clover-tabs { width:100%!important; }
+ .clover-tabs.clover-tabs .recurring-tab-label--desktop { display:inline!important; }
+ .clover-tabs.clover-tabs .recurring-tab-label--mobile { display:none!important; }
+}

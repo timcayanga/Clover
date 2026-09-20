@@ -145,7 +145,7 @@ export function RecurringPageClient({
 
   const renderRecurringTabs = (mobile = false) => (
     <nav
-      className={`investments-tabs recurring-tabs--top${mobile ? " recurring-tabs--mobile" : " mobile-icon-tabs"}`}
+      className={`clover-tabs investments-tabs recurring-tabs--top${mobile ? " recurring-tabs--mobile" : " mobile-icon-tabs"}`}
       aria-label="Recurring sections"
     >
       {recurringTabs.map((tab) => (

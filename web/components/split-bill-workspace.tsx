@@ -1055,7 +1055,7 @@ export function SplitBillWorkspace({
     ];
 
     return (
-      <div className="split-bill-detail-tabs" role="tablist" aria-label={`${selectedDetailLabel} sections`}>
+      <div className="clover-tabs split-bill-detail-tabs" role="tablist" aria-label={`${selectedDetailLabel} sections`}>
         {tabs.map((tab) => (
           <button
             key={tab.id}

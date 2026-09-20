@@ -19,7 +19,7 @@ export function PlanTabs({
     <>
       <div className="plan-detail-heading">
         {title}
-        <div className="plan-tabs" role="tablist" aria-label="Detail sections">
+        <div className="clover-tabs plan-tabs" role="tablist" aria-label="Detail sections">
           {tabs.map((tab, index) => (
             <button
               key={tab.key}

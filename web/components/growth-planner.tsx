@@ -107,7 +107,7 @@ export function GrowthPlanner({ currency, initialPrincipal }: { currency: string
         <button className="button button-secondary button-small" type="button" onClick={addScenario} disabled={scenarios.length >= 4}>+ Add scenario</button>
       </header>
 
-      <div className="growth-planner__scenario-tabs" role="tablist" aria-label="Growth scenarios">
+      <div className="clover-tabs growth-planner__scenario-tabs" role="tablist" aria-label="Growth scenarios">
         {results.map((result) => (
           <button
             key={result.scenario.id}
