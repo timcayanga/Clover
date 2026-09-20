@@ -2,6 +2,10 @@ export function mobileOperation(method: string, segments: string[]) {
   if (segments.join("/") === "billing/store" && ["GET", "POST"].includes(method)) return "store-billing";
   if (segments.join("/") === "settings/preferences" && ["GET", "PATCH"].includes(method)) return "settings-preferences";
   const path = segments.join("/");
+  if (path === "circle-invitations" && method === "GET") return "circle-invitations";
+  if (segments.length === 2 && segments[0] === "circle-invitations" && ["GET", "POST"].includes(method)) return "circle-invitation";
+  if (segments.length === 3 && segments[0] === "circles" && segments[2] === "invitations" && ["GET", "POST"].includes(method)) return "circle-invite";
+  if (segments.length === 4 && segments[0] === "circles" && segments[2] === "invitations" && ["PATCH", "DELETE"].includes(method)) return "circle-invite-manage";
   if (path === "settings/wipe-data" && method === "POST") return "settings-wipe-data";
   if (path === "settings/delete-account" && method === "POST") return "settings-delete-account";
   if (path === "settings/data" && ["GET", "DELETE"].includes(method)) return "settings-data";
@@ -16,6 +20,9 @@ export function mobileOperation(method: string, segments: string[]) {
   if (path === "settings/regional" && ["GET", "PATCH"].includes(method)) return "settings-regional";
   if (path === "split-bill-receipts/preview" && method === "POST") return "split-receipt-preview";
   if (["investments", "market-history", "market-news", "together-options", "reports"].includes(path) && method === "GET") return path;
+  if (segments.length === 3 && segments[0] === "investment-positions" && segments[2] === "history" && method === "GET") return "investment-position-history";
+  if (path === "investment-positions" && method === "GET") return "investment-positions";
+  if (segments.length === 3 && segments[0] === "accounts" && segments[2] === "positions" && method === "POST") return "investment-position-save";
   if (segments.length === 3 && segments[0] === "accounts" && segments[2] === "trades" && ["GET","POST","DELETE"].includes(method)) return "investment-trades";
   if (segments.length === 3 && segments[0] === "accounts" && segments[2] === "history" && method === "GET") return "account-history";
   if (segments.length === 3 && segments[0] === "accounts" && segments[2] === "purchases" && method === "POST") return "investment-purchase-create";
@@ -58,6 +65,7 @@ export function mobileOperation(method: string, segments: string[]) {
     ["GET", "PATCH", "DELETE"].includes(method)
   )
     return "transaction";
+  if (segments.length === 3 && segments[0] === "uploads" && ["start", "part", "complete", "cancel"].includes(segments[2]) && method === "POST") return "native-upload";
   if (segments.length === 3 && segments[0] === "imports") {
     if (method === "GET" && segments[2] === "review") return "import-review";
     if (method === "POST" && segments[2] === "confirm") return "import-confirm";

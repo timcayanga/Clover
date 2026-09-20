@@ -1,10 +1,11 @@
+import { Progress } from "../plan-ui";
 import * as Crypto from "expo-crypto";
 import {
   explainLocalFile,
   localCapability,
   refreshLocalAllowance,
 } from "./local-ai";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Alert } from "react-native";
 import { router } from "expo-router";
 import { Body, Button, Card, Field, Heading, Notice, Screen } from "../ui";
@@ -19,6 +20,9 @@ export function OfflineFilePanel({ file }: { file: QueuedFile }) {
     [preview, setPreview] = useState(""),
     [busy, setBusy] = useState(false),
     [error, setError] = useState("");
+  useEffect(()=>{
+    if(file.state==="processing" && session.offlineStatus.online)router.replace({pathname:"/import/[id]",params:{id:file.canonicalId??file.id,server:"1"}});
+  },[file.state,file.id,file.canonicalId,session.offlineStatus.online]);
   const run = async (fn: () => Promise<void>) => {
     setBusy(true);
     setError("");
@@ -30,10 +34,10 @@ export function OfflineFilePanel({ file }: { file: QueuedFile }) {
       setBusy(false);
     }
   };
-  const original = ["draft", "queued", "sending", "attention"].includes(
+  const original = file.originalRetained !== false && ["draft", "queued", "sending", "paused", "finalizing", "attention"].includes(
     file.state,
   );
-  const canUpload = ["draft", "attention"].includes(file.state);
+  const canUpload = original && ["draft", "attention", "paused"].includes(file.state);
   return (
     <Screen>
       <Card>
@@ -47,7 +51,9 @@ export function OfflineFilePanel({ file }: { file: QueuedFile }) {
             {
               draft: "Saved on this device",
               queued: "Waiting to upload when connected",
-              sending: "Checking upload acknowledgement",
+              sending: "Uploading file",
+              paused: "Upload paused",
+              finalizing: "Checking file and starting import",
               processing: "Original received by Clover",
               done: "Import complete",
               attention: "Needs attention",
@@ -60,6 +66,12 @@ export function OfflineFilePanel({ file }: { file: QueuedFile }) {
             : "The source is saved in Clover. Its temporary device copy has been removed."}
         </Body>
       </Card>
+      {["sending", "paused", "queued", "finalizing"].includes(file.state) ? <Card>
+        <Body>{Math.min(100,Math.round((file.sentBytes??0)/file.size*100))}% uploaded</Body>
+        <Progress value={(file.sentBytes??0)/file.size*100}/>
+        {["sending","queued"].includes(file.state) ? <Button title="Pause upload" secondary onPress={()=>void run(()=>queue.pause(file.id))}/> : null}
+        {file.state==="finalizing" ? <Body>The upload is complete. Clover is checking your file. You can leave this screen and return to its status.</Body> : <Button title="Cancel upload" secondary onPress={()=>Alert.alert("Cancel upload?","This removes the temporary upload and device copy. Your original file is preserved.",[{text:"Keep upload",style:"cancel"},{text:"Cancel upload",style:"destructive",onPress:()=>void run(async()=>{await queue.cancel(file.id);router.replace("/offline");})}])}/>}
+      </Card> : null}
       {file.error ? <Notice>{file.error}</Notice> : null}
       {error ? <Notice>{error}</Notice> : null}
       {original ? (
@@ -128,7 +140,7 @@ export function OfflineFilePanel({ file }: { file: QueuedFile }) {
           <Button
             title={
               session.offlineStatus.online
-                ? "Upload original"
+                ? (file.state === "paused" ? "Resume upload" : "Upload original")
                 : "Upload when connected"
             }
             disabled={busy}
@@ -136,7 +148,7 @@ export function OfflineFilePanel({ file }: { file: QueuedFile }) {
               void run(async () => {
                 await queue.enqueue(file.id, password);
                 setPassword("");
-                if (session.offlineStatus.online) await queue.flush();
+                if (session.offlineStatus.online) void queue.flush().catch(e=>setError(e.message));
               })
             }
           />
@@ -162,7 +174,7 @@ export function OfflineFilePanel({ file }: { file: QueuedFile }) {
           }
         />
       ) : null}
-      <Button
+      {!["queued","sending","paused","finalizing"].includes(file.state) ? <Button
         title={
           file.state === "done"
             ? "Remove from device list"
@@ -181,14 +193,15 @@ export function OfflineFilePanel({ file }: { file: QueuedFile }) {
                 style: "destructive",
                 onPress: () =>
                   void run(async () => {
-                    await queue.remove(file.id);
+                    if(original) await queue.cancel(file.id);
+                    else await queue.remove(file.id);
                     router.replace("/offline");
                   }),
               },
             ],
           )
         }
-      />
+      /> : null}
     </Screen>
   );
 }

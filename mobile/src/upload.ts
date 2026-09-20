@@ -1,3 +1,4 @@
+import { NATIVE_UPLOAD_MAX_SIZE } from "../../shared/native-upload";
 import { Platform } from "react-native";
 import type { DocumentPickerAsset } from "expo-document-picker";
 import { File, Paths } from "expo-file-system";
@@ -24,8 +25,8 @@ export type SelectedFile = Pick<
 export function fileProblem(file: SelectedFile) {
   if (file.size === undefined || file.size <= 0)
     return "This file is empty or its size could not be checked.";
-  if (file.size > 3_500_000)
-    return "For files over 3.5 MB, please use the Clover website during this preview.";
+  if (file.size > NATIVE_UPLOAD_MAX_SIZE)
+    return "Choose a file up to 25 MB.";
   if (
     !/\.(pdf|csv|tsv|xlsx?|xlsm|xlsb|ods|png|jpe?g|webp|hei[cf]|ofx|qfx|qif|mt940|sta|xml|json)$/i.test(
       file.name,

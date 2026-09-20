@@ -28,9 +28,12 @@ export async function apiRequest<T>(
   format: "json" | "text" = "json",
 ): Promise<T> {
   const controller = new AbortController();
+  const abort = () => controller.abort();
+  if (options.signal?.aborted) abort();
+  options.signal?.addEventListener("abort", abort, {once:true});
   const timer = setTimeout(
     () => controller.abort(),
-    path.includes("/process") ||
+    path.includes("/process") || path.startsWith("uploads/") ||
       path.startsWith("split-bill-receipts/") ||
       path.startsWith("adviser/chat")
       ? 120000
@@ -78,5 +81,6 @@ export async function apiRequest<T>(
     throw error;
   } finally {
     clearTimeout(timer);
+    options.signal?.removeEventListener("abort", abort);
   }
 }

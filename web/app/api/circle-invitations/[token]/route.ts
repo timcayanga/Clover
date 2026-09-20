@@ -50,6 +50,7 @@ const findInvitation = (token: string) =>
           name: true,
           type: true,
           description: true,
+          archivedAt: true,
           avatarUrl: true,
           owner: { select: { firstName: true, lastName: true } },
           _count: {
@@ -81,6 +82,7 @@ export async function GET(
   if (
     !invitation ||
     invitation.status !== "pending" ||
+    invitation.circle.archivedAt !== null ||
     invitation.expiresAt <= new Date()
   ) {
     return NextResponse.json(
@@ -148,15 +150,15 @@ export async function POST(
     }
     const user = viewer.user;
     const invitation = await findInvitation(token);
-    if (!invitation || invitation.status !== "pending") {
+    if (!invitation || invitation.status !== "pending" || invitation.circle.archivedAt !== null) {
       throw new CircleAccessError(
         "This Circle invitation is no longer available.",
         404,
       );
     }
     if (invitation.expiresAt <= new Date()) {
-      await prisma.circleInvitation.update({
-        where: { id: invitation.id },
+      await prisma.circleInvitation.updateMany({
+        where: { id: invitation.id, token, status:"pending", expiresAt:{lte:new Date()} },
         data: { status: "expired" },
       });
       throw new CircleAccessError("This Circle invitation has expired.", 410);
@@ -172,6 +174,13 @@ export async function POST(
     }
 
     await prisma.$transaction(async (tx) => {
+      // Claim the unchanged, unexpired invitation atomically. A resend or revoke
+      // racing this request must not grant membership from an obsolete link.
+      const claimed = await tx.circleInvitation.updateMany({
+        where: { id: invitation.id, token, status: "pending", expiresAt: {gt:new Date()}, circle: {archivedAt:null} },
+        data: {status:"accepted", acceptedAt:new Date()},
+      });
+      if (claimed.count !== 1) throw new CircleAccessError("This Circle invitation is no longer available.", 409);
       const currentMembership = await tx.circleMembership.findFirst({
         where: { circleId: invitation.circleId, userId: user.id },
       });
@@ -234,10 +243,6 @@ export async function POST(
         });
       }
 
-      await tx.circleInvitation.update({
-        where: { id: invitation.id },
-        data: { status: "accepted", acceptedAt: new Date() },
-      });
       const group = await tx.splitBillGroup.findUnique({
         where: { circleId: invitation.circleId },
       });

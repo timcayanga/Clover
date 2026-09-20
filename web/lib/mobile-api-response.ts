@@ -52,8 +52,8 @@ const circleSummary = (value: unknown) => {
     members: rows(circle.members, ["id", "displayName", "role", "status", "isOwner", "contributionTarget", "contributionCadence", "contributedThisMonth"]),
     budgets: rows(circle.budgets, ["id", "name", "targetAmount", "spentAmount", "currency", "cadence", "progressPercent", "isActive"]),
     goals: rows(circle.goals, ["id", "name", "targetAmount", "currentAmount", "currency", "targetDate", "progressPercent", "status", "estimateConfidence", "estimateReason", "estimatedCompletionDate"]),
-    commitments: rows(circle.commitments, ["id", "title", "amount", "currency", "recurrence", "nextDueDate", "assignedMemberName", "isActive"]),
-    contributions: rows(circle.contributions, ["id", "memberName", "amount", "currency", "contributionDate", "note"]),
+    commitments: rows(circle.commitments, ["id", "title", "amount", "currency", "recurrence", "nextDueDate", "assignedMemberId", "assignedMemberName", "notes", "isActive"]),
+    contributions: rows(circle.contributions, ["id", "memberId", "memberName", "goalId", "amount", "currency", "contributionDate", "note"]),
     expenses: rows(circle.expenses, ["id", "kind", "title", "amount", "currency", "date", "visibility"]),
     investmentShares: rows(circle.investmentShares, ["id", "name", "institution", "balance", "currency", "visibility"]),
     activities: rows(circle.activities, ["id", "summary", "createdAt"]),
@@ -161,6 +161,7 @@ export function mobileApiResponse(operation: string, value: unknown) {
     };
   if (operation === "import-status")
     return {
+      ...pick(data,["nativeUploadReceived","nativeUploadFinalizing"]),
       progress:resolveImportModalStatusDecision({importMode:"statement",...record(data.importFile),...pick(data,["visibleImportComplete","confirmedTransactionsCount","parsedRowsCount"])}).progress,
       importFile: pick(data.importFile, [
         "id",

@@ -79,6 +79,8 @@ const resourceSchema = z.discriminatedUnion("action", [
   }),
   z.object({
     action: z.literal("update_commitment"),
+    recurrence: z.enum(["once", "weekly", "biweekly", "monthly", "quarterly", "annual"]).optional(),
+    notes: z.string().trim().max(500).nullable().optional(),
     id: z.string().min(1),
     title: z.string().trim().min(1).max(120).optional(),
     amount: amount.nullable().optional(),
@@ -351,6 +353,8 @@ export async function POST(
                     ? new Date(body.nextDueDate)
                     : null,
               assignedMemberId: body.assignedMemberId,
+              recurrence: body.recurrence,
+              notes: body.notes,
               isActive: body.isActive,
             },
           });

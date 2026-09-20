@@ -1,7 +1,7 @@
+import { uploadInParts } from "./offline/resumable-upload";
 import { FileQueue, type QueuedFile } from "./offline/file-queue";
 import {
   readUploadBytes,
-  withUploadCopy,
   clearTemporaryOfflineCopies,
 } from "./offline/file-storage";
 import NetInfo from "@react-native-community/netinfo";
@@ -136,6 +136,9 @@ export function SessionProvider({
               const status = await transport<import("./types").ImportStatus>(
                 `imports/${file.canonicalId ?? file.id}/status?workspaceId=${encodeURIComponent(file.workspaceId)}`,
               );
+              if(status.nativeUploadReceived === false && file.originalRetained !== false) {
+                throw Object.assign(new Error(status.nativeUploadFinalizing ? "Clover is still receiving this file. Check again shortly." : "Resume this upload."),{status:status.nativeUploadFinalizing ? 503 : 404});
+              }
               return {
                 done: Boolean(
                   status.visibleImportComplete ||
@@ -144,23 +147,8 @@ export function SessionProvider({
                 failed: status.importFile.status === "failed",
               };
             },
-            upload: async (file, bytes) =>
-              withUploadCopy(file, bytes, async (uri) => {
-                const form = new FormData();
-                form.append("file", {
-                  uri,
-                  name: file.name,
-                  type: file.mimeType,
-                } as unknown as Blob);
-                if (file.password) form.append("password", file.password);
-                const response = await transport<{
-                  canonicalImportFileId?: string;
-                }>(
-                  `imports/${file.id}/process?workspaceId=${encodeURIComponent(file.workspaceId)}`,
-                  { method: "POST", body: form },
-                );
-                return { canonicalId: response.canonicalImportFileId };
-              }),
+            upload: (file, bytes, control) => uploadInParts(transport,file,bytes,control),
+            cancel: async file => { await transport(`uploads/${file.id}/cancel?workspaceId=${encodeURIComponent(file.workspaceId)}`,{method:"POST",body:"{}"}); },
           },
           (id) => owner.assertLocalAccess(id),
         );
@@ -291,9 +279,11 @@ export function SessionProvider({
         uploads,
         registerUpload: async (id, file, targetProfileId = profileId) => {
           if (!data?.profiles.some((p) => p.id === targetProfileId)) return;
-          if (fileQueue) {
+          const uploadQueue=fileQueue??fileQueueRef.current;
+          if(!demo && Platform.OS!=="web" && !uploadQueue)throw new Error("Secure file storage is still opening. Please try again in a moment.");
+          if (uploadQueue) {
             const bytes = await readUploadBytes(file);
-            await fileQueue.add(
+            await uploadQueue.add(
               {
                 id,
                 workspaceId: targetProfileId,

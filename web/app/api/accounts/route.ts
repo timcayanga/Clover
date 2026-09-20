@@ -1,3 +1,5 @@
+import { positionHoldingView } from "../../../../shared/investment-position-view";
+import { listInvestmentPositions } from "@/lib/investment-position-store";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { isLocalDevHost, requireAuth } from "@/lib/auth";
@@ -225,7 +227,7 @@ const loadInvestmentSnapshotsForWorkspace = async (workspaceId: string) => {
     },
   }).catch(() => []);
 
-  return snapshots.map((snapshot) => ({
+  const serialized = snapshots.map((snapshot) => ({
     ...snapshot,
     snapshotDate: snapshot.snapshotDate?.toISOString() ?? null,
     totalValue: snapshot.totalValue?.toString() ?? null,
@@ -251,6 +253,18 @@ const loadInvestmentSnapshotsForWorkspace = async (workspaceId: string) => {
       updatedAt: holding.updatedAt.toISOString(),
     })),
   }));
+  // Project user-managed positions into the current portfolio without changing
+  // any stored statement snapshot or its raw source payload.
+  const positions = await listInvestmentPositions(workspaceId);
+  const accountIds = [...new Set(positions.map(p=>p.accountId))];
+  for(const accountId of accountIds){
+    const entries=positions.filter(p=>p.accountId===accountId);
+    const latest=serialized.filter(s=>s.account?.id===accountId).sort((a,b)=>b.updatedAt.localeCompare(a.updatedAt))[0];
+    const remaining=(latest?.holdings??[]).filter(h=>!entries.some(p=>p.sourceHoldingId===h.id||((p.symbol||p.assetName).trim().toLowerCase()===(h.assetSymbol||h.assetName).trim().toLowerCase()&&p.currency===h.currency)));
+    const updatedAt=[...entries.map(p=>p.updatedAt),...(latest?[latest.updatedAt]:[])].sort().at(-1)!;
+    serialized.unshift({id:`positions-${accountId}`,snapshotDate:null,portfolioName:"Tracked positions",currency:entries[0].currency,totalValue:null,costBasis:null,gainLossValue:null,gainLossPercent:null,confidence:100,updatedAt,account:latest?.account??{id:accountId,name:entries[0].accountName??"Investment account",institution:entries[0].institution??null,type:"investment"},documentImport:null,holdings:[...remaining,...entries.map(p=>positionHoldingView({...p,accountName:p.accountName??"Investment account"}))]});
+  }
+  return serialized;
 };
 
 const loadEarliestInvestmentPurchaseDatesForWorkspace = async (workspaceId: string) => {

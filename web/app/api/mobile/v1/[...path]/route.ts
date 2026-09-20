@@ -1,3 +1,4 @@
+import { NativeInputError } from "@/lib/native-input-error";
 import { hasFullFeatureAccess } from "@/lib/beta-access";
 import { mobileAccountPatch, mobileRecurringCreate, mobileRecurringPatch, mobileRecurringCompletion, mobileRecurringDismiss } from "@/lib/mobile-organize-input";
 import { mobileAdviserInput } from "@/lib/mobile-adviser-input";
@@ -83,7 +84,7 @@ async function handle(
     }
     const user = await prisma.user.findUnique({
       where: { clerkUserId: userId },
-      select: { id: true, firstName: true, lastName: true, email: true, clerkUserId: true, planTier: true, dataWipedAt: true, onboardingCompletedAt: true },
+      select: { id: true, firstName: true, lastName: true, email: true, clerkUserId: true, planTier: true, accountLimit:true, monthlyUploadLimit:true, transactionLimit:true, dataWipedAt: true, onboardingCompletedAt: true },
     });
     const catalog = operation === "bootstrap" ? await import("@/lib/currencies") : null;
     const currencyChoices = catalog ? catalog.getCurrencyCatalogOptions(catalog.getCurrencyCatalogCodes()) : undefined;
@@ -167,10 +168,39 @@ async function handle(
         },
       });
     }
+    if (["circle-invitations", "circle-invitation", "circle-invite", "circle-invite-manage"].includes(operation)) {
+      const result = await withMobileRequestContext(userId, request, async () => {
+        if (operation === "circle-invitations") return (await import("@/app/api/circle-invitations/route")).GET();
+        if (operation === "circle-invitation") {
+          const route = await import("@/app/api/circle-invitations/[token]/route");
+          const params = { params: Promise.resolve({ token: path[1] }) };
+          return request.method === "POST" ? route.POST(request, params) : route.GET(request, params);
+        }
+        const { getCircleAccess } = await import("@/lib/circle-access");
+        await getCircleAccess(path[1], user.id, "organizer");
+        if (operation === "circle-invite") {
+          if (request.method === "GET") return Response.json({ invitations: await prisma.circleInvitation.findMany({where:{circleId:path[1],status:"pending",expiresAt:{gt:new Date()}},select:{id:true,email:true,displayName:true,role:true,expiresAt:true},orderBy:{createdAt:"desc"},take:50}) });
+          return (await import("@/app/api/circles/[circleId]/invitations/route")).POST(request,{params:Promise.resolve({circleId:path[1]})});
+        }
+        const route = await import("@/app/api/circles/[circleId]/invitations/[invitationId]/route");
+        const params = {params:Promise.resolve({circleId:path[1],invitationId:path[3]})};
+        return request.method === "DELETE" ? route.DELETE(request,params) : route.PATCH(request,params);
+      });
+      return reply(await result.json(),result.status);
+    }
     const url = new URL(request.url);
     const workspaceId = url.searchParams.get("workspaceId");
     if (!workspaceId) return reply({ error: "Choose a Profile first." }, 400);
     await assertWorkspaceAccess(userId, workspaceId);
+    if (operation === "native-upload") {
+      if(path[2]==="start"){
+        const limit=(await import("@/lib/user-limits")).getEffectiveUserLimits(user).monthlyUploadLimit;
+        if(limit!==null && await (await import("@/lib/plan-access")).countWorkspaceOwnerImportFilesThisMonth(workspaceId)>=limit)return reply({error:"You have reached this month’s upload limit. Manage your plan to add more files."},403);
+      }
+      const result = await (await import("@/lib/native-upload-store")).nativeUploadRequest(request,path[1],userId,workspaceId,path[2]);
+      const data = await result.json();
+      return reply(path[2] === "complete" && result.ok ? mobileApiResponse("import-process",data) : data,result.status);
+    }
     if (operation === "adviser-attachments") {
       const response = await withMobileRequestContext(userId,request,async()=> (await import("@/app/api/adviser/attachments/route")).POST(request));
       return reply(await response.json(),response.status);
@@ -275,14 +305,27 @@ async function handle(
     if (operation === "investments") {
       return reply(await (await import("@/lib/mobile-investment-data")).loadMobileInvestments(workspaceId));
     }
+    if(operation === "investment-position-history")return reply(await (await import("@/lib/investment-position-store")).investmentPositionHistory(workspaceId,path[1]));
+    if(operation === "investment-positions")return reply({positions:await (await import("@/lib/investment-position-store")).listInvestmentPositions(workspaceId)});
+    if(operation === "investment-position-save") {
+      const text=await request.text();if(text.length>8000)return reply({error:"Asset details are too long."},413);
+      const {positionInput,saveInvestmentPosition}=await import("@/lib/investment-position-store");
+      const result=await saveInvestmentPosition(workspaceId,path[1],user.id,positionInput.parse(JSON.parse(text)));
+      (await import("@/lib/workspace-summary-cache")).invalidateWorkspaceSummaryCache(workspaceId);
+      return reply(result);
+    }
     if(operation === "investment-trades") {
       const account=await prisma.account.findFirst({where:{id:path[1],workspaceId,type:"investment"},select:{id:true}});
       if(!account)return reply({error:"Investment account not found."},404);
       const {listInvestmentTrades,saveInvestmentTrade}=await import("@/lib/investment-trade-store");
-      if(request.method==="GET")return reply(await listInvestmentTrades(account.id,z.coerce.number().int().min(1).max(10000).parse(url.searchParams.get("page")??1)));
+      if(request.method==="GET")return reply(await listInvestmentTrades(account.id,z.coerce.number().int().min(1).max(10000).parse(url.searchParams.get("page")??1),url.searchParams.get("positionId")??undefined));
       const text=await request.text();if(new TextEncoder().encode(text).length>8000)return reply({error:"Trade details are too long."},413);
       const {investmentTradeInput}=await import("@/lib/investment-trade-input");
-      const result=await saveInvestmentTrade(workspaceId,account.id,user.id,investmentTradeInput.parse(JSON.parse(text)),request.method==="DELETE");
+      const body=JSON.parse(text);
+      const positions=await import("@/lib/investment-position-store");
+      const result=body.positionId
+        ? await positions.savePositionTrade(workspaceId,account.id,user.id,positions.positionTradeInput.parse(body),request.method==="DELETE")
+        : await saveInvestmentTrade(workspaceId,account.id,user.id,investmentTradeInput.parse(body),request.method==="DELETE");
       (await import("@/lib/workspace-summary-cache")).invalidateWorkspaceSummaryCache(workspaceId);
       return reply(result);
     }
@@ -696,6 +739,13 @@ async function handle(
       },
     );
     const responseData = await response.json();
+    if (response.ok && operation === "import-status") {
+      // An ImportFile row can precede durable source storage. Only release the
+      // encrypted device original after the resumable transport acknowledges it.
+      const [upload] = await prisma.$queryRaw<{state:string;leaseUntil:Date|null}[]>`SELECT "state","leaseUntil" FROM "NativeUploadSession" WHERE "id"=${path[1]} AND "workspaceId"=${workspaceId} AND "userId"=${userId}`;
+      responseData.nativeUploadReceived = upload?.state === "done" || responseData.importFile?.status === "done";
+      responseData.nativeUploadFinalizing = upload?.state === "finalizing" && Boolean(upload.leaseUntil && upload.leaseUntil > new Date());
+    }
     if (response.ok && request.method === "GET" && (operation === "accounts" || operation === "account")) {
       const rows = operation === "accounts" ? responseData.accounts : [responseData.account];
       const { mobileAccountBalances } = await import("@/lib/mobile-account-balances");
@@ -704,6 +754,7 @@ async function handle(
     }
     return reply(mobileApiResponse(operation, responseData), response.status);
   } catch (error) {
+    if(error instanceof NativeInputError)return reply({error:error.message},400);
     if (error instanceof z.ZodError)
       return reply({ error: "Please check the entered fields." }, 400);
     if (error instanceof Error && error.message === "WORKSPACE_NOT_FOUND")

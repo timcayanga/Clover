@@ -851,6 +851,7 @@ model Account {
   statementCheckpoints    AccountStatementCheckpoint[]
   financialCommitments    FinancialCommitment[]
   accountRules            AccountRule[]
+  investmentPositions     InvestmentPosition[]
   investmentTrades        InvestmentTrade[]
   investmentPurchases     InvestmentPurchase[]
   investmentDividends     InvestmentDividend[]
@@ -2327,6 +2328,11 @@ model AdviserConversation {
 }
 
 model InvestmentTrade {
+ positionId String?
+ transferPairId String?
+ position InvestmentPosition? @relation(fields:[positionId],references:[id],onDelete:Cascade)
+ @@index([positionId])
+ @@index([transferPairId])
  id String @id
  accountId String
  assetName String
@@ -2352,4 +2358,57 @@ model InvestmentTradeRevision {
  after Json
  createdAt DateTime @default(now())
  trade InvestmentTrade @relation(fields:[tradeId],references:[id],onDelete:Cascade)
+}
+
+// Temporary transport metadata is retained until object cleanup even if a
+// Profile is deleted. Access is checked against the live Profile on every call.
+model NativeUploadSession {
+  response    Json?
+  id          String   @id
+  userId      String
+  workspaceId String
+  fileName    String
+  contentType String
+  size        Int
+  parts       Json     @default("{}")
+  state       String   @default("uploading")
+  leaseUntil  DateTime?
+  expiresAt   DateTime
+  createdAt   DateTime @default(now())
+
+  @@index([expiresAt])
+  @@index([userId])
+}
+
+model InvestmentPosition {
+ id String @id
+ accountId String
+ assetKey String
+ assetName String
+ symbol String?
+ subtype String
+ currency String
+ openingDate DateTime @db.Date
+ openingQuantity Decimal @db.Decimal(18,8)
+ openingCostBasis Decimal @db.Decimal(18,2)
+ quantity Decimal @db.Decimal(18,8)
+ costBasis Decimal @db.Decimal(18,2)
+ value Decimal? @db.Decimal(18,2)
+ valueDate DateTime? @db.Date
+ sourceHoldingId String?
+ revision Int @default(1)
+ updatedAt DateTime @default(now())
+ account Account @relation(fields:[accountId],references:[id],onDelete:Cascade)
+ trades InvestmentTrade[]
+ revisions InvestmentPositionRevision[]
+ @@unique([accountId,assetKey,currency])
+}
+model InvestmentPositionRevision {
+ id String @id
+ positionId String
+ actorUserId String
+ before Json?
+ after Json
+ createdAt DateTime @default(now())
+ position InvestmentPosition @relation(fields:[positionId],references:[id],onDelete:Cascade)
 }

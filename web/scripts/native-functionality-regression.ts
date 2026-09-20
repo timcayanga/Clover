@@ -1,3 +1,4 @@
+import { positionInput, positionTradeInput } from "../lib/investment-position-store";
 import assert from "node:assert/strict";
 import {
   investmentTradeInput,
@@ -21,6 +22,11 @@ const input = {
   note: "",
 };
 assert(investmentTradeInput.safeParse(input).success);
+const position={id:input.id,revision:0,assetName:"Example",symbol:"EXM",subtype:"stock",currency:"PHP",openingDate:"2026-09-01",openingQuantity:"0",openingCostBasis:"0",value:null,valueDate:null,sourceHoldingId:null};
+assert(positionInput.safeParse(position).success);
+for(const change of [{openingQuantity:"-1"},{openingDate:"2026-02-30"},{value:"100",valueDate:null},{actorUserId:"foreign"}])assert(!positionInput.safeParse({...position,...change}).success);
+assert(positionTradeInput.safeParse({...input,positionId:input.id,counterpartPositionId:"71738949-f2a5-4f99-b1b5-b25e16a6283a"}).success);
+assert(!positionTradeInput.safeParse({...input,positionId:"foreign"}).success);
 for (const change of [
   { quantity: "-1" },
   { quantity: "NaN" },

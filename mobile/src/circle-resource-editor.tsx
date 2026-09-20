@@ -16,17 +16,27 @@ export type CircleAction = {
   status?: string;
   isOwner?: boolean;
   isActive?: boolean;
+  notes?: string | null;
+  recurrence?: string;
+  nextDueDate?: string | null;
+  assignedMemberId?: string | null;
 };
 export function CircleResourceEditor({
   circleId,
   currency,
   initial,
+  members = [],
+  goals = [],
+  organizer = false,
   onClose,
   onSaved,
 }: {
   circleId: string;
   currency: string;
   initial: CircleAction;
+  members?: {id:string; displayName:string; status:string}[];
+  goals?: {id:string; name:string}[];
+  organizer?: boolean;
   onClose: () => void;
   onSaved: () => void;
 }) {
@@ -37,12 +47,15 @@ export function CircleResourceEditor({
   const [amount, setAmount] = useState(
     String(initial.targetAmount ?? initial.amount ?? ""),
   );
-  const [note, setNote] = useState("");
+  const [note, setNote] = useState(initial.notes ?? "");
+  const [memberId, setMemberId] = useState(initial.assignedMemberId ?? "");
+  const [goalId, setGoalId] = useState("");
+  const [visibility, setVisibility] = useState("item");
   const [role, setRole] = useState(initial.role ?? "participant");
   const [status, setStatus] = useState(initial.status ?? "active");
   const [active, setActive] = useState(initial.isActive !== false);
-  const [cadence, setCadence] = useState("monthly");
-  const [date, setDate] = useState("");
+  const [cadence, setCadence] = useState(initial.recurrence ?? "monthly");
+  const [date, setDate] = useState(initial.nextDueDate?.slice(0,10) ?? "");
   const [transactionId, setTransactionId] = useState("");
   const [transactions, setTransactions] = useState<
     TransactionPage["transactions"]
@@ -95,12 +108,19 @@ export function CircleResourceEditor({
       clearTimeout(timer);
     };
   }, [isShare, session.profileId, session.request, search, page]);
+  useEffect(() => setConfirm(false), [name, amount, note, role, status, active, cadence, date, memberId, goalId, visibility, transactionId]);
   const payload = () => {
+    let isoDate: string | null = null;
+    if (date) {
+      const parsed = new Date(`${date}T12:00:00.000Z`);
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || !Number.isFinite(parsed.getTime()) || parsed.toISOString().slice(0,10) !== date) throw new Error("Enter a valid date as YYYY-MM-DD.");
+      isoDate = parsed.toISOString();
+    }
     const base = { action, ...(initial.id ? { id: initial.id } : {}) };
     if (isRemove) return base;
     if (isShare) {
       if (!transactionId) throw new Error("Choose an expense to share.");
-      return { ...base, transactionId, visibility: "item", note };
+      return { ...base, transactionId, visibility, note };
     }
     if (isMember)
       return {
@@ -112,16 +132,16 @@ export function CircleResourceEditor({
     if (!(Number(amount) > 0) || !Number.isFinite(Number(amount)))
       throw new Error("Enter a positive amount.");
     if (action === "add_contribution")
-      return { ...base, amount: Number(amount), currency, note };
+      return { ...base, amount: Number(amount), currency, note, ...(organizer && memberId ? {memberId} : {}), goalId: goalId || null, ...(isoDate ? {contributionDate:isoDate} : {}) };
     if (action.includes("commitment"))
       return {
         ...base,
         title: name.trim(),
         amount: Number(amount),
         ...(action === "create_commitment"
-          ? { currency, recurrence: cadence, notes: note }
+          ? { currency }
           : { isActive: active }),
-        ...(date ? { nextDueDate: new Date(date).toISOString() } : {}),
+        recurrence: cadence, notes: note || null, assignedMemberId: memberId || null, nextDueDate: isoDate,
       };
     return {
       ...base,
@@ -227,18 +247,22 @@ export function CircleResourceEditor({
           </Body>
         </>
       ) : null}
-      {action === "create_budget" || action === "create_commitment" ? (
+      {action === "add_contribution" || action.includes("commitment") ? <>
+        {(organizer || action.includes("commitment")) ? <><Body>{action.includes("commitment") ? "Assigned to" : "Contributed by"}</Body><Choices value={memberId} onChange={setMemberId} options={[{value:"",label:action.includes("commitment") ? "Unassigned" : "Me"}, ...members.filter(m=>m.status === "active").map(m=>({value:m.id,label:m.displayName}))]}/></> : <Body>This contribution will be recorded under your name.</Body>}
+        {action === "add_contribution" ? <><Body>Goal</Body><Choices value={goalId} onChange={setGoalId} options={[{value:"",label:"General contribution"},...goals.map(g=>({value:g.id,label:g.name}))]}/></> : null}
+      </> : null}
+      {action === "create_budget" || action.includes("commitment") ? (
         <Choices
           value={cadence}
-          options={["weekly", "monthly", "quarterly", "annual"].map(
+          options={(action.includes("commitment") ? ["once", "weekly", "biweekly", "monthly", "quarterly", "annual"] : ["weekly", "monthly", "quarterly", "annual"]).map(
             (value) => ({ value, label: value }),
           )}
           onChange={setCadence}
         />
       ) : null}
-      {action === "create_goal" || action.includes("commitment") ? (
+      {action === "create_goal" || action === "add_contribution" || action.includes("commitment") ? (
         <Field
-          label="Target / next due date (YYYY-MM-DD, optional)"
+          label={action === "add_contribution" ? "Contribution date (YYYY-MM-DD, optional)" : "Target / next due date (YYYY-MM-DD, optional)"}
           value={date}
           onChangeText={setDate}
         />
@@ -268,6 +292,8 @@ export function CircleResourceEditor({
             Only the selected expense is shared with this Circle. Personal
             accounts remain private.
           </Body>
+          <Body>What members can see</Body>
+          <Choices value={visibility} onChange={setVisibility} options={[{value:"summary",label:"Summary only"},{value:"item",label:"Expense details"}]}/>
           <Field
             label="Find an expense"
             value={search}

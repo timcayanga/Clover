@@ -121,6 +121,7 @@ type InvestmentTransaction = {
 };
 
 type InvestmentSnapshotHolding = {
+  positionId?: string;
   id: string;
   rowIndex: number | null;
   assetName: string;
@@ -1388,7 +1389,7 @@ export default function InvestmentsPage() {
           (holding) =>
             !isInstitutionOnlySnapshotHolding(holding, matchingSnapshot, account) &&
             !isInvestmentActivityOnlyLabel(holding.assetName) &&
-            parseNullableAmount(holding.currentValue ?? holding.marketValue) !== null
+            (Boolean(holding.positionId) || parseNullableAmount(holding.currentValue ?? holding.marketValue) !== null)
         ) ?? [];
       const snapshotHoldings = /\bpdax\b/i.test(account.institution ?? matchingSnapshot?.documentImport?.institution ?? "")
         ? canonicalizePdaxInvestmentHoldings(rawSnapshotHoldings)

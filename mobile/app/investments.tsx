@@ -134,16 +134,12 @@ export default function Investments() {
         }}
       />
     );
-  const openHolding = (item: PortfolioHolding) => {
-    if (item.source === "account") {
-      const account = accounts.find((a) => a.id === item.accountId);
-      if (account) setEditor({ account });
-    } else setHolding(item);
-  };
+  const openHolding = (item: PortfolioHolding) => setHolding(item);
   if (holding)
     return (
       <SnapshotHoldingDetails
         holding={holding}
+        onChanged={()=>{setHolding(null);reload();}}
         history={data?.history ?? []}
         onBack={() => setHolding(null)}
         onAccount={() => {

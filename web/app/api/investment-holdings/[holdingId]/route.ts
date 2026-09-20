@@ -1,3 +1,6 @@
+import { listInvestmentPositions, positionInput, saveInvestmentPosition } from "@/lib/investment-position-store";
+import { positionHoldingView } from "../../../../../shared/investment-position-view";
+import { assertTrustedRequestOrigin } from "@/lib/request-security";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { isLocalDevHost, requireAuth } from "@/lib/auth";
@@ -74,7 +77,18 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ ho
   try {
     const userId = await resolveUserId();
     const { holdingId } = await params;
+    assertTrustedRequestOrigin(request);
     const payload = holdingPatchSchema.parse(await request.json());
+    await assertWorkspaceAccess(userId,payload.workspaceId);
+    const position=(await listInvestmentPositions(payload.workspaceId)).find(p=>p.id===holdingId);
+    if(position){
+      const {id,revision,assetName,symbol,subtype,currency,openingDate,openingQuantity,openingCostBasis,value,valueDate,sourceHoldingId}=position;
+      const input=positionInput.parse({id,revision,assetName:payload.assetName??assetName,symbol:payload.assetSymbol===undefined?(symbol??""):(payload.assetSymbol??""),subtype:payload.assetType??subtype,currency:payload.currency??currency,openingDate,openingQuantity:payload.quantity===undefined?openingQuantity:String(payload.quantity??0),openingCostBasis:payload.costBasis===undefined?openingCostBasis:String(payload.costBasis??0),value:payload.currentValue===undefined?value:parseNullableDecimal(payload.currentValue),valueDate:payload.currentValue===undefined?valueDate:payload.currentValue===null?null:new Date().toISOString().slice(0,10),sourceHoldingId});
+      await saveInvestmentPosition(payload.workspaceId,position.accountId,userId,input);
+      (await import("@/lib/workspace-summary-cache")).invalidateWorkspaceSummaryCache(payload.workspaceId);
+      const updated=(await listInvestmentPositions(payload.workspaceId)).find(p=>p.id===id)!;
+      return NextResponse.json({holding:positionHoldingView({...updated,accountName:updated.accountName??"Investment account"})});
+    }
     const existing = await prisma.investmentHolding.findUnique({
       where: { id: holdingId },
       select: {

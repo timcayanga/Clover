@@ -1,3 +1,4 @@
+import { listInvestmentPositions } from "./investment-position-store";
 import { getLocalInvestmentLogo } from "./investment-assets";
 import type { InvestmentSubtype } from "./investments";
 import { prisma } from "./prisma";
@@ -126,12 +127,13 @@ export async function loadMobileInvestments(workspaceId: string) {
         currency: a.currency,
         value: Number(a.balance),
       });
+  const positions=await listInvestmentPositions(workspaceId);
+  const projected=projectPortfolio(accounts as PortfolioAccount[],snapshots.slice(0,200));
+  const holdings=projected.filter(h=>!positions.some(p=>(p.accountId===h.accountId || p.accountId===h.valuationAccountId) && p.currency===h.currency && (h.source==="account" || p.sourceHoldingId===h.id || (p.symbol||p.assetName).trim().toLowerCase()===(h.symbol||h.name).trim().toLowerCase())));
+  for(const p of positions)holdings.push({id:p.id,positionId:p.id,positionRevision:p.revision,accountId:p.accountId,accountType:"investment",source:"snapshot",name:p.assetName,institution:p.institution??null,subtype:p.subtype,symbol:p.symbol,currency:p.currency,quantity:p.quantity,cost:p.costBasis,value:p.value,date:p.valueDate});
   return {
     accounts,
-    holdings: projectPortfolio(
-      accounts as PortfolioAccount[],
-      snapshots.slice(0, 200),
-    ).map(holding=>({...holding,logoUrl:getLocalInvestmentLogo({name:holding.name,symbol:holding.symbol,currency:holding.currency,subtype:holding.subtype as InvestmentSubtype})})),
+    holdings: holdings.map(holding=>({...holding,logoUrl:getLocalInvestmentLogo({name:holding.name,symbol:holding.symbol,currency:holding.currency,subtype:holding.subtype as InvestmentSubtype})})),
     history,
     limited: rows.length > 1000 || snapshots.length > 200,
   };

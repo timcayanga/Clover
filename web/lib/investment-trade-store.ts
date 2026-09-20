@@ -9,6 +9,7 @@ import {
 type Trade = {
   id: string;
   accountId: string;
+  positionId?: string | null;
   assetName: string;
   tradedAt: Date;
   kind: InvestmentTradeInput["kind"];
@@ -20,13 +21,13 @@ type Trade = {
   revision: number;
   deletedAt: Date | null;
 };
-export async function listInvestmentTrades(accountId: string, page: number) {
+export async function listInvestmentTrades(accountId: string, page: number, positionId?:string) {
   const items = await prisma.$queryRaw<
     Trade[]
-  >`SELECT * FROM "InvestmentTrade" WHERE "accountId"=${accountId} AND "deletedAt" IS NULL ORDER BY "tradedAt" DESC,"id" DESC LIMIT 30 OFFSET ${(page - 1) * 30}`;
+  >(Prisma.sql`SELECT * FROM "InvestmentTrade" WHERE "accountId"=${accountId} AND "deletedAt" IS NULL ${positionId?Prisma.sql`AND "positionId"=${positionId}`:Prisma.empty} ORDER BY "tradedAt" DESC,"id" DESC LIMIT 30 OFFSET ${(page - 1) * 30}`);
   const totals = await prisma.$queryRaw<
     { count: bigint }[]
-  >`SELECT COUNT(*) as count FROM "InvestmentTrade" WHERE "accountId"=${accountId} AND "deletedAt" IS NULL`;
+  >(Prisma.sql`SELECT COUNT(*) as count FROM "InvestmentTrade" WHERE "accountId"=${accountId} AND "deletedAt" IS NULL ${positionId?Prisma.sql`AND "positionId"=${positionId}`:Prisma.empty}`);
   return {
     items: items.map((r) => ({
       ...r,
@@ -73,7 +74,7 @@ export async function saveInvestmentTrade(
       );
     const other = await tx.$queryRaw<
       { assetName: string }[]
-    >`SELECT "assetName" FROM "InvestmentTrade" WHERE "accountId"=${accountId} AND "deletedAt" IS NULL AND "id"<>${input.id} LIMIT 1`;
+    >`SELECT "assetName" FROM "InvestmentTrade" WHERE "accountId"=${accountId} AND "deletedAt" IS NULL AND "positionId" IS NULL AND "id"<>${input.id} LIMIT 1`;
     const recordedAsset = other[0]?.assetName ?? assets[0]?.assetName;
     if (
       recordedAsset &&
@@ -87,6 +88,7 @@ export async function saveInvestmentTrade(
       Trade[]
     >`SELECT * FROM "InvestmentTrade" WHERE "id"=${input.id} FOR UPDATE`;
     const prior = records[0];
+    if(prior?.positionId)throw new Error("Edit this trade from its asset’s trading history.");
     if (prior && prior.accountId !== accountId)
       throw new Error("Trade is not in this account.");
     if (prior?.deletedAt)

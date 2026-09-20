@@ -49,6 +49,8 @@ export type Bootstrap = {
   };
 };
 export type ImportStatus = {
+  nativeUploadReceived?: boolean;
+  nativeUploadFinalizing?: boolean;
   progress?:number;
   importFile: {
     id: string;

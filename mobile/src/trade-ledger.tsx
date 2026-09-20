@@ -1,3 +1,4 @@
+import { PositionEditor, type InvestmentPosition } from "./position-editor";
 import { AddEntryMethods } from "./add-entry-methods";
 import { useEffect, useRef, useState } from "react";
 import * as Crypto from "expo-crypto";
@@ -16,6 +17,9 @@ type Trade = {
   costBasis: string;
   note: string;
   currency?: string;
+  positionId?: string;
+  transferPairId?: string | null;
+  counterpartPositionId?: string;
 };
 const kinds = [
   { value: "buy", label: "Buy" },
@@ -28,12 +32,16 @@ export function TradeLedger({
   accountId,
   currency,
   onChanged,
+  positionId,
 }: {
   accountId: string;
   currency: string;
+  positionId?: string;
   onChanged?: () => void;
 }) {
   const session = useSession();
+  const [positions,setPositions]=useState<InvestmentPosition[]>([]);
+  const [setup,setSetup]=useState(false);
   const [items, setItems] = useState<Trade[]>([]);
   const [page, setPage] = useState(1);
   const [total, setTotal] = useState(0);
@@ -57,13 +65,13 @@ export function TradeLedger({
     let active = true;
     setBusy(true);
     setError("");
-    void session
-      .request<{ items: Trade[]; totalCount: number }>(
-        `accounts/${accountId}/trades?workspaceId=${encodeURIComponent(session.profileId)}&page=${page}`,
-      )
-      .then((r) => {
+    void Promise.all([
+      session.request<{items:Trade[];totalCount:number}>(`accounts/${accountId}/trades?workspaceId=${encodeURIComponent(session.profileId)}&page=${page}${positionId?`&positionId=${encodeURIComponent(positionId)}`:""}`),
+      session.request<{positions:InvestmentPosition[]}>(`investment-positions?workspaceId=${encodeURIComponent(session.profileId)}`),
+    ]).then(([r,p]) => {
         if (active) {
           setItems(r.items);
+          setPositions(p.positions);
           setTotal(r.totalCount);
         }
       })
@@ -78,6 +86,7 @@ export function TradeLedger({
     };
   }, [
     accountId,
+    positionId,
     session.profileId,
     session.request,
     session.demo,
@@ -105,6 +114,8 @@ export function TradeLedger({
           {
             method: confirmation === "delete" ? "DELETE" : "POST",
             body: JSON.stringify({
+              ...(draft.positionId?{positionId:draft.positionId}:{}),
+              ...(draft.counterpartPositionId?{counterpartPositionId:draft.counterpartPositionId}:{}),
               id: draft.id,
               revision: draft.revision,
               assetName: draft.assetName,
@@ -134,6 +145,11 @@ export function TradeLedger({
     setConfirmation(null);
     setDraft((d) => (d ? { ...d, [key]: value } : d));
   };
+  const available=positions.filter(p=>p.accountId===accountId&&(!positionId||p.id===positionId));
+  const selected=positions.find(p=>p.id===draft?.positionId);
+  const tradeCurrency=selected?.currency??draft?.currency??currency;
+  const targets=selected?positions.filter(p=>p.accountId!==accountId&&p.assetKey===selected.assetKey&&p.subtype===selected.subtype&&p.currency===selected.currency):[];
+  if(setup)return <PositionEditor inline accountId={accountId} currency={currency} onClose={()=>setSetup(false)} onSaved={()=>{setSetup(false);setRevision(v=>v+1);onChanged?.();}}/>;
   return (
     <Card>
       <Body muted={false}>Recorded trades</Body>
@@ -155,7 +171,7 @@ export function TradeLedger({
               type: draft.kind,
               quantity: draft.quantity,
               amount: draft.amount,
-              currency,
+              currency:tradeCurrency,
               costBasis: draft.costBasis,
               notes: draft.note,
             },
@@ -172,7 +188,7 @@ export function TradeLedger({
               current
                 ? {
                     ...current,
-                    assetName: f.assetName ?? current.assetName,
+                    assetName: current.positionId ? current.assetName : f.assetName ?? current.assetName,
                     date: f.date ?? current.date,
                     kind: kinds.some((k) => k.value === f.type)
                       ? f.type
@@ -186,12 +202,15 @@ export function TradeLedger({
             );
           }}
         >
+          {draft.positionId ? <><Body>Asset</Body><Choices value={draft.positionId} options={available.map(p=>({value:p.id,label:`${p.assetName} · ${p.quantity} units`}))} onChange={v=>{if(draft.revision)return;const p=positions.find(p=>p.id===v);if(p){setConfirmation(null);setDraft({...draft,positionId:v,assetName:p.assetName,currency:p.currency,counterpartPositionId:undefined});}}}/></> : <Body>Earlier account-level trade. Its original history is preserved.</Body>}
           <Choices
             value={draft.kind}
             options={kinds}
-            onChange={(v) => update("kind", v)}
+            onChange={(v) => {update("kind", v);update("counterpartPositionId", "");}}
           />
+          {draft.positionId && draft.kind.startsWith("transfer_") && draft.revision===0 ? <><Body>Other side of transfer</Body><Choices value={draft.counterpartPositionId??""} options={[{value:"",label:"External account (record this side only)"},...targets.map(p=>({value:p.id,label:`${p.accountName} · ${p.assetName}`}))]} onChange={v=>update("counterpartPositionId",v)}/><Body>For a tracked account, Clover records both sides together. Add the same asset to the other account first if it is missing here.</Body></> : null}
           <Field
+            editable={!draft.positionId}
             label="Asset name"
             value={draft.assetName}
             onChangeText={(v) => update("assetName", v)}
@@ -208,21 +227,20 @@ export function TradeLedger({
             keyboardType="decimal-pad"
           />
           <Field
-            label={`Trade value / proceeds (${currency})`}
+            label={`Trade value / proceeds (${tradeCurrency})`}
             value={draft.amount}
             onChangeText={(v) => update("amount", v)}
             keyboardType="decimal-pad"
           />
           <Field
-            label={`Cost basis ${draft.kind === "sell" || draft.kind === "transfer_out" ? "removed" : "added"} (${currency})`}
+            label={`Cost basis ${draft.kind === "sell" || draft.kind === "transfer_out" ? "removed" : "added"} (${tradeCurrency})`}
             value={draft.costBasis}
             onChangeText={(v) => update("costBasis", v)}
             keyboardType="decimal-pad"
           />
           <Body>
             Enter the recorded cost basis, including any capitalized fees. Sale
-            proceeds are different from cost basis. Transfers affect this
-            holding only; record the counterpart separately.
+            proceeds are different from cost basis. A linked transfer records both sides together; an external transfer records this side only.
           </Body>
           <Field
             label="Note"
@@ -234,8 +252,8 @@ export function TradeLedger({
             <>
               <Body>
                 {confirmation === "delete"
-                  ? "Delete this trade and reverse its recorded unit and cost-basis changes?"
-                  : "Save this trade and update this account’s recorded units and cost basis? Market valuation and cash accounts will not change."}
+                  ? (draft.transferPairId ? "Delete both sides of this linked transfer and reverse their unit and cost-basis changes?" : "Delete this trade and reverse its recorded unit and cost-basis changes?")
+                  : (draft.counterpartPositionId ? "Record this transfer in both investment accounts? This records the same units and cost basis on both sides. No money will be moved." : "Save this trade and update the asset’s recorded units and cost basis? Market valuation and cash accounts will not change.")}
               </Body>
               <PlanAction
                 title={
@@ -248,14 +266,14 @@ export function TradeLedger({
                 onPress={() => void save()}
               />
             </>
-          ) : (
+          ) : !draft.transferPairId ? (
             <PlanAction
               title="Review trade"
               tone="primary"
               disabled={busy}
               onPress={() => setConfirmation("save")}
             />
-          )}
+          ) : <Body>Linked transfers stay paired. To correct this transfer, delete both sides and record its replacement.</Body>}
           <PlanAction
             title="Cancel"
             disabled={busy}
@@ -275,15 +293,18 @@ export function TradeLedger({
         </AddEntryMethods>
       ) : (
         <>
+          {!positionId ? <PlanAction title="+ Set up asset" onPress={()=>setSetup(true)}/> : null}
           <PlanAction
             title="+ Add trade"
             tone="primary"
-            disabled={busy}
+            disabled={busy || (!session.demo&&!available.length)}
             onPress={() =>
               setDraft({
                 id: Crypto.randomUUID(),
                 revision: 0,
-                assetName: "",
+                positionId:available[0]?.id,
+                currency:available[0]?.currency??currency,
+                assetName: available[0]?.assetName??"",
                 date: new Date().toISOString().slice(0, 10),
                 kind: "buy",
                 quantity: "",
@@ -302,9 +323,9 @@ export function TradeLedger({
                   {kinds.find((k) => k.value === t.kind)?.label} · {t.assetName}
                 </Body>
                 <Body>
-                  {t.date} · {t.quantity} units · {money(t.amount, currency)}
+                  {t.date} · {t.quantity} units · {money(t.amount, t.currency??currency)}
                 </Body>
-                <Body>Cost basis {money(t.costBasis, currency)}</Body>
+                <Body>Cost basis {money(t.costBasis, t.currency??currency)}</Body>
                 <PlanAction title="Edit trade" onPress={() => setDraft(t)} />
               </Card>
             ))

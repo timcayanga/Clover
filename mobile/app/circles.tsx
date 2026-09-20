@@ -1,3 +1,4 @@
+import { CircleInvitations } from "../src/circle-invitations";
 import { Text } from "../src/app-text";
 import { CircleResourceEditor, type CircleAction } from "../src/circle-resource-editor";
 import * as ImagePicker from "expo-image-picker";
@@ -35,8 +36,8 @@ type Circle = {
   avatarUrl?: string | null;
   role: string;
   isOwner?:boolean;
-  commitments?:{id:string;title:string;amount:number;currency:string;isActive:boolean}[];
-  contributions?:{id:string;memberName:string;amount:number;currency:string;contributionDate:string}[];
+  commitments?:{id:string;title:string;amount:number;currency:string;isActive:boolean;recurrence?:string;nextDueDate?:string|null;assignedMemberId?:string|null;assignedMemberName?:string|null;notes?:string|null}[];
+  contributions?:{id:string;memberName:string;amount:number;currency:string;contributionDate:string;goalId?:string|null;note?:string|null}[];
   memberCount: number;
   splitBillGroupId?: string | null;
   expenseTotalThisMonth: number;
@@ -76,6 +77,7 @@ export default function Circles() {
   const opened=useRef("");
   const { colors, dark } = useTheme();
   const { data, setData, error, reload } = usePlanData("circles", sample);
+  const [invitations, setInvitations] = useState(false);
   const [selected, setSelected] = useState<Circle | null>(null);
   const [resource,setResource]=useState<CircleAction|null>(null);
   const [deleteConfirm,setDeleteConfirm]=useState(false);
@@ -91,6 +93,7 @@ export default function Circles() {
   const [revision, setRevision] = useState(0);
   useEffect(() => {
     setSelected(null);
+    setInvitations(false);
     setResource(null);
     setEditor(null);
     setSearch("");
@@ -122,7 +125,8 @@ export default function Circles() {
       active = false;
     };
   }, [selectedId, session.demo, session.profileId, session.request, revision]);
-  if(resource&&selected)return <CircleResourceEditor key={`${session.profileId}:${selected.id}:${resource.action}:${resource.id??"new"}`} circleId={selected.id} currency={selected.currency} initial={resource} onClose={()=>setResource(null)} onSaved={()=>{setResource(null);setRevision(v=>v+1);reload();}}/>;
+  if(invitations)return <CircleInvitations key={`${session.profileId}:${selected?.id??"incoming"}`} circleId={selected?.id} onClose={()=>setInvitations(false)} onJoined={()=>{setInvitations(false);reload();}}/>;
+  if(resource&&selected)return <CircleResourceEditor key={`${session.profileId}:${selected.id}:${resource.action}:${resource.id??"new"}`} circleId={selected.id} currency={selected.currency} members={selected.members} goals={selected.goals} organizer={selected.role === "organizer"} initial={resource} onClose={()=>setResource(null)} onSaved={()=>{setResource(null);setRevision(v=>v+1);reload();}}/>;
   if(memberDetail && selected?.splitBillGroupId) return <SplitGroupDetails group={{id:selected.splitBillGroupId,name:selected.name,members:[]}} person={memberDetail} onClose={()=>setMemberDetail(null)} onBill={id=>{setMemberDetail(null);router.push({pathname:"/split-bills",params:{billId:id}});}} onChanged={reload}/>;
   if (editor)
     return (
@@ -234,7 +238,7 @@ export default function Circles() {
               )}
             </>
           ) : tab === "Commitments" || tab === "Contributions" ? (
-            <>{selected.role!=="participant"?<PlanAction title={tab==="Commitments"?"+ Add commitment":"+ Add contribution"} tone="primary" onPress={()=>setResource({action:tab==="Commitments"?"create_commitment":"add_contribution"})}/>:null}{tab==="Commitments"?selected.commitments?.map(item=><Card key={item.id}><Body muted={false}>{item.title}</Body><Body>{money(String(item.amount??0),item.currency)}</Body>{selected.role!=="participant"?<PlanAction title="Edit commitment" onPress={()=>setResource({...item,action:"update_commitment"})}/>:null}</Card>):selected.contributions?.map(item=><Card key={item.id}><Body>{item.memberName} · {money(String(item.amount),item.currency)}</Body><Body>{item.contributionDate?.slice(0,10)}</Body></Card>)}</>
+            <>{selected.role!=="participant"?<PlanAction title={tab==="Commitments"?"+ Add commitment":"+ Add contribution"} tone="primary" onPress={()=>setResource({action:tab==="Commitments"?"create_commitment":"add_contribution"})}/>:null}{tab==="Commitments"?selected.commitments?.map(item=><Card key={item.id}><Body muted={false}>{item.title}</Body><Body>{money(String(item.amount??0),item.currency)}</Body><Body>{item.assignedMemberName || "Unassigned"} · {item.recurrence || "monthly"}{item.nextDueDate ? ` · Due ${item.nextDueDate.slice(0,10)}` : ""}</Body>{item.notes ? <Body>{item.notes}</Body> : null}{selected.role!=="participant"?<PlanAction title="Edit commitment" onPress={()=>setResource({...item,action:"update_commitment"})}/>:null}</Card>):selected.contributions?.map(item=><Card key={item.id}><Body>{item.memberName} · {money(String(item.amount),item.currency)}</Body><Body>{item.contributionDate?.slice(0,10)} · {selected.goals?.find(g=>g.id===item.goalId)?.name || "General contribution"}</Body>{item.note ? <Body>{item.note}</Body> : null}</Card>)}</>
           ) : tab === "Budgets" || tab === "Goals" ? (
             <>
               {selected.role!=="participant"?<PlanAction title={tab==="Budgets"?"+ Add budget":"+ Add goal"} tone="primary" onPress={()=>setResource({action:tab==="Budgets"?"create_budget":"create_goal"})}/>:null}
@@ -280,6 +284,7 @@ export default function Circles() {
             </>
           ) : (
             <>
+              {selected.role==="organizer"?<PlanAction title="Invite people" tone="primary" onPress={()=>setInvitations(true)}/>:null}
               {selected.role==="organizer"?<PlanAction title="+ Add person" tone="primary" onPress={()=>setResource({action:"add_participant"})}/>:null}
               {selected.members?.map((member) => (
                 <Card key={member.id}>
@@ -296,6 +301,7 @@ export default function Circles() {
         </>
       ) : (
         <>
+          <PlanAction title="Circle invitations" onPress={()=>setInvitations(true)}/>
           <Body>A little more together. A lot less to juggle.</Body>
           <Body>Share what matters. Personal accounts stay private.</Body>
           <Field

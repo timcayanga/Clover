@@ -365,7 +365,7 @@ export default function Add() {
           <Body>
             {session.demo
               ? "Sample mode shows a completed sample import. It never opens or uploads your files."
-              : "Preview limit: 3.5 MB per file. Your upload uses Clover’s existing parser and review rules."}
+              : "Up to 25 MB per file. Your upload uses Clover’s existing parser and review rules."}
           </Body>
           <Body>
             Your files are protected with encrypted connections and restricted

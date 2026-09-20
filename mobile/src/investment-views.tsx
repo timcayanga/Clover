@@ -1,3 +1,5 @@
+import { PositionEditor } from "./position-editor";
+import { TradeLedger } from "./trade-ledger";
 import { Text } from "./app-text";
 import { HoldingLogo } from "./holding-logo";
 import { useEffect, useState } from "react";
@@ -72,10 +74,12 @@ export function ValuationHistory({
   history,
   accountIds,
   currency,
+  asset = false,
 }: {
   history: RecordedValuation[];
   accountIds: string[];
   currency: string;
+  asset?: boolean;
 }) {
   const { colors } = useTheme();
   const [range, setRange] = useState("MAX"),
@@ -131,7 +135,7 @@ export function ValuationHistory({
       />
       <Body>
         {new Set(accountIds).size}{" "}
-        {new Set(accountIds).size === 1 ? "account" : "accounts"} · {currency}.
+        {asset ? "asset" : new Set(accountIds).size === 1 ? "account" : "accounts"} · {currency}.
         Recorded estimates, not live prices. Lines connect dated records;
         accounts enter the total when their first value is recorded.
       </Body>
@@ -167,6 +171,7 @@ export function InstitutionDetails({
   const { width } = useWindowDimensions();
   const ids = [...new Set(holdings.map((h) => h.accountId))];
   const [historyAccount, setHistoryAccount] = useState(ids[0] || "");
+  const [addingHolding,setAddingHolding]=useState(false);
   const values = holdings.map((h) => recordedNumber(h.value));
   const total = values.every((v) => v !== null)
     ? values.reduce<number>((n, v) => n + (v ?? 0), 0)
@@ -175,6 +180,7 @@ export function InstitutionDetails({
     (h) => recordedNumber(h.value) !== null && recordedNumber(h.cost) !== null,
   );
   const gain = known.reduce((n, h) => n + Number(h.value) - Number(h.cost), 0);
+  if(addingHolding && historyAccount)return <PositionEditor accountId={historyAccount} currency={currency} onClose={()=>setAddingHolding(false)} onSaved={()=>{setAddingHolding(false);onChanged?.();}}/>;
   return (
     <Screen>
       <PlanHeader
@@ -237,7 +243,7 @@ export function InstitutionDetails({
         >
           Holdings
         </Text>
-        <PlanAction title="+ Add Holding" tone="primary" onPress={onAdd} />
+        <PlanAction title="+ Add Holding" tone="primary" onPress={()=>historyAccount?setAddingHolding(true):onAdd()} />
       </View>
       {holdings.map((h) => (
         <HoldingRow key={h.id} holding={h} onPress={() => onHolding(h)} />
@@ -276,13 +282,17 @@ export function SnapshotHoldingDetails({
   history,
   onBack,
   onAccount,
+  onChanged,
 }: {
   holding: PortfolioHolding;
   history: RecordedValuation[];
   onBack: () => void;
   onAccount: () => void;
+  onChanged?: () => void;
 }) {
   const { colors } = useTheme();
+  const [editing,setEditing]=useState(false);
+  if(editing)return <PositionEditor holding={holding} accountId={holding.positionId ? holding.accountId : holding.valuationAccountId??holding.accountId} currency={holding.currency} onClose={()=>setEditing(false)} onSaved={()=>{setEditing(false);onChanged?.();}}/>;
   return (
     <Screen>
       <PlanHeader title="Asset Details" titleInset={52} back={onBack} />
@@ -319,22 +329,11 @@ export function SnapshotHoldingDetails({
             : money(holding.cost, holding.currency)}
         </Body>
         <Body>Recorded {holding.date?.slice(0, 10) || "date unavailable"}</Body>
+        <PlanAction title="Edit asset" onPress={()=>setEditing(true)}/>
         <PlanAction title="Open linked account" onPress={onAccount} />
       </Card>
-      <Body>
-        History below belongs to this holding’s linked account and may include
-        its other assets.
-      </Body>
-      <ValuationHistory
-        history={history}
-        accountIds={[holding.valuationAccountId ?? holding.accountId]}
-        currency={holding.currency}
-      />
-      <AccountHistory
-        accountId={holding.accountId}
-        currency={holding.currency}
-        investment={holding.accountType === "investment"}
-      />
+      {holding.positionId ? <PositionHistory id={holding.positionId} currency={holding.currency}/> : <><Body>History below belongs to this holding’s linked account and may include its other assets.</Body><ValuationHistory history={history} accountIds={[holding.valuationAccountId ?? holding.accountId]} currency={holding.currency}/></>}
+      {holding.positionId ? <TradeLedger key={holding.positionId} accountId={holding.accountId} currency={holding.currency} positionId={holding.positionId} onChanged={onChanged}/> : <><PlanAction title="Set up trading for this asset" tone="primary" onPress={()=>setEditing(true)}/><AccountHistory accountId={holding.accountId} currency={holding.currency} investment={false}/></>}
     </Screen>
   );
 }
@@ -401,4 +400,13 @@ export function AccountValuationHistory({
   ) : (
     <Body>Loading valuation history…</Body>
   );
+}
+
+function PositionHistory({id,currency}:{id:string;currency:string}){
+  const session=useSession();
+  const [data,setData]=useState<{history:RecordedValuation[];limited:boolean}|null>(null);
+  const [error,setError]=useState("");
+  const [revision,setRevision]=useState(0);
+  useEffect(()=>{let active=true;setData(null);setError("");void session.request<{history:RecordedValuation[];limited:boolean}>(`investment-positions/${id}/history?workspaceId=${encodeURIComponent(session.profileId)}`).then(r=>{if(active)setData(r);}).catch(e=>{if(active)setError(e.message);});return()=>{active=false;};},[id,session.profileId,session.request,revision]);
+  return error?<Card><Body>{error}</Body><PlanAction title="Retry valuation history" onPress={()=>setRevision(v=>v+1)}/></Card>:data?<><ValuationHistory history={data.history} accountIds={[id]} currency={currency} asset/>{data.limited?<Body>Showing the latest 500 recorded valuations.</Body>:null}</>:<Body>Loading asset valuations…</Body>;
 }

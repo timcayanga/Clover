@@ -1,3 +1,5 @@
+import { uploadInParts } from "../../mobile/src/offline/resumable-upload";
+import { NATIVE_UPLOAD_PART_SIZE } from "../../shared/native-upload";
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import {
@@ -382,7 +384,7 @@ const file: QueuedFile = {
   workspaceId: "p",
   name: "test.csv",
   mimeType: "text/csv",
-  size: 20,
+  size: 8,
   createdAt: version,
   state: "draft",
 };
@@ -502,6 +504,38 @@ test("Adviser uses an explicit dated snapshot, independent of cached list pages"
   assert.equal(history.downloadedAt, version);
   await e.saveDownloadedHistory("p", [], 0);
   assert.equal((await e.downloadedTransactions("p")).complete, true);
+});
+
+test("resumable transport sends only missing parts and preserves exact bytes",async()=>{
+  const bytes=Buffer.alloc(NATIVE_UPLOAD_PART_SIZE*2+17,42), sent:number[]=[], received:Buffer[]=[];
+  const request=async<T>(path:string,options?:RequestInit):Promise<T>=>{
+    const body=JSON.parse(String(options?.body));
+    if(path.includes("/start"))return {parts:[0],state:"uploading"} as T;
+    if(path.includes("/part")){sent.push(body.index);received.push(Buffer.from(body.base64,"base64"));return {ok:true} as T;}
+    return {canonicalImportFileId:"canonical"} as T;
+  };
+  const progress:number[]=[];
+  const result=await uploadInParts(request,{...file,size:bytes.length},bytes.toString("base64"),{signal:new AbortController().signal,progress:async(n)=>{progress.push(n);}});
+  assert.deepEqual(sent,[1,2]);assert.deepEqual(Buffer.concat(received),bytes.subarray(NATIVE_UPLOAD_PART_SIZE));assert.equal(progress.at(-1),bytes.length);assert.equal(result.canonicalId,"canonical");
+});
+test("pause aborts the active transfer, retains original bytes, and requires explicit resume",async()=>{
+  const store=memory();let started!:()=>void;const began=new Promise<void>(r=>{started=r;});
+  const q=new FileQueue(store,{status:async()=>{throw Object.assign(new Error("missing"),{status:404});},upload:async(_file,_bytes,control)=>{started();await new Promise<void>((_,reject)=>control.signal.addEventListener("abort",()=>reject(new Error("aborted")),{once:true}));return {};},cancel:async()=>{}},async()=>{});
+  await q.add(file,"b3JpZ2luYWw=");await q.enqueue(file.id);const flight=q.flush();await began;await q.pause(file.id);await flight;
+  assert.equal((await q.list())[0].state,"paused");assert.equal(await q.bytes(file),"b3JpZ2luYWw=");await q.flush();assert.equal((await q.list())[0].state,"paused");await q.cancel(file.id);assert.deepEqual(await q.list(),[]);
+});
+test("finalizing cannot be cancelled as if it were still a file transfer",async()=>{
+  const store=memory();let finish!:()=>void,ready!:()=>void;const reached=new Promise<void>(r=>{ready=r;});
+  const q=new FileQueue(store,{status:async()=>{throw Object.assign(new Error("missing"),{status:404});},upload:async(_file,_bytes,control)=>{await control.progress(file.size,true);ready();await new Promise<void>(r=>{finish=r;});return {}; }},async()=>{});
+  await q.add(file,"b3JpZ2luYWw=");await q.enqueue(file.id);const flight=q.flush();await reached;await assert.rejects(q.cancel(file.id),/already reading/);finish();await flight;assert.equal((await q.list())[0].state,"processing");await assert.rejects(q.bytes(file),/no longer/);
+});
+
+test("pausing a waiting file prevents a stale queue snapshot from uploading it",async()=>{
+  const store=memory();let release!:()=>void,started!:()=>void;const began=new Promise<void>(r=>{started=r;});const sent:string[]=[];
+  const q=new FileQueue(store,{status:async()=>{throw Object.assign(new Error("missing"),{status:404});},upload:async(f)=>{sent.push(f.id);started();await new Promise<void>(r=>{release=r;});return {};},cancel:async()=>{}},async()=>{});
+  const second={...file,id:randomUUID(),createdAt:"2026-09-15T00:00:00.000Z"};
+  await q.add(file,"b3JpZ2luYWw=");await q.add(second,"b3JpZ2luYWw=");await q.enqueue(file.id);await q.enqueue(second.id);const flight=q.flush();await began;await q.pause(second.id);release();await flight;
+  assert.deepEqual(sent,[file.id]);assert.equal((await q.list()).find(f=>f.id===second.id)?.state,"paused");
 });
 
 (async () => {

@@ -35,6 +35,8 @@ export type PortfolioSnapshot = {
 };
 export type PortfolioHolding = {
   logoUrl?:string|null;
+  positionId?:string;
+  positionRevision?:number;
   id: string;
   accountId: string;
   valuationAccountId?: string;

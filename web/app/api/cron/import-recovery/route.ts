@@ -20,6 +20,7 @@ export async function GET(request: Request) {
   }
 
   const startedAt = Date.now();
+  await (await import("@/lib/native-upload-store")).cleanupExpiredNativeUploads().catch(error => console.error("Native upload cleanup failed", error instanceof Error ? error.message : "unknown"));
   const result = await runImportRecoverySweep({
     importLimit: 1,
     enrichmentLimit: 2,

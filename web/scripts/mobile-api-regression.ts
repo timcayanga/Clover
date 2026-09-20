@@ -20,6 +20,17 @@ import { assertTrustedRequestOrigin } from "../lib/request-security";
 import { getSessionContext, isLocalDevHost } from "../lib/auth";
 
 async function main() {
+  assert.equal(mobileOperation("GET",["circle-invitations"]),"circle-invitations");
+  assert.equal(mobileOperation("POST",["circle-invitations","token"]),"circle-invitation");
+  assert.equal(mobileOperation("PATCH",["circles","circle","invitations","invite"]),"circle-invite-manage");
+  assert.equal(mobileOperation("POST",["circles","circle","invitations","invite"]),null);
+  assert.equal(mobileOperation("POST",["uploads","id","part"]),"native-upload");
+  assert.equal(mobileOperation("GET",["uploads","id","part"]),null);
+  assert.equal(mobileOperation("POST",["accounts","id","positions"]),"investment-position-save");
+  const assigned=mobileApiResponse("circle",{circles:[{id:"circle",commitments:[{id:"commitment",assignedMemberId:"member",notes:"Water bill"}],contributions:[{id:"contribution",memberId:"member",goalId:"goal"}]}]}) as {circle:{commitments:{assignedMemberId:string;notes:string}[];contributions:{goalId:string}[]}};
+  assert.equal(assigned.circle.commitments[0].assignedMemberId,"member");
+  assert.equal(assigned.circle.commitments[0].notes,"Water bill");
+  assert.equal(assigned.circle.contributions[0].goalId,"goal");
   const routeSource = readFileSync(new URL("../app/api/mobile/v1/[...path]/route.ts", import.meta.url), "utf8");
   const localGuard = routeSource.indexOf('getCurrentUserEnvironment() === "local"');
   assert.ok(localGuard > 0 && localGuard < routeSource.indexOf("const claims = await verifyToken"),
@@ -51,7 +62,7 @@ async function main() {
   assert.equal(mobileOperation("POST", ["circles"]), "circles");
   assert.equal(mobileOperation("PATCH", ["circles", "one"]), "circle");
   assert.equal(mobileOperation("DELETE", ["circles", "one"]), null, "Do not expose permanent Circle deletion where the spec requires archival");
-  assert.equal(mobileOperation("POST", ["circles", "one", "invitations"]), null);
+  assert.equal(mobileOperation("POST", ["circles", "one", "invitations"]), "circle-invite");
   assert.equal(mobileOperation("GET", ["split-bills"]), "split-bills");
   assert.equal(mobileOperation("POST", ["split-bills"]), "split-bills");
   assert.equal(mobileOperation("GET", ["split-bills", "one"]), "split-bill");
