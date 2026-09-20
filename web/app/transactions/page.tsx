@@ -121,7 +121,7 @@ import {
   subscribeImportActivity,
   type ImportActivitySnapshot,
 } from "@/lib/import-activity";
-import { subscribeImportedSummary } from "@/lib/imported-summary-events";
+import { subscribeImportedSummary, subscribeExternalImportRefresh } from "@/lib/imported-summary-events";
 import {
   buildFinalizingNoticeDismissalKey,
   dismissFinalizingNotice,
@@ -3883,6 +3883,16 @@ function TransactionsPageContent() {
       document.removeEventListener("visibilitychange", refresh);
     };
   }, []);
+
+  useEffect(() => {
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const unsubscribe = subscribeExternalImportRefresh((workspaceId) => {
+      if (workspaceId !== selectedWorkspaceId) return;
+      if (timer) clearTimeout(timer);
+      timer = setTimeout(() => refreshListRef.current(), 100);
+    });
+    return () => { unsubscribe(); if (timer) clearTimeout(timer); };
+  }, [selectedWorkspaceId]);
 
   useEffect(() => {
     if (!selectedWorkspaceId || postImportRefreshVersion === 0) {
@@ -7655,7 +7665,7 @@ function TransactionsPageContent() {
     } finally {
       publishingTransactionsCacheRef.current = false;
     }
-  }, [accounts, categories, imports, isWorkspaceDataReady, selectedWorkspaceId, transactions, transactionsPage, transactionsPageSize, transactionsSummary, workspaceCurrencyCodes, hasActiveTransactionFilters, transactionCacheVersionAtRender]);
+  }, [accounts, categories, imports, isWorkspaceDataReady, selectedWorkspaceId, transactions, transactionsPage, transactionsPageSize, transactionsSummary, workspaceCurrencyCodes, hasActiveTransactionFilters]);
 
   useEffect(() => {
     if (bulkDeleteConfirmOpen) {

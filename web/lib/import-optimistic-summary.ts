@@ -3,6 +3,7 @@ import type { AccountType } from "@/lib/domain-types";
 import { formatUploadAccountDisplayName } from "@/lib/account-display";
 import { inferAccountTypeFromStatement } from "@/lib/financial-classification";
 import { findKnownImportedBalance, getKnownPreviewTransactions } from "@/lib/import-preview-cache";
+import { publishExternalImportRefresh } from "@/lib/imported-summary-events";
 import { pickStableBalance } from "@/lib/import-upload-summary";
 import {
   getCachedAccountsWorkspace,
@@ -305,4 +306,6 @@ export const seedImportedWorkspaceCaches = (workspaceId: string, summary: Upload
   if (Array.isArray(summary.previewTransactions) && summary.previewTransactions.length > 0) {
     syncImportedWorkspaceTransactionCaches(workspaceId, summary.previewTransactions);
   }
+  // Every upload entry point seeds here, including Quick Add.
+  publishExternalImportRefresh(workspaceId);
 };
