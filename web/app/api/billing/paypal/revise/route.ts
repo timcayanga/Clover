@@ -3,7 +3,7 @@ import { auth } from "@clerk/nextjs/server";
 import { getOrCreateCurrentUser } from "@/lib/user-context";
 import { buildBillingReturnUrl, normalizeBillingReturnPath } from "@/lib/billing-urls";
 import { getBillingPlanByInterval, type BillingInterval } from "@/lib/billing-plans";
-import { capturePostHogServerEvent } from "@/lib/analytics";
+import { capturePostHogServerEvent } from "@/lib/analytics-server";
 import {
   getUserBillingSubscription,
   revisePayPalSubscription,

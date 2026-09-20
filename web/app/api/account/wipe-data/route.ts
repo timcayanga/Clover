@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { isStagingHost, requireAuth } from "@/lib/auth";
 import { wipeLocalUserData } from "@/lib/account-management";
-import { capturePostHogServerEvent } from "@/lib/analytics";
+import { capturePostHogServerEvent } from "@/lib/analytics-server";
 import { assertTrustedRequestOrigin } from "@/lib/request-security";
 
 export const dynamic = "force-dynamic";

@@ -9,7 +9,7 @@ import { prisma } from "@/lib/prisma";
 import { refreshProAccess } from "@/lib/pro-access";
 import { addCalendarMonths } from "@/lib/pro-access-rules";
 import { getEnv } from "@/lib/env";
-import { capturePostHogServerEvent } from "@/lib/analytics";
+import { capturePostHogServerEvent } from "@/lib/analytics-server";
 import { getBillingPlanById, type BillingInterval } from "@/lib/billing-plans";
 import { getDeploymentEnvironment } from "@/lib/deployment-environment";
 

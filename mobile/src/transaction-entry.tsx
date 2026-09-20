@@ -1,3 +1,4 @@
+import { beginTelemetry } from "../../shared/analytics";
 import { Text } from "./app-text";
 import { parseAddFormDraft, type AddFormDraft } from "../../shared/add-form-draft";
 import { suggestLocalCategory } from "./offline/local-tools";
@@ -449,8 +450,10 @@ export function TransactionChat({onReview, context, page="transactions", intro, 
     if (attaching || busy || attachments.length >= 3) return;
     setError("");
     setAttaching(true);
+    const finishInput = beginTelemetry("input", { input_method: "camera", surface: "adviser" });
     try {
       if (!(await ImagePicker.requestCameraPermissionsAsync()).granted) {
+        finishInput("failed", { reason: "permission_denied" });
         setError("Camera permission is needed to photograph a receipt.");
         return;
       }
@@ -459,6 +462,7 @@ export function TransactionChat({onReview, context, page="transactions", intro, 
         quality: 0.75,
         exif: false,
       });
+      finishInput(result.canceled ? "canceled" : "completed");
       if (result.canceled) return;
       const asset = result.assets[0];
       if ((asset.fileSize ?? 0) > 3.5 * 1024 * 1024) {
@@ -486,6 +490,7 @@ export function TransactionChat({onReview, context, page="transactions", intro, 
       );
       setAttachments((current) => [...current, response.attachment]);
     } catch (e) {
+      finishInput("failed", { reason: "camera_unavailable" });
       setError(e instanceof Error ? e.message : "Unable to attach the photo.");
     } finally {
       setAttaching(false);

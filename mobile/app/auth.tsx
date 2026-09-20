@@ -1,3 +1,4 @@
+import { beginTelemetry } from "../../shared/analytics";
 import { useState, useRef } from "react";
 import { Image, Linking, Platform, Switch, View } from "react-native";
 import { router, useLocalSearchParams } from "expo-router";
@@ -57,9 +58,12 @@ function AuthForm() {
     setBusy(true);
     setError("");
     setMessage("");
+    const finish = beginTelemetry("flow", { operation: `auth_${step}`, phase: "authentication_step" });
     try {
       await action();
+      finish("completed");
     } catch (e) {
+      finish("failed", { reason: "authentication_error" });
       const problem = e as {
         message?: string;
         errors?: { longMessage?: string; message?: string }[];

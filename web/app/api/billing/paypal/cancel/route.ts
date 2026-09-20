@@ -4,7 +4,7 @@ import { getOrCreateCurrentUser } from "@/lib/user-context";
 import { cancelPayPalSubscription, syncBillingSubscriptionFromPayPal } from "@/lib/paypal-billing";
 import { prisma } from "@/lib/prisma";
 import { refreshProAccess } from "@/lib/pro-access";
-import { capturePostHogServerEvent } from "@/lib/analytics";
+import { capturePostHogServerEvent } from "@/lib/analytics-server";
 import { assertTrustedRequestOrigin } from "@/lib/request-security";
 
 export const dynamic = "force-dynamic";

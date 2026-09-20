@@ -1,4 +1,5 @@
 "use client";
+import { beginTelemetry, safeRoute } from "../../shared/analytics";
 
 export class ClientJsonRequestError extends Error {
   status: number;
@@ -16,6 +17,7 @@ export const postJsonWithXhr = <TResponse>(
   options?: { timeoutMs?: number }
 ) =>
   new Promise<TResponse>((resolve, reject) => {
+    const finish = beginTelemetry("flow", { operation: `POST ${safeRoute(url)}`, phase: "request", timing_boundary: "response_body" });
     const request = new XMLHttpRequest();
     request.open("POST", url);
     request.withCredentials = true;
@@ -32,6 +34,7 @@ export const postJsonWithXhr = <TResponse>(
         responsePayload = null;
       }
 
+      finish(request.status >= 200 && request.status < 300 ? "completed" : "failed", { status: request.status });
       if (request.status < 200 || request.status >= 300) {
         reject(new ClientJsonRequestError(responsePayload?.error || "Request failed", request.status));
         return;
@@ -39,8 +42,8 @@ export const postJsonWithXhr = <TResponse>(
 
       resolve((responsePayload ?? {}) as TResponse);
     };
-    request.onerror = () => reject(new ClientJsonRequestError("The connection was interrupted."));
-    request.ontimeout = () => reject(new ClientJsonRequestError("The request took too long. Please try again."));
-    request.onabort = () => reject(new ClientJsonRequestError("The request was cancelled."));
+    request.onerror = () => { finish("failed", { reason: "network" }); reject(new ClientJsonRequestError("The connection was interrupted.")); };
+    request.ontimeout = () => { finish("failed", { reason: "timeout" }); reject(new ClientJsonRequestError("The request took too long. Please try again.")); };
+    request.onabort = () => { finish("canceled"); reject(new ClientJsonRequestError("The request was cancelled.")); };
     request.send(JSON.stringify(payload));
   });

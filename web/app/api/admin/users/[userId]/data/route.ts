@@ -4,7 +4,7 @@ import { z } from "zod";
 import { getAdminDataEnvironment, requireAdminAuth } from "@/lib/admin";
 import { deleteAccountsAndImportArtifacts, deleteWorkspaceTransactions } from "@/lib/account-deletion";
 import { wipeLocalUserData } from "@/lib/account-management";
-import { capturePostHogServerEvent } from "@/lib/analytics";
+import { capturePostHogServerEvent } from "@/lib/analytics-server";
 import { prisma } from "@/lib/prisma";
 import { assertTrustedRequestOrigin } from "@/lib/request-security";
 import { createAdminDataSnapshot, recordAdminSupportAction } from "@/lib/admin-support";

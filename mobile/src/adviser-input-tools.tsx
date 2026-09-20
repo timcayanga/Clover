@@ -1,3 +1,4 @@
+import { beginTelemetry } from "../../shared/analytics";
 import { Text, TextInput } from "./app-text";
 import { useSession } from "./session";
 import {
@@ -5,7 +6,7 @@ import {
   useSpeechRecognitionEvent,
 } from "expo-speech-recognition";
 import { useFocusEffect } from "expo-router";
-import { useCallback, useState } from "react";
+import { useCallback, useState, useRef } from "react";
 import { Image, Pressable, View } from "react-native";
 import { Icon, Notice, useTheme } from "./ui";
 export function AdviserInputTools({
@@ -27,15 +28,19 @@ export function AdviserInputTools({
 }) {
   const { colors } = useTheme();
   const { offlineStatus } = useSession();
+  const inputFlow = useRef<ReturnType<typeof beginTelemetry> | null>(null);
   const [listening, setListening] = useState(false);
   const [error, setError] = useState("");
   useSpeechRecognitionEvent("start", () => setListening(true));
-  useSpeechRecognitionEvent("end", () => setListening(false));
+  useSpeechRecognitionEvent("end", () => { inputFlow.current?.("canceled", { reason: "no_result" }); setListening(false); });
   useSpeechRecognitionEvent("result", (event) => {
-    if (event.isFinal && event.results[0]?.transcript)
+    if (event.isFinal && event.results[0]?.transcript) {
+      inputFlow.current?.("completed");
       onText(event.results[0].transcript);
+    }
   });
   useSpeechRecognitionEvent("error", () => {
+    inputFlow.current?.("failed", { reason: "recognition_error" });
     setListening(false);
     setError(
       "Voice input is unavailable. Check microphone permission or type your message.",
@@ -44,6 +49,7 @@ export function AdviserInputTools({
   useFocusEffect(
     useCallback(
       () => () => {
+        inputFlow.current?.("canceled", { reason: "screen_left" });
         ExpoSpeechRecognitionModule.abort();
       },
       [],
@@ -55,10 +61,12 @@ export function AdviserInputTools({
       return;
     }
     setError("");
+    inputFlow.current = beginTelemetry("input", { input_method: "microphone", local_only: onDeviceOnly || !offlineStatus.online });
     try {
       const permission =
         await ExpoSpeechRecognitionModule.requestPermissionsAsync();
       if (!permission.granted) {
+        inputFlow.current?.("failed", { reason: "permission_denied" });
         setError(
           "Allow microphone and speech recognition to dictate, or type below.",
         );
@@ -68,6 +76,7 @@ export function AdviserInputTools({
         ExpoSpeechRecognitionModule.supportsOnDeviceRecognition();
       const requiresLocal = onDeviceOnly || !offlineStatus.online;
       if (requiresLocal && !onDevice) {
+        inputFlow.current?.("failed", { reason: "local_unavailable" });
         setError(
           "Offline dictation is unavailable on this device. Type your message, or connect to use voice input.",
         );
@@ -80,6 +89,7 @@ export function AdviserInputTools({
         continuous: false,
       });
     } catch {
+      inputFlow.current?.("failed", { reason: "unavailable" });
       setError(
         "Speech recognition is unavailable on this device. You can still type below.",
       );

@@ -6,7 +6,7 @@ import {
   CircleAccessError,
 } from "@/lib/circle-access";
 import { assertTrustedRequestOrigin } from "@/lib/request-security";
-import { capturePostHogServerEvent } from "@/lib/analytics";
+import { capturePostHogServerEvent } from "@/lib/analytics-server";
 import { getSessionContext, isLocalDevHost } from "@/lib/auth";
 import {
   getOrCreateCurrentUser,

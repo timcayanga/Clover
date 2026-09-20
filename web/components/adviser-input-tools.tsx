@@ -1,4 +1,5 @@
 "use client";
+import { beginTelemetry } from "../../shared/analytics";
 import { useEffect, useRef, useState } from "react";
 type Recognition = {
   lang: string;
@@ -32,11 +33,12 @@ export function AdviserInputTools({
   onText: (text: string) => void;
   onPhoto: (file: File) => void;
 }) {
+  const inputFlow = useRef<ReturnType<typeof beginTelemetry> | null>(null);
   const photo = useRef<HTMLInputElement>(null);
   const recognition = useRef<Recognition | null>(null);
   const [listening, setListening] = useState(false);
   const [notice, setNotice] = useState("");
-  useEffect(() => () => recognition.current?.abort(), []);
+  useEffect(() => () => { inputFlow.current?.("canceled", { reason: "screen_left" }); recognition.current?.abort(); }, []);
   useEffect(() => {
     if (disabled) recognition.current?.abort();
   }, [disabled]);
@@ -45,10 +47,12 @@ export function AdviserInputTools({
       recognition.current?.stop();
       return;
     }
+    inputFlow.current = beginTelemetry("input", { input_method: "microphone" });
     const Speech =
       (window as SpeechWindow).SpeechRecognition ??
       (window as SpeechWindow).webkitSpeechRecognition;
     if (!Speech) {
+      inputFlow.current?.("failed", { reason: "unsupported" });
       setNotice(
         "Voice input isn’t available in this browser. Use your keyboard’s dictation microphone or type below.",
       );
@@ -59,19 +63,21 @@ export function AdviserInputTools({
     current.lang = navigator.language || "en-PH";
     current.continuous = false;
     current.interimResults = false;
-    current.onresult = (event) => onText(event.results[0][0].transcript);
+    current.onresult = (event) => { inputFlow.current?.("completed"); onText(event.results[0][0].transcript); };
     current.onerror = () => {
+      inputFlow.current?.("failed", { reason: "recognition_error" });
       setListening(false);
       setNotice(
         "Voice input could not start. Check microphone permission, or type your message.",
       );
     };
-    current.onend = () => setListening(false);
+    current.onend = () => { inputFlow.current?.("canceled", { reason: "no_result" }); setListening(false); };
     setNotice("");
     try {
       current.start();
       setListening(true);
     } catch {
+      inputFlow.current?.("failed", { reason: "unavailable" });
       setNotice("Microphone unavailable. Please try again or type below.");
     }
   };

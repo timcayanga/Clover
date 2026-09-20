@@ -2,7 +2,7 @@ import { after, NextResponse } from "next/server";
 import { z } from "zod";
 import { requireAuth } from "@/lib/auth";
 import { assertContentLengthWithin, assertTrustedRequestOrigin } from "@/lib/request-security";
-import { capturePostHogServerEvent } from "@/lib/analytics";
+import { capturePostHogServerEvent } from "@/lib/analytics-server";
 
 export const dynamic = "force-dynamic";
 

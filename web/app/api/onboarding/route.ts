@@ -3,7 +3,7 @@ import { z } from "zod";
 import { requireAuth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { getOrCreateCurrentUser } from "@/lib/user-context";
-import { capturePostHogServerEvent } from "@/lib/analytics";
+import { capturePostHogServerEvent } from "@/lib/analytics-server";
 import { assertTrustedRequestOrigin } from "@/lib/request-security";
 import { normalizeRegionalPreferences } from "@/lib/regional-preferences";
 import { alignUserStarterCashCurrencyWithClient } from "@/lib/starter-data";

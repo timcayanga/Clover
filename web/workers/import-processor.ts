@@ -5,7 +5,7 @@ import type { AccountType, ReviewStatus, TransactionType } from "@prisma/client"
 import { after } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getEnv } from "@/lib/env";
-import { capturePostHogServerEvent } from "@/lib/analytics";
+import { capturePostHogServerEvent } from "@/lib/analytics-server";
 import { findDeletedAccountTombstoneMatch } from "@/lib/account-tombstones";
 import { formatUploadAccountDisplayName } from "@/lib/account-display";
 import { recordDataQaRun, type DataQaParsedRow, type DataQaSource } from "@/lib/data-qa";

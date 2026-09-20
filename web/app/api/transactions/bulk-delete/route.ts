@@ -7,7 +7,7 @@ import { isLocalDevHost, requireAuth } from "@/lib/auth";
 import { assertWorkspaceAccess } from "@/lib/workspace-access";
 import { assertTrustedRequestOrigin } from "@/lib/request-security";
 import { hasCompatibleTable } from "@/lib/data-engine";
-import { capturePostHogServerEvent } from "@/lib/analytics";
+import { capturePostHogServerEvent } from "@/lib/analytics-server";
 import { removeEmptyNonDefaultCashAccounts } from "@/lib/empty-cash-account-cleanup";
 import { invalidateWorkspaceSummaryCache } from "@/lib/workspace-summary-cache";
 

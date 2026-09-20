@@ -6,7 +6,7 @@ import {
   Prisma,
   type User,
 } from "@prisma/client";
-import { capturePostHogServerEvent } from "@/lib/analytics";
+import { capturePostHogServerEvent } from "@/lib/analytics-server";
 import { getDeploymentEnvironment } from "@/lib/deployment-environment";
 import { getEnv, type AppEnv } from "@/lib/env";
 import { prisma } from "@/lib/prisma";

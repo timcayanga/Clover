@@ -1,3 +1,4 @@
+import { telemetry, safeAction } from "../../shared/analytics";
 import { Text, TextInput } from "./app-text";
 import { Children } from "react";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -116,7 +117,7 @@ export function Button({
       hitSlop={4}
       accessibilityState={{ disabled }}
       disabled={disabled}
-      onPress={onPress}
+      onPress={() => { telemetry("ui_interaction", { target_type: "button", action: safeAction(title) }); onPress(); }}
       style={({ pressed }) => [
         styles.button,
         secondary && styles.secondary,

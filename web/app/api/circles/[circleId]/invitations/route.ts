@@ -12,7 +12,7 @@ import {
   assertContentLengthWithin,
   assertTrustedRequestOrigin,
 } from "@/lib/request-security";
-import { capturePostHogServerEvent } from "@/lib/analytics";
+import { capturePostHogServerEvent } from "@/lib/analytics-server";
 import { sendCircleInvitationEmail } from "@/lib/circle-invitation-email";
 import {
   CIRCLE_INVITATION_DURATION_DAYS,

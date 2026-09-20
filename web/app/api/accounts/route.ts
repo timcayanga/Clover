@@ -11,7 +11,7 @@ import { countWorkspaceOwnerPlanLimitedAccounts } from "@/lib/plan-access";
 import { ensureWorkspaceCashAccount, seedWorkspaceDefaults } from "@/lib/starter-data";
 import { getOrCreateCurrentUser } from "@/lib/user-context";
 import { getEffectiveUserLimits } from "@/lib/user-limits";
-import { capturePostHogServerEvent } from "@/lib/analytics";
+import { capturePostHogServerEvent } from "@/lib/analytics-server";
 import { isMissingAccountNumberColumnError, omitAccountNumberField } from "@/lib/account-column-compat";
 import { isSupportedAccountType } from "@/lib/account-types";
 import { normalizeInstitutionCurrency } from "@/lib/import-parser";

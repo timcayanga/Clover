@@ -7,7 +7,7 @@ import { getOrCreateCurrentUser } from "@/lib/user-context";
 import { selectedWorkspaceKey } from "@/lib/workspace-selection";
 import { assertTrustedRequestOrigin } from "@/lib/request-security";
 import { getOnboardingMissionSnapshot } from "@/lib/onboarding-missions";
-import { capturePostHogServerEvent } from "@/lib/analytics";
+import { capturePostHogServerEvent } from "@/lib/analytics-server";
 
 export const dynamic = "force-dynamic";
 

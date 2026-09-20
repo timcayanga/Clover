@@ -5,7 +5,7 @@ import { ensureStarterWorkspace, repairDuplicateStarterWorkspaces, seedWorkspace
 import { getOrCreateCurrentUser } from "@/lib/user-context";
 import { getCurrentUserEnvironment, resolvePersistedUserEnvironment } from "@/lib/user-environment";
 import { getEffectiveProfileLimit } from "@/lib/user-limits";
-import { capturePostHogServerEvent } from "@/lib/analytics";
+import { capturePostHogServerEvent } from "@/lib/analytics-server";
 import { assertTrustedRequestOrigin } from "@/lib/request-security";
 import { createTransientDataUnavailableResponse, isTransientDataError, isUnauthorizedDataError } from "@/lib/transient-data";
 import { after, NextResponse } from "next/server";
