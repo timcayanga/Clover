@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireAuth } from "@/lib/auth";
 import { deleteClerkIdentity } from "@/lib/clerk-identity-lifecycle";
-import { capturePostHogServerEvent } from "@/lib/analytics";
+import { capturePostHogServerEvent } from "@/lib/analytics-server";
 import { assertTrustedRequestOrigin } from "@/lib/request-security";
 
 export const dynamic = "force-dynamic";

@@ -1,3 +1,6 @@
+import { apiBase } from "./api-base";
+export { apiBase } from "./api-base";
+import { beginTelemetry, requestTelemetry, telemetry, newTelemetryId, getTelemetryHeaders } from "../../shared/analytics";
 export class NetworkError extends Error {}
 export class ApiError extends Error {
   constructor(
@@ -8,25 +11,16 @@ export class ApiError extends Error {
     super(message);
   }
 }
-export function apiBase() {
-  const base =
-    process.env.EXPO_PUBLIC_API_URL?.replace(/\/$/, "") ??
-    "https://staging.clover.ph";
-  const url = new URL(base);
-  if (
-    url.protocol !== "https:" &&
-    !(__DEV__ && ["localhost", "127.0.0.1", "10.0.2.2"].includes(url.hostname))
-  ) {
-    throw new Error("Clover mobile requires an HTTPS API.");
-  }
-  return base;
-}
 export async function apiRequest<T>(
   token: string,
   path: string,
   options: RequestInit = {},
   format: "json" | "text" = "json",
 ): Promise<T> {
+  const operation_id = newTelemetryId();
+  const started = Date.now();
+  const description = requestTelemetry(path, options.method);
+  const finish = description ? beginTelemetry((options.method ?? "GET").toUpperCase() === "GET" ? "data_load" : "flow", { ...description, operation_id }) : () => {};
   const controller = new AbortController();
   const abort = () => controller.abort();
   if (options.signal?.aborted) abort();
@@ -44,6 +38,8 @@ export async function apiRequest<T>(
     if (!url.pathname.startsWith("/api/mobile/v1/"))
       throw new Error("Invalid mobile API path.");
     const headers = new Headers(options.headers);
+    for (const [key, value] of Object.entries(getTelemetryHeaders())) headers.set(key, value);
+    headers.set("x-clover-operation-id", operation_id);
     headers.set("Authorization", `Bearer ${token}`);
     if (typeof options.body === "string")
       headers.set("Content-Type", "application/json");
@@ -59,7 +55,9 @@ export async function apiRequest<T>(
     if (response.ok && format === "text") {
       if (!response.headers.get("content-type")?.includes("text/csv"))
         throw new Error("Unexpected export format.");
-      return (await response.text()) as T;
+      const text = await response.text();
+      finish("completed", { status: response.status });
+      return text as T;
     }
     const data = await response.json().catch(() => null);
     if (!response.ok)
@@ -70,8 +68,11 @@ export async function apiRequest<T>(
       );
     if (!data)
       throw new Error("Clover returned an unexpected response. Please retry.");
+    finish("completed", { status: response.status });
+    if (description && (options.method ?? "GET").toUpperCase() === "GET") telemetry("data_ready", { ...description, duration_ms: Date.now() - started, timing_boundary: "response_body_consumed" });
     return data as T;
   } catch (error) {
+    finish(options.signal?.aborted ? "canceled" : "failed", { status: error instanceof ApiError ? error.status : 0, reason: options.signal?.aborted ? "user_abort" : controller.signal.aborted ? "timeout" : error instanceof ApiError ? "http" : "network_or_response" });
     if (controller.signal.aborted)
       throw new NetworkError(
         path.includes("/process")

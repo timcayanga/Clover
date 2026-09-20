@@ -1,3 +1,4 @@
+import { beginTelemetry } from "../../../shared/analytics";
 import { Text } from "../../src/app-text";
 import { TransactionTableEntry } from "../../src/transaction-table-entry";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -145,18 +146,21 @@ export default function Add() {
       return;
     }
     setBusy(true);
+    const finishInput = beginTelemetry("input", { input_method: source, screen: "/add" });
     try {
       if (source === "file") {
         const result = await DocumentPicker.getDocumentAsync({
           multiple: false,
           copyToCacheDirectory: true,
         });
+        finishInput(result.canceled ? "canceled" : "completed");
         if (!result.canceled) open(result.assets[0]);
       } else {
         if (
           source === "camera" &&
           !(await ImagePicker.requestCameraPermissionsAsync()).granted
         ) {
+          finishInput("failed", { reason: "permission_denied" });
           setError(
             "Camera permission is needed to photograph a receipt. You can still choose a file.",
           );
@@ -172,6 +176,7 @@ export default function Add() {
           source === "camera"
             ? await ImagePicker.launchCameraAsync(options)
             : await ImagePicker.launchImageLibraryAsync(options);
+        finishInput(result.canceled ? "canceled" : "completed");
         if (!result.canceled) {
           const asset = result.assets[0];
           open({
@@ -183,6 +188,7 @@ export default function Add() {
         }
       }
     } catch {
+      finishInput("failed", { reason: "picker_unavailable" });
       setError("The picker could not open. Please try again.");
     } finally {
       setBusy(false);

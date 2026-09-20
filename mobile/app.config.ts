@@ -23,6 +23,7 @@ const config: ExpoConfig = {
   },
   plugins: [
     "expo-router",
+    "expo-localization",
     ["expo-build-properties", { android: { minSdkVersion: 26 } }],
     ["expo-sqlite", { useSQLCipher: true }],
     "./plugins/with-unique-pod-uuids.cjs",

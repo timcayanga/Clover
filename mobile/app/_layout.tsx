@@ -1,3 +1,5 @@
+import { NativeAnalytics } from "../src/analytics-provider";
+import { identifyNativeAnalytics } from "../src/analytics";
 import { Text } from "../src/app-text";
 import { resourceCache } from "@clerk/expo/resource-cache";
 import { disconnectStoreAccount } from "../src/store-billing";
@@ -207,6 +209,7 @@ function AppSession({
 }
 function AuthenticatedApp() {
   const { isLoaded, userId, getToken, signOut } = useAuth();
+  useEffect(() => { if (isLoaded) identifyNativeAnalytics(userId ?? null); }, [isLoaded, userId]);
   return (
     <AppSession
       configured
@@ -238,6 +241,7 @@ export default function RootLayout() {
   return (
     <SafeAreaProvider>
       <DisplayPreferences>
+        <NativeAnalytics />
         {key ? (
           <ClerkProvider
             publishableKey={key}

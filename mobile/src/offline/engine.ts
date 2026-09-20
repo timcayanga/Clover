@@ -1,3 +1,4 @@
+import { telemetry } from "../../../shared/analytics";
 import { NetworkError } from "../api";
 import type {
   CacheEntry,
@@ -155,6 +156,7 @@ export class OfflineEngine {
         state: "pending",
       };
       await this.store.set("mutation:" + item.id, item);
+      telemetry("offline_action_queued", { action: item.kind, online: this.status.online });
       await this.refreshCount();
       if (this.status.online) await this.sync();
       const receipt = await this.store.get<T>("receipt:" + item.id);
@@ -316,6 +318,8 @@ export class OfflineEngine {
   }
   private async runSync() {
     if (!this.active || !this.status.online) return;
+    const syncStarted = this.now();
+    telemetry("offline_sync_started", { pending_count: this.status.pending });
     this.status.syncing = true;
     this.emit();
     try {
@@ -383,6 +387,7 @@ export class OfflineEngine {
             break;
           }
           if (error.status && error.status < 500) {
+            telemetry(error.status === 409 ? "offline_sync_conflict" : "offline_sync_failed", { status: error.status, action: item.kind });
             item.state = error.status === 409 ? "conflict" : "blocked";
             item.error = error.message;
             item.current = error.data?.current;
@@ -400,12 +405,14 @@ export class OfflineEngine {
     } finally {
       this.status.syncing = false;
       await this.refreshCount();
+      telemetry(this.status.pending === 0 && !this.status.error ? "offline_sync_completed" : "offline_sync_failed", { pending_count: this.status.pending, conflict_count: this.status.conflicts, duration_ms: this.now() - syncStarted });
     }
   }
   async discard(id: string) {
     if (this.status.syncing)
       throw new Error("Wait for sync to finish before discarding a change.");
     await this.store.remove("mutation:" + id);
+    telemetry("offline_action_discarded", { action: "transaction" });
     await this.refreshCount();
   }
   async keepEdit(id: string) {
@@ -426,6 +433,7 @@ export class OfflineEngine {
     };
     await this.store.set("mutation:" + next.id, next);
     await this.store.remove("mutation:" + id);
+    telemetry("offline_action_discarded", { action: "transaction" });
     await this.refreshCount();
     await this.sync();
   }

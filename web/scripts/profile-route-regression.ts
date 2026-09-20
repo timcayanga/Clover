@@ -36,7 +36,7 @@ async function check(local: boolean) {
     },
     "@/lib/user-environment": { getCurrentUserEnvironment: () => "staging", resolvePersistedUserEnvironment: () => "staging" },
     "@/lib/user-limits": { getEffectiveProfileLimit: () => 10 },
-    "@/lib/analytics": { capturePostHogServerEvent: async () => {} },
+    "@/lib/analytics-server": { capturePostHogServerEvent: async () => {} },
     "@/lib/request-security": { assertTrustedRequestOrigin: () => {} },
     "@/lib/transient-data": { isTransientDataError: () => false, isUnauthorizedDataError: () => false },
     "next/server": { NextResponse: { json: (value: unknown) => value }, after: () => {} },

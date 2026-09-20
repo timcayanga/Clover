@@ -5,7 +5,7 @@ import { assertWorkspaceAccess } from "@/lib/workspace-access";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { recordTrainingSignal, upsertAccountRule } from "@/lib/data-engine";
-import { capturePostHogServerEvent } from "@/lib/analytics";
+import { capturePostHogServerEvent } from "@/lib/analytics-server";
 import { hasCompatibleTable } from "@/lib/data-engine";
 import { coerceTransactionTypeFromCategoryName } from "@/lib/transaction-directions";
 import { recordAdviserActionCompletion } from "@/lib/adviser-actions";

@@ -5,7 +5,7 @@ import { requireAuth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { getOrCreateCurrentUser } from "@/lib/user-context";
 import { GOAL_OPTIONS } from "@/lib/goals";
-import { capturePostHogServerEvent } from "@/lib/analytics";
+import { capturePostHogServerEvent } from "@/lib/analytics-server";
 import { recordAdviserActionCompletion } from "@/lib/adviser-actions";
 import { assertTrustedRequestOrigin } from "@/lib/request-security";
 import { summarizeErrorForLog } from "@/lib/security-logging";

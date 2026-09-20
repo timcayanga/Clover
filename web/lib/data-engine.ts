@@ -1,7 +1,7 @@
 import { Prisma } from "@prisma/client";
 import type { AccountType, TransactionType } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
-import { capturePostHogServerEvent } from "@/lib/analytics";
+import { capturePostHogServerEvent } from "@/lib/analytics-server";
 import {
   detectStatementMetadata,
   detectInstitutionFromStatementSignals,

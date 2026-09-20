@@ -1,3 +1,4 @@
+import { trackOperation } from "../../shared/analytics";
 import { Platform } from "react-native";
 import Purchases, { type PurchasesPackage } from "react-native-purchases";
 export type StoreStatus = {
@@ -63,14 +64,14 @@ export function purchaseStorePackage(
     await identify(status);
     if (!status.productIds.includes(item.product.identifier))
       throw new Error("This product is unavailable.");
-    await Purchases.purchasePackage(item);
+    await trackOperation("store_purchase", () => Purchases.purchasePackage(item), { phase: "store_confirmation" });
     // Caller must now ask Clover's server to verify; SDK state cannot grant Pro.
   });
 }
 export function restoreStorePurchases(status: StoreStatus) {
   return exclusive(async () => {
     await identify(status);
-    await Purchases.restorePurchases();
+    await trackOperation("store_restore", () => Purchases.restorePurchases(), { phase: "store_confirmation" });
   });
 }
 export function disconnectStoreAccount() {

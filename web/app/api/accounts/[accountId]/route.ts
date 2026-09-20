@@ -5,7 +5,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { upsertAccountRule } from "@/lib/data-engine";
 import { INVESTMENT_SUBTYPES, type InvestmentSubtype } from "@/lib/investments";
-import { capturePostHogServerEvent } from "@/lib/analytics";
+import { capturePostHogServerEvent } from "@/lib/analytics-server";
 import { isMissingAccountNumberColumnError, omitAccountNumberField } from "@/lib/account-column-compat";
 import { ACCOUNT_TYPES } from "@/lib/account-types";
 import { normalizeInstitutionCurrency } from "@/lib/import-parser";

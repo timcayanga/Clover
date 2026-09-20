@@ -1,0 +1,16 @@
+{
+  "date": "2026-09-20",
+  "implementationCommit": "257242c11844c7a9d660a9363cf7f20f33aa9ff6",
+  "sourceInventory": { "webPagesAndNativeScreens": 103, "status": "pass" },
+  "regressions": { "lifecycleAndPrivacy": "pass", "nativeApiDeviceHeaders": "pass", "offlineQueueAndConflicts": "pass", "serverContextAndPostResponseDelivery": "pass" },
+  "browserRuntime": [
+    { "platform": "desktop_web", "checks": 10, "status": "pass" },
+    { "platform": "mobile_web", "mode": "iPhone browser emulation", "checks": 10, "status": "pass" }
+  ],
+  "qualityGate": { "command": "npm run qa:prepush", "exitCode": 0, "webProductionBuild": "pass", "iosBundle": "pass", "androidBundle": "pass" },
+  "ingestionProbe": { "environment": "staging", "event": "qa_analytics_probe", "httpStatus": 200, "scope": "ingestion endpoint accepted; dashboard receipt not yet queried" },
+  "pending": [
+    "PostHog dashboard/query verification: user will configure personal API key and project ID later",
+    "Native runtime receipt on rebuilt iOS/Android binaries; JS bundles do not update installed apps or prove device delivery"
+  ]
+}

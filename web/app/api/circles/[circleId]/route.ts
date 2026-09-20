@@ -11,7 +11,7 @@ import {
   assertContentLengthWithin,
   assertTrustedRequestOrigin,
 } from "@/lib/request-security";
-import { capturePostHogServerEvent } from "@/lib/analytics";
+import { capturePostHogServerEvent } from "@/lib/analytics-server";
 import { invalidateUserSummaryCache } from "@/lib/workspace-summary-cache";
 
 const updateCircleSchema = z.object({

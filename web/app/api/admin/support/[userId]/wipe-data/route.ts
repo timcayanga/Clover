@@ -2,7 +2,7 @@ import { claimApproval, finishApproval } from "@/lib/admin-approvals";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { getAdminDataEnvironment, requireAdminAuth } from "@/lib/admin";
-import { capturePostHogServerEvent } from "@/lib/analytics";
+import { capturePostHogServerEvent } from "@/lib/analytics-server";
 import { wipeLocalUserData } from "@/lib/account-management";
 import { prisma } from "@/lib/prisma";
 import { assertTrustedRequestOrigin } from "@/lib/request-security";

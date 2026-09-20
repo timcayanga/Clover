@@ -12,10 +12,8 @@ import {
   assertContentLengthWithin,
   assertTrustedRequestOrigin,
 } from "@/lib/request-security";
-import {
-  capturePostHogServerEvent,
-  type AnalyticsEventName,
-} from "@/lib/analytics";
+import { capturePostHogServerEvent } from "@/lib/analytics-server";
+import { type AnalyticsEventName } from "@/lib/analytics";
 
 const amount = z.coerce.number().positive().max(1_000_000_000);
 const optionalDate = z.string().datetime().nullable().optional();

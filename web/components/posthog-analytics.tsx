@@ -1,6 +1,8 @@
 "use client";
 
 import Script from "next/script";
+import { browserContext, safeRoute, routeSegments, safeAction } from "../../shared/analytics";
+import { installBrowserTelemetry } from "@/lib/browser-telemetry";
 import { useEffect } from "react";
 import { usePathname } from "next/navigation";
 import { useUser } from "@clerk/nextjs";
@@ -39,13 +41,7 @@ type PostHogPersonPropertiesProps = {
 };
 
 const normalizeHost = (host: string) => host.replace(/\/$/, "");
-const redactAnalyticsPath = (pathname: string | null | undefined) =>
-  (pathname || "/")
-    .split("/")
-    .map((segment) =>
-      segment.length >= 20 || /^[0-9a-f]{8}-[0-9a-f-]{27,}$/i.test(segment) ? "[redacted]" : segment
-    )
-    .join("/");
+const redactAnalyticsPath = (pathname: string | null | undefined) => safeRoute(pathname || "/");
 
 const getSafeAnalyticsLocation = (pathname: string | null | undefined = window.location.pathname) => {
   const safePathname = redactAnalyticsPath(pathname);
@@ -108,6 +104,9 @@ const safeCapture = (event: string, properties: Record<string, unknown> = {}) =>
   try {
     window.posthog?.capture(event, {
       ...getAnalyticsEpochProperties(),
+      ...browserContext(navigator.userAgent, window.innerWidth, navigator.maxTouchPoints),
+      event_source: "web",
+      analytics_schema_version: 2,
       analytics_environment: getClientAnalyticsEnvironment(),
       ...properties,
     });
@@ -210,10 +209,26 @@ function PostHogBootstrap({ token, host }: PostHogScriptProps) {
       dangerouslySetInnerHTML={{
         __html: `
           !function(t,e){var o,n,p,r;e.__SV=1e3,window.posthog=e,e._i=[],e.init=function(i,s,a){function g(t,e){var o=e.split(".");2==o.length&&(t=t[o[0]],e=o[1]),t[e]=function(){t.push([e].concat(Array.prototype.slice.call(arguments,0)))}}(p=t.createElement("script")).type="text/javascript",p.async=!0,p.src=s.api_host+"/static/array.js",(r=t.getElementsByTagName("script")[0]).parentNode.insertBefore(p,r);var u=e;for(void 0!==a?u=e[a]=[]:a="posthog",u.people=u.people||[],u.toString=function(t){var e="posthog";return"posthog"!==a&&(e+="."+a),t||(e+=" (stub)"),e},u.people.toString=function(){return u.toString(1)+".people (stub)"},o="capture identify alias people.set people.set_once people.unset people.increment people.append register register_once unregister opt_in_capturing opt_out_capturing has_opted_out_capturing".split(" "),n=0;n<o.length;n++)g(u,o[n]);e._i.push([i,s,a])},e.__SV=1e3}(document,window.posthog||[]);
+          window.__cloverSafeRoute = function(path) { const segments = new Set(${JSON.stringify(routeSegments)}); return "/" + path.split(/[?#]/)[0].split("/").filter(Boolean).map(s => segments.has(s) ? s : ":id").join("/"); };
           posthog.init(${JSON.stringify(token)}, {
             api_host: ${JSON.stringify(apiHost)},
             capture_pageview: false,
-            capture_pageleave: true
+            capture_pageleave: false,
+            autocapture: false,
+            disable_session_recording: true,
+            before_send: function(event) {
+              if (event && event.properties) {
+                for (const key of ["$current_url", "$referrer", "$initial_current_url", "$initial_referrer"]) {
+                  if (typeof event.properties[key] === "string") {
+                    try { const url = new URL(event.properties[key]); event.properties[key] = url.origin + window.__cloverSafeRoute(url.pathname); } catch { delete event.properties[key]; }
+                  }
+                }
+                for (const key of ["$pathname", "$initial_pathname"]) {
+                  if (typeof event.properties[key] === "string") event.properties[key] = window.__cloverSafeRoute(event.properties[key]);
+                }
+              }
+              return event;
+            }
           });
           window.__posthogReady = true;
           (${flushPostHogQueue.toString()})();
@@ -232,6 +247,7 @@ function PostHogPageViews() {
       const attribution = getFirstTouchAttribution();
       safeCapture("$pageview", {
         ...getSafeAnalyticsLocation(pathname),
+        route: redactAnalyticsPath(pathname),
         is_public_website: isPublicAnalyticsPath(pathname || "/"),
         ...(attribution ? {
           acquisition_channel: attribution.channel,
@@ -277,6 +293,7 @@ function PostHogBehaviorSignals() {
         route,
         x_percent: Math.min(99, Math.max(0, Math.floor((event.clientX / Math.max(1, window.innerWidth)) * 100))),
         y_percent: Math.min(99, Math.max(0, Math.floor((event.clientY / Math.max(1, window.innerHeight)) * 100))),
+        action: safeAction(target.getAttribute("aria-label") || target.textContent),
         target_type: target.getAttribute("role") || target.tagName.toLowerCase(),
         target_area: area,
         viewport_class: getCloverViewportLayout(window.innerWidth),
@@ -375,9 +392,9 @@ function PostHogRoutePerformance() {
       } satisfies AnalyticsProperties;
 
       runWhenPostHogReady(() => {
-        safeCapture("page_load_completed", properties);
+        safeCapture("page_render_completed", { ...properties, timing_boundary: "post_route_commit_two_frames" });
         if (durationMs >= 2000) {
-          safeCapture("page_load_slow", properties);
+          safeCapture("page_render_slow", { ...properties, timing_boundary: "post_route_commit_two_frames" });
         }
       });
     };
@@ -392,6 +409,11 @@ function PostHogRoutePerformance() {
     };
   }, [pathname]);
 
+  return null;
+}
+
+function PostHogRequestSignals() {
+  useEffect(() => installBrowserTelemetry((event, properties) => runWhenPostHogReady(() => safeCapture(event, properties))), []);
   return null;
 }
 
@@ -457,6 +479,7 @@ export function PostHogAnalytics() {
       <PostHogSessionSignals />
       <PostHogRoutePerformance />
       <PostHogBehaviorSignals />
+      <PostHogRequestSignals />
     </>
   );
 }

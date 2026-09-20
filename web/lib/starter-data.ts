@@ -2,7 +2,7 @@ import type { User } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { DEFAULT_CATEGORY_ROWS } from "@/lib/default-categories";
 import { getOrCreateCurrentUser } from "@/lib/user-context";
-import { capturePostHogServerEvent } from "@/lib/analytics";
+import { capturePostHogServerEvent } from "@/lib/analytics-server";
 import { isCryptoAssetCurrencyCode } from "@/lib/financial-identity-detection";
 import { normalizeRegionalPreferences } from "@/lib/regional-preferences";
 import type { Prisma } from "@prisma/client";

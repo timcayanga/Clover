@@ -1,10 +1,11 @@
+import { TELEMETRY_EVENTS, type TelemetryEvent } from "../../shared/analytics";
 import { getDeploymentEnvironment } from "@/lib/deployment-environment";
 
 export type AnalyticsValue = string | number | boolean | null | undefined;
 
 export type AnalyticsProperties = Record<string, AnalyticsValue>;
 
-export type AnalyticsEventName =
+export type AnalyticsEventName = TelemetryEvent
   | "signup_started"
   | "signup_completed"
   | "identity_environment_conflict"
@@ -163,7 +164,8 @@ export type AnalyticsEventName =
 
 // Keep the Admin event inventory aligned with the compile-time event contract.
 // This is intentionally data-free: event names are safe to expose in internal tooling.
-export const ANALYTICS_EVENT_NAMES: AnalyticsEventName[] = [
+export const ANALYTICS_EVENT_NAMES: AnalyticsEventName[] = Array.from(new Set<AnalyticsEventName>([
+  ...TELEMETRY_EVENTS,
   "signup_started", "signup_completed", "identity_environment_conflict", "onboarding_started", "onboarding_completed", "onboarding_missions_viewed",
   "onboarding_mission_started", "onboarding_mission_completed", "onboarding_missions_dismissed", "first_login",
   "workspace_created", "workspace_updated", "workspace_deleted", "workspace_switched",
@@ -191,7 +193,7 @@ export const ANALYTICS_EVENT_NAMES: AnalyticsEventName[] = [
   "session_started", "session_returned", "acquisition_identified", "page_engagement", "ui_interaction", "feature_used", "settings_updated", "goal_target_saved", "goal_updated", "goal_target_reached",
   "goal_progress_updated", "goal_reset", "plan_limit_reached", "billing_started", "billing_success", "billing_cancelled", "upgrade_cta_clicked",
   "trial_to_paid_conversion", "upgrade_prompt_viewed", "support_contacted", "admin_support_action", "error_shown",
-];
+]));
 
 export const ANALYTICS_BETA_EPOCH = "beta-2026-07-28";
 export const DEFAULT_ANALYTICS_BETA_STARTED_AT = "2026-07-28T11:40:00.000Z";
@@ -257,7 +259,8 @@ export const capturePostHogServerEvent = async (
     return;
   }
 
-  await fetch(`${host}/capture/`, {
+  const response = await fetch(`${host}/capture/`, {
+    signal: AbortSignal.timeout(5000),
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -268,11 +271,13 @@ export const capturePostHogServerEvent = async (
       distinct_id: scopedDistinctId,
       properties: {
         ...getAnalyticsEpochProperties(),
+        analytics_environment: getAnalyticsEnvironment(),
         ...properties,
       },
       timestamp: new Date().toISOString(),
     }),
   }).catch(() => null);
+  if (!response?.ok) console.warn("[analytics] delivery_failed", { event, status: response?.status ?? 0 });
 };
 
 export const analyticsOnceKey = (event: AnalyticsEventName, scope: string) =>

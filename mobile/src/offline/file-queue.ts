@@ -1,3 +1,4 @@
+import { telemetry } from "../../../shared/analytics";
 import { NATIVE_UPLOAD_MAX_SIZE } from "../../../shared/native-upload";
 import type { OfflineStore } from "./types";
 export type QueuedFile = {
@@ -81,6 +82,7 @@ export class FileQueue {
     if (!file) throw new Error("File unavailable.");
     await this.authorize(file.workspaceId);
     if (!["draft", "attention", "paused"].includes(file.state)) return;
+    telemetry("offline_action_queued", { action: "file_upload" });
     file.state = "queued";
     file.password = password || file.password;
     file.error = undefined;
@@ -109,6 +111,7 @@ export class FileQueue {
     if(file.state!=="paused")throw new Error("Clover has already received this file. Open the saved import.");
     await this.transport.cancel?.(file);
     await this.remove(id);
+    telemetry("input_canceled", { input_method: "file_upload", phase: "queued" });
   }
   async remove(id: string) {
     if (this.current?.file.id===id) throw new Error("Pause this file before removing it.");

@@ -3,7 +3,7 @@ import { createHash } from "node:crypto";
 import { z } from "zod";
 import { createContactInquiry } from "@/lib/contact-inquiries";
 import { sendContactInquiryEmail } from "@/lib/contact-email";
-import { capturePostHogServerEvent } from "@/lib/analytics";
+import { capturePostHogServerEvent } from "@/lib/analytics-server";
 import { assertContentLengthWithin, assertTrustedRequestOrigin, getRequestClientIp } from "@/lib/request-security";
 import { assertRateLimit } from "@/lib/rate-limit";
 

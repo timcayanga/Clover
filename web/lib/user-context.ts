@@ -1,7 +1,7 @@
 import { Prisma, type User } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { syncClerkUser, type SyncedClerkUser } from "@/lib/clerk";
-import { capturePostHogServerEvent } from "@/lib/analytics";
+import { capturePostHogServerEvent } from "@/lib/analytics-server";
 import { refreshProAccess } from "@/lib/pro-access";
 import { getCurrentUserEnvironment, resolvePersistedUserEnvironment } from "@/lib/user-environment";
 
