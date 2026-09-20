@@ -20,8 +20,8 @@ Browser session: staging.clover.ph, desktop 1440×900 and mobile 390×844.
 - Desktop spreadsheet modal renders above the sidebar; optional checkboxes have consistent dimensions.
 - Transaction details display account/category artwork and open inline fields, including currency. Editing was canceled without saving.
 - Account picker shows grouped icon options. Runtime Escape check exposed the global capture-handler issue fixed in this follow-up; final deployed retest required.
-- Transactions controls measure 40px tall; final filter alignment correction included here.
-- Budget and goal cards show square glass colors and enlarged artwork. Goal action spacing corrected after visual inspection.
+- Transactions Search, Filters, Manage, Add and Upload all measured 40px tall at the same y=24 position after deployment.
+- Budget and goal cards show square glass colors and enlarged artwork. Goal action spacing corrected and rechecked on mobile: the action stays inside the card.
 - Recurring list helper copy removed. No financial records were changed.
 
 ## Figma work
@@ -31,5 +31,7 @@ File: https://www.figma.com/design/FNnCmCj90szZAnZ6twMPCy/Screens
 Updated primary desktop/mobile designs and shared components: Home metrics/budget colors; Reports metric layouts and chart headers; transaction details/icons/Add To actions; spreadsheet primary, optional and validation variants; account type artwork and minimal chat composers; recurring category icons; Split Bills/Circles headers; investment tabs, section headings and chat; budget/goal card libraries; light and dark mobile navigation. Public chapter prototype transitions use 600ms dissolves; the design guide documents the continuous scroll-driven staging implementation.
 
 Representative nodes: Home `1241:59000`/`1240:59000`; Transactions `1244:511820`; Details `1244:514013`/`1244:514012`; table `1278:97431`; mobile grid `1378:98811`; validation `1397:98834`; optional `1398:98841`; Planner content `612:39182`/`612:39265`; Analysis `612:40017`/`612:40062`; light nav `173:85`; dark nav `759:26049`.
+
+Final browser checks also confirmed Cash Flow heading y matches its header row, a single mobile Adviser header, a 52×52 Adviser navigation asset, and collapse-down/expand-up navigation. Mobile Analysis empty CTAs are centered and contain no Open Accounts action.
 
 Historical detached/dark page copies are not all independently re-certified. Native installed-app runtime was not tested in this UI pass. The current checklist specifically verifies desktop and mobile web; prior native verification must not be inferred from these results.
