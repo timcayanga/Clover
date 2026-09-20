@@ -13,17 +13,24 @@ Scope: native Upload, Circles invitations/resources, and investment assets/tradi
 ## Validation completed
 
 - Mobile TypeScript check.
-- Web TypeScript check (before final integration additions; rerun required).
+- Web TypeScript check, including final integrated tree.
 - Expo production bundles for iOS and Android.
-- Offline regression suite: 24/24, including byte-exact part resume, pause/retention, and finalization cancellation protection.
+- Offline regression suite: 26/26, including byte-exact part resume, pause/retention, finalization cancellation protection, and continuing other queued files when one is paused.
 - Mobile API regression suite.
 - Prisma schema validation.
 - Disposable PostgreSQL database at `127.0.0.1:56545/clover_native_expansion`: multi-asset isolation, paired transfer atomicity/reversal, overselling, opening-date guards, ownership, duplicate retries, imported-source preservation, position valuation history, upload part size/hash checks, cancellation, expiration cleanup, >4 MiB parser handoff and cached canonical acknowledgement.
 
-## Still to complete before release
+## Staging release and live checks
 
-- Final integrated quality gate and staging deployment.
-- Installed iOS and Android UI checks with the current bundle; authenticated flow checks after the API deployment.
-- Confirm no unexpected schema/reader regressions from merging current staging.
+- Full `qa:prepush` passed on `bb0ed0a425566e4a10e8db799a9964cc29293bdf`, including production Next build, both Expo bundles, and release regressions. Pushed to staging; Vercel deployment `dpl_95bEyKNbNRM8jwszPAUUUXCDN2YG` reached READY and received staging.clover.ph.
+- Authenticated staging QA reads passed for bootstrap, Circle invitations, investment positions, and investments. The temporary test session was revoked.
+- Deployed transport smoke passed: a 5 MiB disposable upload session accepted a 1.5 MiB part, accepted an identical retry, and returned the persisted part when resumed. Cancellation succeeded and removed the temporary bytes. No import was finalized and no financial records were changed.
+- Browser/server file-validation boundaries were verified separately: ordinary browser multipart remains limited to 4 MiB; the larger limit applies only to verified native finalization.
+
+## Remaining installed-device verification
+
+- iOS reached its Home screen, but computer-control actions intermittently failed or had no effect. Alternative simctl UI control was requested; approval is still pending. No authenticated native flow is recorded as passed.
+- Android cold boot remained on the Google boot screen for several minutes under host resource pressure. The Clover package was listed, but its activity was not yet resolvable. The emulator was stopped to release resources for the concurrent staging release checks.
+- Metro was stopped. Resume device verification with one simulator/emulator at a time and an authenticated native QA session. Exercise upload pause/resume/cancel, Circle invitation/assignment controls, and asset edits/trades/paired transfers.
 
 This record distinguishes compilation/database checks from installed-device verification; it is not a claim that all native runtime paths have passed.

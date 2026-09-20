@@ -103,7 +103,10 @@ export default function Welcome() {
       colors={["#f0fafb", "#f7fcfc", "#e5f7f5"]}
       style={{ flex: 1 }}
     >
-      <ScrollView contentContainerStyle={{ flexGrow: 1, paddingBottom: 12 }}>
+      <ScrollView
+        style={{ flex: 1, minHeight: 0 }}
+        contentContainerStyle={{ flexGrow: 1, paddingBottom: 12 }}
+      >
         <View style={s.brand}>
           <Image
             source={require("../assets/welcome-clover.png")}
@@ -112,103 +115,67 @@ export default function Welcome() {
           <Text style={s.wordmark}>clover</Text>
         </View>
         {exploring ? (
-          <>
-            <ScrollView
-              ref={pager}
-              horizontal
-              pagingEnabled
-              showsHorizontalScrollIndicator={false}
-              onMomentumScrollEnd={(event) =>
-                go(
-                  Math.max(
-                    0,
-                    Math.min(
-                      3,
-                      Math.round(event.nativeEvent.contentOffset.x / width),
-                    ),
+          <ScrollView
+            ref={pager}
+            horizontal
+            pagingEnabled
+            style={{ flexGrow: 0, flexShrink: 0 }}
+            showsHorizontalScrollIndicator={false}
+            onMomentumScrollEnd={(event) =>
+              go(
+                Math.max(
+                  0,
+                  Math.min(
+                    3,
+                    Math.round(event.nativeEvent.contentOffset.x / width),
                   ),
-                )
-              }
-            >
-              {slides.map((slide, i) => (
-                <View
-                  key={slide.title}
-                  style={{ width, paddingHorizontal: 24 }}
-                  aria-hidden={i !== index}
-                  accessibilityElementsHidden={i !== index}
-                  importantForAccessibility={
-                    i === index ? "auto" : "no-hide-descendants"
-                  }
-                >
-                  <View
-                    style={s.illustration}
-                    accessibilityLabel={`Illustrative sample: ${slide.label}, ${slide.value}. ${slide.detail}`}
-                  >
-                    <Image
-                      source={
-                        i === 1
-                          ? require("../assets/organize/upload-files.png")
-                          : require("../assets/welcome-clover.png")
-                      }
-                      style={{ width: 54, height: 54 }}
-                    />
-                    <Text style={s.label}>{slide.label}</Text>
-                    <Text style={s.value}>{slide.value}</Text>
-                    <LinearGradient
-                      colors={["#03a8c0", "#5ed3d0"]}
-                      start={{ x: 0, y: 0 }}
-                      end={{ x: 1, y: 0 }}
-                      style={{
-                        height: 8,
-                        borderRadius: 4,
-                        width: i === 2 ? "60%" : "90%",
-                      }}
-                    />
-                    <Text style={s.detail}>{slide.detail}</Text>
-                  </View>
-                  <Text accessibilityRole="header" style={s.title}>
-                    {slide.title}
-                  </Text>
-                  <Text style={s.copy}>{slide.copy}</Text>
-                </View>
-              ))}
-            </ScrollView>
-            <View style={s.dots}>
-              {slides.map((slide, i) => (
-                <Pressable
-                  key={slide.title}
-                  accessibilityRole="button"
-                  accessibilityLabel={`Welcome ${i + 1}: ${slide.title.replace("\n", " ")}`}
-                  accessibilityState={{ selected: i === index }}
-                  onPress={() => go(i)}
-                  style={s.dotTarget}
-                >
-                  <View
-                    style={[
-                      s.dot,
-                      { backgroundColor: i === index ? "#03a8c0" : "#c6dfe1" },
-                    ]}
-                  />
-                </Pressable>
-              ))}
-            </View>
-            <Text accessibilityLiveRegion="polite" style={s.progress}>
-              {index + 1} of 4 · Swipe to explore
-            </Text>
-            <Pressable
-              accessibilityRole="button"
-              onPress={() => {
-                if (index < 3) go(index + 1);
-                else {
-                  setExploring(false);
-                  void rememberWelcome();
+                ),
+              )
+            }
+          >
+            {slides.map((slide, i) => (
+              <View
+                key={slide.title}
+                style={{ width, paddingHorizontal: 24 }}
+                aria-hidden={i !== index}
+                accessibilityElementsHidden={i !== index}
+                importantForAccessibility={
+                  i === index ? "auto" : "no-hide-descendants"
                 }
-              }}
-              style={s.next}
-            >
-              <Text style={s.link}>{index < 3 ? "Next" : "Get started"}</Text>
-            </Pressable>
-          </>
+              >
+                <View
+                  style={s.illustration}
+                  accessibilityLabel={`Illustrative sample: ${slide.label}, ${slide.value}. ${slide.detail}`}
+                >
+                  <Image
+                    source={
+                      i === 1
+                        ? require("../assets/organize/upload-files.png")
+                        : require("../assets/welcome-clover.png")
+                    }
+                    style={{ width: 54, height: 54 }}
+                  />
+                  <Text style={s.label}>{slide.label}</Text>
+                  <Text style={s.value}>{slide.value}</Text>
+                  <LinearGradient
+                    colors={["#03a8c0", "#5ed3d0"]}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 0 }}
+                    style={{
+                      height: 8,
+                      borderRadius: 4,
+                      width: i === 2 ? "60%" : "90%",
+                    }}
+                  />
+                  <Text style={s.detail}>{slide.detail}</Text>
+                </View>
+                <Text accessibilityRole="header" style={s.title}>
+                  {slide.title}
+                </Text>
+                <Text style={s.copy}>{slide.copy}</Text>
+              </View>
+            ))}
+          </ScrollView>
         ) : (
           <View style={{ padding: 24 }}>
             <Text style={s.title}>Welcome to Clover</Text>
@@ -226,6 +193,45 @@ export default function Welcome() {
           </View>
         )}
       </ScrollView>
+      {exploring ? (
+        <View style={{ flexShrink: 0 }}>
+          <View style={s.dots}>
+            {slides.map((slide, i) => (
+              <Pressable
+                key={slide.title}
+                accessibilityRole="button"
+                accessibilityLabel={`Welcome ${i + 1}: ${slide.title.replace("\n", " ")}`}
+                accessibilityState={{ selected: i === index }}
+                onPress={() => go(i)}
+                style={s.dotTarget}
+              >
+                <View
+                  style={[
+                    s.dot,
+                    { backgroundColor: i === index ? "#03a8c0" : "#c6dfe1" },
+                  ]}
+                />
+              </Pressable>
+            ))}
+          </View>
+          <Text accessibilityLiveRegion="polite" style={s.progress}>
+            {index + 1} of 4 · Swipe to explore
+          </Text>
+          <Pressable
+            accessibilityRole="button"
+            onPress={() => {
+              if (index < 3) go(index + 1);
+              else {
+                setExploring(false);
+                void rememberWelcome();
+              }
+            }}
+            style={s.next}
+          >
+            <Text style={s.link}>{index < 3 ? "Next" : "Get started"}</Text>
+          </Pressable>
+        </View>
+      ) : null}
       <View style={s.actions}>
         {error ? (
           <Text accessibilityRole="alert" style={{ color: "#ae303b" }}>
@@ -343,7 +349,7 @@ const s = StyleSheet.create({
   progress: { textAlign: "center", color: "#596e78", fontSize: 11 },
   next: { minHeight: 44, alignItems: "center", justifyContent: "center" },
   link: { color: "#007f90", fontFamily: "Poppins-Medium", fontSize: 13 },
-  actions: { paddingHorizontal: 24, gap: 10, marginTop: "auto" },
+  actions: { paddingHorizontal: 24, gap: 10, flexShrink: 0 },
   button: {
     minHeight: 48,
     borderRadius: 24,
@@ -352,6 +358,7 @@ const s = StyleSheet.create({
     padding: 12,
   },
   navigation: {
+    flexShrink: 0,
     flexDirection: "row",
     paddingTop: 12,
     backgroundColor: "#f8fafb",

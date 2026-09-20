@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { Alert } from "react-native";
 import * as Crypto from "expo-crypto";
 import type { PortfolioHolding } from "../../shared/investment-portfolio";
 import { Body, Card, Field, Notice, Screen } from "./ui";
@@ -158,7 +159,11 @@ export function PositionEditor({
       );
       if (alive.current) onSaved(id);
     } catch (e) {
-      if (alive.current) setError((e as Error).message);
+      if (alive.current) {
+        const message = e instanceof Error ? e.message : "Please try saving again.";
+        setError(message);
+        Alert.alert("Asset details weren’t saved", message);
+      }
     } finally {
       lock.current = false;
       if (alive.current) setBusy(false);
