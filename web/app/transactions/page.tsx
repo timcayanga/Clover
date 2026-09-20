@@ -4074,6 +4074,8 @@ function TransactionsPageContent() {
   };
 
   const openMobileFilePicker = () => {
+    // Load the upload UI while the native picker is open, before selection.
+    void loadImportFilesModal();
     const input = addFileInputRef.current;
     if (!input) {
       return;
@@ -4085,6 +4087,8 @@ function TransactionsPageContent() {
   };
 
   const openPhotoCapture = () => {
+    // Load the upload UI while the native picker is open, before selection.
+    void loadImportFilesModal();
     const input = addPhotoInputRef.current;
     if (!input) {
       return;
@@ -4096,6 +4100,8 @@ function TransactionsPageContent() {
   };
 
   const openPhotoLibrary = () => {
+    // Load the upload UI while the native picker is open, before selection.
+    void loadImportFilesModal();
     const input = addPhotoLibraryInputRef.current;
     if (!input) {
       return;
