@@ -1595,7 +1595,9 @@ function AccountDetailPageContent() {
           cachedAccount && nextAccount.id === cachedAccount.id
             ? ({
                 ...nextAccount,
-                source: cachedAccount.source ?? nextAccount.source,
+                // The persisted source determines opening-balance versus statement semantics.
+                // Import previews can temporarily label an existing manual account as upload.
+                source: nextAccount.source ?? cachedAccount.source,
                 balance:
                   typeof nextAccount.balance === "string" && nextAccount.balance.trim()
                     ? nextAccount.balance
