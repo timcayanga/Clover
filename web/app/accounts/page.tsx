@@ -2721,6 +2721,7 @@ function AccountsPageContent() {
 
   useEffect(() => {
     const handleEscape = (event: KeyboardEvent) => {
+      if (event.defaultPrevented || (event.target instanceof Element && event.target.closest('[data-escape-dismiss="local"]'))) return;
       if (event.key === "Escape") {
         setAddOpen(false);
         setImportOpen(false);

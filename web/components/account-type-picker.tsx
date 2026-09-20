@@ -12,9 +12,21 @@ export function AccountTypePicker({ value, onChange }: { value: SupportedAccount
   useEffect(() => {
     if (!open) return;
     const close = (event: PointerEvent) => { if (!root.current?.contains(event.target as Node)) setOpen(false); };
+    const picker = root.current;
+    const dismiss = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      event.preventDefault();
+      event.stopPropagation();
+      setOpen(false);
+      trigger.current?.focus();
+    };
     document.addEventListener("pointerdown", close);
+    picker?.addEventListener("keydown", dismiss);
     root.current?.querySelector<HTMLElement>('[aria-selected="true"]')?.focus();
-    return () => document.removeEventListener("pointerdown", close);
+    return () => {
+      document.removeEventListener("pointerdown", close);
+      picker?.removeEventListener("keydown", dismiss);
+    };
   }, [open]);
   return <div className="account-type-picker" data-escape-dismiss={open ? "local" : undefined} ref={root} onKeyDown={event => {
     if (open && event.key === "Escape") { event.preventDefault(); event.stopPropagation(); setOpen(false); trigger.current?.focus(); }
