@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { buildReviewDraft as buildDraftFromTransaction, mergeReviewDrafts, type ReviewDraft as Draft } from "@/lib/review-refresh-state";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { capturePostHogClientEvent } from "@/components/posthog-analytics";
 import type { AnalyticsEventName } from "@/lib/analytics";
@@ -45,11 +46,7 @@ type ReviewTransaction = {
   rawPayload?: Record<string, unknown> | null;
 };
 
-type Draft = {
-  accountId: string;
-  categoryId: string;
-  description: string;
-};
+
 
 type ReviewQueueAction = "accept" | "fix" | "exclude";
 type ReviewSignal = {
@@ -146,14 +143,11 @@ const getReviewSignals = (transaction: ReviewTransaction): ReviewSignal[] => {
   return items;
 };
 
-const buildDraftFromTransaction = (transaction: ReviewTransaction): Draft => ({
-  accountId: transaction.accountId,
-  categoryId: transaction.categoryId ?? "",
-  description: transaction.description ?? "",
-});
+
 
 export function ReviewWorkbench({ workspaceId, workspaceName, transactions, accounts, categories }: ReviewWorkbenchProps) {
   const [items, setItems] = useState(transactions);
+  const previousReview = useRef({ workspaceId, transactions });
   const [selectedId, setSelectedId] = useState(transactions[0]?.id ?? null);
   const [selectedIds, setSelectedIds] = useState<string[]>(transactions[0]?.id ? [transactions[0].id] : []);
   const [drafts, setDrafts] = useState<Record<string, Draft>>({});
@@ -247,11 +241,21 @@ export function ReviewWorkbench({ workspaceId, workspaceName, transactions, acco
   const transferSignalLabel = current ? "Movement risk" : "Movement";
 
   useEffect(() => {
+    const previous = previousReview.current;
+    previousReview.current = { workspaceId, transactions };
     setItems(transactions);
-    setSelectedId(transactions[0]?.id ?? null);
-    setDrafts({});
+    if (previous.workspaceId !== workspaceId) {
+      setSelectedId(transactions[0]?.id ?? null);
+      setSelectedIds(transactions[0]?.id ? [transactions[0].id] : []);
+      setDrafts({});
+    } else {
+      const ids = new Set(transactions.map((transaction) => transaction.id));
+      setSelectedId((current) => current && ids.has(current) ? current : transactions[0]?.id ?? null);
+      setSelectedIds((current) => current.filter((id) => ids.has(id)));
+      setDrafts((current) => mergeReviewDrafts(previous.transactions, transactions, current));
+    }
     setStatus(null);
-  }, [transactions]);
+  }, [transactions, workspaceId]);
 
   const updateDraft = (patch: Partial<Draft>) => {
     if (!current) return;
