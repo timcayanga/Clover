@@ -242,11 +242,17 @@ export function SessionProvider({
   useEffect(() => {
     const subscription = AppState.addEventListener("change", (state) => {
       if (state === "active") {
-        setRevision((n) => n + 1);
         void offlineReady.current.then(async (engine) => {
-          await engine?.sync();
+          // A transport timeout may mark the engine offline without a network
+          // change event. Recheck reachability before retrying cached requests.
+          const connection = await NetInfo.fetch();
+          await engine?.setOnline(
+            connection.isConnected !== false &&
+              connection.isInternetReachable !== false,
+          );
+          setRevision((n) => n + 1);
           if (engine?.status.online) await fileQueueRef.current?.flush();
-        });
+        }).catch(() => {});
       }
     });
     return () => subscription.remove();

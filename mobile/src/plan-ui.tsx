@@ -377,6 +377,7 @@ export function usePlanData<T>(path: string, sample: T) {
       session.demo,
       session.profileId,
       session.request,
+      session.offlineStatus.online,
       path,
       sample,
       version,

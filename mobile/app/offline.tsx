@@ -13,6 +13,7 @@ import {
 import type { Allowance } from "../src/offline/local-allowance";
 import { useEffect, useState } from "react";
 import { Alert, View } from "react-native";
+import NetInfo from "@react-native-community/netinfo";
 import { useSession } from "../src/session";
 import { Body, Button, Card, Heading, Notice, Screen } from "../src/ui";
 import type { OfflineMutation } from "../src/offline/types";
@@ -107,11 +108,14 @@ export default function OfflineScreen() {
           last downloaded data.
         </Body>
         <Button
-          title={status.syncing ? "Syncing…" : "Sync now"}
-          disabled={!engine || busy || status.syncing || !status.online}
+          title={status.syncing ? "Syncing…" : status.online ? "Sync now" : "Retry connection"}
+          disabled={!engine || busy || status.syncing}
           onPress={() =>
             void run(async () => {
-              await engine!.sync();
+              const connection = await NetInfo.fetch();
+              const online = connection.isConnected !== false && connection.isInternetReachable !== false;
+              await engine!.setOnline(online);
+              if (!online) throw new Error("Still offline. Check your connection and try again.");
               session.refresh();
             })
           }

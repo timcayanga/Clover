@@ -280,7 +280,7 @@ export async function savePositionTrade(
       throw new NativeInputError(
         "Delete the linked transfer first, then record its replacement. Both sides must stay together.",
       );
-    if (prior && input.counterpartPositionId)
+    if (prior && input.counterpartPositionId && !remove)
       throw new NativeInputError(
         "Create a new linked transfer instead of converting an existing trade.",
       );

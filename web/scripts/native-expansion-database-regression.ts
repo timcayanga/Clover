@@ -140,6 +140,18 @@ async function main() {
   );
   assert.equal(await units(a.id), "12");
   assert.equal(await units(b.id), "0");
+  // A client may retain the original destination when deleting a linked trade.
+  // This must reverse both sides, and retrying the delete must be harmless.
+  const retainedDestination = { ...transfer, id: randomUUID() };
+  await savePositionTrade("profile", "broker-a", "owner", retainedDestination);
+  for (let attempt = 0; attempt < 2; attempt++) {
+    await savePositionTrade(
+      "profile", "broker-a", "owner",
+      { ...retainedDestination, revision: 1 }, true,
+    );
+  }
+  assert.equal(await units(a.id), "12");
+  assert.equal(await units(b.id), "0");
   const current = (await positions()).find((p) => p.id === a.id)!;
   await assert.rejects(
     saveInvestmentPosition("profile", "broker-a", "owner", {

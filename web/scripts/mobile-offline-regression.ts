@@ -2,6 +2,7 @@ import { uploadInParts } from "../../mobile/src/offline/resumable-upload";
 import { NATIVE_UPLOAD_PART_SIZE } from "../../shared/native-upload";
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
+import { NetworkError } from "../../mobile/src/api";
 import {
   OfflineEngine,
   OFFLINE_MAX_AGE,
@@ -22,6 +23,27 @@ import type { Transaction } from "../../mobile/src/types";
 const cases: { name: string; run: () => Promise<void> | void }[] = [];
 const test = (name: string, run: () => Promise<void> | void) =>
   cases.push({ name, run });
+test("a transient timeout can reconnect and replace stale downloaded data", async () => {
+  let failing = false;
+  let amount = "15.20";
+  const e = setup(async () => {
+    if (failing) throw new NetworkError("Timed out");
+    return { transactions: [{ ...row, amount }] };
+  });
+  await e.setOnline(true);
+  const path = "transactions?workspaceId=p";
+  await e.request(path);
+  failing = true;
+  const cached = await e.request<{ transactions: Transaction[] }>(path);
+  assert.equal(cached.transactions[0].amount, "15.20");
+  assert.equal(e.status.online, false);
+  failing = false;
+  amount = "19.75";
+  await e.setOnline(true);
+  const fresh = await e.request<{ transactions: Transaction[] }>(path);
+  assert.equal(fresh.transactions[0].amount, "19.75");
+  assert.equal(e.status.online, true);
+});
 function memory(): OfflineStore {
   const data = new Map<string, string>();
   return {

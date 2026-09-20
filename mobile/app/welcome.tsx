@@ -48,7 +48,8 @@ async function rememberWelcome() {
 }
 export default function Welcome() {
   const access = useAccess();
-  const { width } = useWindowDimensions();
+  const { width, height } = useWindowDimensions();
+  const compact = height < 900;
   const insets = useSafeAreaInsets();
   const pager = useRef<ScrollView>(null);
   const [index, setIndex] = useState(0);
@@ -107,7 +108,7 @@ export default function Welcome() {
         style={{ flex: 1, minHeight: 0 }}
         contentContainerStyle={{ flexGrow: 1, paddingBottom: 12 }}
       >
-        <View style={s.brand}>
+        <View style={[s.brand, compact && s.compactBrand]}>
           <Image
             source={require("../assets/welcome-clover.png")}
             style={{ width: 34, height: 34 }}
@@ -144,7 +145,7 @@ export default function Welcome() {
                 }
               >
                 <View
-                  style={s.illustration}
+                  style={[s.illustration, compact && s.compactIllustration]}
                   accessibilityLabel={`Illustrative sample: ${slide.label}, ${slide.value}. ${slide.detail}`}
                 >
                   <Image
@@ -153,10 +154,10 @@ export default function Welcome() {
                         ? require("../assets/organize/upload-files.png")
                         : require("../assets/welcome-clover.png")
                     }
-                    style={{ width: 54, height: 54 }}
+                    style={{ width: compact ? 32 : 54, height: compact ? 32 : 54 }}
                   />
                   <Text style={s.label}>{slide.label}</Text>
-                  <Text style={s.value}>{slide.value}</Text>
+                  <Text style={[s.value, compact && s.compactValue]}>{slide.value}</Text>
                   <LinearGradient
                     colors={["#03a8c0", "#5ed3d0"]}
                     start={{ x: 0, y: 0 }}
@@ -169,17 +170,17 @@ export default function Welcome() {
                   />
                   <Text style={s.detail}>{slide.detail}</Text>
                 </View>
-                <Text accessibilityRole="header" style={s.title}>
+                <Text accessibilityRole="header" style={[s.title, compact && s.compactTitle]}>
                   {slide.title}
                 </Text>
-                <Text style={s.copy}>{slide.copy}</Text>
+                <Text style={[s.copy, compact && s.compactCopy]}>{slide.copy}</Text>
               </View>
             ))}
           </ScrollView>
         ) : (
           <View style={{ padding: 24 }}>
-            <Text style={s.title}>Welcome to Clover</Text>
-            <Text style={s.copy}>Your money, all together.</Text>
+            <Text style={[s.title, compact && s.compactTitle]}>Welcome to Clover</Text>
+            <Text style={[s.copy, compact && s.compactCopy]}>Your money, all together.</Text>
             <Pressable
               accessibilityRole="button"
               style={s.next}
@@ -319,6 +320,11 @@ const s = StyleSheet.create({
     gap: 14,
     justifyContent: "center",
   },
+  compactBrand: { paddingVertical: 12 },
+  compactIllustration: { minHeight: 160, padding: 12, gap: 6 },
+  compactValue: { fontSize: 24 },
+  compactTitle: { marginTop: 12, fontSize: 24 },
+  compactCopy: { marginTop: 8, minHeight: 0 },
   label: { color: "#0f262e", fontSize: 15, fontFamily: "Poppins-Medium" },
   value: { color: "#0f262e", fontSize: 27, fontFamily: "Poppins-SemiBold" },
   detail: { color: "#596e78", fontSize: 12, fontFamily: "Poppins-Regular" },
