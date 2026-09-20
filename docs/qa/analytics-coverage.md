@@ -55,4 +55,4 @@ Browser runtime checks additionally exercise real Fetch/Response, dialog open/cl
 
 ## Execution evidence
 
-Pending completion of this implementation's release verification. See the accompanying run report for results and any remaining access/device limitations.
+The full `npm run qa:prepush` gate passed (exit 0), including iOS/Android bundle generation and the web production build. Ten browser-runtime checks passed on desktop and ten with iPhone browser emulation. The staging ingestion endpoint accepted a test event with HTTP 200. Dashboard/query verification is deferred at the user’s request until a PostHog Query Read key is configured. Native runtime receipt still requires rebuilt binaries; no physical-device or native-simulator delivery pass is claimed. See `analytics-results-2026-09-20.json` and `posthog-setup.md`.
