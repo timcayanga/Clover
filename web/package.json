@@ -184,7 +184,7 @@
     "qa:import-timing": "tsx scripts/import-timing-regression.ts",
     "qa:transaction-table": "tsx scripts/transaction-table-regression.ts",
     "qa:app-font": "tsx scripts/app-font-regression.ts",
-    "qa:receipt-detail-refresh": "tsx scripts/transaction-detail-refresh-regression.ts"
+    "qa:receipt-detail-refresh": "tsx scripts/transaction-detail-refresh-regression.ts && tsx scripts/review-refresh-state-regression.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1095.0",
