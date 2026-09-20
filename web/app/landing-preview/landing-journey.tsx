@@ -343,7 +343,7 @@ export function LandingJourney({ authEnabled, initialMarket, countryResolved }: 
       <JourneyHeader />
 
       <div className={styles.world} aria-hidden="true">
-        <StoryBackground prefix="landing" count={chapters.length} active={displayedChapter} blurred={chapter === 1 || chapter === 6} />
+        <StoryBackground prefix="landing" count={chapters.length} active={displayedChapter} position={storyPosition} blurred={chapter === 1 || chapter === 6} />
         <div className={styles.worldWash} />
       </div>
 

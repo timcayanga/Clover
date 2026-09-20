@@ -94,6 +94,7 @@ type AdviserChatProps = {
   storageKey?: string;
   initialPrompt?: string;
   layout?: "embedded" | "workspace";
+  minimal?: boolean;
   surface?: AdviserPlanningSurface;
   pageLabel?: string;
 };
@@ -161,9 +162,9 @@ export function AdviserChat(props: AdviserChatProps) {
     update(); window.addEventListener(selectedWorkspaceEventName,update);
     return () => { controller?.abort(); window.removeEventListener(selectedWorkspaceEventName,update); };
   }, [props.workspaceId]);
-  return scope ? <ScopedAdviserChat key={scope} {...props} workspaceId={scope} storageKey={`${adviserChatStorageKey}:${scope}`} /> : <p>Choose a Profile to ask Adviser.</p>;
+  return scope ? <ScopedAdviserChat key={scope} {...props} workspaceId={scope} storageKey={`${adviserChatStorageKey}:${scope}`} /> : <div className="adviser-chat__loading" role="status" aria-label="Loading Adviser" />;
 }
-function ScopedAdviserChat({ prompts, storageKey = adviserChatStorageKey, initialPrompt = "", layout = "embedded", surface = "general", pageLabel, workspaceId, formContext, onReviewForm }: AdviserChatProps & {workspaceId:string}) {
+function ScopedAdviserChat({ prompts, storageKey = adviserChatStorageKey, initialPrompt = "", layout = "embedded", minimal = false, surface = "general", pageLabel, workspaceId, formContext, onReviewForm }: AdviserChatProps & {workspaceId:string}) {
   const [entryDraft,setEntryDraft] = useState<EntryDraft|null>(null);
   const [entryLocked,setEntryLocked] = useState(false);
 
@@ -579,7 +580,7 @@ function ScopedAdviserChat({ prompts, storageKey = adviserChatStorageKey, initia
 
   return (
     <div className={`adviser-experience adviser-experience--${layout}`}>
-      <button className="button button-secondary adviser-history-toggle" type="button" aria-expanded={historyOpen} onClick={()=>setHistoryOpen(!historyOpen)}>Your chats</button>
+      {!minimal ? <button className="button button-secondary adviser-history-toggle" type="button" aria-expanded={historyOpen} onClick={()=>setHistoryOpen(!historyOpen)}>Your chats</button> : null}
       <aside className={`adviser-history${historyOpen ? " is-open" : ""}`} aria-label="Chat history">
         <h2>Adviser</h2>
         <button className="button button-primary" type="button" disabled={isSending||attaching||entryLocked||history.busy} onClick={startNewConversation}>+ New chat</button>
@@ -591,7 +592,7 @@ function ScopedAdviserChat({ prompts, storageKey = adviserChatStorageKey, initia
       <div className="adviser-experience__main">
       {history.error ? <p role="status">{history.error} <button type="button" onClick={()=>messages.length ? void history.save(messages) : history.retry()}>Retry</button></p> : null}
     <div className={`adviser-chat${layout === "workspace" ? " adviser-chat--workspace" : ""}${messages.length === 0 ? " adviser-chat--empty" : ""}`}>
-      {layout === "embedded" || messages.length > 0 ? (
+      {(!minimal && layout === "embedded") || messages.length > 0 ? (
         <div className="adviser-chat__heading-row">
           {layout === "embedded" ? <p className="eyebrow adviser-chat__ask-label">Ask Clover</p> : <span />}
           {messages.length > 0 ? (
@@ -608,7 +609,7 @@ function ScopedAdviserChat({ prompts, storageKey = adviserChatStorageKey, initia
             : `${usage.remaining} Adviser question${usage.remaining === 1 ? "" : "s"} left this month on ${usage.plan === "pro" ? "Pro" : "Free"}.`}
         </p>
       ) : null}
-      {messages.length === 0 ? (
+      {messages.length === 0 && !minimal ? (
         <div className="adviser-chat__welcome">
           <Image className="adviser-chat__welcome-mark" src="/clover-mark.svg" alt="" width={42} height={42} priority />
           <div className="adviser-chat__welcome-copy">

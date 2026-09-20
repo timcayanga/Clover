@@ -1,5 +1,7 @@
 "use client";
 
+import { getBudgetAppearance } from "@/lib/budget-appearance";
+import type { CSSProperties } from "react";
 import { HomeSensitiveAmount } from "@/components/home-sensitive-amount";
 
 import Link from "next/link";
@@ -9,6 +11,8 @@ import { formatCurrencyAmount } from "@/lib/currency-format";
 type BudgetProgress = {
   id: string;
   name: string;
+  categoryName?: string | null;
+  emoji?: string | null;
   kind: "spend_limit" | "savings_target";
   currency: string;
   actualAmount: number;
@@ -47,7 +51,7 @@ export function DashboardBudgetPulse({ workspaceId, refreshKey }: { workspaceId:
   return (
     <article className="dashboard-home__insight-strip glass" aria-label="Budget status">
       <div className="home-budget-progress__header">
-        <p className="eyebrow">Budgeting</p>
+        <h4 className="reports-subtab-title">Budgeting</h4>
         <Link className="dashboard-home__insight-strip-action" href="/budgeting">
           {pulse.activeBudgetCount > 3 ? `View all ${pulse.activeBudgetCount} budgets` : "Open budgeting"}
         </Link>
@@ -58,7 +62,7 @@ export function DashboardBudgetPulse({ workspaceId, refreshKey }: { workspaceId:
           const target = formatCurrencyAmount(budget.targetAmount, budget.currency);
           const progress = Math.max(0, Math.min(100, budget.progressPercent));
           return (
-            <Link key={budget.id} href={`/budgeting?budget=${encodeURIComponent(budget.id)}`} className={`home-budget-progress${budget.isAtRisk ? " home-budget-progress--warning" : ""}`}>
+            <Link style={{ "--collection-color": getBudgetAppearance(budget).color } as CSSProperties} key={budget.id} href={`/budgeting?budget=${encodeURIComponent(budget.id)}`} className={`home-budget-progress${budget.isAtRisk ? " home-budget-progress--warning" : ""}`}>
               <div className="home-budget-progress__heading">
                 <strong>{budget.name}</strong>
                 <span>{budget.statusLabel}</span>

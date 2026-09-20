@@ -1,4 +1,5 @@
 "use client";
+import { AccountTypePicker } from "@/components/account-type-picker";
 import { AddEntryMethods } from "@/components/add-entry-methods";
 import { getInvestmentInstitutionSnapshotSummary } from "@/lib/investment-institution-summary";
 import { compactSummaryMoney } from "../../../shared/summary-format";
@@ -5150,20 +5151,7 @@ function AccountsPageContent() {
                   <div className="accounts-add-fields" style={{ width: "100%", minWidth: 0 }}>
                           <label className="accounts-add-fields__type-field" >
                             <span>Account type</span>
-                            <select
-                              value={manualType}
-                              onChange={(event) => setManualType(event.target.value as Account["type"])}
-                            >
-                              {ACCOUNT_TYPE_SECTIONS.map((section) => (
-                                <optgroup key={section.label} label={section.label}>
-                                  {section.options.map((option) => (
-                                    <option key={option} value={option}>
-                                      {formatAccountTypeLabel(option)}
-                                    </option>
-                                  ))}
-                                </optgroup>
-                              ))}
-                            </select>
+                            <AccountTypePicker value={manualType} onChange={setManualType} />
                           </label>
 
                     <div className="accounts-add-fields__row accounts-add-fields__row--amount" style={{ display: "flex", alignItems: "flex-end", gap: 12, width: "100%", minWidth: 0 }}>

@@ -8476,7 +8476,7 @@ export function ImportFilesModal({
       >
         <div className="accounts-import-modal__toolbar">
           <div className="accounts-import-modal__heading">
-            <span className="eyebrow">Import</span>
+
             <h2>Add financial files</h2>
             <p>Take a photo or choose statements, receipts, spreadsheets, and screenshots.</p>
           </div>
@@ -8528,7 +8528,7 @@ export function ImportFilesModal({
             onChange={handleInputChange}
           />
           <strong>Drop files anywhere on this page</strong>
-          <span>Or use one of the options below.</span>
+
           <input ref={photoLibraryInputRef} className="hidden-file-input" type="file" accept="image/*" multiple onChange={handleInputChange} />
           <UploadSourceButtons onFiles={openFilePicker} onCamera={() => cameraInputRef.current?.click()} onLibrary={() => photoLibraryInputRef.current?.click()} />
         </div>

@@ -48,14 +48,14 @@ assert.match(
   /void refreshOpenTransactionDetail\(transaction\.id\)/,
   "Opening Transaction Details must request the latest enriched line items."
 );
-assert.match(transactionsPage, /className="transaction-drawer-form__amount-type-row transaction-drawer-form__amount-type-row--amount-only"/);
+assert.match(transactionsPage, /data-detail-field=\{label\}/);
 assert.match(accountDetailPage, /className="transaction-drawer-form__amount-type-row"/);
 assert.match(globalStyles, /\.transaction-drawer-select__icon\s*\{[^}]*z-index:\s*2;/s);
 assert.match(globalStyles, /@media \(max-width: 1100px\)[\s\S]*?\.transaction-drawer-form__amount-type-row\s*\{\s*grid-template-columns:\s*minmax\(0, 1fr\);/);
-assert.match(detailPage, /\{ value: "transfer", label: "Transfer", icon: "↔" \}/, "Mobile editing must use the shared three-option type selector.");
+assert.match(detailPage, /<option value="transfer">Transfer<\/option>/, "Mobile inline editing must retain the transfer type option.");
 assert.match(detailPage, /editing \? "Edit transaction" : "Transaction details"/, "Mobile details must distinguish view and edit states.");
 assert.match(detailPage, /Save changes/, "Mobile edits must require an explicit save.");
-assert.match(detailPage, /beginEditing\("name"\)/, "Clicking a visible detail must enter editing without a separate Edit action.");
+assert.match(detailPage, /beginEditing\(field\)/, "Clicking a visible detail must enter editing without a separate Edit action.");
 assert.match(detailPage, /transaction-detail-page__delete-button/, "Mobile deletion must remain available at the bottom of the page.");
 assert.match(detailPage, /method: "PATCH"/);
 assert.match(detailPage, /method: "DELETE"/);

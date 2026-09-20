@@ -54,7 +54,7 @@ const formatter={transactionEstimateLoading:false,transactionEstimateUnavailable
 assert.equal(evaluate(['formatTransactionSummary'],{...formatter,transactionsLoadFailed:true},'formatTransactionSummary(0)'), 'Unavailable');
 assert.equal(evaluate(['formatTransactionSummary'],{...formatter,transactionsLoadFailed:false},'formatTransactionSummary(0)'), 'PHP 0');
 const detail=fs.readFileSync(new URL('../app/transactions/[transactionId]/page.tsx',import.meta.url),'utf8');
-assert.match(detail,/<label htmlFor="transaction-detail-amount" data-transaction-detail-field="amount">/);
+assert.match(detail,/data-transaction-detail-field=\{field\}/);
 assert.match(detail,/<input\s+id="transaction-detail-amount"\s+type="number"\s+aria-label="Amount"/);
 assert.equal((detail.match(/id="transaction-detail-amount"/g)??[]).length,1);
 console.log('UI defects regression passed: category sort both directions, authoritative currencies, nine mobile sizes, exhaustion/search boundaries, failed/recovered totals, amount label association.');

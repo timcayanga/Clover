@@ -34,8 +34,7 @@ export function TransactionTableEntry({
   const [optional, setOptional] = useState<(keyof TableRow)[]>([]),
     [columnsOpen, setColumnsOpen] = useState(false);
   const [existingDuplicates, setExistingDuplicates] = useState(false);
-  const [selected, setSelected] = useState<string[]>([]),
-    [editing, setEditing] = useState<string | null>(null);
+
   const [error, setError] = useState(""),
     [validate, setValidate] = useState(false),
     [busy, setBusy] = useState(false),
@@ -107,7 +106,7 @@ export function TransactionTableEntry({
     }
     const row = emptyTableRow(crypto.randomUUID());
     change([...rows, row]);
-    setEditing(row.key);
+
   };
   const paste = (event: React.ClipboardEvent, ri: number, ci: number) => {
     const text = event.clipboardData.getData("text/plain");
@@ -119,7 +118,7 @@ export function TransactionTableEntry({
         throw new Error("Paste up to 50 rows per batch.");
       if (cells.some((row) => ci + row.length > fields.length))
         throw new Error(
-          "Your paste has more columns than are visible. Open Columns first, then paste again.",
+          "Your paste has more columns than are visible. Open Optional columns using the arrow beside Amount first, then paste again.",
         );
       const next = rows.map((r) => ({ ...r }));
       while (next.length < ri + cells.length)
@@ -217,8 +216,8 @@ export function TransactionTableEntry({
       setRows([emptyTableRow(crypto.randomUUID())]);
       setPast([]);
       setFuture([]);
-      setSelected([]);
-      setEditing(null);
+
+
       id.current = crypto.randomUUID();
       pending.current = null;
       clearAccountsWorkspaceCache(workspaceId);
@@ -313,7 +312,6 @@ export function TransactionTableEntry({
       </>
     );
   };
-  const editingIndex = rows.findIndex((r) => r.key === editing);
   return (
     <div
       className="table-entry"
@@ -362,14 +360,7 @@ export function TransactionTableEntry({
           <h4>Add multiple transactions</h4>
           <p>Paste from Excel or Sheets. Required fields are marked *.</p>
         </div>
-        <button
-          className="button button-secondary"
-          type="button"
-          onClick={() => setColumnsOpen(!columnsOpen)}
-          aria-expanded={columnsOpen}
-        >
-          Columns ⋮
-        </button>
+
       </div>
       {columnsOpen ? (
         <fieldset className="table-entry__columns">
@@ -417,72 +408,12 @@ export function TransactionTableEntry({
         >
           Redo
         </button>
-        {selected.length ? (
-          <>
-            <span>{selected.length} selected</span>
-            <button
-              type="button"
-              className="button button-secondary"
-              disabled={locked}
-              onClick={() => {
-                if (rows.length + selected.length > 50) {
-                  setError("A batch can contain up to 50 rows.");
-                  return;
-                }
-                change([
-                  ...rows,
-                  ...rows
-                    .filter((r) => selected.includes(r.key))
-                    .map((r) => ({ ...r, key: crypto.randomUUID() })),
-                ]);
-              }}
-            >
-              Duplicate
-            </button>
-            <button
-              type="button"
-              className="button button-secondary"
-              disabled={locked}
-              onClick={() => {
-                const first = rows.find((r) => selected.includes(r.key));
-                if (first)
-                  change(
-                    rows.map((r) =>
-                      selected.includes(r.key)
-                        ? {
-                            ...r,
-                            accountId: first.accountId,
-                            currency: first.currency,
-                            categoryId: first.categoryId,
-                            type: first.type,
-                          }
-                        : r,
-                    ),
-                  );
-              }}
-            >
-              Fill type, account & category
-            </button>
-            <button
-              type="button"
-              className="button button-secondary"
-              disabled={locked}
-              onClick={() => {
-                change(rows.filter((r) => !selected.includes(r.key)));
-                setSelected([]);
-              }}
-            >
-              Delete rows
-            </button>
-          </>
-        ) : null}
+
       </div>
       <div className="table-entry__desktop">
         <table>
           <thead>
             <tr>
-              <th aria-label="Selection" />
-              <th>#</th>
               {fields.map((f) => (
                 <th
                   key={f}
@@ -496,6 +427,7 @@ export function TransactionTableEntry({
                   {tableFields.includes(f as (typeof tableFields)[number])
                     ? " *"
                     : ""}
+                  {f === "amount" ? <button type="button" className="table-entry__expand" aria-label="Optional columns" aria-expanded={columnsOpen} onClick={() => setColumnsOpen(!columnsOpen)}>{columnsOpen ? "‹" : "›"}</button> : null}
                 </th>
               ))}
             </tr>
@@ -503,107 +435,13 @@ export function TransactionTableEntry({
           <tbody>
             {rows.map((r, ri) => (
               <tr key={r.key}>
-                <td>
-                  <input
-                    type="checkbox"
-                    aria-label={`Select row ${ri + 1}`}
-                    checked={selected.includes(r.key)}
-                    onChange={() =>
-                      setSelected((s) =>
-                        s.includes(r.key)
-                          ? s.filter((k) => k !== r.key)
-                          : [...s, r.key],
-                      )
-                    }
-                  />
-                </td>
-                <td>
-                  {ri + 1}
-                  {duplicates.has(r.key) ? (
-                    <span title="Possible duplicate"> ⚠</span>
-                  ) : null}
-                </td>
                 {fields.map((f, ci) => (
-                  <td key={f}>{control(r, f, ri, ci)}</td>
+                  <td key={f}>{control(r, f, ri, ci)}{f === "merchant" && duplicates.has(r.key) ? <span className="table-entry__issue">Possible duplicate</span> : null}</td>
                 ))}
               </tr>
             ))}
           </tbody>
         </table>
-      </div>
-      <div className="table-entry__mobile">
-        {editingIndex < 0 ? (
-          rows.map((r, i) => (
-            <button
-              type="button"
-              className="table-entry__row"
-              key={r.key}
-              onClick={() => setEditing(r.key)}
-            >
-              <strong>
-                {i + 1}. {r.merchant || "New transaction"}
-              </strong>
-              <span>
-                {r.amount ? `${r.currency} ${r.amount}` : "Add details"} ›
-              </span>
-              {validate &&
-              populatedRow(r) &&
-              Object.keys(tableRowIssues(r, options)).length ? (
-                <small>Check this row</small>
-              ) : null}
-            </button>
-          ))
-        ) : (
-          <>
-            <div className="table-entry__toolbar">
-              <button
-                type="button"
-                className="button button-secondary"
-                onClick={() => setEditing(null)}
-              >
-                Back to rows
-              </button>
-              <span>
-                Row {editingIndex + 1} of {rows.length}
-              </span>
-            </div>
-            {fields.map((f, ci) => (
-              <label key={f}>
-                {tableLabels[f]}
-                {control(rows[editingIndex], f, editingIndex, ci)}
-              </label>
-            ))}
-            <div className="table-entry__toolbar">
-              <button
-                type="button"
-                className="button button-secondary"
-                disabled={editingIndex === 0}
-                onClick={() => setEditing(rows[editingIndex - 1].key)}
-              >
-                Previous
-              </button>
-              <button
-                type="button"
-                className="button button-secondary"
-                disabled={editingIndex === rows.length - 1}
-                onClick={() => setEditing(rows[editingIndex + 1].key)}
-              >
-                Next
-              </button>
-              <button
-                type="button"
-                className="button button-secondary"
-                disabled={locked}
-                onClick={() => {
-                  change(rows.filter((r) => r.key !== editing));
-                  setEditing(null);
-                }}
-              >
-                Delete row
-              </button>
-            </div>
-          </>
-        )}
       </div>
       <button
         type="button"

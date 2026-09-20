@@ -7,7 +7,6 @@ import { UploadSourceButtons, UploadSecurityCopy } from "@/components/upload-sou
 import { TransactionColumns, TransactionTagPreview, useTransactionColumns } from "@/components/transaction-columns";
 import { organizeAccountLabels } from "@/lib/organize-account-label";
 import { InterfaceIcon } from "@/components/interface-icon";
-import { AdviserFormAssist } from "@/components/adviser-form-assist";
 import { AdviserChat } from "@/components/adviser-chat";
 import { formatTransactionAccountName } from "@/lib/transaction-account-sort";
 import { containDialogFocus } from "@/lib/dialog-focus";
@@ -5308,7 +5307,7 @@ function TransactionsPageContent() {
     requestAnimationFrame(() => {
       const root = document.querySelector(".transaction-drawer");
       root?.querySelectorAll("details").forEach((element) => { element.open = true; });
-      const field = Array.from(root?.querySelectorAll("label") ?? []).find((element) => element.textContent?.trim().startsWith(label));
+      const field = Array.from(root?.querySelectorAll("[data-detail-field]") ?? []).find((element) => element.getAttribute("data-detail-field") === label);
       (field?.querySelector("input, textarea, button, select") as HTMLElement | null)?.focus();
     });
   };
@@ -8661,7 +8660,7 @@ function TransactionsPageContent() {
         </div>
       ) : null}
 
-      {manualOpen ? (
+      {manualOpen ? createPortal(
         <div className="modal-backdrop modal-backdrop--centered-mobile" role="presentation" onClick={() => { if (!isSaving && !tableLocked) setManualOpen(false); }}>
           <section
             className={`modal-card modal-card--manual transactions-entry--figma glass${enlargedText ? " modal-card--enlarged-text" : ""}`}
@@ -8960,7 +8959,6 @@ function TransactionsPageContent() {
                 {manualMoreOpen ? (
                   <>
                     <div className="manual-more-panel manual-more-panel--compact">
-<AdviserFormAssist workspaceId={selectedWorkspaceId} context={{kind:"transaction", fields: Object.fromEntries(Object.entries(manualForm).filter(([key,value]) => ["accountId","categoryId","merchantRaw","merchantClean","amount","date","currency","type","description"].includes(key) && typeof value === "string")) as Record<string,string>}} />
                       {manualForm.type === "transfer" ? (
                         <label className="transactions-manual-field transactions-manual-field--embedded-label">
                           <span className="transactions-manual-field__label">Transfer fee (optional)</span>
@@ -9111,16 +9109,15 @@ function TransactionsPageContent() {
             </form>
             </div>
             {creationChatVisited ? <div id="creation-panel-ask" role="tabpanel" aria-labelledby="creation-tab-ask" hidden={creationTab !== "ask"} className="transaction-creation-panel">
-              <h4>Tell Clover what to add</h4>
-              <p>For example: “Lunch ₱250 with cash, groceries ₱1,200 from BPI.” Review each draft before saving.</p>
-              <AdviserChat workspaceId={selectedWorkspaceId} prompts={[]} isPro={planTier === "pro"} surface="transactions" pageLabel="Add transactions: prepare editable drafts for review" />
+
+              <AdviserChat minimal workspaceId={selectedWorkspaceId} prompts={[]} isPro={planTier === "pro"} surface="transactions" pageLabel="Add transactions: prepare editable drafts for review" />
             </div> : null}
             {true ? <div id="creation-panel-upload" role="tabpanel" aria-labelledby="creation-tab-upload" hidden={creationTab !== "upload"} className="transaction-creation-panel">
 
               <UploadSourceButtons onFiles={openMobileFilePicker} onCamera={openPhotoCapture} onLibrary={openPhotoLibrary} /><UploadSecurityCopy />
             </div> : null}
           </section>
-        </div>
+        </div>, document.body
       ) : null}
 
       {selectedTransaction ? (
@@ -9176,120 +9173,6 @@ function TransactionsPageContent() {
               </div>
             ) : null}
 
-            {detailEditing ? (
-            <div className="transaction-drawer-form transaction-drawer-form--single">
-              <div className="transaction-drawer-edit-type">
-                <span className="transactions-manual-type-section__label">Transaction type</span>
-                <div className="transactions-manual-type-toggle" role="group" aria-label="Transaction type">
-                  {amountTypeOptions.map((option) => (
-                    <button
-                      key={option.value}
-                      type="button"
-                      className={`transactions-manual-type-toggle__button ${detailDraft?.type === option.value ? "is-active" : ""}`}
-                      aria-pressed={detailDraft?.type === option.value}
-                      onClick={() =>
-                        setDetailDraft((current) =>
-                          current ? { ...current, type: option.value, isTransfer: option.value === "transfer" } : current
-                        )
-                      }
-                    >
-                      <span className="transactions-manual-type-symbol" aria-hidden="true">{option.icon}</span>
-                      <span>{option.label}</span>
-                    </button>
-                  ))}
-                </div>
-              </div>
-              <label>
-                Name
-                <input
-                  value={detailDraft?.merchantClean ?? selectedTransaction.merchantClean ?? selectedTransaction.merchantRaw}
-                  onChange={(event) =>
-                    setDetailDraft((current) => (current ? { ...current, merchantClean: event.target.value } : current))
-                  }
-                  placeholder="Merchant or payee"
-                />
-              </label>
-
-              <label>
-                Date
-                <input
-                  type="date"
-                  value={detailDraft?.date ?? todayIso}
-                  onChange={(event) => setDetailDraft((current) => (current ? { ...current, date: event.target.value } : current))}
-                />
-              </label>
-
-              <div className="transaction-drawer-form__amount-type-row transaction-drawer-form__amount-type-row--amount-only">
-                <div className="transaction-drawer-form__amount-field">
-                  <span className="transaction-drawer-field-label">
-                    <span>Amount</span>
-                  </span>
-                  <div className="transaction-drawer-form__money-row">
-                    <CurrencySelector
-                      value={detailDraft?.currency ?? selectedTransaction.currency}
-                      onChange={(value) => setDetailDraft((current) => (current ? { ...current, currency: value } : current))}
-                      options={currencyCatalogCodes}
-                      ariaLabel="Select transaction currency"
-                      className="transaction-drawer-form__currency-selector"
-                      buttonClassName="transaction-drawer-form__currency-button"
-                      menuClassName="transaction-drawer-form__currency-menu"
-                      optionClassName="transaction-drawer-form__currency-option"
-                    />
-                    <input
-                      type="number"
-                      step="0.01"
-                      aria-label="Amount"
-                      value={detailDraft?.amount ?? selectedTransaction.amount}
-                      onChange={(event) => setDetailDraft((current) => (current ? { ...current, amount: event.target.value } : current))}
-                    />
-                  </div>
-                </div>
-
-              </div>
-
-              <label>
-                <span className="transaction-drawer-field-label">
-                  <span>Account</span>
-                </span>
-                <div className="transaction-drawer-select transaction-drawer-select--picker">
-                  <span className="transaction-drawer-select__icon" aria-hidden="true">
-                    {detailSelectedAccountBrand ? (
-                      <AccountBrandMark
-                        accountBrand={detailSelectedAccountBrand}
-                        label={detailSelectedAccount?.name ?? "Account"}
-                      />
-                    ) : null}
-                  </span>
-                  <TransactionAccountPicker
-                    accounts={transactionAccountPickerOptions}
-                    selectedId={detailDraft?.accountId ?? ""}
-                    onSelect={(account) => setDetailDraft((current) => (current ? { ...current, accountId: account.id } : current))}
-                    ariaLabel="Choose transaction account"
-                    className="transaction-drawer-relation-picker"
-                  />
-                </div>
-              </label>
-
-              <label>
-                <span className="transaction-drawer-field-label">
-                  <span>Category</span>
-                </span>
-                <div className="transaction-drawer-select transaction-drawer-select--picker">
-                  <span className="transaction-drawer-select__icon" aria-hidden="true">
-                    <CategoryBrandMark categoryName={detailSelectedCategory?.name ?? "Other"} size={24} radius={8} className="transaction-drawer-category-icon" />
-                  </span>
-                  <TransactionCategoryPicker
-                    categories={categories}
-                    selectedId={detailDraft?.categoryId ?? otherCategoryId}
-                    onSelect={(category) => setDetailDraft((current) => (current ? { ...current, categoryId: category.id } : current))}
-                    ariaLabel="Choose transaction category"
-                    className="transaction-drawer-relation-picker"
-                  />
-                </div>
-              </label>
-
-            </div>
-            ) : (
               <div className="transaction-drawer-view">
                 <div className={`transaction-drawer-view__amount is-${detailDraft?.type ?? "debit"}`}>
                   <span>{detailDraft?.type === "credit" ? "+" : detailDraft?.type === "transfer" ? "↔" : "−"}</span>
@@ -9306,7 +9189,14 @@ function TransactionsPageContent() {
                     ["Amount", formatTransactionAmount(Number(detailDraft?.amount ?? selectedTransaction.amount), detailDraft?.currency ?? selectedTransaction.currency)],
                     ["Tags", (selectedTransaction.tags ?? []).map((tag) => tag.name).join(", ") || "Add tags"],
                     ["Notes", detailDraft?.description.trim() || "Add a note"],
-                  ].map(([label, value]) => <div key={label}><dt><TransactionDetailLabel label={label} /></dt><dd><button type="button" onClick={() => beginDrawerEdit(label)}>{value}</button></dd></div>)}
+                  ].map(([label, value]) => <div key={label} data-detail-field={label}><dt>{label === "Account" && detailSelectedAccountBrand ? <><span className="transaction-detail-brand"><AccountBrandMark accountBrand={detailSelectedAccountBrand} label="" /></span><span>Account</span></> : label === "Category" ? <><CategoryBrandMark categoryName={detailSelectedCategory?.name ?? selectedTransaction.categoryName ?? "Other"} size={24} /><span>Category</span></> : <TransactionDetailLabel label={label} />}</dt><dd>{detailEditing ? (
+                    label === "Account" ? <TransactionAccountPicker accounts={transactionAccountPickerOptions} selectedId={detailDraft?.accountId ?? ""} onSelect={account => setDetailDraft(current => current ? {...current,accountId:account.id} : current)} ariaLabel="Choose transaction account" /> :
+                    label === "Category" ? <TransactionCategoryPicker categories={categories} selectedId={detailDraft?.categoryId ?? otherCategoryId} onSelect={category => setDetailDraft(current => current ? {...current,categoryId:category.id} : current)} ariaLabel="Choose transaction category" /> :
+                    label === "Type" ? <select aria-label="Transaction type" value={detailDraft?.type} onChange={event => setDetailDraft(current => current ? {...current,type:event.target.value as "credit" | "debit" | "transfer",isTransfer:event.target.value === "transfer"} : current)}>{amountTypeOptions.map(option => <option value={option.value} key={option.value}>{option.label}</option>)}</select> :
+                    label === "Tags" ? <TransactionTagsEditor tags={detailTags} onChange={setDetailTags} suggestions={tagSuggestions} /> :
+                    label === "Notes" ? <textarea aria-label="Notes" value={detailDraft?.description ?? ""} onChange={event => setDetailDraft(current => current ? {...current,description:event.target.value} : current)} /> :
+                    <input aria-label={label} type={label === "Date" ? "date" : label === "Amount" ? "number" : "text"} step={label === "Amount" ? "0.01" : undefined} value={label === "Date" ? detailDraft?.date ?? todayIso : label === "Amount" ? detailDraft?.amount ?? "" : detailDraft?.merchantClean ?? ""} onChange={event => setDetailDraft(current => current ? {...current,[label === "Date" ? "date" : label === "Amount" ? "amount" : "merchantClean"]:event.target.value} : current)} />
+                  ) : <button type="button" onClick={() => beginDrawerEdit(label)}>{value}</button>}</dd></div>)}
                 </dl>
                 <details className="transaction-line-items-accordion">
                   <summary>Line Items <span>{detailReceiptLineItems.length}</span></summary>
@@ -9314,7 +9204,6 @@ function TransactionsPageContent() {
                   <button className="button button-secondary button-small" type="button" onClick={() => beginDrawerEdit("Line Items")}>Edit / add line items</button>
                 </details>
               </div>
-            )}
 
             {detailEditing ? (
               <label>
@@ -9369,20 +9258,6 @@ function TransactionsPageContent() {
             <details className="transaction-drawer-more">
               <summary>More</summary>
               <div className="transaction-drawer-more__body">
-                <label>Tags<TransactionTagsEditor tags={detailTags} onChange={setDetailTags} suggestions={tagSuggestions} /></label>
-                <label className="transaction-drawer-form__notes">
-                  Notes
-                  <textarea
-                    value={
-                      selectedTransactionRawNote &&
-                      (detailDraft?.description ?? "").trim() === selectedTransactionRawNote.trim()
-                        ? ""
-                        : detailDraft?.description ?? ""
-                    }
-                    onChange={(event) => setDetailDraft((current) => (current ? { ...current, description: event.target.value } : current))}
-                    placeholder="Optional note or review context"
-                  />
-                </label>
                 <div className="transaction-drawer-receipt-lines">
                   <div className="transaction-drawer-receipt-lines__head">
                     <span className="transaction-drawer-field-label">
@@ -9473,7 +9348,7 @@ function TransactionsPageContent() {
                   <div className="transaction-drawer-more__row">
                     <span>Source</span>
                     <strong>{selectedTransaction.importFileId ? "Imported" : "Manual"}</strong>
-                    {selectedTransaction.importFileId ? <p>Source file: {selectedTransaction.importFileName ?? selectedTransaction.importFileId}</p> : null}
+                    {selectedTransaction.importFileId ? <p>{selectedTransaction.importFileName ?? selectedTransaction.importFileId}</p> : null}
                   </div>
                   <div className="transaction-drawer-more__row">
                     <span>Confidence score</span>
@@ -9486,7 +9361,6 @@ function TransactionsPageContent() {
                       <strong>{selectedTransactionConfidenceScore ?? 0}%</strong>
                     </span>
                   </div>
-                  <p>Clover keeps the original source separate from the details you confirm.</p>
                   <section aria-label="Parsed information"><h5>Parsed information</h5><p>{getTransactionParsedNote(selectedTransaction) || selectedTransaction.merchantRaw}</p></section>
                 </div>
               </details>

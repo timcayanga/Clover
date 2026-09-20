@@ -5430,7 +5430,7 @@ function AccountDetailPageContent() {
                 <option value="">Select an account</option>
                 {mergeableAccounts.map((candidate) => (
                   <option key={candidate.id} value={candidate.id}>
-                    {formatAccountOptionLabel(candidate, `${candidate.institution ? `${candidate.institution} · ` : ""}${candidate.name}${candidate.accountNumber ? ` · ${candidate.accountNumber}` : ""}`)}
+                    {candidate.name}
                   </option>
                 ))}
               </select>

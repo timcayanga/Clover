@@ -78,7 +78,7 @@ export function FeatureStory({ story, authEnabled, initialMarket, countryResolve
     <div className={styles.stage}>
       <JourneyHeader />
       <div className={styles.background} data-feature-background aria-hidden="true">
-        <StoryBackground prefix={story.slug} count={story.chapters.length} active={active} blurred={pricing} />
+        <StoryBackground prefix={story.slug} count={story.chapters.length} active={active} position={position} blurred={pricing} />
       </div>
       <div className={styles.wash} aria-hidden="true" />
       <section ref={copyRef} className={`${styles.content} ${pricing?styles.pricingContent:""}`} data-landing-copy data-final={final} aria-live="polite" aria-atomic="true">

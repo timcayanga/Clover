@@ -93,9 +93,9 @@ assert.match(transactionDetail, /<summary>More<\/summary>/, "Mobile transaction 
 assert.match(transactionDetail, /Line Items/, "Mobile transaction details must show editable line items.");
 assert.match(transactionDetail, /confidenceScore/, "Mobile transaction details must show confidence context.");
 assert.doesNotMatch(transactionDetail, /Source Details/, "Transaction details should not expose source diagnostics in the user interface.");
-assert.match(crossFeatureActions, /Add to Circles/, "Transaction details must support Circles linking.");
-assert.match(crossFeatureActions, /Add to Recurring/, "Transaction details must support Recurring linking.");
-assert.match(crossFeatureActions, /Add to Split Bills/, "Transaction details must support Split Bills linking.");
+assert.match(crossFeatureActions, /togglePanel\("circles"\)/, "Transaction details must support Circles linking.");
+assert.match(crossFeatureActions, /togglePanel\("recurring"\)/, "Transaction details must support Recurring linking.");
+assert.match(crossFeatureActions, /onToggleSplitBill\(\)/, "Transaction details must support Split Bills linking.");
 assert.match(crossFeatureActions, /if \(splitBillOpen\)[\s\S]*?setPanel\(null\)/, "Opening Split Bills must close other transaction action panels.");
 assert.match(crossFeatureActions, /Create new Circle/, "Transaction details must allow creating a Circle without leaving the transaction.");
 assert.match(crossFeatureActions, /Add to Circle/, "Transaction details must allow choosing and sharing to an existing Circle.");
@@ -108,7 +108,7 @@ assert.match(transactions, /Save changes/, "Desktop transaction edits must have 
 assert.doesNotMatch(transactions, /detailAutosaveTimerRef/, "Transaction Details must not silently autosave financial edits.");
 assert.doesNotMatch(transactions, /className="transaction-drawer__action-menu-popover"/, "Desktop details must not retain the removed overflow menu.");
 assert.match(transactions, /className="button button-danger button-small transaction-drawer-delete-footer"[\s\S]{0,160}>Delete transaction<\/button>/, "Desktop details must expose Delete at the bottom, with confirmation.");
-assert.match(transactionDetail, /beginEditing\("account"\)/, "Transaction detail fields must enter editing directly when tapped.");
+assert.match(transactionDetail, /beginEditing\(field\)/, "Transaction detail fields must enter editing directly when tapped.");
 assert.match(transactionDetail, /transaction-detail-page__delete-button/, "Mobile destructive actions must remain at the bottom of the details page.");
 assert.match(transactionDetail, /AccountBrandMark/, "Transaction details must show the selected account icon.");
 assert.match(transactionDetail, /CategoryBrandMark/, "Transaction details must show the selected category icon.");

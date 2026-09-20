@@ -2910,6 +2910,7 @@ export default function InvestmentsPage() {
     <CloverShell
       active="investments"
       title="Investments"
+      titleAddon={renderInvestmentTabs()}
       desktopTitleAction={<AdviserHeaderLink />}
       mobileSubheader={renderInvestmentTabs(true)}
       mobileLeadingAction={<AdviserHeaderLink />}
@@ -2977,7 +2978,6 @@ export default function InvestmentsPage() {
         </>
       }
     >
-      <div className="investments-desktop-tabs">{renderInvestmentTabs()}</div>
       <div className="accounts-page animate-tab-panel" key={selectedTab}>
         {!loading && message ? <p className="panel-muted">{message}</p> : null}
 
@@ -3032,14 +3032,15 @@ export default function InvestmentsPage() {
               <div className="investments-allocation__head">
                 <div className="investments-allocation__head-title">
                   <div className="investments-allocation__title-row">
-                    <h5>Estimated value history</h5>
+                    <h5 className="reports-subtab-title">Estimated Value History</h5>
                     <InfoTooltip label="Includes market-priced and manually valued investments. Market assets use available prices and recorded units; other assets use their saved purchase dates and values." />
                   </div>
                 </div>
               </div>
               <InvestmentPortfolioGrowthChart assets={growthAssets} currency={growthDisplayCurrency} />
+              {!growthAssets.length ? <div className="investment-history-empty-action">{renderAddInvestmentButton()}</div> : null}
             </section>
-            <section className="investments-allocation investments-allocation--overview glass">
+            {portfolioAllocation.length > 0 || portfolioEstimateUnavailable || (usesPortfolioFxEstimates && portfolioExchangeRates.loading) ? <section className="investments-allocation investments-allocation--overview glass">
               {usesPortfolioFxEstimates && portfolioExchangeRates.loading ? (
                 <div className="investments-currency-comparison-state">
                   <strong>Calculating Portfolio Mix</strong>
@@ -3132,7 +3133,7 @@ export default function InvestmentsPage() {
                   actions={renderAddInvestmentButton()}
                 />
               )}
-            </section>
+            </section> : null}
           </>
         ) : selectedTab === "portfolio" ? (
           <>
@@ -3530,9 +3531,6 @@ export default function InvestmentsPage() {
                       <button className="button button-primary button-small" type="button" onClick={() => setAddOpen(true)}>
                         Add investment
                       </button>
-                      <Link className="button button-secondary button-small" href="/accounts">
-                        Open Accounts
-                      </Link>
                     </>
                   }
                 />
@@ -3584,9 +3582,6 @@ export default function InvestmentsPage() {
                       <button className="button button-primary button-small" type="button" onClick={() => setAddOpen(true)}>
                         Add investment
                       </button>
-                      <Link className="button button-secondary button-small" href="/accounts">
-                        Open Accounts
-                      </Link>
                     </>
                   }
                 />
@@ -3597,12 +3592,12 @@ export default function InvestmentsPage() {
               <div className="investments-allocation__head">
                 <div className="investments-allocation__head-title">
                   <div className="investments-allocation__title-row">
-                    <h5>Ask Adviser About Your Investments</h5>
+                    <h5>Ask Clover</h5>
                     <InfoTooltip label="Adviser considers your portfolio together with the rest of your Clover data." />
                   </div>
                 </div>
               </div>
-              <AdviserChat workspaceId={selectedWorkspaceId}
+              <AdviserChat minimal workspaceId={selectedWorkspaceId}
                 prompts={investmentAdviserPrompts}
                 isPro={canUseProTabs}
                 storageKey="clover-adviser-chat-investments-v1"

@@ -101,8 +101,7 @@ export function GrowthPlanner({ currency, initialPrincipal }: { currency: string
     <section className="growth-planner" aria-labelledby="growth-planner-title">
       <header className="growth-planner__header">
         <div>
-          <p className="eyebrow">Scenario planning</p>
-          <h2 id="growth-planner-title">Growth Planner</h2>
+          <h2 className="reports-subtab-title" id="growth-planner-title">Scenario Planning</h2>
           <p>Compare potential outcomes without changing your recorded portfolio.</p>
         </div>
         <button className="button button-secondary button-small" type="button" onClick={addScenario} disabled={scenarios.length >= 4}>+ Add scenario</button>
@@ -127,7 +126,7 @@ export function GrowthPlanner({ currency, initialPrincipal }: { currency: string
       <div className="growth-planner__workspace">
         <form className="growth-planner__form" onSubmit={(event) => event.preventDefault()}>
           <div className="growth-planner__form-heading">
-            <div><p className="eyebrow">Scenario assumptions</p><h3>{selectedScenario.name}</h3></div>
+            <div><h3 className="reports-subtab-title">Scenario Assumptions</h3><p className="growth-planner__scenario-name">{selectedScenario.name}</p></div>
             {scenarios.length > 1 ? <button type="button" onClick={removeScenario}>Remove</button> : null}
           </div>
           <label className="growth-planner__field growth-planner__field--wide">
@@ -173,7 +172,7 @@ export function GrowthPlanner({ currency, initialPrincipal }: { currency: string
         </form>
 
         <article className="growth-planner__result glass">
-          <p className="eyebrow">Projected value</p>
+          <h3 className="reports-subtab-title">Projected Value</h3>
           <strong className="growth-planner__result-value">{formatCurrencyAmount(selectedResult.selectedProjection.endingValue, currency)}</strong>
           <span>after {selectedScenario.years} year{selectedScenario.years === 1 ? "" : "s"}</span>
           <div className="growth-planner__chart-scale"><span>{currency}</span><span>Up to {formatCurrencyAmount(chart.maximum, currency)}</span></div>
@@ -208,7 +207,7 @@ export function GrowthPlanner({ currency, initialPrincipal }: { currency: string
       </div>
 
       <section className="growth-planner__comparison glass" aria-labelledby="growth-comparison-title">
-        <div><p className="eyebrow">Compare scenarios</p><h3 id="growth-comparison-title">Value and access side by side</h3></div>
+        <div><h3 className="reports-subtab-title" id="growth-comparison-title">Compare Scenarios</h3></div>
         <div className="growth-planner__comparison-grid">
           {results.map((result) => (
             <button type="button" key={result.scenario.id} onClick={() => setSelectedId(result.scenario.id)} className={result.scenario.id === selectedScenario.id ? "is-active" : ""}>

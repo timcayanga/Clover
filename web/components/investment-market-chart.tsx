@@ -1048,10 +1048,10 @@ export function InvestmentMarketChart({ investmentAccounts, onOpenPortfolio, foc
       <section className="investments-market-insights" aria-label="Market insights">
         <div className="investments-market-insights__head">
           <div>
-            <p className="eyebrow">Market Insights</p>
+            <h3 className="reports-subtab-title">Market Insights</h3>
             <div className="investment-market-identity">
               {submittedSymbol ? <AccountBrandMark accountBrand={getInvestmentAssetBrand({ symbol: submittedSymbol, market: submittedMarket, subtype: submittedMarket === "crypto" ? "crypto" : "stock" })} label={submittedSymbol} /> : null}
-              <h3>{submittedSymbol ? `${submittedSymbol} at a glance` : "Portfolio watchlist"}</h3>
+              {submittedSymbol ? <p>{submittedSymbol} at a glance</p> : null}
             </div>
           </div>
           <div className="investments-market-insights__links">

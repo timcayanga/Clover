@@ -168,12 +168,13 @@ export function TransactionCrossFeatureActions({
 
   return (
     <div className="transaction-cross-feature-actions">
+      <h4 className="transaction-cross-feature-actions__title">Add To</h4>
       <div className="transaction-cross-feature-actions__buttons">
         {splitBillHref ? (
           <Link className="button button-secondary button-small" href={splitBillHref} prefetch={false}>Open in Split Bills</Link>
         ) : onToggleSplitBill ? (
           <button className="button button-secondary button-small" type="button" onClick={() => { setPanel(null); setMessage(""); onToggleSplitBill(); }}>
-            {splitBillOpen ? "Hide Split Bills" : "Add to Split Bills"}
+            {splitBillOpen ? "Hide Split Bills" : "Split Bills"}
           </button>
         ) : null}
         <button
@@ -183,14 +184,14 @@ export function TransactionCrossFeatureActions({
           disabled={!canShareToCircle}
           title={canShareToCircle ? undefined : "Only expense transactions can be shared to a Circle."}
         >
-          Add to Circles
+          Circles
         </button>
         <button
           className="button button-secondary button-small"
           type="button"
           onClick={() => togglePanel("recurring")}
         >
-          Add to Recurring
+          Recurring
         </button>
       </div>
 

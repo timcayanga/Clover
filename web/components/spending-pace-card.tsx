@@ -35,7 +35,7 @@ const compactCurrency = (value: number, currency: string) => {
 
 export function SpendingPaceCard(props: SpendingPaceCardProps) {
   const svgRef = useRef<SVGSVGElement | null>(null);
-  const [activeDay, setActiveDay] = useState(props.comparableDay);
+  const [activeDay, setActiveDay] = useState<number | null>(null);
   const maximum = Math.max(1, ...props.points.map((point) => Math.max(point.current ?? 0, point.previous ?? 0)));
   const maxDay = Math.max(props.points.length, 1);
   const xForDay = (day: number) => chart.left + ((day - 1) / Math.max(maxDay - 1, 1)) * plotWidth;
@@ -45,7 +45,7 @@ export function SpendingPaceCard(props: SpendingPaceCardProps) {
   const remainingPreviousPoints = props.points.filter((point) => point.day >= props.comparableDay && point.previous !== null);
   const toPolyline = (points: SpendingPacePoint[], key: "current" | "previous") =>
     points.map((point) => `${xForDay(point.day)},${yForValue(Number(point[key] ?? 0))}`).join(" ");
-  const activePoint = props.points.find((point) => point.day === activeDay) ?? props.points[props.points.length - 1];
+  const activePoint = props.points.find((point) => point.day === activeDay);
   const deltaCopy = props.deltaPercent === null
     ? "No comparable spending last month"
     : `${Math.abs(props.deltaPercent).toFixed(0)}% ${props.deltaPercent >= 0 ? "higher" : "lower"} than the same period last month`;
@@ -64,7 +64,6 @@ export function SpendingPaceCard(props: SpendingPaceCardProps) {
     <article className="report-card reports-subtab-card spending-pace glass">
       <div className="spending-pace__header">
         <div>
-          <p className="eyebrow">Matched-period comparison</p>
           <h4 className="reports-subtab-title">Spending Pace</h4>
           <strong className="spending-pace__headline">{formatCurrencyAmount(props.currentTotal, props.currency)} spent through day {props.comparableDay}</strong>
           <p className={`spending-pace__delta${props.deltaPercent !== null && props.deltaPercent > 0 ? " is-higher" : ""}`}>{deltaCopy}</p>
@@ -87,6 +86,18 @@ export function SpendingPaceCard(props: SpendingPaceCardProps) {
             aria-label={`Cumulative spending in ${props.currentLabel} through day ${props.comparableDay}, compared with the same days in ${props.previousLabel}`}
             onPointerMove={updateActiveDay}
             onPointerDown={updateActiveDay}
+            onPointerLeave={() => setActiveDay(null)}
+            onPointerCancel={() => setActiveDay(null)}
+            onBlur={() => setActiveDay(null)}
+            tabIndex={0}
+            onFocus={() => setActiveDay(props.comparableDay)}
+            onKeyDown={(event) => {
+              if (event.key === "Escape") setActiveDay(null);
+              if (event.key === "ArrowLeft" || event.key === "ArrowRight") {
+                event.preventDefault();
+                setActiveDay(day => Math.max(1, Math.min(maxDay, (day ?? props.comparableDay) + (event.key === "ArrowRight" ? 1 : -1))));
+              }
+            }}
           >
             <defs>
               <linearGradient id="spending-pace-fill" x1="0" y1="0" x2="0" y2="1">

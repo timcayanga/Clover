@@ -162,12 +162,7 @@ export function AddEntryMethods({
           aria-labelledby={`${id}-ask`}
           hidden={tab !== "ask"}
         >
-          <h4>{info.title}</h4>
-          <p>
-            Review every draft before saving. Your manual entries stay here when
-            you switch tabs.
-          </p>
-          <AdviserChat
+          <AdviserChat minimal
             formContext={formContext}
             onReviewForm={
               onReviewForm
@@ -191,13 +186,6 @@ export function AddEntryMethods({
             initialPrompt={info.prompt}
             storageKey={`clover-add-${kind}`}
           />
-          <button
-            className="button button-secondary"
-            type="button"
-            onClick={() => setTab("manual")}
-          >
-            Continue in Manual
-          </button>
         </div>
       ) : null}
       <div
@@ -211,7 +199,7 @@ export function AddEntryMethods({
             ? "Upload a receipt"
             : "Upload statements, receipts, and screenshots"}
         </h4>
-        <p>{info.upload}</p>
+        {kind !== "accounts" && kind !== "recurring" ? <p>{info.upload}</p> : null}
         {onUpload ? (
           <button
             className="button button-primary"

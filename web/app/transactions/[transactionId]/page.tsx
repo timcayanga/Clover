@@ -1,7 +1,6 @@
 "use client";
 import { usePendingReceiptDetails } from "@/lib/use-pending-receipt-details";
 import { TransactionDetailLabel } from "@/components/transaction-detail-label";
-import { AdviserFormAssist } from "@/components/adviser-form-assist";
 
 import { getTransactionReviewReasons } from "@/lib/transaction-review-reasons";
 import { getRecordedTransactionConfidence } from "@/lib/transaction-confidence";
@@ -417,7 +416,6 @@ export default function TransactionDetailPage() {
           </section>
         ) : transaction && draft ? (
           <form className="transaction-detail-page__form" onSubmit={save}>
-            <AdviserFormAssist workspaceId={transaction.workspaceId} context={{kind:"receipt",recordId:transaction.id,fields:{transactionId:transaction.id,merchant:draft.merchantClean||draft.merchantRaw,amount:draft.amount,currency:draft.currency,date:draft.date,accountId:draft.accountId,receiptLineItems:JSON.stringify(draft.receiptLineItems).slice(0,3000)}}}/>
             <section className="transaction-detail-page__summary">
               <CategoryBrandMark categoryName={selectedCategory?.name ?? transaction.categoryName ?? "Other"} size={38} radius={12} />
               <div>
@@ -429,108 +427,29 @@ export default function TransactionDetailPage() {
               </strong>
             </section>
 
-            {editing ? (
-            <section className="transaction-detail-page__fields">
-              <div className="transaction-detail-page__type-section" data-transaction-detail-field="type">
-                <span>Transaction type</span>
-                <div className="transactions-manual-type-toggle" role="group" aria-label="Transaction type">
-                  {([
-                    { value: "debit", label: "Expense", icon: "−" },
-                    { value: "credit", label: "Income", icon: "+" },
-                    { value: "transfer", label: "Transfer", icon: "↔" },
-                  ] as const).map((option) => (
-                    <button
-                      key={option.value}
-                      type="button"
-                      className={`transactions-manual-type-toggle__button ${draft.type === option.value ? "is-active" : ""}`}
-                      aria-pressed={draft.type === option.value}
-                      onClick={() => setDraft({ ...draft, type: option.value, isTransfer: option.value === "transfer" })}
-                    >
-                      <span aria-hidden="true">{option.icon}</span>
-                      <span>{option.label}</span>
-                    </button>
-                  ))}
-                </div>
-              </div>
-              <label data-transaction-detail-field="name">
-                Name
-                <input value={draft.merchantClean} onChange={(event) => setDraft({ ...draft, merchantClean: event.target.value })} />
-              </label>
-              <label data-transaction-detail-field="date">
-                Date
-                <input type="date" value={draft.date} onChange={(event) => setDraft({ ...draft, date: event.target.value })} />
-              </label>
-              <label data-transaction-detail-field="account">
-                Account
-                <TransactionAccountPicker
-                  accounts={accountPickerOptions}
-                  selectedId={draft.accountId}
-                  onSelect={(account) => setDraft({ ...draft, accountId: account.id })}
-                  ariaLabel="Choose transaction account"
-                  className="transaction-detail-page__relation-picker"
-                />
-              </label>
-              <label data-transaction-detail-field="category">
-                Category
-                <TransactionCategoryPicker
-                  categories={categories}
-                  selectedId={draft.categoryId}
-                  onSelect={(category) => setDraft({ ...draft, categoryId: category.id })}
-                  ariaLabel="Choose transaction category"
-                  className="transaction-detail-page__relation-picker"
-                />
-              </label>
-              <div className="transaction-detail-page__tags-field" data-transaction-detail-field="tags">
-                <span>Tags</span>
-                <TransactionTagsEditor
-                  tags={tagDraft}
-                  onChange={setTagDraft}
-                  placeholder="Examples: Work, Family, Reimbursable"
-                  inputAriaLabel="Add tags to transaction"
-                />
-              </div>
-              <label htmlFor="transaction-detail-amount" data-transaction-detail-field="amount">
-                Amount
-                <span className="transaction-detail-page__money-control">
-                  <CurrencySelector
-                    value={draft.currency}
-                    onChange={(currency) => setDraft({ ...draft, currency })}
-                    options={getCurrencyCatalogCodes()}
-                    ariaLabel="Select transaction currency"
-                  />
-                  <input
-                    id="transaction-detail-amount"
-                    type="number"
-                    aria-label="Amount"
-                    min="0"
-                    step="0.01"
-                    value={draft.amount}
-                    onChange={(event) => setDraft({ ...draft, amount: event.target.value })}
-                  />
-                </span>
-              </label>
+            <section className="transaction-detail-page__facts transaction-detail-page__facts--inline">
+              {(["type", "name", "account", "category", "tags", "date", "amount", "notes"] as const).map(field => {
+                const label = field[0].toUpperCase() + field.slice(1);
+                const value = field === "type" ? draft.type === "credit" ? "Income" : draft.type === "transfer" ? "Transfer" : "Expense" : field === "name" ? draft.merchantClean || transaction.merchantRaw : field === "account" ? accountDisplayName : field === "category" ? selectedCategory?.name ?? transaction.categoryName ?? "Other" : field === "tags" ? tagDraft.join(", ") || "No tags" : field === "date" ? new Date(`${draft.date}T00:00:00`).toLocaleDateString("en-PH", {month:"long",day:"numeric",year:"numeric"}) : field === "amount" ? formatCurrencyAmount(Number(draft.amount || 0), draft.currency) : draft.description.trim() || "No notes";
+                return <div className="transaction-detail-page__inline-row" data-transaction-detail-field={field} key={field}>
+                  <span className="transaction-detail-page__inline-label">{field === "account" ? <><span className="transaction-detail-brand"><AccountBrandMark accountBrand={accountBrand} label="" /></span>Account</> : field === "category" ? <><CategoryBrandMark categoryName={selectedCategory?.name ?? transaction.categoryName ?? "Other"} size={24} />Category</> : <TransactionDetailLabel label={label} />}</span>
+                  {editing ? <div className="transaction-detail-page__inline-control">{
+                    field === "account" ? <TransactionAccountPicker accounts={accountPickerOptions} selectedId={draft.accountId} onSelect={account => setDraft({...draft,accountId:account.id})} ariaLabel="Choose transaction account" /> :
+                    field === "category" ? <TransactionCategoryPicker categories={categories} selectedId={draft.categoryId} onSelect={category => setDraft({...draft,categoryId:category.id})} ariaLabel="Choose transaction category" /> :
+                    field === "type" ? <select aria-label="Transaction type" value={draft.type} onChange={event => setDraft({...draft,type:event.target.value as "debit" | "credit" | "transfer",isTransfer:event.target.value === "transfer"})}><option value="debit">Expense</option><option value="credit">Income</option><option value="transfer">Transfer</option></select> :
+                    field === "tags" ? <TransactionTagsEditor tags={tagDraft} onChange={setTagDraft} inputAriaLabel="Add tags to transaction" /> :
+                    field === "notes" ? <textarea aria-label="Notes" value={draft.description} onChange={event => setDraft({...draft,description:event.target.value})} /> :
+                    field === "amount" ? <span className="transaction-detail-page__money-control"><CurrencySelector value={draft.currency} onChange={currency => setDraft({...draft,currency})} options={getCurrencyCatalogCodes()} ariaLabel="Select transaction currency" /><input id="transaction-detail-amount" type="number" aria-label="Amount" min="0" step="0.01" value={draft.amount} onChange={event => setDraft({...draft,amount:event.target.value})} /></span> :
+                    <input aria-label={label} type={field === "date" ? "date" : "text"} value={field === "date" ? draft.date : draft.merchantClean} onChange={event => setDraft({...draft,[field === "date" ? "date" : "merchantClean"]:event.target.value})} />
+                  }</div> : <button type="button" onClick={() => beginEditing(field)}>{value}</button>}
+                </div>;
+              })}
             </section>
-            ) : (
-              <section className="transaction-detail-page__facts">
-                <button type="button" onClick={() => beginEditing("type")}><TransactionDetailLabel label="Type" /><strong>{draft.type === "credit" ? "Income" : draft.type === "transfer" ? "Transfer" : "Expense"}</strong></button>
-                <button type="button" onClick={() => beginEditing("name")}><TransactionDetailLabel label="Name" /><strong>{draft.merchantClean || transaction.merchantRaw}</strong></button>
-                <button type="button" onClick={() => beginEditing("account")}><TransactionDetailLabel label="Account" /><strong className="transaction-detail-page__fact-value-with-icon"><span className="transaction-detail-page__fact-icon" aria-hidden="true"><AccountBrandMark accountBrand={accountBrand} label={accountDisplayName} /></span>{accountDisplayName}</strong></button>
-                <button type="button" onClick={() => beginEditing("category")}><TransactionDetailLabel label="Category" /><strong className="transaction-detail-page__fact-value-with-icon"><CategoryBrandMark categoryName={selectedCategory?.name ?? transaction.categoryName ?? "Other"} size={24} radius={8} />{selectedCategory?.name ?? transaction.categoryName ?? "Other"}</strong></button>
-                <button type="button" onClick={() => beginEditing("tags")}><TransactionDetailLabel label="Tags" /><strong>{tagDraft.length > 0 ? tagDraft.join(", ") : "No tags"}</strong></button>
-                <button type="button" onClick={() => beginEditing("date")}><TransactionDetailLabel label="Date" /><strong>{new Date(`${draft.date}T00:00:00`).toLocaleDateString("en-PH", { month: "long", day: "numeric", year: "numeric" })}</strong></button>
-                <button type="button" onClick={() => beginEditing("amount")}><TransactionDetailLabel label="Amount" /><strong>{formatCurrencyAmount(Number(draft.amount || 0), draft.currency)}</strong></button>
-                <button type="button" className="transaction-detail-page__facts-notes" onClick={() => beginEditing("notes")}><TransactionDetailLabel label="Notes" /><strong>{draft.description.trim() || "No notes"}</strong></button>
-              </section>
-            )}
 
             {editing ? (
             <details className="transaction-detail-page__more" open>
               <summary>More</summary>
               <div className="transaction-detail-page__more-body">
-                <label className="transaction-detail-page__notes" data-transaction-detail-field="notes">
-                  Notes
-                  <textarea value={draft.description} onChange={(event) => setDraft({ ...draft, description: event.target.value })} placeholder="Optional note" />
-                </label>
                 <div className="transaction-detail-page__line-items" data-transaction-detail-field="line-items">
                   <div className="transaction-detail-page__line-items-head">
                     <strong>Line Items</strong>
@@ -562,13 +481,12 @@ export default function TransactionDetailPage() {
                   <div className="transaction-detail-page__confidence">
                     <span>Source</span>
                     <strong>{transaction.importFileId ? "Imported" : "Manual"}</strong>
-                    {transaction.importFileId ? <p>Source file: {transaction.importFileName ?? transaction.importFileId}</p> : null}
+                    {transaction.importFileId ? <p>{transaction.importFileName ?? transaction.importFileId}</p> : null}
                   </div>
                   <div className="transaction-detail-page__confidence">
                     <span className={`transaction-detail-page__confidence-chip is-${confidenceScore >= 85 ? "high" : confidenceScore >= 65 ? "medium" : "low"}`}>{confidenceLabel}</span>
                     <strong>{confidenceScore}%</strong>
                   </div>
-                  <p>Clover keeps the original source separate from the details you confirm.</p>
                   <section aria-label="Parsed information">
                     <h3>Parsed information</h3>
                     <p>{getTransactionParsedNoteValue(transaction) || transaction.merchantRaw || "No parsed information available."}</p>

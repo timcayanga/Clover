@@ -21,6 +21,7 @@ import { SplitBillQrLibrary } from "@/components/split-bill-qr-library";
 import { MobileSwipeDelete } from "@/components/mobile-swipe-delete";
 
 type SplitBillHomeProps = {
+  tab: string;
   bills: SplitBillSerializedBill[];
   groups: SplitBillGroupSummary[];
   people: SplitBillPersonSummary[];
@@ -119,6 +120,7 @@ const addCurrencyTotal = (
 };
 
 export function SplitBillHome({
+  tab,
   bills,
   groups,
   people,
@@ -139,7 +141,6 @@ export function SplitBillHome({
   const [statusFilter, setStatusFilter] = useState<"all" | "open" | "settled" | "resolved">(
     "all",
   );
-  const [tab, setTab] = useState("Bills");
   const [search, setSearch] = useState("");
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [currencyFilter, setCurrencyFilter] = useState("");
@@ -346,24 +347,6 @@ export function SplitBillHome({
 
   return (
     <div className="split-bill-home">
-      <div
-        className="split-bill-tabs"
-        role="tablist"
-        aria-label="Split Bills sections"
-      >
-        {["Bills", "Groups", "People", "Payment options"].map((name) => (
-          <button
-            type="button"
-            role="tab"
-            aria-selected={tab === name}
-            key={name}
-            onClick={() => setTab(name)}
-          >
-            <InterfaceIcon name="details" size={16} />
-            {name}
-          </button>
-        ))}
-      </div>
       {tab === "Bills" ? (
         <>
           <section

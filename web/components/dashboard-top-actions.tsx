@@ -873,8 +873,8 @@ export function DashboardManualTransactionModal({
         </form>
         </div>
         {askVisited ? <div id="quick-entry-panel-ask" role="tabpanel" aria-labelledby="quick-entry-tab-ask" hidden={entryTab !== "ask"} className="transaction-creation-panel">
-          <h4>Tell Clover what to add</h4><p>Describe your transactions, then review each draft before saving.</p>
-          <AdviserChat workspaceId={workspaceId} prompts={[]} isPro={isPro} surface="transactions" pageLabel="Add transactions: prepare editable drafts for review" />
+
+          <AdviserChat minimal workspaceId={workspaceId} prompts={[]} isPro={isPro} surface="transactions" pageLabel="Add transactions: prepare editable drafts for review" />
         </div> : null}
         <div id="quick-entry-panel-upload" role="tabpanel" aria-labelledby="quick-entry-tab-upload" hidden={entryTab !== "upload"} className="transaction-creation-panel">
 

@@ -9,6 +9,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { previewSplitBillItems } from "@/lib/split-bill";
 import { useSearchParams } from "next/navigation";
+import { AnimatedTabs } from "@/components/animated-tabs";
 import { CloverShell } from "@/components/clover-shell";
 import { SplitBillEntityAvatar } from "@/components/split-bill-entity-avatar";
 import { SplitBillHome } from "@/components/split-bill-home";
@@ -359,6 +360,7 @@ export function SplitBillWorkspace({
   currentUserName,
 }: SplitBillWorkspaceProps) {
   const searchParams = useSearchParams();
+  const [homeTab, setHomeTab] = useState("Bills");
   const [bills, setBills] = useState(initialBills);
   const [groups, setGroups] = useState(initialGroups);
   const [people, setPeople] = useState(initialPeople);
@@ -1334,6 +1336,8 @@ export function SplitBillWorkspace({
     <CloverShell
       active="split-bill"
       title="Split Bills"
+      titleAddon={<AnimatedTabs className="split-bill-tabs" activeKey={homeTab} onChange={setHomeTab} tabs={["Bills", "Groups", "People", "Payment options"].map(label => ({key:label,label}))} />}
+      mobileSubheader={<AnimatedTabs className="split-bill-tabs split-bill-tabs--mobile" activeKey={homeTab} onChange={setHomeTab} tabs={["Bills", "Groups", "People", "Payment options"].map(label => ({key:label,label}))} />}
       actions={
         <SplitBillPageActions
           currentUserName={currentUserName}
@@ -1345,7 +1349,7 @@ export function SplitBillWorkspace({
         />
       }
     >
-      <SplitBillHome
+      <SplitBillHome tab={homeTab}
         bills={bills}
         groups={groups}
         people={people}
