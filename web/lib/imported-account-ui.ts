@@ -420,3 +420,21 @@ export const mergeAccountsWithOptimisticImports = <TAccount extends ImportedAcco
 
   return [...preservedCurrentAccounts, ...optimisticAccounts, ...mergedFetchedAccounts];
 };
+
+// Browser snapshots can contain only an import's accounts. They are not an
+// authoritative inventory or evidence that a loaded manual balance changed.
+export const mergeProvisionalAccountSnapshot = <TAccount extends ImportedAccountLike>(
+  current: TAccount[],
+  incoming: TAccount[],
+  deletedIds: Set<string>
+): TAccount[] => {
+  const merged = new Map(current.filter((account) => !deletedIds.has(account.id)).map((account) => [account.id, account]));
+  for (const account of incoming) {
+    if (deletedIds.has(account.id)) continue;
+    const loaded = merged.get(account.id);
+    merged.set(account.id, loaded?.source === "manual"
+      ? { ...loaded, ...account, source: loaded.source, balance: loaded.balance }
+      : account);
+  }
+  return Array.from(merged.values());
+};

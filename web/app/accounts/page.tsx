@@ -110,6 +110,7 @@ import {
   mergeAccountsWithOptimisticImports as mergeAccountsWithOptimisticImportsShared,
   mergeImportedPreviewTransactions,
   mergeOptimisticImportedAccount as mergeOptimisticImportedAccountShared,
+  mergeProvisionalAccountSnapshot,
   resolvePersistedImportedAccountId as resolvePersistedImportedAccountIdShared,
   isGenericUploadedAccountShadowed,
   isTransientUploadedAccountPlaceholder,
@@ -2320,13 +2321,19 @@ function AccountsPageContent() {
         (!deletedAccountIdsRef.current.has(checkpoint.accountId) && !deletingAccountIdsRef.current.has(checkpoint.accountId))
     );
 
-    setAccounts(
-      mergeAccountsWithOptimisticImports(filteredAccounts, filteredAccounts, deletedAccountIdsRef.current, filteredTransactions, {
-        preserveImportedEvidence: true,
-      })
-    );
+    const removedIds = new Set([...deletedAccountIdsRef.current, ...deletingAccountIdsRef.current]);
+    setAccounts((current) => mergeProvisionalAccountSnapshot(
+      current.filter((account) => isWorkspaceAccount(account, workspaceId)),
+      filteredAccounts,
+      removedIds
+    ));
     setAccountRules(cachedSnapshot.accountRules as AccountRule[]);
-    setTransactions(filteredTransactions);
+    // A metadata-only cache publication must not erase a loaded receipt ledger.
+    // The direct API response remains authoritative for edits and removals.
+    setTransactions((current) => mergeImportedWorkspaceTransactions(
+      current.filter((transaction) => transaction.workspaceId === workspaceId && !removedIds.has(transaction.accountId)),
+      filteredTransactions
+    ));
     setStatementCheckpoints(filteredCheckpoints);
     markWorkspaceHydrated(workspaceId, cachedSnapshot.updatedAt);
     setAccountsLoading(false);

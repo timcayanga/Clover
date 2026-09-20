@@ -6,6 +6,7 @@ import {
   mergeFetchedTransactionsPreservingImported,
   mergeAccountsWithOptimisticImports,
   mergeOptimisticImportedAccount,
+  mergeProvisionalAccountSnapshot,
   isTransientUploadedAccountPlaceholder,
   isGenericUploadedAccountShadowed,
   uploadSummaryCanDismissImportUi,
@@ -708,6 +709,12 @@ const main = () => {
     assert.equal(mergedCash.balance, "1000", "Persisted opening balance must be retained for reconciliation");
   }
 
+  assert.deepEqual(mergeProvisionalAccountSnapshot([cash], [], new Set()), [cash], "Partial cache inventory must retain loaded Cash instead of a zero fallback");
+  const [provisionalCash] = mergeProvisionalAccountSnapshot([cash], [{...cash, source: "upload", balance: "0"}], new Set());
+  assert.equal(provisionalCash.source, "manual");
+  assert.equal(provisionalCash.balance, "1000", "Cache metadata cannot replace the manual opening balance");
+  assert.deepEqual(mergeProvisionalAccountSnapshot([cash], [cash], new Set([cash.id])), [], "Explicit deletions still remove cached accounts");
+  assert.deepEqual(mergeAccountsWithOptimisticImports([], [cash]), [], "Authoritative API inventory still permits removal");
   console.log("[PASS] imported-account-ui regression");
 };
 
