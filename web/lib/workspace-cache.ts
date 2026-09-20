@@ -2025,6 +2025,10 @@ export const syncImportedWorkspaceAccountCaches = (
     return;
   }
 
+  // Import summaries omit Profile metadata, but Accounts correctly rejects
+  // unscoped records. The containing snapshot supplies the authoritative scope.
+  account = { ...account, workspaceId };
+
   const accountsCache = readAccountsWorkspaceCache();
   const nextAccountsSnapshot: AccountsWorkspaceCacheSnapshot = {
     workspaceId,

@@ -130,6 +130,8 @@ void (async () => {
   syncImportedWorkspaceAccountCaches("manual-cash", {id: "cash", name: "Cash", type: "cash", currency: "PHP", source: "manual", balance: "1000"});
   syncImportedWorkspaceAccountCaches("manual-cash", {id: "cash", name: "Cash", type: "cash", currency: "PHP", source: "upload", balance: "750"});
   const preservedCash = getCachedAccountsWorkspace("manual-cash")?.accounts.find(a => a.id === "cash");
+  assert.equal(preservedCash?.workspaceId, "manual-cash", "New imported cache accounts must retain their Profile scope for immediate Accounts hydration");
+  assert.equal(getCachedTransactionsWorkspace("manual-cash")?.accounts.find(a => a.id === "cash")?.workspaceId, "manual-cash");
   assert.equal(preservedCash?.source, "manual", "Receipt preview cannot change an existing manual account source");
   assert.equal(preservedCash?.balance, "1000", "Manual opening balance must not become a reconciled receipt preview");
 
