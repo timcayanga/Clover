@@ -17,7 +17,7 @@ export function AccountTypePicker({ value, onChange }: { value: SupportedAccount
     return () => document.removeEventListener("pointerdown", close);
   }, [open]);
   return <div className="account-type-picker" ref={root} onKeyDown={event => {
-    if (event.key === "Escape") { event.preventDefault(); setOpen(false); trigger.current?.focus(); }
+    if (open && event.key === "Escape") { event.preventDefault(); event.stopPropagation(); setOpen(false); trigger.current?.focus(); }
     if (open && ["ArrowDown", "ArrowUp", "Home", "End"].includes(event.key)) {
       event.preventDefault();
       const options = Array.from(root.current?.querySelectorAll<HTMLButtonElement>('[role="option"]') ?? []);
