@@ -144,6 +144,7 @@ import {
   type ImportedWorkspaceTransaction,
 } from "@/lib/workspace-cache";
 import { clearJsonRequestCache, fetchJsonOnce } from "@/lib/request-dedupe";
+import { useWorkspaceCacheVersion } from "@/lib/use-workspace-cache-version";
 import { formatCurrencyAmount, formatCurrencyCode } from "@/lib/currency-format";
 import { useDefaultCurrency } from "@/lib/use-default-currency";
 import { convertAmount, useExchangeRates } from "@/lib/use-exchange-rates";
@@ -2423,6 +2424,7 @@ function TransactionsPageContent() {
   const authoritativeCurrencyWorkspaceRef = useRef("");
   const deletedTransactionIdsRef = useRef(new Set<string>());
   const transactionsHydrationVersionRef = useRef(new Map<string, number>());
+  const transactionCacheVersion = useWorkspaceCacheVersion(selectedWorkspaceId);
   const mobileLoadMoreRef = useRef<HTMLButtonElement | null>(null);
   const mobileLoadMoreInFlightRef = useRef(false);
   const transactionDetailScrollYRef = useRef<number | null>(null);
@@ -3610,6 +3612,9 @@ function TransactionsPageContent() {
     );
     setWorkspaceCurrencyCodes(cachedCurrencyCodes);
     markTransactionsHydrated(workspaceId, cachedSnapshot.updatedAt);
+    // Keep the consumed version in the same React update as its rows. A ref
+    // can advance before a lower-priority row update has rendered.
+    transactionCacheVersion.consume(workspaceId, cachedSnapshot.updatedAt);
     setIsWorkspaceDataReady(true);
     setHasInitialTransactionsLoaded(true);
     return true;
@@ -7620,7 +7625,7 @@ function TransactionsPageContent() {
       </button>
     </div>
   );
-  const transactionCacheVersionAtRender = transactionsHydrationVersionRef.current.get(selectedWorkspaceId) ?? 0;
+  const transactionCacheVersionAtRender = transactionCacheVersion.expectedVersion;
   useEffect(() => {
     // This cache is shared with unfiltered workspace views. Never publish a
     // filtered subset and its totals as though it were the full workspace.
@@ -7644,6 +7649,7 @@ function TransactionsPageContent() {
       if (updatedAt === 0) {
         hydrateWorkspaceFromCache(selectedWorkspaceId);
       } else {
+        if (updatedAt) transactionCacheVersion.publish(selectedWorkspaceId, updatedAt);
         markTransactionsHydrated(selectedWorkspaceId, updatedAt);
       }
     } finally {
