@@ -1995,6 +1995,23 @@ export const persistTransactionsWorkspaceCache = (
   return updatedAt;
 };
 
+// Category refreshes are metadata-only. An older Accounts snapshot must not
+// replace transaction rows, totals, or paging that arrived during the request.
+export const syncWorkspaceCategoryCache = (workspaceId: string, categories: CachedRecord[]) => {
+  const current = getCachedTransactionsWorkspace(workspaceId);
+  return persistTransactionsWorkspaceCache(workspaceId, {
+    accounts: current?.accounts ?? [],
+    transactions: current?.transactions ?? [],
+    imports: current?.imports ?? [],
+    totalCount: current?.totalCount,
+    summary: current?.summary,
+    page: current?.page,
+    pageSize: current?.pageSize,
+    currencyCodes: current?.currencyCodes,
+    categories,
+  });
+};
+
 export const syncImportedWorkspaceAccountCaches = (
   workspaceId: string,
   account: ImportedWorkspaceAccount,

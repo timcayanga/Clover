@@ -1,4 +1,5 @@
 type ImportResultPreviewTransaction = {
+  id?: string;
   categoryName?: string | null;
   reviewStatus?: string | null;
   merchantRaw?: string | null;
@@ -98,8 +99,8 @@ const getCategorizedStats = (summary: ImportResultSummaryInput) => {
 
   return {
     categorized,
-    review: rows.filter((row) => ["pending_review", "suggested"].includes(row.reviewStatus ?? "")).length,
-    unknown: Math.max(0, getRowCount(summary) - rows.length) + rows.filter((row) => !row.reviewStatus).length,
+    review: rows.filter((row) => !row.id?.startsWith("optimistic-") && ["pending_review", "suggested"].includes(row.reviewStatus ?? "")).length,
+    unknown: Math.max(0, getRowCount(summary) - rows.length) + rows.filter((row) => !row.reviewStatus || row.id?.startsWith("optimistic-")).length,
     total: getRowCount(summary),
   };
 };

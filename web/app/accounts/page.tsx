@@ -52,6 +52,7 @@ import {
   getDeletingWorkspaceAccountIds,
   persistAccountsWorkspaceCache,
   persistTransactionsWorkspaceCache,
+  syncWorkspaceCategoryCache,
   markDeletedWorkspaceAccount,
   markDeletingWorkspaceAccount,
   clearDeletingWorkspaceAccount,
@@ -2051,18 +2052,7 @@ function AccountsPageContent() {
             return;
           }
 
-          const cachedWorkspaceTransactions = getCachedAccountsWorkspace(workspaceId);
-          persistTransactionsWorkspaceCache(workspaceId, {
-            accounts: (cachedWorkspaceTransactions?.accounts as Account[] | undefined) ?? visibleFetchedAccounts,
-            categories: fetchedCategories,
-            transactions:
-              (cachedWorkspaceTransactions?.transactions as Transaction[] | undefined)?.filter(
-                (transaction) =>
-                  !deletedAccountIdsRef.current.has(transaction.accountId) &&
-                  !deletingAccountIdsRef.current.has(transaction.accountId)
-              ) ?? [],
-            imports: (cachedWorkspaceTransactions?.imports as ImportFile[] | undefined) ?? [],
-          });
+          syncWorkspaceCategoryCache(workspaceId, fetchedCategories);
         } catch {
           // Categories are best-effort during background hydration.
         }

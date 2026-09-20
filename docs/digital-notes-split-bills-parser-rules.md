@@ -18,3 +18,5 @@ A “No VAT / discounts / service charges” footer is administrative text, not 
 For core-only image receipts, the initial transcript intentionally omits item details. When no line items or allocations exist, refine from the original image after the core transaction becomes visible; absence of item keywords in that sparse transcript must not suppress refinement. Preserve confirmed transaction core values.
 
 Once item quantity and price/amount columns are separated, preserve numeric product-name suffixes (for example Test snack 01). A number remaining in the product name is not another price token to discard.
+
+A leading merchant header may end in a three-digit (or longer) branch/name suffix. If followed by dated receipt metadata and lacking a decimal/currency price or leading quantity, preserve that number in the merchant identity and exclude the full merchant header from item candidates. “Not valid for payment” notices are administrative text, including when other words in the notice have OCR errors. Never turn a merchant suffix into an item amount.

@@ -45,6 +45,7 @@ void (async () => {
     persistTransactionsWorkspaceCache,
     getCachedAccountsWorkspace,
     syncImportedWorkspaceAccountCaches,
+    syncWorkspaceCategoryCache,
     syncImportedWorkspaceTransactionCaches,
   } = await import("@/lib/workspace-cache");
   const { BETA_FULL_ACCESS_ENABLED, hasFullFeatureAccess } = await import("@/lib/beta-access");
@@ -108,6 +109,12 @@ void (async () => {
   syncImportedWorkspaceTransactionCaches("empty-before-import", [receiptRow]);
   assert.equal(getCachedTransactionsWorkspace("empty-before-import")?.totalCount, 1, "Imported rows cannot retain an empty list count");
   assert.equal(getCachedTransactionsWorkspace("empty-before-import")?.summary?.totalCount, 1, "Summary count includes the imported row immediately");
+  syncWorkspaceCategoryCache("empty-before-import", [{id: "food", name: "Food & Dining"}]);
+  const afterMetadata = getCachedTransactionsWorkspace("empty-before-import");
+  assert.equal(afterMetadata?.transactions.length, 1, "Late category hydration must preserve newly imported rows");
+  assert.equal(afterMetadata?.summary?.totalCount, 1, "Late category hydration must preserve populated summary totals");
+  assert.equal(afterMetadata?.categories[0]?.name, "Food & Dining");
+
   syncImportedWorkspaceAccountCaches("manual-cash", {id: "cash", name: "Cash", type: "cash", currency: "PHP", source: "manual", balance: "1000"});
   syncImportedWorkspaceAccountCaches("manual-cash", {id: "cash", name: "Cash", type: "cash", currency: "PHP", source: "upload", balance: "750"});
   const preservedCash = getCachedAccountsWorkspace("manual-cash")?.accounts.find(a => a.id === "cash");
