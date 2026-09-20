@@ -29,7 +29,7 @@ export class FileQueue {
   private listeners = new Set<() => void>();
   private flight: Promise<void> | null = null;
   private active = true;
-  private current: {file:QueuedFile;controller:AbortController} | null = null;
+  private current: {file:QueuedFile;controller:AbortController;finished:Promise<void>} | null = null;
   constructor(
     private store: OfflineStore,
     private transport: FileTransport,
@@ -92,7 +92,7 @@ export class FileQueue {
     if(current?.file.id===id) {
       if(current.file.state==="finalizing"||current.file.state==="processing")throw new Error("Clover is already reading this file. Check its status.");
       current.controller.abort();
-      await this.flight;
+      await current.finished;
     }
     const file=await this.store.get<QueuedFile>("file:"+id);
     if(!file)return;
@@ -130,7 +130,9 @@ export class FileQueue {
       if(!file)continue;
       if (!["queued", "sending", "finalizing", "processing"].includes(file.state)) continue;
       const controller=new AbortController();
-      this.current={file,controller};
+      let finish!:()=>void;
+      const finished=new Promise<void>(resolve=>{finish=resolve;});
+      this.current={file,controller,finished};
       try {
         await this.authorize(file.workspaceId);
         // A timed-out upload may already exist. Always inspect its stable ID first.
@@ -171,7 +173,7 @@ export class FileQueue {
       } catch (e) {
         if(controller.signal.aborted && file.state!=="finalizing"){
           file.state="paused";file.error=undefined;
-          await this.store.set("file:"+file.id,file);this.emit();break;
+          await this.store.set("file:"+file.id,file);this.emit();continue;
         }
         const status = (e as { status?: number }).status;
         file.error = (e as Error).message;
@@ -179,7 +181,7 @@ export class FileQueue {
         await this.store.set("file:" + file.id, file);
         this.emit();
         if (!status || status >= 500) break;
-      } finally {this.current=null;}
+      } finally {this.current=null;finish();}
       this.emit();
     }
   }

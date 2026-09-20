@@ -538,6 +538,15 @@ test("pausing a waiting file prevents a stale queue snapshot from uploading it",
   assert.deepEqual(sent,[file.id]);assert.equal((await q.list()).find(f=>f.id===second.id)?.state,"paused");
 });
 
+
+test("pausing one active upload lets other queued files continue",async()=>{
+  const store=memory();let started!:()=>void;const began=new Promise<void>(r=>{started=r;});const sent:string[]=[];
+  const second={...file,id:randomUUID(),createdAt:"2026-09-15T00:00:00.000Z"};
+  const q=new FileQueue(store,{status:async()=>{throw Object.assign(new Error("missing"),{status:404});},upload:async(f,_bytes,control)=>{sent.push(f.id);if(f.id===file.id){started();await new Promise<void>((_,reject)=>control.signal.addEventListener("abort",()=>reject(new Error("aborted")),{once:true}));}return {}; }},async()=>{});
+  await q.add(file,"b3JpZ2luYWw=");await q.add(second,"b3JpZ2luYWw=");await q.enqueue(file.id);await q.enqueue(second.id);const flight=q.flush();await began;await q.pause(file.id);await flight;
+  assert.deepEqual(sent,[file.id,second.id]);assert.equal((await q.list()).find(f=>f.id===file.id)?.state,"paused");assert.equal((await q.list()).find(f=>f.id===second.id)?.state,"processing");
+});
+
 (async () => {
   let failures = 0;
   for (const c of cases) {
