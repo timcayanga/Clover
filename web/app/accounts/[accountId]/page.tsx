@@ -1369,6 +1369,12 @@ function AccountDetailPageContent() {
             workspaceId: cachedWorkspaceId,
           } as Account)
         : null;
+      // A cache preview may be incomplete or replace a known manual account
+      // with upload semantics. Keep its loaded opening balance until the direct
+      // account response below supplies authoritative values.
+      if (cachedAccount && account?.id === cachedAccount.id && account.source === "manual") {
+        cachedAccount = { ...cachedAccount, source: account.source, balance: account.balance };
+      }
       let accountTransactionsLookup: ReturnType<typeof findCachedTransactionsForAccount> | null = null;
       const pendingImportStatuses = new Set(["processing", "queued", "staged", "pending"]);
       const hasPendingImportSettlement = () =>
@@ -1492,6 +1498,12 @@ function AccountDetailPageContent() {
                 (checkpoint) => checkpoint.accountId === activeCachedAccount.id
               )
             : [];
+          if (account?.id === activeCachedAccount.id) {
+            // Metadata-only cache writes are not evidence that the ledger was
+            // cleared. Merge cached arrivals; the direct response still replaces
+            // this provisional view with the authoritative page below.
+            cachedTransactions = mergeImportedWorkspaceTransactions(transactions, cachedTransactions);
+          }
           setAccount(activeCachedAccount);
           setTransactions(cachedTransactions);
           setImportFiles(cachedImportFiles);
