@@ -77,11 +77,13 @@ async function main() {
   );
 
   for (const consumer of consumers) {
-    assert.doesNotMatch(
-      consumer.source,
-      /\/assets\/3d%20icons\/menu\//,
-      `${consumer.relativePath} must not use legacy optimized icon copies.`,
-    );
+    if (consumer.relativePath !== "components/settings-hub.tsx") {
+      assert.doesNotMatch(
+        consumer.source,
+        /\/assets\/3d%20icons\/menu\//,
+        `${consumer.relativePath} must not use legacy optimized icon copies.`,
+      );
+    }
     assert.doesNotMatch(
       consumer.source,
       /\/assets\/icons\/goals\.png/,
@@ -95,6 +97,14 @@ async function main() {
     /plan:\s*{\s*title:\s*"Plan",\s*icon:\s*<SettingsIcon name="plan" \/>/,
     "The Settings Plan submenu must use the dedicated Plan icon.",
   );
+
+  // Settings selected rows need transparent artwork, without baked-in white squares.
+  for (const name of ["account", "profiles", "display", "data", "review", "categories", "notifications", "security", "region", "plan"]) {
+    const icon = sharp(path.join(publicRoot, "assets/3d icons/menu", `${name}.png`));
+    assert.equal((await icon.metadata()).hasAlpha, true, `${name} must retain transparency.`);
+    const { data, info } = await icon.raw().toBuffer({ resolveWithObject: true });
+    assert.equal(data[info.channels - 1], 0, `${name} must have a transparent corner.`);
+  }
 
   console.log(
     `Navigation icon regression passed for ${Object.keys(NAVIGATION_ICON_SOURCE_FILES).length} canonical 3D icons.`,

@@ -33,7 +33,7 @@ import {
   regionalPreferencesStorageKey,
   type RegionalPreferences,
 } from "@/lib/regional-preferences";
-import { getNavigationIconSrc, type NavigationIconName } from "@/lib/navigation-icons";
+import { type NavigationIconName } from "@/lib/navigation-icons";
 import type { CloverTokenUsageSnapshot } from "@/lib/clover-token-usage";
 
 const SettingsCategoriesPanel = dynamic(
@@ -448,7 +448,7 @@ function SettingsToggleRow({
 }
 
 function SettingsIcon({ name }: { name: NavigationIconName }) {
-  return <img aria-hidden="true" src={getNavigationIconSrc(name)} alt="" className="settings-hub__menu-icon" loading="eager" decoding="sync" />;
+  return <img aria-hidden="true" src={`/assets/3d%20icons/menu/${name === "profile" ? "account" : name}.png`} alt="" className="settings-hub__menu-icon" loading="eager" decoding="sync" />;
 }
 
 const sectionCopy: Record<
@@ -1778,12 +1778,6 @@ export function SettingsHub({
 
       {mode !== "menu" ? (
       <div className="settings-hub__panel glass">
-        {["notifications", "imports", "data", "profiles"].includes(activeSection) ? (
-          <div className="settings-card">
-            <button type="button" className="button button--primary" disabled={!preferencesReady || preferencesSaving} onClick={() => void saveSharedPreferences()}>{preferencesSaving ? "Saving…" : "Save preferences"}</button>
-            <p role="status">{preferencesMessage || (preferencesReady ? "Save changes to apply these preferences across your devices." : "Loading preferences…")}</p>
-          </div>
-        ) : null}
         {mode === "panel" ? (
           <div className="settings-hub__panel-back">
             <Link className="help-page__back-button settings-hub__back-button" href="/settings" aria-label="Back to settings" prefetch={false}>
@@ -2424,7 +2418,7 @@ export function SettingsHub({
               <div className="settings-data-shell__grid">
                 <section className="settings-data-zone settings-data-zone--export">
                   <div className="settings-data-zone__header">
-                    <h6>Download snapshots</h6>
+                    <h4>Download snapshots</h4>
                   </div>
 
                   <div className="settings-data-export-actions">
@@ -2476,7 +2470,7 @@ export function SettingsHub({
 
                 <section className="settings-data-zone settings-data-zone--delete">
                   <div className="settings-data-zone__header">
-                    <h6>Remove Clover data</h6>
+                    <h4>Remove Clover data</h4>
                   </div>
 
                   <div className="settings-data-danger-list">
@@ -2547,7 +2541,7 @@ export function SettingsHub({
 
               <section className="settings-data-privacy">
                 <div className="settings-data-zone__header">
-                  <h6>Privacy & Data Use</h6>
+                  <h4>Privacy and Data Use</h4>
                 </div>
                 <div className="settings-preference-card__list">
                   <SettingsToggleRow
@@ -2702,6 +2696,12 @@ export function SettingsHub({
             )
           : null}
 
+        {["notifications", "imports", "data", "profiles"].includes(activeSection) ? (
+          <div className="settings-preferences-actions">
+            <button type="button" className="button button-primary" disabled={!preferencesReady || preferencesSaving} onClick={() => void saveSharedPreferences()}>{preferencesSaving ? "Saving…" : "Save changes"}</button>
+            {preferencesMessage ? <p role="status">{preferencesMessage}</p> : null}
+          </div>
+        ) : null}
         {(activeSection === "account" || activeSection === "profiles") && (profileMessage || profileListMessage) ? (
           <p className="settings-status">{profileMessage ?? profileListMessage}</p>
         ) : null}

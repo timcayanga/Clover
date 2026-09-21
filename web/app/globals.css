@@ -66418,3 +66418,24 @@ html[data-theme="dark"] .content.content--reports .reports-range-menu__summary {
 }
 
 :is(.content,.shell-mobile-subheader) .clover-tabs.clover-tabs .animated-tabs__label { display:inline!important; }
+
+/* Settings content hierarchy and compact plan limits. */
+.settings-section--plan .settings-plan-usage {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+.settings-data-zone__header h4 {
+  margin: 0;
+  font-family: var(--font-body);
+  font-size: 16px;
+  line-height: 24px;
+  font-weight: 700;
+  color: var(--muted-2);
+}
+.settings-preferences-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  margin-top: 24px;
+}
+.settings-hub__menu-icon { background: transparent; }

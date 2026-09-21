@@ -10,7 +10,6 @@ import { capturePostHogClientEvent } from "@/components/posthog-analytics";
 import { type BillingInterval } from "@/lib/billing-plans";
 import type { BillingOffers } from "@/lib/billing-offer-rules";
 import type { CloverTokenUsageSnapshot } from "@/lib/clover-token-usage";
-import { TokenUsageDonut } from "@/components/token-usage-donut";
 
 type BillingSubscriptionSummary = {
   provider: "paypal" | "paddle";
@@ -241,7 +240,6 @@ export function SettingsPlanPanel({
 
   return (
     <section className="settings-section settings-section--plan settings-section--swap" role="tabpanel">
-      <ReferralAccount summary />
       <div className="settings-section__intro settings-section__intro--single">
         <h4>Plan</h4>
       </div>
@@ -264,7 +262,6 @@ export function SettingsPlanPanel({
           <article key={usage.label} className="settings-plan-usage__card">
             <div className="settings-plan-usage__head">
               <strong>{usage.label}</strong>
-              {usage.donut ? <TokenUsageDonut percent={usage.percent} label={usage.label} compact /> : null}
             </div>
             <span className="settings-plan-usage__legend">
               <span>{usage.used}</span>
@@ -467,6 +464,7 @@ export function SettingsPlanPanel({
           minimalManagement
         />
       ) : null}
+      <ReferralAccount summary />
     </section>
   );
 }
