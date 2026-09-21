@@ -1,13 +1,15 @@
 import { beginTelemetry } from "../../shared/analytics";
 import { useState, useRef } from "react";
-import { Image, Linking, Platform, Switch, View } from "react-native";
+import { Image, Linking, Platform, Pressable, Switch, View } from "react-native";
 import { router, useLocalSearchParams } from "expo-router";
 import { useSignIn, useSignUp } from "@clerk/expo";
 import { useSSO } from "@clerk/expo/experimental";
 import { AuthVerification } from "../src/auth-verification";
 import { useAccess } from "../src/access";
 import { setRememberSession } from "../src/auth-token-cache";
-import { Body, Button, Card, Field, Heading, Notice, Screen } from "../src/ui";
+import { Body, Button, Card, Field, Heading, Icon, Notice, Screen, useTheme } from "../src/ui";
+import { Text } from "../src/app-text";
+import { GoogleIcon } from "../src/google-icon";
 type Step =
   | "sign-in"
   | "sign-up"
@@ -28,6 +30,7 @@ export default function Authentication() {
   );
 }
 function AuthForm() {
+  const { colors } = useTheme();
   const params = useLocalSearchParams<{ mode?: string }>();
   const { signIn } = useSignIn();
   const { signUp } = useSignUp();
@@ -167,7 +170,10 @@ function AuthForm() {
             );
   return (
     <Screen>
-      <View style={{ paddingVertical: 32 }}>
+      <View style={{ paddingVertical: 8, maxWidth: 520, width: "100%", alignSelf: "center" }}>
+        <Pressable accessibilityRole="button" accessibilityLabel="Back to tutorial" onPress={() => router.back()} style={{ minHeight: 44, alignSelf: "flex-start", justifyContent: "center", marginBottom: 8 }}>
+          <Icon name="arrow-back" size={24} color={colors.teal} />
+        </Pressable>
         <Card style={{ borderRadius: 24 }}>
           <Image
             source={require("../assets/welcome-clover.png")}
@@ -215,16 +221,16 @@ function AuthForm() {
                 value={password}
                 onChangeText={setPassword}
                 secureTextEntry={!visible}
+                trailing={<Pressable accessibilityRole="button" accessibilityLabel={visible ? "Hide password" : "Show password"}
+                  accessibilityState={{ checked: visible }} disabled={busy} onPress={() => setVisible(v => !v)}
+                  style={{ width: 44, minHeight: 48, alignItems: "center", justifyContent: "center" }}>
+                  <Icon name={visible ? "eye-off-outline" : "eye-outline"} size={22} color={colors.muted} />
+                </Pressable>}
                 autoCapitalize="none"
                 autoComplete={
                   step === "sign-in" ? "current-password" : "new-password"
                 }
                 editable={!busy}
-              />
-              <Button
-                title={visible ? "Hide password" : "Show password"}
-                secondary
-                onPress={() => setVisible((v) => !v)}
               />
               {step !== "sign-in" ? (
                 <Field
@@ -232,6 +238,11 @@ function AuthForm() {
                   value={repeat}
                   onChangeText={setRepeat}
                   secureTextEntry={!visible}
+                trailing={<Pressable accessibilityRole="button" accessibilityLabel={visible ? "Hide password" : "Show password"}
+                  accessibilityState={{ checked: visible }} disabled={busy} onPress={() => setVisible(v => !v)}
+                  style={{ width: 44, minHeight: 48, alignItems: "center", justifyContent: "center" }}>
+                  <Icon name={visible ? "eye-off-outline" : "eye-outline"} size={22} color={colors.muted} />
+                </Pressable>}
                   autoCapitalize="none"
                   autoComplete="new-password"
                   editable={!busy}
@@ -268,16 +279,17 @@ function AuthForm() {
             </>
           ) : null}
           {step === "sign-in" ? (
-            <Button
-              title="Forgot password?"
-              secondary
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Forgot password?"
+              style={{ alignSelf: "flex-end", minHeight: 44, justifyContent: "center" }}
               disabled={busy}
               onPress={() => {
                 setStep("reset");
                 setPassword("");
                 setError("");
               }}
-            />
+            ><Text style={{ color: colors.teal, fontFamily: "Poppins-Medium", fontSize: 14 }}>Forgot password?</Text></Pressable>
           ) : null}
           {initial && Platform.OS !== "web" ? (
             <View
@@ -289,7 +301,7 @@ function AuthForm() {
                 onValueChange={setRemember}
                 disabled={busy}
               />
-              <Body>Stay signed in on this device</Body>
+              <View style={{ flex: 1 }}><Body>Stay signed in on this device</Body></View>
             </View>
           ) : null}
           {step === "sign-up" ? (
@@ -323,6 +335,7 @@ function AuthForm() {
           ) : null}
           {step !== "extra-verification" ? (
             <Button
+              fullWidth
               title={
                 busy
                   ? "Please wait…"
@@ -340,10 +353,12 @@ function AuthForm() {
           )}
           {initial ? (
             <>
-              {(["google", "apple"] as const).map((provider) => (
+              {(["google"] as const).map((provider) => (
                 <Button
                   key={provider}
-                  title={`Continue with ${provider === "google" ? "Google" : "Apple"}`}
+                  title="Continue with Google"
+                  fullWidth
+                  leading={<GoogleIcon />}
                   secondary
                   disabled={busy || (step === "sign-up" && !terms)}
                   onPress={() =>

@@ -133,8 +133,7 @@ function Routes() {
           />
         </Stack.Protected>
       </Stack>
-      {path === "/auth" ||
-      (active &&
+      {active &&
         (path.startsWith("/transaction/") ||
           path.startsWith("/import/") ||
           [
@@ -148,7 +147,7 @@ function Routes() {
             "/circles",
             "/split-bills",
             "/reports",
-          ].includes(path))) ? (
+          ].includes(path)) ? (
         <DetailNavigation />
       ) : null}
     </PrivacyShield>

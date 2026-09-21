@@ -12,9 +12,9 @@ const key = "clover.appearance.v1";
 const Context = createContext<{
   appearance: Appearance;
   setAppearance: (value: Appearance) => Promise<void>;
-}>({ appearance: "system", setAppearance: async () => {} });
+}>({ appearance: "light", setAppearance: async () => {} });
 export function DisplayPreferences({ children }: { children: ReactNode }) {
-  const [appearance, set] = useState<Appearance>("system");
+  const [appearance, set] = useState<Appearance>("light");
   useEffect(() => {
     let active = true;
     void (async () => {

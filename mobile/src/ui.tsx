@@ -102,12 +102,16 @@ export function Button({
   secondary = false,
   disabled = false,
   icon,
+  leading,
+  fullWidth = false,
 }: {
   title: string;
   onPress: () => void;
   secondary?: boolean;
   disabled?: boolean;
   icon?: ComponentProps<typeof Ionicons>["name"];
+  leading?: ReactNode;
+  fullWidth?: boolean;
 }) {
   const { colors, styles } = useTheme();
   return (
@@ -121,6 +125,7 @@ export function Button({
       style={({ pressed }) => [
         styles.button,
         secondary && styles.secondary,
+        fullWidth && { alignSelf: "stretch", width: "100%", minHeight: 52 },
         (pressed || disabled) && { opacity: 0.6 },
       ]}
     >
@@ -133,6 +138,7 @@ export function Button({
           style={[StyleSheet.absoluteFill, { borderRadius: 26 }]}
         />
       ) : null}
+      {leading}
       {icon ? (
         <Icon
           name={icon}
@@ -220,17 +226,21 @@ export function Screen({
     </ScrollView>
   );
 }
-export function Field({ label, ...props }: TextInputProps & { label: string }) {
+export function Field({ label, trailing, ...props }: TextInputProps & { label: string; trailing?: ReactNode }) {
   const { colors, styles, dark } = useTheme();
   return (
     <View style={{ gap: 8 }}>
       <Text style={styles.label}>{label}</Text>
+      <View>
       <TextInput
         accessibilityLabel={label}
         placeholderTextColor={colors.muted}
+        keyboardAppearance={dark ? "dark" : "light"}
         {...props}
-        style={[styles.input, props.style]}
+        style={[styles.input, trailing ? { paddingRight: 56 } : undefined, props.style]}
       />
+      {trailing ? <View style={{ position: "absolute", right: 4, top: 0, bottom: 0, justifyContent: "center" }}>{trailing}</View> : null}
+      </View>
     </View>
   );
 }
