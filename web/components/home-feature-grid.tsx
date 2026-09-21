@@ -54,7 +54,7 @@ export function HomeFeatureGrid() {
               aria-controls="home-feature-category"
               onClick={() => selectCategory(item.label)}
             >
-              <img src={item.label === "Plan" ? "/assets/3d%20icons/menu/budgeting.png" : getNavigationIconSrc(item.icon)} alt="" width={48} height={48} />
+              <img src={item.label === "Plan" ? "/assets/3d%20icons/budgeting.png" : getNavigationIconSrc(item.icon)} alt="" width={48} height={48} />
               <span>{item.label}</span>
             </button>
           ))}
