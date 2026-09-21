@@ -111,8 +111,10 @@ export function ProActions({ market }: { market?: LandingMarket }) {
 
 export function ProComparison({ market, style, showActions = true, variant = "landing" }: { market: LandingMarket; style: CSSProperties; showActions?: boolean; variant?: "landing" | "feature" }) {
   return <div className={styles.proDetails} style={style}>
-    <PlanComparisonTable variant={variant} className={styles.proTable} />
-    <Link className={styles.proCompareLink} href="/pricing">Compare all Free and Pro features →</Link>
+    <div className={styles.proComparisonCard}>
+      <PlanComparisonTable variant={variant} className={styles.proTable} />
+      <Link className={styles.proCompareLink} href="/pricing">Compare all Free and Pro features <span aria-hidden="true">→</span></Link>
+    </div>
     {showActions ? <ProActions market={market} /> : null}
   </div>;
 }
@@ -318,7 +320,7 @@ export function LandingJourney({ authEnabled, initialMarket, countryResolved }: 
     };
   };
   const tableMotion = (index: number): CSSProperties => {
-    const visibility = clamp((0.58 - Math.abs(storyPosition - index)) / 0.25);
+    const visibility = displayedChapter === index ? 1 : 0;
     return {
       opacity: visibility,
       transform: `translate3d(0, ${(1 - visibility) * 10}px, 0)`,
@@ -343,7 +345,7 @@ export function LandingJourney({ authEnabled, initialMarket, countryResolved }: 
       <JourneyHeader />
 
       <div className={styles.world} aria-hidden="true">
-        <StoryBackground prefix="landing" count={chapters.length} active={displayedChapter} position={storyPosition} blurred={chapter === 1 || chapter === 6} />
+        <StoryBackground prefix="landing" count={chapters.length} active={displayedChapter} position={storyPosition} blurred={chapter === 1 || chapter === 6} reservePhone={[3,4,5].includes(displayedChapter)} />
         <div className={styles.worldWash} />
       </div>
 

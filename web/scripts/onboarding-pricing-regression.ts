@@ -32,3 +32,8 @@ for (const country of ['PH', 'US']) {
 }
 assert.equal(matchesPaddleApprovedPrice(null, 'PH', 'monthly'), false);
 console.log('[PASS] Approved regional and provider prices match; unapproved prices, wrong currencies/cadences, inactive plans and setup fees are rejected.');
+
+assert.deepEqual(plannedProPrices('ph'), {monthly:'₱169', annual:'₱1,259'});
+assert.deepEqual(plannedProPrices('global'), {monthly:'US$7.99', annual:'US$59.99'});
+assert.equal(paddleProPricing.ph.monthly.amount, 2.69);
+assert.equal(paddleProPricing.ph.annual.amount, 19.99);

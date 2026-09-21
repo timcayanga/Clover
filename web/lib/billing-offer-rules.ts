@@ -2,8 +2,8 @@ import { type PricingMarket } from "./public-plan-comparison";
 
 // Approved provider charges: Paddle bills Philippine customers in USD.
 export const paddleProPricing = {
-  ph: { currency: "USD", monthly: { amount: 1.59, label: "US$1.59" }, annual: { amount: 15.99, label: "US$15.99" } },
-  global: { currency: "USD", monthly: { amount: 2.99, label: "US$2.99" }, annual: { amount: 29.99, label: "US$29.99" } },
+  ph: { currency: "USD", monthly: { amount: 2.69, label: "US$2.69" }, annual: { amount: 19.99, label: "US$19.99" } },
+  global: { currency: "USD", monthly: { amount: 7.99, label: "US$7.99" }, annual: { amount: 59.99, label: "US$59.99" } },
 } as const;
 
 type PaddlePrice = {

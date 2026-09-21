@@ -1,16 +1,16 @@
-// Composed backgrounds and current phone displays exported from Figma, 13 Sep 2026.
+// Current public phone displays re-exported from the updated Figma screens, 21 Sep 2026.
 // Reuse the approved viewport exports wherever a public phone preview appears.
 export const cloverPhoneScreens: Record<string, string> = {
-  accounts: "/assets/connect-platform/screen-50-660.webp",
-  transactions: "/assets/connect-platform/screen-50-723.webp",
-  recurring: "/assets/connect-platform/screen-50-755.webp",
-  reports: "/assets/connect-platform/screen-571-25734.webp",
-  adviser: "/assets/connect-platform/screen-561-25437.webp",
-  investments: "/assets/connect-platform/screen-612-38129.webp",
-  budget: "/assets/connect-platform/screen-584-27896.webp",
-  goal: "/assets/connect-platform/screen-598-31795.webp",
-  circles: "/assets/connect-platform/screen-641-40491.webp",
-  split: "/assets/connect-platform/screen-629-49324.webp",
+  accounts: "/assets/marketing-screens/accounts-20260921.webp",
+  transactions: "/assets/marketing-screens/transactions-20260921.webp",
+  recurring: "/assets/marketing-screens/recurring-20260921.webp",
+  reports: "/assets/marketing-screens/reports-20260921.webp",
+  adviser: "/assets/marketing-screens/adviser-20260921.webp",
+  investments: "/assets/marketing-screens/investments-20260921.webp",
+  budget: "/assets/marketing-screens/budget-20260921.webp",
+  goal: "/assets/marketing-screens/goal-20260921.webp",
+  circles: "/assets/marketing-screens/circles-20260921.webp",
+  split: "/assets/marketing-screens/split-20260921.webp",
 };
 
 export const connectPlatformDesigns: Record<
@@ -28,15 +28,15 @@ export const connectPlatformDesigns: Record<
   },
   "landing-desktop-3": {
     background: "/assets/connect-platform/landing-desktop-3.webp",
-    screen: "/assets/connect-platform/screen-50-660.webp",
+    screen: "/assets/marketing-screens/accounts-20260921.webp",
   },
   "landing-desktop-4": {
     background: "/assets/connect-platform/landing-desktop-4.webp",
-    screen: "/assets/connect-platform/screen-561-25437.webp",
+    screen: "/assets/marketing-screens/adviser-20260921.webp",
   },
   "landing-desktop-5": {
     background: "/assets/connect-platform/landing-desktop-5.webp",
-    screen: "/assets/connect-platform/screen-629-49324.webp",
+    screen: "/assets/marketing-screens/split-20260921.webp",
   },
   "landing-desktop-6": {
     background: "/assets/connect-platform/landing-desktop-6.webp",
@@ -70,19 +70,19 @@ export const connectPlatformDesigns: Record<
   },
   "manage-money-desktop-0": {
     background: "/assets/connect-platform/manage-money-desktop-0.webp",
-    screen: "/assets/connect-platform/screen-50-660.webp",
+    screen: "/assets/marketing-screens/accounts-20260921.webp",
   },
   "manage-money-desktop-1": {
     background: "/assets/connect-platform/manage-money-desktop-1.webp",
-    screen: "/assets/connect-platform/screen-50-723.webp",
+    screen: "/assets/marketing-screens/transactions-20260921.webp",
   },
   "manage-money-desktop-2": {
     background: "/assets/connect-platform/manage-money-desktop-2.webp",
-    screen: "/assets/connect-platform/screen-50-660.webp",
+    screen: "/assets/marketing-screens/accounts-20260921.webp",
   },
   "manage-money-desktop-3": {
     background: "/assets/connect-platform/manage-money-desktop-3.webp",
-    screen: "/assets/connect-platform/screen-50-755.webp",
+    screen: "/assets/marketing-screens/recurring-20260921.webp",
   },
   "manage-money-desktop-4": {
     background: "/assets/connect-platform/manage-money-desktop-4.webp",
@@ -104,28 +104,28 @@ export const connectPlatformDesigns: Record<
   },
   "understand-your-money-desktop-0": {
     background: "/assets/connect-platform/understand-your-money-desktop-0.webp",
-    screen: "/assets/connect-platform/screen-571-25734.webp",
+    screen: "/assets/marketing-screens/reports-20260921.webp",
   },
   "understand-your-money-mobile-0": {
     background: "/assets/connect-platform/understand-your-money-mobile-0.webp",
   },
   "understand-your-money-desktop-1": {
     background: "/assets/connect-platform/understand-your-money-desktop-1.webp",
-    screen: "/assets/connect-platform/screen-572-27596.webp",
+    screen: "/assets/marketing-screens/reports-20260921.webp",
   },
   "understand-your-money-mobile-1": {
     background: "/assets/connect-platform/understand-your-money-mobile-1.webp",
   },
   "understand-your-money-desktop-2": {
     background: "/assets/connect-platform/understand-your-money-desktop-2.webp",
-    screen: "/assets/connect-platform/screen-561-25437.webp",
+    screen: "/assets/marketing-screens/adviser-20260921.webp",
   },
   "understand-your-money-mobile-2": {
     background: "/assets/connect-platform/understand-your-money-mobile-2.webp",
   },
   "understand-your-money-desktop-3": {
     background: "/assets/connect-platform/understand-your-money-desktop-3.webp",
-    screen: "/assets/connect-platform/screen-561-25437.webp",
+    screen: "/assets/marketing-screens/adviser-20260921.webp",
   },
   "understand-your-money-mobile-3": {
     background: "/assets/connect-platform/understand-your-money-mobile-3.webp",
@@ -138,28 +138,28 @@ export const connectPlatformDesigns: Record<
   },
   "plan-ahead-desktop-0": {
     background: "/assets/connect-platform/plan-ahead-desktop-0.webp",
-    screen: "/assets/connect-platform/screen-598-31795.webp",
+    screen: "/assets/marketing-screens/goal-20260921.webp",
   },
   "plan-ahead-mobile-0": {
     background: "/assets/connect-platform/plan-ahead-mobile-0.webp",
   },
   "plan-ahead-desktop-1": {
     background: "/assets/connect-platform/plan-ahead-desktop-1.webp",
-    screen: "/assets/connect-platform/screen-612-38129.webp",
+    screen: "/assets/marketing-screens/investments-20260921.webp",
   },
   "plan-ahead-mobile-1": {
     background: "/assets/connect-platform/plan-ahead-mobile-1.webp",
   },
   "plan-ahead-desktop-2": {
     background: "/assets/connect-platform/plan-ahead-desktop-2.webp",
-    screen: "/assets/connect-platform/screen-584-27896.webp",
+    screen: "/assets/marketing-screens/budget-20260921.webp",
   },
   "plan-ahead-mobile-2": {
     background: "/assets/connect-platform/plan-ahead-mobile-2.webp",
   },
   "plan-ahead-desktop-3": {
     background: "/assets/connect-platform/plan-ahead-desktop-3.webp",
-    screen: "/assets/connect-platform/screen-598-31991.webp",
+    screen: "/assets/marketing-screens/goal-20260921.webp",
   },
   "plan-ahead-mobile-3": {
     background: "/assets/connect-platform/plan-ahead-mobile-3.webp",
@@ -172,28 +172,28 @@ export const connectPlatformDesigns: Record<
   },
   "manage-money-together-desktop-0": {
     background: "/assets/connect-platform/manage-money-together-desktop-0.webp",
-    screen: "/assets/connect-platform/screen-629-49324.webp",
+    screen: "/assets/marketing-screens/split-20260921.webp",
   },
   "manage-money-together-mobile-0": {
     background: "/assets/connect-platform/manage-money-together-mobile-0.webp",
   },
   "manage-money-together-desktop-1": {
     background: "/assets/connect-platform/manage-money-together-desktop-1.webp",
-    screen: "/assets/connect-platform/screen-641-40191.webp",
+    screen: "/assets/marketing-screens/circles-20260921.webp",
   },
   "manage-money-together-mobile-1": {
     background: "/assets/connect-platform/manage-money-together-mobile-1.webp",
   },
   "manage-money-together-desktop-2": {
     background: "/assets/connect-platform/manage-money-together-desktop-2.webp",
-    screen: "/assets/connect-platform/screen-629-49324.webp",
+    screen: "/assets/marketing-screens/split-20260921.webp",
   },
   "manage-money-together-mobile-2": {
     background: "/assets/connect-platform/manage-money-together-mobile-2.webp",
   },
   "manage-money-together-desktop-3": {
     background: "/assets/connect-platform/manage-money-together-desktop-3.webp",
-    screen: "/assets/connect-platform/screen-641-40491.webp",
+    screen: "/assets/marketing-screens/circles-20260921.webp",
   },
   "manage-money-together-mobile-3": {
     background: "/assets/connect-platform/manage-money-together-mobile-3.webp",
@@ -237,21 +237,21 @@ export const connectPlatformDesigns: Record<
   },
   "pro-desktop-0": {
     background: "/assets/connect-platform/pro-desktop-0.webp",
-    screen: "/assets/connect-platform/screen-612-38129.webp",
+    screen: "/assets/marketing-screens/investments-20260921.webp",
   },
   "pro-mobile-0": {
     background: "/assets/connect-platform/pro-mobile-0.webp",
   },
   "pro-desktop-1": {
     background: "/assets/connect-platform/pro-desktop-1.webp",
-    screen: "/assets/connect-platform/screen-561-25437.webp",
+    screen: "/assets/marketing-screens/adviser-20260921.webp",
   },
   "pro-mobile-1": {
     background: "/assets/connect-platform/pro-mobile-1.webp",
   },
   "pro-desktop-2": {
     background: "/assets/connect-platform/pro-desktop-2.webp",
-    screen: "/assets/connect-platform/screen-612-38129.webp",
+    screen: "/assets/marketing-screens/investments-20260921.webp",
   },
   "pro-mobile-2": {
     background: "/assets/connect-platform/pro-mobile-2.webp",

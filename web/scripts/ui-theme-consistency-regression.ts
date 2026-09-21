@@ -91,7 +91,7 @@ async function main() {
     assert.ok(source.includes("<StoryBackground "), "Public chapters must use the shared responsive background.");
   }
   const background = await readSource("components/story-background.tsx");
-  assert.ok(background.includes("connectPlatformDesigns"), "Desktop backgrounds must retain approved Figma compositions.");
+  assert.ok(background.includes("desktopStoryPhoto"), "Desktop backgrounds must use original photographs instead of flattened frame exports.");
   assert.ok(background.includes("mobileStoryPhotos"), "Mobile backgrounds must use the original high-resolution photo sources.");
   for (const css of [journeyCss, featureCss]) {
 

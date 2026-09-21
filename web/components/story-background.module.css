@@ -1,15 +1,23 @@
 .background,.scene,.scene img,.fade{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}
 .background{overflow:hidden;background:#f8fcfc}
-.scene{opacity:0;transition:opacity 80ms linear;will-change:opacity}
-.scene[data-active=true]{opacity:1}
-.scene img{object-fit:cover;object-position:center;user-select:none}
-.fade{display:none}
-.background[data-blurred=true] .scene{filter:blur(24px);transform:scale(1.06)}
+.scene{background:#f8fcfc;top:96px;height:calc(100% - 96px);opacity:0;will-change:opacity}
+.scene img{object-fit:contain;object-position:right center;user-select:none}
+.fade{background:linear-gradient(90deg,#f8fcfc 0%,rgba(248,252,252,.98) 23%,rgba(248,252,252,.9) 34%,rgba(248,252,252,.35) 45%,transparent 56%)}
+.background[data-blurred=true] .scene{filter:blur(20px)}
+.background[data-blurred=true] .fade{background:rgba(248,252,252,.82)}
 @media(max-width:900px){
- /* Keep real photo pixels and their aspect ratio; reserve room for the header. */
  .scene{top:64px;height:calc(100% - 64px)}
- .scene img{object-position:55% top}
- .fade{display:block;background:linear-gradient(180deg,transparent 0 50%,rgba(248,252,252,.86) 67%,rgba(248,252,252,.97) 79%,#f8fcfc 100%)}
+ .scene img{object-fit:cover;object-position:55% top}
+ .fade{background:linear-gradient(180deg,transparent 0 50%,rgba(248,252,252,.86) 67%,rgba(248,252,252,.97) 79%,#f8fcfc 100%)}
  .background[data-blurred=true] .fade{background:rgba(248,252,252,.94)}
 }
-@media(prefers-reduced-motion:reduce){.scene{transition:none;will-change:auto}}
+@media(prefers-reduced-motion:reduce){.scene{will-change:auto}}
+/* A tiny vertical drift suggests depth without zooming or cropping the photo. */
+.scene[data-active=true] img{animation:photo-drift 7s ease-in-out infinite}
+@keyframes photo-drift{50%{transform:translateY(-3px)}}
+@media(prefers-reduced-motion:reduce){.scene[data-active=true] img{animation:none}}
+
+@media(min-width:901px){
+ .background[data-phone=true] .scene{width:calc(100% - var(--landing-phone-width) - 5vw)}
+ .background[data-phone=true] .fade{background:linear-gradient(90deg,#f8fcfc 0 20%,rgba(248,252,252,.94) 28%,transparent 42%)}
+}

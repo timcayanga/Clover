@@ -9,7 +9,7 @@ import {
 import "./in-app-notifications-regression";
 import { FEATURE_STORIES } from "../lib/feature-stories";
 import { FEATURE_LINKS, FEATURE_PAGE_MAP, resolveFeatureSlug } from "../lib/public-site";
-import { landingScenePosition, featurePhotoPosition, featureChapterPosition, featureChapterProgress } from "../lib/landing-motion";
+import { storyPhotoOpacity, landingScenePosition, featurePhotoPosition, featureChapterPosition, featureChapterProgress } from "../lib/landing-motion";
 
 for (const position of [0, .5, .75, 1, 1.25, 1.5]) assert.equal(landingScenePosition(position), 0);
 for (const position of [5, 5.5, 5.75, 6, 6.25, 6.5]) assert.equal(landingScenePosition(position), 4);
@@ -432,3 +432,11 @@ assert.equal(getHomePeriodChange(1758.9, 5, "PHP")?.label, "₱1,753.90 more");
 assert.equal(getHomePeriodChange(110, 100, "PHP")?.label, "+10%");
 assert.equal(getHomePeriodChange(90, 100, "PHP")?.label, "-10%");
 assert.equal(getHomePeriodChange(100, 100, "PHP")?.label, "0%");
+
+// Photos hold at either side of a short, reversible chapter-boundary blend.
+for (const chapter of [1, 2, 6, 7]) {
+  assert.equal(storyPhotoOpacity(chapter, chapter - .6), 0);
+  assert.equal(storyPhotoOpacity(chapter, chapter - .4), 1);
+  assert.ok(Math.abs(storyPhotoOpacity(chapter, chapter - .5) - .5) < 1e-10);
+  assert.equal(storyPhotoOpacity(chapter, chapter), 1);
+}

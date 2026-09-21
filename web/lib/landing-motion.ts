@@ -25,3 +25,9 @@ export function featureChapterProgress(index: number, count: number) {
   if (index >= count - 1) return 1;
   return (index + 0.5) / count;
 }
+
+// Hold each photo fully opaque for 84% of a chapter. Blend only at its boundary.
+export function storyPhotoOpacity(index: number, position: number) {
+  const phase = Math.max(0, Math.min(1, (position - index + 0.58) / 0.16));
+  return index === 0 ? 1 : phase * phase * (3 - 2 * phase);
+}
