@@ -218,7 +218,7 @@ export const connectPlatformDesigns: Record<
   },
   "security-desktop-2": {
     background: "/assets/connect-platform/security-desktop-2.webp",
-    screen: "/assets/connect-platform/screen-52-315.webp",
+    screen: "/assets/marketing-screens/transactions-20260921.webp",
   },
   "security-mobile-2": {
     background: "/assets/connect-platform/security-mobile-2.webp",
