@@ -2611,7 +2611,7 @@ export function CloverShell({
               {kicker ? <p className="eyebrow">{kicker}</p> : null}
               <div className="topbar__title-row">
                 <h1>{mobileOverlayChrome?.title ?? title}</h1>
-                {!["adviser", "dashboard", "recurring", "reports", "investments"].includes(active) && !desktopTitleAction ? <div className="topbar__desktop-adviser"><AdviserHeaderLink /></div> : null}{desktopTitleAction ? <div className="topbar__desktop-title-action">{desktopTitleAction}</div> : null}
+                {!["adviser", "dashboard", "recurring", "reports", "investments", "split-bill"].includes(active) && !desktopTitleAction ? <div className="topbar__desktop-adviser"><AdviserHeaderLink /></div> : null}{desktopTitleAction ? <div className="topbar__desktop-title-action">{desktopTitleAction}</div> : null}
                 {titleAddon ? <div className="topbar__title-addon">{titleAddon}</div> : null}
               </div>
               {subtitle ? <p className="topbar-subtitle">{subtitle}</p> : null}
@@ -2620,6 +2620,7 @@ export function CloverShell({
               <div className="shell-compact-bar__actions">
                 {active === "dashboard" ? <span className="home-header-adviser"><AdviserHeaderLink /></span> : null}
               {homeNotificationsAction}
+              {active === "split-bill" || active === "investments" ? <div className="desktop-header-adviser"><AdviserHeaderLink /></div> : null}
                 {mobileTrailingAction ? <div className="shell-mobile-trailing-actions">{mobileTrailingAction}</div> : null}
                 {actions}
               </div>
@@ -2655,7 +2656,7 @@ export function CloverShell({
               {kicker ? <p className="eyebrow">{kicker}</p> : null}
               <div className="topbar__title-row">
                 <h1>{mobileOverlayChrome?.title ?? title}</h1>
-                {!["adviser", "dashboard", "recurring", "reports", "investments"].includes(active) && !desktopTitleAction ? <div className="topbar__desktop-adviser"><AdviserHeaderLink /></div> : null}{desktopTitleAction ? <div className="topbar__desktop-title-action">{desktopTitleAction}</div> : null}
+                {!["adviser", "dashboard", "recurring", "reports", "investments", "split-bill"].includes(active) && !desktopTitleAction ? <div className="topbar__desktop-adviser"><AdviserHeaderLink /></div> : null}{desktopTitleAction ? <div className="topbar__desktop-title-action">{desktopTitleAction}</div> : null}
                 {titleAddon ? <div className="topbar__title-addon">{titleAddon}</div> : null}
               </div>
               {subtitle ? <p className="topbar-subtitle">{subtitle}</p> : null}
@@ -2663,6 +2664,7 @@ export function CloverShell({
             <div className="topbar-actions">
               {active === "dashboard" ? <span className="home-header-adviser"><AdviserHeaderLink /></span> : null}
               {homeNotificationsAction}
+              {active === "split-bill" || active === "investments" ? <div className="desktop-header-adviser"><AdviserHeaderLink /></div> : null}
               {mobileTrailingAction ? <div className="shell-mobile-trailing-actions">{mobileTrailingAction}</div> : null}
               {actions}
             </div>

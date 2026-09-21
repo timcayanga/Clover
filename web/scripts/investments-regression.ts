@@ -373,11 +373,13 @@ const currencySelectorSource = readFileSync(resolve(process.cwd(), "components/c
 const portfolioGrowthSource = readFileSync(resolve(process.cwd(), "components/investment-portfolio-growth-chart.tsx"), "utf8");
 const marketHistoryRouteSource = readFileSync(resolve(process.cwd(), "app/api/market-history/route.ts"), "utf8");
 
-assert.match(
+assert.doesNotMatch(
   investmentsPageSource,
   /desktopTitleAction=\{<AdviserHeaderLink \/>\}/,
-  "Investments must expose Adviser immediately beside its desktop title",
+  "Investments Adviser belongs with desktop actions, after its tabs",
 );
+const headerShellSource = readFileSync(resolve(process.cwd(), "components/clover-shell.tsx"), "utf8");
+assert.match(headerShellSource, /active === "investments" \? <div className="desktop-header-adviser"><AdviserHeaderLink/, "Investments must retain Adviser before its desktop actions");
 assert.match(investmentsPageSource, /deleteSelectedInvestmentAsset/, "Asset details should expose the delete workflow.");
 assert.match(investmentsPageSource, /"Delete asset"/, "Asset details should render a clear delete action.");
 assert.match(

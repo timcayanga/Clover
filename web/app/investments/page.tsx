@@ -2913,7 +2913,6 @@ export default function InvestmentsPage() {
       active="investments"
       title="Investments"
       titleAddon={renderInvestmentTabs()}
-      desktopTitleAction={<AdviserHeaderLink />}
       mobileSubheader={renderInvestmentTabs(true)}
       mobileLeadingAction={<AdviserHeaderLink />}
       actions={

@@ -66451,3 +66451,9 @@ html[data-theme="dark"] .content.content--reports .reports-range-menu__summary {
     min-height: 36px;
   }
 }
+
+/* Keep desktop Adviser beside the page actions, after the section tabs. */
+.desktop-header-adviser { display: none; }
+@media (min-width: 1101px) {
+  .desktop-header-adviser { display: flex; align-items: center; flex: none; }
+}

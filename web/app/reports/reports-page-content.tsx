@@ -2262,6 +2262,7 @@ async function ReportsPageStream({ searchParams }: { searchParams?: Promise<{ ra
         mobileTrailingAction={<ReportsRangeMenu options={filterOptions} currentRange={selectedRange} currentRangeLabel={selectedRangeLabel} currentFrom={reportWindow.from} currentTo={reportWindow.to} />}
         actions={
           <div className="reports-page__actions">
+            <AdviserHeaderLink />
             <ReportsRangeMenu
               options={filterOptions}
               currentRange={selectedRange}
@@ -2269,7 +2270,6 @@ async function ReportsPageStream({ searchParams }: { searchParams?: Promise<{ ra
               currentFrom={reportWindow.from}
               currentTo={reportWindow.to}
              />
-            <AdviserHeaderLink />
           </div>
         }
       >
