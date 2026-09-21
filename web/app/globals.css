@@ -66398,7 +66398,7 @@ html[data-theme="dark"] .content.content--reports .reports-range-menu__summary {
  max-width:none!important; overflow:visible!important; text-overflow:clip!important; flex-shrink:0;
 }
 :is(.content,.shell-mobile-subheader) .clover-tabs.clover-tabs :is(.animated-tabs__icon,.recurring-tab-icon),
-:is(.content,.shell-mobile-subheader) .clover-tabs.clover-tabs > :is(button,.animated-tabs__tab) svg {
+:is(.content,.shell-mobile-subheader) .clover-tabs.clover-tabs > :is(button,.animated-tabs__tab) :is(svg,.interface-icon) {
  display:inline-flex!important; width:var(--clover-tab-icon-size)!important; height:var(--clover-tab-icon-size)!important;
  min-width:var(--clover-tab-icon-size)!important; min-height:var(--clover-tab-icon-size)!important; flex-shrink:0;
 }
@@ -66416,3 +66416,5 @@ html[data-theme="dark"] .content.content--reports .reports-range-menu__summary {
  .clover-tabs.clover-tabs .recurring-tab-label--desktop { display:inline!important; }
  .clover-tabs.clover-tabs .recurring-tab-label--mobile { display:none!important; }
 }
+
+:is(.content,.shell-mobile-subheader) .clover-tabs.clover-tabs .animated-tabs__label { display:inline!important; }
