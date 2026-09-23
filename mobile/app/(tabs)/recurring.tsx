@@ -158,11 +158,7 @@ export default function Recurring() {
     <Screen>
       <View
         accessibilityRole="tablist"
-        style={{
-          flexDirection: "row",
-          borderBottomWidth: 1,
-          borderBottomColor: colors.line,
-        }}
+        style={{ flexDirection: "row", flexWrap: "wrap", gap: 4 }}
       >
         {kinds.map((item, index) => (
           <Pressable
@@ -170,47 +166,57 @@ export default function Recurring() {
             accessibilityRole="tab"
             accessibilityLabel={item.label}
             accessibilityState={{ selected: kind === item.value }}
-            aria-selected={kind === item.value}
             onPress={() => setKind(item.value)}
             style={{
-              flex: 1,
-              minHeight: 60,
-              padding: 5,
+              flexGrow: 1,
+              flexBasis: "30%",
+              minHeight: 40,
+              flexDirection: "row",
               alignItems: "center",
               justifyContent: "center",
-              gap: 5,
-              borderTopLeftRadius: 10,
-              borderTopRightRadius: 10,
-              backgroundColor: kind === item.value ? colors.white : colors.bg,
+              gap: 4,
               borderWidth: 1,
-              borderColor: kind === item.value ? colors.line : "transparent",
+              borderColor: kind === item.value ? colors.bright : colors.line,
+              borderTopLeftRadius: 8,
+              borderTopRightRadius: 8,
+              backgroundColor: kind === item.value ? colors.pale : colors.white,
             }}
           >
+            <Icon
+              line
+              name={
+                (
+                  [
+                    "apps-outline",
+                    "calendar-outline",
+                    "card-outline",
+                    "swap-horizontal-outline",
+                    "list-outline",
+                  ] as const
+                )[index]
+              }
+              size={14}
+            />
             <Text
               style={{
-                color: kind === item.value ? colors.teal : colors.muted,
-                fontSize: 18,
-              }}
-            >
-              {["▦", "◷", "↙︎", "↗︎", "▤"][index]}
-            </Text>
-            <Text
-              style={{
-                color: kind === item.value ? colors.teal : colors.muted,
                 fontSize: 10,
+                textAlign: "center",
+                color: kind === item.value ? colors.teal : colors.muted,
               }}
             >
-              {["Overview", "Planned", "Debts", "Owed", "Installments"][index]}
+              {
+                [
+                  "Overview",
+                  "Planned Payments",
+                  "Debt & Loans",
+                  "Money Owed",
+                  "Installments",
+                ][index]
+              }
             </Text>
           </Pressable>
         ))}
       </View>
-      <Field label="Search recurring" value={query} onChangeText={setQuery} />
-      <Button
-        title="Filters"
-        secondary
-        onPress={() => setFilters((value) => !value)}
-      />
       {filters ? (
         <Card>
           <Body>Account</Body>
@@ -462,7 +468,7 @@ export default function Recurring() {
                 />
               ))
             ) : (
-              <Body>No recurring items match these filters.</Body>
+              <Body>No recurring items yet.</Body>
             )}
           </Card>
         </>

@@ -13,6 +13,7 @@ import { router, useLocalSearchParams } from "expo-router";
 import { useSession } from "../src/session";
 import {
   Body,
+  Button,
   Card,
   CategoryMark,
   Field,
@@ -84,6 +85,7 @@ export default function SplitBills() {
   const session = useSession();
   const { colors, dark } = useTheme();
   const [statusFilter, setStatusFilter] = useState("All");
+  const [filtersOpen, setFiltersOpen] = useState(false);
   const [entity, setEntity] = useState<{
     group?: SplitGroup;
     person?: string;
@@ -287,7 +289,7 @@ export default function SplitBills() {
       ) : (
         <>
           <PlanTabs
-            items={["Bills", "Groups", "People", "Payment options"]}
+            items={["Bills", "Groups", "People", "Payments"]}
             value={tab}
             onChange={setTab}
           />
@@ -302,16 +304,36 @@ export default function SplitBills() {
                 <Body>Loading bills…</Body>
               ) : (
                 <>
-                  <Field
-                    label="Search bills on this page"
-                    value={search}
-                    onChangeText={setSearch}
-                  />
-                  <PlanTabs
-                    items={["All", "Open", "Settled", "Resolved"]}
-                    value={statusFilter}
-                    onChange={setStatusFilter}
-                  />
+                  <View
+                    style={{
+                      flexDirection: "row",
+                      gap: 8,
+                      alignItems: "center",
+                    }}
+                  >
+                    <View style={{ flex: 1 }}>
+                      <Field
+                        accessibilityLabel="Search bills"
+                        placeholder="Search bills"
+                        value={search}
+                        onChangeText={setSearch}
+                      />
+                    </View>
+                    <Button
+                      title="Filters"
+                      icon="options-outline"
+                      secondary
+                      onPress={() => setFiltersOpen((v) => !v)}
+                    />
+                  </View>
+                  {filtersOpen ? (
+                    <PlanTabs
+                      compact
+                      items={["All", "Open", "Settled", "Resolved"]}
+                      value={statusFilter}
+                      onChange={setStatusFilter}
+                    />
+                  ) : null}
                   {data.bills.length ? (
                     data.bills
                       .filter(
@@ -436,7 +458,7 @@ export default function SplitBills() {
                       onPress={() => setPage((value) => value + 1)}
                     />
                   ) : null}
-                  <Body>Page {page}</Body>
+                  {page > 1 || data.hasMore ? <Body>Page {page}</Body> : null}
                 </>
               )}
             </>
@@ -784,79 +806,97 @@ function BillEditor({
           if (!busy) onClose();
         }}
       />
-      <AddEntryMethods kind="split" disabled={busy} context={{kind:"split",fields:{title,amount:total,currency,date,people:names}}} onReviewForm={({fields:f})=>{if(f.title!==undefined)setTitle(f.title);if(f.amount!==undefined)setTotal(f.amount);if(f.currency!==undefined)setCurrency(f.currency);if(f.date!==undefined)setDate(f.date);if(f.people!==undefined){setNames(f.people);setPayer(null);}}} onUpload={()=>void uploadReceipt()}>
-      {receipt ? (
-        <Card>
-          <Body>
-            {receipt.fileName} · {receipt.confidence}% extraction confidence
-          </Body>
-          <Notice>
-            Review the title, total, currency and date before creating the bill.
-            The confirmed total is split equally; the original receipt and
-            extracted items are retained separately.
-          </Notice>
-          {receipt.items.map((item, index) => (
-            <Body key={index}>
-              {item.description} · {item.amount}
-            </Body>
-          ))}
-        </Card>
-      ) : null}
-      <Field
-        label="Bill title"
-        value={title}
-        onChangeText={setTitle}
-        maxLength={100}
-      />
-      <Field
-        label="Total"
-        value={total}
-        onChangeText={setTotal}
-        keyboardType="decimal-pad"
-      />
-      <Field
-        label="Currency"
-        value={currency}
-        onChangeText={(v) => setCurrency(v.toUpperCase())}
-        maxLength={3}
-      />
-      <Field label="Date (YYYY-MM-DD)" value={date} onChangeText={setDate} />
-      <Field
-        label="People (one name per line)"
-        value={names}
-        onChangeText={(value) => {
-          setNames(value);
-          setPayer(null);
-        }}
-        multiline
-      />
-      <Body>Split equally between these people.</Body>
-      <Body>Who paid?</Body>
-      <PlanAction
-        title={payer === null ? "Not paid yet ✓" : "Not paid yet"}
-        onPress={() => setPayer(null)}
-      />
-      {participants.map((person, index) => (
-        <PlanAction
-          key={index}
-          title={`${person.name}${payer === index ? " ✓" : ""}`}
-          onPress={() => setPayer(index)}
-        />
-      ))}
-      <Field
-        label="Note"
-        value={note}
-        onChangeText={setNote}
-        maxLength={1000}
-      />
-      {error ? <Notice>{error}</Notice> : null}
-      <PlanAction title="Cancel" disabled={busy} onPress={onClose} />
-      <PlanAction
-        title={busy ? "Creating…" : "Create bill"}
-        tone="primary"
+      <AddEntryMethods
+        kind="split"
         disabled={busy}
-        onPress={() => void save()}
-      />
+        context={{
+          kind: "split",
+          fields: { title, amount: total, currency, date, people: names },
+        }}
+        onReviewForm={({ fields: f }) => {
+          if (f.title !== undefined) setTitle(f.title);
+          if (f.amount !== undefined) setTotal(f.amount);
+          if (f.currency !== undefined) setCurrency(f.currency);
+          if (f.date !== undefined) setDate(f.date);
+          if (f.people !== undefined) {
+            setNames(f.people);
+            setPayer(null);
+          }
+        }}
+        onUpload={() => void uploadReceipt()}
+      >
+        {receipt ? (
+          <Card>
+            <Body>
+              {receipt.fileName} · {receipt.confidence}% extraction confidence
+            </Body>
+            <Notice>
+              Review the title, total, currency and date before creating the
+              bill. The confirmed total is split equally; the original receipt
+              and extracted items are retained separately.
+            </Notice>
+            {receipt.items.map((item, index) => (
+              <Body key={index}>
+                {item.description} · {item.amount}
+              </Body>
+            ))}
+          </Card>
+        ) : null}
+        <Field
+          label="Bill title"
+          value={title}
+          onChangeText={setTitle}
+          maxLength={100}
+        />
+        <Field
+          label="Total"
+          value={total}
+          onChangeText={setTotal}
+          keyboardType="decimal-pad"
+        />
+        <Field
+          label="Currency"
+          value={currency}
+          onChangeText={(v) => setCurrency(v.toUpperCase())}
+          maxLength={3}
+        />
+        <Field label="Date (YYYY-MM-DD)" value={date} onChangeText={setDate} />
+        <Field
+          label="People (one name per line)"
+          value={names}
+          onChangeText={(value) => {
+            setNames(value);
+            setPayer(null);
+          }}
+          multiline
+        />
+        <Body>Split equally between these people.</Body>
+        <Body>Who paid?</Body>
+        <PlanAction
+          title={payer === null ? "Not paid yet ✓" : "Not paid yet"}
+          onPress={() => setPayer(null)}
+        />
+        {participants.map((person, index) => (
+          <PlanAction
+            key={index}
+            title={`${person.name}${payer === index ? " ✓" : ""}`}
+            onPress={() => setPayer(index)}
+          />
+        ))}
+        <Field
+          label="Note"
+          value={note}
+          onChangeText={setNote}
+          maxLength={1000}
+        />
+        {error ? <Notice>{error}</Notice> : null}
+        <PlanAction title="Cancel" disabled={busy} onPress={onClose} />
+        <PlanAction
+          title={busy ? "Creating…" : "Create bill"}
+          tone="primary"
+          disabled={busy}
+          onPress={() => void save()}
+        />
       </AddEntryMethods>
     </Screen>
   );

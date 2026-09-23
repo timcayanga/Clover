@@ -139,7 +139,10 @@ export default function Investments() {
     return (
       <SnapshotHoldingDetails
         holding={holding}
-        onChanged={()=>{setHolding(null);reload();}}
+        onChanged={() => {
+          setHolding(null);
+          reload();
+        }}
         history={data?.history ?? []}
         onBack={() => setHolding(null)}
         onAccount={() => {
@@ -274,6 +277,7 @@ export default function Investments() {
           <View style={{ flexDirection: "row", gap: 8 }}>
             <SummaryCard
               title="Est. value"
+              color={colors.positive}
               value={
                 completeValue
                   ? compactSummaryMoney(total, selectedCurrency)
@@ -306,8 +310,7 @@ export default function Investments() {
             />
           </View>
           <Body>
-            Recorded values in {selectedCurrency}. Missing purchase values are
-            excluded from returns. Check your provider for live valuations.
+            Portfolio values are estimates. Check your investment apps for the latest amounts.
           </Body>
           {visibleHoldings.length ? (
             <ValuationHistory
@@ -345,15 +348,11 @@ export default function Investments() {
                 >
                   Estimated value history
                 </Text>
-                <Body>No investments in this view yet.</Body>
+                <Body>Add an investment to start tracking your growth.</Body>
                 <PlanAction
-                  title="Add a holding"
+                  title="+ Add Investment"
                   tone="primary"
                   onPress={() => setEditor({ account: null })}
-                />
-                <PlanAction
-                  title="Upload a statement"
-                  onPress={() => router.push("/(tabs)/add")}
                 />
               </Card>
             </>

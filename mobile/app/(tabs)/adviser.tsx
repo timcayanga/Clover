@@ -1,6 +1,9 @@
 import { Text } from "../../src/app-text";
 import { createAdviserHistoryHook } from "../../../shared/use-adviser-history";
-import { parseAdviserChart, type AdviserChart } from "../../../shared/adviser-chart";
+import {
+  parseAdviserChart,
+  type AdviserChart,
+} from "../../../shared/adviser-chart";
 import { AdviserReportCard } from "../../src/adviser-report-card";
 import { router } from "expo-router";
 import * as Crypto from "expo-crypto";
@@ -16,13 +19,27 @@ import { useLocalSearchParams } from "expo-router";
 import { Body, Card, Icon, Notice, Screen, useTheme } from "../../src/ui";
 import { PlanAction } from "../../src/plan-ui";
 import { useSession } from "../../src/session";
-import { Image, KeyboardAvoidingView, Platform, Pressable, View } from "react-native";
+import {
+  Image,
+  KeyboardAvoidingView,
+  Platform,
+  Pressable,
+  View,
+} from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-const useAdviserHistory = createAdviserHistoryHook({useEffect,useRef,useState});
+const useAdviserHistory = createAdviserHistoryHook({
+  useEffect,
+  useRef,
+  useState,
+});
 
 type FollowUp = { id: string; label: string; prompt: string };
 type Grounding = { transactionCount?: number; historyThrough?: string };
-type Message = { role: "user" | "assistant"; content: string; visualization?:AdviserChart };
+type Message = {
+  role: "user" | "assistant";
+  content: string;
+  visualization?: AdviserChart;
+};
 export default function Adviser() {
   const session = useSession();
   const { colors } = useTheme();
@@ -32,30 +49,66 @@ export default function Adviser() {
   const [local, setLocal] = useState(false);
   const useLocal = local || !session.offlineStatus.online;
   const [messages, setMessages] = useState<Message[]>([]);
-  const [cloudConversation,setCloudConversation]=useState(false);
+  const [cloudConversation, setCloudConversation] = useState(false);
   const [draft, setDraft] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [actions, setActions] = useState(false);
   const [followUps, setFollowUps] = useState<FollowUp[]>([]);
   const [grounding, setGrounding] = useState<Grounding | null>(null);
-  const history = useAdviserHistory(session.profileId, !session.demo && !useLocal, <T,>(path:string, body?:unknown) => session.request<T>(path, body ? {method:"POST",body:JSON.stringify(body)} : undefined), () => Crypto.randomUUID());
-  const [historyOpen,setHistoryOpen]=useState(false);
-  const [viewedChatId,setViewedChatId]=useState<string|undefined>();
-  useEffect(()=>{
-    if(!history.active)return;
-    setCloudConversation(true);setViewedChatId(history.active.id);setMessages(history.active.messages??[]);setFollowUps([]);setGrounding(null);setDraft("");setError("");setActions(false);setHistoryOpen(false);
-  },[history.active]);
-  useEffect(()=>{
-    if(cloudConversation && !useLocal && viewedChatId===history.active?.id && !busy&&!history.busy&&!history.error&&messages.at(-1)?.role==="assistant")void history.save(messages);
-  },[messages,busy,history.busy,history.error,viewedChatId,history.active?.id,cloudConversation,useLocal]);
+  const history = useAdviserHistory(
+    session.profileId,
+    !session.demo && !useLocal,
+    <T,>(path: string, body?: unknown) =>
+      session.request<T>(
+        path,
+        body ? { method: "POST", body: JSON.stringify(body) } : undefined,
+      ),
+    () => Crypto.randomUUID(),
+  );
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const [viewedChatId, setViewedChatId] = useState<string | undefined>();
+  useEffect(() => {
+    if (!history.active) return;
+    setCloudConversation(true);
+    setViewedChatId(history.active.id);
+    setMessages(history.active.messages ?? []);
+    setFollowUps([]);
+    setGrounding(null);
+    setDraft("");
+    setError("");
+    setActions(false);
+    setHistoryOpen(false);
+  }, [history.active]);
+  useEffect(() => {
+    if (
+      cloudConversation &&
+      !useLocal &&
+      viewedChatId === history.active?.id &&
+      !busy &&
+      !history.busy &&
+      !history.error &&
+      messages.at(-1)?.role === "assistant"
+    )
+      void history.save(messages);
+  }, [
+    messages,
+    busy,
+    history.busy,
+    history.error,
+    viewedChatId,
+    history.active?.id,
+    cloudConversation,
+    useLocal,
+  ]);
   const generation = useRef(0),
     inFlight = useRef(false);
   useEffect(() => {
     generation.current++;
     inFlight.current = false;
     setViewedChatId(undefined);
-    setMessages([]);setCloudConversation(false);
+    setMessages([]);
+    setCloudConversation(false);
     setFollowUps([]);
     setGrounding(null);
     setDraft("");
@@ -138,13 +191,13 @@ export default function Adviser() {
         entryDraft?: unknown;
         suggestions?: FollowUp[];
         grounding?: Grounding;
-        visualization?:AdviserChart;
+        visualization?: AdviserChart;
       }>(`adviser/chat?workspaceId=${encodeURIComponent(session.profileId)}`, {
         method: "POST",
         body: JSON.stringify({
           messages: next
             .slice(-6)
-            .map((m) => ({ role:m.role, content: m.content.slice(0, 4000) })),
+            .map((m) => ({ role: m.role, content: m.content.slice(0, 4000) })),
           page: allowed.includes(params.page ?? "") ? params.page : "general",
           clientDate: new Date().toLocaleDateString("en-CA", {
             timeZone: "Asia/Manila",
@@ -153,7 +206,14 @@ export default function Adviser() {
       });
       if (version !== generation.current) return;
       setCloudConversation(true);
-      setMessages([...next, { role: "assistant", content: result.reply, visualization:parseAdviserChart(result.visualization)??undefined }]);
+      setMessages([
+        ...next,
+        {
+          role: "assistant",
+          content: result.reply,
+          visualization: parseAdviserChart(result.visualization) ?? undefined,
+        },
+      ]);
       setDraft("");
       setActions(Boolean(result.hasActions || result.entryDraft));
       setFollowUps(
@@ -183,7 +243,7 @@ export default function Adviser() {
       onChangeText={setDraft}
       onSend={() => void send()}
       onDeviceOnly={useLocal}
-      disabled={busy||history.busy}
+      disabled={busy || history.busy}
       onText={(text) =>
         setDraft((previous) => `${previous} ${text}`.trim().slice(0, 4000))
       }
@@ -202,9 +262,46 @@ export default function Adviser() {
       keyboardVerticalOffset={insets.top + 70}
     >
       <Screen>
-        {!useLocal&&!session.demo ? <PlanAction title="Your chats" disabled={busy||history.busy} onPress={()=>setHistoryOpen(!historyOpen)} /> : null}
-        {historyOpen ? <Card><PlanAction title="New chat" disabled={busy||history.busy} onPress={history.fresh}/>{!history.conversations.length ? <Body>Your conversations will appear here.</Body> : null}{history.conversations.map(chat=><PlanAction key={chat.id} title={chat.title} disabled={busy||history.busy} onPress={()=>void history.open(chat.id)}/>)}</Card> : null}
-        {history.error ? <Notice>{history.error}<PlanAction title="Retry chat history" onPress={()=>cloudConversation && messages.length ? void history.save(messages) : history.retry()} /></Notice> : null}
+        {!useLocal && !session.demo ? (
+          <PlanAction
+            title="Your chats"
+            disabled={busy || history.busy}
+            onPress={() => setHistoryOpen(!historyOpen)}
+          />
+        ) : null}
+        {historyOpen ? (
+          <Card>
+            <PlanAction
+              title="New chat"
+              disabled={busy || history.busy}
+              onPress={history.fresh}
+            />
+            {!history.conversations.length ? (
+              <Body>Your conversations will appear here.</Body>
+            ) : null}
+            {history.conversations.map((chat) => (
+              <PlanAction
+                key={chat.id}
+                title={chat.title}
+                disabled={busy || history.busy}
+                onPress={() => void history.open(chat.id)}
+              />
+            ))}
+          </Card>
+        ) : null}
+        {history.error ? (
+          <Notice>
+            {history.error}
+            <PlanAction
+              title="Retry chat history"
+              onPress={() =>
+                cloudConversation && messages.length
+                  ? void history.save(messages)
+                  : history.retry()
+              }
+            />
+          </Notice>
+        ) : null}
 
         <View
           style={{
@@ -214,40 +311,14 @@ export default function Adviser() {
             gap: 8,
           }}
         >
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Adviser processing settings"
-            accessibilityState={{ expanded: showSettings }}
-            onPress={() => setShowSettings(!showSettings)}
-            style={{
-              minHeight: 40,
-              flexDirection: "row",
-              alignItems: "center",
-              gap: 6,
-              flexShrink: 1,
-            }}
-          >
-            <Text
-              style={{
-                color: colors.teal,
-                fontFamily: "Poppins-Medium",
-                fontSize: 13,
-              }}
-            >
-              {useLocal ? "On-device" : "Cloud Adviser"}
-            </Text>
-            <Icon
-              name={showSettings ? "chevron-up" : "chevron-down"}
-              size={16}
-            />
-          </Pressable>
           {messages.length ? (
             <PlanAction
               title="New chat"
-              disabled={busy||history.busy}
+              disabled={busy || history.busy}
               onPress={() => {
-                if(!useLocal&&!session.demo)history.fresh();
-                setMessages([]);setCloudConversation(false);
+                if (!useLocal && !session.demo) history.fresh();
+                setMessages([]);
+                setCloudConversation(false);
                 setFollowUps([]);
                 setGrounding(null);
                 setDraft("");
@@ -269,7 +340,8 @@ export default function Adviser() {
               disabled={busy}
               onPress={() => {
                 generation.current++;
-                setMessages([]);setCloudConversation(false);
+                setMessages([]);
+                setCloudConversation(false);
                 setFollowUps([]);
                 setGrounding(null);
                 setActions(false);
@@ -347,7 +419,9 @@ export default function Adviser() {
               {message.role === "user" ? "You" : "Clover"}
             </Text>
             <Body muted={false}>{message.content}</Body>
-            {message.visualization ? <AdviserReportCard chart={message.visualization} /> : null}
+            {message.visualization ? (
+              <AdviserReportCard chart={message.visualization} />
+            ) : null}
           </View>
         ))}
         {grounding &&

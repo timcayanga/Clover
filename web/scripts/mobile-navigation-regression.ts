@@ -293,7 +293,8 @@ async function main() {
   const accountMenu = shell.slice(shell.indexOf("const mobileSettingsSections ="), shell.indexOf("const shouldPrefetchNavHref"));
   assert.deepEqual([...accountMenu.matchAll(/label: "([^"]+)"/g)].map((match) => match[1]), ["Settings", "Help", "Plan"]);
   assert.match(styles, /Mobile navigation: Menu or Back[\s\S]*position: static !important/, "The mobile Menu belongs in the left leading group.");
-  assert.match(shell, /shell-mobile-more-link--replaced/);
+  assert.doesNotMatch(shell, /shell-mobile-more-link--replaced/, "Menu must remain available alongside Back on every mobile page.");
+  assert.match(shell, /shell-mobile-relocated-action/, "Contextual actions move to the trailing group to leave Menu on the left.");
   assert.match(shell, /if \(mobileBackAction\)[\s\S]{0,100}mobileBackAction\(\)/, "In-place collection details must use their explicit Back action.");
   assert.match(transactionsPage, /transactions-main-panel[\s\S]{0,120}isCompactViewport \? <TransactionSelectionToolbar compact/, "Mobile search and filters belong above the transaction list.");
   assert.match(await readSource("components/transaction-selection-toolbar.tsx"), /type="search" aria-label="Search"/, "Mobile search must remain visible rather than hidden in a header overlay.");

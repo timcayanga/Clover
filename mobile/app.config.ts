@@ -23,6 +23,15 @@ const config: ExpoConfig = {
   },
   plugins: [
     "expo-router",
+    [
+      "expo-splash-screen",
+      {
+        backgroundColor: "#F7F9FA",
+        image: "./assets/splash-brand.png",
+        imageWidth: 220,
+        resizeMode: "contain",
+      },
+    ],
     "expo-localization",
     ["expo-build-properties", { android: { minSdkVersion: 26 } }],
     ["expo-sqlite", { useSQLCipher: true }],

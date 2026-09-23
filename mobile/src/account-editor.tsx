@@ -21,6 +21,7 @@ export type AccountRecord = {
   currency: string;
   balance: string | null;
   displayBalance?: string | null;
+  brandLogoUrl?: string | null;
   lastFour?: string;
   source?: string;
   favorite?: boolean;
@@ -287,60 +288,85 @@ export function AccountEditor({
       {loading ? (
         <Body>Loading account details…</Body>
       ) : editing ? (
-        <AddEntryMethods enabled={!record} key={record?.id || "new"} kind={draft.type==="investment"?"investment":"account"} disabled={busy} context={{kind:draft.type==="investment"?"investment":"account",fields:{name:draft.name||"",institution:draft.institution||"",type:draft.type||"bank",currency:draft.currency||"PHP",balance:draft.balance||"",investmentSubtype:draft.investmentSubtype||"",investmentSymbol:draft.investmentSymbol||"",investmentQuantity:draft.investmentQuantity||"",investmentCostBasis:draft.investmentCostBasis||""}}} onDraft={proposal=>{const account=proposal.accounts[0];if(account)setDraft(current=>({...current,...account}));}}>
-        <Card>
-          <Choices
-            value={draft.type}
-            options={types.map((value) => ({
-              value,
-              label: value.replaceAll("_", " "),
-            }))}
-            onChange={(type) => setDraft((d) => ({ ...d, type }))}
-          />
-          {["name", "institution", "currency", ...extra].map((field) => (
-            <Field
-              key={field}
-              label={labels[field]}
-              value={draft[field] ?? ""}
-              placeholder={dateFields.has(field) ? "YYYY-MM-DD" : undefined}
-              autoCapitalize={field === "currency" ? "characters" : "sentences"}
-              keyboardType={
-                numericFields.has(field) ? "decimal-pad" : "default"
-              }
-              onChangeText={(value) =>
-                setDraft((d) => ({
-                  ...d,
-                  [field]: field === "currency" ? value.toUpperCase() : value,
-                }))
+        <AddEntryMethods
+          enabled={!record}
+          key={record?.id || "new"}
+          kind={draft.type === "investment" ? "investment" : "account"}
+          disabled={busy}
+          context={{
+            kind: draft.type === "investment" ? "investment" : "account",
+            fields: {
+              name: draft.name || "",
+              institution: draft.institution || "",
+              type: draft.type || "bank",
+              currency: draft.currency || "PHP",
+              balance: draft.balance || "",
+              investmentSubtype: draft.investmentSubtype || "",
+              investmentSymbol: draft.investmentSymbol || "",
+              investmentQuantity: draft.investmentQuantity || "",
+              investmentCostBasis: draft.investmentCostBasis || "",
+            },
+          }}
+          onDraft={(proposal) => {
+            const account = proposal.accounts[0];
+            if (account) setDraft((current) => ({ ...current, ...account }));
+          }}
+        >
+          <Card>
+            <Choices
+              value={draft.type}
+              options={types.map((value) => ({
+                value,
+                label: value.replaceAll("_", " "),
+              }))}
+              onChange={(type) => setDraft((d) => ({ ...d, type }))}
+            />
+            {["name", "institution", "currency", ...extra].map((field) => (
+              <Field
+                key={field}
+                label={labels[field]}
+                value={draft[field] ?? ""}
+                placeholder={dateFields.has(field) ? "YYYY-MM-DD" : undefined}
+                autoCapitalize={
+                  field === "currency" ? "characters" : "sentences"
+                }
+                keyboardType={
+                  numericFields.has(field) ? "decimal-pad" : "default"
+                }
+                onChangeText={(value) =>
+                  setDraft((d) => ({
+                    ...d,
+                    [field]: field === "currency" ? value.toUpperCase() : value,
+                  }))
+                }
+              />
+            ))}
+            {record?.source === "manual" ? (
+              <Body>
+                Leave opening balance blank to keep it unchanged. Saving a new
+                opening balance changes the calculated account balance.
+              </Body>
+            ) : null}
+            {!record ? (
+              <Body>
+                After adding the account, open Edit account for its credit or
+                asset details.
+              </Body>
+            ) : null}
+            <Button
+              title={busy ? "Saving…" : "Save account"}
+              disabled={busy}
+              onPress={() => void save()}
+            />
+            <Button
+              title="Cancel"
+              secondary
+              disabled={busy}
+              onPress={() =>
+                record ? (setEditing(false), setError("")) : onClose()
               }
             />
-          ))}
-          {record?.source === "manual" ? (
-            <Body>
-              Leave opening balance blank to keep it unchanged. Saving a new
-              opening balance changes the calculated account balance.
-            </Body>
-          ) : null}
-          {!record ? (
-            <Body>
-              After adding the account, open Edit account for its credit or
-              asset details.
-            </Body>
-          ) : null}
-          <Button
-            title={busy ? "Saving…" : "Save account"}
-            disabled={busy}
-            onPress={() => void save()}
-          />
-          <Button
-            title="Cancel"
-            secondary
-            disabled={busy}
-            onPress={() =>
-              record ? (setEditing(false), setError("")) : onClose()
-            }
-          />
-        </Card>
+          </Card>
         </AddEntryMethods>
       ) : record ? (
         <Card>

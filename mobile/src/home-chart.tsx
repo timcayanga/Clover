@@ -20,7 +20,6 @@ export function HomeChart({
     return <Body>No daily activity recorded for this period.</Body>;
   return (
     <View style={{ gap: 10 }}>
-      <Body>Income · green Expenses · red</Body>
       <ScrollView
         horizontal
         showsHorizontalScrollIndicator
@@ -73,7 +72,12 @@ export function HomeChart({
             <Text
               style={{ color: colors.muted, fontSize: 10, textAlign: "center" }}
             >
-              {d.date.slice(5)}
+              {days.length === 7
+                ? new Date(d.date).toLocaleDateString("en-US", {
+                    weekday: "short",
+                    timeZone: "UTC",
+                  })
+                : new Date(d.date).getUTCDate()}
             </Text>
           </Pressable>
         ))}
@@ -84,9 +88,7 @@ export function HomeChart({
           {hidden ? "••••" : money(String(current.income), currency)} · Expenses{" "}
           {hidden ? "••••" : money(String(current.expense), currency)}
         </Body>
-      ) : (
-        <Body>Tap a day for details. Scroll to see the full period.</Body>
-      )}
+      ) : null}
     </View>
   );
 }

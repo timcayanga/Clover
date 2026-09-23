@@ -1,3 +1,4 @@
+import { Icon } from "../src/ui";
 import { Text } from "../src/app-text";
 import { useEffect, useRef, useState } from "react";
 import { router, useLocalSearchParams } from "expo-router";
@@ -53,8 +54,8 @@ const presets = [
 ];
 export default function Goals() {
   const session = useSession();
-  const params=useLocalSearchParams<{goalId?:string}>();
-  const opened=useRef("");
+  const params = useLocalSearchParams<{ goalId?: string }>();
+  const opened = useRef("");
   const { colors, dark } = useTheme();
   const { data, setData, error, reload } = usePlanData("goals", sample);
   const [deleteState, setDeleteState] = useState<"idle" | "confirm" | "busy">(
@@ -73,7 +74,17 @@ export default function Goals() {
     setDeleteState("idle");
     setDeleteError("");
   }, [session.profileId]);
-  useEffect(()=>{const id=params.goalId;const token=`${session.profileId}:${id}`;if(id&&data&&opened.current!==token){const found=data.goals.find(item=>item.id===id);if(found){opened.current=token;setSelected(found);}}},[params.goalId,data,session.profileId]);
+  useEffect(() => {
+    const id = params.goalId;
+    const token = `${session.profileId}:${id}`;
+    if (id && data && opened.current !== token) {
+      const found = data.goals.find((item) => item.id === id);
+      if (found) {
+        opened.current = token;
+        setSelected(found);
+      }
+    }
+  }, [params.goalId, data, session.profileId]);
   if (editor)
     return (
       <GoalEditor
@@ -156,7 +167,9 @@ export default function Goals() {
                     <Progress value={selected.progress.progressPercent ?? 0} />
                     <Body>
                       {Math.round(selected.progress.progressPercent ?? 0)}% of{" "}
-                      {selected.cadence === "annual" ? "monthly pace" : "target"}
+                      {selected.cadence === "annual"
+                        ? "monthly pace"
+                        : "target"}
                     </Body>
                   </>
                 ) : (
@@ -171,7 +184,22 @@ export default function Goals() {
                 It is not money reserved separately. Annual targets are shown as
                 a monthly pace.
               </Body>
-              {selected.legacy?<><Body>This is your account-wide goal. Create a separate Profile goal to customize it without changing the original.</Body><PlanAction title="Create Profile goal from this" onPress={()=>setEditor({goal:{...selected,id:"",legacy:false}})}/></>:null}
+              {selected.legacy ? (
+                <>
+                  <Body>
+                    This is your account-wide goal. Create a separate Profile
+                    goal to customize it without changing the original.
+                  </Body>
+                  <PlanAction
+                    title="Create Profile goal from this"
+                    onPress={() =>
+                      setEditor({
+                        goal: { ...selected, id: "", legacy: false },
+                      })
+                    }
+                  />
+                </>
+              ) : null}
               {!selected.legacy ? (
                 <PlanAction
                   title="Edit goal"
@@ -441,6 +469,14 @@ export default function Goals() {
               </PlanDirectoryCard>
             ))
           )}
+          <Card>
+            <Icon name="add" size={32} />
+            <PlanAction
+              title="Create Goal"
+              tone="primary"
+              onPress={() => setEditor({ goal: null })}
+            />
+          </Card>
         </>
       )}
     </Screen>

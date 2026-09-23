@@ -1,3 +1,6 @@
+import { GlassContent, GlassNavigationProvider } from "../src/glass-backdrop";
+import { Image } from "expo-image";
+import * as SplashScreen from "expo-splash-screen";
 import { NativeAnalytics } from "../src/analytics-provider";
 import { identifyNativeAnalytics } from "../src/analytics";
 import { Text } from "../src/app-text";
@@ -16,6 +19,8 @@ import { SafeAreaProvider, SafeAreaView } from "react-native-safe-area-context";
 import { AccessContext, useAccess } from "../src/access";
 import { SessionProvider, useSession } from "../src/session";
 import { useTheme, AppHeader, DetailNavigation } from "../src/ui";
+
+void SplashScreen.preventAutoHideAsync().catch(() => {});
 
 function PrivacyShield({ children }: { children: ReactNode }) {
   const { colors, styles, dark } = useTheme();
@@ -42,9 +47,12 @@ function PrivacyShield({ children }: { children: ReactNode }) {
             },
           ]}
         >
-          <Text style={{ fontSize: 34, color: colors.teal, fontWeight: "700" }}>
-            clover
-          </Text>
+          <Image
+            source={require("../assets/splash-brand.png")}
+            contentFit="contain"
+            style={{ width: 220, height: 70 }}
+            accessibilityLabel="Clover"
+          />
         </View>
       )}
     </View>
@@ -76,64 +84,79 @@ function Routes() {
   }, [active, session.data?.needsOnboarding, path]);
   return (
     <PrivacyShield>
-      <StatusBar style={active && dark ? "light" : "dark"} />
-      <Stack
-        screenOptions={{
-          headerTintColor: colors.teal,
-          headerTitleStyle: { color: colors.ink },
-          headerShadowVisible: false,
-          headerStyle: { backgroundColor: colors.white },
-          contentStyle: { backgroundColor: colors.bg },
-          headerBackButtonDisplayMode: "minimal",
-        }}
-      >
-        <Stack.Protected guard={!active}>
-          <Stack.Screen name="welcome" options={{ headerShown: false }} />
-          <Stack.Screen name="auth" options={{ headerShown: false }} />
-        </Stack.Protected>
-        <Stack.Protected guard={active}>
-          <Stack.Screen
-            name="(tabs)"
-            options={{ headerShown: false, title: "Clover" }}
-          />
-          <Stack.Screen
-            name="offline"
-            options={{
-              header: () => <AppHeader title="Sync & Offline" back />,
+      <GlassNavigationProvider>
+        <StatusBar style={active && dark ? "light" : "dark"} />
+        <GlassContent>
+          <Stack
+            screenOptions={{
+              headerTintColor: colors.teal,
+              headerTitleStyle: { color: colors.ink },
+              headerShadowVisible: false,
+              headerStyle: { backgroundColor: colors.white },
+              contentStyle: { backgroundColor: colors.bg },
+              headerBackButtonDisplayMode: "minimal",
             }}
-          />
-          <Stack.Screen name="settings" options={{ headerShown: false }} />
-          <Stack.Screen name="notifications" options={{ headerShown: false }} />
-          <Stack.Screen name="onboarding" options={{ headerShown: false }} />
-          <Stack.Screen name="reports" options={{ headerShown: false }} />
-          <Stack.Screen name="circles" options={{ headerShown: false }} />
-          <Stack.Screen name="split-bills" options={{ headerShown: false }} />
-          <Stack.Screen name="investments" options={{ headerShown: false }} />
-          <Stack.Screen name="goals" options={{ headerShown: false }} />
-          <Stack.Screen
-            name="budgeting"
-            options={{
-              title: "Budgeting",
-              headerShown: false,
-            }}
-          />
-          <Stack.Screen
-            name="transaction/[id]"
-            options={{
-              title: "Transaction",
-              header: () => <AppHeader title="Transaction Details" back />,
-            }}
-          />
-          <Stack.Screen
-            name="import/[id]"
-            options={{
-              title: "Import status",
-              header: () => <AppHeader title="Import status" back />,
-            }}
-          />
-        </Stack.Protected>
-      </Stack>
-      {active &&
+          >
+            <Stack.Protected guard={!active}>
+              <Stack.Screen name="welcome" options={{ headerShown: false }} />
+              <Stack.Screen name="auth" options={{ headerShown: false }} />
+            </Stack.Protected>
+            <Stack.Protected guard={active}>
+              <Stack.Screen
+                name="(tabs)"
+                options={{ headerShown: false, title: "Clover" }}
+              />
+              <Stack.Screen
+                name="offline"
+                options={{
+                  header: () => <AppHeader title="Sync & Offline" back />,
+                }}
+              />
+              <Stack.Screen name="settings" options={{ headerShown: false }} />
+              <Stack.Screen
+                name="notifications"
+                options={{ headerShown: false }}
+              />
+              <Stack.Screen
+                name="onboarding"
+                options={{ headerShown: false }}
+              />
+              <Stack.Screen name="reports" options={{ headerShown: false }} />
+              <Stack.Screen name="circles" options={{ headerShown: false }} />
+              <Stack.Screen
+                name="split-bills"
+                options={{ headerShown: false }}
+              />
+              <Stack.Screen
+                name="investments"
+                options={{ headerShown: false }}
+              />
+              <Stack.Screen name="goals" options={{ headerShown: false }} />
+              <Stack.Screen
+                name="budgeting"
+                options={{
+                  title: "Budgeting",
+                  headerShown: false,
+                }}
+              />
+              <Stack.Screen
+                name="transaction/[id]"
+                options={{
+                  title: "Transaction",
+                  header: () => <AppHeader title="Transaction Details" back />,
+                }}
+              />
+              <Stack.Screen
+                name="import/[id]"
+                options={{
+                  title: "Import status",
+                  header: () => <AppHeader title="Import status" back />,
+                }}
+              />
+            </Stack.Protected>
+          </Stack>
+        </GlassContent>
+        {active &&
         (path.startsWith("/transaction/") ||
           path.startsWith("/import/") ||
           [
@@ -148,8 +171,9 @@ function Routes() {
             "/split-bills",
             "/reports",
           ].includes(path)) ? (
-        <DetailNavigation />
-      ) : null}
+          <DetailNavigation />
+        ) : null}
+      </GlassNavigationProvider>
     </PrivacyShield>
   );
 }
@@ -208,7 +232,9 @@ function AppSession({
 }
 function AuthenticatedApp() {
   const { isLoaded, userId, getToken, signOut } = useAuth();
-  useEffect(() => { if (isLoaded) identifyNativeAnalytics(userId ?? null); }, [isLoaded, userId]);
+  useEffect(() => {
+    if (isLoaded) identifyNativeAnalytics(userId ?? null);
+  }, [isLoaded, userId]);
   return (
     <AppSession
       configured
@@ -235,6 +261,9 @@ export default function RootLayout() {
     "Poppins-Regular": require("../assets/fonts/Poppins-Regular.ttf"),
     "Poppins-SemiBold": require("../assets/fonts/Poppins-SemiBold.ttf"),
   });
+  useEffect(() => {
+    if (fontsLoaded || fontError) void SplashScreen.hideAsync();
+  }, [fontsLoaded, fontError]);
   const key = process.env.EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY;
   if (!fontsLoaded && !fontError) return null;
   return (

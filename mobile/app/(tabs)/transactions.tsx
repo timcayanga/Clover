@@ -20,7 +20,7 @@ import {
 export default function Transactions() {
   const { colors, styles, dark } = useTheme();
   const { demo, rows: samples, profileId, request } = useSession();
-  const [summary,setSummary] = useState<TransactionPage["summary"]>();
+  const [summary, setSummary] = useState<TransactionPage["summary"]>();
   const [filters, setFilters] = useState(false);
   const params = useLocalSearchParams<{ review?: string }>();
   const [review, setReview] = useState("");
@@ -105,29 +105,24 @@ export default function Transactions() {
   return (
     <View style={{ flex: 1, backgroundColor: colors.bg }}>
       <View style={{ padding: 20, gap: 12 }}>
-        <Button
-          title="Add transaction"
-          onPress={() =>
-            router.navigate({
-              pathname: "/(tabs)/add",
-              params: { entry: String(Date.now()) },
-            })
-          }
-        />
-        <Field
-          label="Find a transaction"
-          placeholder="Search name, account, category…"
-          value={query}
-          onChangeText={setQuery}
-          returnKeyType="search"
-          autoCorrect={false}
-        />
-        <Button
-          title="Filters"
-          icon="options-outline"
-          secondary
-          onPress={() => setFilters((value) => !value)}
-        />
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+          <View style={{ flex: 1 }}>
+            <Field
+              accessibilityLabel="Search transactions"
+              placeholder="Search transactions"
+              value={query}
+              onChangeText={setQuery}
+              returnKeyType="search"
+              autoCorrect={false}
+            />
+          </View>
+          <Button
+            title="Filters"
+            icon="options-outline"
+            secondary
+            onPress={() => setFilters((v) => !v)}
+          />
+        </View>
         {filters ? (
           <View style={{ gap: 8 }}>
             <Body>Warnings</Body>
@@ -155,16 +150,11 @@ export default function Transactions() {
         ) : null}
         {error ? (
           <Notice>{error}</Notice>
-        ) : (
-          <Body>
-            {busy && !rows.length
-              ? "Loading transactions…"
-              : `${total} transactions`}
-          </Body>
-        )}
+        ) : busy && !rows.length ? (
+          <Body>Loading transactions…</Body>
+        ) : null}
       </View>
       <FlatList
-        ListHeaderComponent={summary?.currencyTotals ? <View style={{gap:12,marginBottom:16}}>{Object.entries(summary.currencyTotals).map(([currency,totals])=><View key={currency} style={{gap:8}}><Body>{currency} · all filtered transactions</Body><View style={{flexDirection:"row",gap:8}}><SummaryCard title="Income" value={money(String(totals.income),currency)}/><SummaryCard title="Spending" value={money(String(totals.spending),currency)}/><SummaryCard title="Net" value={money(String(totals.income-totals.spending),currency)}/></View></View>)}</View> : null}
         data={rows}
         keyExtractor={(row) => row.id}
         keyboardShouldPersistTaps="handled"
@@ -172,7 +162,7 @@ export default function Transactions() {
         onRefresh={() => void load()}
         contentContainerStyle={{
           paddingHorizontal: 20,
-          paddingBottom: 30,
+          paddingBottom: 120,
           width: "100%",
           maxWidth: 760,
           alignSelf: "center",
@@ -209,7 +199,7 @@ export default function Transactions() {
                 <Text
                   style={{
                     flex: 1,
-                    fontSize: 18,
+                    fontSize: 15,
                     fontWeight: "600",
                     color: colors.ink,
                   }}
@@ -219,7 +209,7 @@ export default function Transactions() {
                 <Text
                   style={{
                     maxWidth: "46%",
-                    fontSize: 18,
+                    fontSize: 15,
                     fontWeight: "700",
                     color: item.type === "income" ? colors.teal : colors.ink,
                   }}

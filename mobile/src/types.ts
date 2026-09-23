@@ -1,4 +1,8 @@
 export type Transaction = {
+  source?: string;
+  userNote?: string | null;
+  parsedNote?: string | null;
+  receiptLineItems?: { description: string; amount?: string | null; currency?: string | null }[];
   updatedAt?: string;
   pendingSync?: boolean;
   isTransfer?: boolean;
@@ -51,7 +55,7 @@ export type Bootstrap = {
 export type ImportStatus = {
   nativeUploadReceived?: boolean;
   nativeUploadFinalizing?: boolean;
-  progress?:number;
+  progress?: number;
   importFile: {
     id: string;
     fileName: string;

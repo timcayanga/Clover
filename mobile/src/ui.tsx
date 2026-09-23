@@ -1,5 +1,9 @@
 import { telemetry, safeAction } from "../../shared/analytics";
 import { Text, TextInput } from "./app-text";
+import { useUser } from "@clerk/expo";
+import { Image as ExpoImage } from "expo-image";
+import { GlassBackdrop } from "./glass-backdrop";
+import { navigationGroups } from "./navigation-groups";
 import { Children } from "react";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
@@ -7,7 +11,19 @@ import { useAccess } from "./access";
 import { useDisplayPreferences } from "./display-preferences";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { router } from "expo-router";
-import { Image, Modal, Linking, useColorScheme, Pressable, ScrollView, StyleSheet, View, type ColorValue, type TextInputProps, type ViewStyle } from "react-native";
+import {
+  Image,
+  Modal,
+  Linking,
+  useColorScheme,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  View,
+  type ColorValue,
+  type TextInputProps,
+  type ViewStyle,
+} from "react-native";
 import {
   useEffect,
   useRef,
@@ -23,32 +39,36 @@ import {
 import { useSession } from "./session";
 
 const lightColors = {
-  ink: "#18343E",
-  muted: "#506975",
-  teal: "#007F90",
+  ink: "#202B37",
+  muted: "#687386",
+  teal: "#00ACC0",
   bright: "#00ACC0",
   pale: "#E7F7F6",
-  bg: "#F5FAFA",
-  line: "#DCE9EB",
+  bg: "#F7F9FA",
+  line: "#D4E0E8",
   white: "#FFFFFF",
-  danger: "#AE303B",
-  positive: "#00875A",
+  danger: "#FF3F4C",
+  positive: "#16C763",
 };
 export function Icon({
   name,
   color,
   size = 24,
+  line = false,
 }: {
   name: ComponentProps<typeof Ionicons>["name"];
   color?: ColorValue;
   size?: number;
+  line?: boolean;
 }) {
   const { colors, styles, dark } = useTheme();
-  const source = mobileNavigationIcons[name] ?? mobileInterfaceIcons[name];
+  const source = line
+    ? undefined
+    : (mobileNavigationIcons[name] ?? mobileInterfaceIcons[name]);
   if (name === "chatbubble-ellipses-outline" && source)
     return (
       <View style={{ width: size, height: size, overflow: "hidden" }}>
-        <Image
+        <ExpoImage
           source={source}
           accessible={false}
           resizeMode="contain"
@@ -64,7 +84,7 @@ export function Icon({
     );
   if (source)
     return (
-      <Image
+      <ExpoImage
         source={source}
         accessible={false}
         resizeMode="contain"
@@ -121,7 +141,13 @@ export function Button({
       hitSlop={4}
       accessibilityState={{ disabled }}
       disabled={disabled}
-      onPress={() => { telemetry("ui_interaction", { target_type: "button", action: safeAction(title) }); onPress(); }}
+      onPress={() => {
+        telemetry("ui_interaction", {
+          target_type: "button",
+          action: safeAction(title),
+        });
+        onPress();
+      }}
       style={({ pressed }) => [
         styles.button,
         secondary && styles.secondary,
@@ -163,7 +189,11 @@ export function Heading({ children }: { children: ReactNode }) {
 /** Shared container heading, distinct from onboarding's larger headline. */
 export function SectionTitle({ children }: { children: ReactNode }) {
   const { styles } = useTheme();
-  return <Text accessibilityRole="header" style={styles.sectionTitle}>{children}</Text>;
+  return (
+    <Text accessibilityRole="header" style={styles.sectionTitle}>
+      {children}
+    </Text>
+  );
 }
 export function Body({
   children,
@@ -198,10 +228,14 @@ export function Screen({
 }) {
   const { colors, styles, dark } = useTheme();
   const session = useSession();
+  const insets = useSafeAreaInsets();
   return (
     <ScrollView
       style={{ flex: 1, backgroundColor: colors.bg }}
-      contentContainerStyle={[styles.content, { gap }]}
+      contentContainerStyle={[
+        styles.content,
+        { gap, paddingBottom: 100 + insets.bottom },
+      ]}
       keyboardShouldPersistTaps="handled"
       automaticallyAdjustKeyboardInsets
     >
@@ -226,20 +260,40 @@ export function Screen({
     </ScrollView>
   );
 }
-export function Field({ label, trailing, ...props }: TextInputProps & { label: string; trailing?: ReactNode }) {
+export function Field({
+  label,
+  trailing,
+  ...props
+}: TextInputProps & { label?: string; trailing?: ReactNode }) {
   const { colors, styles, dark } = useTheme();
   return (
     <View style={{ gap: 8 }}>
-      <Text style={styles.label}>{label}</Text>
+      {label ? <Text style={styles.label}>{label}</Text> : null}
       <View>
-      <TextInput
-        accessibilityLabel={label}
-        placeholderTextColor={colors.muted}
-        keyboardAppearance={dark ? "dark" : "light"}
-        {...props}
-        style={[styles.input, trailing ? { paddingRight: 56 } : undefined, props.style]}
-      />
-      {trailing ? <View style={{ position: "absolute", right: 4, top: 0, bottom: 0, justifyContent: "center" }}>{trailing}</View> : null}
+        <TextInput
+          accessibilityLabel={label}
+          placeholderTextColor={colors.muted}
+          keyboardAppearance={dark ? "dark" : "light"}
+          {...props}
+          style={[
+            styles.input,
+            trailing ? { paddingRight: 56 } : undefined,
+            props.style,
+          ]}
+        />
+        {trailing ? (
+          <View
+            style={{
+              position: "absolute",
+              right: 4,
+              top: 0,
+              bottom: 0,
+              justifyContent: "center",
+            }}
+          >
+            {trailing}
+          </View>
+        ) : null}
       </View>
     </View>
   );
@@ -273,7 +327,9 @@ export function AppHeader({
   title,
   back = false,
   onClose,
+  trailing,
 }: {
+  trailing?: ReactNode;
   title: string;
   back?: boolean;
   onClose?: () => void;
@@ -369,92 +425,105 @@ export function AppHeader({
   return (
     <>
       <View style={styles.header}>
-        <View style={{ width: home ? 96 : 48, flexDirection: "row" }}>
-          {home ? (
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel="Open navigation menu"
-              onPress={() => setPanel("menu")}
-              style={styles.iconButton}
-            >
-              <Icon name="menu-outline" />
-            </Pressable>
-          ) : title === "Adviser" ? (
-            <View style={styles.iconButton} />
-          ) : (
-            adviser
-          )}
+        <View style={{ width: 48, flexDirection: "row" }}>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Open navigation menu"
+            onPress={() => setPanel("menu")}
+            style={styles.iconButton}
+          >
+            <Icon name="menu-outline" size={22} />
+          </Pressable>
         </View>
         <Text
           accessibilityRole="header"
           numberOfLines={1}
-          style={styles.headerTitle}
+          style={[
+            styles.headerTitle,
+            {
+              position: "absolute",
+              left: home || trailing ? 102 : 58,
+              right: home || trailing ? 102 : 58,
+            },
+          ]}
         >
           {title}
         </Text>
-        <View style={{ width: home ? 96 : 48, flexDirection: "row" }}>
-          {home ? (
-            <>
-              {adviser}
+        <View
+          style={{
+            marginLeft: "auto",
+            minWidth: 48,
+            flexDirection: "row",
+            alignItems: "center",
+          }}
+        >
+          {trailing ??
+            (title === "Adviser" ? (
               <Pressable
                 accessibilityRole="button"
-                accessibilityLabel="Open notifications"
-                onPress={() => setPanel("notifications")}
+                accessibilityLabel="View Reports"
+                onPress={() => router.navigate("/reports")}
                 style={styles.iconButton}
               >
-                <Icon name="notifications-outline" />
+                <Text style={{ fontSize: 11, color: colors.teal }}>
+                  View Reports
+                </Text>
               </Pressable>
-            </>
-          ) : canAdd ? (
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel={
-                title === "Accounts"
-                  ? "Add account"
-                  : title === "Recurring"
-                    ? "Add recurring"
-                    : "Add transaction"
-              }
-              style={styles.iconButton}
-              onPress={() =>
-                title === "Transactions"
-                  ? router.navigate("/(tabs)/add")
-                  : router.navigate({
-                      pathname:
-                        title === "Accounts"
-                          ? "/(tabs)/accounts"
-                          : "/(tabs)/recurring",
-                      params: { add: String(Date.now()) },
-                    })
-              }
-            >
-              <AddNavigationMark size={32} />
-            </Pressable>
-          ) : back || onClose ? (
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel="Close details"
-              style={styles.iconButton}
-              onPress={
-                onClose ??
-                (() =>
-                  router.canGoBack()
-                    ? router.back()
-                    : router.navigate("/(tabs)"))
-              }
-            >
-              <Icon name="close" />
-            </Pressable>
-          ) : (
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel="Open navigation menu"
-              style={styles.iconButton}
-              onPress={() => setPanel("menu")}
-            >
-              <Icon name="menu-outline" />
-            </Pressable>
-          )}
+            ) : home ? (
+              <>
+                {adviser}
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel="Open notifications"
+                  onPress={() => setPanel("notifications")}
+                  style={styles.iconButton}
+                >
+                  <Icon name="notifications-outline" />
+                </Pressable>
+              </>
+            ) : canAdd ? (
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={
+                  title === "Accounts"
+                    ? "Add account"
+                    : title === "Recurring"
+                      ? "Add recurring"
+                      : "Add transaction"
+                }
+                style={styles.iconButton}
+                onPress={() =>
+                  title === "Transactions"
+                    ? router.navigate("/(tabs)/add")
+                    : router.navigate({
+                        pathname:
+                          title === "Accounts"
+                            ? "/(tabs)/accounts"
+                            : "/(tabs)/recurring",
+                        params: { add: String(Date.now()) },
+                      })
+                }
+              >
+                <AddNavigationMark size={32} />
+              </Pressable>
+            ) : back || onClose ? (
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Close details"
+                style={styles.iconButton}
+                onPress={
+                  onClose ??
+                  (() =>
+                    router.canGoBack()
+                      ? router.back()
+                      : router.navigate("/(tabs)"))
+                }
+              >
+                <Icon name="close" />
+              </Pressable>
+            ) : (
+              adviser
+            ))}
         </View>
       </View>
       <Modal
@@ -496,32 +565,36 @@ export function AppHeader({
             </View>
             <ScrollView contentContainerStyle={{ gap: 12 }}>
               {panel === "menu" ? (
-                [
-                  ["Home", "/"],
-                  ["Reports", "/reports"],
-                  ["Adviser", "/adviser"],
-                  ["Accounts", "/accounts"],
-                  ["Transactions", "/transactions"],
-                  ["Recurring", "/recurring"],
-                  ["Split Bills", "/split-bills"],
-                  ["Circles", "/circles"],
-                  ["Budgeting", "/budgeting"],
-                  ["Goals", "/goals"],
-                  ["Investments", "/investments"],
-                  ["Account & Profiles", "/account"],
-                ].map(([label, href]) => (
-                  <Pressable
-                    key={href}
-                    accessibilityRole="button"
-                    onPress={() => navigate(href)}
-                    style={{
-                      paddingVertical: 14,
-                      borderBottomWidth: 1,
-                      borderBottomColor: colors.line,
-                    }}
-                  >
-                    <Text style={styles.body}>{label}</Text>
-                  </Pressable>
+                navigationGroups.map((group) => (
+                  <View key={group.title} style={{ gap: 4 }}>
+                    <Text
+                      style={{
+                        fontSize: 11,
+                        color: colors.muted,
+                        marginTop: 6,
+                      }}
+                    >
+                      {group.title}
+                    </Text>
+                    {group.items.map((item) => (
+                      <Pressable
+                        key={item.route}
+                        accessibilityRole="button"
+                        onPress={() => navigate(item.route)}
+                        style={{
+                          minHeight: 44,
+                          flexDirection: "row",
+                          alignItems: "center",
+                          gap: 12,
+                        }}
+                      >
+                        <Icon name={item.icon} size={28} />
+                        <Text style={{ fontSize: 13, color: colors.ink }}>
+                          {item.label}
+                        </Text>
+                      </Pressable>
+                    ))}
+                  </View>
                 ))
               ) : (
                 <>
@@ -656,7 +729,7 @@ export function dateLabel(date: string) {
 const makeStyles = (colors: typeof lightColors) =>
   StyleSheet.create({
     content: {
-      padding: 22,
+      padding: 16,
       gap: 16,
       paddingBottom: 44,
       width: "100%",
@@ -666,8 +739,8 @@ const makeStyles = (colors: typeof lightColors) =>
     },
     heading: {
       fontFamily: "Poppins-SemiBold",
-      fontSize: 30,
-      lineHeight: 37,
+      fontSize: 24,
+      lineHeight: 32,
       color: colors.ink,
       letterSpacing: -0.7,
     },
@@ -679,13 +752,13 @@ const makeStyles = (colors: typeof lightColors) =>
     },
     body: {
       fontFamily: "Poppins-Regular",
-      fontSize: 16,
-      lineHeight: 24,
+      fontSize: 14,
+      lineHeight: 21,
       color: colors.muted,
     },
-    label: { fontFamily: "Poppins-Medium", fontSize: 15, color: colors.ink },
+    label: { fontFamily: "Poppins-Regular", fontSize: 13, color: colors.ink },
     card: {
-      padding: 22,
+      padding: 16,
       borderRadius: 24,
       backgroundColor: colors.white,
       borderWidth: 1,
@@ -721,17 +794,17 @@ const makeStyles = (colors: typeof lightColors) =>
     },
     input: {
       fontFamily: "Poppins-Regular",
-      padding: 15,
-      minHeight: 52,
+      padding: 12,
+      minHeight: 44,
       borderWidth: 1,
       borderColor: colors.line,
       borderRadius: 16,
       backgroundColor: colors.white,
-      fontSize: 17,
+      fontSize: 14,
       color: colors.ink,
     },
     header: {
-      minHeight: 70,
+      minHeight: 60,
       flexDirection: "row",
       alignItems: "center",
       backgroundColor: colors.white,
@@ -758,7 +831,7 @@ const makeStyles = (colors: typeof lightColors) =>
 const darkColors: typeof lightColors = {
   ink: "#EDF5F7",
   muted: "#A6BBC4",
-  teal: "#007F90",
+  teal: "#00ACC0",
   bright: "#5ED3D0",
   pale: "#193A43",
   bg: "#0D171D",
@@ -781,6 +854,21 @@ export function useTheme() {
 }
 
 export function AccountAvatar() {
+  return useSession().demo ? <AvatarFallback /> : <UserAvatar />;
+}
+function UserAvatar() {
+  const { user } = useUser();
+  return user?.hasImage && user.imageUrl ? (
+    <Image
+      accessibilityLabel="Profile photo"
+      source={{ uri: user.imageUrl }}
+      style={{ width: 34, height: 34, borderRadius: 10 }}
+    />
+  ) : (
+    <AvatarFallback />
+  );
+}
+function AvatarFallback() {
   const { colors } = useTheme();
   const session = useSession();
   const initial =
@@ -830,20 +918,27 @@ export function DetailNavigation({
   onNavigate,
 }: { onNavigate?: () => void } = {}) {
   const access = useAccess();
-  const { colors } = useTheme();
+  const { colors, dark } = useTheme();
   const insets = useSafeAreaInsets();
   return (
     <View
       style={{
+        position: "absolute",
+        left: 8,
+        right: 8,
+        bottom: Math.max(insets.bottom,8),
+        borderRadius:32,
+        overflow:"hidden",
         flexDirection: "row",
         paddingVertical: 7,
-        minHeight: 72 + insets.bottom,
-        paddingBottom: 8 + insets.bottom,
-        borderTopWidth: 1,
-        borderTopColor: colors.line,
-        backgroundColor: colors.white,
+        minHeight: 72,
+        paddingBottom: 8,
+        borderWidth: 1,
+        borderColor: colors.line,
+        backgroundColor: "transparent",
       }}
     >
+      <GlassBackdrop dark={dark} />
       {(
         [
           { title: "Home", route: "/(tabs)", icon: "home-outline" },

@@ -9,7 +9,14 @@ import * as Crypto from "expo-crypto";
 import { File } from "expo-file-system";
 import { router, useFocusEffect, useLocalSearchParams } from "expo-router";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Alert, KeyboardAvoidingView, Platform, View, Pressable, Image } from "react-native";
+import {
+  Alert,
+  KeyboardAvoidingView,
+  Platform,
+  View,
+  Pressable,
+  Image,
+} from "react-native";
 import {
   Choices,
   ManualTransaction,
@@ -36,7 +43,7 @@ export default function Add() {
   const { colors, dark } = useTheme();
   const insets = useSafeAreaInsets();
   const session = useSession();
-  const [tableMode,setTableMode]=useState(false);
+  const [tableMode, setTableMode] = useState(false);
   const [tab, setTab] = useState("manual");
   const [draft, setDraft] = useState(emptyTransaction);
   const { entry, picker } = useLocalSearchParams<{
@@ -146,7 +153,10 @@ export default function Add() {
       return;
     }
     setBusy(true);
-    const finishInput = beginTelemetry("input", { input_method: source, screen: "/add" });
+    const finishInput = beginTelemetry("input", {
+      input_method: source,
+      screen: "/add",
+    });
     try {
       if (source === "file") {
         const result = await DocumentPicker.getDocumentAsync({
@@ -207,198 +217,206 @@ export default function Add() {
     void choose(picker as "file" | "camera" | "library");
   }, [picker, session.data]);
   return (
-    <KeyboardAvoidingView style={{ flex: 1 }} keyboardVerticalOffset={insets.top + 70} behavior={Platform.OS === "ios" ? "padding" : "height"}>
-    <Screen>
-      <View
-        style={{
-          backgroundColor: colors.white,
-          borderRadius: 24,
-          padding: 18,
-          gap: 16,
-          minHeight: 650,
-        }}
-      >
+    <KeyboardAvoidingView
+      style={{ flex: 1 }}
+      keyboardVerticalOffset={insets.top + 70}
+      behavior={Platform.OS === "ios" ? "padding" : "height"}
+    >
+      <Screen>
         <View
           style={{
-            width: 36,
-            height: 4,
-            borderRadius: 4,
-            backgroundColor: colors.line,
-            alignSelf: "center",
-          }}
-        />
-        <Heading>Add transaction</Heading>
-        <Button
-          title="Close"
-          secondary
-          onPress={() => {
-            setDraft(emptyTransaction());
-            router.navigate("/(tabs)/transactions");
-          }}
-        />
-        <View
-          accessibilityRole="tablist"
-          style={{
-            flexDirection: "row",
-            padding: 4,
-            borderRadius: 999,
-            borderWidth: 1,
-            borderColor: colors.line,
-            backgroundColor: dark ? "#0e1b21" : "#ecf4f5",
+            backgroundColor: colors.white,
+            borderRadius: 24,
+            padding: 18,
+            gap: 16,
+            minHeight: 650,
           }}
         >
-          {(["manual", "ask", "upload"] as const).map((method) => (
-            <Pressable
-              key={method}
-              accessibilityRole="tab"
-              accessibilityState={{ selected: tab === method }}
-              aria-selected={tab === method}
-              onPress={() => setTab(method)}
-              style={{ flex: 1, borderRadius: 999, overflow: "hidden" }}
-            >
-              <LinearGradient
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 0 }}
-                colors={
-                  tab === method
-                    ? ["#03a8c0", "#28cfca"]
-                    : ["transparent", "transparent"]
-                }
-                style={{
-                  minHeight: 52,
-                  alignItems: "center",
-                  justifyContent: "center",
-                  gap: 4,
-                }}
-              >
-                <Image
-                  source={
-                    method === "manual"
-                      ? require("../../assets/organize/method-manual.png")
-                      : method === "ask"
-                        ? require("../../assets/organize/method-ask.png")
-                        : require("../../assets/organize/method-upload.png")
-                  }
-                  style={{
-                    width: 20,
-                    height: 20,
-                    tintColor: tab === method ? "white" : colors.teal,
-                  }}
-                />
-                <Text
-                  style={{
-                    color: tab === method ? "white" : colors.ink,
-                    fontSize: 12,
-                  }}
-                >
-                  {method === "manual"
-                    ? "Manual"
-                    : method === "ask"
-                      ? "Ask Clover"
-                      : "Upload"}
-                </Text>
-              </LinearGradient>
-            </Pressable>
-          ))}
-        </View>
-        <View style={{ display: tab === "manual" ? "flex" : "none" }}>
-          <Button secondary title={tableMode?"Single entry":"▦ Table entry"} onPress={()=>setTableMode(!tableMode)}/>
-          <View style={{display:tableMode?"none":"flex"}}><ManualTransaction draft={draft} onChange={setDraft} /></View>
-          <View style={{display:tableMode?"flex":"none"}}><TransactionTableEntry key={session.profileId}/></View>
-        </View>
-        <View style={{ display: tab === "ask" ? "flex" : "none" }}>
-          {tab === "ask" ? (
-            <TransactionChat
-              onReview={(value) => {
-                setDraft(value);
-                setTab("manual");
-              }}
-            />
-          ) : null}
-        </View>
-        <View style={{ display: tab === "upload" ? "flex" : "none", gap: 18 }}>
-          <View style={{ gap: 10 }}>
-            {(
-              [
-                ["file", "Choose files"],
-                ["camera", "Take photo"],
-                ["library", "Photo library"],
-              ] as const
-            ).map(([source, label]) => (
+          <View
+            style={{
+              width: 36,
+              height: 4,
+              borderRadius: 4,
+              backgroundColor: colors.line,
+              alignSelf: "center",
+            }}
+          />
+
+          <View
+            accessibilityRole="tablist"
+            style={{
+              flexDirection: "row",
+              padding: 4,
+              borderRadius: 999,
+              borderWidth: 1,
+              borderColor: colors.line,
+              backgroundColor: dark ? "#0e1b21" : "#ecf4f5",
+            }}
+          >
+            {(["manual", "ask", "upload"] as const).map((method) => (
               <Pressable
-                key={source}
-                disabled={busy}
-                accessibilityRole="button"
-                accessibilityLabel={label}
-                onPress={() => void choose(source)}
-                style={{
-                  flexDirection: "row",
-                  minHeight: 80,
-                  padding: 14,
-                  borderWidth: 1,
-                  borderColor: colors.line,
-                  borderRadius: 16,
-                  backgroundColor: colors.white,
-                  alignItems: "center",
-                  justifyContent: "flex-start",
-                  gap: 14,
-                }}
+                key={method}
+                accessibilityRole="tab"
+                accessibilityState={{ selected: tab === method }}
+                aria-selected={tab === method}
+                onPress={() => setTab(method)}
+                style={{ flex: 1, borderRadius: 999, overflow: "hidden" }}
               >
-                <Image
-                  source={
-                    source === "file"
-                      ? require("../../assets/organize/upload-files.png")
-                      : source === "camera"
-                        ? require("../../assets/organize/upload-camera.png")
-                        : require("../../assets/organize/upload-library.png")
+                <LinearGradient
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 0 }}
+                  colors={
+                    tab === method
+                      ? ["#03a8c0", "#28cfca"]
+                      : ["transparent", "transparent"]
                   }
-                  style={{ width: 56, height: 56 }}
-                />
-                <Text
                   style={{
-                    color: colors.ink,
-                    textAlign: "center",
-                    fontSize: 15,
-                    fontWeight: "500",
+                    minHeight: 52,
+                    alignItems: "center",
+                    justifyContent: "center",
+                    gap: 4,
                   }}
                 >
-                  {label}
-                </Text>
+                  <Image
+                    source={
+                      method === "manual"
+                        ? require("../../assets/organize/method-manual.png")
+                        : method === "ask"
+                          ? require("../../assets/organize/method-ask.png")
+                          : require("../../assets/organize/method-upload.png")
+                    }
+                    style={{
+                      width: 20,
+                      height: 20,
+                      tintColor: tab === method ? "white" : colors.teal,
+                    }}
+                  />
+                  <Text
+                    style={{
+                      color: tab === method ? "white" : colors.ink,
+                      fontSize: 12,
+                    }}
+                  >
+                    {method === "manual"
+                      ? "Manual"
+                      : method === "ask"
+                        ? "Ask Clover"
+                        : "Upload"}
+                  </Text>
+                </LinearGradient>
               </Pressable>
             ))}
           </View>
-          {error ? <Notice>{error}</Notice> : null}
-          <Body>
-            {session.demo
-              ? "Sample mode shows a completed sample import. It never opens or uploads your files."
-              : "Up to 25 MB per file. Your upload uses Clover’s existing parser and review rules."}
-          </Body>
-          <Body>
-            Your files are protected with encrypted connections and restricted
-            access. Clover never sells your data.
-          </Body>
-          <Body>Password-protected PDFs supported.</Body>
-          {history.length > 0 && (
-            <Card>
-              <Body>Recent imports</Body>
-              {history.map((item) => (
-                <Button
-                  key={item.id}
-                  title={`${item.fileName} · ${item.status}`}
-                  secondary
-                  onPress={() =>
-                    router.push({
-                      pathname: "/import/[id]",
-                      params: { id: item.id },
-                    })
-                  }
-                />
+          <View style={{ display: tab === "manual" ? "flex" : "none" }}>
+            <View style={{ flexDirection: "row", justifyContent: "flex-end" }}>
+              <Button
+                secondary
+                title={tableMode ? "Single entry" : "Table entry"}
+                onPress={() => setTableMode(!tableMode)}
+              />
+            </View>
+            <View style={{ display: tableMode ? "none" : "flex" }}>
+              <ManualTransaction draft={draft} onChange={setDraft} />
+            </View>
+            <View style={{ display: tableMode ? "flex" : "none" }}>
+              <TransactionTableEntry key={session.profileId} />
+            </View>
+          </View>
+          <View style={{ display: tab === "ask" ? "flex" : "none" }}>
+            {tab === "ask" ? (
+              <TransactionChat
+                onReview={(value) => {
+                  setDraft(value);
+                  setTab("manual");
+                }}
+              />
+            ) : null}
+          </View>
+          <View
+            style={{ display: tab === "upload" ? "flex" : "none", gap: 18 }}
+          >
+            <View style={{ gap: 10 }}>
+              {(
+                [
+                  ["file", "Choose files"],
+                  ["camera", "Take photo"],
+                  ["library", "Photo library"],
+                ] as const
+              ).map(([source, label]) => (
+                <Pressable
+                  key={source}
+                  disabled={busy}
+                  accessibilityRole="button"
+                  accessibilityLabel={label}
+                  onPress={() => void choose(source)}
+                  style={{
+                    flexDirection: "row",
+                    minHeight: 80,
+                    padding: 14,
+                    borderWidth: 1,
+                    borderColor: colors.line,
+                    borderRadius: 16,
+                    backgroundColor: colors.white,
+                    alignItems: "center",
+                    justifyContent: "flex-start",
+                    gap: 14,
+                  }}
+                >
+                  <Image
+                    source={
+                      source === "file"
+                        ? require("../../assets/organize/upload-files.png")
+                        : source === "camera"
+                          ? require("../../assets/organize/upload-camera.png")
+                          : require("../../assets/organize/upload-library.png")
+                    }
+                    style={{ width: 56, height: 56 }}
+                  />
+                  <Text
+                    style={{
+                      color: colors.ink,
+                      textAlign: "center",
+                      fontSize: 15,
+                      fontWeight: "500",
+                    }}
+                  >
+                    {label}
+                  </Text>
+                </Pressable>
               ))}
-            </Card>
-          )}
+            </View>
+            {error ? <Notice>{error}</Notice> : null}
+            <Body>
+              {session.demo
+                ? "Sample mode shows a completed sample import. It never opens or uploads your files."
+                : "Up to 25 MB per file. Your upload uses Clover’s existing parser and review rules."}
+            </Body>
+            <Body>
+              Your files are protected with encrypted connections and restricted
+              access. Clover never sells your data.
+            </Body>
+            <Body>Password-protected PDFs supported.</Body>
+            {history.length > 0 && (
+              <Card>
+                <Body>Recent imports</Body>
+                {history.map((item) => (
+                  <Button
+                    key={item.id}
+                    title={`${item.fileName} · ${item.status}`}
+                    secondary
+                    onPress={() =>
+                      router.push({
+                        pathname: "/import/[id]",
+                        params: { id: item.id },
+                      })
+                    }
+                  />
+                ))}
+              </Card>
+            )}
+          </View>
         </View>
-      </View>
-    </Screen>
+      </Screen>
     </KeyboardAvoidingView>
   );
 }

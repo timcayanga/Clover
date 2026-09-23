@@ -2582,7 +2582,7 @@ export function CloverShell({
           <div className="shell-compact-bar glass">
             <div className="shell-topbar-leading">
               <button
-                className={`shell-mobile-more-link${shouldShowBackButton ? " shell-mobile-more-link--replaced" : ""}${isSidebarOpen ? " is-active" : ""}`}
+                className={`shell-mobile-more-link${isSidebarOpen ? " is-active" : ""}`}
                 type="button"
                 aria-label={isSidebarOpen ? "Close menu" : "Open menu"}
                 aria-expanded={isSidebarOpen}
@@ -2616,10 +2616,11 @@ export function CloverShell({
               </div>
               {subtitle ? <p className="topbar-subtitle">{subtitle}</p> : null}
             </div>
-            {actions || homeNotificationsAction || mobileTrailingAction ? (
+            {actions || homeNotificationsAction || mobileTrailingAction || (active !== "dashboard" && active !== "adviser") ? (
               <div className="shell-compact-bar__actions">
                 {active === "dashboard" ? <span className="home-header-adviser"><AdviserHeaderLink /></span> : null}
               {homeNotificationsAction}
+              {active !== "dashboard" && active !== "adviser" ? <span className="shell-mobile-relocated-action">{mobileLeadingAction ?? <AdviserHeaderLink />}</span> : null}
               {active === "split-bill" || active === "investments" ? <div className="desktop-header-adviser"><AdviserHeaderLink /></div> : null}
                 {mobileTrailingAction ? <div className="shell-mobile-trailing-actions">{mobileTrailingAction}</div> : null}
                 {actions}
@@ -2631,7 +2632,7 @@ export function CloverShell({
           <header className="topbar glass">
             <div className="shell-topbar-leading">
               <button
-                className={`shell-mobile-more-link${shouldShowBackButton ? " shell-mobile-more-link--replaced" : ""}${isSidebarOpen ? " is-active" : ""}`}
+                className={`shell-mobile-more-link${isSidebarOpen ? " is-active" : ""}`}
                 type="button"
                 aria-label={isSidebarOpen ? "Close menu" : "Open menu"}
                 aria-expanded={isSidebarOpen}
@@ -2664,6 +2665,7 @@ export function CloverShell({
             <div className="topbar-actions">
               {active === "dashboard" ? <span className="home-header-adviser"><AdviserHeaderLink /></span> : null}
               {homeNotificationsAction}
+              {active !== "dashboard" && active !== "adviser" ? <span className="shell-mobile-relocated-action">{mobileLeadingAction ?? <AdviserHeaderLink />}</span> : null}
               {active === "split-bill" || active === "investments" ? <div className="desktop-header-adviser"><AdviserHeaderLink /></div> : null}
               {mobileTrailingAction ? <div className="shell-mobile-trailing-actions">{mobileTrailingAction}</div> : null}
               {actions}

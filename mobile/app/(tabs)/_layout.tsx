@@ -1,3 +1,8 @@
+import {
+  GlassBackdrop,
+  GlassContent,
+  GlassNavigationProvider,
+} from "../../src/glass-backdrop";
 import { Text } from "../../src/app-text";
 import { Tabs } from "expo-router";
 import { View } from "react-native";
@@ -34,103 +39,121 @@ export default function TabLayout() {
             DEMO · FICTIONAL DATA · NOT YOUR ACCOUNT
           </Text>
         )}
-        <Tabs
-          initialRouteName="index"
-          screenOptions={{
-            header: ({ options }) => (
-              <AppHeader title={String(options.title ?? "Clover")} />
-            ),
-            tabBarActiveTintColor: colors.teal,
-            tabBarInactiveTintColor: colors.muted,
-            tabBarStyle: {
-              height: 72 + insets.bottom,
-              paddingTop: 7,
-              paddingBottom: 8 + insets.bottom,
-              borderTopColor: colors.line,
-              backgroundColor: colors.white,
-            },
-            tabBarLabel: ({ children, color }) => (
-              <Text
-                numberOfLines={1}
-                adjustsFontSizeToFit
-                minimumFontScale={0.8}
-                style={{
-                  fontFamily: "Poppins-Regular",
-                  fontSize: 11,
-                  color,
-                  textAlign: "center",
-                  maxWidth: "100%",
-                }}
-              >
-                {children}
-              </Text>
-            ),
-            tabBarLabelStyle: { fontSize: 11, fontFamily: "Poppins-Regular" },
-          }}
-        >
-          <Tabs.Screen
-            name="accounts"
-            options={{ title: "Accounts", href: null }}
-          />
-          <Tabs.Screen
-            name="recurring"
-            options={{ title: "Recurring", href: null }}
-          />
-          <Tabs.Screen
-            name="index"
-            options={{
-              title: "Home",
-              tabBarIcon: ({ color }) => (
-                <Icon name="home-outline" color={color} size={34} />
+        <GlassNavigationProvider>
+          <Tabs
+            screenLayout={({ children }) => (
+              <GlassContent>{children}</GlassContent>
+            )}
+            initialRouteName="index"
+            screenOptions={{
+              header: ({ options }) => (
+                <AppHeader title={String(options.title ?? "Clover")} />
               ),
-            }}
-          />
-          <Tabs.Screen
-            name="transactions"
-            options={{
-              title: "Transactions",
-              tabBarIcon: ({ color }) => (
-                <Icon name="swap-horizontal-outline" color={color} size={34} />
-              ),
-            }}
-          />
-          <Tabs.Screen
-            name="add"
-            listeners={({ navigation }) => ({
-              tabPress: (event) => {
-                event.preventDefault();
-                navigation.navigate("add", { entry: String(Date.now()) });
+              tabBarItemStyle: { paddingHorizontal: 0, minWidth: 0 },
+              tabBarActiveTintColor: colors.teal,
+              tabBarInactiveTintColor: colors.muted,
+              tabBarBackground: () => <GlassBackdrop dark={dark} />,
+              tabBarStyle: {
+                position: "absolute",
+                height: 72,
+                bottom: Math.max(insets.bottom,8),
+                marginHorizontal:8,
+                borderRadius:32,
+                overflow:"hidden",
+                borderWidth:1,
+                borderColor:colors.line,
+                paddingTop: 7,
+                paddingBottom: 8,
+                borderTopColor: colors.line,
+                backgroundColor: "transparent",
               },
-            })}
-            options={{
-              title: "Add",
-              tabBarAccessibilityLabel: "Add",
-              tabBarLabel: () => null,
-              tabBarIcon: () => <AddNavigationMark />,
-            }}
-          />
-          <Tabs.Screen
-            name="adviser"
-            options={{
-              title: "Adviser",
-              tabBarIcon: ({ color }) => (
-                <Icon
-                  name="chatbubble-ellipses-outline"
-                  color={color}
-                  size={34}
-                />
+              tabBarLabel: ({ children, color }) => (
+                <Text
+                  numberOfLines={1}
+                  adjustsFontSizeToFit
+                  minimumFontScale={0.8}
+                  style={{
+                    fontFamily: "Poppins-Regular",
+                    fontSize: 10,
+                    color,
+                    textAlign: "center",
+                    maxWidth: "100%",
+                  }}
+                >
+                  {children}
+                </Text>
               ),
+              tabBarLabelStyle: { fontSize: 10, fontFamily: "Poppins-Regular" },
             }}
-          />
-          <Tabs.Screen
-            name="account"
-            options={{
-              title: "Account",
-              tabBarAccessibilityLabel: "Account",
-              tabBarIcon: ({ color }) => <AccountAvatar />,
-            }}
-          />
-        </Tabs>
+          >
+            <Tabs.Screen
+              name="accounts"
+              options={{ title: "Accounts", href: null }}
+            />
+            <Tabs.Screen
+              name="recurring"
+              options={{ title: "Recurring", href: null }}
+            />
+            <Tabs.Screen
+              name="index"
+              options={{
+                title: "Home",
+                tabBarIcon: ({ color }) => (
+                  <Icon name="home-outline" color={color} size={34} />
+                ),
+              }}
+            />
+            <Tabs.Screen
+              name="transactions"
+              options={{
+                title: "Transactions",
+                tabBarIcon: ({ color }) => (
+                  <Icon
+                    name="swap-horizontal-outline"
+                    color={color}
+                    size={34}
+                  />
+                ),
+              }}
+            />
+            <Tabs.Screen
+              name="add"
+              listeners={({ navigation }) => ({
+                tabPress: (event) => {
+                  event.preventDefault();
+                  navigation.navigate("add", { entry: String(Date.now()) });
+                },
+              })}
+              options={{
+                title: "Add Transaction",
+                tabBarAccessibilityLabel: "Add",
+                tabBarLabel: () => null,
+                tabBarIcon: () => <AddNavigationMark />,
+              }}
+            />
+            <Tabs.Screen
+              name="adviser"
+              options={{
+                title: "Adviser",
+                tabBarIcon: ({ color }) => (
+                  <Icon
+                    name="chatbubble-ellipses-outline"
+                    color={color}
+                    size={34}
+                  />
+                ),
+              }}
+            />
+            <Tabs.Screen
+              name="account"
+              options={{
+                title: "Account",
+                tabBarAccessibilityLabel: "Account",
+                tabBarIcon: ({ color }) => <AccountAvatar />,
+              }}
+            />
+          </Tabs>
+        </GlassNavigationProvider>
       </View>
     </ProfileGate>
   );

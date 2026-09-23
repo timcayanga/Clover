@@ -1,4 +1,6 @@
+import { homePeriodLabel } from "../../src/home-period-label";
 import { Text } from "../../src/app-text";
+import { HomeQuickAccess } from "../../src/home-quick-access";
 import { HomeChart } from "../../src/home-chart";
 import { router, useFocusEffect } from "expo-router";
 import { LinearGradient } from "expo-linear-gradient";
@@ -139,41 +141,8 @@ export default function Home() {
       : value === null
         ? "Unavailable"
         : money(String(value), currency);
-  const trend = (current: number, previous: number) =>
-    previous === 0
-      ? "—"
-      : `${current >= previous ? "↑" : "↓"} ${Math.abs(((current - previous) / previous) * 100).toFixed(0)}%`;
   return (
     <Screen>
-      <Body>
-        {
-          session.data?.profiles.find(
-            (profile) => profile.id === session.profileId,
-          )?.name
-        }
-      </Body>
-      <View style={[styles.row, { justifyContent: "space-between" }]}>
-        <Text style={{ color: colors.ink, fontSize: 24, fontWeight: "700" }}>
-          Hello{session.data?.firstName ? `, ${session.data.firstName}` : ""}.
-        </Text>
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel={`Reporting currency ${currency}. Switch currency`}
-          style={{ padding: 12 }}
-          onPress={() =>
-            setCurrency((current) => {
-              const currencies = data?.currencies?.length
-                ? data.currencies
-                : ["PHP", "USD"];
-              return currencies[
-                (currencies.indexOf(current) + 1) % currencies.length
-              ];
-            })
-          }
-        >
-          <Text style={{ color: colors.teal }}>{currency} ⌄</Text>
-        </Pressable>
-      </View>
       {error ? (
         <Notice>{error}</Notice>
       ) : !data ? (
@@ -183,248 +152,216 @@ export default function Home() {
           <LinearGradient
             colors={["#03A8C0", "#34D3D0"]}
             start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-            style={{
-              borderRadius: 24,
-              padding: 20,
-              paddingBottom: 14,
-              gap: 14,
-            }}
+            end={{ x: 1, y: 0 }}
+            style={{ borderRadius: 20, padding: 16, gap: 12 }}
           >
-            <View style={styles.row}>
+            <View
+              style={{
+                flexDirection: "row",
+                justifyContent: "center",
+                alignItems: "center",
+                gap: 8,
+              }}
+            >
               <Text
                 style={{
                   color: "white",
-                  fontSize: 20,
-                  fontWeight: "600",
-                  flex: 1,
+                  fontSize: 18,
+                  fontFamily: "Poppins-SemiBold",
                 }}
               >
                 My Balance
               </Text>
               <Pressable
-                onPress={toggleHidden}
                 accessibilityRole="button"
                 accessibilityLabel={hidden ? "Show balances" : "Hide balances"}
-                style={styles.iconButton}
+                onPress={toggleHidden}
+                style={{
+                  width: 36,
+                  height: 36,
+                  alignItems: "center",
+                  justifyContent: "center",
+                }}
               >
                 <Icon
                   name={hidden ? "eye-off-outline" : "eye-outline"}
                   color="white"
+                  size={20}
                 />
               </Pressable>
             </View>
-            <Text style={{ color: "white", fontSize: 34, fontWeight: "700" }}>
+            <Text
+              style={{
+                color: "white",
+                fontSize: 30,
+                fontFamily: "Poppins-Bold",
+                textAlign: "center",
+              }}
+            >
               {amount(data.balance)}
             </Text>
-            <View style={{ flexDirection: "row", gap: 8, marginTop: 8 }}>
+            <Text
+              style={{
+                color: "white",
+                fontSize: 11,
+                fontFamily: "Poppins-SemiBold",
+                textAlign: "center",
+                marginTop: 8,
+              }}
+            >
+              {new Date().toLocaleDateString("en-US", {
+                month: "long",
+                year: "numeric",
+              })}
+            </Text>
+            <View style={{ flexDirection: "row", gap: 8 }}>
               {(["income", "expense"] as const).map((key) => (
                 <View
                   key={key}
                   style={{
                     flex: 1,
-                    minHeight: 52,
-                    backgroundColor: "rgba(255,255,255,.94)",
-                    borderRadius: 14,
-                    padding: 9,
-                    gap: 4,
+                    backgroundColor: "#fffffff2",
+                    padding: 10,
+                    borderRadius: 12,
+                    gap: 3,
                   }}
                 >
-                  <Text style={{ color: "#436572", fontSize: 11 }}>
-                    {key === "income" ? "Monthly income" : "Monthly expenses"}
+                  <Text style={{ fontSize: 10, color: colors.muted }}>
+                    {key === "income" ? "Monthly Income" : "Monthly Expenses"}
                   </Text>
-                  <View
+                  <Text
                     style={{
-                      flexDirection: "row",
-                      justifyContent: "space-between",
-                      flexWrap: "wrap",
-                      gap: 3,
+                      fontSize: 16,
+                      fontFamily: "Poppins-SemiBold",
+                      color: key === "income" ? colors.positive : colors.danger,
                     }}
                   >
-                    <Text style={{ color: "#18343E", fontWeight: "600" }}>
-                      {amount(data.month[key])}
-                    </Text>
-                    <Text
-                      accessibilityLabel="Change compared with previous month"
-                      style={{ color: "#436572", fontSize: 11 }}
-                    >
-                      {trend(data.month[key], data.previousMonth[key])}
-                    </Text>
-                  </View>
+                    {amount(data.month[key])}
+                  </Text>
+                  <Text style={{ fontSize: 10, color: colors.muted }}>
+                    {hidden
+                      ? "••••"
+                      : homePeriodLabel(data.month[key], data.previousMonth[key])}
+                  </Text>
                 </View>
               ))}
             </View>
           </LinearGradient>
-          <View style={{ flexDirection: "row", gap: 8 }}>
-            <View style={{ flex: 1 }}>
-              <Button
-                title="Accounts"
-                secondary
-                onPress={() => router.navigate("/(tabs)/accounts")}
-              />
-            </View>
-            <View style={{ flex: 1 }}>
-              <Button
-                title="Recurring"
-                secondary
-                onPress={() => router.navigate("/(tabs)/recurring")}
-              />
-            </View>
-          </View>
+          <HomeQuickAccess />
           <Card>
-            <Text
-              style={{ color: colors.ink, fontSize: 16, fontFamily: "Poppins-SemiBold" }}
+            <Text style={styles.sectionTitle}>Adviser</Text>
+            <View
+              style={{ flexDirection: "row", alignItems: "center", gap: 10 }}
             >
-              Next steps
-            </Text>
+              <Icon name="chatbubble-ellipses-outline" size={36} />
+              <View style={{ flex: 1 }}>
+                <Body>
+                  {data.reviewCount
+                    ? `${data.reviewCount} transactions are ready for your review.`
+                    : "Ask Clover about your finances and find a clearer next step."}
+                </Body>
+              </View>
+            </View>
             <Button
-              title={
-                data.reviewCount === undefined
-                  ? "Review transactions"
-                  : `Review transactions · ${data.reviewCount} unresolved`
-              }
-              onPress={() =>
-                router.navigate({
-                  pathname: "/(tabs)/transactions",
-                  params: { review: "pending_review" },
-                })
-              }
-            />
-            <Button
-              title="Upload a record"
+              title="Ask Clover"
               secondary
-              onPress={() =>
-                router.navigate({
-                  pathname: "/(tabs)/add",
-                  params: { entry: `upload-${Date.now()}` },
-                })
-              }
+              onPress={() => router.navigate("/(tabs)/adviser")}
             />
           </Card>
-          {data.budgets?.length ? (
+          {Boolean(data.reviewCount) && (
             <Card>
-              <Text
-                style={{ color: colors.ink, fontSize: 16, fontFamily: "Poppins-SemiBold" }}
-              >
-                Budgeting
-              </Text>
-              {[...data.budgets]
-                .sort((a, b) => Number(b.isAtRisk) - Number(a.isAtRisk))
-                .slice(0, 3)
-                .map((b) => (
-                  <View key={b.id} style={{ gap: 8 }}>
-                    <Body muted={false}>
-                      {b.name} · {b.statusLabel}
-                    </Body>
-                    <Body>
-                      {hidden
-                        ? "••••"
-                        : money(String(b.actualAmount), b.currency)}{" "}
-                      of{" "}
-                      {hidden
-                        ? "••••"
-                        : money(String(b.targetAmount), b.currency)}
-                    </Body>
-                    <View
-                      accessibilityRole="progressbar"
-                      accessibilityLabel={b.name}
-                      accessibilityValue={{
-                        min: 0,
-                        max: 100,
-                        now: Math.max(0, Math.min(100, b.progressPercent)),
-                      }}
-                      style={{
-                        height: 8,
-                        backgroundColor: colors.line,
-                        borderRadius: 4,
-                      }}
-                    >
-                      <View
-                        style={{
-                          height: 8,
-                          width: `${Math.max(0, Math.min(100, b.progressPercent))}%`,
-                          backgroundColor: b.isAtRisk
-                            ? "#D59A39"
-                            : colors.bright,
-                          borderRadius: 4,
-                        }}
-                      />
-                    </View>
-                    <Body>
-                      {Math.round(b.progressPercent)}% · {b.periodLabel}
-                    </Body>
-                  </View>
-                ))}
+              <Text style={styles.sectionTitle}>Next steps</Text>
               <Button
-                title="Open budgeting"
+                title={`Review ${data.reviewCount} transactions`}
                 secondary
-                onPress={() => router.navigate("/budgeting")}
+                onPress={() =>
+                  router.navigate({
+                    pathname: "/(tabs)/transactions",
+                    params: { review: "pending_review" },
+                  })
+                }
               />
             </Card>
-          ) : null}
-          {(
-            [
-              ["weekly", "This week"],
-              ["monthly", "This month"],
-            ] as const
-          ).map(([key, title]) => (
+          )}
+          {(["weekly", "monthly"] as const).map((key) => (
             <Card key={key}>
-              <Text
-                style={{ color: colors.ink, fontSize: 16, fontFamily: "Poppins-SemiBold" }}
-              >
-                {title}
+              <Text style={styles.sectionTitle}>
+                {key === "weekly" ? "Weekly Report" : "Monthly Report"}
               </Text>
               <Text
-                style={{ fontSize: 28, color: colors.ink, fontWeight: "600" }}
+                style={{
+                  fontSize: 26,
+                  fontFamily: "Poppins-SemiBold",
+                  color: colors.ink,
+                }}
               >
                 {amount(data[key].expense)}
               </Text>
               <Body>
-                Recorded spending · past {key === "weekly" ? 7 : 30} days
+                Recorded spending in the past {key === "weekly" ? 7 : 30} days
               </Body>
-              {data[key].previous ? (
-                <Body>
-                  {trend(data[key].expense, data[key].previous.expense)}{" "}
-                  compared with previous {key === "weekly" ? 7 : 30} days
-                </Body>
-              ) : null}
+              <View style={{ flexDirection: "row", gap: 8 }}>
+                {[
+                  ["Income", data[key].income, colors.positive],
+                  ["Expenses", data[key].expense, colors.danger],
+                  [
+                    "Net Cash Flow",
+                    data[key].income - data[key].expense,
+                    data[key].income >= data[key].expense
+                      ? colors.positive
+                      : colors.danger,
+                  ],
+                ].map(([label, value, color]) => (
+                  <View key={String(label)} style={{ flex: 1, gap: 4 }}>
+                    <Text style={{ fontSize: 10, color: colors.muted }}>
+                      {label}
+                    </Text>
+                    <Text
+                      style={{
+                        fontSize: 12,
+                        fontFamily: "Poppins-SemiBold",
+                        color: String(color),
+                      }}
+                    >
+                      {amount(Number(value))}
+                    </Text>
+                  </View>
+                ))}
+              </View>
               <HomeChart
-                key={`${key}-${currency}`}
                 days={data[key].days}
                 hidden={hidden}
                 currency={currency}
               />
-              <View style={{ gap: 8 }}>
-                {(["income", "expense"] as const).map((kind) => (
-                  <View
-                    key={kind}
-                    style={[styles.row, { justifyContent: "space-between" }]}
-                  >
-                    <Body>{kind === "income" ? "Income" : "Expenses"}</Body>
-                    <Body muted={false}>{amount(data[key][kind])}</Body>
-                  </View>
-                ))}
-              </View>
-              <View style={[styles.row, { justifyContent: "space-between" }]}>
-                <Body>Net cash flow</Body>
-                <Body muted={false}>
-                  {amount(data[key].income - data[key].expense)}
-                </Body>
-              </View>
+              <Button
+                title="View report"
+                secondary
+                onPress={() => router.navigate("/reports")}
+              />
             </Card>
           ))}
-          <Card>
-            <Text
-              style={{ color: colors.ink, fontSize: 16, fontFamily: "Poppins-SemiBold" }}
-            >
-              Spending by category
-            </Text>
-            <Body>This calendar month · {currency}</Body>
-            {data.categories?.length ? (
-              data.categories.map((c) => (
-                <View key={c.name} style={{ gap: 6 }}>
+          {Boolean(data.budgets?.length) && (
+            <Card>
+              <Text style={styles.sectionTitle}>Budgeting</Text>
+              {data.budgets?.slice(0, 3).map((b) => (
+                <Pressable
+                  key={b.id}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Open ${b.name}`}
+                  onPress={() => router.navigate("/budgeting")}
+                  style={{ gap: 8 }}
+                >
                   <Body muted={false}>
-                    {c.name} · {amount(c.amount)}
+                    {b.name} · {b.statusLabel}
+                  </Body>
+                  <Body>
+                    {hidden
+                      ? "••••"
+                      : money(String(b.actualAmount), b.currency)}{" "}
+                    spent of{" "}
+                    {hidden
+                      ? "••••"
+                      : money(String(b.targetAmount), b.currency)}
                   </Body>
                   <View
                     style={{
@@ -437,65 +374,61 @@ export default function Home() {
                       style={{
                         height: 7,
                         borderRadius: 4,
-                        backgroundColor: colors.bright,
-                        width: `${Math.min(100, (c.amount / Math.max(1, data.month.expense)) * 100)}%`,
+                        width: `${Math.max(0, Math.min(100, b.progressPercent))}%`,
+                        backgroundColor: b.isAtRisk ? "#D59A39" : colors.bright,
                       }}
                     />
                   </View>
-                </View>
-              ))
-            ) : (
-              <Body>No recorded spending in this currency.</Body>
-            )}
-          </Card>
-          {data.overdue?.length ? (
-            <Card>
-              <Text
-                style={{ color: colors.ink, fontSize: 16, fontFamily: "Poppins-SemiBold" }}
-              >
-                Recent overdue payments
-              </Text>
-              {data.overdue.map((item) => (
-                <View key={item.id} style={{ gap: 4 }}>
-                  <Body muted={false}>
-                    {item.title} · {amount(item.amount)}
+                  <Body>
+                    {Math.round(b.progressPercent)}% used · {b.periodLabel}
                   </Body>
-                  <Body>Overdue · {item.date}</Body>
-                </View>
+                </Pressable>
               ))}
-              <Button
-                title="Review overdue payments"
-                secondary
-                onPress={() => router.navigate("/(tabs)/recurring")}
-              />
             </Card>
-          ) : null}
+          )}
           <Card>
-            <Text
-              style={{ color: colors.ink, fontSize: 16, fontFamily: "Poppins-SemiBold" }}
-            >
-              Upcoming payments
-            </Text>
+            <Text style={styles.sectionTitle}>What's coming up</Text>
+            <Body muted={false}>Recurring payments</Body>
             {data.upcoming.length ? (
               data.upcoming.map((item) => (
                 <View
                   key={item.id}
-                  style={[styles.row, { justifyContent: "space-between" }]}
+                  style={{
+                    flexDirection: "row",
+                    gap: 8,
+                    justifyContent: "space-between",
+                  }}
                 >
-                  <View style={{ flex: 1 }}>
-                    <Body muted={false}>{item.title}</Body>
-                    <Body>{item.date.slice(0, 10)}</Body>
-                  </View>
-                  <Body muted={false}>{amount(item.amount)}</Body>
+                  <Body>{item.title}</Body>
+                  <Body>{amount(item.amount)}</Body>
                 </View>
               ))
             ) : (
-              <Body>No upcoming payments in this currency.</Body>
+              <Body>No upcoming payments need attention.</Body>
             )}
             <Button
-              title="View recurring"
+              title="Open recurring"
               secondary
               onPress={() => router.navigate("/(tabs)/recurring")}
+            />
+          </Card>
+          <Card>
+            <Text style={styles.sectionTitle}>Things to review</Text>
+            <Body muted={false}>Transactions</Body>
+            <Body>
+              {data.reviewCount
+                ? `${data.reviewCount} transactions need review`
+                : "No transactions need review"}
+            </Body>
+            <Button
+              title="Review transactions"
+              secondary
+              onPress={() =>
+                router.navigate({
+                  pathname: "/(tabs)/transactions",
+                  params: { review: "pending_review" },
+                })
+              }
             />
           </Card>
         </>

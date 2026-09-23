@@ -4,7 +4,7 @@ import { useEffect, useState, useCallback, type ReactNode } from "react";
 import { router, useFocusEffect } from "expo-router";
 import { Platform, Pressable, View } from "react-native";
 import { useSession } from "./session";
-import { Icon, useTheme } from "./ui";
+import { AppHeader, AddNavigationMark, Icon, useTheme } from "./ui";
 /** Square at normal text size, but grows rather than clipping larger text. */
 export function PlanDirectoryCard({
   children,
@@ -65,82 +65,34 @@ export function PlanHeader({
   stackedTitle?: boolean;
   titleInset?: number;
 }) {
-  const { colors } = useTheme();
-  const adviser = () => router.push("/(tabs)/adviser");
   return (
-    <View
-      style={{
-        flexDirection: "row",
-        alignItems: stackedTitle ? "flex-start" : "center",
-        justifyContent: "space-between",
-        minHeight: stackedTitle ? 84 : 48,
-      }}
-    >
-      <Pressable
-        accessibilityRole="button"
-        accessibilityLabel={back ? "Go back" : "Adviser"}
-        onPress={back ?? adviser}
-        style={{ padding: 8 }}
-      >
-        <Icon
-          name={back ? "chevron-back" : "chatbubble-ellipses-outline"}
-          size={back ? 24 : 32}
-        />
-      </Pressable>
-      <Text
-        accessibilityRole="header"
-        style={{
-          position: "absolute",
-          left: stackedTitle ? 0 : titleInset,
-          right: stackedTitle ? 0 : titleInset,
-          top: stackedTitle ? 52 : undefined,
-          textAlign: "center",
-          fontFamily: "Poppins-SemiBold",
-          fontSize: 18,
-          color: colors.ink,
-        }}
-      >
-        {title}
-      </Text>
-      {trailing ??
-        (!back && add ? (
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel={`Add ${title}`}
-            onPress={add}
-            hitSlop={4}
-          >
-            <LinearGradient
-              colors={["#03a8c0", "#34d3d0"]}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 0 }}
+    <View style={{ marginHorizontal: -16, marginTop: -16 }}>
+      <AppHeader
+        title={title}
+        onClose={back}
+        trailing={
+          trailing ??
+          (back ? undefined : add ? (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={`Add ${title}`}
+              onPress={add}
               style={{
-                width: 40,
-                height: 40,
-                borderRadius: 20,
+                width: 44,
+                height: 44,
                 alignItems: "center",
                 justifyContent: "center",
               }}
             >
-              <Icon name="add" color="#fff" size={22} />
-            </LinearGradient>
-          </Pressable>
-        ) : (
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel={back ? "Adviser" : "Home"}
-            onPress={back ? adviser : () => router.push("/(tabs)/index")}
-            style={{ padding: 8 }}
-          >
-            <Icon
-              size={back ? 32 : 24}
-              name={back ? "chatbubble-ellipses-outline" : "home-outline"}
-            />
-          </Pressable>
-        ))}
+              <AddNavigationMark size={36} />
+            </Pressable>
+          ) : undefined)
+        }
+      />
     </View>
   );
 }
+
 export function PlanTabs({
   items,
   value,
@@ -190,6 +142,7 @@ export function PlanTabs({
           }}
         >
           <Icon
+            line={compact}
             name={
               index === 0
                 ? compact
@@ -215,11 +168,12 @@ export function PlanTabs({
                                   ? "list-outline"
                                   : "stats-chart-outline"
             }
-            size={compact ? 12 : 16}
+            size={compact ? 14 : 28}
           />
           <Text
             style={{
               fontSize: 11,
+              textAlign: "center",
               flexShrink: compact ? 1 : undefined,
               fontFamily: "Poppins-Regular",
               color: colors.teal,
@@ -433,8 +387,8 @@ export function SummaryCard({
       <Text
         style={{
           fontFamily: "Poppins-SemiBold",
-          fontSize: 16,
-          lineHeight: 24,
+          fontSize: 12,
+          lineHeight: 18,
           textAlign: "center",
           color: "#7A879C",
         }}
