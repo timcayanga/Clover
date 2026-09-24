@@ -1,3 +1,6 @@
+import { splitBillBalanceSummary } from "@/lib/split-bill-balance-summary";
+import { loadSplitBillWorkspaceData } from "@/lib/split-bill-loaders";
+import { getUserDisplayName } from "@/lib/user-display-name";
 import { randomUUID } from "node:crypto";
 import { Prisma } from "@prisma/client";
 import { NextResponse } from "next/server";
@@ -517,6 +520,10 @@ export async function GET(request: Request) {
   try {
     const user = await getSplitBillCurrentUser();
     const native = getMobileRequestContext()?.request === request && request !== undefined;
+    if (native && new URL(request.url).searchParams.get("summaryOnly") === "true") {
+      const { bills } = await loadSplitBillWorkspaceData(user.id);
+      return NextResponse.json({ summary: splitBillBalanceSummary(bills, getUserDisplayName(user)) });
+    }
     const requestedPage = native ? Number(new URL(request.url).searchParams.get("page") ?? 1) : 1;
     const groupFilter = native ? new URL(request.url).searchParams.get("groupId") : null;
     const personFilter = native ? new URL(request.url).searchParams.get("person") : null;

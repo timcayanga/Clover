@@ -2,6 +2,7 @@
 
 import { CategoryBrandMark } from "@/components/category-brand-mark";
 import { InterfaceIcon } from "@/components/interface-icon";
+import { splitBillBalanceSummary, isSameSplitBillPerson as isSamePersonName } from "@/lib/split-bill-balance-summary";
 import { useMemo, useState } from "react";
 import { useUser } from "@clerk/nextjs";
 import { SplitBillActionButtons } from "@/components/split-bill-action-buttons";
@@ -41,20 +42,6 @@ const formatDate = (value: string) =>
     year: "numeric",
   });
 
-const isSamePersonName = (left: string, right: string) => {
-  const normalize = (value: string) =>
-    value.trim().toLowerCase().replace(/\s+/g, " ");
-  const leftName = normalize(left);
-  const rightName = normalize(right);
-  if (!leftName || !rightName) return false;
-  if (leftName === rightName) return true;
-  const leftParts = leftName.split(" ");
-  const rightParts = rightName.split(" ");
-  return (
-    leftParts[0] === rightParts[0] &&
-    (leftParts.length === 1 || rightParts.length === 1)
-  );
-};
 
 const buildRowStatus = (bill: SplitBillSerializedBill) =>
   bill.settlementStatus === "open" && bill.settlement.transfers.length > 0
@@ -90,26 +77,6 @@ const groupBillsByCurrency = (items: SplitBillSerializedBill[]) =>
     acc[key].push(bill);
     return acc;
   }, {});
-
-const formatCurrencyTotals = (
-  totals: Map<string, number>,
-  fallbackCurrency = "PHP",
-) => {
-  const entries = Array.from(totals.entries()).filter(
-    ([, amount]) => Math.abs(amount) > 0.005,
-  );
-
-  if (entries.length === 0) {
-    return formatSplitBillAmount(0, fallbackCurrency);
-  }
-
-  if (entries.length > 1) {
-    return "Mixed";
-  }
-
-  const [currency, amount] = entries[0];
-  return formatSplitBillAmount(amount, currency);
-};
 
 const addCurrencyTotal = (
   totals: Map<string, number>,
@@ -169,9 +136,7 @@ export function SplitBillHome({
   }, [bills]);
 
   const balancePulse = useMemo(() => {
-    const owes = new Map<string, number>();
-    const isOwed = new Map<string, number>();
-    const fallbackCurrency = normalizeCurrencyCode(bills[0]?.currency ?? "PHP");
+    const summary = splitBillBalanceSummary(bills, currentUserName);
     const openBills = bills.filter(
       (bill) => bill.settlementStatus !== "settled",
     );
@@ -209,21 +174,9 @@ export function SplitBillHome({
         );
       })[0];
 
-    for (const bill of bills) {
-      for (const transfer of bill.settlement.transfers) {
-        const currency = normalizeCurrencyCode(bill.currency);
-        if (isSamePersonName(transfer.fromParticipantName, currentUserName)) {
-          addCurrencyTotal(owes, currency, transfer.amount);
-        }
-        if (isSamePersonName(transfer.toParticipantName, currentUserName)) {
-          addCurrencyTotal(isOwed, currency, transfer.amount);
-        }
-      }
-    }
-
     return {
-      owesLabel: formatCurrencyTotals(owes, fallbackCurrency),
-      isOwedLabel: formatCurrencyTotals(isOwed, fallbackCurrency),
+      owesLabel: summary.youOwe,
+      isOwedLabel: summary.owedToYou,
       settledCount: bills.filter((bill) => bill.settlementStatus === "settled")
         .length,
       openCount: openBills.length,
@@ -343,7 +296,6 @@ export function SplitBillHome({
       <span>{bill.group?.name ?? (names.slice(0, 2).join(", ") + (names.length > 2 ? ` +${names.length - 2}` : ""))}</span>
     </span>;
   };
-
 
   return (
     <div className="split-bill-home">

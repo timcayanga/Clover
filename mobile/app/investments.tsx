@@ -90,7 +90,7 @@ export default function Investments() {
         .includes(search.toLowerCase()),
   );
   const total = visibleHoldings.reduce((n, h) => n + Number(h.value ?? 0), 0);
-  const completeValue = visibleHoldings.every(
+  const completeValue = visibleHoldings.length > 0 && visibleHoldings.every(
     (h) => recordedNumber(h.value) !== null,
   );
   const known = visibleHoldings.filter(

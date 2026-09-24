@@ -59,6 +59,7 @@ type Bill = {
     }[];
   };
 };
+const balanceSample = { summary: { youOwe: "₱0.00", owedToYou: "₱0.00" } };
 const sample = { bills: [] as Bill[], hasMore: false, page: 1 };
 const optionsSample = {
   groups: [] as {
@@ -91,10 +92,15 @@ export default function SplitBills() {
     person?: string;
   } | null>(null);
   const [page, setPage] = useState(1);
-  const { data, setData, error, reload } = usePlanData(
+  const { data, setData, error, reload: reloadBills } = usePlanData(
     `split-bills?page=${page}`,
     sample,
   );
+  const balance = usePlanData("split-bills?summaryOnly=true", balanceSample);
+  const reload = () => {
+    reloadBills();
+    balance.reload();
+  };
   const options = usePlanData("together-options", optionsSample);
   const [paymentDetail, setPaymentDetail] = useState<
     (typeof optionsSample.profiles)[number] | null
@@ -295,6 +301,16 @@ export default function SplitBills() {
           />
           {tab === "Bills" ? (
             <>
+              <View style={{ flexDirection: "row", gap: 8 }}>
+                <SummaryCard title="You owe" value={balance.data?.summary?.youOwe ?? "—"} />
+                <SummaryCard title="Owed to you" value={balance.data?.summary?.owedToYou ?? "—"} />
+              </View>
+              {balance.error ? (
+                <>
+                  <Notice>Balance summary is unavailable.</Notice>
+                  <Button title="Retry balance summary" secondary onPress={balance.reload} />
+                </>
+              ) : null}
               {error ? (
                 <>
                   <Notice>{error}</Notice>

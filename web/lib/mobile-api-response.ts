@@ -101,6 +101,7 @@ export function mobileApiResponse(operation: string, value: unknown) {
     const circles = Array.isArray(data.circles) ? data.circles.map(circleSummary) : [];
     return operation === "circles" ? { circles } : { circle: circles[0] ?? null };
   }
+  if (operation === "split-bills" && data.summary) return { summary: pick(data.summary, ["youOwe", "owedToYou"]) };
   if (operation === "split-bills") return data.bill ? { bill: splitDetail(data.bill) } : { ...pick(data, ["page", "hasMore"]), bills: Array.isArray(data.bills) ? data.bills.map(splitDetail) : [] };
   if (operation === "split-bill" || operation === "transfer-settlements" || operation === "resolution") return data.bill ? { bill: splitDetail(data.bill) } : pick(data,["deleted","ok"]);
   if (operation === "payment-profile-delete") return pick(data,["deleted","ok"]);
