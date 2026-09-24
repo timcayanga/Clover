@@ -1,3 +1,4 @@
+import { finverseBalances } from "@/lib/finverse-balances";
 import { prisma } from "@/lib/prisma";
 import { isLocalDevHost, requireAuth } from "@/lib/auth";
 import { assertWorkspaceAccess } from "@/lib/workspace-access";
@@ -473,7 +474,8 @@ export async function GET(_request: Request, { params }: { params: Promise<{ acc
               account.type
             )
         : account.name;
-    const effectiveBalance = resolveEffectiveAccountBalance({
+    const bankSnapshot = (await finverseBalances(account.workspaceId, [account.id])).get(account.id);
+    const effectiveBalance = bankSnapshot?.bankBalance ?? resolveEffectiveAccountBalance({
       accountType: account.type,
       liveBalance: account.balance,
       checkpointStatus: latestCheckpoint?.status ?? null,
@@ -488,6 +490,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ acc
         institution: effectiveInstitution,
         accountNumber: effectiveAccountNumber,
         balance: effectiveBalance,
+        ...bankSnapshot,
         transactionCount,
       }),
     });

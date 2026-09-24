@@ -10,7 +10,7 @@ export async function GET(request: Request) {
     const workspaceId = new URL(request.url).searchParams.get("workspaceId");
     if (!workspaceId) return NextResponse.json({error:"Choose a Profile first."},{status:400});
     await assertWorkspaceAccess(userId,workspaceId);
-    const connections = await prisma.finverseConnection.findMany({where:{workspaceId,user:{clerkUserId:userId},status:{not:"disconnected"},encryptedRefreshToken:{not:null}},select:{id:true,status:true,institutionName:true,lastSyncedAt:true,accountLinks:{where:{accountId:{not:null}},select:{account:{select:{id:true,name:true,institution:true,accountNumber:true,logoUrl:true,type:true}}}}}});
+    const connections = await prisma.finverseConnection.findMany({where:{workspaceId,user:{clerkUserId:userId},status:{not:"disconnected"},encryptedRefreshToken:{not:null}},select:{id:true,status:true,institutionName:true,lastSyncedAt:true,accountLinks:{where:{accountId:{not:null},unlinkedAt:null},select:{account:{select:{id:true,name:true,institution:true,accountNumber:true,logoUrl:true,type:true}}}}}});
     return NextResponse.json({
       pending:connections.filter(c=>c.status==='awaiting_selection'||(!c.accountLinks.length&&!c.lastSyncedAt)).map(c=>({id:c.id,name:c.institutionName||"Linked bank"})),
       accounts:connections.flatMap(c=>c.accountLinks.flatMap(link=>{const a=link.account;if(!a)return [];const brand=getAccountBrand(a);return [{id:a.id,connectionId:c.id,name:a.name,last4:a.accountNumber?.replace(/\s/g,"").slice(-4)||null,logoUrl:brand.logoSrc||brand.fallbackIconSrc,lastSyncedAt:c.lastSyncedAt}];})),

@@ -28,7 +28,7 @@ const { assertPlanQuota, PlanQuotaError } = await import("../lib/plan-quota");
 for (const tier of ["free","pro","premium"] as const) {
  for (const kind of ["budgets","goals","circles","linkedBanks"] as const) {
   const limit=PLAN_CATALOG[tier][kind];let count=limit;
-  const tx={ $executeRaw:async()=>0,user:{findUniqueOrThrow:async()=>({planTier:tier,clerkUserId:"qa-plan-limit"})},budget:{count:async()=>count},personalGoal:{count:async()=>count},circle:{count:async()=>count},finverseAccountLink:{count:async()=>count} };
+  const tx={ $executeRaw:async()=>0,user:{findUniqueOrThrow:async()=>({createdAt:new Date("2026-01-01"),planTier:tier,clerkUserId:"qa-plan-limit"})},budget:{count:async()=>count},personalGoal:{count:async()=>count},circle:{count:async()=>count},storeAccess:{findUnique:async()=>null},billingSubscription:{findUnique:async()=>null},bankLinkUsage:{createMany:async()=>({}),findMany:async()=>Array.from({length:count},(_,i)=>({externalAccountId:String(i)}))},finverseAccountLink:{findMany:async()=>[]} };
   await assert.rejects(assertPlanQuota(tx as any,"qa",kind),PlanQuotaError);
   if(limit>0){count=limit-1;await assertPlanQuota(tx as any,"qa",kind);}
  }

@@ -1,6 +1,6 @@
 import { PLAN_CATALOG } from "../../shared/plan-catalog";
 
-export const connectedBankAllowanceAnswer = `Free includes ${PLAN_CATALOG.free.linkedBanks} connected bank accounts, Plus includes ${PLAN_CATALOG.pro.linkedBanks}, and Pro includes ${PLAN_CATALOG.premium.linkedBanks}. The allowance is shared across all your Profiles. Each linked account counts separately, even when several accounts belong to the same bank. Linked accounts also count toward your plan's overall financial-account allowance.`;
+export const connectedBankAllowanceAnswer = `Free includes ${PLAN_CATALOG.free.linkedBanks} connected bank accounts, Plus includes ${PLAN_CATALOG.pro.linkedBanks}, and Pro includes ${PLAN_CATALOG.premium.linkedBanks}. The allowance is shared across all your Profiles and counts distinct accounts during each monthly subscription period. Unlinking does not free a slot until the next period. Reconnecting the same account uses no additional slot. Each linked account counts separately, even when several accounts belong to the same bank. Linked accounts also count toward your plan's overall financial-account allowance.`;
 
 export const connectedBankQuestions = [
   {
@@ -26,15 +26,15 @@ export const connectedBankQuestions = [
   },
   {
     question: "Why is my connected bank still retrieving data?",
-    answer: "The bank or Finverse may still be preparing the available data. You can leave the page and use Resume bank sync later. Follow any authorization prompts in the connection flow. If the problem persists, contact support with the bank name, approximate time and error message, without passwords or one-time codes.",
+    answer: "The bank or Finverse may still be preparing the available data. You can leave the page and select your pending accounts from the action at the top of Accounts later. Follow any authorization prompts in the connection flow. If the problem persists, contact support with the bank name, approximate time and error message, without passwords or one-time codes.",
   },
   {
     question: "Are connected balances and transactions always live?",
-    answer: "No. Available history, retrieval times and transaction status depend on the bank and provider. Connecting does not guarantee an instant feed or your bank's complete history. Review imported records, pending transactions and dates against your bank's records. Clover preserves user-confirmed account details rather than silently replacing them with every provider refresh.",
+    answer: "No. Available history, retrieval times and transaction status depend on the bank and provider. Connecting does not guarantee an instant feed or your bank's complete history. Review imported records, pending transactions and dates against your bank's records. Clover displays the last retrieved bank balance separately from saved opening balances and confirmed account details.",
   },
   {
     question: "Will syncing or uploading the same statement create duplicates?",
-    answer: "Clover uses provider transaction identifiers to avoid importing the same linked transaction again within a connection. A separate connection, statement upload or manual entry may overlap with existing records. Review dates, amounts, references and account assignments before confirming or removing a suspected duplicate.",
+    answer: "Clover recognizes provider transaction IDs across reconnections and matches existing entries using the account, currency, date, amount, direction and transaction text. Matching records keep your edits and categories. Uncertain overlaps are flagged for review; pending bank entries wait until posted.",
   },
   {
     question: "What happens if I downgrade or reach my connected-bank limit?",
@@ -42,6 +42,6 @@ export const connectedBankQuestions = [
   },
   {
     question: "How do I disconnect a bank or revoke access?",
-    answer: "Contact Clover support for help disconnecting a bank connection. Clover does not currently offer a self-service disconnect button. Where your bank or connection provider offers a way to revoke authorization, use that control as well. Deleting a financial account in Clover is not the same as revoking the bank connection and should not be used as a substitute.",
+    answer: "Choose Unlink in Account Details or Add Transaction → Sync. Your account and history stay in Clover, and its monthly slot stays reserved. Other linked accounts keep working. When the final account for a bank authorization is unlinked, Clover also revokes that Finverse authorization.",
   },
 ];

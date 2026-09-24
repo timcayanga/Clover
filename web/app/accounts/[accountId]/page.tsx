@@ -129,6 +129,8 @@ type Account = {
   currency: string;
   source: string;
   balance: string | null;
+  bankBalance?: string;
+  bankBalanceAt?: string;
   creditLimit?: string | null;
   creditLimitSource?: string | null;
   creditLimitUpdatedAt?: string | null;
@@ -2015,6 +2017,7 @@ function AccountDetailPageContent() {
 
   const currentBalance = useMemo(
     () => {
+      if (account?.bankBalance != null) return normalizeAccountBalanceSign(account.type, Number(account.bankBalance));
       const checkpoint = latestCheckpoint;
       const checkpointBalance =
         checkpoint?.status !== "mismatch" &&
@@ -2039,7 +2042,7 @@ function AccountDetailPageContent() {
 
       return normalizeAccountBalanceSign(account?.type ?? "", parseAmount(reconciledValue));
     },
-    [account?.balance, account?.source, account?.type, account?.id, balanceAnchor, cachedImportedBalance, latestCheckpoint, transactions]
+    [account?.bankBalance, account?.balance, account?.source, account?.type, account?.id, balanceAnchor, cachedImportedBalance, latestCheckpoint, transactions]
   );
   const checkpointBalance =
     latestCheckpoint?.status !== "mismatch" &&

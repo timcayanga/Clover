@@ -386,6 +386,7 @@ model User {
   adminDataSnapshots               AdminDataSnapshot[]          @relation("DataSnapshotTarget")
   brankasStatementSessions         BrankasStatementSession[]
   finverseConnections              FinverseConnection[]
+  bankLinkUsage                    BankLinkUsage[]
   lunchFlowConnections             LunchFlowConnection[]
   appErrorLogs                     AppErrorLog[]
   inAppNotificationDismissals      InAppNotificationDismissal[]
@@ -1043,7 +1044,20 @@ model FinverseConnection {
   @@index([workspaceId, status])
 }
 
+model BankLinkUsage {
+  id String @id @default(cuid())
+  userId String
+  externalAccountId String
+  periodStart DateTime
+  periodEnd DateTime
+  createdAt DateTime @default(now())
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  @@unique([userId, periodStart, externalAccountId])
+  @@index([userId, periodEnd])
+}
+
 model FinverseAccountLink {
+  unlinkedAt DateTime?
   id                String             @id @default(cuid())
   connectionId      String
   workspaceId       String

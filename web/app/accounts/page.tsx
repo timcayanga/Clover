@@ -209,6 +209,8 @@ type Account = {
   currency: string;
   source: string;
   balance: string | null;
+  bankBalance?: string;
+  bankBalanceAt?: string;
   publishedImportInventory?: boolean;
   transactionCount?: number | null;
   favorite?: boolean;
@@ -1675,7 +1677,7 @@ function AccountsPageContent() {
                         const shouldPreserveImportedBalance =
                           account.source === "upload" && checkpointBalance === null;
                         const reconciledBalance =
-                          checkpointBalance ??
+                          account.bankBalance ?? checkpointBalance ??
                           (shouldPreserveImportedBalance
                             ? account.balance
                             : deriveReconciledBalance({

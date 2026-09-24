@@ -9,12 +9,16 @@ let claimed=false, exchanges=0, created=0, bankCalls=0, refreshCalls=0, updates=
 export function setPlan(value){planTier=value;}
 export const getAccountBrand=()=>({logoSrc:null,fallbackIconSrc:"/assets/account-types/bank.png"});
 export const getProAccess=async()=>({planTier});
+export const refreshProAccess=async()=>planTier;
 export function reset(){claimed=false;exchanges=0;created=0;bankCalls=0;refreshCalls=0;updates=[];}
 export function stats(){return {exchanges,created,bankCalls,refreshCalls,updates};}
 export const requireAuth=async()=>({userId:'owner'});
 export const assertWorkspaceAccess=async(user,id)=>{if(id!=='profile')throw Error('WORKSPACE_NOT_FOUND');return {id,userId:user};};
 export class PlanQuotaError extends Error {}
 export const assertPlanQuota=async()=>{};
+export const getActiveFinverseToken=async()=>"access";
+export const bankLinkAllowance=async()=>({usedIds:new Set(),remaining:5});
+export const getFinverseAccountNumber=async()=>null;
 export const getMobileRequestContext=()=>({userId:'owner'});
 export const isFinverseEnabled=()=>true;
 export const getFinverseConfig=()=>({redirectUri:'https://staging.clover.ph/api/integrations/finverse/callback',encryptionKey:'test'});
@@ -39,11 +43,11 @@ export const prisma={user:{findUniqueOrThrow:async()=>({planTier})},$transaction
  findMany:async({where,select})=>{if(where.workspaceId!=='profile'||where.user.clerkUserId!=='owner')throw Error('unsafe scope');return [{id:'pending',status:'awaiting_selection',institutionName:'Test bank',lastSyncedAt:null,accountLinks:[]},{id:'linked',status:'ready',institutionName:'Test bank',lastSyncedAt:'2026-09-24T00:00:00Z',accountLinks:[{account:{id:'account',name:'Savings',institution:'Test bank',accountNumber:'1234567890',type:'bank'}}]}];},
  create:async({data})=>{created++;return{id:'connection'};},
  findUnique:async({where})=>['native.valid','native.refresh.valid'].includes(where.stateHash)?{id:'connection',workspaceId:'profile',stateExpiresAt:new Date(Date.now()+60000),status:claimed?'authorizing':'link_pending'}:null,
- updateMany:async()=>{if(claimed)return{count:0};claimed=true;return{count:1};},
+ updateMany:async({where,data})=>{if(where.status && typeof where.status === "object"){updates.push(data);return{count:1};}if(claimed)return{count:0};claimed=true;return{count:1};},
  update:async({data})=>{updates.push(data);return{};}
 }};
 `;
-  const bundled = await build({ stdin: { contents: `export {POST as sync} from './app/api/integrations/finverse/sync/route'; export {GET as connections} from './app/api/integrations/finverse/connections/route'; export {GET as institutions} from './app/api/integrations/finverse/institutions/route'; export {POST as link} from './app/api/integrations/finverse/link/route'; export {GET as callback} from './app/api/integrations/finverse/callback/route'; export {reset,stats,setPlan} from 'fixture';`, resolveDir: process.cwd() }, bundle: true, platform: "node", format: "cjs", packages: "external", write: false, plugins: [{ name: "finverse-boundaries", setup(b) { b.onResolve({filter:/^(fixture|@\/lib\/(auth|user-limits|account-limit-count|account-brand|workspace-access|finverse|prisma|plan-quota|pro-access|mobile-request-context))$/},()=>({path:"fixture",namespace:"test"})); b.onLoad({filter:/.*/,namespace:"test"},()=>({contents:fixture,loader:"ts",resolveDir:process.cwd()})); }}] });
+  const bundled = await build({ stdin: { contents: `export {POST as sync} from './app/api/integrations/finverse/sync/route'; export {GET as connections} from './app/api/integrations/finverse/connections/route'; export {GET as institutions} from './app/api/integrations/finverse/institutions/route'; export {POST as link} from './app/api/integrations/finverse/link/route'; export {GET as callback} from './app/api/integrations/finverse/callback/route'; export {reset,stats,setPlan} from 'fixture';`, resolveDir: process.cwd() }, bundle: true, platform: "node", format: "cjs", packages: "external", write: false, plugins: [{ name: "finverse-boundaries", setup(b) { b.onResolve({filter:/^(fixture|@\/lib\/(auth|finverse-access-token|bank-link-usage|user-limits|account-limit-count|account-brand|workspace-access|finverse|prisma|plan-quota|pro-access|mobile-request-context))$/},()=>({path:"fixture",namespace:"test"})); b.onLoad({filter:/.*/,namespace:"test"},()=>({contents:fixture,loader:"ts",resolveDir:process.cwd()})); }}] });
   const Module = requireFixture("node:module"), mod = new Module(resolve("finverse-test.cjs")); mod.filename=resolve("finverse-test.cjs");mod.paths=Module._nodeModulePaths(process.cwd());mod._compile(bundled.outputFiles[0].text,mod.filename);
   const api=mod.exports;
   assert.equal((await api.connections(new Request('https://clover.test/api?workspaceId=other'))).status,404);

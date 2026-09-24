@@ -12,6 +12,9 @@ async function main() {
   ];
   const before=JSON.stringify(fixtures);
   const original = prisma.account.findMany;
+  const originalLinks = prisma.finverseAccountLink.findMany;
+  let bankRows: any[] = [];
+  prisma.finverseAccountLink.findMany = (async () => bankRows) as typeof originalLinks;
   const find=mock.fn(async(args:unknown)=>{
     const q=args as {where:unknown;select:{transactions:{where:unknown}}};
     assert.deepEqual(q.where,{workspaceId:'qa-profile',id:{in:['bank','cash','usd']},source:'manual'});
@@ -27,10 +30,12 @@ async function main() {
     assert.equal(balances.get('cash'),'1000.00');
     assert.equal(balances.get('usd'),'100.00');
     assert.equal(JSON.stringify(fixtures),before);
+    bankRows = [{ accountId: "bank", normalizedPayload: { balance: 45000 }, lastSeenAt: new Date("2026-09-25") }];
+    assert.equal((await mobileAccountBalances("qa-profile",["bank","cash","usd"])).get("bank"), "45000.00", "bank snapshot outranks replayed ledger without changing opening balance");
     const account={id:'bank',balance:'10000',displayBalance:balances.get('bank'),rawPayload:'private'};
     assert.deepEqual(mobileApiResponse('accounts',{accounts:[account]}),{accounts:[{id:'bank',balance:'10000',displayBalance:'10500.00'}]});
     assert.deepEqual(mobileApiResponse('account',{account}),{account:{id:'bank',balance:'10000',displayBalance:'10500.00'}});
-  } finally {prisma.account.findMany = original;}
+  } finally {prisma.account.findMany = original; prisma.finverseAccountLink.findMany = originalLinks;}
   console.log('Mobile balances: opening balances preserved; transfers, currency isolation, Profile scope and response projection passed.');
 }
 void main();

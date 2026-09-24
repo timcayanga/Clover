@@ -116,6 +116,7 @@ async function refreshRequests() {
     assert.equal(requests.at(-1)?.body.login_identity_id,"identity","Relink must reuse the existing identity");
     await createFinverseLink("owner","state","sg-bank");
     assert.equal(requests.at(-1)?.body.institution_id,"sg-bank");
+    assert.deepEqual(requests.at(-1)?.body.products_requested,["ACCOUNTS","TRANSACTIONS","ACCOUNT_NUMBERS"]);
     assert.equal(requests.at(-1)?.body.countries,undefined,"Selected banks outside the Philippines must remain connectable");
     console.log("Finverse refresh, relink and multi-country requests passed.");
   } finally { globalThis.fetch=originalFetch; for(const key of Object.keys(process.env)) if(!(key in originalEnv)) delete process.env[key];Object.assign(process.env,originalEnv); }

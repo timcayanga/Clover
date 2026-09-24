@@ -1,3 +1,4 @@
+import { finverseBalances } from "./finverse-balances";
 import { mobileHomePeriods, homeDateKey } from "./mobile-home-periods";
 import { buildReviewQueueWhere } from "./review-queue";
 import { loadCachedBudgetWorkspaceData } from "./budgeting-data";
@@ -33,6 +34,7 @@ export async function mobileHome(workspaceId: string, currency: string) {
     prisma.account.findMany({
       where: { workspaceId },
       select: {
+        id: true,
         type: true,
         currency: true,
         balance: true,
@@ -95,6 +97,7 @@ export async function mobileHome(workspaceId: string, currency: string) {
       select: { currency: true },
     }),
   ]);
+  const bankSnapshots = await finverseBalances(workspaceId);
   const spendable = accounts.filter((a) => isSpendableAccountType(a.type));
   const rates = new Map<string, number>();
   rates.set(currency, 1);
@@ -153,7 +156,7 @@ export async function mobileHome(workspaceId: string, currency: string) {
                 treatStoredBalanceAsOpening: true,
               })
             : account.balance;
-        const effective = resolveEffectiveAccountBalance({
+        const effective = bankSnapshots.get(account.id)?.bankBalance ?? resolveEffectiveAccountBalance({
           accountType: account.type,
           liveBalance: fallback,
           checkpointStatus: checkpoint?.status ?? null,

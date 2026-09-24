@@ -1,3 +1,4 @@
+import { bankLinkAllowance } from "./bank-link-usage";
 import { recordAccountTombstones } from "@/lib/account-tombstones";
 
 type DeleteAccountArtifactsOptions = {
@@ -267,6 +268,12 @@ export const deleteAccountsAndImportArtifacts = async (
     where: importFileDeleteWhere,
   });
 
+  // Retain monthly bank slots before account deletion severs provider links.
+  if (await tx.finverseAccountLink.count({ where: { workspaceId, accountId: accountIdFilter } })) {
+    const owner = await tx.workspace.findUniqueOrThrow({ where: { id: workspaceId }, select: { userId: true } });
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`plan-quota:${owner.userId}`}, 0))`;
+    await bankLinkAllowance(tx, owner.userId);
+  }
   const deletedAccounts = await tx.account.deleteMany({
     where: {
       workspaceId,

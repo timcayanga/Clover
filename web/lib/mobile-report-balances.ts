@@ -1,3 +1,4 @@
+import { finverseBalances } from "./finverse-balances";
 import { prisma } from "./prisma";
 import {
   reportAccountBalance,
@@ -78,10 +79,11 @@ export async function mobileReportBalances(
   type RawPayload = Parameters<
     typeof buildReportBalanceSeries
   >[1][number]["rawPayload"];
+  const bankSnapshots = await finverseBalances(workspaceId);
   const balances = accounts.map((account) => ({
     id: account.id,
     currency: account.currency,
-    balance: reportAccountBalance({
+    balance: bankSnapshots.has(account.id) ? Number(bankSnapshots.get(account.id)!.bankBalance) : reportAccountBalance({
       ...account,
       transactions: account.transactions.map((transaction) => ({
         ...transaction,

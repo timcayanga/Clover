@@ -113,7 +113,7 @@
     "qa:account-tombstone-currency": "tsx scripts/account-tombstone-currency-regression.ts",
     "qa:currency-selection": "tsx scripts/currency-selection-regression.ts",
     "qa:confirmed-data": "tsx scripts/confirmed-data-regression.ts",
-    "qa:finverse": "tsx scripts/finverse-integration-regression.ts && tsx scripts/finverse-connect-route-regression.ts",
+    "qa:finverse": "tsx scripts/finverse-integration-regression.ts && tsx scripts/finverse-connect-route-regression.ts && tsx scripts/finverse-preservation-regression.ts",
     "qa:lunchflow": "tsx scripts/lunch-flow-integration-regression.ts",
     "qa:billing-lifecycle": "tsx scripts/paddle-tiers-regression.ts && tsx scripts/billing-lifecycle-regression.ts",
     "qa:goal-intent": "tsx scripts/goal-intent-regression.ts",

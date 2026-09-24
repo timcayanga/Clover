@@ -1,3 +1,4 @@
+import { finverseBalances } from "./finverse-balances";
 import { prisma } from "./prisma";
 import { deriveReconciledBalance, type BalanceLikeTransaction } from "./account-balance";
 import { resolveEffectiveAccountBalance, selectLatestAccountCheckpoint } from "./account-balance-projection";
@@ -19,7 +20,8 @@ export async function mobileAccountBalances(workspaceId: string, ids: string[]) 
       },
     },
   });
-  return new Map(accounts.map(account => {
+  const snapshots = await finverseBalances(workspaceId, ids);
+  const result = new Map(accounts.map(account => {
     const checkpoint = selectLatestAccountCheckpoint(account.statementCheckpoints);
     const balance = deriveReconciledBalance({
       balance: account.balance?.toString() ?? null,
@@ -31,4 +33,6 @@ export async function mobileAccountBalances(workspaceId: string, ids: string[]) 
     });
     return [account.id, resolveEffectiveAccountBalance({ accountType: account.type, liveBalance: balance, checkpointStatus: checkpoint?.status, checkpointBalance: checkpoint?.endingBalance })];
   }));
+  for (const [id, snapshot] of snapshots) result.set(id, snapshot.bankBalance);
+  return result;
 }

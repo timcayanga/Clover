@@ -1,3 +1,4 @@
+import { finverseBalances } from "@/lib/finverse-balances";
 import { convertHomeTotal } from "@/lib/home-currency-total";
 import { parseRecurringTracking, isWithinRecurringTerm } from "@/lib/recurring-tracking";
 import { HomeSensitiveAmount } from "@/components/home-sensitive-amount";
@@ -787,6 +788,7 @@ async function DashboardStream({
   const formatSignedCurrency = (value: number, currency: string | null = displayCurrency) =>
     `${value < 0 ? "-" : ""}${formatCurrencyAmount(Math.abs(value), currency)}`;
 
+  const bankSnapshots = await finverseBalances(workspaceSummary.id);
   const reconcileAccountBalance = (account: (typeof dashboardAccounts)[number]) => {
     const latestCheckpoint = selectLatestAccountCheckpoint(account.statementCheckpoints);
     const accountTransactions = account.type === "cash"
@@ -802,7 +804,7 @@ async function DashboardStream({
           treatStoredBalanceAsOpening: true,
         })
       : account.balance;
-    const reconciledBalance = resolveEffectiveAccountBalance({
+    const reconciledBalance = bankSnapshots.get(account.id)?.bankBalance ?? resolveEffectiveAccountBalance({
       accountType: account.type,
       liveBalance: fallbackBalance,
       checkpointStatus: latestCheckpoint?.status ?? null,

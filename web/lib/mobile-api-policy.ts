@@ -4,7 +4,7 @@ export function mobileOperation(method: string, segments: string[]) {
   const path = segments.join("/");
   if (path === "finverse/connections" && method === "GET") return "finverse-connections";
   if (path === "finverse/institutions" && method === "GET") return "finverse-institutions";
-  if (["finverse/link", "finverse/sync"].includes(path) && method === "POST") return path.replace("/", "-");
+  if (["finverse/link", "finverse/sync", "finverse/unlink"].includes(path) && method === "POST") return path.replace("/", "-");
   if (path === "circle-invitations" && method === "GET") return "circle-invitations";
   if (segments.length === 2 && segments[0] === "circle-invitations" && ["GET", "POST"].includes(method)) return "circle-invitation";
   if (segments.length === 3 && segments[0] === "circles" && segments[2] === "invitations" && ["GET", "POST"].includes(method)) return "circle-invite";

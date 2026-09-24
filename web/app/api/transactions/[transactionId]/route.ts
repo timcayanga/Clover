@@ -241,7 +241,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ tr
       data: {
         categoryId: payload.categoryId === undefined ? undefined : payload.categoryId,
         accountId: payload.accountId,
-        isExcluded: payload.isExcluded,
+        isExcluded: payload.isExcluded ?? ((payload.reviewStatus === "confirmed" || payload.reviewStatus === "edited") && Array.isArray(transaction.reviewReasons) && transaction.reviewReasons.includes("finverse_possible_duplicate") ? false : undefined),
         isTransfer: resolvedIsTransfer,
         type: resolvedType,
         merchantRaw: payload.merchantRaw,

@@ -25,7 +25,8 @@ export async function POST(request: Request) {
     if (!body.workspaceId) return NextResponse.json({ error: "Workspace is required." }, { status: 400 });
     const workspace = await assertWorkspaceAccess(userId, body.workspaceId);
     if ((await getProAccess(workspace.userId)).planTier === "free") return NextResponse.json({ error: "Upgrade to Clover Plus or Pro to connect your banks.", upgradeRequired: true }, { status: 403 });
-    await prisma.$transaction(tx => assertPlanQuota(tx, workspace.userId, "linkedBanks"));
+    // Authorization may reconnect an already reserved account at a full allowance.
+    // Distinct-account slots are enforced atomically when accounts are selected.
     if (body.institutionId && !(await getFinverseBanks()).banks.some(bank => bank.id === body.institutionId)) return NextResponse.json({ error: "This bank is no longer available. Refresh the bank list." }, { status: 400 });
     const state = (getMobileRequestContext() ? "native." : "") + randomBytes(32).toString("base64url");
     const link = await createFinverseLink(workspace.userId, state, body.institutionId);

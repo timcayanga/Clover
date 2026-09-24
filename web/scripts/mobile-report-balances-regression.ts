@@ -55,6 +55,8 @@ async function main() {
   ];
   const originalAccounts = prisma.account.findMany,
     originalMovements = prisma.transaction.findMany;
+  const originalLinks = prisma.finverseAccountLink.findMany;
+  prisma.finverseAccountLink.findMany = (async () => []) as typeof originalLinks;
   const before = JSON.stringify({ accounts, movements });
   prisma.account.findMany = (async (args: any) => {
     assert.deepEqual(args.where, { workspaceId: "profile-a", currency: "PHP" });
@@ -122,6 +124,7 @@ async function main() {
       "Unknown balance must not become a zero line",
     );
   } finally {
+    prisma.finverseAccountLink.findMany = originalLinks;
     prisma.account.findMany = originalAccounts;
     prisma.transaction.findMany = originalMovements;
   }

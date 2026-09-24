@@ -1,3 +1,4 @@
+import { finverseBalances } from "@/lib/finverse-balances";
 import { positionHoldingView } from "../../../../shared/investment-position-view";
 import { listInvestmentPositions } from "@/lib/investment-position-store";
 import { Prisma } from "@prisma/client";
@@ -3803,6 +3804,7 @@ export async function GET(request: Request) {
         !looksLikeReceiptImageFilenameAccount(account) &&
         !looksLikeGenericImageFilenameAccount(account)
     );
+    const bankSnapshots = await finverseBalances(workspaceId);
     const serializedResponseAccounts = responseAccounts.map((account) => {
       const purchaseStartDate = earliestInvestmentPurchaseDates.get(account.id) ?? null;
       const effectiveInvestmentStartDate =
@@ -3819,6 +3821,7 @@ export async function GET(request: Request) {
         // their publication evidence to the browser so cache cleanup never
         // mistakes a legitimate zero-balance account for a transient parser
         // placeholder.
+        ...(bankSnapshots.has(account.id) ? { ...bankSnapshots.get(account.id), balance: bankSnapshots.get(account.id)!.bankBalance } : {}),
         publishedImportInventory: publishedInventoryAccountIds.has(account.id),
       };
     });

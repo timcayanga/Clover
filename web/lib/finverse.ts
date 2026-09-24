@@ -22,6 +22,7 @@ export type FinverseAccount = JsonRecord & {
   account_name?: string;
   account_nickname?: string;
   account_number_masked?: string;
+  account_number_full?: string;
   account_currency?: string;
   account_type?: { type?: string; subtype?: string };
   balance?: { currency?: string; value?: number | string };
@@ -148,7 +149,7 @@ export const createFinverseLink = async (userId: string, state: string, institut
       link_mode: config.mode === "live" ? "real" : "test",
       institution_id: institutionId,
       products_supported: ["ACCOUNTS", "TRANSACTIONS"],
-      products_requested: ["ACCOUNTS", "TRANSACTIONS"],
+      products_requested: ["ACCOUNTS", "TRANSACTIONS", "ACCOUNT_NUMBERS"],
     }),
   }, customerToken);
 };
@@ -165,7 +166,7 @@ export const createFinverseRefresh = async (accessToken: string, state: string, 
     method: "POST", headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ ...customizations, client_id: config.clientId, login_identity_id: loginIdentityId,
       grant_type: "client_credentials", response_mode: "form_post", response_type: "code",
-      products_requested: ["ACCOUNTS", "TRANSACTIONS"] }),
+      products_requested: ["ACCOUNTS", "TRANSACTIONS", "ACCOUNT_NUMBERS"] }),
   }, await getFinverseCustomerToken());
 };
 
@@ -207,6 +208,18 @@ export const getFinverseLoginIdentity = async (accessToken: string) =>
 export const getFinverseAccounts = async (accessToken: string) =>
   requestFinverse<{ accounts?: FinverseAccount[]; institution?: JsonRecord }>("/accounts", { method: "GET" }, accessToken);
 
+/** Full number is a separate Finverse product; keep the mask when unavailable. */
+export async function getFinverseAccountNumber(accessToken: string, accountId: string) {
+  try {
+    const result = await requestFinverse<{ account_number?: { number?: string } }>(`/account_numbers/${encodeURIComponent(accountId)}`, { method: "GET" }, accessToken);
+    return result.account_number?.number || null;
+  } catch (error) {
+    if (error instanceof FinverseApiError && [400, 403, 404, 422].includes(error.status)) return null;
+    throw error;
+  }
+}
+export const unlinkFinverseIdentity = (accessToken: string) => requestFinverse("/login_identity", { method: "DELETE" }, accessToken);
+
 export const getAllFinverseTransactions = async (accessToken: string) => {
   const transactions: FinverseTransaction[] = [];
   const limit = 500;
@@ -218,7 +231,7 @@ export const getAllFinverseTransactions = async (accessToken: string) => {
     );
     const items = page.transactions ?? [];
     transactions.push(...items);
-    if (items.length < limit || transactions.length >= (page.total_transactions ?? 0)) break;
+    if (items.length < limit || (typeof page.total_transactions === "number" && transactions.length >= page.total_transactions)) break;
   }
   return transactions;
 };
@@ -229,7 +242,7 @@ export const normalizeFinverseAccount = (account: FinverseAccount, institutionNa
   return {
     name: account.account_nickname || account.account_name || institutionName || "Connected account",
     institution: institutionName || null,
-    accountNumber: account.account_number_masked || null,
+    accountNumber: account.account_number_full || account.account_number_masked || null,
     type,
     currency: account.account_currency || account.balance?.currency || "PHP",
     balance: account.balance?.value == null ? null : Number(account.balance.value),
