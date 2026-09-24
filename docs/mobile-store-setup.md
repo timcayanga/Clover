@@ -9,6 +9,7 @@ Updated September 24, 2026. Setup status below is based on the user's confirmati
 - Apple Team ID `6XX38GYURG`; App Store Connect app ID `6811711508`. TestFlight access works.
 - Google organization developer account and internal-testing setup exist.
 - `mobile/eas.json` profile `store-test` uses EAS Preview, staging API, registered store identifiers and `clover` scheme. These builds must not be promoted to public production.
+- Profile `production` uses EAS Production, `https://clover.ph`, the same registered `ph.clover.app` identifiers and `clover` scheme. It creates store-distribution artifacts with automatic build-number increments; iOS uses local signing credentials. No production submission profile or automatic submission is configured. Wait for the native UI fixes and purchase verification before building for release.
 - No replacement signed build is created by this integration change. Compile/bundle checks do not test store purchases.
 
 ## Configured RevenueCat catalog
@@ -69,7 +70,7 @@ The Clerk publishable key and API URL must match staging. Never place private AP
 3. Enable native purchases in staging only when ready for controlled sandbox testing, then create/install fresh store-test builds with the Preview public keys.
 4. Test each of four packages on both platforms: localized price/period, purchase, cancel, pending approval, restore, expiry, refund, renewal, grace, network interruption and restart.
 5. Check correct Plus/Pro limits, account switching, ownership protection, sandbox isolation, webhook retries, and independent web subscription/Admin-grant preservation. Existing paid users use provider management; this change does not introduce a cross-provider upgrade checkout.
-6. Configure and validate production separately after sandbox tests pass. Production sales remain disabled.
+6. Production configuration is prepared: EAS Production variables are present in `@clover-innovations/clover-mobile` for the API URL, live Clerk publishable key and both RevenueCat public SDK keys. Vercel Production has the RevenueCat server key, separate webhook secret and disabled native-purchase flag. The user confirmed HTTP 200 TEST deliveries for both production webhook URLs on 24 September 2026. This proves test delivery only; real production purchases and lifecycle events remain unverified. Production sales remain disabled.
 
 Automated coverage: `npm --prefix web run qa:store-tiers` (included in the required pre-push gate); isolated DB persistence fixture: `web/scripts/store-access-fixture.ts`. Neither substitutes for installed store purchase tests.
 

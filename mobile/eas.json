@@ -25,6 +25,24 @@
       "ios": {
         "credentialsSource": "local"
       }
+    },
+    "production": {
+      "distribution": "store",
+      "environment": "production",
+      "autoIncrement": true,
+      "env": {
+        "CLOVER_APP_NAME": "Clover",
+        "CLOVER_APP_SCHEME": "clover",
+        "CLOVER_IOS_BUNDLE_ID": "ph.clover.app",
+        "CLOVER_ANDROID_PACKAGE_ID": "ph.clover.app",
+        "EXPO_PUBLIC_API_URL": "https://clover.ph"
+      },
+      "android": {
+        "buildType": "app-bundle"
+      },
+      "ios": {
+        "credentialsSource": "local"
+      }
     }
   },
   "submit": {
