@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Platform, Pressable, View } from "react-native";
+import { router } from "expo-router";
 import * as WebBrowser from "expo-web-browser";
 import { Text } from "./app-text";
 import { Body, Button, Field, Heading, Notice, useTheme } from "./ui";
@@ -10,6 +11,8 @@ type SyncResult = { status: string; connectionId?: string; remaining?: number; a
 export function FinverseConnect({ onSynced, callbackConnection }: { onSynced: () => void; callbackConnection?: string }) {
   const session = useSession();
   const { colors } = useTheme();
+  const [access, setAccess] = useState<{ profileId: string; upgradeRequired: boolean } | null>(null);
+  const allowed = access?.profileId === session.profileId && !access.upgradeRequired;
   const [banks, setBanks] = useState<Bank[]>([]);
   const [query, setQuery] = useState("");
   const [bankMessage, setBankMessage] = useState("Loading banks…");
@@ -28,15 +31,16 @@ export function FinverseConnect({ onSynced, callbackConnection }: { onSynced: ()
   useEffect(() => { active.current = true; return () => { active.current = false; abortRef.current?.abort(); }; }, []);
   useEffect(() => {
     const controller = new AbortController();
+    setAccess(null);
     setBanks([]); setBankMessage("Loading banks…");
     if (session.demo) { setBankMessage("Sign in to connect your bank. Demo mode does not access bank accounts."); return; }
-    void requestRef.current<{ banks: Bank[]; mode?: string; message?: string }>(`finverse/institutions?workspaceId=${encodeURIComponent(session.profileId)}`, { signal: controller.signal })
-      .then(data => { if (!controller.signal.aborted) { setBanks(data.banks); setTest(data.mode === "test"); setBankMessage(data.message || (data.banks.length ? "" : "No banks are available right now. Use Manual or Upload.")); } })
+    void requestRef.current<{ banks: Bank[]; mode?: string; message?: string; upgradeRequired?: boolean }>(`finverse/institutions?workspaceId=${encodeURIComponent(session.profileId)}`, { signal: controller.signal })
+      .then(data => { if (!controller.signal.aborted) { setAccess({ profileId: session.profileId, upgradeRequired: data.upgradeRequired === true }); setBanks(data.banks); setTest(data.mode === "test"); setBankMessage(data.message || (data.banks.length ? "" : "No banks are available right now. Use Manual or Upload.")); } })
       .catch(error => { if (!controller.signal.aborted) setBankMessage(error.message || "Unable to load banks."); });
     return () => controller.abort();
   }, [session.demo, session.profileId, revision]);
   const sync = useCallback(async (id?: string, accountIds?: string[]) => {
-    if (action.current) return;
+    if (!allowed || action.current) return;
     action.current = true; setBusy(true); setMessage("Retrieving your bank accounts…");
     const controller = new AbortController(); abortRef.current = controller;
     try {
@@ -56,11 +60,11 @@ export function FinverseConnect({ onSynced, callbackConnection }: { onSynced: ()
       setMessage("Finverse is still retrieving your data. Use Resume bank sync to check again.");
     } catch (error) { if (active.current && !controller.signal.aborted) setMessage(error instanceof Error ? error.message : "Unable to sync your bank."); }
     finally { action.current = false; if (active.current) setBusy(false); }
-  }, [session.profileId]);
+  }, [allowed, session.profileId]);
   const callbackHandled = useRef("");
-  useEffect(() => { if (callbackConnection && callbackHandled.current !== callbackConnection) { callbackHandled.current = callbackConnection; setConnection(callbackConnection); void sync(callbackConnection); } }, [callbackConnection, sync]);
+  useEffect(() => { if (allowed && callbackConnection && callbackHandled.current !== callbackConnection) { callbackHandled.current = callbackConnection; setConnection(callbackConnection); void sync(callbackConnection); } }, [allowed, callbackConnection, sync]);
   async function connect(bank: Bank) {
-    if (action.current || session.demo) return;
+    if (!allowed || action.current || session.demo) return;
     if (Platform.OS === "web") { setMessage("Use Clover’s mobile website or the iOS or Android app to connect a bank."); return; }
     action.current = true; setBusy(true); setMessage(`Opening ${bank.name} with Finverse…`);
     try {
@@ -79,6 +83,13 @@ export function FinverseConnect({ onSynced, callbackConnection }: { onSynced: ()
     } catch (error) { if (active.current) setMessage(error instanceof Error ? error.message : "Unable to connect your bank."); }
     finally { action.current = false; if (active.current) setBusy(false); }
   }
+  if (access?.profileId === session.profileId && access.upgradeRequired) return <View style={{ gap: 16 }}>
+    <Heading>Unlock bank connections</Heading>
+    <Body>Upgrade to Clover Plus or Pro to securely connect your banks through Finverse.</Body>
+    <Button title="Upgrade plan" fullWidth onPress={() => router.push("/settings?section=plan")} />
+    <Body muted>You can still add accounts with Manual or Upload on Free.</Body>
+  </View>;
+  if (!allowed) return <View style={{ gap: 16 }}><Notice>{bankMessage}</Notice>{bankMessage !== "Loading banks…" && !session.demo ? <Button secondary title="Try again" onPress={() => setRevision(v => v + 1)} /> : null}</View>;
   const filtered = banks.filter(bank => bank.name.toLowerCase().includes(query.trim().toLowerCase()));
   return <View style={{ gap: 16 }}>
     <Heading>Connect your bank</Heading>

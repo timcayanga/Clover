@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 
 type SyncResponse = {
@@ -35,6 +36,8 @@ export function FinverseConnectButton({
   workspaceId: string;
   onSynced?: () => Promise<void> | void;
 }) {
+  const [access, setAccess] = useState<{ workspaceId: string; upgradeRequired: boolean } | null>(null);
+  const allowed = access?.workspaceId === workspaceId && !access.upgradeRequired;
   const [banks, setBanks] = useState<{id:string;name:string}[]>([]);
   const [bankQuery, setBankQuery] = useState("");
   const [bankStatus, setBankStatus] = useState("Loading banks…");
@@ -59,16 +62,17 @@ export function FinverseConnectButton({
 
   useEffect(() => {
     const controller = new AbortController();
+    setAccess(null);
     setBanks([]); setBankStatus("Loading banks…");
     void fetch(`/api/integrations/finverse/institutions?workspaceId=${encodeURIComponent(workspaceId)}`, { signal: controller.signal, cache: "no-store" })
       .then(async response => { const data = await response.json(); if (!response.ok) throw new Error(data.error || "Unable to load banks."); return data; })
-      .then(data => { setBanks(data.banks); setTestMode(data.mode === "test"); setBankStatus(data.message || (data.banks.length ? "" : "No banks are available right now. Use Manual or Upload.")); })
+      .then(data => { if (controller.signal.aborted) return; setAccess({ workspaceId, upgradeRequired: data.upgradeRequired === true }); setBanks(data.banks); setTestMode(data.mode === "test"); setBankStatus(data.message || (data.banks.length ? "" : "No banks are available right now. Use Manual or Upload.")); })
       .catch(error => { if (!controller.signal.aborted) setBankStatus(error.message || "Unable to load banks. Try again."); });
     return () => controller.abort();
   }, [workspaceId, bankRevision]);
 
   const sync = useCallback(async (requestedConnectionId?: string, selectedAccountIds?: string[]) => {
-    if (!workspaceId || actionRef.current) return;
+    if (!allowed || !workspaceId || actionRef.current) return;
     const controller = new AbortController();
     activeSyncRef.current = controller;
     actionRef.current = "syncing";
@@ -111,12 +115,12 @@ export function FinverseConnectButton({
       actionRef.current = null;
       setAction(null);
     }
-  }, [router, workspaceId]);
+  }, [allowed, router, workspaceId]);
 
   useEffect(() => () => activeSyncRef.current?.abort(), []);
 
   useEffect(() => {
-    if (callbackStatus === "connected" && connectionId && workspaceId && !autoSyncStarted.current) {
+    if (allowed && callbackStatus === "connected" && connectionId && workspaceId && !autoSyncStarted.current) {
       autoSyncStarted.current = true;
       void sync(connectionId);
     } else if (callbackStatus === "invalid_callback") {
@@ -126,10 +130,10 @@ export function FinverseConnectButton({
     } else if (callbackStatus === "error") {
       setMessage("The bank connection could not be completed. Please try again.");
     }
-  }, [callbackStatus, connectionId, sync, workspaceId]);
+  }, [allowed, callbackStatus, connectionId, sync, workspaceId]);
 
   const connect = async (institutionId: string) => {
-    if (!workspaceId || actionRef.current) return;
+    if (!allowed || !workspaceId || actionRef.current) return;
     actionRef.current = "connecting";
     setAction("connecting");
     setMessage("Opening the secure bank connection…");
@@ -148,6 +152,16 @@ export function FinverseConnectButton({
       setAction(null);
     }
   };
+
+  if (access?.workspaceId === workspaceId && access.upgradeRequired) return (
+    <div className="finverse-connect finverse-connect--upgrade">
+      <h4>Unlock bank connections</h4>
+      <p>Upgrade to Clover Plus or Pro to securely connect your banks through Finverse.</p>
+      <Link className="button button-primary" href="/settings/plan">Upgrade plan</Link>
+      <p>You can still add accounts with Manual or Upload on Free.</p>
+    </div>
+  );
+  if (!allowed) return <div role="status"><p>{bankStatus}</p>{bankStatus !== "Loading banks…" ? <button type="button" className="button button-secondary" onClick={() => setBankRevision(v => v + 1)}>Try again</button> : null}</div>;
 
   return (
     <div className="finverse-connect">

@@ -66519,3 +66519,6 @@ html[data-theme="dark"] .content.content--reports .reports-range-menu__summary {
   padding-right: 0;
 }
 .settings-section--plan .settings-plan-card { order: initial; }
+
+.finverse-connect.finverse-connect--upgrade { display: flex; flex-direction: column; align-items: stretch; gap: 1rem; width: 100%; }
+.finverse-connect--upgrade .button { width: 100%; text-align: center; justify-content: center; }

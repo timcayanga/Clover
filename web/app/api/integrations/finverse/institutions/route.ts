@@ -2,13 +2,15 @@ import { NextResponse } from "next/server";
 import { requireAuth } from "@/lib/auth";
 import { assertWorkspaceAccess } from "@/lib/workspace-access";
 import { getFinverseBanks, isFinverseEnabled } from "@/lib/finverse";
+import { getProAccess } from "@/lib/pro-access";
 export const dynamic = "force-dynamic";
 export async function GET(request: Request) {
   try {
     const { userId } = await requireAuth();
     const workspaceId = new URL(request.url).searchParams.get("workspaceId");
     if (!workspaceId) return NextResponse.json({ error: "Choose a Profile first." }, { status: 400 });
-    await assertWorkspaceAccess(userId, workspaceId);
+    const workspace = await assertWorkspaceAccess(userId, workspaceId);
+    if ((await getProAccess(workspace.userId)).planTier === "free") return NextResponse.json({ banks: [], available: false, upgradeRequired: true }, { headers: { "Cache-Control": "private, no-store" } });
     if (!isFinverseEnabled()) return NextResponse.json({ banks: [], available: false, message: "Bank connections are not available yet. You can still use Manual or Upload." });
     return NextResponse.json({ ...await getFinverseBanks(), available: true }, { headers: { "Cache-Control": "private, no-store" } });
   } catch (error) {
