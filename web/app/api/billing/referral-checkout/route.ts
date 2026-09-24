@@ -23,7 +23,8 @@ export async function POST(request: Request) {
       })
       .parse(await request.json());
     const offers = await getVerifiedBillingOffers(request.headers.get("x-vercel-ip-country") ?? "");
-    if (!Object.values(offers[body.provider]).includes(body.planId)) {
+    const allowedPrices = [...Object.values(offers[body.provider]), ...(body.provider === "paddle" ? Object.values(offers.pro?.paddle ?? {}) : [])];
+    if (!allowedPrices.includes(body.planId)) {
       return NextResponse.json({ error: "Checkout is temporarily unavailable for the advertised regional price. You can keep using Clover Free." }, { status: 409 });
     }
     const user = await getOrCreateCurrentUser(userId);

@@ -1,3 +1,4 @@
+import { getPaddlePlanById } from "./paddle-plans";
 import { randomUUID } from "node:crypto";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
@@ -37,17 +38,17 @@ export async function prepareReferralCheckout(
   const interval =
     provider === "paypal"
       ? getBillingPlanById(planId)?.interval
-      : planId === env.PADDLE_MONTHLY_PRICE_ID
-        ? "monthly"
-        : planId === env.PADDLE_ANNUAL_PRICE_ID
-          ? "annual"
-          : null;
+      : getPaddlePlanById(planId, env)?.interval;
   if (!interval) throw new Error("This checkout plan is not configured.");
   return growthTransaction(async (tx) => {
     const user = await tx.user.findUniqueOrThrow({
       where: { id: userId },
       include: { billingSubscription: true },
     });
+    if (user.billingSubscription?.providerSubscriptionId &&
+        !["cancelled", "expired"].includes(user.billingSubscription.status)) {
+      throw new Error("Manage your existing subscription before starting another checkout.");
+    }
     const recent = await tx.referralCheckout.count({
       where: { userId, createdAt: { gt: new Date(Date.now() - 3600000) } },
     });

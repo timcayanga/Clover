@@ -147,6 +147,8 @@ export function SettingsPlanPanel({
       paddlePriceId &&
       billingCustomerId
   );
+  const premiumPriceId = offers?.pro?.paddle[billingInterval];
+  const premiumReady = Boolean(paddleCheckoutReady && paddleClientToken && premiumPriceId && billingCustomerId);
   const isAwaitingApproval = billingSubscription?.status === "approval_pending";
   const currentInterval = billingSubscription?.interval ?? null;
   const currentProvider = billingSubscription?.provider ?? null;
@@ -464,8 +466,22 @@ export function SettingsPlanPanel({
             <ul className="settings-plan-card__features">
               {["Everything in Plus", "20 Profiles and 40 non-cash accounts", "5 linked bank accounts", "10 budgets, 10 goals and 10 Circles", "4 million shared AI tokens monthly", "1 million AI tokens per rolling 24 hours"].map(feature => <PlanFeatureItem key={feature} label={feature} className="settings-plan-card__feature-row" />)}
             </ul>
+            <div className="settings-plan-interval" role="group" aria-label="Pro billing interval">
+              <button type="button" className={billingInterval === "monthly" ? "is-selected" : ""} onClick={() => setBillingInterval("monthly")}>Monthly</button>
+              <button type="button" className={billingInterval === "annual" ? "is-selected" : ""} onClick={() => setBillingInterval("annual")}>Annually</button>
+            </div>
+            {premiumReady && offers?.pro ? <p className="settings-helper">Paddle bills {offers.pro.paddlePrices[billingInterval]}{billingInterval === "monthly" ? " / month" : " / year"} in USD. Your payment provider may apply currency conversion.</p> : null}
             <div className="settings-plan-card__cta">
-              {planTier === "premium" ? <span className="settings-pill">Current plan</span> : <p className="settings-helper">Pro subscriptions are not available yet. Your current plan remains active.</p>}
+              {!billingDetailsReady ? <p className="settings-helper">Loading subscription details...</p>
+                : hasPaddleSubscription ? <div className="settings-plan-card__management">
+                  {planTier === "premium" ? <span className="settings-pill">Current plan</span> : <p className="settings-helper">Manage your existing subscription before starting a different plan.</p>}
+                  <button type="button" className="button button-secondary" disabled={paddlePortalAction !== null} onClick={() => void openPaddlePortal("manage")}>Manage subscription</button>
+                  {paddlePortalMessage ? <p className="billing-helper" aria-live="polite">{paddlePortalMessage}</p> : null}
+                </div>
+                : isAwaitingApproval || (currentProvider === "paypal" && !["cancelled", "expired"].includes(billingSubscription?.status ?? "")) ? <p className="settings-helper">Manage your existing subscription before starting a different plan.</p>
+                : planTier === "premium" ? <span className="settings-pill">Current plan</span>
+                : premiumReady ? <PaddleCheckoutButton clientToken={paddleClientToken!} environment={paddleEnvironment} priceId={premiumPriceId!} planTier="premium" customerId={billingCustomerId ?? ""} customerEmail={customerEmail} interval={billingInterval} className="settings-plan-card__paddle" />
+                : <p className="settings-helper">{offersLoading ? "Checking subscription availability…" : "Pro checkout is temporarily unavailable. Your current plan remains active."}</p>}
             </div>
           </div>
         </article>
