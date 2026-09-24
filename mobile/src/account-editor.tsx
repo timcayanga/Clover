@@ -1,3 +1,4 @@
+import { FinverseConnect } from "./finverse-connect";
 import { AddEntryMethods } from "./add-entry-methods";
 import { useEffect, useRef, useState } from "react";
 import { Body, Button, Card, Field, Notice, Screen } from "./ui";
@@ -91,6 +92,7 @@ const numericFields = new Set([
 ]);
 export function AccountEditor({
   initial,
+  callbackConnection,
   defaultType = "bank",
   defaultInstitution = "",
   defaultCurrency = "PHP",
@@ -98,6 +100,7 @@ export function AccountEditor({
   onSaved,
 }: {
   initial: AccountRecord | null;
+  callbackConnection?: string;
   defaultType?: string;
   defaultInstitution?: string;
   defaultCurrency?: string;
@@ -289,6 +292,8 @@ export function AccountEditor({
         <Body>Loading account details…</Body>
       ) : editing ? (
         <AddEntryMethods
+          connect={draft.type !== "investment" ? <FinverseConnect callbackConnection={callbackConnection} onSynced={() => onSaved(null)} /> : undefined}
+          initialMethod={callbackConnection ? "connect" : "manual"}
           enabled={!record}
           key={record?.id || "new"}
           kind={draft.type === "investment" ? "investment" : "account"}

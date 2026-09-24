@@ -44,7 +44,7 @@ export const getFinverseConfig = () => {
   const clientSecret = process.env.FINVERSE_CLIENT_SECRET?.trim();
   const redirectUri = process.env.FINVERSE_REDIRECT_URI?.trim();
   const encryptionKey = process.env.FINVERSE_TOKEN_ENCRYPTION_KEY?.trim();
-  const mode = process.env.FINVERSE_MODE === "live" ? "live" : "test";
+  const mode: "live" | "test" = process.env.FINVERSE_MODE === "live" ? "live" : "test";
 
   if (!clientId || !clientSecret || !redirectUri || !encryptionKey) {
     throw new Error("FINVERSE_NOT_CONFIGURED");
@@ -130,7 +130,7 @@ export const getFinverseCustomerToken = async () => {
   return result.access_token;
 };
 
-export const createFinverseLink = async (userId: string, state: string) => {
+export const createFinverseLink = async (userId: string, state: string, institutionId?: string) => {
   const config = getFinverseConfig();
   const customerToken = await getFinverseCustomerToken();
   return requestFinverse<{ link_url: string }>("/link/token", {
@@ -146,6 +146,9 @@ export const createFinverseLink = async (userId: string, state: string) => {
       state,
       ui_mode: "auto_redirect",
       countries: ["PHL"],
+      link_mode: config.mode === "live" ? "real" : "test",
+      institution_id: institutionId,
+      products_supported: ["ACCOUNTS", "TRANSACTIONS"],
       products_requested: ["ACCOUNTS", "TRANSACTIONS"],
     }),
   }, customerToken);
@@ -235,3 +238,25 @@ export const normalizeFinverseTransaction = (transaction: FinverseTransaction) =
     isPending: Boolean(transaction.is_pending),
   };
 };
+
+/** Public display data only; never forward institution login fields or tokens. */
+export type ConnectBank = { id: string; name: string };
+export function visibleFinverseBanks(institutions: unknown, mode: "live" | "test"): ConnectBank[] {
+  if (!Array.isArray(institutions)) throw new Error("FINVERSE_INVALID_INSTITUTIONS");
+  const banks = new Map<string, ConnectBank>();
+  for (const item of institutions) {
+    if (!item || typeof item.institution_id !== "string" || typeof item.institution_name !== "string") continue;
+    if (!Array.isArray(item.countries) || !item.countries.includes("PHL")) continue;
+    if (!Array.isArray(item.products_supported) || !["ACCOUNTS", "TRANSACTIONS"].every(p => item.products_supported.includes(p))) continue;
+    if (!Array.isArray(item.tags) || !item.tags.includes(mode === "live" ? "real" : "test")) continue;
+    if (!(mode === "live" ? ["SUPPORTED"] : ["SUPPORTED", "BETA"]).includes(item.status)) continue;
+    banks.set(item.institution_id, { id: item.institution_id, name: item.institution_name });
+  }
+  return [...banks.values()].sort((a, b) => a.name.localeCompare(b.name));
+}
+export async function getFinverseBanks() {
+  const { mode } = getFinverseConfig();
+  const token = await getFinverseCustomerToken();
+  const data = await requestFinverse<unknown>("/institutions?countries=PHL", { method: "GET" }, token);
+  return { banks: visibleFinverseBanks(data, mode), mode };
+}

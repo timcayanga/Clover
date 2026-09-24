@@ -76,3 +76,12 @@
     display: none !important;
   }
 }
+
+.finverse-connect { display: grid; gap: 14px; min-width: 0; }
+.finverse-connect h4, .finverse-connect p { margin: 0; }
+.finverse-connect p { color: var(--muted); font-size: 13px; }
+.finverse-connect__search { display: grid; gap: 8px; font-size: 13px; }
+.finverse-connect__banks { display: grid; gap: 10px; }
+.finverse-connect__banks .button { width: 100%; height: auto; min-height: 48px; justify-content: space-between; text-align: left; white-space: normal; }
+.finverse-connect fieldset { display: grid; gap: 12px; border: 1px solid var(--line, #d4e0e8); border-radius: 16px; padding: 16px; }
+@media (max-width: 420px) { .accounts-add-modal .add-entry-methods .transaction-creation-tabs.transaction-creation-tabs button { font-size: 11px !important; padding-inline: 2px; } }

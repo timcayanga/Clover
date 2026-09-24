@@ -2,6 +2,8 @@ export function mobileOperation(method: string, segments: string[]) {
   if (segments.join("/") === "billing/store" && ["GET", "POST"].includes(method)) return "store-billing";
   if (segments.join("/") === "settings/preferences" && ["GET", "PATCH"].includes(method)) return "settings-preferences";
   const path = segments.join("/");
+  if (path === "finverse/institutions" && method === "GET") return "finverse-institutions";
+  if (["finverse/link", "finverse/sync"].includes(path) && method === "POST") return path.replace("/", "-");
   if (path === "circle-invitations" && method === "GET") return "circle-invitations";
   if (segments.length === 2 && segments[0] === "circle-invitations" && ["GET", "POST"].includes(method)) return "circle-invitation";
   if (segments.length === 3 && segments[0] === "circles" && segments[2] === "invitations" && ["GET", "POST"].includes(method)) return "circle-invite";

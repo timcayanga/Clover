@@ -68,12 +68,7 @@ const importAccount = async (
       where: { id: existing.id },
       data: { rawPayload: json(account), normalizedPayload: json(normalized), lastSeenAt: new Date() },
     });
-    if (existing.accountId && normalized.balance != null) {
-      await prisma.account.updateMany({
-        where: { id: existing.accountId, workspaceId },
-        data: { balance: normalized.balance },
-      });
-    }
+    // Retain provider balances in the audit payload; preserve the user-confirmed account.
     return existing.accountId;
   }
 
@@ -235,7 +230,7 @@ export async function POST(request: Request) {
     if(body.selectedAccountIds !== undefined && (!Array.isArray(body.selectedAccountIds) || body.selectedAccountIds.some(id=>typeof id!=="string" || !newAccounts.some(a=>a.account_id===id)))) return NextResponse.json({error:"Choose valid bank accounts."},{status:400});
     const selectedIds = body.selectedAccountIds ? new Set(body.selectedAccountIds) : null;
     const chosen = newAccounts.filter(a=>!selectedIds || selectedIds.has(a.account_id));
-    if(chosen.length>capacity) return NextResponse.json({status:"select_accounts",connectionId:connection.id,remaining:capacity,accounts:newAccounts.map(a=>({id:a.account_id,name:normalizeFinverseAccount(a,resolvedInstitutionName).name})),error:`Choose up to ${capacity} bank accounts to fit your plan.`});
+    if((!selectedIds && newAccounts.length > 0) || chosen.length>capacity) return NextResponse.json({status:"select_accounts",connectionId:connection.id,remaining:capacity,accounts:newAccounts.map(a=>({id:a.account_id,name:normalizeFinverseAccount(a,resolvedInstitutionName).name})),error:`Choose up to ${capacity} bank accounts to fit your plan.`});
     const accountsToImport = providerAccounts.filter(a=>linkedIds.has(a.account_id)||chosen.some(c=>c.account_id===a.account_id));
     for (const account of accountsToImport) {
       await importAccount(connection.id, connection.workspaceId, account, resolvedInstitutionName);

@@ -3,6 +3,7 @@ import { AccountBrandLogo } from "../../src/account-brand-logo";
 import { AccountTypeMark } from "../../src/account-type-mark";
 import { accountRowColors } from "../../../shared/visual-identity";
 import {
+  router,
   useFocusEffect,
   useLocalSearchParams,
   useNavigation,
@@ -40,8 +41,10 @@ function AccountsContent() {
   const [query, setQuery] = useState("");
   const [selected, setSelected] = useState<Account | null>(null);
   const [adding, setAdding] = useState(false);
-  const { add, accountId } = useLocalSearchParams<{
+  const { add, accountId, finverseConnection, finverseWorkspace } = useLocalSearchParams<{
     add?: string;
+    finverseConnection?: string;
+    finverseWorkspace?: string;
     accountId?: string;
   }>();
   const [openedAccount, setOpenedAccount] = useState("");
@@ -56,11 +59,12 @@ function AccountsContent() {
   }, [accountId, accounts, openedAccount]);
   const navigation = useNavigation();
   useEffect(() => {
-    if (add) {
+    if (finverseWorkspace && finverseWorkspace !== session.profileId && session.data?.profiles.some(p => p.id === finverseWorkspace)) { session.setProfileId(finverseWorkspace); return; }
+    if (add || finverseConnection) {
       setSelected(null);
       setAdding(true);
     }
-  }, [add]);
+  }, [add, finverseConnection, finverseWorkspace, session.profileId]);
   useLayoutEffect(() => {
     // The shared editor owns its header, whether opened here or from Investments.
     navigation.setOptions({ headerShown: !adding && !selected });
@@ -215,12 +219,15 @@ function AccountsContent() {
   if (selected || adding)
     return (
       <AccountEditor
+        callbackConnection={finverseConnection}
         initial={selected}
         onClose={() => {
+          router.setParams({ add: undefined, finverseConnection: undefined, finverseWorkspace: undefined, finverse: undefined });
           setSelected(null);
           setAdding(false);
         }}
         onSaved={(record) => {
+          router.setParams({ add: undefined, finverseConnection: undefined, finverseWorkspace: undefined, finverse: undefined });
           if (session.demo)
             setAccounts((list) =>
               record

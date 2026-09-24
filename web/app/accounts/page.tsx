@@ -1465,6 +1465,13 @@ function AccountsPageContent() {
   const [luxuryAccountCardsEnabled, setLuxuryAccountCardsEnabled] = useState(false);
   const [planLimitNudge, setPlanLimitNudge] = useState<PlanLimitPayload | null>(null);
   const [addOpen, setAddOpen] = useState(false);
+  useEffect(() => {
+    if (searchParams?.get("finverse")) {
+      const workspace = searchParams.get("finverseWorkspace");
+      if (workspace) setSelectedWorkspaceId(workspace);
+      setAddOpen(true);
+    }
+  }, [searchParams]);
   const mobileCreation = useMobileCreationRoute(addOpen, setAddOpen, "/accounts");
   const [importOpen, setImportOpen] = useState(false);
   const [importSessionId, setImportSessionId] = useState(0);
@@ -5141,7 +5148,7 @@ function AccountsPageContent() {
               </button>
             </div>
 
-            <AddEntryMethods key={selectedWorkspaceId} kind="accounts" workspaceId={selectedWorkspaceId} accounts={accounts}>
+            <AddEntryMethods key={selectedWorkspaceId} kind="accounts" workspaceId={selectedWorkspaceId} accounts={accounts} initialMethod={searchParams?.get("finverse") ? "connect" : "manual"} onAccountsSynced={() => loadWorkspaceData(selectedWorkspaceId, { silent: true, awaitHydration: true })}>
             <div className="accounts-add-grid">
               <AccountCreationForm onSave={saveManualAccount}>
                 {(isSaving, createAnotherManualAccount) => (<>

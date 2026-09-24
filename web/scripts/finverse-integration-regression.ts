@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import {
+  visibleFinverseBanks,
   decryptFinverseToken,
   encryptFinverseToken,
   hashFinverseState,
@@ -71,3 +72,20 @@ assert.doesNotMatch(accountsPageSource, />Connect bank</);
 assert.doesNotMatch(accountsPageSource, />Sync bank</);
 
 console.log("Finverse integration regression checks passed.");
+
+const realBank = { institution_id: "bank-one", institution_name: "One Bank", countries: ["PHL"], products_supported: ["ACCOUNTS", "TRANSACTIONS"], tags: ["real"], status: "SUPPORTED", login_actions: ["PRIVATE"] };
+const testBank = { ...realBank, institution_id: "test", institution_name: "Test bank", tags: ["test"], status: "BETA" };
+const bankCases = [realBank, testBank, {...realBank,institution_id:"other-country",countries:["SGP"]}, {...realBank,institution_id:"no-transactions",products_supported:["ACCOUNTS"]}, {...realBank,institution_id:"alpha",status:"ALPHA"}, null];
+assert.deepEqual(visibleFinverseBanks(bankCases,"live"),[{id:"bank-one",name:"One Bank"}]);
+assert.deepEqual(visibleFinverseBanks(bankCases,"test"),[{id:"test",name:"Test bank"}]);
+assert.deepEqual(visibleFinverseBanks([],"live"),[]);
+assert.throws(()=>visibleFinverseBanks({error:"bad response"},"live"));
+assert.deepEqual(visibleFinverseBanks([realBank,realBank],"live"),[{id:"bank-one",name:"One Bank"}]);
+import { mobileOperation } from "../lib/mobile-api-policy";
+assert.equal(mobileOperation("GET",["finverse","institutions"]),"finverse-institutions");
+assert.equal(mobileOperation("POST",["finverse","link"]),"finverse-link");
+assert.equal(mobileOperation("POST",["finverse","sync"]),"finverse-sync");
+assert.equal(mobileOperation("GET",["finverse","link"]),null);
+assert.equal(mobileOperation("POST",["finverse","institutions"]),null);
+assert.equal(mobileOperation("GET",["finverse","callback"]),null);
+console.log("Finverse bank discovery: mode, region, products, status, deduplication and mobile method boundaries passed.");

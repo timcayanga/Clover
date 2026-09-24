@@ -1,4 +1,5 @@
 "use client";
+import { FinverseConnectButton } from "./finverse-connect-button";
 import type { EntryFormContext } from "@/lib/adviser-entry-types";
 import type { AddFormDraft } from "../../shared/add-form-draft";
 import dynamic from "next/dynamic";
@@ -60,7 +61,11 @@ export function AddEntryMethods({
   enabled = true,
   formContext,
   onReviewForm,
+  initialMethod = "manual",
+  onAccountsSynced,
 }: {
+  initialMethod?: "manual" | "connect";
+  onAccountsSynced?: () => Promise<void> | void;
   kind: keyof typeof guidance;
   workspaceId?: string;
   accounts?: {
@@ -77,7 +82,7 @@ export function AddEntryMethods({
   formContext?: EntryFormContext;
   onReviewForm?: (draft: AddFormDraft) => void;
 }) {
-  const [tab, setTab] = useState("manual"),
+  const [tab, setTab] = useState(initialMethod as string),
     [visited, setVisited] = useState(false),
     [isPro, setIsPro] = useState(false),
     [upload, setUpload] = useState(false),
@@ -98,7 +103,7 @@ export function AddEntryMethods({
   }, []);
   if (!enabled) return <>{children}</>;
   const info = guidance[kind];
-  const methods = ["manual", "ask", "upload"];
+  const methods = kind === "accounts" ? ["manual", "ask", "upload", "connect"] : ["manual", "ask", "upload"];
   return (
     <div className="add-entry-methods">
       <div
@@ -123,13 +128,13 @@ export function AddEntryMethods({
             onKeyDown={(e) => {
               const n =
                 e.key === "ArrowRight"
-                  ? (index + 1) % 3
+                  ? (index + 1) % methods.length
                   : e.key === "ArrowLeft"
-                    ? (index + 2) % 3
+                    ? (index + methods.length - 1) % methods.length
                     : e.key === "Home"
                       ? 0
                       : e.key === "End"
-                        ? 2
+                        ? methods.length - 1
                         : null;
               if (n !== null) {
                 e.preventDefault();
@@ -143,7 +148,7 @@ export function AddEntryMethods({
               ? "Manual"
               : method === "ask"
                 ? "Ask Clover"
-                : "Upload"}
+                : method === "connect" ? "Connect" : "Upload"}
           </button>
         ))}
       </div>
@@ -220,6 +225,7 @@ export function AddEntryMethods({
         )}
         <UploadSecurityCopy />
       </div>
+      {kind === "accounts" && tab === "connect" ? <div role="tabpanel" id={`${id}-connect-panel`} aria-labelledby={`${id}-connect`}>{workspaceId ? <FinverseConnectButton workspaceId={workspaceId} onSynced={onAccountsSynced} /> : <p>Choose a Profile before connecting your bank.</p>}</div> : null}
       {workspaceId && upload ? (
         <ImportFilesModal
           open={upload}

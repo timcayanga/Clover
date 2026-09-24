@@ -25,9 +25,10 @@ const callbackValues = async (request: Request) => {
   return { code: url.searchParams.get("code") ?? "", state: url.searchParams.get("state") ?? "" };
 };
 
-const redirectToAccounts = (status: string, connectionId?: string) => {
+const redirectToAccounts = (status: string, connectionId?: string, native = false, workspaceId?: string) => {
   const configured = getFinverseConfig().redirectUri;
-  const url = new URL("/accounts", new URL(configured).origin);
+  const url = native ? new URL("clover://accounts") : new URL("/accounts", new URL(configured).origin);
+  if (workspaceId) url.searchParams.set("finverseWorkspace", workspaceId);
   url.searchParams.set("finverse", status);
   if (connectionId) url.searchParams.set("finverseConnection", connectionId);
   return NextResponse.redirect(url, { status: 303, headers: corsHeaders });
@@ -44,14 +45,20 @@ const handleCallback = async (request: Request) => {
     return redirectDisabledToAccounts(request);
   }
 
+  let native = false;
   try {
     const { code, state } = await callbackValues(request);
-    if (!code || !state) return redirectToAccounts("invalid_callback");
+    if (!state) return redirectToAccounts("invalid_callback");
     const connection = await prisma.finverseConnection.findUnique({ where: { stateHash: hashFinverseState(state) } });
     if (!connection || connection.stateExpiresAt.getTime() < Date.now() || connection.status !== "link_pending") {
       return redirectToAccounts("invalid_callback");
     }
 
+    native = state.startsWith("native.");
+    // Claim the one-time callback before exchanging credentials (including concurrent replays).
+    const claimed = await prisma.finverseConnection.updateMany({ where: { id: connection.id, status: "link_pending", stateExpiresAt: { gt: new Date() } }, data: { status: code ? "authorizing" : "cancelled", stateExpiresAt: new Date(0) } });
+    if (claimed.count !== 1) return redirectToAccounts("invalid_callback");
+    if (!code) return redirectToAccounts("cancelled", undefined, native, connection.workspaceId);
     const token = await exchangeFinverseCode(code);
     const config = getFinverseConfig();
     await prisma.finverseConnection.update({
@@ -65,10 +72,10 @@ const handleCallback = async (request: Request) => {
         stateExpiresAt: new Date(0),
       },
     });
-    return redirectToAccounts("connected", connection.id);
+    return redirectToAccounts("connected", connection.id, native, connection.workspaceId);
   } catch (error) {
     console.error("Finverse callback failed", error);
-    return redirectToAccounts("error");
+    return redirectToAccounts("error", undefined, native);
   }
 };
 

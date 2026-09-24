@@ -27,7 +27,7 @@ export async function apiRequest<T>(
   options.signal?.addEventListener("abort", abort, {once:true});
   const timer = setTimeout(
     () => controller.abort(),
-    path.includes("/process") || path.startsWith("uploads/") ||
+    path.includes("/process") || path.startsWith("finverse/") || path.startsWith("uploads/") ||
       path.startsWith("split-bill-receipts/") ||
       path.startsWith("adviser/chat")
       ? 120000

@@ -1,10 +1,12 @@
 import { assertPlanQuota, PlanQuotaError } from "@/lib/plan-quota";
+import { getMobileRequestContext } from "@/lib/mobile-request-context";
+import { z } from "zod";
 import { randomBytes } from "node:crypto";
 import { NextResponse } from "next/server";
 import { requireAuth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { assertWorkspaceAccess } from "@/lib/workspace-access";
-import { createFinverseLink, hashFinverseState, isFinverseEnabled } from "@/lib/finverse";
+import { createFinverseLink, getFinverseBanks, hashFinverseState, isFinverseEnabled } from "@/lib/finverse";
 
 export const dynamic = "force-dynamic";
 
@@ -15,12 +17,15 @@ export async function POST(request: Request) {
 
   try {
     const { userId } = await requireAuth();
-    const body = await request.json().catch(() => ({})) as { workspaceId?: string };
+    const parsed = z.object({ workspaceId: z.string().min(1), institutionId: z.string().min(1).max(200).optional() }).strict().safeParse(await request.json().catch(() => null));
+    if (!parsed.success) return NextResponse.json({ error: "Choose a Profile and bank." }, { status: 400 });
+    const body = parsed.data;
     if (!body.workspaceId) return NextResponse.json({ error: "Workspace is required." }, { status: 400 });
     const workspace = await assertWorkspaceAccess(userId, body.workspaceId);
     await prisma.$transaction(tx => assertPlanQuota(tx, workspace.userId, "linkedBanks"));
-    const state = randomBytes(32).toString("base64url");
-    const link = await createFinverseLink(workspace.userId, state);
+    if (body.institutionId && !(await getFinverseBanks()).banks.some(bank => bank.id === body.institutionId)) return NextResponse.json({ error: "This bank is no longer available. Refresh the bank list." }, { status: 400 });
+    const state = (getMobileRequestContext() ? "native." : "") + randomBytes(32).toString("base64url");
+    const link = await createFinverseLink(workspace.userId, state, body.institutionId);
     if (!link.link_url) throw new Error("FINVERSE_LINK_URL_MISSING");
 
     const connection = await prisma.finverseConnection.create({

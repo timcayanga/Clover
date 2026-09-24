@@ -16,8 +16,12 @@ export function AddEntryMethods({
   onDraft,
   onReviewForm,
   onUpload,
+  connect,
+  initialMethod = "manual",
 }: {
   children: ReactNode;
+  connect?: ReactNode;
+  initialMethod?: "manual" | "connect";
   kind: "account" | "investment" | "recurring" | "split" | "trade";
   disabled?: boolean;
   enabled?: boolean;
@@ -26,7 +30,7 @@ export function AddEntryMethods({
   onReviewForm?: (draft: AddFormDraft) => void;
   onUpload?: () => void;
 }) {
-  const [tab, setTab] = useState("manual"),
+  const [tab, setTab] = useState(initialMethod as string),
     [visited, setVisited] = useState(false);
   const { colors } = useTheme();
   if (!enabled) return <>{children}</>;
@@ -41,7 +45,7 @@ export function AddEntryMethods({
           backgroundColor: colors.pale,
         }}
       >
-        {["manual", "ask", "upload"].map((method) => (
+        {(connect ? ["manual", "ask", "upload", "connect"] : ["manual", "ask", "upload"]).map((method) => (
           <Pressable
             key={method}
             accessibilityRole="tab"
@@ -70,7 +74,7 @@ export function AddEntryMethods({
               <Text
                 style={{
                   fontFamily: "Poppins-Medium",
-                  fontSize: 15,
+                  fontSize: connect ? 11 : 15,
                   color: tab === method ? "white" : colors.ink,
                 }}
               >
@@ -78,7 +82,7 @@ export function AddEntryMethods({
                   ? "Manual"
                   : method === "ask"
                     ? "Ask Clover"
-                    : "Upload"}
+                    : method === "connect" ? "Connect" : "Upload"}
               </Text>
             </LinearGradient>
           </Pressable>
@@ -87,6 +91,7 @@ export function AddEntryMethods({
       <View style={{ display: tab === "manual" ? "flex" : "none", gap: 16 }}>
         {children}
       </View>
+      {tab === "connect" ? connect : null}
       {visited ? (
         <View style={{ display: tab === "ask" ? "flex" : "none", gap: 16 }}>
           <TransactionChat

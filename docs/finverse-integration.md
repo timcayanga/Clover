@@ -8,12 +8,13 @@ Clover uses Finverse's Bank Data API to connect accounts and import transactions
 2. Copy the application's client ID and client secret.
 3. Register `https://staging.clover.ph/api/integrations/finverse/callback` as an exact redirect URI.
 4. Add the following Vercel Preview variables scoped to the `staging` branch:
+   - `FINVERSE_ENABLED=true`
    - `FINVERSE_MODE=test`
    - `FINVERSE_CLIENT_ID`
    - `FINVERSE_CLIENT_SECRET`
    - `FINVERSE_REDIRECT_URI=https://staging.clover.ph/api/integrations/finverse/callback`
    - `FINVERSE_TOKEN_ENCRYPTION_KEY` (a 32-byte base64 value from `openssl rand -base64 32`)
-5. Redeploy staging, open Accounts, and select **Connect bank**. In test mode Finverse displays its supported test institutions.
+5. Redeploy staging, open **Accounts → Add account → Connect**. Search the Finverse bank list and choose a bank. In test mode only supported test institutions are shown. After authorization, review and select the returned accounts before adding them.
 
 ## Data behavior
 
@@ -27,3 +28,11 @@ Clover uses Finverse's Bank Data API to connect accounts and import transactions
 ## Live rollout
 
 Finverse uses `https://api.prod.finverse.net` for both test and live credentials. Obtain separate live credentials and approval from Finverse, register the production callback URI, set `FINVERSE_MODE=live` and the live secrets in Vercel Production, then test with a low-risk account before broad release.
+
+## Native return and availability
+
+The iOS/Android store-test apps open the provider in the system authentication browser. The existing HTTPS callback verifies one-time state, then redirects native sessions to the fixed `clover://accounts` route. No arbitrary return URL is accepted. The native gateway exposes only authenticated institutions GET and link/sync POST operations; workspace ownership and plan quotas are reused from web.
+
+The Connect tab is visible even when credentials are missing, with a clear unavailable message and Manual/Upload alternatives. Bank discovery is restricted to the existing Philippines rollout and accounts/transactions products. Do not infer live availability from the Figma sample banks.
+
+Refreshes update raw/normalized provider audit payloads without overwriting existing confirmed Clover account balances. Newly returned accounts require user selection before import; transactions enter review as suggestions.
