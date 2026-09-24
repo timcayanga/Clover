@@ -1,3 +1,4 @@
+import { convertHomeTotal } from "@/lib/home-currency-total";
 import { parseRecurringTracking, isWithinRecurringTerm } from "@/lib/recurring-tracking";
 import { HomeSensitiveAmount } from "@/components/home-sensitive-amount";
 import Link from "next/link";
@@ -819,10 +820,10 @@ async function DashboardStream({
     new Set(spendableAccounts.map((account) => formatCurrencyCode(account.currency)).filter(Boolean))
   );
   const balanceRateEntries = await Promise.all(
-    spendableCurrencies.map(async (currency) => [currency, await loadDashboardExchangeRate(currency, balanceCurrency)] as const)
+    Array.from(new Set([...spendableCurrencies, ...reportCurrencies])).map(async (currency) => [currency, await loadDashboardExchangeRate(currency, balanceCurrency)] as const)
   );
   const balanceRates = Object.fromEntries(balanceRateEntries);
-  const balanceEstimateUnavailable = balanceRateEntries.some(([, rate]) => rate === null);
+  const balanceEstimateUnavailable = spendableCurrencies.some(currency => balanceRates[currency] === null);
   const BalanceDecimal = Prisma.Decimal.clone({ precision: 40 });
   const savingsTotal = spendableAccounts.reduce((sum, account) => {
     const signedBalance = new BalanceDecimal(reconcileAccountBalance(account));
@@ -1112,10 +1113,20 @@ async function DashboardStream({
       })),
     };
   });
-  const balanceHighlights = currencyReports.flatMap(({currency, month, previousMonth}) => [
-    { key: `${currency}-income`, isExpense: false, currency, label: `Monthly Income${reportCurrencies.length > 1 ? ` (${currency})` : ""}`, value: formatCurrency(month.income, currency), trend: getHomePeriodChange(month.income, previousMonth.income, currency) },
-    { key: `${currency}-expenses`, isExpense: true, currency, label: `Monthly Expenses${reportCurrencies.length > 1 ? ` (${currency})` : ""}`, value: formatCurrency(month.expense, currency), trend: getHomePeriodChange(month.expense, previousMonth.expense, currency) },
-  ]);
+  const balanceHighlights = (["income", "expense"] as const).map((kind) => {
+    const current = convertHomeTotal(currencyReports.map(report => ({ currency: report.currency, amount: report.month[kind] })), balanceRates);
+    const previous = convertHomeTotal(currencyReports.map(report => ({ currency: report.currency, amount: report.previousMonth[kind] })), balanceRates);
+    return {
+      key: kind,
+      isExpense: kind === "expense",
+      currency: balanceCurrency,
+      label: kind === "income" ? "Monthly Income" : "Monthly Expenses",
+      value: current === null ? "—" : formatCurrencyAmount(current, balanceCurrency),
+      unavailable: current === null,
+      comparisonUnavailable: current === null || previous === null,
+      trend: current === null || previous === null ? null : getHomePeriodChange(Number(current), Number(previous), balanceCurrency),
+    };
+  });
   return (
     <>
       <PostHogPersonProperties
@@ -1164,10 +1175,10 @@ async function DashboardStream({
             <span className="dashboard-home__balance-month">{monthStart.toLocaleDateString("en-US", { month: "long", year: "numeric" })}</span>
             {balanceHighlights.map((pill) => (
               <div key={pill.key} className={`dashboard-home__hero-mini-pill dashboard-home__hero-mini-pill--${pill.isExpense ? "expense" : "income"}`}>
-                <span className="dashboard-home__hero-mini-label">{pill.label}</span>
+                <span className="dashboard-home__hero-mini-label" title={`All currencies converted to ${balanceCurrency}`}>{pill.label}</span>
                 <div className="dashboard-home__hero-mini-row">
                   <strong className="dashboard-home__hero-mini-value">
-                    <HomeSensitiveAmount value={pill.value} currency={pill.currency} />
+                    {pill.unavailable ? "—" : <HomeSensitiveAmount value={pill.value} currency={pill.currency} />}
                   </strong>
                   {pill.trend ? (
                     <span
@@ -1178,7 +1189,7 @@ async function DashboardStream({
                         ? "—"
                         : pill.trend.label === "0%" ? "0%" : `${pill.trend.direction > 0 ? "↑" : "↓"} ${pill.trend.label.replace(/^[+-]/, "")}`}
                     </span>
-                  ) : <span className="dashboard-home__hero-mini-trend dashboard-home__hero-mini-trend--unavailable">No prior month</span>}
+                  ) : <span className="dashboard-home__hero-mini-trend dashboard-home__hero-mini-trend--unavailable">{pill.comparisonUnavailable ? "Rate unavailable" : "No prior month"}</span>}
                 </div>
               </div>
             ))}
