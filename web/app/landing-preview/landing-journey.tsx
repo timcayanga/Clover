@@ -113,7 +113,7 @@ export function ProComparison({ market, style, showActions = true, variant = "la
   return <div className={styles.proDetails} style={style}>
     <div className={styles.proComparisonCard}>
       <PlanComparisonTable variant={variant} className={styles.proTable} />
-      <Link className={styles.proCompareLink} href="/pricing">Compare all Free, Plus and Plus features <span aria-hidden="true">→</span></Link>
+      <Link className={styles.proCompareLink} href="/pricing">Compare all Free, Plus and Pro features <span aria-hidden="true">→</span></Link>
     </div>
     {showActions ? <ProActions market={market} /> : null}
   </div>;

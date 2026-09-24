@@ -2,7 +2,7 @@ import { PLAN_COMPARISON_KEYS, PLAN_COMPARISON_ROWS } from "@/lib/public-plan-co
 
 export function PlanComparisonTable({ variant, className }: { variant: keyof typeof PLAN_COMPARISON_KEYS; className?: string }) {
   return <table className={className} data-plan-comparison={variant}>
-    <caption>Planned Clover Free, Plus and Plus features</caption>
+    <caption>Clover Free, Plus and Pro features</caption>
     <thead><tr><th scope="col">Feature</th><th scope="col">Free</th><th scope="col">Plus</th><th scope="col">Pro</th></tr></thead>
     <tbody>{PLAN_COMPARISON_KEYS[variant].map(key => {
       const [label, free, plus, pro] = PLAN_COMPARISON_ROWS[key];
