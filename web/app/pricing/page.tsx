@@ -9,7 +9,7 @@ import { analyticsOnceKey } from "@/lib/analytics";
 import { getSessionContext } from "@/lib/auth";
 import styles from "./pricing.module.css";
 
-export const metadata = { title: { absolute: "Clover" }, description: "Compare Clover Free, Plus and Pro features and planned regional pricing." };
+export const metadata = { title: { absolute: "Clover" }, description: "Compare Clover Free, Plus and Pro features and regional pricing." };
 
 export default async function PricingPage() {
   const country = (await headers()).get("x-vercel-ip-country")?.toUpperCase();
@@ -23,22 +23,13 @@ export default async function PricingPage() {
     <JourneyHeader />
     <PostHogEvent event="upgrade_prompt_viewed" onceKey={analyticsOnceKey("upgrade_prompt_viewed", `pricing:${signedIn ? "signed-in" : "guest"}`)} properties={{ prompt_location: "pricing_page", cta_href: proHref }} />
     <div className={styles.content}>
-      <header className={styles.intro}>
-        <p className={styles.eyebrow}>Free, Plus and Pro</p>
-        <h1>Choose what works for your money.</h1>
-        <p>Start with the records you already have. Get more room and deeper insights when you need them.</p>
-      </header>
-      <aside className={styles.notice}>
-        <strong>Plans and allowances</strong>
-        <p>Choose the allowance that fits your needs. Existing paid subscriptions retain their billing terms as Plus. Final subscription pricing is shown before payment.</p>
-      </aside>
-      <section className={styles.plans} aria-label="Planned regional pricing">
-        <article><h2>Free</h2><strong>Free</strong><p>Organize your finances with Clover’s core tools.</p><Link className="button button-secondary button-pill" href={signedIn ? "/home" : "/sign-up"}>{signedIn ? "Open Clover" : "Start free"} →</Link></article>
-        <article><h2>Plus</h2><strong>{prices.monthly}<small> / month</small></strong><p>Or {prices.annual} per year</p><Link className="button button-primary button-pill" href={proHref}>Upgrade to Plus →</Link><small>You can keep using Clover for free.</small></article>
-        <article><h2>Pro</h2><strong>{premium.monthly}<small> / month</small></strong><p>Or {premium.annual} per year</p><p>More accounts, linked banks and AI capacity.</p><Link className="button button-primary button-pill" href={signedIn ? "/settings/plan" : "/sign-up?intent=premium"}>Explore Pro →</Link></article>
+      <h1 className={styles.srOnly}>Clover pricing</h1>
+      <section className={styles.plans} aria-label="Clover plans">
+        <article className={styles.pro}><h2>Pro</h2><strong>{premium.monthly}<small> / month</small></strong><p>Or {premium.annual} per year</p><p>More accounts, linked banks and AI capacity.</p><Link className="button button-primary button-pill" href={signedIn ? "/settings/plan" : "/sign-up?intent=premium"}>Explore Pro →</Link></article>
+        <article className={styles.plus}><h2>Plus</h2><strong>{prices.monthly}<small> / month</small></strong><p>Or {prices.annual} per year</p><Link className="button button-primary button-pill" href={proHref}>Upgrade to Plus →</Link></article>
+        <article className={styles.free}><h2>Free</h2><strong>Free</strong><p>Organize your finances with Clover’s core tools.</p><Link className="button button-secondary button-pill" href={signedIn ? "/home" : "/sign-up"}>{signedIn ? "Open Clover" : "Start free"} →</Link></article>
       </section>
-      <p className={styles.region}>Pricing region: {market === "ph" ? "Philippines · PHP" : "Global · USD"}</p>
-      <PlanComparisonTable variant="full" className={styles.table} />
+      <PlanComparisonTable variant="full" paidFirst className={styles.table} />
       <section className={styles.notes} aria-label="Plan details">
         <h2>How the allowances work</h2>
         <ul>
