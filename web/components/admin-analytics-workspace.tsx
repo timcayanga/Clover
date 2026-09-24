@@ -30,7 +30,7 @@ const posthogStatusCopy = (snapshot: AdminAnalyticsSnapshot) => {
   if (live.status === "ready") {
     return {
       title: "Live event queries are ready",
-      detail: `Beta aggregates loaded from ${formatDate(live.rangeStartedAt)}${live.isCached ? " using PostHog cache" : ""}`,
+      detail: `Aggregates loaded from ${formatDate(live.rangeStartedAt)}${live.isCached ? " using PostHog cache" : ""}`,
       tone: "is-good",
     };
   }
@@ -77,9 +77,9 @@ export function AdminAnalyticsWorkspace({ snapshot }: { snapshot: AdminAnalytics
     <section className="admin-analytics-workspace">
       <div className="admin-analytics-workspace__hero table-panel">
         <div>
-          <p className="eyebrow">Beta analytics · {snapshot.beta.epoch}</p>
-          <h2>Track Clover from the beta baseline forward.</h2>
-          <p className="panel-muted">All metrics on this page exclude pre-beta activity. The shared baseline began {formatDate(snapshot.beta.startedAt)}; historical records remain preserved for audit and comparison.</p>
+          <p className="eyebrow">Product analytics</p>
+          <h2>Track Clover’s usage and performance.</h2>
+          <p className="panel-muted">Metrics are measured from {formatDate(snapshot.beta.startedAt)}. Earlier records remain available for audit and comparison.</p>
         </div>
         <div className="admin-analytics-workspace__hero-actions">
           <span className={`admin-analytics-status ${snapshot.posthog.configured ? "is-ready" : "is-muted"}`}>
@@ -109,23 +109,23 @@ export function AdminAnalyticsWorkspace({ snapshot }: { snapshot: AdminAnalytics
         {snapshot.planBilling.status === "ready" ? snapshot.planBilling.rows.length ? <div style={{ overflowX: "auto" }}><table><thead><tr><th>Event</th><th>Plan</th><th>Provider</th><th>Platform</th><th>Events</th></tr></thead><tbody>{snapshot.planBilling.rows.map((row, i) => <tr key={i}><td>{row.event.replaceAll("_", " ")}</td><td>{row.plan}</td><td>{row.provider}</td><td>{row.platform}</td><td>{row.count.toLocaleString()}</td></tr>)}</tbody></table></div> : <p>No plan or billing events in this environment yet.</p> : <p>Plan event queries are {snapshot.planBilling.status === "not_configured" ? "not configured" : "temporarily unavailable"}. Account totals remain available.</p>}
       </section>
       <div className="admin-analytics-metric-grid">
-        <MetricCard label="Beta participants" value={snapshot.users.total} detail={`+${snapshot.users.new7d.toLocaleString()} accounts created in the last 7d`} />
+        <MetricCard label="Users in reporting period" value={snapshot.users.total} detail={`+${snapshot.users.new7d.toLocaleString()} accounts created in the last 7d`} />
         <MetricCard label="Active users" value={snapshot.users.active7d} detail={`${snapshot.users.active30d.toLocaleString()} active in the last 30d`} />
         <MetricCard label="Onboarding complete" value={snapshot.users.onboardingCompleted} detail={`${percent(snapshot.users.onboardingCompleted, snapshot.users.total)} of users`} />
-        <MetricCard label="Beta transactions" value={snapshot.product.transactions} detail={`${snapshot.product.accounts.toLocaleString()} accounts added during beta`} />
+        <MetricCard label="Transactions in reporting period" value={snapshot.product.transactions} detail={`${snapshot.product.accounts.toLocaleString()} accounts added in the reporting period`} />
         <MetricCard label="Imports, 7d" value={snapshot.product.completedImports7d} detail={`${snapshot.product.failedImports7d.toLocaleString()} failed`} tone={snapshot.product.failedImports7d ? "warning" : "default"} />
         <MetricCard label="Reviewed, 7d" value={snapshot.product.reviewedTransactions7d} detail="Confirmed or edited transactions" />
         <MetricCard label="Review queue" value={snapshot.product.reviewQueueItems} detail={`${snapshot.product.lowConfidenceItems.toLocaleString()} low-confidence`} tone={snapshot.product.reviewQueueItems ? "warning" : "default"} />
         <MetricCard label="Current deploy errors" value={snapshot.reliability.errors24h} detail={`${snapshot.reliability.errors7d.toLocaleString()} from this deployment in the last 7d`} tone={snapshot.reliability.errors24h ? "danger" : "default"} />
         <MetricCard label="Stale imports" value={snapshot.product.staleImports} detail={`${snapshot.product.processingImports.toLocaleString()} processing now`} tone={snapshot.product.staleImports ? "danger" : "default"} />
         <MetricCard
-          label="PostHog beta events"
+          label="PostHog events"
           value={livePostHog.status === "ready" ? livePostHog.totalEvents : "—"}
           detail={livePostHog.status === "ready" ? `${livePostHog.observedEventTypes.toLocaleString()} event types observed` : "Database analytics remain available"}
           tone={livePostHog.status === "unavailable" ? "warning" : "default"}
         />
         <MetricCard
-          label="Beta event coverage"
+          label="Event coverage"
           value={livePostHog.status === "ready" ? percent(livePostHog.observedInstrumentedEvents, livePostHog.instrumentedEventTypes) : "—"}
           detail={livePostHog.status === "ready" ? `${livePostHog.observedInstrumentedEvents} of ${livePostHog.instrumentedEventTypes} instrumented events seen` : "Available after Query Read setup"}
         />
@@ -441,7 +441,7 @@ export function AdminAnalyticsWorkspace({ snapshot }: { snapshot: AdminAnalytics
           <div><span>Imports total</span><strong>{snapshot.product.imports.toLocaleString()}</strong></div>
           <div><span>Current deploy errors, 7d</span><strong>{snapshot.reliability.errors7d.toLocaleString()}</strong></div>
         </div>
-        <p className="admin-analytics__footnote">Generated {formatDate(snapshot.generatedAt)}. Counts are scoped to production and the beta epoch.</p>
+        <p className="admin-analytics__footnote">Generated {formatDate(snapshot.generatedAt)}. Counts are scoped to production and the reporting period.</p>
       </section>
 
       <section className="admin-hub__panel glass" aria-labelledby="admin-top-errors-title">

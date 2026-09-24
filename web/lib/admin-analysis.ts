@@ -140,7 +140,7 @@ export const buildAdminRecommendations = (
       key: "collect-signal",
       priority: "opportunity",
       area: "Measurement",
-      title: "Keep collecting beta behavior before changing the product",
+      title: "Keep collecting usage data before changing the product",
       evidence: "No high-confidence product or reliability gap crosses the current recommendation thresholds.",
       action: "Validate event coverage and wait for a larger cohort before drawing conclusions from small conversion changes.",
       href: "/admin/analytics",
