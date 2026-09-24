@@ -7,6 +7,7 @@ import { beginTelemetry, browserContext, getTelemetryHeaders, requestTelemetry, 
 import { OfflineEngine } from "../../mobile/src/offline/engine";
 import { openOfflineStore } from "../../mobile/src/offline/store";
 import { apiRequest, ApiError, NetworkError } from "../../mobile/src/api";
+import { normalizePlanAnalytics } from "../../shared/plan-analytics";
 async function main() {
 const events: Array<{ event: string; properties: TelemetryProperties }> = [];
 setTelemetrySink((event, properties) => events.push({ event, properties }));
@@ -86,6 +87,7 @@ vm.runInNewContext(serverCode, { exports: serverModule.exports, require: (id: st
   if (id === "next/server") return { after: (run: () => Promise<void>) => { if (!requestHeaders) throw Error("worker"); scheduled.push(run); } };
   if (id.endsWith("shared/analytics")) return { browserContext };
   if (id === "./analytics") return { capturePostHogServerEvent: async (...args: any[]) => { outgoing.push(args); } };
+  if (id === "./prisma") return { prisma: { user: { findUnique: async () => ({ clerkUserId: "user_billing" }) } } };
   throw Error(id);
 } });
 await serverModule.exports.capturePostHogServerEvent("account_created", "test-user", { account_type: "cash" });
@@ -97,6 +99,8 @@ assert.equal(outgoing[0][2].device_model, "Pixel");
 requestHeaders = null; outgoing = [];
 await serverModule.exports.capturePostHogServerEvent("import_processing_completed", "test-user");
 assert.equal(outgoing[0][2].platform, "server");
+await serverModule.exports.capturePostHogServerEvent("billing_renewed", "database-user", { plan_tier: "premium" });
+assert.equal(outgoing.at(-1)[1], "user_billing", "billing events must join the signed-in analytics identity");
 // Execute native setup under a React Native-shaped environment (no AbortSignal.timeout).
 for (const platform of ["ios", "android"]) {
   const captures: any[] = [], identities: string[] = [];
@@ -122,6 +126,7 @@ for (const platform of ["ios", "android"]) {
       if (id === "react-native") return { Platform: {OS:platform, Version:"test-os"} };
       if (id === "./api-base") return {apiBase:()=>"https://example.invalid"};
       if (id.endsWith("shared/analytics")) return { setTelemetrySink:(next:any)=>{nativeSink=next;}, setTelemetryHeaderProvider:()=>{}, clearPendingTelemetry:()=>{} };
+      if (id.endsWith("shared/plan-analytics")) return { normalizePlanAnalytics };
       throw Error(id);
     }
   });

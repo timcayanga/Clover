@@ -16,6 +16,7 @@ export async function PATCH(request: Request, context: { params: Promise<{ userI
     const admin = await requireAdminAuth("operate");
     const { userId } = await context.params;
     const payload = adminUserUpdateSchema.parse(await request.json());
+    if (payload.planTier !== undefined || payload.planTierLocked !== undefined || payload.accountLimit !== undefined) await requireAdminAuth("entitlements");
     const updated = await updateAdminUser(userId, payload);
     await recordAdminSupportAction({
       actorUserId: admin.userId,

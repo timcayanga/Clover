@@ -503,6 +503,7 @@ model BillingEvent {
 }
 
 model ProAccessGrant {
+  planTier  PlanTier @default(pro)
   id        String   @id @default(cuid())
   userId    String
   startsAt  DateTime

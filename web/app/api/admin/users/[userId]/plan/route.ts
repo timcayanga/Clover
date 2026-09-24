@@ -1,3 +1,7 @@
+import { PLAN_CATALOG } from "../../../../../../../shared/plan-catalog";
+import { getEffectiveUserLimits } from "@/lib/user-limits";
+import { getCloverTokenUsage } from "@/lib/clover-token-usage";
+import { capturePostHogServerEvent } from "@/lib/analytics-server";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { requireAdminAuth, getAdminDataEnvironment } from "@/lib/admin";
@@ -10,6 +14,7 @@ import { jsonSnapshot, reasonSchema } from "@/lib/growth-rules";
 const schema = z.object({
   action: z.enum(["grant", "edit", "revoke", "unlock"]),
   grantId: z.string().optional(),
+  planTier: z.enum(["pro", "premium"]).optional(),
   startsAt: z.string().datetime().optional(),
   endsAt: z.string().datetime().optional(),
   reason: reasonSchema,
@@ -26,7 +31,7 @@ export async function GET(
   try {
     await requireAdminAuth();
     const { userId } = await context.params;
-    await target(userId);
+    const account = await target(userId);
     const access = await getProAccess(userId);
     const history = await prisma.growthAudit.findMany({
       where: {
@@ -40,7 +45,9 @@ export async function GET(
       orderBy: { createdAt: "desc" },
       take: 100,
     });
-    return NextResponse.json({ ...access, history });
+    const limits = getEffectiveUserLimits({ ...account, planTier: access.planTier }, { ignoreDevelopmentOverride: true });
+    const tokens = await getCloverTokenUsage({ ...account, planTier: access.planTier });
+    return NextResponse.json({ ...access, history, allowances: { ...PLAN_CATALOG[access.planTier], accounts: limits.accountLimit }, accountLimitOverride: account.accountLimit, tokens });
   } catch {
     return NextResponse.json(
       { error: "Unable to access this account." },
@@ -100,6 +107,7 @@ export async function POST(
           ? await tx.proAccessGrant.create({
               data: {
                 userId,
+                planTier: input.planTier ?? "pro",
                 startsAt: input.startsAt!,
                 endsAt: input.endsAt!,
                 actorId: admin.userId,
@@ -112,6 +120,7 @@ export async function POST(
                 input.action === "revoke"
                   ? { revokedAt: new Date() }
                   : {
+                      ...(input.planTier ? { planTier: input.planTier } : {}),
                       startsAt: input.startsAt,
                       endsAt: input.endsAt,
                       reason: input.reason,
@@ -133,7 +142,8 @@ export async function POST(
         },
       });
     });
-    await refreshProAccess(userId);
+    const effectiveTier = await refreshProAccess(userId);
+    void capturePostHogServerEvent("plan_grant_changed", userId, { action: input.action, plan_tier: effectiveTier, billing_affected: false }).catch(() => {});
     return NextResponse.json({ ok: true });
   } catch (error) {
     return NextResponse.json(

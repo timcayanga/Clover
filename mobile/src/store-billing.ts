@@ -67,7 +67,7 @@ export function purchaseStorePackage(
     await identify(status);
     if (!status.productIds.includes(item.product.identifier) || !matchesStorePackage(item, Platform.OS))
       throw new Error("This product is unavailable.");
-    await trackOperation("store_purchase", () => Purchases.purchasePackage(item), { phase: "store_confirmation" });
+    await trackOperation("store_purchase", () => Purchases.purchasePackage(item), { phase: "store_confirmation", target_plan: STORE_PACKAGES.find(p => p.identifier === item.identifier)?.tier, billing_provider: Platform.OS === "ios" ? "app_store" : "play_store", product_id: item.product.identifier });
     // Caller must now ask Clover's server to verify; SDK state cannot grant Pro.
   });
 }

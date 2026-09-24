@@ -1,3 +1,4 @@
+import { updateNativePlanAnalytics } from "./analytics";
 import { uploadInParts } from "./offline/resumable-upload";
 import { FileQueue, type QueuedFile } from "./offline/file-queue";
 import {
@@ -224,6 +225,7 @@ export function SessionProvider({
       .then((result) => {
         if (!current) return;
         setData(result);
+        if (result.entitlement.analytics) updateNativePlanAnalytics(result.entitlement.analytics);
         setProfile((previous) =>
           result.profiles.some((p) => p.id === previous)
             ? previous

@@ -69,6 +69,7 @@ export function verifiedStoreAccess(
         : null;
     const active = Boolean(expiration && expiration > now && !plan?.refunded_at);
     return {
+      refunded: Boolean(matches && plan?.refunded_at),
       verifiedAt: new Date(data.request_date_ms),
       expiresAt: active ? expiration : null,
       store: matches ? plan.store : null,
@@ -81,6 +82,7 @@ export function verifiedStoreAccess(
     };
   });
   return states.find((state) => state.expiresAt) ?? {
+    refunded: states.some(state => state.refunded),
     verifiedAt: new Date(data.request_date_ms), expiresAt: null,
     store: null, productId: null, renewing: false, sandbox: config.sandbox,
   };

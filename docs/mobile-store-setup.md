@@ -28,9 +28,9 @@ Plus has eight attached products across Apple, Google and the two Paddle apps. P
 
 ## Provider setup status
 
-- Apple: Clover Membership subscription group with Pro at level 1 and Plus at level 2; four products imported into RevenueCat. Review screenshots/remaining metadata and submission are pending. App Store Connect and In-App Purchase credentials were entered privately.
+- Apple: Clover Membership subscription group with Pro at level 1 and Plus at level 2; four products imported into RevenueCat. All four show Prepare for Submission; review screenshots and submission are pending. Paid Apps Agreement confirmed Active by the user. App Store Connect and In-App Purchase credentials were entered privately.
 - Apple production and sandbox server-notification URLs point to RevenueCat. Notification version and receipt remain unverified.
-- Google: Plus and Pro monthly/annual base plans created. Activation has not yet been confirmed. Credentials validated in RevenueCat.
+- Google: Plus and Pro monthly/annual base plans created. All four base plans confirmed Active by the user. Credentials validated in RevenueCat.
 - Google RTDN topic `projects/clover-493710/topics/Play-Store-Notifications` connected; user confirmed a test notification received by RevenueCat.
 - Regional store pricing configured: Plus US$7.99/month or US$59.99/year, Philippines ₱169/month or ₱1,259/year; Pro US$12.99/month or US$99.99/year, Philippines ₱349/month or ₱2,999/year. Store checkout supplies final localized prices.
 
@@ -64,8 +64,8 @@ The Clerk publishable key and API URL must match staging. Never place private AP
 
 ## Remaining before purchase tests and production
 
-1. Redeploy staging with new secret variables and integration code, then send RevenueCat TEST events from both webhooks and verify HTTP 200.
-2. Confirm Google base-plan activation, Apple product metadata and required store agreements. Capture real native paywall screenshots for Apple review.
+1. Completed: staging integration deployed; user supplied HTTP 200 TEST deliveries for both iOS and Android on 24 September 2026. This verifies endpoint delivery, not a purchase.
+2. Capture real native paywall screenshots and finish Apple review metadata/submission. Google base-plan activation and Apple agreement are confirmed.
 3. Enable native purchases in staging only when ready for controlled sandbox testing, then create/install fresh store-test builds with the Preview public keys.
 4. Test each of four packages on both platforms: localized price/period, purchase, cancel, pending approval, restore, expiry, refund, renewal, grace, network interruption and restart.
 5. Check correct Plus/Pro limits, account switching, ownership protection, sandbox isolation, webhook retries, and independent web subscription/Admin-grant preservation. Existing paid users use provider management; this change does not introduce a cross-provider upgrade checkout.

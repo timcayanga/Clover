@@ -1,3 +1,4 @@
+import { capturePostHogServerEvent } from "./analytics-server";
 import { getPaddlePlanById } from "./paddle-plans";
 import { randomUUID } from "node:crypto";
 import { Prisma } from "@prisma/client";
@@ -260,6 +261,7 @@ export async function reverseGrowthPayment(
   provider: string,
   paymentId: string,
 ) {
+  const previous = await prisma.growthPayment.findUnique({ where: { id: `${provider}:${paymentId}` } });
   await growthTransaction(async (tx) => {
     const key = `${provider}:${paymentId}`;
     await tx.growthPayment.upsert({
@@ -288,6 +290,7 @@ export async function reverseGrowthPayment(
       },
     });
   });
+  if (previous?.userId && !previous.reversedAt) void capturePostHogServerEvent("billing_refunded", previous.userId, { billing_provider: provider, $insert_id: `refund:${provider}:${paymentId}` }).catch(() => {});
 }
 
 export async function claimReferralReward(userId: string, rewardId: string) {

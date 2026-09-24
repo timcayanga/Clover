@@ -32,6 +32,8 @@ const USERS_PAGE_SIZE = 100;
 
 const EMPTY_OVERVIEW: AdminUserOverview = {
   totalUsers: 0,
+  freeUsers: 0,
+  plusUsers: 0,
   proUsers: 0,
   verifiedUsers: 0,
   lockedUsers: 0,
@@ -704,8 +706,7 @@ export function AdminUsersConsole({
             <p className="eyebrow">Internal admin</p>
             <h2>Command center</h2>
             <p className="panel-muted">
-              A compact user directory for plan edits, limits, and quick account
-              actions.
+              Manage access, limits, and accounts. Manual access changes do not change subscriptions or cancel provider charges.
             </p>
           </div>
           <div className="admin-users__stats">
@@ -713,6 +714,8 @@ export function AdminUsersConsole({
               <strong>{data.overview.totalUsers}</strong>
               <span>Real users</span>
             </div>
+            <div className="admin-users__stat"><strong>{data.overview.freeUsers}</strong><span>Free users</span></div>
+            <div className="admin-users__stat"><strong>{data.overview.plusUsers}</strong><span>Plus users</span></div>
             <div className="admin-users__stat">
               <strong>{data.overview.proUsers}</strong>
               <span>Pro users</span>

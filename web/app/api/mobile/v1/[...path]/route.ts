@@ -172,6 +172,7 @@ async function handle(
         profiles,
         entitlement: {
           planTier: access.planTier,
+          analytics: access.analytics,
           fullFeatureAccess: hasFullFeatureAccess(access.planTier),
           accessEndsAt: access.accessEndsAt,
           renewing: access.renewing,
