@@ -66,6 +66,15 @@
     "src": "/assets/banks/optimized/hong kong/dbs-bank-5b08bc9e7c.webp"
   },
   {
+    "file": "hong kong/hang seng bank.png",
+    "region": "hong kong",
+    "label": "Hang Seng Bank",
+    "aliases": [
+      "Hang Seng"
+    ],
+    "src": "/assets/banks/optimized/hong kong/hang-seng-bank-ad9fb29318.webp"
+  },
+  {
     "file": "hong kong/hsbc.png",
     "region": "hong kong",
     "label": "HSBC",
@@ -222,6 +231,15 @@
     "src": "/assets/banks/optimized/malaysia/cimb-cdae879c09.webp"
   },
   {
+    "file": "malaysia/dbs bank.jpeg",
+    "region": "malaysia",
+    "label": "DBS Bank",
+    "aliases": [
+      "DBS"
+    ],
+    "src": "/assets/banks/optimized/malaysia/dbs-bank-5b08bc9e7c.webp"
+  },
+  {
     "file": "malaysia/hong leong bank.webp",
     "region": "malaysia",
     "label": "Hong Leong Bank",
@@ -370,11 +388,11 @@
     "src": "/assets/banks/optimized/philippines/atome-50c1acfa1b.webp"
   },
   {
-    "file": "singapore/airwallex",
+    "file": "singapore/airwallex.webp",
     "region": "singapore",
     "label": "Airwallex",
     "aliases": [],
-    "src": "/assets/banks/optimized/singapore/airwallex-71ed056755.webp"
+    "src": "/assets/banks/optimized/singapore/airwallex-5124e283f8.webp"
   },
   {
     "file": "singapore/bank of singapore.webp",
@@ -433,6 +451,15 @@
     "label": "RHB",
     "aliases": [],
     "src": "/assets/banks/optimized/singapore/rhb-337f38f6c8.webp"
+  },
+  {
+    "file": "singapore/standard chartered.jpg",
+    "region": "singapore",
+    "label": "Standard Chartered",
+    "aliases": [
+      "Standard Chartered Bank"
+    ],
+    "src": "/assets/banks/optimized/singapore/standard-chartered-ef71b0b605.webp"
   },
   {
     "file": "singapore/uob.webp",
