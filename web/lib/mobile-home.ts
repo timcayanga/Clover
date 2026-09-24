@@ -1,3 +1,6 @@
+import { buildHomeAdviserInsights } from "../../shared/home-adviser-insights";
+import { buildHomeNextSteps } from "./home-next-steps";
+import { getPlannedPaymentSuggestions } from "./planned-payment-suggestions";
 import { convertHomeWindow } from "./home-currency-total";
 import { finverseBalances } from "./finverse-balances";
 import { mobileHomePeriods, homeDateKey } from "./mobile-home-periods";
@@ -31,6 +34,8 @@ export async function mobileHome(workspaceId: string, currency: string) {
     budgetData,
     reviewCount,
     reportCurrencies,
+    latestImport,
+    suggestions,
   ] = await Promise.all([
     prisma.account.findMany({
       where: { workspaceId },
@@ -97,6 +102,8 @@ export async function mobileHome(workspaceId: string, currency: string) {
       distinct: ["currency"],
       select: { currency: true },
     }),
+    prisma.importFile.findFirst({ where: { workspaceId }, orderBy: { uploadedAt: "desc" }, select: { uploadedAt: true } }),
+    getPlannedPaymentSuggestions(workspaceId),
   ]);
   const bankSnapshots = await finverseBalances(workspaceId);
   const spendable = accounts.filter((a) => isSpendableAccountType(a.type));
@@ -176,31 +183,31 @@ export async function mobileHome(workspaceId: string, currency: string) {
         );
       }, 0)
     : null;
-  const totals = (from: Date, to: Date) =>
+  const totals = (from: Date, to: Date, reportCurrency = currency) =>
     transactions
-      .filter((t) => t.currency === currency && t.date >= from && t.date < to)
+      .filter((t) => t.currency === reportCurrency && t.date >= from && t.date < to)
       .reduce(
         (sum, t) => {
           const type = resolveFinancialTransactionType({
             ...t,
             categoryName: t.category?.name,
           });
-          if (type === "income" || type === "expense")
+          if (type === "income" || type === "expense" || type === "transfer")
             sum[type] += Math.abs(Number(t.amount));
           return sum;
         },
-        { income: 0, expense: 0 },
+        { income: 0, expense: 0, transfer: 0 },
       );
-  const report = (days: number) => {
+  const report = (days: number, reportCurrency = currency) => {
     const { from, previousFrom, previousTo } = rolling(days);
     return {
-      ...totals(from, tomorrow),
-      previous: totals(previousFrom, previousTo),
+      ...totals(from, tomorrow, reportCurrency),
+      previous: totals(previousFrom, previousTo, reportCurrency),
       days: Array.from({ length: days }, (_, i) => {
         const date = new Date(+from + i * 86400000);
         return {
           date: homeDateKey(date),
-          ...totals(date, new Date(+date + 86400000)),
+          ...totals(date, new Date(+date + 86400000), reportCurrency),
         };
       }),
     };
@@ -231,15 +238,41 @@ export async function mobileHome(workspaceId: string, currency: string) {
       (categories.get(name) ?? 0) + Math.abs(Number(t.amount)),
     );
   }
+  const recurringCount = suggestions.filter((s) => s.sourceKind === "recurring_transaction" || s.sourceKind === "installment").length;
+  const thirty = rolling(30);
+  const categoryDeltas = new Map<string, { current: number; previous: number }>();
+  for (const t of transactions) {
+    if (t.currency !== currency || t.date < thirty.previousFrom || resolveFinancialTransactionType({ ...t, categoryName: t.category?.name }) !== "expense") continue;
+    const name = t.category?.name ?? "Uncategorized";
+    const entry = categoryDeltas.get(name) ?? { current: 0, previous: 0 };
+    entry[t.date >= thirty.from ? "current" : "previous"] += Math.abs(Number(t.amount));
+    categoryDeltas.set(name, entry);
+  }
+  const monthly = report(30);
+  const weekly = report(7);
+  const spike = [...categoryDeltas].map(([name, v]) => ({ name, delta: v.current - v.previous, ...v }))
+    .filter((v) => v.delta >= Math.max(500, monthly.expense * 0.08) && (v.previous === 0 || v.delta / v.previous >= 0.25))
+    .sort((a, b) => b.delta - a.delta || b.current - a.current)[0] ?? null;
+  const monthTotals = totals(month, tomorrow);
+  const currencies = [...new Set([currency, ...accounts.map((a) => a.currency), ...reportCurrencies.map((t) => t.currency)])].sort();
   return {
+    insights: buildHomeAdviserInsights({
+      currency,
+      daysSinceLastImport: latestImport ? Math.max(0, Math.floor((Date.now() - +latestImport.uploadedAt) / 86400000)) : null,
+      categorySpike: spike,
+      paymentTitles: suggestions.filter((s) => s.dueDate && +new Date(s.dueDate) <= Date.now() + 7 * 86400000).map((s) => s.title),
+      recurringCount,
+      weekly,
+      previousWeeklyExpense: weekly.previous.expense,
+      monthNet: monthTotals.income - monthTotals.expense,
+      hasRecentTransactions: transactions.some((t) => t.currency === currency && t.date >= rolling(7).from),
+      // Conservatively suppress the all-clear card while any queue item remains.
+      recentReviewCount: reviewCount,
+    }),
+    nextSteps: buildHomeNextSteps({ transactionCount: reviewCount, recurringCount, statementCount: suggestions.filter((s) => s.sourceKind === "statement_reminder").length }),
+    currencyReports: currencies.map((c) => ({ currency: c, weekly: report(7, c), monthly: report(30, c) })),
     heroTotals: { current: convertHomeWindow(transactions, month, tomorrow, Object.fromEntries(rates)), previous: convertHomeWindow(transactions, previousMonth, month, Object.fromEntries(rates)) },
-    currencies: [
-      ...new Set([
-        currency,
-        ...accounts.map((a) => a.currency),
-        ...reportCurrencies.map((t) => t.currency),
-      ]),
-    ].sort(),
+    currencies,
     reviewCount,
     budgets: budgetData.overview.budgets.map((b) => ({
       id: b.id,
@@ -260,8 +293,8 @@ export async function mobileHome(workspaceId: string, currency: string) {
     overdue,
     month: totals(month, tomorrow),
     previousMonth: totals(previousMonth, month),
-    weekly: report(7),
-    monthly: report(30),
+    weekly,
+    monthly,
     upcoming,
   };
 }

@@ -1,3 +1,4 @@
+import { buildHomeAdviserInsights } from "../../shared/home-adviser-insights";
 import { finverseBalances } from "@/lib/finverse-balances";
 import { convertHomeTotal } from "@/lib/home-currency-total";
 import { parseRecurringTracking, isWithinRecurringTerm } from "@/lib/recurring-tracking";
@@ -6,7 +7,6 @@ import Link from "next/link";
 import { Prisma } from "@prisma/client";
 import { redirect } from "next/navigation";
 import { cookies } from "next/headers";
-import type { ReactNode } from "react";
 import { after } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { ensureStarterWorkspace } from "@/lib/starter-data";
@@ -162,15 +162,6 @@ type DailyFlow = {
   dayLabel: string;
   income: number;
   expense: number;
-};
-
-type HomeAdviserItem = {
-  emoji: string;
-  label: string;
-  copy: ReactNode;
-  href?: string;
-  actionLabel?: string;
-  tone?: "neutral" | "positive" | "warning";
 };
 
 type WorkspaceSummary = {
@@ -884,11 +875,6 @@ async function DashboardStream({
     (currentSummary.biggestMover.previousAmount === 0 || currentSummary.biggestMover.percentage >= 25)
       ? currentSummary.biggestMover
       : null;
-  const encodedSpikeCategory = categorySpike ? encodeURIComponent(categorySpike.name) : "";
-  const uploadReminderCopy = latestImport
-    ? `Last upload was ${daysSinceLastImport === 0 ? "today" : `${daysSinceLastImport ?? 0} day${daysSinceLastImport === 1 ? "" : "s"} ago`}. Add recent statements so advice stays current.`
-    : "Upload a recent statement so Clover can start finding spending patterns.";
-  const weeklySpendDelta = weeklySummary.current.expense - weeklySummary.previous.expense;
   const nextSevenDays = new Date(now);
   nextSevenDays.setDate(nextSevenDays.getDate() + 7);
   const [plannedPaymentSuggestions, outstandingReviewCount, recurringCommitments] = await Promise.all([
@@ -994,108 +980,18 @@ async function DashboardStream({
       amountLabel: suggestion.amount != null ? formatCurrencyAmount(Number(suggestion.amount), suggestion.currency) : null,
       currency: suggestion.currency,
     }));
-  const insightCandidates: Array<HomeAdviserItem | null> = [
-    daysSinceLastImport === null || daysSinceLastImport >= 7
-      ? {
-          emoji: "📥",
-          label: "Upload Reminder",
-          copy: uploadReminderCopy,
-          href: "/transactions",
-          actionLabel: "Upload now",
-          tone: daysSinceLastImport === null ? "neutral" : "warning",
-        }
-      : null,
-    categorySpike
-      ? {
-          emoji: "📈",
-          label: "Spending spike",
-          copy: <>{categorySpike.name} is up <HomeSensitiveAmount value={formatCurrency(categorySpike.delta)} currency={displayCurrency} /> vs the previous 30 days.</>,
-          href: `/transactions?category=${encodedSpikeCategory}`,
-          actionLabel: "Review category",
-          tone: "warning",
-        }
-      : null,
-    plannedPaymentsDueSoon.length > 0
-      ? {
-          emoji: "🗓️",
-          label: "Upcoming payment",
-          copy: `${plannedPaymentsDueSoon.map((payment) => payment.title).join(", ")} ${plannedPaymentsDueSoon.length === 1 ? "is" : "are"} due in the next 7 days.`,
-          href: "/recurring",
-          actionLabel: "Review payments",
-          tone: "warning",
-        }
-      : null,
-    recurringSuggestionCount > 0
-      ? {
-          emoji: "🔁",
-          label: "Recurring check",
-          copy: `${recurringSuggestionCount} potential recurring payment${recurringSuggestionCount === 1 ? "" : "s"} found.`,
-          href: "/recurring",
-          actionLabel: "Review recurring",
-          tone: "neutral",
-        }
-      : null,
-    weeklySummary.previous.expense > 0 && weeklySummary.current.expense < weeklySummary.previous.expense
-      ? {
-          emoji: "🌿",
-          label: "Spending eased",
-          copy: <>You spent <HomeSensitiveAmount value={formatCurrency(Math.abs(weeklySpendDelta))} currency={displayCurrency} /> less than last week.</>,
-          href: "/adviser?section=trends",
-          actionLabel: "See the trend",
-          tone: "positive",
-        }
-      : null,
-    monthSummary.net > 0
-      ? {
-          emoji: "✨",
-          label: "Positive cash flow",
-          copy: <><HomeSensitiveAmount value={formatCurrency(monthSummary.net)} currency={displayCurrency} /> more came in than went out this month.</>,
-          href: "/adviser?section=trends",
-          actionLabel: "Open Adviser",
-          tone: "positive",
-        }
-      : null,
-    currentSevenDayTransactions.length > 0 && reviewAttentionCount === 0
-      ? {
-          emoji: "✅",
-          label: "Recent review",
-          copy: "No recent transactions need review. Older transactions may still need attention.",
-          href: "/transactions",
-          actionLabel: "View transactions",
-          tone: "positive",
-        }
-      : null,
-    currentSevenDayTransactions.length > 0
-      ? {
-          emoji: "🗓️",
-          label: "Weekly summary",
-          copy: (
-            <>
-              {weeklySummary.current.expense > 0 ? (
-                <>
-                  <HomeSensitiveAmount value={formatCurrency(weeklySummary.current.expense)} currency={displayCurrency} /> in spending recorded this week
-                  {weeklySummary.current.transfer > 0 ? (
-                    <>; <HomeSensitiveAmount value={formatCurrency(weeklySummary.current.transfer)} currency={displayCurrency} /> moved between accounts</>
-                  ) : null}.
-                </>
-              ) : "No spending was recorded this week."}
-              {" Spending is "}
-              {weeklySummary.previous.expense > 0 ? (
-                <>
-                  {weeklySpendDelta >= 0 ? "up" : "down"} <HomeSensitiveAmount value={formatCurrency(Math.abs(weeklySpendDelta))} currency={displayCurrency} /> vs last week.
-                </>
-              ) : weeklySummary.current.expense > 0
-                ? "there is not enough prior activity to compare yet."
-                : "there is no spending to compare yet."}
-            </>
-          ),
-          href: "/adviser",
-          actionLabel: "Open Adviser",
-          tone: weeklySummary.net >= 0 ? "positive" : "warning",
-        }
-      : null,
-  ];
-  const insightItems = insightCandidates.filter((item): item is HomeAdviserItem => Boolean(item)).slice(0, 3);
+  const insightItems = buildHomeAdviserInsights({
+    currency: displayCurrency,
+    daysSinceLastImport,
+    categorySpike: categorySpike ?? null,
+    paymentTitles: plannedPaymentsDueSoon.map((payment) => payment.title),
+    recurringCount: recurringSuggestionCount,
+    weekly: weeklySummary.current,
+    previousWeeklyExpense: weeklySummary.previous.expense,
+    monthNet: monthSummary.net,
+    hasRecentTransactions: currentSevenDayTransactions.length > 0,
+    recentReviewCount: reviewAttentionCount,
+  });
   const totalBalanceLabel = balanceEstimateUnavailable
     ? "—"
     : formatCurrencyAmount(savingsTotal.toFixed(2), balanceCurrency);
@@ -1210,7 +1106,7 @@ async function DashboardStream({
                     <span className="dashboard-home__insight-strip-emoji" aria-hidden="true">{item.emoji}</span>
                     <span>{item.label}</span>
                   </div>
-                  <span className="dashboard-home__insight-strip-copy">{item.copy}</span>
+                  <span className="dashboard-home__insight-strip-copy">{item.parts.map((part, index) => typeof part === "string" ? part : <HomeSensitiveAmount key={index} value={formatCurrency(part.amount)} currency={part.currency} />)}</span>
                   {item.href && item.actionLabel ? (
                     <Link className="dashboard-home__insight-strip-action" href={item.href}>
                       {item.actionLabel}

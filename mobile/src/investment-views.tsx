@@ -75,16 +75,24 @@ export function ValuationHistory({
   accountIds,
   currency,
   asset = false,
+  accountOptions,
 }: {
   history: RecordedValuation[];
   accountIds: string[];
   currency: string;
   asset?: boolean;
+  accountOptions?: { id: string; name: string }[];
 }) {
   const { colors } = useTheme();
   const [range, setRange] = useState("MAX"),
     [open, setOpen] = useState(false);
-  const all = recordedPortfolioSeries(history, currency, accountIds);
+  const [selectorOpen, setSelectorOpen] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<string[] | null>(null);
+  // Null follows all available accounts; an explicit empty selection stays empty.
+  const selected = selectedIds === null ? accountIds : accountIds.filter((id) => selectedIds.includes(id));
+  const all = selected.length ? recordedPortfolioSeries(history, currency, selected) : [];
+  const controlStyle = { minHeight: 40, borderRadius: 20, borderWidth: 1, borderColor: colors.line, backgroundColor: colors.white, paddingHorizontal: 14, justifyContent: "center" as const };
+  const controlText = { fontSize: 12, fontFamily: "Poppins-Regular", color: colors.ink };
   const now = new Date();
   const cutoff = new Date(now);
   if (range === "1M") cutoff.setUTCMonth(cutoff.getUTCMonth() - 1);
@@ -114,8 +122,22 @@ export function ValuationHistory({
         >
           Estimated value history
         </Text>
-        <PlanAction title={`${range} ▾`} onPress={() => setOpen((v) => !v)} />
       </View>
+      <View style={{ flexDirection: "row", gap: 8, alignItems: "center" }}>
+        {accountOptions ? <Pressable accessibilityRole="button" accessibilityLabel={`Investments, ${selected.length} selected`} accessibilityState={{ expanded: selectorOpen }} onPress={() => { setSelectorOpen((v) => !v); setOpen(false); }} style={[controlStyle, { flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 6 }]}>
+          <Text style={controlText}>Investments</Text><Text style={{ ...controlText, color: colors.muted }}>{selected.length} selected ▾</Text>
+        </Pressable> : null}
+        <Pressable accessibilityRole="button" accessibilityLabel={`History range ${range}`} accessibilityState={{ expanded: open }} onPress={() => { setOpen((v) => !v); setSelectorOpen(false); }} style={controlStyle}>
+          <Text style={controlText}>{range} ▾</Text>
+        </Pressable>
+      </View>
+      {selectorOpen && accountOptions ? <View style={{ gap: 4 }}>
+        <PlanAction title="Select all investments" onPress={() => setSelectedIds(null)} />
+        {accountOptions.map((option) => <Pressable key={option.id} accessibilityRole="checkbox" accessibilityState={{ checked: selected.includes(option.id) }} accessibilityLabel={option.name} onPress={() => setSelectedIds(selected.includes(option.id) ? selected.filter((id) => id !== option.id) : [...selected, option.id])} style={{ minHeight: 44, flexDirection: "row", alignItems: "center", gap: 8 }}>
+          <Text style={{ color: colors.teal }}>{selected.includes(option.id) ? "☑" : "☐"}</Text><Text style={{ color: colors.ink, flex: 1 }}>{option.name}</Text>
+        </Pressable>)}
+        <PlanAction title="Done" onPress={() => setSelectorOpen(false)} />
+      </View> : null}
       {open ? (
         <Choices
           value={range}
@@ -134,12 +156,12 @@ export function ValuationHistory({
         series={[{ name: "Recorded value", color: colors.bright, points }]}
       />
       <Body>
-        {new Set(accountIds).size}{" "}
-        {asset ? "asset" : new Set(accountIds).size === 1 ? "account" : "accounts"} · {currency}.
+        {new Set(selected).size}{" "}
+        {asset ? "asset" : new Set(selected).size === 1 ? "account" : "accounts"} · {currency}.
         Recorded estimates, not live prices. Lines connect dated records;
         accounts enter the total when their first value is recorded.
       </Body>
-      {all.length && all[all.length - 1].accounts < new Set(accountIds).size ? (
+      {all.length && all[all.length - 1].accounts < new Set(selected).size ? (
         <Body>
           History covers {all[all.length - 1].accounts} of these accounts.
           Missing values are not treated as zero.

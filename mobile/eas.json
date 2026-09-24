@@ -43,6 +43,21 @@
       "ios": {
         "credentialsSource": "local"
       }
+    },
+    "device-preview": {
+      "extends": "store-test",
+      "distribution": "internal",
+      "autoIncrement": false,
+      "ios": {
+        "simulator": true
+      },
+      "android": {
+        "buildType": "apk"
+      },
+      "env": {
+        "CLOVER_APP_NAME": "Clover Preview",
+        "CLOVER_IOS_BUNDLE_ID": "ph.clover.preview"
+      }
     }
   },
   "submit": {

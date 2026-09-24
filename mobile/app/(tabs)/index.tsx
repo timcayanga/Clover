@@ -1,3 +1,5 @@
+import { HomeAdviser } from "../../src/home-adviser";
+import type { HomeInsight } from "../../../shared/home-adviser-insights";
 import { homePeriodLabel } from "../../src/home-period-label";
 import { Text } from "../../src/app-text";
 import { HomeQuickAccess } from "../../src/home-quick-access";
@@ -19,7 +21,11 @@ import {
   useTheme,
 } from "../../src/ui";
 type Totals = { income: number; expense: number };
+type HomeReport = Totals & { previous?: Totals; days: (Totals & { date: string })[] };
 type HomeData = {
+  insights?: HomeInsight[];
+  nextSteps?: { id: string; title: string; description: string; count: number; href: string }[];
+  currencyReports?: { currency: string; weekly: HomeReport; monthly: HomeReport }[];
   heroTotals?: { current: {income: string | null; expense: string | null}; previous: {income: string | null; expense: string | null} };
   currencies?: string[];
   reviewCount?: number;
@@ -253,46 +259,25 @@ export default function Home() {
             </View>
           </LinearGradient>
           <HomeQuickAccess />
-          <Card>
-            <Text style={styles.sectionTitle}>Adviser</Text>
-            <View
-              style={{ flexDirection: "row", alignItems: "center", gap: 10 }}
-            >
-              <Icon name="chatbubble-ellipses-outline" size={36} />
-              <View style={{ flex: 1 }}>
-                <Body>
-                  {data.reviewCount
-                    ? `${data.reviewCount} transactions are ready for your review.`
-                    : "Ask Clover about your finances and find a clearer next step."}
-                </Body>
-              </View>
-            </View>
-            <Button
-              title="Ask Clover"
-              secondary
-              onPress={() => router.navigate("/(tabs)/adviser")}
-            />
-          </Card>
-          {Boolean(data.reviewCount) && (
+          <HomeAdviser insights={data.insights ?? []} hidden={hidden} />
+          {Boolean(data.nextSteps?.length) && (
             <Card>
-              <Text style={styles.sectionTitle}>Next steps</Text>
-              <Button
-                title={`Review ${data.reviewCount} transactions`}
-                secondary
-                onPress={() =>
-                  router.navigate({
-                    pathname: "/(tabs)/transactions",
-                    params: { review: "pending_review" },
-                  })
-                }
-              />
+              <Text style={styles.sectionTitle}>Next Steps</Text>
+              {data.nextSteps?.map((step) => <View key={step.id} style={{ gap: 6 }}>
+                <Text style={{ color: colors.ink, fontFamily: "Poppins-SemiBold", fontSize: 13 }}>{step.title} · {step.count} pending</Text>
+                <Body>{step.description}</Body>
+                <Button title="Review" secondary onPress={() => step.id === "transactions"
+                  ? router.navigate({ pathname: "/(tabs)/transactions", params: { review: "pending_review" } })
+                  : router.navigate("/(tabs)/recurring")} />
+              </View>)}
             </Card>
           )}
-          {(["weekly", "monthly"] as const).map((key) => (
-            <Card key={key}>
+          {(data.currencyReports ?? [{ currency, weekly: data.weekly, monthly: data.monthly }]).flatMap((report) => (["weekly", "monthly"] as const).map((key) => (
+            <Card key={`${report.currency}-${key}`}>
               <Text style={styles.sectionTitle}>
                 {key === "weekly" ? "Weekly Report" : "Monthly Report"}
               </Text>
+              {(data.currencyReports?.length ?? 0) > 1 ? <Body>{report.currency}</Body> : null}
               <Text
                 style={{
                   fontSize: 26,
@@ -300,19 +285,19 @@ export default function Home() {
                   color: colors.ink,
                 }}
               >
-                {amount(data[key].expense)}
+                {hidden ? "••••" : money(String(report[key].expense), report.currency)}
               </Text>
               <Body>
                 Recorded spending in the past {key === "weekly" ? 7 : 30} days
               </Body>
               <View style={{ flexDirection: "row", gap: 8 }}>
                 {[
-                  ["Income", data[key].income, colors.positive],
-                  ["Expenses", data[key].expense, colors.danger],
+                  ["Income", report[key].income, colors.positive],
+                  ["Expenses", report[key].expense, colors.danger],
                   [
                     "Net Cash Flow",
-                    data[key].income - data[key].expense,
-                    data[key].income >= data[key].expense
+                    report[key].income - report[key].expense,
+                    report[key].income >= report[key].expense
                       ? colors.positive
                       : colors.danger,
                   ],
@@ -328,15 +313,15 @@ export default function Home() {
                         color: String(color),
                       }}
                     >
-                      {amount(Number(value))}
+                      {hidden ? "••••" : money(String(value), report.currency)}
                     </Text>
                   </View>
                 ))}
               </View>
               <HomeChart
-                days={data[key].days}
+                days={report[key].days}
                 hidden={hidden}
-                currency={currency}
+                currency={report.currency}
               />
               <Button
                 title="View report"
@@ -344,7 +329,7 @@ export default function Home() {
                 onPress={() => router.navigate("/reports")}
               />
             </Card>
-          ))}
+          )))}
           {Boolean(data.budgets?.length) && (
             <Card>
               <Text style={styles.sectionTitle}>Budgeting</Text>

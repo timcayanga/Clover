@@ -29,3 +29,20 @@ assert.deepEqual(convertHomeWindow(records,from,to,{USD:1}),{income:null,expense
 assert.equal(JSON.stringify(records),before);
 assert.deepEqual(convertHomeWindow([],from,to,{}),{income:"0.00",expense:"0.00"});
 console.log("Native hero totals: mixed currency, transfer exclusion, exclusive end, missing rates and source preservation passed.");
+
+import { buildHomeAdviserInsights } from "../../shared/home-adviser-insights";
+const insightInput = { currency: "USD", daysSinceLastImport: null, categorySpike: null, paymentTitles: [], recurringCount: 0, weekly: { income: 100, expense: 20, transfer: 0 }, previousWeeklyExpense: 30, monthNet: 80, hasRecentTransactions: true, recentReviewCount: 0 };
+const advice = buildHomeAdviserInsights(insightInput);
+assert.deepEqual(advice.map(i => i.label), ["Upload Reminder", "Spending eased", "Positive cash flow"]);
+assert.deepEqual(advice[1].parts, ["You spent ", { amount: 10, currency: "USD" }, " less than last week."]);
+assert.deepEqual(buildHomeAdviserInsights({ ...insightInput, categorySpike: { name: "Food & Dining", delta: 600 }, paymentTitles: ["Rent"] }).map(i => i.label), ["Upload Reminder", "Spending spike", "Upcoming payment"]);
+const warning = buildHomeAdviserInsights({ ...insightInput, daysSinceLastImport: 0, previousWeeklyExpense: 0, monthNet: -10, recentReviewCount: 1, weekly: { income: 0, expense: 20, transfer: 50 } });
+assert.equal(warning.length, 1);
+assert.equal(warning[0].tone, "warning");
+assert.ok(warning[0].parts.includes(" moved between accounts"));
+assert.ok(!warning[0].parts.some(p => typeof p === "string" && p.includes("Spending is there")));
+assert.deepEqual(buildHomeAdviserInsights({ ...insightInput, daysSinceLastImport: 0, previousWeeklyExpense: 0, monthNet: 0, hasRecentTransactions: false }), []);
+console.log("Shared Home advice: priority, monetary privacy tokens, review suppression, empty activity and transfer context passed.");
+
+assert.ok(buildHomeAdviserInsights({ ...insightInput, paymentTitles: ["Rent"] }).find(i => i.label === "Upcoming payment")?.parts.includes("Rent is due in the next 7 days."));
+assert.ok(buildHomeAdviserInsights({ ...insightInput, paymentTitles: ["Rent", "Internet"] }).find(i => i.label === "Upcoming payment")?.parts.includes("Rent, Internet are due in the next 7 days."));

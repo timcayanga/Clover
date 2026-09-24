@@ -323,6 +323,7 @@ export default function Investments() {
                 ),
               ]}
               currency={selectedCurrency}
+              accountOptions={[...new Map(visibleHoldings.map((h) => [h.valuationAccountId ?? h.accountId, { id: h.valuationAccountId ?? h.accountId, name: accounts.find((a) => a.id === h.accountId)?.name ?? h.name }])).values()]}
             />
           ) : null}
           {data?.limited ? (

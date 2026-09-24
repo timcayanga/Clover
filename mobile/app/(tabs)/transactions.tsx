@@ -23,7 +23,7 @@ export default function Transactions() {
   const { demo, rows: samples, profileId, request } = useSession();
   const [summary, setSummary] = useState<TransactionPage["summary"]>();
   const [filters, setFilters] = useState(false);
-  const params = useLocalSearchParams<{ review?: string }>();
+  const params = useLocalSearchParams<{ review?: string; query?: string }>();
   const [review, setReview] = useState("");
   useEffect(() => {
     if (params.review === "pending_review") {
@@ -34,6 +34,7 @@ export default function Transactions() {
   const [type, setType] = useState("");
   const [query, setQuery] = useState("");
   const [search, setSearch] = useState("");
+  useEffect(() => { if (params.query !== undefined) setQuery(params.query); }, [params.query]);
   const [rows, setRows] = useState<Transaction[]>([]);
   const [page, setPage] = useState(1);
   const [total, setTotal] = useState(0);

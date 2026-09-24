@@ -170,7 +170,7 @@ assert.match(dashboardSource, /transactionCurrency\(transaction\) === currency/,
 assert.match(dashboardSource, /summary: summarizeWindow\(inWindow\(period.start, tomorrowStart\)/);
 assert.match(dashboardSource, /flow: buildDailyFlow\(inWindow\(period.start, tomorrowStart\), period.start, period.days/);
 assert.match(dashboardSource, /Recorded spending in the past \{days\} days/);
-assert.match(dashboardSource, /plannedPaymentsDueSoon\.length === 1 \? "is" : "are"/);
+assert.match(dashboardSource, /buildHomeAdviserInsights/);
 assert.ok(
   dashboardSource.indexOf('aria-label="Home Adviser"') < dashboardSource.indexOf("<HomeNextSteps"),
   "Next Steps should appear below Adviser.",
@@ -191,7 +191,7 @@ assert.match(sensitiveAmountSource, /function HomeSensitiveAmount/);
 assert.match(sensitiveAmountSource, /home-sensitive-amount__mask/);
 assert.match(
   dashboardSource,
-  /label: "Spending spike"[\s\S]{0,220}<HomeSensitiveAmount/,
+  /item\.parts\.map[\s\S]{0,150}<HomeSensitiveAmount/,
   "The Home Adviser must respect amount privacy for monetary insights.",
 );
 assert.doesNotMatch(dashboardSource, /label: "Balance in view"/i, "Home Adviser must not show the balance-in-view card.");
