@@ -25,14 +25,14 @@ export async function POST(request: Request) {
     !timingSafeEqual(supplied, expected)
   )
     return reply({ error: "Unauthorized" }, 401);
-  if (!storeBillingConfig().enabled)
-    return reply({ error: "Store integration is disabled" }, 503);
   try {
     const text = await request.text();
     if (Buffer.byteLength(text) > 65536)
       return reply({ error: "Payload too large" }, 413);
     const { event } = bodySchema.parse(JSON.parse(text));
     if (event.type === "TEST") return reply({ received: true });
+    if (!storeBillingConfig().enabled)
+      return reply({ error: "Store integration is disabled" }, 503);
     const ids = [
       ...new Set(
         [

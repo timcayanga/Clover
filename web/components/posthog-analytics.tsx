@@ -1,5 +1,6 @@
 "use client";
 
+import { normalizePlanAnalytics } from "../../shared/plan-analytics";
 import Script from "next/script";
 import { browserContext, safeRoute, routeSegments, safeAction } from "../../shared/analytics";
 import { installBrowserTelemetry } from "@/lib/browser-telemetry";
@@ -100,6 +101,8 @@ const runWhenPostHogReady = (callback: () => void) => {
   window.__posthogQueue.push(callback);
 };
 
+let currentPlanProperties: Record<string, unknown> = {};
+let currentPlanUserId: string | null = null;
 const safeCapture = (event: string, properties: Record<string, unknown> = {}) => {
   try {
     window.posthog?.capture(event, {
@@ -108,7 +111,8 @@ const safeCapture = (event: string, properties: Record<string, unknown> = {}) =>
       event_source: "web",
       analytics_schema_version: 2,
       analytics_environment: getClientAnalyticsEnvironment(),
-      ...properties,
+      ...currentPlanProperties,
+      ...normalizePlanAnalytics(properties ?? {}),
     });
   } catch {
     // Analytics must never interrupt Clover rendering or navigation.
@@ -419,6 +423,19 @@ function PostHogRequestSignals() {
 
 function PostHogIdentity() {
   const { isLoaded, user } = useUser();
+  const path = usePathname();
+  useEffect(() => {
+    if (currentPlanUserId !== (user?.id ?? null)) {
+      currentPlanProperties = {};
+      currentPlanUserId = user?.id ?? null;
+    }
+    if (!isLoaded || !user || !shouldTrackAnalytics()) return;
+    const controller = new AbortController();
+    const refresh = () => { void fetch("/api/analytics/plan", { cache: "no-store", signal: controller.signal })
+      .then(r => r.ok ? r.json() : null).then(p => { if (p && !controller.signal.aborted) runWhenPostHogReady(() => { if (controller.signal.aborted) return; currentPlanProperties = p; safeIdentify(scopeAnalyticsDistinctId(user.id, getClientAnalyticsEnvironment()), p); }); }).catch(() => {}); };
+    refresh(); window.addEventListener("focus", refresh);
+    return () => { controller.abort(); window.removeEventListener("focus", refresh); };
+  }, [isLoaded, user?.id, path]);
 
   useEffect(() => {
     if (!isLoaded) {
@@ -457,6 +474,7 @@ function PostHogIdentity() {
         return;
       }
 
+        currentPlanProperties = {};
         safeReset();
     });
   }, [isLoaded, user]);
@@ -503,7 +521,8 @@ export function PostHogPersonProperties({ distinctId, properties }: PostHogPerso
     runWhenPostHogReady(() => {
       safeIdentify(scopeAnalyticsDistinctId(distinctId, getClientAnalyticsEnvironment()), {
         ...getAnalyticsEpochProperties(),
-        ...properties,
+        ...currentPlanProperties,
+      ...normalizePlanAnalytics(properties ?? {}),
       });
     });
   }, [distinctId, properties]);
@@ -552,7 +571,8 @@ export function PostHogPageEvent({ event, properties }: Omit<PostHogEventProps, 
 
     runWhenPostHogReady(() => {
       safeCapture(event, {
-        ...properties,
+        ...currentPlanProperties,
+      ...normalizePlanAnalytics(properties ?? {}),
         ...getSafeAnalyticsLocation(pathname),
       });
     });

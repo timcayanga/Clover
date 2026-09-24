@@ -1,3 +1,5 @@
+import { planContext } from "../../shared/plan-analytics";
+import { capturePostHogServerEvent } from "./analytics-server";
 import { hasStagingProAccess } from "@/lib/user-limits";
 import { prisma } from "@/lib/prisma";
 import { calculateProAccess } from "@/lib/pro-access-rules";
@@ -11,13 +13,15 @@ export async function getProAccess(userId: string) {
       proGrants: { orderBy: { startsAt: "asc" } },
     },
   });
-  return {
-    ...calculateProAccess({
+  const access = calculateProAccess({
       ...user,
       stagingQaAccess: hasStagingProAccess(user),
       subscription: user.billingSubscription,
       grants: user.proGrants,
-    }),
+    });
+  return {
+    ...access,
+    analytics: planContext(access.planTier, access.source, user.storeAccess?.expiresAt && user.storeAccess.expiresAt > new Date() ? user.storeAccess.store : user.billingSubscription?.provider, access.hasPaidSubscription),
     user: {
       id: user.id,
       email: user.email,
@@ -31,6 +35,7 @@ export async function getProAccess(userId: string) {
       nextBillingTime: user.billingSubscription.nextBillingTime,
       cancelledAt: user.billingSubscription.cancelledAt,
     },
+    storeSubscription: user.storeAccess,
     grants: user.proGrants,
   };
 }
@@ -41,7 +46,7 @@ export async function refreshProAccess(userId: string) {
     select: {
       clerkUserId: true,
       email: true,
-      storeAccess: { select: { expiresAt: true, renewing: true } },
+      storeAccess: { select: { expiresAt: true, renewing: true, productId: true } },
       planTier: true,
       planTierLocked: true,
       billingSubscription: {
@@ -49,7 +54,7 @@ export async function refreshProAccess(userId: string) {
       },
       proGrants: {
         where: { revokedAt: null, endsAt: { gt: new Date() } },
-        select: { startsAt: true, endsAt: true, revokedAt: true },
+        select: { planTier: true, startsAt: true, endsAt: true, revokedAt: true },
       },
     },
   });
@@ -60,8 +65,8 @@ export async function refreshProAccess(userId: string) {
     grants: user.proGrants,
   });
   // Conditional write prevents an entitlement refresh overriding a concurrent Admin lock.
-  if (!user.planTierLocked && user.planTier !== access.planTier)
-    await prisma.user.updateMany({
+  if (!user.planTierLocked && user.planTier !== access.planTier) {
+    const changed = await prisma.user.updateMany({
       where: {
         id: userId,
         planTierLocked: false,
@@ -69,5 +74,7 @@ export async function refreshProAccess(userId: string) {
       },
       data: { planTier: access.planTier },
     });
+    if (changed.count) void capturePostHogServerEvent("plan_changed", user.clerkUserId, { previous_plan: user.planTier, plan_tier: access.planTier, access_source: access.source, is_paid_subscriber: access.hasPaidSubscription }).catch(() => {});
+  }
   return access.planTier;
 }

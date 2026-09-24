@@ -94,6 +94,20 @@ export function AdminAnalyticsWorkspace({ snapshot }: { snapshot: AdminAnalytics
         </div>
       </div>
 
+      <section className="table-panel">
+        <h2>Plans and access</h2>
+        <div className="admin-analytics-metric-grid">
+          <MetricCard label="Free" value={snapshot.plans.free} detail="Current access" />
+          <MetricCard label="Plus" value={snapshot.plans.plus} detail="Current access" />
+          <MetricCard label="Pro" value={snapshot.plans.pro} detail="Current access" />
+          <MetricCard label="Manual overrides" value={snapshot.plans.manualOverrides} detail="Access overrides do not change billing" />
+        </div>
+        <p className="panel-muted">Current account totals include complimentary access and are not paid-subscriber counts. Billing events distinguish provider, tier, and access source. Historical events retain their original schema; new events use Free, Plus, and Pro.</p>
+      </section>
+      <section className="table-panel">
+        <h2>Plan and billing events · Last 30 days</h2>
+        {snapshot.planBilling.status === "ready" ? snapshot.planBilling.rows.length ? <div style={{ overflowX: "auto" }}><table><thead><tr><th>Event</th><th>Plan</th><th>Provider</th><th>Platform</th><th>Events</th></tr></thead><tbody>{snapshot.planBilling.rows.map((row, i) => <tr key={i}><td>{row.event.replaceAll("_", " ")}</td><td>{row.plan}</td><td>{row.provider}</td><td>{row.platform}</td><td>{row.count.toLocaleString()}</td></tr>)}</tbody></table></div> : <p>No plan or billing events in this environment yet.</p> : <p>Plan event queries are {snapshot.planBilling.status === "not_configured" ? "not configured" : "temporarily unavailable"}. Account totals remain available.</p>}
+      </section>
       <div className="admin-analytics-metric-grid">
         <MetricCard label="Beta participants" value={snapshot.users.total} detail={`+${snapshot.users.new7d.toLocaleString()} accounts created in the last 7d`} />
         <MetricCard label="Active users" value={snapshot.users.active7d} detail={`${snapshot.users.active30d.toLocaleString()} active in the last 30d`} />

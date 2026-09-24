@@ -1,3 +1,4 @@
+import { prisma } from "./prisma";
 import { headers } from "next/headers";
 import { after } from "next/server";
 import { browserContext } from "../../shared/analytics";
@@ -19,6 +20,12 @@ export async function capturePostHogServerEvent(event: AnalyticsEventName, disti
         context[field.replaceAll("-", "_")] = h.get(`x-clover-${field}`)?.slice(0, 80) ?? null;
     }
   } catch { /* Workers have no request; keep explicit server attribution. */ }
-  const send = () => capture(event, distinctId, { ...context, ...properties });
+  const send = async () => {
+    let identity = distinctId;
+    if (/^(plan_|billing_|trial_to_paid)/.test(event) && !distinctId.startsWith("user_")) {
+      try { identity = (await prisma.user.findUnique({ where: { id: distinctId }, select: { clerkUserId: true } }))?.clerkUserId ?? distinctId; } catch { /* Delivery must not affect billing. */ }
+    }
+    await capture(event, identity, { ...context, ...properties });
+  };
   try { after(send); } catch { await send(); }
 }

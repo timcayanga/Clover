@@ -1,3 +1,4 @@
+import { capturePostHogServerEvent } from "./analytics-server";
 import { clerkClient } from "@clerk/nextjs/server";
 import { BillingSubscriptionStatus, Prisma, type FinancialExperienceLevel, type PlanTier, type User } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
@@ -11,7 +12,7 @@ import {
   getAdminTransactionVolumeSnapshot,
   type AdminTrackedVolumeCurrency,
 } from "@/lib/admin-transaction-volume";
-import { cancelPayPalSubscription, reconcileBillingPlanTier } from "@/lib/paypal-billing";
+import { reconcileBillingPlanTier } from "@/lib/paypal-billing";
 import { getEffectiveUserLimits, getPlanDisplayLabel } from "@/lib/user-limits";
 
 export type AdminUserListFilters = {
@@ -81,6 +82,8 @@ export type AdminUserListResponse = {
 
 export type AdminUserOverview = {
   totalUsers: number;
+  freeUsers: number;
+  plusUsers: number;
   proUsers: number;
   verifiedUsers: number;
   lockedUsers: number;
@@ -739,14 +742,15 @@ async function fetchAdminOverview(): Promise<AdminUserOverview> {
   const planCounts = {
     free: 0,
     pro: 0,
+    premium: 0,
   };
   let verifiedUsers = 0;
   let lockedUsers = 0;
   for (const row of userCounts) {
     if (row.planTier === "free") {
       planCounts.free += row._count._all;
-    } else if ((row.planTier === "pro" || row.planTier === "premium")) {
-      planCounts.pro += row._count._all;
+    } else {
+      planCounts[row.planTier] += row._count._all;
     }
 
     if (row.verified) {
@@ -764,8 +768,10 @@ async function fetchAdminOverview(): Promise<AdminUserOverview> {
   const totalInvestmentValue = investmentValueRows[0]?.total ?? "0";
 
   return {
-    totalUsers: planCounts.free + planCounts.pro,
-    proUsers: planCounts.pro,
+    totalUsers: planCounts.free + planCounts.pro + planCounts.premium,
+    freeUsers: planCounts.free,
+    plusUsers: planCounts.pro,
+    proUsers: planCounts.premium,
     verifiedUsers,
     lockedUsers,
     totalWorkspaces: workspaceCount,
@@ -943,20 +949,6 @@ export async function updateAdminUser(userId: string, input: AdminUserUpdateInpu
   }
 
   const planTierChanged = input.planTier !== undefined && input.planTier !== currentUser.planTier;
-  const shouldCancelPaidSubscription =
-    planTierChanged &&
-    input.planTier === "free" &&
-    Boolean(currentUser.billingSubscription?.providerSubscriptionId) &&
-    currentUser.billingSubscription?.status !== "cancelled" &&
-    currentUser.billingSubscription?.status !== "expired";
-
-  if (shouldCancelPaidSubscription) {
-    await cancelPayPalSubscription({
-      subscriptionId: currentUser.billingSubscription!.providerSubscriptionId!,
-      reason: "Clover Admin changed this account to the Free plan.",
-    });
-  }
-
   if (nextFirstName !== undefined || nextLastName !== undefined) {
     const client = await clerkClient();
     await client.users.updateUser(currentUser.clerkUserId, {
@@ -1004,35 +996,13 @@ export async function updateAdminUser(userId: string, input: AdminUserUpdateInpu
       },
     });
 
-    if (
-      currentUser.billingSubscription &&
-      input.planTier &&
-      updated.billingSubscription &&
-      updated.billingSubscription.planTier !== input.planTier
-    ) {
-      await tx.billingSubscription.update({
-        where: { id: currentUser.billingSubscription.id },
-        data: shouldCancelPaidSubscription
-          ? {
-              status: "cancelled",
-              planTier: "free",
-              pendingPlanId: null,
-              pendingInterval: null,
-              cancelledAt: new Date(),
-              lastEventType: "ADMIN.CANCEL",
-              lastSyncedAt: new Date(),
-            }
-          : { planTier: input.planTier },
-      });
-      updated.billingSubscription.planTier = shouldCancelPaidSubscription ? "free" : input.planTier;
-      if (shouldCancelPaidSubscription) {
-        updated.billingSubscription.status = "cancelled";
-      }
-    }
-
+    // Access overrides never mutate provider subscriptions or cancel charges.
     return updated;
   });
 
+  if (planTierChanged || nextPlanTierLocked !== undefined) {
+    void capturePostHogServerEvent("plan_override_changed", currentUser.clerkUserId, { previous_plan: currentUser.planTier, plan_tier: updatedUser.planTier, billing_affected: false, override_locked: updatedUser.planTierLocked }).catch(() => {});
+  }
   if (nextPlanTierLocked === false) {
     await reconcileBillingPlanTier(updatedUser.id).catch(() => null);
     const reconciledUser = await prisma.user.findUnique({
@@ -1345,7 +1315,7 @@ export async function exportAdminUsers(filters: AdminUserListFilters = {}) {
     "firstName",
     "lastName",
     "fullName",
-    "planTier",
+    "planTierInternal",
     "planTierLocked",
     "planLabel",
     "verified",

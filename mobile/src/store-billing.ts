@@ -1,3 +1,4 @@
+import { matchesStorePackage, STORE_OFFERING_ID, STORE_PACKAGES } from "../../shared/store-catalog";
 import { trackOperation } from "../../shared/analytics";
 import { Platform } from "react-native";
 import Purchases, { type PurchasesPackage } from "react-native-purchases";
@@ -5,6 +6,7 @@ export type StoreStatus = {
   available: boolean;
   appUserId: string;
   entitlementId: string;
+  offeringId?: string;
   productIds: string[];
   planTier: "free" | "pro" | "premium";
   accessEndsAt: string | null;
@@ -51,9 +53,10 @@ export function loadStorePackages(status: StoreStatus) {
   return exclusive(async () => {
     await identify(status);
     const offerings = await Purchases.getOfferings();
-    return (offerings.current?.availablePackages ?? []).filter((p) =>
-      status.productIds.includes(p.product.identifier) && ["P1M", "P1Y"].includes(p.product.subscriptionPeriod ?? ""),
-    );
+    const offering = offerings.all[status.offeringId ?? STORE_OFFERING_ID];
+    return (offering?.availablePackages ?? []).filter((p) =>
+      status.productIds.includes(p.product.identifier) && matchesStorePackage(p, Platform.OS),
+    ).sort((a, b) => STORE_PACKAGES.findIndex((p) => p.identifier === a.identifier) - STORE_PACKAGES.findIndex((p) => p.identifier === b.identifier));
   });
 }
 export function purchaseStorePackage(
@@ -62,9 +65,9 @@ export function purchaseStorePackage(
 ) {
   return exclusive(async () => {
     await identify(status);
-    if (!status.productIds.includes(item.product.identifier))
+    if (!status.productIds.includes(item.product.identifier) || !matchesStorePackage(item, Platform.OS))
       throw new Error("This product is unavailable.");
-    await trackOperation("store_purchase", () => Purchases.purchasePackage(item), { phase: "store_confirmation" });
+    await trackOperation("store_purchase", () => Purchases.purchasePackage(item), { phase: "store_confirmation", target_plan: STORE_PACKAGES.find(p => p.identifier === item.identifier)?.tier, billing_provider: Platform.OS === "ios" ? "app_store" : "play_store", product_id: item.product.identifier });
     // Caller must now ask Clover's server to verify; SDK state cannot grant Pro.
   });
 }

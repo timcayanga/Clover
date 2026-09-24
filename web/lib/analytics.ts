@@ -1,3 +1,4 @@
+import { normalizePlanAnalytics } from "../../shared/plan-analytics";
 import { TELEMETRY_EVENTS, type TelemetryEvent } from "../../shared/analytics";
 import { getDeploymentEnvironment } from "@/lib/deployment-environment";
 
@@ -6,6 +7,7 @@ export type AnalyticsValue = string | number | boolean | null | undefined;
 export type AnalyticsProperties = Record<string, AnalyticsValue>;
 
 export type AnalyticsEventName = TelemetryEvent
+  | "plan_changed" | "plan_override_changed" | "plan_grant_changed" | "billing_renewed" | "billing_expired" | "billing_refunded" | "billing_restored"
   | "signup_started"
   | "signup_completed"
   | "identity_environment_conflict"
@@ -191,6 +193,7 @@ export const ANALYTICS_EVENT_NAMES: AnalyticsEventName[] = Array.from(new Set<An
   "circle_created", "circle_updated", "circle_deleted", "circle_invitation_created", "circle_invitation_accepted", "circle_member_updated",
   "circle_budget_created", "circle_goal_created", "circle_contribution_recorded", "circle_commitment_created", "circle_transaction_shared", "circle_investment_shared",
   "session_started", "session_returned", "acquisition_identified", "page_engagement", "ui_interaction", "feature_used", "settings_updated", "goal_target_saved", "goal_updated", "goal_target_reached",
+  "plan_changed", "plan_override_changed", "plan_grant_changed", "billing_renewed", "billing_expired", "billing_refunded", "billing_restored",
   "goal_progress_updated", "goal_reset", "plan_limit_reached", "billing_started", "billing_success", "billing_cancelled", "upgrade_cta_clicked",
   "trial_to_paid_conversion", "upgrade_prompt_viewed", "support_contacted", "admin_support_action", "error_shown",
 ]));
@@ -272,7 +275,8 @@ export const capturePostHogServerEvent = async (
       properties: {
         ...getAnalyticsEpochProperties(),
         analytics_environment: getAnalyticsEnvironment(),
-        ...properties,
+        ...normalizePlanAnalytics(properties),
+        ...(event === "plan_changed" ? { $set: normalizePlanAnalytics(properties) } : {}),
       },
       timestamp: new Date().toISOString(),
     }),

@@ -336,6 +336,8 @@ export async function applyPaddleEntitlement(
     create: subscriptionData,
   });
 
+  if (wasActive && status === BillingSubscriptionStatus.active && existing?.currentPeriodEnd && currentPeriodEnd && currentPeriodEnd > existing.currentPeriodEnd)
+    void capturePostHogServerEvent("billing_renewed", user.id, { billing_provider: "paddle", plan_tier: planTier }).catch(() => {});
   if (!user.planTierLocked) {
     await refreshProAccess(user.id);
   }

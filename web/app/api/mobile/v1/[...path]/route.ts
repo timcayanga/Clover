@@ -117,7 +117,7 @@ async function handle(
         await syncStoreAccess(user.id);
       }
       const access = await getProAccess(user.id);
-      return reply({ available: config.enabled && !(access.user.planTierLocked && access.planTier === "free"), appUserId: userId, entitlementId: config.entitlementId, productIds: config.products, planTier: access.planTier, accessEndsAt: access.accessEndsAt, renewing: access.renewing });
+      return reply({ available: config.enabled && !(access.user.planTierLocked && access.planTier === "free"), appUserId: userId, entitlementId: config.entitlementId, offeringId: config.offeringId, productIds: config.products, planTier: access.planTier, accessEndsAt: access.accessEndsAt, renewing: access.renewing });
     }
     if (operation === "settings-preferences") {
       const { getAppPreferences, updateAppPreferences } = await import("@/lib/app-preferences");
@@ -172,6 +172,7 @@ async function handle(
         profiles,
         entitlement: {
           planTier: access.planTier,
+          analytics: access.analytics,
           fullFeatureAccess: hasFullFeatureAccess(access.planTier),
           accessEndsAt: access.accessEndsAt,
           renewing: access.renewing,

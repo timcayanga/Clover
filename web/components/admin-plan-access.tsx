@@ -1,9 +1,11 @@
 "use client";
 import { useCallback, useEffect, useState } from "react";
 import { addCalendarMonths } from "@/lib/pro-access-rules";
+import { planName, type CloverPlanTier } from "../../shared/plan-catalog";
 import styles from "./growth.module.css";
 
 type Grant = {
+  planTier: CloverPlanTier;
   id: string;
   startsAt: string;
   endsAt: string;
@@ -12,18 +14,23 @@ type Grant = {
   reason: string;
 };
 type Access = {
-  planTier: string;
+  planTier: CloverPlanTier;
   source: string;
   renewing: boolean;
   paidThrough: string | null;
   accessEndsAt: string | null;
   user: { email: string; planTierLocked: boolean };
   subscription: {
+    provider: string;
     status: string;
     nextBillingTime: string | null;
     currentPeriodEnd: string | null;
     cancelledAt: string | null;
   } | null;
+  storeSubscription: { store: string | null; productId: string | null; expiresAt: string | null; renewing: boolean; sandbox: boolean } | null;
+  allowances: { accounts: number | null; profiles: number; budgets: number; goals: number; circles: number; linkedBanks: number; monthlyTokens: number; dailyTokens: number };
+  accountLimitOverride: number | null;
+  tokens: { monthly: { used: number; limit: number | null }; rolling24h: { used: number; limit: number | null } };
   grants: Grant[];
   history: {
     id: string;
@@ -41,6 +48,7 @@ export function AdminPlanAccess({ userId }: { userId: string }) {
   const [data, setData] = useState<Access | null>(null),
     [message, setMessage] = useState(""),
     [busy, setBusy] = useState(false);
+  const [grantTier, setGrantTier] = useState<"pro" | "premium">("pro");
   const [grantId, setGrantId] = useState(""),
     [startsAt, setStart] = useState(() => localInput(new Date())),
     [endsAt, setEnd] = useState(() =>
@@ -84,6 +92,7 @@ export function AdminPlanAccess({ userId }: { userId: string }) {
           body: JSON.stringify({
             action,
             grantId: grantId || undefined,
+            planTier: grantTier,
             startsAt: new Date(startsAt).toISOString(),
             endsAt: new Date(endsAt).toISOString(),
             reason,
@@ -121,15 +130,17 @@ export function AdminPlanAccess({ userId }: { userId: string }) {
             <dl>
               <dt>Current access</dt>
               <dd>
-                {data.planTier.toUpperCase()} · {data.source}
+                {planName(data.planTier)} · {data.source}
               </dd>
               <dt>Subscription</dt>
               <dd>{data.subscription?.status ?? "No paid subscription"}</dd>
+              <dt>Native subscription</dt>
+              <dd>{data.storeSubscription ? `${data.storeSubscription.store ?? "Store"} · ${data.storeSubscription.productId ?? "No active product"} · ${data.storeSubscription.sandbox ? "Sandbox" : "Production"} · Paid through ${dateText(data.storeSubscription.expiresAt)}` : "No native subscription"}</dd>
               <dt>Verified paid through</dt>
               <dd>{dateText(data.paidThrough)}</dd>
-              <dt>{data.renewing ? "Next renewal" : "Plus access ends"}</dt>
+              <dt>{data.accessEndsAt ? "Current tier access ends" : data.renewing ? "Next renewal" : "Current tier access ends"}</dt>
               <dd>
-                {data.renewing
+                {data.accessEndsAt ? dateText(data.accessEndsAt) : data.renewing
                   ? dateText(
                       data.subscription?.nextBillingTime ??
                         data.subscription?.currentPeriodEnd ??
@@ -141,6 +152,8 @@ export function AdminPlanAccess({ userId }: { userId: string }) {
               </dd>
               <dt>Cancellation recorded</dt>
               <dd>{dateText(data.subscription?.cancelledAt ?? null)}</dd>
+              <dt>Web billing provider</dt>
+              <dd>{data.subscription ? `${data.subscription.provider} · ${data.subscription.status}` : "None"}</dd>
             </dl>
             <p className={styles.note}>
               Billing dates are read-only. Complimentary grants never postpone
@@ -149,10 +162,17 @@ export function AdminPlanAccess({ userId }: { userId: string }) {
             </p>
           </section>
           <section className={styles.card}>
+            <h2>Effective allowances</h2>
+            <p>{data.allowances.accounts ?? "Unlimited"} accounts · {data.allowances.profiles} Profiles · {data.allowances.linkedBanks} linked banks · {data.allowances.budgets} budgets · {data.allowances.goals} goals · {data.allowances.circles} Circles</p>
+            <p>Monthly AI tokens: {data.tokens.monthly.used.toLocaleString()} / {data.tokens.monthly.limit?.toLocaleString() ?? "Unlimited"}</p>
+            <p>Rolling 24-hour AI tokens: {data.tokens.rolling24h.used.toLocaleString()} / {data.tokens.rolling24h.limit?.toLocaleString() ?? "Unlimited"}</p>
+            <p>Account limit override: {data.accountLimitOverride === null ? "None — follows plan" : data.accountLimitOverride}. Existing financial records are preserved when limits decrease.</p>
+          </section>
+          <section className={styles.card}>
             <h2>
               {grantId
                 ? "Edit complimentary access"
-                : "Grant complimentary Plus"}
+                : "Grant complimentary access"}
             </h2>
             <form
               className={styles.stack}
@@ -161,6 +181,7 @@ export function AdminPlanAccess({ userId }: { userId: string }) {
                 void save(grantId ? "edit" : "grant");
               }}
             >
+              <label>Plan<select value={grantTier} onChange={e => setGrantTier(e.target.value as "pro" | "premium")}><option value="pro">Plus</option><option value="premium">Pro</option></select></label>
               <div className={styles.grid}>
                 <label>
                   Starts at
@@ -208,7 +229,7 @@ export function AdminPlanAccess({ userId }: { userId: string }) {
                 />
               </label>
               <p>
-                Preview: complimentary Plus from {dateText(startsAt)} until{" "}
+                Preview: complimentary {planName(grantTier)} from {dateText(startsAt)} until{" "}
                 {dateText(endsAt)}. Billing stays unchanged.
               </p>
               {data.user.planTierLocked && (
@@ -255,7 +276,7 @@ export function AdminPlanAccess({ userId }: { userId: string }) {
                 data.grants.map((g) => (
                   <article key={g.id}>
                     <strong>
-                      {g.source} ·{" "}
+                      {planName(g.planTier)} · {g.source} ·{" "}
                       {g.revokedAt
                         ? "Revoked"
                         : new Date(g.endsAt) <= new Date()
@@ -273,6 +294,7 @@ export function AdminPlanAccess({ userId }: { userId: string }) {
                         disabled={busy}
                         onClick={() => {
                           setGrantId(g.id);
+                          setGrantTier(g.planTier === "premium" ? "premium" : "pro");
                           setStart(localInput(new Date(g.startsAt)));
                           setEnd(localInput(new Date(g.endsAt)));
                           setReason("");

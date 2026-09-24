@@ -1,3 +1,4 @@
+import { telemetry } from "../../shared/analytics";
 import { PLAN_CATALOG } from "../../shared/plan-catalog";
 import { Text } from "./app-text";
 import { useEffect, useRef, useState } from "react";
@@ -43,7 +44,7 @@ export function SettingsPlan() {
           const verified = await session.request<StoreStatus>("billing/store", { method: "POST", body: "{}" });
           if (!active) return;
           setStatus(verified);
-          const choices = await loadStorePackages(result);
+          const choices = await loadStorePackages(verified);
           if (active) setPackages(choices);
         } else setStatus(result);
       })
@@ -54,7 +55,7 @@ export function SettingsPlan() {
       active = false;
     };
   }, [session.demo, session.request]);
-  const act = async (run?: () => Promise<void>) => {
+  const act = async (run?: () => Promise<void>, restoring = false) => {
     if (locked.current || session.demo) return;
     locked.current = true;
     setBusy(true);
@@ -71,10 +72,11 @@ export function SettingsPlan() {
       setStatus(next);
       if ((next.planTier === "pro" || next.planTier === "premium")) setVerificationPending(false);
       session.refresh();
+      if (restoring) telemetry("billing_restored", { plan_tier: next.planTier, verified_access: next.planTier !== "free" });
       setMessage(
         (next.planTier === "pro" || next.planTier === "premium")
-          ? "Clover Plus access verified."
-          : "No active Clover Plus purchase was found for this account.",
+          ? `Clover ${PLAN_CATALOG[next.planTier].name} access verified.`
+          : "No active Clover Plus or Pro purchase was found for this account.",
       );
     } catch (e) {
       if (mounted.current && e && typeof e === "object" && "userCancelled" in e && e.userCancelled) setVerificationPending(false);
@@ -135,7 +137,7 @@ export function SettingsPlan() {
               secondary
               disabled={loading || busy}
               title={busy ? "Checking…" : "Restore purchases"}
-              onPress={() => void act(() => restoreStorePurchases(status))}
+              onPress={() => void act(() => restoreStorePurchases(status), true)}
             />
           </>
         ) : (

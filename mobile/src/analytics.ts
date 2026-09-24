@@ -1,3 +1,4 @@
+import { normalizePlanAnalytics } from "../../shared/plan-analytics";
 import PostHog from "posthog-react-native";
 import * as Application from "expo-application";
 import * as Device from "expo-device";
@@ -10,6 +11,11 @@ let desiredUser: string | null = null;
 let identifiedUser: string | null = null;
 let environment = "local";
 let epoch: TelemetryProperties = {};
+let planProperties: TelemetryProperties = {};
+export function updateNativePlanAnalytics(properties: TelemetryProperties) {
+  planProperties = properties;
+  if (client && identifiedUser) client.identify(`${environment}:${identifiedUser}`, compact(properties));
+}
 let initializing: Promise<boolean> | undefined;
 export function deviceContext(): TelemetryProperties {
   return {
@@ -31,12 +37,13 @@ setTelemetryHeaderProvider(analyticsHeaders);
 function compact(properties: TelemetryProperties) { return Object.fromEntries(Object.entries(properties).filter((entry): entry is [string, string | number | boolean | null] => entry[1] !== undefined)); }
 export function identifyNativeAnalytics(userId: string | null) {
   if (desiredUser && desiredUser !== userId && !client) clearPendingTelemetry();
+  if (desiredUser !== userId) planProperties = {};
   desiredUser = userId;
   if (!client || identifiedUser === userId) return;
   try {
     // Queued events keep the identity captured at creation; reset prevents cross-account attribution.
     if (identifiedUser) client.reset();
-    if (userId) client.identify(`${environment}:${userId}`);
+    if (userId) client.identify(`${environment}:${userId}`, compact(planProperties));
     identifiedUser = userId;
   } catch { /* Non-blocking. */ }
 }
@@ -77,7 +84,7 @@ export async function initializeNativeAnalytics() {
       identifiedUser = null;
       client.register({ ...epoch, ...deviceContext(), analytics_environment: environment, event_source: "native", analytics_schema_version: 2 });
       identifyNativeAnalytics(desiredUser);
-      setTelemetrySink((event, properties) => client?.capture(event, compact({ ...epoch, ...deviceContext(), analytics_environment: environment, event_source: "native", analytics_schema_version: 2, ...properties })));
+      setTelemetrySink((event, properties) => client?.capture(event, compact({ ...epoch, ...deviceContext(), analytics_environment: environment, event_source: "native", analytics_schema_version: 2, ...planProperties, ...normalizePlanAnalytics(properties) })));
       client.capture("session_started", compact(deviceContext()));
       return true;
     } catch { return false; }

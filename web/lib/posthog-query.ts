@@ -647,3 +647,25 @@ export async function getPostHogLiveAnalytics(
     clearTimeout(timeout);
   }
 }
+
+export type PlanBillingAnalytics = {
+  status: "ready" | "not_configured" | "unavailable";
+  rows: { event: string; plan: string; provider: string; platform: string; count: number }[];
+};
+export async function getPlanBillingAnalytics(): Promise<PlanBillingAnalytics> {
+  const config = getQueryConfig();
+  if (!config) return { status: "not_configured", rows: [] };
+  const environment = getAnalyticsEnvironment();
+  const query = `SELECT event,
+    multiIf(properties.plan_schema_version = 3, coalesce(properties.target_plan, properties.plan_tier, 'unknown'),
+      properties.plan_tier = 'premium', 'pro', properties.plan_tier = 'pro', 'plus', properties.plan_tier = 'free', 'free', 'unknown') AS plan,
+    coalesce(properties.billing_provider, 'unknown') AS provider,
+    coalesce(properties.platform, 'unknown') AS platform, count() AS count
+    FROM events WHERE timestamp >= now() - INTERVAL 30 DAY
+      AND properties.analytics_environment = '${escapeHogQl(environment)}'
+      AND event IN ('billing_started','billing_success','billing_renewed','billing_cancelled','billing_expired','billing_refunded','billing_restored','plan_changed','plan_grant_changed','plan_override_changed')
+    GROUP BY event, plan, provider, platform ORDER BY count DESC LIMIT 100`;
+  const response = await queryPostHog(config, query, `clover_plan_billing_${environment}`, environment);
+  if (!response.ok) return { status: "unavailable", rows: [] };
+  return { status: "ready", rows: rowsAsRecords(response.payload).map(row => ({ event: String(row.event), plan: String(row.plan), provider: String(row.provider), platform: String(row.platform), count: toFiniteNumber(row.count) })) };
+}

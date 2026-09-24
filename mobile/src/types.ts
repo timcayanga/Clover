@@ -45,6 +45,7 @@ export type Bootstrap = {
   firstName: string | null;
   profiles: Profile[];
   entitlement: {
+    analytics?: Record<string, string | number | boolean | null>;
     planTier: "free" | "pro" | "premium";
     fullFeatureAccess?: boolean;
     accessEndsAt: string | null;

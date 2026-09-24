@@ -1,3 +1,4 @@
+import { storeProductTier } from "../../shared/store-catalog";
 export function addCalendarMonths(date: Date, months: number) {
   const result = new Date(date);
   const day = result.getUTCDate();
@@ -20,8 +21,8 @@ export type AccessInput = {
     interval: string | null;
     paidThrough: Date | null;
   } | null;
-  storeAccess?: { planTier?: "pro" | "premium"; expiresAt: Date | null; renewing: boolean } | null;
-  grants: { startsAt: Date; endsAt: Date; revokedAt: Date | null }[];
+  storeAccess?: { productId?: string | null; planTier?: "pro" | "premium"; expiresAt: Date | null; renewing: boolean } | null;
+  grants: { planTier?: "free" | "pro" | "premium"; startsAt: Date; endsAt: Date; revokedAt: Date | null }[];
 };
 
 export function calculateProAccess(input: AccessInput, now = new Date()) {
@@ -35,27 +36,27 @@ export function calculateProAccess(input: AccessInput, now = new Date()) {
   const renewing = (storePaid && input.storeAccess!.renewing) || subscriptionRenewing;
   const paid = storePaid || subscriptionPaid;
   const premiumPaid = (subscriptionPaid && input.subscription?.planTier === "premium") ||
-    (storePaid && input.storeAccess?.planTier === "premium");
+    (storePaid && (input.storeAccess?.planTier ?? storeProductTier(input.storeAccess?.productId)) === "premium");
   const planTier: AccessInput["planTier"] = input.stagingQaAccess ? "pro"
     : input.planTierLocked ? input.planTier
-    : premiumPaid ? "premium"
+    : premiumPaid || activeGrants.some(g => g.planTier === "premium") ? "premium"
     : paid || activeGrants.length > 0 ? "pro" : "free";
-  let end: Date | null =
-    paidThrough && paidThrough > now
-      ? paidThrough
-      : (activeGrants[0]?.endsAt ?? null);
-  if (storePaid && (!end || input.storeAccess!.expiresAt! > end)) end = input.storeAccess!.expiresAt;
-  // Include only contiguous grants; a future, disconnected grant isn't current access.
-  for (const grant of [...input.grants]
-    .filter((g) => !g.revokedAt)
-    .sort((a, b) => +a.startsAt - +b.startsAt)) {
-    if (end && grant.startsAt <= end && grant.endsAt > end) end = grant.endsAt;
+  const tier = planTier;
+  const matchingGrants = input.grants.filter(g => !g.revokedAt && (g.planTier ?? "pro") === tier);
+  const webMatches = subscriptionPaid && (input.subscription?.planTier ?? "pro") === tier;
+  const storeMatches = storePaid && (input.storeAccess?.planTier ?? storeProductTier(input.storeAccess?.productId) ?? "pro") === tier;
+  const tierRenewing = (webMatches && subscriptionRenewing) || (storeMatches && input.storeAccess!.renewing);
+  let end: Date | null = webMatches && paidThrough && paidThrough > now ? paidThrough : null;
+  if (storeMatches && (!end || input.storeAccess!.expiresAt! > end)) end = input.storeAccess!.expiresAt;
+  for (const grant of [...matchingGrants].sort((a,b) => +a.startsAt - +b.startsAt)) {
+    if (grant.endsAt > now && grant.startsAt <= (end ?? now) && (!end || grant.endsAt > end)) end = grant.endsAt;
   }
   return {
     planTier,
+    hasPaidSubscription: paid,
     renewing,
     paidThrough,
-    accessEndsAt: input.stagingQaAccess || input.planTierLocked || renewing ? null : end,
+    accessEndsAt: input.stagingQaAccess || input.planTierLocked || tierRenewing ? null : end,
     source: input.stagingQaAccess
       ? "staging QA override"
       : input.planTierLocked

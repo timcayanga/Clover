@@ -133,6 +133,8 @@ export function PaddleCheckoutButton({
       billing_action: "create_subscription",
       billing_provider: "paddle",
       plan_interval: interval,
+      target_plan: planTier,
+      plan_tier: planTier,
     });
     setMessage(null);
 

@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { getPostHogGrowthAnalytics, getPostHogLiveAnalytics } from "@/lib/posthog-query";
+import { getPlanBillingAnalytics, getPostHogGrowthAnalytics, getPostHogLiveAnalytics } from "@/lib/posthog-query";
 
 const originalFetch = global.fetch;
 const originalPersonalApiKey = process.env.POSTHOG_PERSONAL_API_KEY;
@@ -38,6 +38,7 @@ const main = async () => {
     assert.equal(notConfigured.errorCode, "missing_credentials");
     const growthNotConfigured = await getPostHogGrowthAnalytics();
     assert.equal(growthNotConfigured.status, "not_configured");
+    assert.equal((await getPlanBillingAnalytics()).status, "not_configured");
 
     process.env.POSTHOG_PERSONAL_API_KEY = "test-personal-key";
     process.env.POSTHOG_PROJECT_ID = "388373";
@@ -161,7 +162,15 @@ const main = async () => {
     assert.equal(partialGrowth.pages[0]?.route, "/");
     assert.equal(partialGrowth.heatmaps[0]?.totalClicks, 2);
 
+    global.fetch = async (_input, init) => {
+      const body = JSON.parse(String(init?.body));
+      assert.match(body.query.query, /analytics_environment = 'staging'/);
+      assert.match(body.query.query, /plan_schema_version = 3/);
+      return Response.json({ columns: ["event", "plan", "provider", "platform", "count"], results: [["billing_renewed", "plus", "paddle", "server", "2"]] });
+    };
+    assert.deepEqual(await getPlanBillingAnalytics(), { status: "ready", rows: [{ event: "billing_renewed", plan: "plus", provider: "paddle", platform: "server", count: 2 }] });
     global.fetch = async () => new Response(null, { status: 401 });
+    assert.equal((await getPlanBillingAnalytics()).status, "unavailable");
     const unauthorized = await getPostHogLiveAnalytics();
     assert.equal(unauthorized.status, "unavailable");
     assert.equal(unauthorized.errorCode, "unauthorized");

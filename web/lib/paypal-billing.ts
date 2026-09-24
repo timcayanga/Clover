@@ -478,6 +478,10 @@ async function applyBillingSubscriptionSnapshot(
         data,
       });
 
+  if (snapshot.status === BillingSubscriptionStatus.expired && existing?.status !== BillingSubscriptionStatus.expired)
+    void capturePostHogServerEvent("billing_expired", user.id, { billing_provider: "paypal", plan_tier: existing?.planTier ?? planTier }).catch(() => {});
+  if (wasActive && snapshot.status === BillingSubscriptionStatus.active && existing?.currentPeriodEnd && snapshot.currentPeriodEnd && snapshot.currentPeriodEnd > existing.currentPeriodEnd)
+    void capturePostHogServerEvent("billing_renewed", user.id, { billing_provider: "paypal", plan_tier: planTier }).catch(() => {});
   if (!user.planTierLocked) {
     await refreshProAccess(user.id);
   }

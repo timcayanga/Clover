@@ -14,7 +14,7 @@ import {
   getPostHogConfig,
   type AnalyticsEventName,
 } from "@/lib/analytics";
-import { getPostHogGrowthAnalytics, getPostHogLiveAnalytics, type PostHogGrowthAnalytics, type PostHogLiveAnalytics } from "@/lib/posthog-query";
+import { getPlanBillingAnalytics, type PlanBillingAnalytics, getPostHogGrowthAnalytics, getPostHogLiveAnalytics, type PostHogGrowthAnalytics, type PostHogLiveAnalytics } from "@/lib/posthog-query";
 import { getAdminImportActivityCutoff } from "@/lib/admin-import-activity";
 
 export type AdminAnalyticsEvent = {
@@ -44,6 +44,8 @@ export const ADMIN_ANALYTICS_EVENTS: AdminAnalyticsEvent[] = ANALYTICS_EVENT_NAM
 }));
 
 export type AdminAnalyticsSnapshot = {
+  planBilling: PlanBillingAnalytics;
+  plans: { free: number; plus: number; pro: number; manualOverrides: number };
   generatedAt: string;
   beta: {
     epoch: string;
@@ -101,6 +103,7 @@ const activeImport = { status: { not: "deleted" } } as const;
 const activeTransaction = { deletedAt: null } as const;
 
 export async function getAdminAnalyticsSnapshot(): Promise<AdminAnalyticsSnapshot> {
+  const planBillingPromise = getPlanBillingAnalytics();
   const now = Date.now();
   const betaStartedAt = getAnalyticsBetaStartedAt();
   const behaviorStartedAt = getBehaviorAnalyticsStartedAt();
@@ -352,7 +355,15 @@ export async function getAdminAnalyticsSnapshot(): Promise<AdminAnalyticsSnapsho
     .sort((a, b) => b.count - a.count || b.lastSeen.localeCompare(a.lastSeen))
     .slice(0, 5);
 
+  const planRows = await prisma.user.groupBy({ by: ["planTier", "planTierLocked"], where: productionUser, _count: { _all: true } });
+  const plans = { free: 0, plus: 0, pro: 0, manualOverrides: 0 };
+  for (const row of planRows) {
+    plans[row.planTier === "premium" ? "pro" : row.planTier === "pro" ? "plus" : "free"] += row._count._all;
+    if (row.planTierLocked) plans.manualOverrides += row._count._all;
+  }
   return {
+    plans,
+    planBilling: await planBillingPromise,
     generatedAt: new Date().toISOString(),
     beta: {
       epoch: ANALYTICS_BETA_EPOCH,
