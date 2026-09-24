@@ -103,7 +103,7 @@ export function OnboardingForm({
   );
   const [step, setStep] = useState<OnboardingStep>(upgradeForPro ? "upgrade" : "experience");
   const [message, setMessage] = useState(
-    upgradeForPro ? "Choose Pro now or continue with Clover Free. You can upgrade later." : null,
+    upgradeForPro ? "Choose Plus now or continue with Clover Free. You can upgrade later." : null,
   );
   const [isPending, startTransition] = useTransition();
   const [isCompleting, setIsCompleting] = useState(false);
@@ -388,13 +388,13 @@ export function OnboardingForm({
 
   const upgradeStep = (
     <>
-      <p className="eyebrow">Clover Pro</p>
+      <p className="eyebrow">Clover Plus</p>
       <h3>Get more room when you need it.</h3>
       <p className="onboarding-card__copy">
         Choose monthly or annual billing now, or continue with Free and upgrade later. Your choice will not stop you from finishing setup.
       </p>
 
-      <div className="onboarding-upgrade__interval" role="group" aria-label="Pro billing frequency">
+      <div className="onboarding-upgrade__interval" role="group" aria-label="Plus billing frequency">
         {(["monthly", "annual"] as const).map((option) => (
           <button
             key={option}
@@ -418,7 +418,7 @@ export function OnboardingForm({
             fundingSource="card"
             className="onboarding-upgrade__paypal"
             onApproved={() => {
-              setMessage("Pro is being confirmed. Continue setting up Clover while we finish that step.");
+              setMessage("Plus is being confirmed. Continue setting up Clover while we finish that step.");
               setStep("experience");
             }}
           />

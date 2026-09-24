@@ -152,12 +152,12 @@ export default function OfflineScreen() {
         <Body>{capability?.detail}</Body>
         <Body>
           {allowance?.grant
-            ? `${Math.max(0, allowance.grant.issued - allowance.grant.used)} local requests reserved on this device. Expires ${new Date(allowance.grant.expiresAt).toLocaleDateString()}.`
+            ? `${Math.max(0, allowance.grant.issued - allowance.grant.used)} AI tokens reserved on this device. Expires ${new Date(allowance.grant.expiresAt).toLocaleDateString()}.`
             : "Connect to reserve your device allowance."}
         </Body>
         <Body>
-          Free: 50 local requests per month. Pro: 500. Cloud tokens stay
-          separate. Local calculations, dictation and OCR do not use these
+          On-device AI draws from the same monthly and rolling 24-hour AI token allowance as cloud AI. Tokens are reserved while online; unused reservations remain charged for their window. Cloud token limits are
+          shared. Local calculations, dictation and OCR do not use these
           requests.
         </Body>
         {capability?.model === "downloadable" ? (

@@ -141,7 +141,7 @@ export async function POST(request: Request) {
       const profileCount = await prisma.workspace.count({ where: { userId: user.id } });
       if (profileCount >= profileLimit) {
         return NextResponse.json(
-          { error: `${user.planTier === "free" ? "Free" : "Pro"} includes up to ${profileLimit} Profiles, including Personal.` },
+          { error: `${user.planTier === "free" ? "Free" : "Plus / Pro"} includes up to ${profileLimit} Profiles, including Personal.` },
           { status: 400 }
         );
       }

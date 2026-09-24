@@ -38,11 +38,11 @@ export const BILLING_COPY = {
   free: {
     label: "Free",
     headline: "Start free and upgrade when you need more room.",
-    detail: "Free includes 3 Profiles, 5 non-cash accounts, and 100,000 Clover tokens each month for Adviser and AI-assisted parsing.",
+    detail: "Free includes 3 Profiles, 10 non-cash accounts, and 100,000 Clover tokens each month for Adviser and AI-assisted parsing.",
   },
   pro: {
-    label: "Pro",
-    headline: "Your Pro access is active.",
+    label: "Plus",
+    headline: "Your Plus access is active.",
     detail: "PayPal manages the subscription, and Clover updates access automatically when billing events arrive.",
   },
 } as const;

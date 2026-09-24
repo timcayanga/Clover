@@ -89,7 +89,7 @@ const adviserSurfaceGuidance: Record<AdviserPlanningSurface, string> = {
 };
 
 type AdviserUsage = {
-  plan: "free" | "pro";
+  plan: "free" | "pro" | "premium";
   used: number;
   limit: number;
   remaining: number;

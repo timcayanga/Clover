@@ -1,3 +1,4 @@
+import { assertPlanQuota, PlanQuotaError } from "@/lib/plan-quota";
 import { Prisma } from "@prisma/client";
 import { NextResponse } from "next/server";
 import { z } from "zod";
@@ -161,7 +162,8 @@ export async function POST(request: Request) {
         ? stringValue(payload.cadence) as "daily" | "weekly" | "biweekly" | "monthly" | "quarterly" | "annual"
         : "monthly";
       const kind = stringValue(payload.kind, "spend_limit") === "savings_target" ? "savings_target" : "spend_limit";
-      const budget = await prisma.budget.create({
+      const budget = await prisma.$transaction(async tx => { if (true) await assertPlanQuota(tx, (await tx.workspace.findUniqueOrThrow({where:{id:workspace.id}})).userId, "budgets");
+return tx.budget.create({
         data: {
           workspaceId: workspace.id,
           name: stringValue(payload.name, "Adviser budget"),
@@ -176,6 +178,7 @@ export async function POST(request: Request) {
         },
         select: { id: true, name: true, targetAmount: true, currency: true },
       });
+    });
       result = { budget: { ...budget, targetAmount: budget.targetAmount.toString() } };
     } else if (action.type === "create_transaction") {
       const accountId = stringValue(payload.accountId);
@@ -308,6 +311,7 @@ export async function POST(request: Request) {
     invalidateWorkspaceSummaryCache(workspace.id);
     return NextResponse.json({ ok: true, result });
   } catch (error) {
+    if (error instanceof PlanQuotaError) return NextResponse.json({error:error.message},{status:403});
     return NextResponse.json({ error: error instanceof Error ? error.message : "Unable to complete the Adviser action." }, { status: 400 });
   }
 }

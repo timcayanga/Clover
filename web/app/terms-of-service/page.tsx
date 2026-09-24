@@ -18,7 +18,7 @@ const sections = [
   ["automation", "Imports, Adviser, and AI"],
   ["sharing", "Circles and shared expenses"],
   ["acceptable-use", "Acceptable use"],
-  ["plans", "Free and Pro plans"],
+  ["plans", "Free, Plus and Plus plans"],
   ["billing", "Billing and cancellation"],
   ["third-parties", "Third-party services"],
   ["availability", "Changes and availability"],
@@ -317,9 +317,9 @@ export default function TermsOfServicePage() {
             </section>
 
             <section className={styles.legalSection} id="plans">
-              <h2>8. Free and Pro plans</h2>
+              <h2>8. Free, Plus and Plus plans</h2>
               <p>
-                Clover may offer Free and Pro plans with different features,
+                Clover may offer Free, Plus and Plus plans with different features,
                 capacity, and limits. The current plan descriptions and prices
                 appear on the <Link href="/pricing">Pricing page</Link> and at
                 checkout. Features and limits may change as the service
@@ -385,7 +385,7 @@ export default function TermsOfServicePage() {
                   Paddle Refund Policy
                 </a>
                 . If a payment fails, is reversed, or is disputed, Clover may
-                limit Pro access while the billing status is resolved.
+                limit Plus access while the billing status is resolved.
               </p>
             </section>
 

@@ -1,4 +1,4 @@
-import type { PlanTier } from "@prisma/client";
+import type { PlanTier, Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { hasUnlimitedPlanLimits } from "@/lib/user-limits";
 
@@ -8,6 +8,7 @@ const BASE_INPUT_PRICE_PER_MILLION_USD = 0.75;
 const WARNING_PERCENT = 80;
 
 export const CLOVER_TOKEN_LIMITS: Record<PlanTier, { monthly: number; rolling24h: number }> = {
+  premium: { monthly: 4_000_000, rolling24h: 1_000_000 },
   free: { monthly: 100_000, rolling24h: 30_000 },
   pro: { monthly: 1_000_000, rolling24h: 250_000 },
 };
@@ -147,11 +148,12 @@ const buildWindow = (used: number, limit: number | null, startsAt: Date, resetsA
 export const getCloverTokenUsage = async (
   user: CloverTokenUsageUser,
   now = new Date(),
+  db: Prisma.TransactionClient = prisma,
 ): Promise<CloverTokenUsageSnapshot> => {
   const month = getManilaMonthWindow(now);
   const rollingStartsAt = new Date(now.getTime() - DAY_MS);
   const earliestStart = month.startsAt < rollingStartsAt ? month.startsAt : rollingStartsAt;
-  const logs = await prisma.auditLog.findMany({
+  const logs = await db.auditLog.findMany({
     where: {
       workspace: { userId: user.id },
       action: { in: ["import.parser_usage", "import.openai_model_call", "adviser.model_call"] },
@@ -159,8 +161,13 @@ export const getCloverTokenUsage = async (
     },
     select: { action: true, metadata: true, createdAt: true },
   });
+  // Tokens are charged when reserved, so cloud and offline work cannot reuse them.
+  const reservations = await db.mobileLocalAllowance.findMany({where:{userId:user.id,unit:"tokens",createdAt:{gte:earliestStart}},select:{issued:true,createdAt:true}});
+  const reservedSince = (since: Date) => reservations.filter(g=>g.createdAt >= since).reduce((sum,g)=>sum+g.issued,0);
   const monthlyParts = calculateUsageParts(logs, month.startsAt);
   const rollingParts = calculateUsageParts(logs, rollingStartsAt);
+  monthlyParts.localParserTokens += reservedSince(month.startsAt);
+  rollingParts.localParserTokens += reservedSince(rollingStartsAt);
   const monthlyUsed = monthlyParts.localParserTokens + monthlyParts.backupParserTokens + monthlyParts.adviserTokens;
   const rollingUsed = rollingParts.localParserTokens + rollingParts.backupParserTokens + rollingParts.adviserTokens;
   const unlimited = hasUnlimitedPlanLimits(user) || process.env.NODE_ENV !== "production";
@@ -183,7 +190,7 @@ export const getCloverTokenLimitError = (usage: CloverTokenUsageSnapshot) => {
     error: isRolling
       ? "You’ve reached Clover’s rolling 24-hour AI allowance. Try again as earlier usage clears from the window."
       : usage.planTier === "free"
-        ? "You’ve used this month’s Clover token allowance. Upgrade to Pro for more room."
+        ? "You’ve used this month’s Clover token allowance. Upgrade to Plus or Pro for more room."
         : "You’ve used this month’s Clover token allowance. Your allowance resets next month.",
     planTier: usage.planTier,
     limitType: isRolling ? "clover_token_24h_limit" : "clover_token_monthly_limit",

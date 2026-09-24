@@ -5,7 +5,7 @@ import { getPlanFeatureDetailByLabel } from "@/lib/plan-feature-details";
 type PlanFeatureItemProps = {
   label: string;
   className?: string;
-  detailPlan?: "free" | "pro";
+  detailPlan?: "free" | "pro" | "premium";
 };
 
 function InfoIcon() {

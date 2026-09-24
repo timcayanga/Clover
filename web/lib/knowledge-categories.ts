@@ -45,7 +45,7 @@ export const knowledgeCategories: KnowledgeCategory[] = [
   {
     slug: "plans-billing",
     title: "Plans & billing",
-    summary: "Free, Pro, and managing your subscription.",
+    summary: "Free, Plus, Pro, and managing your subscription.",
     icon: "plan",
   },
   {

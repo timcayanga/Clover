@@ -110,7 +110,7 @@ export function DashboardManualTransactionModal({
   const [entryUploadFiles, setEntryUploadFiles] = useState<File[]>([]);
   useEffect(() => {
     let active = true;
-    void fetch("/api/me").then(response => response.ok ? response.json() : null).then(data => { if (active) setIsPro(data?.user?.planTier === "pro"); }).catch(() => {});
+    void fetch("/api/me").then(response => response.ok ? response.json() : null).then(data => { if (active) setIsPro((data?.user?.planTier === "pro" || data?.user?.planTier === "premium")); }).catch(() => {});
     return () => { active = false; };
   }, []);
   const [categories, setCategories] = useState<DashboardCategory[]>([]);

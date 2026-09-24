@@ -8,7 +8,7 @@ import { hasFullFeatureAccess } from "@/lib/beta-access";
 import { getNavigationIconSrc } from "@/lib/navigation-icons";
 
 type AskCloverContext = "accounts" | "transactions" | "recurring" | "budgeting" | "goals";
-type PlanTier = "free" | "pro" | "unknown";
+type PlanTier = "free" | "pro" | "premium" | "unknown";
 
 type ContextualAskCloverProps = {
   context: AskCloverContext;
@@ -201,7 +201,7 @@ export function ContextualAskClover({ context, planTier = "unknown" }: Contextua
           throw new Error("Unable to load plan");
         }
         const payload = (await response.json()) as { user?: { planTier?: string } };
-        setResolvedPlanTier(payload.user?.planTier === "pro" ? "pro" : "free");
+        setResolvedPlanTier(payload.user?.planTier === "premium" ? "premium" : payload.user?.planTier === "pro" ? "pro" : "free");
       })
       .catch((error: unknown) => {
         if (!(error instanceof DOMException && error.name === "AbortError")) {

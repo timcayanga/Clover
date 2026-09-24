@@ -1,5 +1,6 @@
 # Clover native offline and on-device design
 
+Current plan policy (24 September 2026): the separate local request allowance below is superseded by [pricing-policy.md](../pricing-policy.md). Cloud and on-device AI share the monthly and rolling 24-hour token budgets, with online reservations for offline use.
 Figma: [04 — Offline & On-device](https://www.figma.com/design/FNnCmCj90szZAnZ6twMPCy/Screens?node-id=1206-472062).
 
 Fourteen new light/dark mobile screens cover Sync & Offline, working offline, pending changes, conflicts, on-device Adviser, model availability and offline file previews. They retain the shared mobile navigation and semantic Clover colors. The frames are 390 × 844 minimum, with non-clipping layout. These designs describe native app behavior; desktop/mobile web remain online clients.

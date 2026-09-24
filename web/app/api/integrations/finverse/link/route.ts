@@ -1,3 +1,4 @@
+import { assertPlanQuota, PlanQuotaError } from "@/lib/plan-quota";
 import { randomBytes } from "node:crypto";
 import { NextResponse } from "next/server";
 import { requireAuth } from "@/lib/auth";
@@ -17,6 +18,7 @@ export async function POST(request: Request) {
     const body = await request.json().catch(() => ({})) as { workspaceId?: string };
     if (!body.workspaceId) return NextResponse.json({ error: "Workspace is required." }, { status: 400 });
     const workspace = await assertWorkspaceAccess(userId, body.workspaceId);
+    await prisma.$transaction(tx => assertPlanQuota(tx, workspace.userId, "linkedBanks"));
     const state = randomBytes(32).toString("base64url");
     const link = await createFinverseLink(workspace.userId, state);
     if (!link.link_url) throw new Error("FINVERSE_LINK_URL_MISSING");
@@ -33,6 +35,7 @@ export async function POST(request: Request) {
 
     return NextResponse.json({ connectionId: connection.id, linkUrl: link.link_url });
   } catch (error) {
+    if (error instanceof PlanQuotaError) return NextResponse.json({error:error.message},{status:403});
     const message = error instanceof Error ? error.message : "";
     if (message === "UNAUTHORIZED") return NextResponse.json({ error: "Please sign in again." }, { status: 401 });
     if (message === "WORKSPACE_NOT_FOUND") return NextResponse.json({ error: "Workspace not found." }, { status: 404 });

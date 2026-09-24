@@ -179,9 +179,9 @@ export function PlanTabs({
               color: colors.teal,
             }}
           >
-            {compact ? item.replace(" · Pro", "") : item}
+            {compact ? item.replace(" · Plus", "") : item}
           </Text>
-          {compact && item.includes(" · Pro") ? (
+          {compact && item.includes(" · Plus") ? (
             <Text
               style={{
                 position: "absolute",
@@ -192,7 +192,7 @@ export function PlanTabs({
                 color: colors.teal,
               }}
             >
-              Pro
+              Plus
             </Text>
           ) : null}
         </Pressable>

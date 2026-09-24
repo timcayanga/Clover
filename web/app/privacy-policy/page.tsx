@@ -130,7 +130,7 @@ export default function PrivacyPolicyPage() {
               </p>
               <h3>Billing information</h3>
               <p>
-                For Pro subscriptions, we process your selected plan, billing
+                For Plus subscriptions, we process your selected plan, billing
                 interval, subscription status, payment-provider references, and
                 transaction status. Payments are completed through the provider
                 shown at checkout, including Paddle or PayPal where available.
@@ -193,7 +193,7 @@ export default function PrivacyPolicyPage() {
                   features you choose to use.
                 </li>
                 <li>
-                  Process Pro subscriptions and maintain billing entitlements.
+                  Process Plus subscriptions and maintain billing entitlements.
                 </li>
                 <li>
                   Answer support requests and send important account, security,

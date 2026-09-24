@@ -7,7 +7,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { PublicFooter } from "@/components/public-footer";
 import { PlanComparisonTable } from "@/components/plan-comparison-table";
-import { plannedProPrices } from "@/lib/public-plan-comparison";
+import { plannedProPrices, plannedPremiumPrices } from "@/lib/public-plan-comparison";
 import { useEffect, useRef, useState, type CSSProperties } from "react";
 import { LandingSignupModal } from "@/components/landing-signup-modal";
 import { FEATURE_LINKS } from "@/lib/public-site";
@@ -103,8 +103,8 @@ export function JourneyActions({ authEnabled, final = false }: { authEnabled: bo
 
 export function ProActions({ market }: { market?: LandingMarket }) {
   return <div className={styles.proActions} data-landing-actions>
-    {market ? <strong className={styles.proPrice}>Pro: {plannedProPrices(market).monthly}/month or {plannedProPrices(market).annual}/year</strong> : null}
-    <Link className="button button-primary button-pill" href="/sign-up?intent=pro&interval=annual" prefetch={false}>Upgrade to Pro <span aria-hidden="true">→</span></Link>
+    {market ? <strong className={styles.proPrice}>Plus: {plannedProPrices(market).monthly}/month or {plannedProPrices(market).annual}/year<br />Pro: {plannedPremiumPrices(market).monthly}/month or {plannedPremiumPrices(market).annual}/year</strong> : null}
+    <Link className="button button-primary button-pill" href="/sign-up?intent=pro&interval=annual" prefetch={false}>Upgrade to Plus <span aria-hidden="true">→</span></Link>
     <small>You can keep using Clover for free.</small>
   </div>;
 }
@@ -113,7 +113,7 @@ export function ProComparison({ market, style, showActions = true, variant = "la
   return <div className={styles.proDetails} style={style}>
     <div className={styles.proComparisonCard}>
       <PlanComparisonTable variant={variant} className={styles.proTable} />
-      <Link className={styles.proCompareLink} href="/pricing">Compare all Free and Pro features <span aria-hidden="true">→</span></Link>
+      <Link className={styles.proCompareLink} href="/pricing">Compare all Free, Plus and Pro features <span aria-hidden="true">→</span></Link>
     </div>
     {showActions ? <ProActions market={market} /> : null}
   </div>;

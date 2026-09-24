@@ -337,7 +337,7 @@ test("local allowance is serialized, persists restart and refuses extra inferenc
       issuedAt: version,
       expiresAt: "2026-10-01T00:00:00Z",
     },
-    monthlyLimit: 50,
+    unit: "tokens", monthlyLimit: 50,
     resetsAt: "2026-10-01",
     serverTime: version,
   });
@@ -351,10 +351,20 @@ test("local allowance is serialized, persists restart and refuses extra inferenc
   const restarted = new LocalAllowance(store, () => Date.parse(version));
   await assert.rejects(
     restarted.use(async () => ++runs),
-    /allowance/,
+    /token/,
   );
 });
-test("failed inference refunds a request and expiry blocks requests", async () => {
+test("local inference charges tokens rather than requests and rejects legacy grants", async () => {
+  const store=memory(), a=new LocalAllowance(store,()=>Date.parse(version));
+  const value={unit:"tokens" as const,grant:{id:"tokens",issued:12,used:0,issuedAt:version,expiresAt:"2026-10-01T00:00:00Z"},monthlyLimit:100000,resetsAt:"2026-10-01",serverTime:version};
+  await a.save(value); await a.use(async()=>"answer",10);
+  assert.equal((await a.get())?.grant?.used,10);
+  await assert.rejects(a.use(async()=>"answer",3),/token/);
+  await assert.rejects(a.use(async()=>"answer",-1),/token/);
+  await store.set("local-allowance",{...value,unit:undefined});
+  await assert.rejects(a.use(async()=>"answer"),/token/);
+});
+test("failed inference refunds tokens and expiry blocks inference", async () => {
   const store = memory(),
     a = new LocalAllowance(store, () => Date.parse(version));
   await a.save({
@@ -365,7 +375,7 @@ test("failed inference refunds a request and expiry blocks requests", async () =
       issuedAt: version,
       expiresAt: "2026-10-01T00:00:00Z",
     },
-    monthlyLimit: 50,
+    unit: "tokens", monthlyLimit: 50,
     resetsAt: "2026-10-01",
     serverTime: version,
   });
@@ -379,7 +389,7 @@ test("failed inference refunds a request and expiry blocks requests", async () =
     new LocalAllowance(store, () => Date.parse("2026-10-01")).use(
       async () => 1,
     ),
-    /allowance/,
+    /token/,
   );
 });
 test("allowance refresh cannot roll back local usage", async () => {
@@ -393,7 +403,7 @@ test("allowance refresh cannot roll back local usage", async () => {
       issuedAt: version,
       expiresAt: "2026-10-01T00:00:00Z",
     },
-    monthlyLimit: 50,
+    unit: "tokens", monthlyLimit: 50,
     resetsAt: "2026-10-01",
     serverTime: version,
   };

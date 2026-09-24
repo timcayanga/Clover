@@ -45,7 +45,7 @@ export async function refreshProAccess(userId: string) {
       planTier: true,
       planTierLocked: true,
       billingSubscription: {
-        select: { status: true, interval: true, paidThrough: true },
+        select: { status: true, interval: true, paidThrough: true, planTier: true },
       },
       proGrants: {
         where: { revokedAt: null, endsAt: { gt: new Date() } },

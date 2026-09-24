@@ -96,7 +96,7 @@ export function PaddleCheckoutButton({
     const handleCheckoutEvent = (event: Event) => {
       const paddleEvent = (event as CustomEvent<PaddleCheckoutEvent>).detail;
       if (paddleEvent.name === "checkout.completed") {
-        setMessage("Payment received. Clover is confirming your Pro access.");
+        setMessage("Payment received. Clover is confirming your Plus access.");
       } else if (paddleEvent.name === "checkout.closed") {
         setMessage((current) => current ?? "Checkout closed.");
       }

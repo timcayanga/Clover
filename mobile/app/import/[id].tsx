@@ -274,7 +274,7 @@ export default function ImportDetail() {
                 autoCorrect={false}
               />
               <Body>
-                This file will be uploaded to the selected Clover Profile.
+                This file will be uploaded to the selected Clover Plusfile.
                 Review the imported results before confirming anything.
               </Body>
               <Button title="Import this file" onPress={() => void upload()} />

@@ -137,12 +137,12 @@ void (async () => {
 
   assert.equal(BETA_FULL_ACCESS_ENABLED, false, "Beta full access must remain disabled after plan enforcement is restored.");
   assert.deepEqual(getPlanDefaultLimits("free"), {
-    accountLimit: 5,
+    accountLimit: 10,
     monthlyUploadLimit: null,
     transactionLimit: null,
   });
   assert.equal(hasFullFeatureAccess("free"), false);
   assert.equal(hasFullFeatureAccess("pro"), true);
 
-  console.log("[PASS] Large imports survive browser quota pressure and Free/Pro plan gates are restored.");
+  console.log("[PASS] Large imports survive browser quota pressure and Free/Plus/Pro plan gates are restored.");
 })();

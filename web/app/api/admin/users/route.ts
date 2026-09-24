@@ -30,7 +30,7 @@ export async function GET(request: Request) {
       page: Number.isFinite(page) ? page : 1,
       pageSize: Number.isFinite(pageSize) ? pageSize : 25,
       planTier:
-        planTier === "free" || planTier === "pro"
+        planTier === "free" || planTier === "pro" || planTier === "premium"
           ? (planTier as PlanTier)
           : "all",
       verified: verified === "yes" || verified === "no" ? verified : "all",

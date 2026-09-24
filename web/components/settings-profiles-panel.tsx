@@ -127,7 +127,7 @@ export function SettingsProfilesPanel({
 
       <div className="settings-profile-create">
         {profileLimit !== null && profileList.length >= profileLimit ? (
-          <p className="settings-helper">You&apos;ve reached your {profileLimit}-Profile limit. Upgrade to Pro for more Profiles.</p>
+          <p className="settings-helper">You&apos;ve reached your {profileLimit}-Profile limit. Upgrade to Plus for more Profiles.</p>
         ) : null}
         {isCreateOpen ? (
           <div className="settings-profile-create__form">

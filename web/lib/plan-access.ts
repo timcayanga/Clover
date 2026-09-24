@@ -7,7 +7,7 @@ export { countNonCashAccounts } from "@/lib/account-limit-count";
 
 type PlanLimitSource = {
   clerkUserId?: string | null;
-  planTier: "free" | "pro";
+  planTier: "free" | "pro" | "premium";
   accountLimit: number | null;
   monthlyUploadLimit: number | null;
   transactionLimit: number | null;

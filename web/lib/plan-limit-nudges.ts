@@ -1,4 +1,4 @@
-export type ClientPlanTier = "free" | "pro" | "unknown";
+export type ClientPlanTier = "free" | "pro" | "premium" | "unknown";
 
 export type PlanLimitType =
   | "account_limit"
@@ -31,7 +31,7 @@ export const parsePlanLimitPayload = (payload: unknown): PlanLimitPayload | null
   const limitValueRaw = "limitValue" in payload ? (payload as { limitValue?: unknown }).limitValue : null;
 
   const planTier =
-    planTierValue === "free" || planTierValue === "pro" || planTierValue === "unknown" ? planTierValue : null;
+    planTierValue === "free" || planTierValue === "pro" || planTierValue === "premium" || planTierValue === "unknown" ? planTierValue : null;
   const limitType =
     limitTypeValue === "account_limit"
       || limitTypeValue === "transaction_limit"
@@ -107,15 +107,15 @@ export const getPlanLimitNudgeCopy = ({ planTier, limitType, limitValue }: PlanL
         eyebrow: rolling ? "24-hour allowance reached" : "Monthly allowance reached",
         title: `You’ve used ${limitText} Clover tokens on Free.`,
         body: rolling
-          ? "Earlier usage clears automatically during the next 24 hours. Pro also includes a larger safeguard for heavier days."
-          : "Upgrade to Pro for a 1,000,000-token monthly allowance shared by Adviser and AI-assisted parsing.",
-        ctaLabel: "View Pro",
+          ? "Earlier usage clears automatically during the next 24 hours. Plus also includes a larger safeguard for heavier days."
+          : "Upgrade to Plus for a 1,000,000-token monthly allowance shared by Adviser and AI-assisted parsing.",
+        ctaLabel: "View Plus",
         ctaHref: "/settings?section=plan",
       };
     }
     return {
       eyebrow: rolling ? "24-hour allowance reached" : "Monthly allowance reached",
-      title: `You’ve used ${limitText} Clover tokens on Pro.`,
+      title: `You’ve used ${limitText} Clover tokens on your plan.`,
       body: rolling
         ? "Earlier usage clears automatically during the next 24 hours."
         : "Your monthly allowance resets at the start of next month in Asia/Manila.",
@@ -128,16 +128,16 @@ export const getPlanLimitNudgeCopy = ({ planTier, limitType, limitValue }: PlanL
     if (planTier === "free") {
       return {
         eyebrow: "Account limit reached",
-        title: "You’ve filled your 5-account space on Free.",
-        body: "Upgrade to Pro to unlock up to 20 accounts and keep bringing more banks, wallets, and cards into one view.",
-        ctaLabel: "Upgrade to Pro",
+        title: "You’ve filled your 10-account space on Free.",
+        body: "Upgrade to Plus to unlock up to 20 accounts and keep bringing more banks, wallets, and cards into one view.",
+        ctaLabel: "Upgrade to Plus",
         ctaHref: "/pricing",
       };
     }
 
     return {
       eyebrow: "Account limit reached",
-      title: `You’ve reached the current ${limitText}-account limit on Pro.`,
+      title: `You’ve reached the current ${limitText}-account limit on your plan.`,
       body: "You can remove an account to make room, or manage billing if you need more headroom.",
       ctaLabel: "Manage billing",
       ctaHref: "/settings#billing",
@@ -149,8 +149,8 @@ export const getPlanLimitNudgeCopy = ({ planTier, limitType, limitValue }: PlanL
       return {
         eyebrow: "Transaction limit reached",
         title: "You’ve reached the 1,000-row limit on Free.",
-        body: "Upgrade to Pro to keep importing and adding more transaction history without trimming your timeline.",
-        ctaLabel: "Upgrade to Pro",
+        body: "Upgrade to Plus to keep importing and adding more transaction history without trimming your timeline.",
+        ctaLabel: "Upgrade to Plus",
         ctaHref: "/pricing",
       };
     }
@@ -168,15 +168,15 @@ export const getPlanLimitNudgeCopy = ({ planTier, limitType, limitValue }: PlanL
     return {
       eyebrow: "Upload limit reached",
       title: "You’ve used this month’s 10-upload room on Free.",
-      body: "Upgrade to Pro to unlock more monthly statement uploads and keep importing without waiting for the next cycle.",
-      ctaLabel: "Upgrade to Pro",
+      body: "Upgrade to Plus to unlock more monthly statement uploads and keep importing without waiting for the next cycle.",
+      ctaLabel: "Upgrade to Plus",
       ctaHref: "/pricing",
     };
   }
 
   return {
     eyebrow: "Upload limit reached",
-    title: `You’ve reached the current ${limitText}-upload limit on Pro for this month.`,
+    title: `You’ve reached the current ${limitText}-upload limit on your plan for this month.`,
     body: "Uploads will open back up next month, or you can manage billing if you need more room now.",
     ctaLabel: "Manage billing",
     ctaHref: "/settings#billing",

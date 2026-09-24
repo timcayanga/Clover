@@ -17,7 +17,7 @@ export async function GET(request: Request) {
 
     const csv = await exportAdminUsers({
       query,
-      planTier: planTier === "free" || planTier === "pro" ? (planTier as PlanTier) : "all",
+      planTier: planTier === "free" || planTier === "pro" || planTier === "premium" ? (planTier as PlanTier) : "all",
       verified: verified === "yes" || verified === "no" ? verified : "all",
       locked: locked === "locked" || locked === "unlocked" ? locked : "all",
     });

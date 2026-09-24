@@ -196,9 +196,11 @@ export async function saveMobileGoal(workspaceId: string, input: unknown) {
     invalidateWorkspaceSummaryCache(workspaceId);
     return { id };
   }
-  const created = await prisma.personalGoal.create({
-    data: { ...data, workspaceId },
-    select: { id: true },
+  const { assertPlanQuota } = await import("./plan-quota");
+  const created = await prisma.$transaction(async (tx) => {
+    const workspace = await tx.workspace.findUniqueOrThrow({ where: { id: workspaceId } });
+    await assertPlanQuota(tx, workspace.userId, "goals");
+    return tx.personalGoal.create({ data: { ...data, workspaceId }, select: { id: true } });
   });
   invalidateWorkspaceSummaryCache(workspaceId);
   return created;

@@ -16,7 +16,7 @@ type RecurringPageClientProps = {
   accounts: Parameters<typeof CommitmentsPanel>[0]["accounts"];
   categoryOptions: Parameters<typeof CommitmentsPanel>[0]["categoryOptions"];
   transactions: Parameters<typeof CommitmentsPanel>[0]["transactions"];
-  planTier: "free" | "pro";
+  planTier: "free" | "pro" | "premium";
   initialTab?: RecurringTab;
   initialAddOpen?: boolean;
 };

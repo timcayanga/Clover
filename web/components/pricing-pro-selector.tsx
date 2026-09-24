@@ -9,7 +9,7 @@ type BillingInterval = "monthly" | "annual";
 
 type PricingProSelectorProps = {
   signedIn: boolean;
-  planTier: "free" | "pro" | null;
+  planTier: "free" | "pro" | "premium" | null;
 };
 
 export function PricingProSelector({ signedIn, planTier }: PricingProSelectorProps) {
@@ -17,7 +17,7 @@ export function PricingProSelector({ signedIn, planTier }: PricingProSelectorPro
   const [interval, setInterval] = useState<BillingInterval>("annual");
   const isAnnual = interval === "annual";
   const resolvedSignedIn = auth.isLoaded ? Boolean(auth.isSignedIn) : signedIn;
-  const isPro = auth.isLoaded && auth.isSignedIn && planTier === "pro";
+  const isPro = auth.isLoaded && auth.isSignedIn && (planTier === "pro" || planTier === "premium");
   const proHref = resolvedSignedIn
     ? "/settings?upgrade=pro&interval=" + interval + "#billing"
     : "/sign-up?intent=pro&interval=" + interval;
@@ -27,7 +27,7 @@ export function PricingProSelector({ signedIn, planTier }: PricingProSelectorPro
   const annualSavings = annualizedMonthlyPrice - annualPlan.priceValue;
 
   if (isPro) {
-    return <div className="pricing-pro-selector pricing-pro-selector--active"><p>Pro is active on your account.</p></div>;
+    return <div className="pricing-pro-selector pricing-pro-selector--active"><p>{planTier === "premium" ? "Pro" : "Plus"} is active on your account.</p></div>;
   }
 
   return (
@@ -68,7 +68,7 @@ export function PricingProSelector({ signedIn, planTier }: PricingProSelectorPro
       )}
 
       <Link className="button button-primary button-pill pricing-pro-selector__signup" href={proHref} prefetch={false}>
-        {resolvedSignedIn ? "Upgrade to Pro" : "Organize my finances with Pro"}
+        {resolvedSignedIn ? "Upgrade to Plus" : "Organize my finances with Plus"}
       </Link>
     </div>
   );

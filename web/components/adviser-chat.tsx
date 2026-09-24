@@ -53,7 +53,7 @@ type ChatMessage = {
 };
 
 type AdviserUsage = {
-  plan: "free" | "pro";
+  plan: "free" | "pro" | "premium";
   used: number;
   limit: number;
   remaining: number;
@@ -606,7 +606,7 @@ function ScopedAdviserChat({ prompts, storageKey = adviserChatStorageKey, initia
         <p className="adviser-chat__status">
           {hasReachedLimit
             ? `Your Adviser questions refresh on ${resetLabel}.`
-            : `${usage.remaining} Adviser question${usage.remaining === 1 ? "" : "s"} left this month on ${usage.plan === "pro" ? "Pro" : "Free"}.`}
+            : `${usage.remaining} Adviser question${usage.remaining === 1 ? "" : "s"} left this month on ${usage.plan === "premium" ? "Pro" : usage.plan === "pro" ? "Plus" : "Free"}.`}
         </p>
       ) : null}
       {messages.length === 0 && !minimal ? (

@@ -3,7 +3,7 @@ import { plannedProPrices, PLAN_COMPARISON_ROWS } from '@/lib/public-plan-compar
 import { getPlanProfileLimit } from '@/lib/user-limits';
 import { matchesOnboardingPrice } from '@/lib/onboarding-pricing';
 import { matchesPaddleApprovedPrice, paddleProPricing } from '@/lib/billing-offer-rules';
-assert.deepEqual(PLAN_COMPARISON_ROWS.profiles.slice(1), ['free', 'pro'].map(tier => String(getPlanProfileLimit(tier as 'free' | 'pro'))), 'Public Profile allowances must match the limits used by Account Plan');
+assert.deepEqual(PLAN_COMPARISON_ROWS.profiles.slice(1), ['free', 'pro', 'premium'].map(tier => String(getPlanProfileLimit(tier as 'free' | 'pro' | 'premium'))), 'Public Profile allowances must match the limits used by Account Plan');
 for (const market of ['ph','global'] as const) {
   for (const interval of ['monthly','annual'] as const) {
     const amount = Number(plannedProPrices(market)[interval].replace(/[^0-9.]/g,''));

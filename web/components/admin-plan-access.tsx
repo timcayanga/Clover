@@ -127,7 +127,7 @@ export function AdminPlanAccess({ userId }: { userId: string }) {
               <dd>{data.subscription?.status ?? "No paid subscription"}</dd>
               <dt>Verified paid through</dt>
               <dd>{dateText(data.paidThrough)}</dd>
-              <dt>{data.renewing ? "Next renewal" : "Pro access ends"}</dt>
+              <dt>{data.renewing ? "Next renewal" : "Plus access ends"}</dt>
               <dd>
                 {data.renewing
                   ? dateText(
@@ -152,7 +152,7 @@ export function AdminPlanAccess({ userId }: { userId: string }) {
             <h2>
               {grantId
                 ? "Edit complimentary access"
-                : "Grant complimentary Pro"}
+                : "Grant complimentary Plus"}
             </h2>
             <form
               className={styles.stack}
@@ -208,7 +208,7 @@ export function AdminPlanAccess({ userId }: { userId: string }) {
                 />
               </label>
               <p>
-                Preview: complimentary Pro from {dateText(startsAt)} until{" "}
+                Preview: complimentary Plus from {dateText(startsAt)} until{" "}
                 {dateText(endsAt)}. Billing stays unchanged.
               </p>
               {data.user.planTierLocked && (

@@ -1,3 +1,7 @@
+import { PLAN_CATALOG } from "../../../../../../shared/plan-catalog";
+import { assertPlanQuota, PlanQuotaError } from "@/lib/plan-quota";
+import { getEffectiveUserLimits } from "@/lib/user-limits";
+import { countNonCashAccounts } from "@/lib/account-limit-count";
 import { AccountType, Prisma, TransactionType } from "@prisma/client";
 import { NextResponse } from "next/server";
 import { requireAuth } from "@/lib/auth";
@@ -74,6 +78,14 @@ const importAccount = async (
   }
 
   return prisma.$transaction(async (tx) => {
+    const workspace = await tx.workspace.findUniqueOrThrow({where:{id:workspaceId},include:{user:true}});
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`plan-quota:${workspace.userId}`}, 0))`;
+    const duplicate = await tx.finverseAccountLink.findUnique({where:{connectionId_externalAccountId:{connectionId,externalAccountId:account.account_id}}});
+    if (duplicate) return duplicate.accountId;
+    await assertPlanQuota(tx, workspace.userId, "linkedBanks");
+    const limit = getEffectiveUserLimits(workspace.user).accountLimit;
+    const accounts = await tx.account.findMany({where:{workspace:{userId:workspace.userId}},select:{type:true,name:true,institution:true}});
+    if(limit !== null && countNonCashAccounts(accounts) >= limit) throw new PlanQuotaError("Your financial account allowance is full. Upgrade or remove an unused account before linking another bank account.");
     const created = await tx.account.create({
       data: {
         workspaceId,
@@ -170,7 +182,7 @@ export async function POST(request: Request) {
 
   try {
     const { userId } = await requireAuth();
-    const body = await request.json().catch(() => ({})) as { workspaceId?: string; connectionId?: string };
+    const body = await request.json().catch(() => ({})) as { workspaceId?: string; connectionId?: string; selectedAccountIds?: string[] };
     if (!body.workspaceId) return NextResponse.json({ error: "Workspace is required." }, { status: 400 });
     await assertWorkspaceAccess(userId, body.workspaceId);
     const connection = await prisma.finverseConnection.findFirst({
@@ -184,6 +196,9 @@ export async function POST(request: Request) {
     });
     if (!connection) return NextResponse.json({ error: "No connected bank was found." }, { status: 404 });
 
+    await prisma.$transaction(tx => assertPlanQuota(tx, connection.userId, "linkedBanks", 0));
+    const owner = await prisma.user.findUniqueOrThrow({where:{id:connection.userId}});
+    if (owner.planTier === "free") return NextResponse.json({error:"Bank sync requires Plus or Pro. Existing imported records are preserved."},{status:403});
     const token = await getActiveToken(connection);
     const identityResult = await getFinverseLoginIdentity(token);
     const identity = identityResult.login_identity ?? {};
@@ -210,7 +225,19 @@ export async function POST(request: Request) {
 
     const accountResult = await getFinverseAccounts(token);
     const resolvedInstitutionName = institutionName || (typeof accountResult.institution?.institution_name === "string" ? accountResult.institution.institution_name : undefined);
-    for (const account of accountResult.accounts ?? []) {
+    const providerAccounts = accountResult.accounts ?? [];
+    const links = await prisma.finverseAccountLink.findMany({where:{connectionId:connection.id},select:{externalAccountId:true}});
+    const linkedIds = new Set(links.map(l=>l.externalAccountId));
+    const ownerLinks = await prisma.finverseAccountLink.count({where:{workspace:{userId:connection.userId},accountId:{not:null},connection:{status:{not:"disconnected"}}}});
+    const ownerAccounts = await prisma.account.findMany({where:{workspace:{userId:connection.userId}},select:{type:true,name:true,institution:true}});
+    const capacity = Math.max(0,Math.min(PLAN_CATALOG[owner.planTier].linkedBanks-ownerLinks,(getEffectiveUserLimits(owner).accountLimit ?? Infinity)-countNonCashAccounts(ownerAccounts)));
+    const newAccounts = providerAccounts.filter(a=>!linkedIds.has(a.account_id));
+    if(body.selectedAccountIds !== undefined && (!Array.isArray(body.selectedAccountIds) || body.selectedAccountIds.some(id=>typeof id!=="string" || !newAccounts.some(a=>a.account_id===id)))) return NextResponse.json({error:"Choose valid bank accounts."},{status:400});
+    const selectedIds = body.selectedAccountIds ? new Set(body.selectedAccountIds) : null;
+    const chosen = newAccounts.filter(a=>!selectedIds || selectedIds.has(a.account_id));
+    if(chosen.length>capacity) return NextResponse.json({status:"select_accounts",connectionId:connection.id,remaining:capacity,accounts:newAccounts.map(a=>({id:a.account_id,name:normalizeFinverseAccount(a,resolvedInstitutionName).name})),error:`Choose up to ${capacity} bank accounts to fit your plan.`});
+    const accountsToImport = providerAccounts.filter(a=>linkedIds.has(a.account_id)||chosen.some(c=>c.account_id===a.account_id));
+    for (const account of accountsToImport) {
       await importAccount(connection.id, connection.workspaceId, account, resolvedInstitutionName);
     }
 
@@ -242,6 +269,7 @@ export async function POST(request: Request) {
       transactions: { imported, existing, skipped },
     });
   } catch (error) {
+    if (error instanceof PlanQuotaError) return NextResponse.json({error:error.message},{status:403});
     const message = error instanceof Error ? error.message : "";
     if (message === "UNAUTHORIZED") return NextResponse.json({ error: "Please sign in again." }, { status: 401 });
     if (message === "WORKSPACE_NOT_FOUND") return NextResponse.json({ error: "Workspace not found." }, { status: 404 });

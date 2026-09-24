@@ -236,7 +236,7 @@ export const FEATURE_PAGES: FeatureNeedPage[] = [
           "You can keep the fuller story inside Clover instead of trimming the history that gives your numbers context.",
         ],
         imageSrc: "/assets/landing page/Keep more of your financial history together.png",
-        imageAlt: "Expanded upload, account, and Profile capacity with Clover Pro",
+        imageAlt: "Expanded upload, account, and Profile capacity with Clover Plus and Pro",
       },
       {
         id: "deeper-guidance",
@@ -277,7 +277,7 @@ export const FEATURE_SLUG_ALIASES: Record<string, string> = {
 export const resolveFeatureSlug = (slug: string) => FEATURE_SLUG_ALIASES[slug] ?? slug;
 
 export const PRODUCT_LINKS: PublicNavLink[] = [
-  { label: "Pricing", href: "/pricing", description: "Compare Clover Free and Pro." },
+  { label: "Pricing", href: "/pricing", description: "Compare Clover Free, Plus and Pro." },
   {
     label: "Help",
     href: "/help",

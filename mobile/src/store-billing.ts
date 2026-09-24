@@ -6,7 +6,7 @@ export type StoreStatus = {
   appUserId: string;
   entitlementId: string;
   productIds: string[];
-  planTier: "free" | "pro";
+  planTier: "free" | "pro" | "premium";
   accessEndsAt: string | null;
   renewing: boolean;
 };

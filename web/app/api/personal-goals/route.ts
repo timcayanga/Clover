@@ -1,3 +1,4 @@
+import { assertPlanQuota, PlanQuotaError } from "@/lib/plan-quota";
 import { NextResponse } from "next/server";
 import { requireAuth } from "@/lib/auth";
 import { resolveBudgetingWorkspace } from "@/lib/budgeting-context";
@@ -25,10 +26,11 @@ export async function POST(request: Request) {
       invalidateWorkspaceSummaryCache(workspaceId);
       return NextResponse.json({ id });
     }
-    const created = await prisma.personalGoal.create({ data: { ...data, workspaceId } });
+    const created = await prisma.$transaction(async tx => { await assertPlanQuota(tx, (await tx.workspace.findUniqueOrThrow({where:{id:workspaceId}})).userId, "goals"); return tx.personalGoal.create({data:{...data,workspaceId}}); });
     invalidateWorkspaceSummaryCache(workspaceId);
     return NextResponse.json({ id: created.id }, { status: 201 });
-  } catch {
+  } catch (error) {
+    if (error instanceof PlanQuotaError) return NextResponse.json({error:error.message},{status:403});
     return NextResponse.json({ error: "Unable to save goal. Please sign in and try again." }, { status: 400 });
   }
 }
@@ -45,7 +47,8 @@ export async function DELETE(request: Request) {
     if (!result.count) return NextResponse.json({ error: "Goal not found." }, { status: 404 });
     invalidateWorkspaceSummaryCache(workspaceId);
     return NextResponse.json({ deleted: true });
-  } catch {
+  } catch (error) {
+    if (error instanceof PlanQuotaError) return NextResponse.json({error:error.message},{status:403});
     return NextResponse.json({ error: "Unable to delete goal." }, { status: 400 });
   }
 }

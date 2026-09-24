@@ -2168,7 +2168,7 @@ export async function ReportsStream({
         {!isPro ? (
           <div className="reports-footer-upsell">
             <p>
-              Want a little more context and room to explore? <Link href="/pricing">Upgrade to Pro</Link> to unlock more charts,
+              Want a little more context and room to explore? <Link href="/pricing">Upgrade to Plus</Link> to unlock more charts,
               deeper comparisons, and extra analysis when you need it.
             </p>
           </div>

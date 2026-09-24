@@ -49,12 +49,12 @@ const local = (v: string) => {
     .slice(0, 16);
 };
 const fresh = () => ({
-  name: "Refer a friend to Clover Pro",
+  name: "Refer a friend to Clover Plus",
   startsAt: new Date().toISOString(),
   endsAt: new Date(Date.now() + 90 * 86400000).toISOString(),
   rules: campaignRulesSchema.parse({}),
   terms:
-    "Refer a different, verified Clover user who makes their first paid Pro purchase using your code. Earn one calendar month of Pro after a 14-day review period. Monthly and annual purchases qualify. Self-referrals are not allowed. Refunds, reversals, and disputes can invalidate rewards. Rewards for active paid subscribers are banked and do not change provider charges. Campaign and per-person limits apply. Review and finalize these terms before publishing.",
+    "Refer a different, verified Clover user who makes their first paid Plus purchase using your code. Earn one calendar month of Plus after a 14-day review period. Monthly and annual purchases qualify. Self-referrals are not allowed. Refunds, reversals, and disputes can invalidate rewards. Rewards for active paid subscribers are banked and do not change provider charges. Campaign and per-person limits apply. Review and finalize these terms before publishing.",
 });
 export function AdminCampaigns() {
   const [data, setData] = useState<Data>({
@@ -114,7 +114,7 @@ export function AdminCampaigns() {
     <div className={styles.shell}>
       <p>
         Admin manages production campaigns. Create referral campaigns, review
-        eligibility, and manage earned Pro time. Campaigns start as drafts.
+        eligibility, and manage earned Plus time. Campaigns start as drafts.
         Published rules and terms are immutable; duplicate a campaign to change
         them.
       </p>
@@ -189,7 +189,7 @@ export function AdminCampaigns() {
           <div className={styles.grid}>
             {(
               [
-                ["months", "Pro months per referral", 1, 12],
+                ["months", "Plus months per referral", 1, 12],
                 ["holdDays", "Payment review period (days)", 0, 90],
                 ["purchaseDays", "Checkout purchase window (days)", 1, 90],
                 ["maxPerReferrer", "Rewards per referrer", 1, 1000],
@@ -407,7 +407,7 @@ export function AdminCampaigns() {
                     )
                     .reduce((n, x) => n + (x._sum.months ?? 0), 0)}
                 </strong>
-                Pro months awarded / pending
+                Plus months awarded / pending
               </div>
             </div>
             <div className={styles.row}>
@@ -457,7 +457,7 @@ export function AdminCampaigns() {
           {data.rewards.map((r) => (
             <article key={r.id}>
               <strong>
-                {r.months} Pro month(s) · {r.status}
+                {r.months} Plus month(s) · {r.status}
               </strong>
               <p>
                 Referrer:{" "}

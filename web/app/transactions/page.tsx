@@ -2344,7 +2344,7 @@ function TransactionsPageContent() {
   const [manualForm, setManualForm] = useState<ManualTransactionForm>(createEmptyManualForm());
   const [isSaving, setIsSaving] = useState(false);
   const manualSaveInFlightRef = useRef(false);
-  const [planTier, setPlanTier] = useState<"free" | "pro" | "unknown">("unknown");
+  const [planTier, setPlanTier] = useState<"free" | "pro" | "premium" | "unknown">("unknown");
   const [planLimits, setPlanLimits] = useState<UserLimits | null>(null);
   const [planUsage, setPlanUsage] = useState<PlanUsage | null>(null);
   const [planLimitNudge, setPlanLimitNudge] = useState<PlanLimitPayload | null>(null);
@@ -3633,7 +3633,7 @@ function TransactionsPageContent() {
       }
 
       const payload = await response.json();
-      const nextPlanTier = payload?.user?.planTier === "pro" ? "pro" : "free";
+      const nextPlanTier = payload?.user?.planTier === "premium" ? "premium" : payload?.user?.planTier === "pro" ? "pro" : "free";
       const nextLimits = payload?.user
         ? {
             accountLimit:
@@ -9110,7 +9110,7 @@ function TransactionsPageContent() {
             </div>
             {creationChatVisited ? <div id="creation-panel-ask" role="tabpanel" aria-labelledby="creation-tab-ask" hidden={creationTab !== "ask"} className="transaction-creation-panel">
 
-              <AdviserChat minimal workspaceId={selectedWorkspaceId} prompts={[]} isPro={planTier === "pro"} surface="transactions" pageLabel="Add transactions: prepare editable drafts for review" />
+              <AdviserChat minimal workspaceId={selectedWorkspaceId} prompts={[]} isPro={planTier === "pro" || planTier === "premium"} surface="transactions" pageLabel="Add transactions: prepare editable drafts for review" />
             </div> : null}
             {true ? <div id="creation-panel-upload" role="tabpanel" aria-labelledby="creation-tab-upload" hidden={creationTab !== "upload"} className="transaction-creation-panel">
 

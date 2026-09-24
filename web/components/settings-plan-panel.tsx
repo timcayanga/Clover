@@ -1,5 +1,7 @@
 "use client";
 
+import { PLAN_CATALOG, planName } from "../../shared/plan-catalog";
+import { PlanComparisonTable } from "@/components/plan-comparison-table";
 import { useEffect, useState } from "react";
 import { BillingActions } from "@/components/billing-actions";
 import { ReferralAccount } from "@/components/referral-account";
@@ -20,7 +22,7 @@ type BillingSubscriptionSummary = {
   providerSubscriptionId: string | null;
   currentPeriodEnd: string | null;
   nextBillingTime: string | null;
-  planTier: "free" | "pro";
+  planTier: "free" | "pro" | "premium";
 };
 
 type PaddlePortalAction = "manage" | "payment_method" | "cancel" | "plan_change";
@@ -28,7 +30,7 @@ type PaddlePortalAction = "manage" | "payment_method" | "cancel" | "plan_change"
 type SettingsPlanPanelProps = {
   workspaceId: string;
   billingCustomerId?: string | null;
-  planTier: "free" | "pro";
+  planTier: "free" | "pro" | "premium";
   profileCount: number;
   profileLimit: number | null;
   preferredBillingInterval?: BillingInterval;
@@ -61,7 +63,7 @@ type SettingsPlanPanelProps = {
 
 const freeFeatures = [
   "Manual transaction tracking",
-  "3 profiles and 5 non-cash accounts",
+  "3 profiles and 10 non-cash accounts",
   "100,000 Clover tokens monthly",
   "Unlimited files and transaction rows within the token allowance",
   "Receipt scanning",
@@ -73,6 +75,7 @@ const freeFeatures = [
 const proFeatures = [
   "Everything in Free",
   "10 profiles and 20 non-cash accounts",
+  "2 linked bank accounts",
   "1,000,000 Clover tokens monthly",
   "Full investment portfolio tools",
   "Advanced Adviser guidance",
@@ -223,7 +226,7 @@ export function SettingsPlanPanel({
       used: `${(cloverTokenUsage?.monthly.used ?? 0).toLocaleString()} used`,
       limit: cloverTokenUsage?.monthly.limit === null
         ? "Unlimited"
-        : `${(cloverTokenUsage?.monthly.limit ?? (planTier === "pro" ? 1_000_000 : 100_000)).toLocaleString()} limit`,
+        : `${(cloverTokenUsage?.monthly.limit ?? PLAN_CATALOG[planTier].monthlyTokens).toLocaleString()} limit`,
       percent: cloverTokenUsage?.monthly.percent ?? 0,
       donut: true,
     },
@@ -232,7 +235,7 @@ export function SettingsPlanPanel({
       used: `${(cloverTokenUsage?.rolling24h.used ?? 0).toLocaleString()} used`,
       limit: cloverTokenUsage?.rolling24h.limit === null
         ? "Unlimited"
-        : `${(cloverTokenUsage?.rolling24h.limit ?? (planTier === "pro" ? 250_000 : 30_000)).toLocaleString()} limit`,
+        : `${(cloverTokenUsage?.rolling24h.limit ?? PLAN_CATALOG[planTier].dailyTokens).toLocaleString()} limit`,
       percent: cloverTokenUsage?.rolling24h.percent ?? 0,
       donut: true,
     },
@@ -248,7 +251,7 @@ export function SettingsPlanPanel({
         <article className="settings-plan-usage__card settings-plan-usage__card--plan">
           <div className="settings-plan-usage__head">
             <strong>Current plan</strong>
-            <span className="settings-plan-usage__tier">{planTier === "pro" ? "Pro" : "Free"}</span>
+            <span className="settings-plan-usage__tier">{planName(planTier)}</span>
           </div>
           <span className="settings-plan-usage__legend">
             <span>Plan status</span>
@@ -278,6 +281,7 @@ export function SettingsPlanPanel({
         Asia/Manila on the first day of each month and does not roll over.
       </p>
 
+      <PlanComparisonTable variant="full" className="settings-plan-comparison" />
       <div className={`settings-plan-grid settings-plan-grid--current-${planTier}`} aria-label="Available plans">
         <article className={`settings-plan-card settings-plan-card--free${planTier === "free" ? " is-current" : ""}`}>
           <div className="settings-plan-card__band">
@@ -300,7 +304,7 @@ export function SettingsPlanPanel({
           <div className="settings-plan-card__band">
             <span className="settings-plan-card__icon"><PlanIcon pro /></span>
             <span className="settings-plan-card__band-text">
-              <strong className="settings-plan-card__band-title">Pro</strong>
+              <strong className="settings-plan-card__band-title">Plus</strong>
               <span className="settings-plan-card__band-price">
                 {offers?.prices[billingInterval] ?? (offersLoading ? "Checking regional pricing…" : "Regional pricing unavailable")}
                 {offers ? (billingInterval === "monthly" ? " / month" : " / year") : ""}
@@ -308,7 +312,7 @@ export function SettingsPlanPanel({
             </span>
           </div>
           <div className="settings-plan-card__body">
-            <div className="settings-plan-interval" role="group" aria-label="Pro billing interval">
+            <div className="settings-plan-interval" role="group" aria-label="Plus billing interval">
               <button
                 type="button"
                 className={billingInterval === "monthly" ? "is-selected" : ""}
@@ -379,7 +383,7 @@ export function SettingsPlanPanel({
                 )
               ) : !billingDetailsReady ? (
                 <p className="settings-helper">Loading subscription details...</p>
-              ) : currentProvider === "paddle" && hasPaddleSubscription ? (
+              ) : planTier === "premium" ? <span className="settings-pill">Your Pro plan includes all Plus features</span> : currentProvider === "paddle" && hasPaddleSubscription ? (
                 billingInterval === currentInterval ? (
                   <div className="settings-plan-card__management">
                     <button
@@ -445,6 +449,23 @@ export function SettingsPlanPanel({
               ) : (
                 <p className="settings-helper">Subscription details are unavailable.</p>
               )}
+            </div>
+          </div>
+        </article>
+        <article className={`settings-plan-card settings-plan-card--pro${planTier === "premium" ? " is-current" : ""}`} aria-label="Pro plan">
+          <div className="settings-plan-card__band">
+            <span className="settings-plan-card__icon"><PlanIcon pro /></span>
+            <span className="settings-plan-card__band-text">
+              <strong className="settings-plan-card__band-title">Pro</strong>
+              <span className="settings-plan-card__band-price">₱349/month · ₱2,999/year<br />US$12.99/month · US$99.99/year</span>
+            </span>
+          </div>
+          <div className="settings-plan-card__body">
+            <ul className="settings-plan-card__features">
+              {["Everything in Plus", "20 Profiles and 40 non-cash accounts", "5 linked bank accounts", "10 budgets, 10 goals and 10 Circles", "4 million shared AI tokens monthly", "1 million AI tokens per rolling 24 hours"].map(feature => <PlanFeatureItem key={feature} label={feature} className="settings-plan-card__feature-row" />)}
+            </ul>
+            <div className="settings-plan-card__cta">
+              {planTier === "premium" ? <span className="settings-pill">Current plan</span> : <p className="settings-helper">Pro subscriptions are not available yet. Your current plan remains active.</p>}
             </div>
           </div>
         </article>

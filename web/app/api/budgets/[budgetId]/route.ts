@@ -1,3 +1,4 @@
+import { assertPlanQuota, PlanQuotaError } from "@/lib/plan-quota";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { isBudgetEmoji } from "@/lib/budget-appearance";
@@ -148,6 +149,7 @@ export async function GET(_request: Request, { params }: Params) {
       },
     });
   } catch (error) {
+    if (error instanceof PlanQuotaError) return NextResponse.json({error:error.message},{status:403});
     if (isMissingBudgetTableError(error)) {
       return NextResponse.json(
         {
@@ -201,6 +203,7 @@ export async function GET(_request: Request, { params }: Params) {
       },
     });
   } catch (error) {
+    if (error instanceof PlanQuotaError) return NextResponse.json({error:error.message},{status:403});
     if (isMissingBudgetTableError(error)) {
       return NextResponse.json(
         {
@@ -339,7 +342,8 @@ export async function PATCH(request: Request, { params }: Params) {
 
   let budget;
   try {
-    budget = await prisma.budget.update({
+    budget = await prisma.$transaction(async tx => { if (payload.isActive === true && !existingBudget.isActive) await assertPlanQuota(tx, (await tx.workspace.findUniqueOrThrow({where:{id:context.workspaceId!}})).userId, "budgets");
+return tx.budget.update({
       where: {
         id: budgetId,
       },
@@ -357,7 +361,9 @@ export async function PATCH(request: Request, { params }: Params) {
         isActive: payload.isActive ?? existingBudget.isActive,
       },
     });
+    });
   } catch (error) {
+    if (error instanceof PlanQuotaError) return NextResponse.json({error:error.message},{status:403});
     if (isMissingBudgetTableError(error)) {
       return NextResponse.json(
         {
@@ -404,6 +410,7 @@ export async function DELETE(_request: Request, { params }: Params) {
       where: { id: budgetId },
     });
   } catch (error) {
+    if (error instanceof PlanQuotaError) return NextResponse.json({error:error.message},{status:403});
     if (isMissingBudgetTableError(error)) {
       return NextResponse.json(
         {

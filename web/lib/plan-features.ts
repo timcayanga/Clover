@@ -13,7 +13,7 @@ export const PLAN_FEATURES: Record<PlanTier, { title: string; headline: string; 
     copy: "Free includes the core Clover workflow with a monthly shared allowance for Adviser and AI-assisted parsing.",
     bullets: [
       "Manual transaction tracking",
-      "3 profiles and 5 non-cash accounts",
+      "3 profiles and 10 non-cash accounts",
       "100,000 Clover tokens monthly",
       "Unlimited files and transaction rows within the token allowance",
       "Basic investment tracking",
@@ -21,13 +21,19 @@ export const PLAN_FEATURES: Record<PlanTier, { title: string; headline: string; 
       "Basic goal tracking",
     ],
   },
+  premium: {
+    title: "Pro", headline: "More room for your full financial picture.",
+    copy: "Everything in Plus with higher account, planning, bank-link and AI limits.",
+    bullets: ["20 profiles and 40 non-cash accounts", "5 linked bank accounts", "10 active budgets, 10 goals and 10 Circles", "4,000,000 shared AI tokens monthly", "1,000,000 AI tokens per rolling 24 hours", "Full portfolio tools and advanced reporting"],
+  },
   pro: {
-    title: "Pro",
-    headline: "Pro gives you more room to work with the full picture.",
-    copy: "Pro is designed for broader account coverage, heavier importing, and richer analysis across goals, reports, Adviser guidance, recommendations, and investing.",
+    title: "Plus",
+    headline: "Plus gives you more room to work with the full picture.",
+    copy: "Plus is designed for broader account coverage, heavier importing, and richer analysis across goals, reports, Adviser guidance, recommendations, and investing.",
     bullets: [
       "Manual transaction tracking",
       "10 profiles and 20 non-cash accounts",
+      "2 linked bank accounts",
       "1,000,000 Clover tokens monthly",
       "Unlimited files and transaction rows within the token allowance",
       "Full investment portfolio tools",

@@ -1,3 +1,4 @@
+import { assertPlanQuota, PlanQuotaError } from "@/lib/plan-quota";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { isBudgetEmoji } from "@/lib/budget-appearance";
@@ -52,6 +53,7 @@ export async function GET() {
   try {
     context = await resolveBudgetingWorkspace();
   } catch (error) {
+    if (error instanceof PlanQuotaError) return NextResponse.json({error:error.message},{status:403});
     if (isUnauthorizedDataError(error)) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
@@ -71,7 +73,7 @@ export async function GET() {
     overview: data.overview,
     categories: data.categories,
     accounts: data.accounts,
-    workspaceId: context.workspaceId,
+    workspaceId: context.workspaceId!,
   });
 }
 
@@ -80,6 +82,7 @@ export async function POST(request: Request) {
   try {
     context = await resolveBudgetingWorkspace();
   } catch (error) {
+    if (error instanceof PlanQuotaError) return NextResponse.json({error:error.message},{status:403});
     if (isUnauthorizedDataError(error)) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
@@ -107,7 +110,7 @@ export async function POST(request: Request) {
 
   const [account, category] = await Promise.all([
     accountId ? prisma.account.findFirst({ where: { id: accountId, workspaceId: context.workspaceId }, select: { id: true, currency: true } }) : null,
-    categoryId ? prisma.category.findFirst({ where: { id: categoryId, workspaceId: context.workspaceId, type: "expense" }, select: { id: true } }) : null,
+    categoryId ? prisma.category.findFirst({ where: { id: categoryId, workspaceId: context.workspaceId!, type: "expense" }, select: { id: true } }) : null,
   ]);
   if ((accountId && !account) || (categoryId && !category)) {
     return NextResponse.json({ error: "Choose a valid account or expense category." }, { status: 400 });
@@ -118,9 +121,10 @@ export async function POST(request: Request) {
 
   let budget;
   try {
-    budget = await prisma.budget.create({
+    budget = await prisma.$transaction(async tx => { if (true) await assertPlanQuota(tx, (await tx.workspace.findUniqueOrThrow({where:{id:context.workspaceId!}})).userId, "budgets");
+return tx.budget.create({
       data: {
-        workspaceId: context.workspaceId,
+        workspaceId: context.workspaceId!,
         name: payload.name,
         emoji: payload.emoji ?? null,
         planId: payload.planId ?? null,
@@ -133,7 +137,9 @@ export async function POST(request: Request) {
         categoryId,
       },
     });
+    });
   } catch (error) {
+    if (error instanceof PlanQuotaError) return NextResponse.json({error:error.message},{status:403});
     if (isMissingBudgetTableError(error)) {
       return NextResponse.json(
         {
