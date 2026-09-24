@@ -66534,7 +66534,15 @@ html[data-theme="dark"] .content.content--reports .reports-range-menu__summary {
   .content.content:is(.content--transactions, .content--recurring, .content--investments) > :is(.topbar, .shell-compact-bar) :is(.topbar__title-wrap, .shell-compact-bar__copy) {
     position: absolute !important; inset: 0 !important; margin: 0 !important;
     display: flex !important; align-items: center !important; justify-content: center !important;
-    width: 100% !important; pointer-events: none;
+    width: 100% !important; max-width: none !important; height: 100% !important;
+    grid-column: 1 / -1 !important; grid-row: 1 !important; align-self: stretch !important; justify-self: stretch !important; pointer-events: none;
+  }
+  .content.content:is(.content--transactions, .content--recurring, .content--investments) > :is(.topbar, .shell-compact-bar) .topbar__title-row {
+    display: flex !important; align-items: center !important; justify-content: center !important;
+    height: 24px !important; min-height: 0 !important; padding: 0 !important; width: 100% !important;
+  }
+  .content.content--investments > :is(.topbar, .shell-compact-bar) :is(#investment-header-filter, .portfolio-filter-menu) {
+    display: flex !important; align-items: center !important; height: 40px !important; margin: 0 !important; padding: 0 !important;
   }
   .content.content:is(.content--transactions, .content--recurring, .content--investments) > :is(.topbar, .shell-compact-bar) .topbar__title-row h1 {
     margin: 0 !important; line-height: 24px !important;
