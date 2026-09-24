@@ -8339,13 +8339,13 @@ function TransactionsPageContent() {
                                 radius={7}
                                 className="transactions-mobile-simple-row__category-icon"
                               />
-                              <span className="transactions-mobile-simple-row__text"><span className="transactions-mobile-simple-row__name-main">{merchantSummary}</span><span className="transactions-mobile-simple-row__meta">{formatDate(transaction.date)} · {categoryLabel} · {accountDisplayName}</span></span>
+                              <span className="transactions-mobile-simple-row__text"><span className="transactions-mobile-simple-row__title-line"><span className="transactions-mobile-simple-row__name-main">{merchantSummary}</span>{warningReasonFor(transaction) ? <button type="button" className="transactions-mobile-warning-button" aria-label={warningReasonFor(transaction) ?? "Needs review"} onPointerDown={(event) => event.stopPropagation()} onClick={(event) => { event.stopPropagation(); openTransactionDetail(transaction); }}><span className="warning-mark warning-mark--small" aria-hidden="true" /></button> : null}</span><span className="transactions-mobile-simple-row__meta">{formatDate(transaction.date)} · {categoryLabel} · {accountDisplayName}</span></span>
                             </div>
                             <div className={`transactions-mobile-simple-row__amount-group ${amountToneClass}`}>
                               <span className={`transactions-mobile-simple-row__amount ${amountToneClass}`}>
                                 {effectiveType === "income" ? "+" : effectiveType === "expense" ? "−" : ""}{formatTransactionAmount(Math.abs(amount), transaction.currency)}
                               </span>
-                              {warningReasonFor(transaction) ? <button type="button" className="transactions-mobile-warning-button" aria-label={warningReasonFor(transaction) ?? "Needs review"} onPointerDown={(event) => event.stopPropagation()} onClick={(event) => { event.stopPropagation(); openTransactionDetail(transaction); }}><span className="warning-mark warning-mark--small" aria-hidden="true" /></button> : null}
+
                             </div>
                             <button
                               type="button"

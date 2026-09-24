@@ -66524,3 +66524,51 @@ html[data-theme="dark"] .content.content--reports .reports-range-menu__summary {
 
 .finverse-connect.finverse-connect--upgrade { display: flex; flex-direction: column; align-items: stretch; gap: 1rem; width: 100%; }
 .finverse-connect--upgrade .button { width: 100%; text-align: center; justify-content: center; }
+
+/* Mobile header and review indicators: keep actions aligned without shifting amounts. */
+@media (max-width: 1100px) {
+  .content.content:is(.content--transactions, .content--recurring, .content--investments) > :is(.topbar, .shell-compact-bar) {
+    grid-template-columns: 44px minmax(0, 1fr) auto !important;
+    align-items: center !important;
+  }
+  .content.content:is(.content--transactions, .content--recurring, .content--investments) > :is(.topbar, .shell-compact-bar) :is(.topbar__title-wrap, .shell-compact-bar__copy) {
+    position: absolute !important; inset: 0 !important; margin: 0 !important;
+    display: flex !important; align-items: center !important; justify-content: center !important;
+    width: 100% !important; pointer-events: none;
+  }
+  .content.content:is(.content--transactions, .content--recurring, .content--investments) > :is(.topbar, .shell-compact-bar) .topbar__title-row h1 {
+    margin: 0 !important; line-height: 24px !important;
+  }
+  .content.content:is(.content--transactions, .content--recurring, .content--investments) > :is(.topbar, .shell-compact-bar) :is(.topbar-actions, .shell-compact-bar__actions) {
+    display: flex !important; align-items: center !important; gap: 4px !important;
+    width: auto !important; min-width: 0 !important; z-index: 1;
+  }
+  .content.content > :is(.topbar, .shell-compact-bar) .shell-mobile-relocated-action :is(.contextual-ask-clover, .transactions-mobile-leading-actions) {
+    display: inline-flex !important; align-items: center !important;
+  }
+  .content.content > :is(.topbar, .shell-compact-bar) .shell-mobile-relocated-action .contextual-ask-clover__trigger {
+    display: inline-flex !important; width: 36px !important; height: 40px !important; min-width: 36px !important; padding: 0 !important;
+  }
+  .content.content:is(.content--recurring, .content--investments) > :is(.topbar, .shell-compact-bar) :is(.recurring-topbar-add, .investments-page__add-button, .portfolio-filter-menu__trigger) {
+    width: 40px !important; height: 40px !important; min-width: 40px !important; min-height: 40px !important;
+    max-width: 40px !important; max-height: 40px !important; flex: 0 0 40px !important;
+    padding: 0 !important; aspect-ratio: 1; border-radius: 50% !important; box-sizing: border-box;
+  }
+  .content--transactions .transactions-mobile-simple-row__title-line { display: flex; align-items: center; gap: 6px; min-width: 0; }
+  .content--transactions .transactions-mobile-simple-row__name-main { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .content--transactions .transactions-mobile-warning-button { min-width: 16px; width: 16px; min-height: 20px; height: 20px; position: relative; }
+  .transaction-filter-warning { gap: 2px; padding: 2px 4px; border-radius: 8px; background: color-mix(in srgb, var(--warn) 12%, transparent); }
+  .transaction-filter-warning__count { font-size: 10px; line-height: 14px; font-weight: 600; }
+  .transaction-filter-warning .warning-mark, .transactions-mobile-warning-button .warning-mark {
+    display: inline-block; width: 0; height: 0; border-left-width: 6px; border-right-width: 6px; border-bottom-width: 11px; transform: none;
+  }
+  .transaction-filter-warning .warning-mark::after, .transactions-mobile-warning-button .warning-mark::after { top: 3px; font-size: 7px; }
+  .content--investments .portfolio-growth__controls { grid-template-columns: minmax(0, 1fr) 76px; align-items: center; gap: 8px; }
+  .content--investments .portfolio-growth__asset-picker { width: 100%; min-width: 0; }
+  .content--investments .portfolio-growth__period { margin: 0; }
+  .content--investments .portfolio-growth__period select, .content--investments .portfolio-growth__asset-picker > summary {
+    box-sizing: border-box; width: 100%; height: 36px; min-height: 36px; padding: 0 10px;
+    border: 1px solid rgba(3, 168, 192, 0.22); border-radius: 12px;
+    background: var(--surface); color: var(--text); font: 400 12px var(--font-body);
+  }
+}
