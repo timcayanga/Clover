@@ -14,6 +14,7 @@ const sections = [
   ["scope", "Who this policy covers"],
   ["information", "Information we collect"],
   ["sources", "Where information comes from"],
+  ["connected-banks", "Connected bank accounts"],
   ["uses", "How we use information"],
   ["automation", "Imports, Adviser, and AI"],
   ["sharing", "When information is shared"],
@@ -35,10 +36,10 @@ export default function PrivacyPolicyPage() {
         <header className={styles.hero}>
           <p className={styles.eyebrow}>Legal</p>
           <h1>Privacy Policy</h1>
-          <p className={styles.updated}>Last updated: September 7, 2026</p>
+          <p className={styles.updated}>Last updated: September 24, 2026</p>
           <p className={styles.intro}>
-            Clover helps you organize financial records, understand your money,
-            and manage shared expenses. This policy explains what information we
+            Clover helps you connect supported banks, upload records, enter details manually,
+            and understand your finances. This policy explains what information we
             handle, why we need it, and the choices you have.
           </p>
         </header>
@@ -47,7 +48,7 @@ export default function PrivacyPolicyPage() {
           <article>
             <span aria-hidden="true">01</span>
             <h2>You stay in control</h2>
-            <p>You choose what to upload, review, correct, share, or delete.</p>
+            <p>You choose which banks to connect and what to upload, enter, review, share, or delete.</p>
           </article>
           <article>
             <span aria-hidden="true">02</span>
@@ -85,10 +86,10 @@ export default function PrivacyPolicyPage() {
               <h2>1. Who this policy covers</h2>
               <p>
                 This Privacy Policy applies to Clover&apos;s website, web
-                application, Help Center, contact forms, and related services.
+                application, iOS and Android apps, Help Center, contact forms, and related services.
                 In this policy, &quot;Clover,&quot; &quot;we,&quot;
                 &quot;us,&quot; and &quot;our&quot; refer to the operator of the
-                Clover personal finance service.
+                Clover personal finance service, Clover Innovations OPC.
               </p>
               <p>
                 Clover determines how personal information is processed for the
@@ -130,10 +131,10 @@ export default function PrivacyPolicyPage() {
               </p>
               <h3>Billing information</h3>
               <p>
-                For Plus subscriptions, we process your selected plan, billing
+                For Plus and Pro subscriptions, we process your selected plan, billing
                 interval, subscription status, payment-provider references, and
                 transaction status. Payments are completed through the provider
-                shown at checkout, including Paddle or PayPal where available.
+                shown at checkout, including Paddle, PayPal, Apple App Store, or Google Play where available. RevenueCat helps validate app purchases and maintain subscription entitlements.
                 Clover does not receive or store your complete card or
                 bank-payment credentials.
               </p>
@@ -163,7 +164,7 @@ export default function PrivacyPolicyPage() {
                   information to a shared area.
                 </li>
                 <li>
-                  From service providers that support authentication, payments,
+                  From banks you authorize through Finverse, and service providers that support authentication, payments,
                   hosting, analytics, email, and security.
                 </li>
                 <li>
@@ -173,8 +174,43 @@ export default function PrivacyPolicyPage() {
               </ul>
             </section>
 
+            <section className={styles.legalSection} id="connected-banks">
+              <h2>4. Connected bank accounts</h2>
+              <p>
+                Bank connections are optional. If you choose to connect a supported bank,
+                Finverse handles the bank-link authorization flow. Depending on the bank
+                and your authorization, Clover receives account identifiers, account names
+                or types, currencies, balances, transaction dates, amounts, descriptions,
+                and other account information supplied by the provider.
+              </p>
+              <p>
+                Clover stores connection identifiers, encrypted access and refresh tokens,
+                sync status and errors, and raw and normalized bank responses. We use these
+                to retrieve authorized records, maintain your connection, prevent duplicate
+                imports, support review, and provide your accounts, reports, and Adviser
+                features. Authorized support and administrators can inspect connection
+                status and linked-account usage to troubleshoot and enforce plan limits.
+              </p>
+              <p>
+                Enter bank sign-in details only in the bank or Finverse authorization flow,
+                not in Clover forms or support messages. Clover receives connection tokens
+                rather than your bank password. Finverse and your bank handle their own
+                processing under the notices shown during authorization. See the{" "}
+                <a href="https://www.finverse.com/legal/privacy-policy">Finverse Privacy Policy</a>.
+              </p>
+              <p>
+                To request disconnection or withdraw authorization, contact{" "}
+                <a href="mailto:hello@clover.ph">hello@clover.ph</a> and use any revocation
+                controls your bank or provider offers. Stopping future access does not
+                automatically erase records already imported into Clover; you can request
+                their deletion separately. Connected-bank records follow the retention
+                rules below, not the temporary uploaded-file cleanup period. Your bank and
+                Finverse may retain their own records under their policies and legal duties.
+              </p>
+            </section>
+
             <section className={styles.legalSection} id="uses">
-              <h2>4. How we use information</h2>
+              <h2>5. How we use information</h2>
               <p>We use personal information to:</p>
               <ul>
                 <li>
@@ -182,7 +218,7 @@ export default function PrivacyPolicyPage() {
                 </li>
                 <li>
                   Import, extract, organize, categorize, and display the records
-                  you provide.
+                  you provide or authorize a connected bank to supply.
                 </li>
                 <li>
                   Generate reports, patterns, goals, recurring suggestions, and
@@ -193,7 +229,7 @@ export default function PrivacyPolicyPage() {
                   features you choose to use.
                 </li>
                 <li>
-                  Process Plus subscriptions and maintain billing entitlements.
+                  Process Plus and Pro subscriptions and maintain billing entitlements.
                 </li>
                 <li>
                   Answer support requests and send important account, security,
@@ -222,7 +258,7 @@ export default function PrivacyPolicyPage() {
             </section>
 
             <section className={styles.legalSection} id="automation">
-              <h2>5. Imports, Adviser, and AI</h2>
+              <h2>6. Imports, Adviser, and AI</h2>
               <p>
                 Clover uses deterministic rules first where possible. When a
                 file is unfamiliar, incomplete, image-based, or difficult to
@@ -233,7 +269,7 @@ export default function PrivacyPolicyPage() {
               </p>
               <p>
                 This means relevant text, images, extracted financial details,
-                prompts, and account context may be sent to AI service providers
+                prompts, and account context (including relevant connected-bank records) may be sent to AI service providers
                 solely to produce the requested result and operate the feature.
                 AI output can be incomplete or wrong. Clover shows review and
                 correction tools so you can confirm important details before
@@ -247,7 +283,7 @@ export default function PrivacyPolicyPage() {
             </section>
 
             <section className={styles.legalSection} id="sharing">
-              <h2>6. When information is shared</h2>
+              <h2>7. When information is shared</h2>
               <p>
                 We do not sell your personal information. We may disclose it in
                 these limited circumstances:
@@ -257,7 +293,7 @@ export default function PrivacyPolicyPage() {
                   <strong>Service providers.</strong> Providers help us deliver
                   authentication (Clerk), hosting and application infrastructure
                   (Vercel), database services (Supabase), AI processing
-                  (OpenAI), payments (Paddle or PayPal), product analytics
+                  (OpenAI), bank-data connections (Finverse), payments (Paddle, PayPal, Apple, or Google), subscription validation (RevenueCat), product analytics
                   (PostHog), and support email (Zoho). They receive only the
                   information needed for their role and process it under their
                   own applicable terms and privacy commitments.
@@ -283,7 +319,7 @@ export default function PrivacyPolicyPage() {
             </section>
 
             <section className={styles.legalSection} id="circles">
-              <h2>7. Circles and shared features</h2>
+              <h2>8. Circles and shared features</h2>
               <p>
                 Joining a Circle does not automatically give its members access
                 to your personal Profiles, accounts, transactions, files,
@@ -308,7 +344,7 @@ export default function PrivacyPolicyPage() {
             </section>
 
             <section className={styles.legalSection} id="transfers">
-              <h2>8. International processing</h2>
+              <h2>9. International processing</h2>
               <p>
                 Clover and its service providers may process information in the
                 Philippines and other countries where they operate. Privacy and
@@ -320,7 +356,7 @@ export default function PrivacyPolicyPage() {
             </section>
 
             <section className={styles.legalSection} id="retention">
-              <h2>9. Retention and deletion</h2>
+              <h2>10. Retention and deletion</h2>
               <p>
                 We keep information only for as long as reasonably necessary to
                 provide Clover, maintain traceability, secure the service, meet
@@ -363,7 +399,7 @@ export default function PrivacyPolicyPage() {
             </section>
 
             <section className={styles.legalSection} id="security">
-              <h2>10. How we protect information</h2>
+              <h2>11. How we protect information</h2>
               <p>
                 Clover uses administrative, technical, and organizational
                 safeguards designed for financial information. These include
@@ -382,7 +418,7 @@ export default function PrivacyPolicyPage() {
             </section>
 
             <section className={styles.legalSection} id="choices">
-              <h2>11. Your choices and rights</h2>
+              <h2>12. Your choices and rights</h2>
               <p>
                 Subject to applicable law, including the Philippine Data Privacy
                 Act of 2012, you may have the right to be informed, access your
@@ -392,7 +428,7 @@ export default function PrivacyPolicyPage() {
               </p>
               <p>
                 Clover also provides in-product controls to review and correct
-                imported data, manage sharing, wipe app data, and delete your
+                connected or imported data, manage sharing, wipe app data, and delete your
                 account. To exercise a right that is not available in the app,
                 email <a href="mailto:hello@clover.ph">hello@clover.ph</a>. We
                 may need to verify your identity and may retain or decline a
@@ -401,7 +437,7 @@ export default function PrivacyPolicyPage() {
             </section>
 
             <section className={styles.legalSection} id="cookies">
-              <h2>12. Cookies and analytics</h2>
+              <h2>13. Cookies and analytics</h2>
               <p>
                 Clover uses cookies and similar browser storage for sign-in
                 sessions, security, theme and interface preferences, and
@@ -418,7 +454,7 @@ export default function PrivacyPolicyPage() {
             </section>
 
             <section className={styles.legalSection} id="children">
-              <h2>13. Children&apos;s privacy</h2>
+              <h2>14. Children&apos;s privacy</h2>
               <p>
                 Clover is not directed to children under 18 and is intended for
                 people who can legally manage an account or who use it with
@@ -429,7 +465,7 @@ export default function PrivacyPolicyPage() {
             </section>
 
             <section className={styles.legalSection} id="changes">
-              <h2>14. Changes to this policy</h2>
+              <h2>15. Changes to this policy</h2>
               <p>
                 We may update this policy as Clover changes or legal
                 requirements develop. We will post the revised policy here and
@@ -440,7 +476,7 @@ export default function PrivacyPolicyPage() {
             </section>
 
             <section className={styles.legalSection} id="contact">
-              <h2>15. Contact and complaints</h2>
+              <h2>16. Contact and complaints</h2>
               <p>
                 For privacy questions or requests, email{" "}
                 <a href="mailto:hello@clover.ph">hello@clover.ph</a>. Please

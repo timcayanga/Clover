@@ -14,11 +14,12 @@ const sections = [
   ["agreement", "Agreement and eligibility"],
   ["account", "Your account"],
   ["service", "What Clover provides"],
+  ["connected-banks", "Connected bank accounts"],
   ["content", "Your records and content"],
   ["automation", "Imports, Adviser, and AI"],
   ["sharing", "Circles and shared expenses"],
   ["acceptable-use", "Acceptable use"],
-  ["plans", "Free, Plus and Plus plans"],
+  ["plans", "Free, Plus and Pro plans"],
   ["billing", "Billing and cancellation"],
   ["third-parties", "Third-party services"],
   ["availability", "Changes and availability"],
@@ -38,7 +39,7 @@ export default function TermsOfServicePage() {
         <header className={styles.hero}>
           <p className={styles.eyebrow}>Legal</p>
           <h1>Terms of Service</h1>
-          <p className={styles.updated}>Last updated: September 7, 2026</p>
+          <p className={styles.updated}>Last updated: September 24, 2026</p>
           <p className={styles.intro}>
             These Terms explain the rules for using Clover. By creating an
             account or using the service, you agree to them.
@@ -58,7 +59,7 @@ export default function TermsOfServicePage() {
             <span aria-hidden="true">02</span>
             <h2>Review before relying</h2>
             <p>
-              Imports, reports, and Adviser guidance can be incomplete or
+              Connected records, imports, reports, and Adviser guidance can be incomplete or
               inaccurate.
             </p>
           </article>
@@ -90,8 +91,8 @@ export default function TermsOfServicePage() {
               <h2>1. Agreement and eligibility</h2>
               <p>
                 These Terms of Service (&quot;Terms&quot;) are an agreement
-                between you and Clover. They apply to Clover&apos;s website, web
-                application, Help Center, contact forms, and related services.
+                between you and Clover Innovations OPC, the operator of Clover. They apply to Clover&apos;s website, web
+                application, iOS and Android apps, Help Center, contact forms, and related services.
               </p>
               <p>
                 You must be at least 18 years old and legally capable of
@@ -147,7 +148,7 @@ export default function TermsOfServicePage() {
               </p>
               <ul>
                 <li>
-                  Import bank statements, receipts, screenshots, spreadsheets,
+                  Connect supported bank accounts, enter details manually, or import bank statements, receipts, screenshots, spreadsheets,
                   and other supported records.
                 </li>
                 <li>
@@ -172,13 +173,47 @@ export default function TermsOfServicePage() {
                 manager, credit bureau, remittance provider, or payment
                 processor. Clover does not hold, move, lend, invest, or insure
                 your money. References to financial institutions or brands
-                describe supported records and do not imply endorsement or
+                identify record sources or connection availability and do not imply endorsement or
                 affiliation.
               </p>
             </section>
 
+            <section className={styles.legalSection} id="connected-banks">
+              <h2>4. Connected bank accounts</h2>
+              <p>
+                Bank connections use Finverse and are optional. Connect only accounts you
+                own or are authorized to access. By completing the authorization flow, you
+                ask Clover and its provider to retrieve and process the account information
+                covered by that authorization. Linking an account does not authorize Clover
+                to send payments, move funds, or execute trades.
+              </p>
+              <p>
+                Available banks, account types, history, and refresh timing depend on the
+                bank and provider. Connections can expire, need renewed authorization, or
+                be interrupted. Clover does not guarantee real-time balances, complete
+                history, or uninterrupted syncing. Review synced records against your
+                bank records, especially when combining connections with uploads or manual
+                entries that may overlap.
+              </p>
+              <p>
+                Connection and sync access are subject to your plan limits. A plan change
+                may restrict new links or further syncing. It does not itself cancel your
+                bank authorization or erase existing financial records. To request
+                disconnection, contact <a href="mailto:hello@clover.ph">hello@clover.ph</a>
+                {" "}and use any revocation controls your bank or provider offers. Request
+                deletion of previously imported records separately where needed.
+              </p>
+              <p>
+                Your bank&apos;s terms and the{" "}
+                <a href="https://www.finverse.com/legal/terms-of-service-data">Finverse Data Services Terms</a>
+                {" "}also apply to their services. Our{" "}
+                <Link href="/privacy-policy#connected-banks">Privacy Policy</Link>
+                {" "}explains how Clover handles connected-bank information.
+              </p>
+            </section>
+
             <section className={styles.legalSection} id="content">
-              <h2>4. Your records and content</h2>
+              <h2>5. Your records and content</h2>
               <p>
                 You retain your rights in files, financial records, messages,
                 images, and other content you provide. You give Clover a
@@ -189,7 +224,7 @@ export default function TermsOfServicePage() {
               <p>You confirm that:</p>
               <ul>
                 <li>
-                  You have the right to upload and process the content you
+                  You have the right to connect accounts and provide or process the content you
                   provide.
                 </li>
                 <li>
@@ -214,7 +249,7 @@ export default function TermsOfServicePage() {
             </section>
 
             <section className={styles.legalSection} id="automation">
-              <h2>5. Imports, Adviser, and AI</h2>
+              <h2>6. Imports, Adviser, and AI</h2>
               <p>
                 Clover uses software rules, optical character recognition,
                 heuristics, and AI services to interpret records and generate
@@ -226,8 +261,7 @@ export default function TermsOfServicePage() {
                 balances, categories, investment details, reports, and Adviser
                 guidance before relying on them. Your confirmation does not
                 guarantee that an entry is complete or accurate, and Clover does
-                not independently verify your information with a bank or other
-                institution.
+                not independently audit or guarantee the information received from you, a bank, or another provider.
               </p>
               <p>
                 Adviser and other generated guidance are educational and
@@ -239,7 +273,7 @@ export default function TermsOfServicePage() {
             </section>
 
             <section className={styles.legalSection} id="sharing">
-              <h2>6. Circles and shared expenses</h2>
+              <h2>7. Circles and shared expenses</h2>
               <p>
                 Circles are permissioned spaces for shared plans, selected
                 financial summaries, expenses, goals, budgets, commitments, and
@@ -277,7 +311,7 @@ export default function TermsOfServicePage() {
             </section>
 
             <section className={styles.legalSection} id="acceptable-use">
-              <h2>7. Acceptable use</h2>
+              <h2>8. Acceptable use</h2>
               <p>You may not:</p>
               <ul>
                 <li>
@@ -317,13 +351,17 @@ export default function TermsOfServicePage() {
             </section>
 
             <section className={styles.legalSection} id="plans">
-              <h2>8. Free, Plus and Plus plans</h2>
+              <h2>9. Free, Plus and Pro plans</h2>
               <p>
-                Clover may offer Free, Plus and Plus plans with different features,
+                Clover may offer Free, Plus and Pro plans with different features,
                 capacity, and limits. The current plan descriptions and prices
                 appear on the <Link href="/pricing">Pricing page</Link> and at
                 checkout. Features and limits may change as the service
-                develops.
+                develops. Free includes uploads and manual entry within its allowances;
+                bank connections require Plus or Pro. Plus currently permits 2 linked bank
+                accounts and Pro 5 per user across Profiles. Each linked account counts
+                separately, including accounts at the same bank, and also uses your
+                overall financial-account allowance.
               </p>
               <p>
                 A temporary trial, promotion, higher limit, or uncapped feature
@@ -334,10 +372,10 @@ export default function TermsOfServicePage() {
             </section>
 
             <section className={styles.legalSection} id="billing">
-              <h2>9. Billing and cancellation</h2>
+              <h2>10. Billing and cancellation</h2>
               <p>
-                Pro purchases use the billing provider identified at checkout,
-                including Paddle or PayPal where available. Review the amount,
+                Plus and Pro purchases use the billing provider identified at checkout,
+                including Paddle, PayPal, Apple App Store, or Google Play where available. RevenueCat may validate app purchases and manage subscription entitlements. Review the amount,
                 currency, taxes, billing interval, and provider terms before
                 approving payment. Regional pricing may differ; the checkout
                 details govern your purchase.
@@ -356,7 +394,7 @@ export default function TermsOfServicePage() {
                   with your billing provider.
                 </li>
                 <li>
-                  Use Plan settings or your provider’s customer portal to manage
+                  Use Plan settings, your provider’s customer portal, or your Apple or Google subscription settings to manage
                   renewal and cancellation. Check the cancellation confirmation
                   and the access end date shown for your subscription.
                 </li>
@@ -367,7 +405,7 @@ export default function TermsOfServicePage() {
                   displayed terms.
                 </li>
                 <li>
-                  Free Pro grants or referral rewards can have their own expiry
+                  Complimentary Plus or Pro grants or referral rewards can have their own expiry
                   dates and eligibility rules. Receiving a grant does not itself
                   authorize a recurring charge.
                 </li>
@@ -385,15 +423,15 @@ export default function TermsOfServicePage() {
                   Paddle Refund Policy
                 </a>
                 . If a payment fails, is reversed, or is disputed, Clover may
-                limit Plus access while the billing status is resolved.
+                limit paid-plan access while the billing status is resolved.
               </p>
             </section>
 
             <section className={styles.legalSection} id="third-parties">
-              <h2>10. Third-party services</h2>
+              <h2>11. Third-party services</h2>
               <p>
                 Clover relies on third-party services for authentication,
-                hosting, databases, AI processing, payments, analytics, and
+                hosting, databases, bank connections, AI processing, payments, subscription validation, analytics, and
                 email. Their terms and privacy policies may apply to their part
                 of the service. Clover is not responsible for a third-party
                 service&apos;s independent acts, availability, or content,
@@ -408,7 +446,7 @@ export default function TermsOfServicePage() {
             </section>
 
             <section className={styles.legalSection} id="availability">
-              <h2>11. Changes and availability</h2>
+              <h2>12. Changes and availability</h2>
               <p>
                 We work to keep Clover useful and available, but the service may
                 be interrupted for maintenance, security work, provider outages,
@@ -424,7 +462,7 @@ export default function TermsOfServicePage() {
             </section>
 
             <section className={styles.legalSection} id="termination">
-              <h2>12. Suspension and termination</h2>
+              <h2>13. Suspension and termination</h2>
               <p>
                 You may stop using Clover, wipe app data, or delete your account
                 through the available settings. We may restrict or suspend
@@ -443,7 +481,7 @@ export default function TermsOfServicePage() {
             </section>
 
             <section className={styles.legalSection} id="ownership">
-              <h2>13. Clover ownership</h2>
+              <h2>14. Clover ownership</h2>
               <p>
                 Clover&apos;s software, design, branding, documentation,
                 interfaces, and original content are owned by Clover or its
@@ -460,7 +498,7 @@ export default function TermsOfServicePage() {
             </section>
 
             <section className={styles.legalSection} id="disclaimers">
-              <h2>14. Important disclaimers</h2>
+              <h2>15. Important disclaimers</h2>
               <p>
                 To the fullest extent permitted by law, Clover is provided
                 &quot;as is&quot; and &quot;as available.&quot; We do not
@@ -477,7 +515,7 @@ export default function TermsOfServicePage() {
             </section>
 
             <section className={styles.legalSection} id="liability">
-              <h2>15. Limits of liability</h2>
+              <h2>16. Limits of liability</h2>
               <p>
                 To the fullest extent permitted by law, Clover will not be
                 liable for indirect, incidental, special, consequential,
@@ -496,7 +534,7 @@ export default function TermsOfServicePage() {
             </section>
 
             <section className={styles.legalSection} id="law">
-              <h2>16. Governing law and disputes</h2>
+              <h2>17. Governing law and disputes</h2>
               <p>
                 These Terms are governed by the laws of the Republic of the
                 Philippines, without regard to conflict-of-law rules. Before
@@ -512,7 +550,7 @@ export default function TermsOfServicePage() {
             </section>
 
             <section className={styles.legalSection} id="changes">
-              <h2>17. Changes to these Terms</h2>
+              <h2>18. Changes to these Terms</h2>
               <p>
                 We may update these Terms as Clover, our providers, or legal
                 requirements change. We will post the revised Terms and update
@@ -523,7 +561,7 @@ export default function TermsOfServicePage() {
             </section>
 
             <section className={styles.legalSection} id="contact">
-              <h2>18. Contact</h2>
+              <h2>19. Contact</h2>
               <p>
                 Questions about these Terms can be sent to{" "}
                 <a href="mailto:hello@clover.ph">hello@clover.ph</a> or through
