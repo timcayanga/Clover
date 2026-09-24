@@ -743,6 +743,23 @@ export function AdminUsersConsole({
           </div>
         </div>
 
+        <section className="admin-bank-links" aria-label="Linked bank accounts">
+          <h2>Linked bank accounts</h2>
+          <p>Current Finverse links across this environment, independent of user search filters. Disconnected links, deleted accounts and manual accounts are excluded.</p>
+          <div className="admin-bank-links__totals">
+            <div className="admin-users__stat"><strong>{(data.overview.bankLinks?.totalAccounts ?? 0).toLocaleString()}</strong><span>Linked accounts</span></div>
+            <div className="admin-users__stat"><strong>{(data.overview.bankLinks?.totalUsers ?? 0).toLocaleString()}</strong><span>Users with linked accounts</span></div>
+          </div>
+          <div className="admin-users__table-wrap">
+            <table className="admin-bank-links__table">
+              <caption>Linked accounts by bank</caption>
+              <thead><tr><th scope="col">Bank</th><th scope="col">Linked accounts</th><th scope="col">Users</th></tr></thead>
+              <tbody>{(data.overview.bankLinks?.banks ?? []).map(bank => <tr key={bank.id}><th scope="row">{bank.name}</th><td>{bank.accountCount.toLocaleString()}</td><td>{bank.userCount.toLocaleString()}</td></tr>)}</tbody>
+            </table>
+            {!data.overview.bankLinks?.banks.length && <p>No bank accounts are linked yet.</p>}
+          </div>
+        </section>
+
         <div className="admin-users__trend-grid">
           <div className="admin-users__trend-card">
             <span>Active users</span>
@@ -1048,7 +1065,7 @@ export function AdminUsersConsole({
                           {user.workspaceCount} ws · {user.accountCount} acct
                         </strong>
                         <small className="admin-users__cell-note">
-                          {user.transactionCount.toLocaleString()} transactions
+                          {(user.linkedBankAccountCount ?? 0).toLocaleString()} linked bank accounts · {user.transactionCount.toLocaleString()} transactions
                           · {user.monthlyUploads} uploads
                         </small>
                       </td>

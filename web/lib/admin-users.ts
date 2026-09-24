@@ -1,3 +1,5 @@
+import { loadAdminBankLinks } from "@/lib/admin-bank-links";
+import type { AdminBankLinkSummary } from "@/lib/admin-bank-link-metrics";
 import { capturePostHogServerEvent } from "./analytics-server";
 import { clerkClient } from "@clerk/nextjs/server";
 import { BillingSubscriptionStatus, Prisma, type FinancialExperienceLevel, type PlanTier, type User } from "@prisma/client";
@@ -25,6 +27,7 @@ export type AdminUserListFilters = {
 };
 
 export type AdminUserListItem = {
+  linkedBankAccountCount?: number;
   id: string;
   clerkUserId: string;
   email: string;
@@ -81,6 +84,7 @@ export type AdminUserListResponse = {
 };
 
 export type AdminUserOverview = {
+  bankLinks?: AdminBankLinkSummary;
   totalUsers: number;
   freeUsers: number;
   plusUsers: number;
@@ -109,6 +113,7 @@ export type AdminUserOverview = {
 };
 
 export type AdminUserDetail = {
+  linkedBankAccountCount?: number;
   id: string;
   clerkUserId: string;
   email: string;
@@ -323,6 +328,7 @@ type AdminUserListRow = User & {
     workspaces: number;
   };
   accountCount?: number;
+  linkedBankAccountCount?: number;
   transactionCount?: number;
   activeAccountCount?: number;
   investmentAccountCount?: number;
@@ -376,6 +382,7 @@ function mapUser(user: AdminUserListRow): AdminUserListItem {
     updatedAt: user.updatedAt.toISOString(),
     workspaceCount: user._count.workspaces,
     accountCount: user.accountCount ?? 0,
+    linkedBankAccountCount: user.linkedBankAccountCount ?? 0,
     transactionCount: user.transactionCount ?? 0,
     activeAccountCount: user.activeAccountCount ?? 0,
     investmentAccountCount: user.investmentAccountCount ?? 0,
@@ -403,6 +410,7 @@ async function fetchUserMetrics(userIds: string[]) {
   if (userIds.length === 0) {
     return {
       accountCounts: new Map<string, number>(),
+      linkedBankAccountCounts: new Map<string, number>(),
       transactionCounts: new Map<string, number>(),
       activeAccountCounts: new Map<string, number>(),
       investmentAccountCounts: new Map<string, number>(),
@@ -423,6 +431,7 @@ async function fetchUserMetrics(userIds: string[]) {
   const userIdFragments = userIds.map((userId) => Prisma.sql`${userId}`);
 
   const [
+    bankLinks,
     accountRows,
     transactionCountRows,
     activeAccountRows,
@@ -432,6 +441,7 @@ async function fetchUserMetrics(userIds: string[]) {
     recentErrorRows,
     lastActivityRows,
   ] = await Promise.all([
+    loadAdminBankLinks(userIds),
     prisma.$queryRaw<Array<{ userId: string; accountCount: bigint }>>(Prisma.sql`
       SELECT w."userId" AS "userId", COUNT(*)::bigint AS "accountCount"
       FROM "Account" a
@@ -509,6 +519,7 @@ async function fetchUserMetrics(userIds: string[]) {
   ]);
 
   return {
+    linkedBankAccountCounts: bankLinks.counts,
     accountCounts: new Map(
       accountRows.map((row) => [row.userId, Number(row.accountCount)])
     ),
@@ -582,6 +593,7 @@ async function fetchAdminOverview(): Promise<AdminUserOverview> {
   const realUserWhere = getAdminRealUserWhere();
 
   const [
+    bankLinks,
     userCounts,
     workspaceCount,
     accountCount,
@@ -600,6 +612,7 @@ async function fetchAdminOverview(): Promise<AdminUserOverview> {
     signups7d,
     signupsPrev7d,
   ] = await Promise.all([
+    loadAdminBankLinks(),
     prisma.user.groupBy({
       by: ["planTier", "verified", "planTierLocked"],
       where: realUserWhere,
@@ -768,6 +781,7 @@ async function fetchAdminOverview(): Promise<AdminUserOverview> {
   const totalInvestmentValue = investmentValueRows[0]?.total ?? "0";
 
   return {
+    bankLinks: bankLinks.summary,
     totalUsers: planCounts.free + planCounts.pro + planCounts.premium,
     freeUsers: planCounts.free,
     plusUsers: planCounts.pro,
@@ -856,6 +870,7 @@ export async function getAdminUsers(filters: AdminUserListFilters = {}): Promise
   const enrichedUsers: AdminUserListRow[] = users.map((user) => ({
     ...user,
     accountCount: metrics.accountCounts.get(user.id) ?? 0,
+    linkedBankAccountCount: metrics.linkedBankAccountCounts.get(user.id) ?? 0,
     transactionCount: metrics.transactionCounts.get(user.id) ?? 0,
     activeAccountCount: metrics.activeAccountCounts.get(user.id) ?? 0,
     investmentAccountCount: metrics.investmentAccountCounts.get(user.id) ?? 0,
@@ -1187,6 +1202,7 @@ export async function getAdminUserDetail(userId: string): Promise<AdminUserDetai
     verified: user.verified,
     workspaceCount: user._count.workspaces,
     accountCount: metrics.accountCounts.get(user.id) ?? 0,
+    linkedBankAccountCount: metrics.linkedBankAccountCounts.get(user.id) ?? 0,
     transactionCount: metrics.transactionCounts.get(user.id) ?? 0,
     activeAccountCount: metrics.activeAccountCounts.get(user.id) ?? 0,
     investmentAccountCount: metrics.investmentAccountCounts.get(user.id) ?? 0,
@@ -1300,6 +1316,7 @@ export async function exportAdminUsers(filters: AdminUserListFilters = {}) {
     mapUser({
       ...user,
       accountCount: metrics.accountCounts.get(user.id) ?? 0,
+      linkedBankAccountCount: metrics.linkedBankAccountCounts.get(user.id) ?? 0,
       transactionCount: metrics.transactionCounts.get(user.id) ?? 0,
       activeAccountCount: metrics.activeAccountCounts.get(user.id) ?? 0,
       investmentAccountCount: metrics.investmentAccountCounts.get(user.id) ?? 0,
@@ -1321,6 +1338,7 @@ export async function exportAdminUsers(filters: AdminUserListFilters = {}) {
     "verified",
     "workspaceCount",
     "accountCount",
+    "linkedBankAccountCount",
     "transactionCount",
     "activeAccountCount",
     "investmentAccountCount",
@@ -1355,6 +1373,7 @@ export async function exportAdminUsers(filters: AdminUserListFilters = {}) {
         row.verified,
         row.workspaceCount,
         row.accountCount,
+        row.linkedBankAccountCount ?? 0,
         row.transactionCount,
         row.activeAccountCount,
         row.investmentAccountCount,

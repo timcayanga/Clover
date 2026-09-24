@@ -188,7 +188,7 @@
     "qa:analytics": "tsx scripts/analytics-coverage-regression.ts",
     "qa:plans": "tsx scripts/three-tier-plans-regression.ts",
     "qa:store-tiers": "tsx scripts/store-tier-regression.ts",
-    "qa:plan-admin": "tsx scripts/plan-admin-analytics-regression.ts"
+    "qa:plan-admin": "tsx scripts/plan-admin-analytics-regression.ts && tsx scripts/admin-bank-links-regression.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1095.0",
