@@ -4,6 +4,7 @@ export const FINVERSE_COUNTRIES = [
   { code: "MYS", name: "Malaysia", flag: "🇲🇾" },
   { code: "PHL", name: "Philippines", flag: "🇵🇭" },
   { code: "SGP", name: "Singapore", flag: "🇸🇬" },
+  { code: "THA", name: "Thailand", flag: "🇹🇭" },
   { code: "VNM", name: "Vietnam", flag: "🇻🇳" },
 ] as const;
 export function finverseCountries(banks: { countries: string[] }[]) {

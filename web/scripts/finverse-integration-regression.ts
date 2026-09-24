@@ -93,7 +93,7 @@ assert.equal(mobileOperation("GET",["finverse","callback"]),null);
 console.log("Finverse bank discovery: mode, region, products, status, deduplication and mobile method boundaries passed.");
 
 import { finverseCountries } from "../../shared/finverse-countries";
-assert.deepEqual(finverseCountries([]).map(c=>c.name),["Hong Kong","Indonesia","Malaysia","Philippines","Singapore","Vietnam"]);
+assert.deepEqual(finverseCountries([]).map(c=>c.name),["Hong Kong","Indonesia","Malaysia","Philippines","Singapore","Thailand","Vietnam"]);
 assert.equal(mobileOperation("GET",["finverse","connections"]),"finverse-connections");
 assert.equal(mobileOperation("POST",["finverse","connections"]),null);
 

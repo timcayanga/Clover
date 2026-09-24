@@ -498,7 +498,7 @@ export function DashboardManualTransactionModal({
             const tabs = ["manual", "ask", "upload", "sync"] as const;
             const next = event.key === "ArrowRight" ? tabs[(index + 1) % 4] : event.key === "ArrowLeft" ? tabs[(index + 3) % 4] : event.key === "Home" ? tabs[0] : event.key === "End" ? tabs[3] : null;
             if (next) { event.preventDefault(); setEntryTab(next); if (next === "ask") setAskVisited(true); document.getElementById(`quick-entry-tab-${next}`)?.focus(); }
-          }}><img src={`/assets/organize/method-${tab === "sync" ? "connect" : tab}.svg`} alt="" width="20" height="20" />{tab === "manual" ? "Manual" : tab === "ask" ? "Ask Clover" : tab === "sync" ? "Sync" : "Upload"}</button>)}
+          }}><img src={`/assets/organize/method-${tab}.svg`} alt="" width="20" height="20" />{tab === "manual" ? "Manual" : tab === "ask" ? "Ask Clover" : tab === "sync" ? "Sync" : "Upload"}</button>)}
         </div>
         {entryTab === "sync" ? <div id="quick-entry-panel-sync" role="tabpanel" aria-labelledby="quick-entry-tab-sync"><FinverseConnectButton workspaceId={workspaceId} mode="sync" /></div> : null}
         <div id="quick-entry-panel-manual" role="tabpanel" aria-labelledby="quick-entry-tab-manual" hidden={entryTab !== "manual"}>

@@ -8691,7 +8691,7 @@ function TransactionsPageContent() {
                     const index = tabs.indexOf(tab);
                     const next = event.key === "ArrowRight" ? tabs[(index + 1) % tabs.length] : event.key === "ArrowLeft" ? tabs[(index + tabs.length - 1) % tabs.length] : event.key === "Home" ? tabs[0] : event.key === "End" ? tabs[tabs.length - 1] : null;
                     if (next) { event.preventDefault(); setCreationTab(next); if (next === "ask") setCreationChatVisited(true); document.getElementById(`creation-tab-${next}`)?.focus(); }
-                  }} onClick={() => { setCreationTab(tab); if (tab === "ask") setCreationChatVisited(true); }}><img src={`/assets/organize/method-${tab === "sync" ? "connect" : tab}.svg`} alt="" width="20" height="20" />{label}</button>
+                  }} onClick={() => { setCreationTab(tab); if (tab === "ask") setCreationChatVisited(true); }}><img src={`/assets/organize/method-${tab}.svg`} alt="" width="20" height="20" />{label}</button>
                 ))}
               </div>
             )}
