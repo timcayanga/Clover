@@ -27,7 +27,7 @@ export default async function PricingPage() {
       <section className={styles.plans} aria-label="Clover plans">
         <article className={styles.pro}><h2>Pro</h2><strong>{premium.monthly}<small> / month</small></strong><p>Or {premium.annual} per year</p><p>More accounts, linked banks and AI capacity.</p><Link className="button button-primary button-pill" href={signedIn ? "/settings/plan" : "/sign-up?intent=premium"}>Explore Pro →</Link></article>
         <article className={styles.plus}><h2>Plus</h2><strong>{prices.monthly}<small> / month</small></strong><p>Or {prices.annual} per year</p><Link className="button button-primary button-pill" href={proHref}>Upgrade to Plus →</Link></article>
-        <article className={styles.free}><h2>Free</h2><strong>Free</strong><p>Organize your finances with Clover’s core tools.</p><Link className="button button-secondary button-pill" href={signedIn ? "/home" : "/sign-up"}>{signedIn ? "Open Clover" : "Start free"} →</Link></article>
+        <article className={styles.free}><h2>Free</h2><strong>P 0</strong><p>Organize your finances with Clover’s core tools.</p><Link className="button button-secondary button-pill" href={signedIn ? "/home" : "/sign-up"}>{signedIn ? "Open Clover" : "Start free"} →</Link></article>
       </section>
       <PlanComparisonTable variant="full" paidFirst className={styles.table} />
       <section className={styles.notes} aria-label="Plan details">
