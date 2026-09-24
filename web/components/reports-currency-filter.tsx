@@ -2,12 +2,10 @@
 
 import { usePathname, useSearchParams } from "next/navigation";
 import { CurrencySelector } from "@/components/currency-selector";
-import { getCurrencyCatalogCodes } from "@/lib/currencies";
 import { formatCurrencyCode } from "@/lib/currency-format";
 
-const reportCurrencyOptions = getCurrencyCatalogCodes();
 
-export function ReportsCurrencyFilter({ currentCurrency }: { currentCurrency?: string }) {
+export function ReportsCurrencyFilter({ currentCurrency, currencies }: { currentCurrency: string; currencies: string[] }) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const value = currentCurrency || "all";
@@ -19,7 +17,7 @@ export function ReportsCurrencyFilter({ currentCurrency }: { currentCurrency?: s
         const params = new URLSearchParams(searchParams?.toString() ?? "");
         const targetPath = pathname || "/reports";
         if (next.toLowerCase() === "all") {
-          params.delete("currency");
+          params.set("currency", "ALL");
         } else {
           params.set("currency", formatCurrencyCode(next));
         }
@@ -28,7 +26,7 @@ export function ReportsCurrencyFilter({ currentCurrency }: { currentCurrency?: s
         // RSC replacement while preserving the same URL and calculation semantics.
         window.location.replace(query ? `${targetPath}?${query}` : targetPath);
       }}
-      options={reportCurrencyOptions}
+      options={currencies}
       includeAllOption
       allLabel="All currencies"
       ariaLabel="Filter reports by currency"

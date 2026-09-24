@@ -1,3 +1,4 @@
+import { resolveReportCurrency } from "@/lib/report-currency";
 import { getRollingWeekBuckets } from "@/lib/report-week-buckets";
 import { organizeAccountLabels } from "@/lib/organize-account-label";
 import { reportFilterSelection, matchesReportSelection } from "@/lib/report-filter-policy";
@@ -2238,8 +2239,9 @@ async function ReportsPageStream({ searchParams }: { searchParams?: Promise<{ ra
     prisma.account.findMany({where:{workspaceId:filterProfile.id},select:{id:true,name:true,accountNumber:true,currency:true,type:true,source:true,institution:true},orderBy:{name:"asc"}}),
     prisma.category.findMany({where:{workspaceId:filterProfile.id},select:{name:true},orderBy:{name:"asc"}}),
   ]) : [[], []];
+  const currencySelection = resolveReportCurrency(filterAccounts.map(account => account.currency), normalizeRegionalPreferences(user.regionalPreferences).baseCurrency, resolvedSearchParams?.currency);
   const filterAccountLabels = organizeAccountLabels(filterAccounts);
-  const filterOptions = {profiles, currentProfile:filterProfile?.id ?? "", accounts:filterAccounts.map(account=>({id:account.id,name:filterAccountLabels.get(account.id) ?? account.name})), categories:filterCategories.map(category=>category.name)};
+  const filterOptions = {...currencySelection, profiles, currentProfile:filterProfile?.id ?? "", accounts:filterAccounts.map(account=>({id:account.id,name:filterAccountLabels.get(account.id) ?? account.name})), categories:filterCategories.map(category=>category.name)};
   const reportWindow = resolveReportWindow(
     getCalendarDayEndInTimeZone(new Date(), normalizeRegionalPreferences(user.regionalPreferences).timeZone),
     resolvedSearchParams,
@@ -2275,7 +2277,7 @@ async function ReportsPageStream({ searchParams }: { searchParams?: Promise<{ ra
       >
         <ReportsStream
           active="reports"
-          searchParams={resolvedSearchParams}
+          searchParams={{...resolvedSearchParams, currency: currencySelection.currentCurrency}}
           user={user}
           sessionIsGuest={session.isGuest}
         />

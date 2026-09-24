@@ -7827,7 +7827,7 @@ html[data-theme="dark"] .contextual-ask-clover__close:focus-visible {
   box-shadow: var(--shadow-soft);
 }
 
-.metric span {
+.metric span:not(.info-tooltip):not(.info-tooltip__icon) {
   display: block;
   color: var(--muted);
   margin-bottom: 6px;
@@ -7865,7 +7865,7 @@ html[data-theme="dark"] .contextual-ask-clover__close:focus-visible {
   padding: 16px 18px 17px;
 }
 
-.metric--highlight span {
+.metric--highlight span:not(.info-tooltip):not(.info-tooltip__icon) {
   margin-bottom: 0;
   font-size: 12px;
   text-transform: capitalize;
@@ -38540,7 +38540,7 @@ button.accounts-detail__transaction-head-cell {
     gap: 4px;
   }
 
-  .reports-summary-grid--highlights .metric--highlight span {
+  .reports-summary-grid--highlights .metric--highlight span:not(.info-tooltip):not(.info-tooltip__icon) {
     font-size: 10px;
     letter-spacing: 0.08em;
   }
@@ -38971,7 +38971,7 @@ button.accounts-detail__transaction-head-cell {
     border-radius: 14px;
   }
 
-  .reports-summary-grid--highlights .metric--highlight span {
+  .reports-summary-grid--highlights .metric--highlight span:not(.info-tooltip):not(.info-tooltip__icon) {
     font-size: 9px;
   }
 

@@ -3,7 +3,6 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { usePathname, useSearchParams } from "next/navigation";
-import { getCurrencyCatalogCodes } from "@/lib/currencies";
 import { persistSelectedWorkspaceId } from "@/lib/workspace-selection";
 import { reportFilterSelection } from "@/lib/report-filter-policy";
 
@@ -13,12 +12,18 @@ type Options = {
   currentProfile: string;
   accounts: { id: string; name: string }[];
   categories: string[];
+  currencies: string[];
+  currentCurrency: string;
+  defaultCurrency: string;
 };
 const emptyOptions: Options = {
   profiles: [],
   currentProfile: "",
   accounts: [],
   categories: [],
+  currencies: [],
+  currentCurrency: "PHP",
+  defaultCurrency: "PHP",
 };
 const reportsRangeLabels = {
   "30d": "30 days",
@@ -63,7 +68,7 @@ export function ReportsRangeMenu({
     [from, setFrom] = useState(currentFrom ?? ""),
     [to, setTo] = useState(currentTo ?? "");
   const [profile, setProfile] = useState(options.currentProfile),
-    [currency, setCurrency] = useState(params?.get("currency") ?? ""),
+    [currency, setCurrency] = useState(options.currentCurrency),
     [compare, setCompare] = useState(params?.get("compare") ?? "previous");
   const [accounts, setAccounts] = useState(selection.accounts),
     [categories, setCategories] = useState(selection.categories),
@@ -84,7 +89,7 @@ export function ReportsRangeMenu({
     setFrom(currentFrom ?? "");
     setTo(currentTo ?? "");
     setProfile(options.currentProfile);
-    setCurrency(params?.get("currency") ?? "");
+    setCurrency(options.currentCurrency);
     setCompare(params?.get("compare") ?? "previous");
     setAccounts(selection.accounts);
     setCategories(selection.categories);
@@ -134,7 +139,7 @@ export function ReportsRangeMenu({
         next.set("from", from);
         next.set("to", to);
       }
-      if (currency) next.set("currency", currency);
+      if (currency && !changedProfile) next.set("currency", currency);
       if (compare === "year") next.set("compare", compare);
       if (!changedProfile && accounts.length)
         next.set("accounts", accounts.join(","));
@@ -262,8 +267,8 @@ export function ReportsRangeMenu({
                     value={currency}
                     onChange={(e) => setCurrency(e.target.value)}
                   >
-                    <option value="">All currencies, shown separately</option>
-                    {getCurrencyCatalogCodes().map((code) => (
+                    <option value="ALL">All currencies, shown separately</option>
+                    {options.currencies.map((code) => (
                       <option key={code} value={code}>
                         {code}
                       </option>
