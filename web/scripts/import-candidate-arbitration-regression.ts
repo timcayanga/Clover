@@ -1,3 +1,4 @@
+import { assessImportEvidenceSafety, assertSafeImportEvidence } from "../lib/import-evidence-safety";
 import assert from "node:assert/strict";
 import {
   arbitrateImportCandidates,
@@ -110,3 +111,16 @@ const stable = assessStatementLayoutDrift({
 assert.equal(stable.drifted, false);
 
 console.log("Import candidate arbitration regression passed.");
+
+const dateAsAmount = [{ date: "2026-09-23", amount: "2026", rawPayload: { line: "Example Fund 12345.67 9/23/2026" } }];
+const unsafeDateCandidate = assessImportCandidate({source: "trained", rows: dateAsAmount});
+assert.equal(unsafeDateCandidate.critical, true);
+assert.ok(unsafeDateCandidate.score <= 35);
+assert.throws(() => assertSafeImportEvidence(dateAsAmount), /Nothing was added/, "Missing/failed backup cannot publish unsafe local rows");
+const supportedAmount = [{date: "2026-09-23", amount: "2026", confidence: 90, rawPayload: {parserEvidence: {source_text: "Coffee 2026.00 9/23/2026"}}}];
+assert.deepEqual(assessImportEvidenceSafety(supportedAmount).reasons, [], "A real amount matching the year is valid when independently present");
+assert.doesNotThrow(() => assertSafeImportEvidence(supportedAmount));
+assert.deepEqual(assessImportEvidenceSafety([{amount: "0", rawPayload: {kind: "account_snapshot_marker"}}], "Investment Market Value Valuation Date").reasons, []);
+assert.throws(() => assertSafeImportEvidence([{amount: "12345.67", confidence: 90}], "Investment Platform Market Value Valuation Date"), /Nothing was added/);
+
+assert.doesNotThrow(() => assertSafeImportEvidence([{amount: "150", rawPayload: {source: "structured_transaction_csv", worksheetName: "Transactions"}}], "Investment Market Value Valuation Date"), "Separate workbook ledgers remain valid");

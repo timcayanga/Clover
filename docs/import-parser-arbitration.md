@@ -35,3 +35,10 @@ Structured spreadsheets keep their deterministic schema parser and do not enter 
 - Arbitration metadata is stored with parsed-row provenance for audit and Admin diagnostics.
 - Ambiguous winners are marked pending review.
 - Merchant enrichment remains downstream of safe row extraction and cannot make an unsafe candidate valid.
+
+## Evidence checks before the fast path
+
+- Institution identity, cache reuse, a learned template, and apparently usable screenshot rows never override contradictory source evidence.
+- Force backup verification when a transaction amount is taken solely from a date, a holdings valuation summary becomes transactions, or generic heuristic rows have neither confidence nor structured parser evidence.
+- Penalize unsafe local candidates before choosing a winner. A failed/unavailable backup must not silently fall back to those same unsupported rows; stop before persistence with an actionable error.
+- Dated investment snapshot markers remain valid and do not require backup solely because their valuation date is present.

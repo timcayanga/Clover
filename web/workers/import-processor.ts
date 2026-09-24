@@ -1,3 +1,4 @@
+import { assessImportEvidenceSafety, assertSafeImportEvidence } from "@/lib/import-evidence-safety";
 import { startImportTiming, measureImportTiming } from "@/lib/import-timing";
 import { shouldRefineReceiptCore } from "@/lib/receipt-detail-refinement";
 import { Prisma } from "@prisma/client";
@@ -1032,6 +1033,7 @@ export const hasStrongWisePdfDeterministicParse = (params: {
 };
 
 export const buildParserRoutingDecision = (params: {
+  parsedRows?: Array<Record<string, unknown>>;
   fileType: string | null | undefined;
   imageImport: boolean;
   importMode: ImportImageMode;
@@ -1057,6 +1059,10 @@ export const buildParserRoutingDecision = (params: {
   historicalRoutingHint?: ParserRoutingHistoryHint | null;
 }) : ParserRoutingDecision => {
   const documentLikeImport = params.fileType === "application/pdf" || params.imageImport;
+  const evidenceSafety = assessImportEvidenceSafety(params.parsedRows ?? [], params.textForParse);
+  if (documentLikeImport && params.importMode === "statement" && evidenceSafety.reasons.length) {
+    return { localParseHealthScore: 0, reasons: evidenceSafety.reasons, shouldForceBackupForSuspiciousParse: true, shouldUseVisionFallback: true, decision: "backup_required" };
+  }
   if (
     !documentLikeImport ||
     params.importMode !== "statement" ||
@@ -9829,6 +9835,7 @@ export const processImportFileText = async (
     rows: parsedRows as Array<Record<string, unknown>>,
   });
   const preliminaryParserRoutingDecision = buildParserRoutingDecision({
+    parsedRows: parsedRows as Array<Record<string, unknown>>,
     fileType: importFile.fileType,
     imageImport,
     importMode,
@@ -10508,6 +10515,7 @@ export const processImportFileText = async (
       !screenshotRowsLookStructurallyWeak &&
       !suspiciousDateCoverage);
   const parserRoutingDecision = buildParserRoutingDecision({
+    parsedRows: parsedRows as Array<Record<string, unknown>>,
     fileType: importFile.fileType,
     imageImport,
     importMode,
@@ -11616,6 +11624,8 @@ export const processImportFileText = async (
         accountName: effectiveMetadataSource.accountName,
       })
     : effectiveRowsBase;
+  // Backup failure or disagreement must not publish the same unsafe local result.
+  if (importMode === "statement") assertSafeImportEvidence(effectiveRowsSelected, textForParse);
   const effectiveRows =
     importMode === "statement" && finalCandidateArbitration
       ? effectiveRowsSelected.map((row) => ({

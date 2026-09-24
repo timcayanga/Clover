@@ -1,3 +1,4 @@
+import { assessImportEvidenceSafety } from "@/lib/import-evidence-safety";
 import { parseAmountValue, parseDateValue, type DetectedStatementMetadata, type ParsedImportRow } from "@/lib/import-parser";
 import { validateParsedImportRows, type ImportValidationResult } from "@/lib/data-engine-validation";
 import { assessStatementExtractionQuality, type StatementExtractionQuality } from "@/lib/import-quality";
@@ -129,6 +130,7 @@ export const assessImportCandidate = (params: {
   metadata?: Partial<DetectedStatementMetadata> | null;
   pageCount?: number | null;
 }): ImportCandidateAssessment => {
+  const evidenceSafety = assessImportEvidenceSafety(params.rows);
   const validation = validateParsedImportRows({ rows: params.rows, metadata: params.metadata });
   const balanceReconciliation = assessBalanceReconciliation(params.rows, params.metadata);
   const extraction = assessStatementExtractionQuality({
@@ -137,7 +139,7 @@ export const assessImportCandidate = (params: {
     balanceReconciled: balanceReconciliation.reconciled,
   });
   const currencyConsistency = assessCurrencyConsistency(params.rows, params.metadata);
-  const reasons = [...validation.findings.map((finding) => finding.code), ...extraction.reasons];
+  const reasons = [...evidenceSafety.reasons, ...validation.findings.map((finding) => finding.code), ...extraction.reasons];
   if (balanceReconciliation.reconciled === false) reasons.push("balance_not_reconciled");
   if (balanceReconciliation.runningBalanceCoverage > 0 && balanceReconciliation.runningBalanceCoverage < 0.75) {
     reasons.push("running_balance_mismatch");
@@ -158,12 +160,12 @@ export const assessImportCandidate = (params: {
       Math.round(validation.score * 0.45 + extraction.score * 0.3 + reconciliationScore * 0.15 + currencyConsistency * 10)
     )
   );
-  const critical = validation.critical || extraction.critical || balanceReconciliation.reconciled === false;
+  const critical = evidenceSafety.reasons.length > 0 || validation.critical || extraction.critical || balanceReconciliation.reconciled === false;
 
   return {
     source: params.source,
     rows: params.rows,
-    score,
+    score: evidenceSafety.reasons.length ? Math.min(score, 35) : score,
     critical,
     validation,
     extraction,

@@ -399,3 +399,16 @@ assert.equal(
 );
 
 console.log("parser routing regression passed");
+
+// Reproduce the production bypass: identity/cache/usability must not trump
+// contradictory amount evidence or unvalidated generic rows.
+const unsafeSummaryText = 'Investment Platform Market Value Valuation Date\nExample Fund GFunds 12345.67 9/23/2026';
+const unsafeSummaryRows = [{date:'2026-09-23',amount:'2026',type:'expense',rawPayload:{line:'Example Fund GFunds 12345.67 9/23/2026'}}];
+for (const shortcut of ['imageStatementParseLooksUsable','canReuseCachedStatementParse','hasReliableDeterministicStatementParse','trainedReceiptDetails'] as const) {
+ const decision = buildParserRoutingDecision({...baseRoutingInput,imageImport:true,fileType:'image/png',textForParse:unsafeSummaryText,parsedRows:unsafeSummaryRows,[shortcut]:true,metadataConfidence:100,hasKnownInstitution:true,hasTemplateMemory:true});
+ assert.equal(decision.decision,'backup_required',`${shortcut} cannot bypass evidence checks`);
+ assert.ok(decision.reasons.includes('amount_from_date'));
+ assert.ok(decision.reasons.includes('holdings_summary_as_transactions'));
+}
+const weakRows=[{date:'2026-09-23',amount:'150',rawPayload:{line:'Coffee 150.00 9/23/2026'}}];
+assert.equal(buildParserRoutingDecision({...baseRoutingInput,imageImport:true,imageStatementParseLooksUsable:true,parsedRows:weakRows}).decision,'backup_required');
