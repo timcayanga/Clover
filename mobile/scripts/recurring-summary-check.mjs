@@ -1,0 +1,10 @@
+import assert from 'node:assert/strict';
+import { recurringSummaryAmounts } from '../src/recurring-summary.ts';
+const items = [{id:'bill',status:'active'},{id:'owed',status:'active'},{id:'paused',status:'paused'}];
+const occurrence = (id, amount, currency = 'PHP', kind = 'planned_payment') => ({id,amount,currency,kind});
+const rows = [occurrence('bill',100),occurrence('bill',50),occurrence('bill',20,'USD'),occurrence('owed',200,'PHP','receivable'),occurrence('paused',999),occurrence('bill',null),occurrence('bill','NaN')];
+assert.deepEqual(recurringSummaryAmounts(items, rows, false), [['PHP',150],['USD',20]]);
+assert.deepEqual(recurringSummaryAmounts(items.filter(i=>i.id==='owed'), rows, true), [['PHP',200]]);
+assert.deepEqual(recurringSummaryAmounts([], rows, false), []);
+assert.deepEqual(recurringSummaryAmounts(items, [occurrence('bill',0)], false), [['PHP',0]]);
+console.log('Recurring summary checks passed: active items, receivables, currencies, missing and zero amounts.');

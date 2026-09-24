@@ -1,6 +1,9 @@
 import { beginTelemetry } from "../../shared/analytics";
 import { Text } from "./app-text";
-import { parseAddFormDraft, type AddFormDraft } from "../../shared/add-form-draft";
+import {
+  parseAddFormDraft,
+  type AddFormDraft,
+} from "../../shared/add-form-draft";
 import { suggestLocalCategory } from "./offline/local-tools";
 import type { Transaction } from "./types";
 import * as ImagePicker from "expo-image-picker";
@@ -46,14 +49,22 @@ export function Choices({
   options,
   value,
   onChange,
+  pill = false,
 }: {
+  pill?: boolean;
   options: { value: string; label: string }[];
   value: string;
   onChange: (value: string) => void;
 }) {
   const { colors, styles, dark } = useTheme();
   return (
-    <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+    <View
+      style={{
+        flexDirection: "row",
+        flexWrap: pill ? "nowrap" : "wrap",
+        gap: 8,
+      }}
+    >
       {options.map((option) => (
         <Pressable
           key={option.value}
@@ -63,15 +74,19 @@ export function Choices({
           style={{
             minHeight: 44,
             justifyContent: "center",
-            paddingHorizontal: 14,
-            borderRadius: 12,
+            paddingHorizontal: pill ? 8 : 14,
+            flex: pill ? 1 : undefined,
+            alignItems: "center",
+            borderRadius: pill ? 24 : 12,
             borderWidth: 1,
             borderColor: value === option.value ? colors.teal : colors.line,
             backgroundColor:
               value === option.value ? colors.pale : colors.white,
           }}
         >
-          <Text style={{ color: colors.ink }}>{option.label}</Text>
+          <Text style={{ color: colors.ink, fontSize: pill ? 12 : undefined }}>
+            {option.label}
+          </Text>
         </Pressable>
       ))}
     </View>
@@ -157,6 +172,7 @@ export function ManualTransaction({
   const [options, setOptions] = useState<Options | null>(null);
   const [error, setError] = useState("");
   const [saved, setSaved] = useState(false);
+  const [moreDetails, setMoreDetails] = useState(false);
   const [savedPending, setSavedPending] = useState(false);
   const [uncertain, setUncertain] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -276,6 +292,7 @@ export function ManualTransaction({
         </Notice>
       ) : null}
       <Choices
+        pill
         options={[
           { value: "expense", label: "Expense" },
           { value: "income", label: "Income" },
@@ -290,16 +307,17 @@ export function ManualTransaction({
       />
       <Field
         label={`Amount (${draft.currency})`}
+        style={{ fontSize: 28, fontFamily: "Poppins-SemiBold", minHeight: 68 }}
         value={draft.amount}
         onChangeText={(amount) => change({ amount })}
         keyboardType="decimal-pad"
         placeholder="0.00"
       />
       <Field
-        label="Name"
+        label="What was it for?"
         value={draft.merchantRaw}
         onChangeText={(merchantRaw) => change({ merchantRaw })}
-        placeholder="What was this transaction for?"
+        placeholder="e.g. Lunch at Mendokoro"
         maxLength={200}
       />
       {options ? (
@@ -332,12 +350,6 @@ export function ManualTransaction({
           onPress={() => setRetry((n) => n + 1)}
         />
       )}
-      <Field
-        label="Date (YYYY-MM-DD)"
-        value={draft.date}
-        onChangeText={(date) => change({ date })}
-        maxLength={10}
-      />
       {options && draft.type !== "transfer" ? (
         <>
           <ChoiceField
@@ -355,6 +367,12 @@ export function ManualTransaction({
           />
         </>
       ) : null}
+      <Field
+        label="Date"
+        value={draft.date}
+        onChangeText={(date) => change({ date })}
+        maxLength={10}
+      />
       {localSuggestion &&
       options?.categories.some(
         (c) => c.name === localSuggestion.category && c.type === draft.type,
@@ -391,13 +409,20 @@ export function ManualTransaction({
           ))}
         </Card>
       ) : null}
-      <Field
-        label="Notes (optional)"
-        value={draft.description}
-        onChangeText={(description) => change({ description })}
-        multiline
-        maxLength={2000}
+      <Button
+        title={moreDetails ? "Fewer details" : "More details"}
+        secondary
+        onPress={() => setMoreDetails((value) => !value)}
       />
+      {moreDetails ? (
+        <Field
+          label="Notes (optional)"
+          value={draft.description}
+          onChangeText={(description) => change({ description })}
+          multiline
+          maxLength={2000}
+        />
+      ) : null}
       {uncertain ? (
         <Notice>
           The save result is uncertain. Retry this unchanged draft; Clover
@@ -426,9 +451,23 @@ type Suggestion = {
   description: string;
   payload: Partial<TransactionDraft>;
 };
-export function TransactionChat({onReview, context, page="transactions", intro, onDraft, onReviewForm}: {onReview:(draft:TransactionDraft)=>void;context?:EntryFormContext;page?:string;intro?:string;onDraft?:(draft:EntryDraft)=>void;onReviewForm?:(draft:AddFormDraft)=>void;}) {
-  const [preparedForm,setPreparedForm]=useState<AddFormDraft|null>(null);
-  const [prepared,setPrepared]=useState<EntryDraft|null>(null);
+export function TransactionChat({
+  onReview,
+  context,
+  page = "transactions",
+  intro,
+  onDraft,
+  onReviewForm,
+}: {
+  onReview: (draft: TransactionDraft) => void;
+  context?: EntryFormContext;
+  page?: string;
+  intro?: string;
+  onDraft?: (draft: EntryDraft) => void;
+  onReviewForm?: (draft: AddFormDraft) => void;
+}) {
+  const [preparedForm, setPreparedForm] = useState<AddFormDraft | null>(null);
+  const [prepared, setPrepared] = useState<EntryDraft | null>(null);
   const { colors, styles, dark } = useTheme();
   const session = useSession();
   const [input, setInput] = useState("");
@@ -450,7 +489,10 @@ export function TransactionChat({onReview, context, page="transactions", intro, 
     if (attaching || busy || attachments.length >= 3) return;
     setError("");
     setAttaching(true);
-    const finishInput = beginTelemetry("input", { input_method: "camera", surface: "adviser" });
+    const finishInput = beginTelemetry("input", {
+      input_method: "camera",
+      surface: "adviser",
+    });
     try {
       if (!(await ImagePicker.requestCameraPermissionsAsync()).granted) {
         finishInput("failed", { reason: "permission_denied" });
@@ -593,7 +635,8 @@ export function TransactionChat({onReview, context, page="transactions", intro, 
       {attaching ? <Body>Reading photo…</Body> : null}
       <Body muted={false}>Tell Clover what to add</Body>
       <Body>
-        {intro || "For example: Lunch ₱250 with cash, groceries ₱1,200 from BPI. Review each draft before saving."}
+        {intro ||
+          "For example: Lunch ₱250 with cash, groceries ₱1,200 from BPI. Review each draft before saving."}
       </Body>
       {messages.map((message, index) => (
         <Card
@@ -606,8 +649,24 @@ export function TransactionChat({onReview, context, page="transactions", intro, 
           <Body muted={false}>{message.content}</Body>
         </Card>
       ))}
-      {preparedForm && onReviewForm ? <Button title="Review in Manual" onPress={()=>{onReviewForm(preparedForm);setPreparedForm(null);}}/> : null}
-      {prepared && onDraft ? <Button title="Review draft in Manual" onPress={()=>{onDraft(prepared);setPrepared(null);}}/> : null}
+      {preparedForm && onReviewForm ? (
+        <Button
+          title="Review in Manual"
+          onPress={() => {
+            onReviewForm(preparedForm);
+            setPreparedForm(null);
+          }}
+        />
+      ) : null}
+      {prepared && onDraft ? (
+        <Button
+          title="Review draft in Manual"
+          onPress={() => {
+            onDraft(prepared);
+            setPrepared(null);
+          }}
+        />
+      ) : null}
       {(onDraft ? [] : actions).map((action) => (
         <Card key={action.id}>
           <Body>{action.description}</Body>

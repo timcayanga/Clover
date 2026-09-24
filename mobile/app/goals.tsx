@@ -1,3 +1,4 @@
+import { CreateDirectoryCard } from "../src/create-directory-card";
 import { Icon } from "../src/ui";
 import { Text } from "../src/app-text";
 import { useEffect, useRef, useState } from "react";
@@ -469,14 +470,11 @@ export default function Goals() {
               </PlanDirectoryCard>
             ))
           )}
-          <Card>
-            <Icon name="add" size={32} />
-            <PlanAction
-              title="Create Goal"
-              tone="primary"
-              onPress={() => setEditor({ goal: null })}
-            />
-          </Card>
+          <CreateDirectoryCard
+            title="Create goal"
+            subtitle="Make room for another plan"
+            onPress={() => setEditor({ goal: null })}
+          />
         </>
       )}
     </Screen>

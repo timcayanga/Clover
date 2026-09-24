@@ -38,15 +38,16 @@ function AccountsContent() {
   const { colors, styles, dark } = useTheme();
   const session = useSession();
   const [accounts, setAccounts] = useState<Account[]>([]);
-  const [query, setQuery] = useState("");
+  const [expandedAccount, setExpandedAccount] = useState<string | null>(null);
   const [selected, setSelected] = useState<Account | null>(null);
   const [adding, setAdding] = useState(false);
-  const { add, accountId, finverseConnection, finverseWorkspace } = useLocalSearchParams<{
-    add?: string;
-    finverseConnection?: string;
-    finverseWorkspace?: string;
-    accountId?: string;
-  }>();
+  const { add, accountId, finverseConnection, finverseWorkspace } =
+    useLocalSearchParams<{
+      add?: string;
+      finverseConnection?: string;
+      finverseWorkspace?: string;
+      accountId?: string;
+    }>();
   const [openedAccount, setOpenedAccount] = useState("");
   useEffect(() => {
     if (accountId && accountId !== openedAccount) {
@@ -59,7 +60,14 @@ function AccountsContent() {
   }, [accountId, accounts, openedAccount]);
   const navigation = useNavigation();
   useEffect(() => {
-    if (finverseWorkspace && finverseWorkspace !== session.profileId && session.data?.profiles.some(p => p.id === finverseWorkspace)) { session.setProfileId(finverseWorkspace); return; }
+    if (
+      finverseWorkspace &&
+      finverseWorkspace !== session.profileId &&
+      session.data?.profiles.some((p) => p.id === finverseWorkspace)
+    ) {
+      session.setProfileId(finverseWorkspace);
+      return;
+    }
     if (add || finverseConnection) {
       setSelected(null);
       setAdding(true);
@@ -149,9 +157,7 @@ function AccountsContent() {
     string,
     { title: string; currency: string; rows: Account[] }
   >();
-  for (const account of accounts.filter((a) =>
-    `${a.name} ${a.institution}`.toLowerCase().includes(query.toLowerCase()),
-  )) {
+  for (const account of accounts) {
     const title = sectionName(account.type),
       key = `${title}:${account.currency}`;
     if (!groups.has(key))
@@ -222,12 +228,22 @@ function AccountsContent() {
         callbackConnection={finverseConnection}
         initial={selected}
         onClose={() => {
-          router.setParams({ add: undefined, finverseConnection: undefined, finverseWorkspace: undefined, finverse: undefined });
+          router.setParams({
+            add: undefined,
+            finverseConnection: undefined,
+            finverseWorkspace: undefined,
+            finverse: undefined,
+          });
           setSelected(null);
           setAdding(false);
         }}
         onSaved={(record) => {
-          router.setParams({ add: undefined, finverseConnection: undefined, finverseWorkspace: undefined, finverse: undefined });
+          router.setParams({
+            add: undefined,
+            finverseConnection: undefined,
+            finverseWorkspace: undefined,
+            finverse: undefined,
+          });
           if (session.demo)
             setAccounts((list) =>
               record
@@ -264,12 +280,6 @@ function AccountsContent() {
           </View>
         </View>
       ))}
-      <Field
-        accessibilityLabel="Search accounts"
-        value={query}
-        onChangeText={setQuery}
-        placeholder="Name or institution"
-      />
       {loading ? (
         <Body>Loading accounts…</Body>
       ) : error ? (
@@ -284,10 +294,7 @@ function AccountsContent() {
             <View key={key} style={{ gap: 12 }}>
               <View
                 style={{
-                  flexDirection: "row",
-                  alignItems: "center",
-                  gap: 12,
-                  flexWrap: "wrap",
+                  gap: 6,
                 }}
               >
                 <Text
@@ -330,95 +337,134 @@ function AccountsContent() {
                       Math.abs(Number(accountDisplayBalance(a))) ||
                     a.name.localeCompare(b.name),
                 )
-                .map((account) => (
-                  <Pressable
-                    key={account.id}
-                    accessibilityRole="button"
-                    accessibilityLabel={`Open ${label(account)}`}
-                    onPress={() => setSelected(account)}
-                  >
-                    <View
-                      style={{
-                        flexDirection: "row",
-                        alignItems: "center",
-                        gap: 10,
-                        borderRadius: 14,
-                        minHeight: 54,
-                        padding: 10,
-                        backgroundColor: accountRowColors(
-                          account.type,
-                          account.institution || account.name,
-                          dark,
-                        )[0],
-                      }}
-                    >
-                      <AccountBrandLogo account={account} size={32} />
-                      <View style={{ flex: 1, minWidth: 0 }}>
-                        <Text
+                .map((account) => {
+                  const [background, foreground] = accountRowColors(
+                    account.type,
+                    account.institution || account.name,
+                    dark,
+                  );
+                  const expanded = expandedAccount === account.id;
+                  const balance = accountDisplayBalance(account);
+                  return (
+                    <View key={account.id}>
+                      <Pressable
+                        accessibilityRole="button"
+                        accessibilityLabel={
+                          expanded
+                            ? `Open ${label(account)} details`
+                            : `Show ${label(account)} card`
+                        }
+                        accessibilityState={{ expanded }}
+                        onPress={() =>
+                          expanded
+                            ? setSelected(account)
+                            : setExpandedAccount(account.id)
+                        }
+                      >
+                        <LinearGradient
+                          colors={[background, background, `${foreground}33`]}
+                          start={{ x: 0, y: 0 }}
+                          end={{ x: 1, y: 1 }}
                           style={{
-                            fontFamily: "Poppins-SemiBold",
-                            fontSize: 13,
-                            color: accountRowColors(
-                              account.type,
-                              account.institution || account.name,
-                              dark,
-                            )[1],
+                            borderRadius: expanded ? 28 : 14,
+                            minHeight: expanded ? 190 : 60,
+                            padding: expanded ? 24 : 10,
+                            gap: 16,
                           }}
                         >
-                          {account.name}
-                        </Text>
-                        {account.lastFour ? (
-                          <Text
+                          <View
                             style={{
-                              fontFamily: "Poppins-Regular",
-                              fontSize: 10,
-                              color: accountRowColors(
-                                account.type,
-                                account.institution || account.name,
-                                dark,
-                              )[1],
+                              flexDirection: "row",
+                              alignItems: "center",
+                              gap: 10,
                             }}
                           >
-                            Account •••• {account.lastFour}
+                            <AccountBrandLogo
+                              account={account}
+                              size={expanded ? 42 : 32}
+                            />
+                            <View style={{ flex: 1, minWidth: 0 }}>
+                              <Text
+                                style={{
+                                  fontFamily: "Poppins-SemiBold",
+                                  fontSize: expanded ? 16 : 13,
+                                  color: foreground,
+                                }}
+                              >
+                                {expanded
+                                  ? account.institution || account.name
+                                  : label(account)}
+                              </Text>
+                              {!expanded && account.institution ? (
+                                <Text
+                                  style={{ fontSize: 10, color: foreground }}
+                                >
+                                  {account.institution}
+                                </Text>
+                              ) : null}
+                            </View>
+                            {!expanded ? (
+                              <Text
+                                style={{
+                                  fontFamily: "Poppins-SemiBold",
+                                  fontSize: 13,
+                                  maxWidth: "38%",
+                                  color: foreground,
+                                }}
+                              >
+                                {balance === null
+                                  ? "Not recorded"
+                                  : money(balance, account.currency)}
+                              </Text>
+                            ) : null}
+                            <Icon
+                              line
+                              name={
+                                expanded ? "chevron-forward" : "chevron-down"
+                              }
+                              size={16}
+                              color={foreground}
+                            />
+                          </View>
+                          {expanded ? (
+                            <>
+                              <Text style={{ color: foreground, fontSize: 13 }}>
+                                •••• {account.lastFour || "••••"}
+                              </Text>
+                              <Text
+                                style={{
+                                  fontFamily: "Poppins-Bold",
+                                  fontSize: 24,
+                                  color: foreground,
+                                }}
+                              >
+                                {balance === null
+                                  ? "Not recorded"
+                                  : money(balance, account.currency)}
+                              </Text>
+                            </>
+                          ) : null}
+                        </LinearGradient>
+                      </Pressable>
+                      {expanded ? (
+                        <Pressable
+                          accessibilityRole="button"
+                          accessibilityLabel={`Hide ${label(account)} card`}
+                          onPress={() => setExpandedAccount(null)}
+                          style={{
+                            minHeight: 44,
+                            alignItems: "center",
+                            justifyContent: "center",
+                          }}
+                        >
+                          <Text style={{ color: colors.teal, fontSize: 12 }}>
+                            Hide card ⌃
                           </Text>
-                        ) : null}
-                      </View>
-                      <Text
-                        style={{
-                          maxWidth: "43%",
-                          textAlign: "right",
-                          fontFamily: "Poppins-SemiBold",
-                          fontSize: 14,
-                          color: accountRowColors(
-                            account.type,
-                            account.institution || account.name,
-                            dark,
-                          )[1],
-                        }}
-                      >
-                        {accountDisplayBalance(account) === null
-                          ? "Not recorded"
-                          : money(
-                              accountDisplayBalance(account)!,
-                              account.currency,
-                            )}
-                      </Text>
-                      <Text
-                        accessibilityElementsHidden
-                        style={{
-                          fontSize: 24,
-                          color: accountRowColors(
-                            account.type,
-                            account.institution || account.name,
-                            dark,
-                          )[1],
-                        }}
-                      >
-                        ›
-                      </Text>
+                        </Pressable>
+                      ) : null}
                     </View>
-                  </Pressable>
-                ))}
+                  );
+                })}
             </View>
           ))
       )}

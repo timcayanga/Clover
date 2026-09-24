@@ -16,6 +16,7 @@ import {
   Modal,
   Linking,
   useColorScheme,
+  useWindowDimensions,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -335,6 +336,7 @@ export function AppHeader({
   onClose?: () => void;
 }) {
   const { colors, styles } = useTheme();
+  const { width } = useWindowDimensions();
   const session = useSession();
   const profileRef = useRef(session.profileId);
   profileRef.current = session.profileId;
@@ -421,6 +423,17 @@ export function AppHeader({
       void Linking.openURL(`https://staging.clover.ph${href}`);
   };
   const home = title === "Home";
+  const adviserShortcut = [
+    "Reports",
+    "Investments",
+    "Split Bills",
+    "Budgeting",
+    "Goals",
+    "Circles",
+    "Settings",
+    "Transaction Details",
+    "Account Details",
+  ].includes(title);
   const canAdd = ["Accounts", "Transactions", "Recurring"].includes(title);
   return (
     <>
@@ -442,8 +455,14 @@ export function AppHeader({
             styles.headerTitle,
             {
               position: "absolute",
-              left: home || trailing ? 102 : 58,
-              right: home || trailing ? 102 : 58,
+              left: 54,
+              fontSize: width < 360 && title.length > 10 ? 14 : 18,
+              right:
+                title === "Investments"
+                  ? 144
+                  : adviserShortcut || home || trailing
+                    ? 100
+                    : 54,
             },
           ]}
         >
@@ -457,6 +476,7 @@ export function AppHeader({
             alignItems: "center",
           }}
         >
+          {adviserShortcut && (trailing || back || onClose) ? adviser : null}
           {trailing ??
             (title === "Adviser" ? (
               <Pressable
@@ -926,9 +946,9 @@ export function DetailNavigation({
         position: "absolute",
         left: 8,
         right: 8,
-        bottom: Math.max(insets.bottom,8),
-        borderRadius:32,
-        overflow:"hidden",
+        bottom: Math.max(insets.bottom, 8),
+        borderRadius: 32,
+        overflow: "hidden",
         flexDirection: "row",
         paddingVertical: 7,
         minHeight: 72,

@@ -366,7 +366,7 @@ export default function Adviser() {
               accessibilityRole="header"
               style={{
                 fontFamily: "Poppins-SemiBold",
-                fontSize: 26,
+                fontSize: 22,
                 lineHeight: 34,
                 color: colors.ink,
               }}

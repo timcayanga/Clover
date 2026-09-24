@@ -16,6 +16,7 @@ import {
   Button,
   Card,
   CategoryMark,
+  Icon,
   Field,
   Notice,
   Screen,
@@ -92,10 +93,12 @@ export default function SplitBills() {
     person?: string;
   } | null>(null);
   const [page, setPage] = useState(1);
-  const { data, setData, error, reload: reloadBills } = usePlanData(
-    `split-bills?page=${page}`,
-    sample,
-  );
+  const {
+    data,
+    setData,
+    error,
+    reload: reloadBills,
+  } = usePlanData(`split-bills?page=${page}`, sample);
   const balance = usePlanData("split-bills?summaryOnly=true", balanceSample);
   const reload = () => {
     reloadBills();
@@ -302,13 +305,23 @@ export default function SplitBills() {
           {tab === "Bills" ? (
             <>
               <View style={{ flexDirection: "row", gap: 8 }}>
-                <SummaryCard title="You owe" value={balance.data?.summary?.youOwe ?? "—"} />
-                <SummaryCard title="Owed to you" value={balance.data?.summary?.owedToYou ?? "—"} />
+                <SummaryCard
+                  title="You owe"
+                  value={balance.data?.summary?.youOwe ?? "—"}
+                />
+                <SummaryCard
+                  title="Owed to you"
+                  value={balance.data?.summary?.owedToYou ?? "—"}
+                />
               </View>
               {balance.error ? (
                 <>
                   <Notice>Balance summary is unavailable.</Notice>
-                  <Button title="Retry balance summary" secondary onPress={balance.reload} />
+                  <Button
+                    title="Retry balance summary"
+                    secondary
+                    onPress={balance.reload}
+                  />
                 </>
               ) : null}
               {error ? (
@@ -447,20 +460,62 @@ export default function SplitBills() {
                         </Pressable>
                       ))
                   ) : (
-                    <>
-                      <Notice>
-                        No bills yet. Upload a receipt or add a bill manually.
-                      </Notice>
-                      <PlanAction
-                        title="Upload receipt"
-                        tone="primary"
-                        onPress={() => setAdding(true)}
-                      />
-                      <PlanAction
-                        title="Add bill manually"
-                        onPress={() => setAdding(true)}
-                      />
-                    </>
+                    <View
+                      style={{
+                        alignItems: "center",
+                        gap: 14,
+                        paddingVertical: 8,
+                      }}
+                    >
+                      <Text
+                        style={{
+                          color: colors.ink,
+                          fontFamily: "Poppins-SemiBold",
+                          fontSize: 18,
+                        }}
+                      >
+                        No bills yet
+                      </Text>
+                      <Body>Upload a receipt or add a split bill.</Body>
+                      <View style={{ flexDirection: "row", gap: 12 }}>
+                        <Pressable
+                          accessibilityRole="button"
+                          accessibilityLabel="Add bill manually"
+                          onPress={() => setAdding(true)}
+                          style={{
+                            width: 44,
+                            height: 44,
+                            borderRadius: 22,
+                            borderWidth: 1,
+                            borderColor: colors.line,
+                            alignItems: "center",
+                            justifyContent: "center",
+                          }}
+                        >
+                          <Icon line name="add" size={20} />
+                        </Pressable>
+                        <Pressable
+                          accessibilityRole="button"
+                          accessibilityLabel="Upload receipt"
+                          onPress={() => setAdding(true)}
+                          style={{
+                            width: 44,
+                            height: 44,
+                            borderRadius: 22,
+                            backgroundColor: colors.teal,
+                            alignItems: "center",
+                            justifyContent: "center",
+                          }}
+                        >
+                          <Icon
+                            line
+                            name="cloud-upload-outline"
+                            size={20}
+                            color="white"
+                          />
+                        </Pressable>
+                      </View>
+                    </View>
                   )}
                   {page > 1 ? (
                     <PlanAction

@@ -6,13 +6,15 @@ import * as Sharing from "expo-sharing";
 import { useSession } from "./session";
 import { snapshotHtml } from "./snapshot-html";
 import { removeUploadCopy } from "./upload";
-import { Body, Button, Card, Field, Notice } from "./ui";
+import { Text } from "./app-text";
+import { Body, Button, Card, Field, Notice, useTheme } from "./ui";
 export function SettingsData({
   accountOnly = false,
 }: {
   accountOnly?: boolean;
 }) {
   const session = useSession();
+  const { styles } = useTheme();
   const [before, setBefore] = useState("");
   const [scope, setScope] = useState<
     "transactions" | "accounts" | "all" | "account" | null
@@ -144,7 +146,7 @@ export function SettingsData({
       {!accountOnly ? (
         <>
           <Card style={{ borderRadius: 16 }}>
-            <Body>Download snapshots</Body>
+            <Text accessibilityRole="header" style={styles.sectionTitle}>Download snapshots</Text>
             <Button
               title="Transactions as PDF · Download"
               disabled={busy || !session.profileId}
@@ -161,7 +163,7 @@ export function SettingsData({
             />
           </Card>
           <Card style={{ borderRadius: 16 }}>
-            <Body>Remove Clover data</Body>
+            <Text accessibilityRole="header" style={styles.sectionTitle}>Remove Clover data</Text>
             <Field
               label="Transactions before date (UTC, YYYY-MM-DD)"
               value={before}

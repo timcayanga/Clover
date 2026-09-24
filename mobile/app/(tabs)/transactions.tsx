@@ -8,6 +8,7 @@ import { useSession } from "../../src/session";
 import type { Transaction, TransactionPage } from "../../src/types";
 import {
   CategoryMark,
+  Icon,
   Body,
   Button,
   Field,
@@ -167,90 +168,82 @@ export default function Transactions() {
           maxWidth: 760,
           alignSelf: "center",
         }}
-        renderItem={({ item, index }) => (
-          <View>
-            {index === 0 ||
-            rows[index - 1].date.slice(0, 10) !== item.date.slice(0, 10) ? (
+        renderItem={({ item }) => (
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={`${item.merchantClean ?? item.merchantRaw}, ${money(item.amount, item.currency)}, ${dateLabel(item.date)}.${item.reviewStatus === "pending_review" ? " Needs review." : ""} Open transaction.`}
+            onPress={() =>
+              router.push({
+                pathname: "/transaction/[id]",
+                params: { id: item.id },
+              })
+            }
+            style={({ pressed }) => ({
+              minHeight: 68,
+              paddingVertical: 12,
+              paddingHorizontal: 10,
+              flexDirection: "row",
+              alignItems: "center",
+              gap: 10,
+              backgroundColor: colors.white,
+              borderBottomWidth: 1,
+              borderBottomColor: colors.line,
+              opacity: pressed ? 0.6 : 1,
+            })}
+          >
+            <CategoryMark name={item.categoryName} size={24} />
+            <View style={{ flex: 1, minWidth: 0, gap: 4 }}>
               <Text
-                accessibilityRole="header"
-                style={{ color: colors.muted, fontSize: 13, paddingTop: 16 }}
+                numberOfLines={2}
+                style={{
+                  fontSize: 13,
+                  fontFamily: "Poppins-SemiBold",
+                  color: colors.ink,
+                }}
               >
-                {dateLabel(item.date)}
+                {item.merchantClean ?? item.merchantRaw}
               </Text>
-            ) : null}
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel={`${item.merchantClean ?? item.merchantRaw}, ${money(item.amount, item.currency)}, ${dateLabel(item.date)}. Open transaction.`}
-              onPress={() =>
-                router.push({
-                  pathname: "/transaction/[id]",
-                  params: { id: item.id },
-                })
-              }
-              style={({ pressed }) => ({
-                paddingVertical: 21,
-                borderBottomWidth: 1,
-                borderBottomColor: colors.line,
-                gap: 7,
-                opacity: pressed ? 0.6 : 1,
-              })}
-            >
-              <View style={[styles.row, { alignItems: "flex-start" }]}>
-                <Text
-                  style={{
-                    flex: 1,
-                    fontSize: 15,
-                    fontWeight: "600",
-                    color: colors.ink,
-                  }}
-                >
-                  {item.merchantClean ?? item.merchantRaw}
-                </Text>
-                <Text
-                  style={{
-                    maxWidth: "46%",
-                    fontSize: 15,
-                    fontWeight: "700",
-                    color: item.type === "income" ? colors.teal : colors.ink,
-                  }}
-                >
-                  {money(item.amount, item.currency)}
-                </Text>
-              </View>
-              <View
-                style={{ flexDirection: "row", alignItems: "center", gap: 6 }}
+              <Text
+                numberOfLines={2}
+                style={{ fontSize: 10, color: colors.muted }}
               >
-                <CategoryMark name={item.categoryName} />
-                <Text style={{ fontSize: 15, color: colors.muted, flex: 1 }}>
-                  {item.categoryName ?? "Uncategorized"} · {item.accountName}
-                  {item.lastFour && !item.accountName.endsWith(item.lastFour)
-                    ? ` ${item.lastFour}`
-                    : ""}
-                </Text>
-              </View>
-              {item.reviewStatus === "pending_review" ? (
-                <Pressable
-                  accessibilityRole="button"
-                  accessibilityLabel="Review transaction warning"
-                  onPress={() =>
-                    router.push({
-                      pathname: "/transaction/[id]",
-                      params: { id: item.id },
-                    })
-                  }
-                  style={{
-                    minWidth: 44,
-                    minHeight: 44,
-                    alignSelf: "flex-end",
-                    alignItems: "center",
-                    justifyContent: "center",
-                  }}
-                >
-                  <Text style={{ color: "#D6A226", fontSize: 22 }}>⚠</Text>
-                </Pressable>
-              ) : null}
-            </Pressable>
-          </View>
+                {dateLabel(item.date)} · {item.categoryName ?? "Uncategorized"}{" "}
+                · {item.accountName}
+                {item.lastFour && !item.accountName.endsWith(item.lastFour)
+                  ? ` ${item.lastFour}`
+                  : ""}
+              </Text>
+            </View>
+            <Text
+              style={{
+                maxWidth: "30%",
+                fontSize: 12,
+                fontFamily: "Poppins-SemiBold",
+                color:
+                  item.type === "income"
+                    ? colors.positive
+                    : item.type === "expense"
+                      ? colors.danger
+                      : colors.ink,
+              }}
+            >
+              {money(item.amount, item.currency)}
+            </Text>
+            <Icon
+              line
+              name={
+                item.reviewStatus === "pending_review"
+                  ? "warning-outline"
+                  : "chevron-forward"
+              }
+              size={14}
+              color={
+                item.reviewStatus === "pending_review"
+                  ? "#D6A226"
+                  : colors.muted
+              }
+            />
+          </Pressable>
         )}
         ListEmptyComponent={
           !busy ? (

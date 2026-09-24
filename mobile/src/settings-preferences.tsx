@@ -13,7 +13,7 @@ export function SettingsPreferences({
   section: "review" | "notifications" | "privacy" | "defaults";
 }) {
   const session = useSession();
-  const { colors } = useTheme();
+  const { colors, styles } = useTheme();
   const [value, setValue] = useState<AppPreferences>(
     session.data?.preferences ?? defaultAppPreferences,
   );
@@ -182,7 +182,7 @@ export function SettingsPreferences({
       ) : null}
       {section === "privacy" ? (
         <>
-          <Body>Privacy and data use</Body>
+          <Text accessibilityRole="header" style={styles.sectionTitle}>Privacy and Data Use</Text>
           {toggle(
             "privacy",
             "improveSuggestions",

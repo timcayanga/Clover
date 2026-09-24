@@ -207,37 +207,55 @@ export default function TransactionDetail() {
             {!editing ? (
               <>
                 <View
-                  style={{ alignItems: "center", gap: 8, paddingVertical: 12 }}
+                  style={{
+                    flexDirection: "row",
+                    alignItems: "center",
+                    gap: 12,
+                    paddingVertical: 16,
+                  }}
                 >
-                  <CategoryMark name={row.categoryName} size={44} />
-                  <Text
-                    style={{
-                      fontSize: 21,
-                      textAlign: "center",
-                      fontFamily: "Poppins-SemiBold",
-                      color: colors.ink,
-                    }}
-                  >
-                    {row.merchantClean || row.merchantRaw}
-                  </Text>
+                  <CategoryMark name={row.categoryName} size={32} />
+                  <View style={{ flex: 1, gap: 4 }}>
+                    <Text
+                      style={{
+                        fontSize: 15,
+                        fontFamily: "Poppins-SemiBold",
+                        color: colors.ink,
+                      }}
+                    >
+                      {row.merchantClean || row.merchantRaw}
+                    </Text>
+                    <Text style={{ fontSize: 12, color: colors.muted }}>
+                      {dateLabel(row.date)}
+                    </Text>
+                  </View>
                   <Pressable
                     accessibilityRole="button"
                     accessibilityLabel="Edit transaction"
                     onPress={() => setEditing(true)}
-                    style={{ minHeight: 40, padding: 8 }}
+                    style={{ padding: 10 }}
                   >
-                    <Icon name="create-outline" size={18} />
+                    <Icon line name="create-outline" size={18} />
                   </Pressable>
                 </View>
+                <Text
+                  style={{
+                    textAlign: "right",
+                    fontSize: 15,
+                    color: colors.ink,
+                  }}
+                >
+                  {money(row.amount, row.currency)}
+                </Text>
                 <Card
                   style={{ padding: 0, overflow: "hidden", borderRadius: 16 }}
                 >
                   {[
-                    ["Name", row.merchantClean || row.merchantRaw],
                     [
                       "Type",
                       row.type.charAt(0).toUpperCase() + row.type.slice(1),
                     ],
+                    ["Name", row.merchantClean || row.merchantRaw],
                     ["Account", row.accountName],
                     ["Category", row.categoryName || "Uncategorized"],
                     [

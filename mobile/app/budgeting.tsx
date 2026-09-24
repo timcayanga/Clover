@@ -1,3 +1,4 @@
+import { CreateDirectoryCard } from "../src/create-directory-card";
 import { Icon } from "../src/ui";
 import { Text } from "../src/app-text";
 import { useEffect, useRef, useState } from "react";
@@ -389,14 +390,11 @@ export default function Budgeting() {
               </PlanDirectoryCard>
             ))
           )}
-          <Card>
-            <Icon name="add" size={32} />
-            <PlanAction
-              title="Create Budget"
-              tone="primary"
-              onPress={() => setEditor({ budget: null })}
-            />
-          </Card>
+          <CreateDirectoryCard
+            title="Create Budget"
+            subtitle="Plan for what matters to you"
+            onPress={() => setEditor({ budget: null })}
+          />
         </>
       )}
     </Screen>

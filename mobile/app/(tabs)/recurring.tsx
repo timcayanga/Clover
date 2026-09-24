@@ -1,3 +1,4 @@
+import { recurringSummaryAmounts } from "../../src/recurring-summary";
 import { PlanTabs } from "../../src/plan-ui";
 import { Text } from "../../src/app-text";
 import { useFocusEffect, useLocalSearchParams } from "expo-router";
@@ -98,6 +99,10 @@ export default function Recurring() {
   const ids = new Set(items.map((item) => item.id));
   const occurrences =
     data?.occurrences.filter((item) => ids.has(item.id)) ?? [];
+  const monthlyAmounts = recurringSummaryAmounts(items, occurrences, kind === "receivable");
+  const dueLabel = monthlyAmounts.length
+    ? monthlyAmounts.map(([currency, value]) => money(String(value), currency)).join(" · ")
+    : "No amount set";
   const due = occurrences.filter((item) => item.date === day);
   const amount = (item: Occurrence | Item) =>
     item.amount === null
@@ -160,7 +165,9 @@ export default function Recurring() {
       <PlanTabs
         items={kinds.map((item) => item.label)}
         value={kinds.find((item) => item.value === kind)?.label ?? "Overview"}
-        onChange={(label) => setKind(kinds.find((item) => item.label === label)?.value ?? "")}
+        onChange={(label) =>
+          setKind(kinds.find((item) => item.label === label)?.value ?? "")
+        }
       />
       {filters ? (
         <Card>
@@ -187,6 +194,23 @@ export default function Recurring() {
         <Body>Loading recurring…</Body>
       ) : (
         <>
+          <Card style={{ backgroundColor: colors.pale, alignItems: "center" }}>
+            <Text style={styles.sectionTitle}>
+              {month.getFullYear() === new Date().getFullYear() &&
+              month.getMonth() === new Date().getMonth()
+                ? "Due this month"
+                : `Due in ${month.toLocaleDateString(undefined, { month: "long", year: "numeric" })}`}
+            </Text>
+            <Text
+              style={{
+                color: colors.teal,
+                fontFamily: "Poppins-SemiBold",
+                fontSize: 18,
+              }}
+            >
+              {dueLabel}
+            </Text>
+          </Card>
           <Card>
             <Text
               style={{
@@ -217,7 +241,11 @@ export default function Recurring() {
                     ),
                   )
                 }
-                style={{ paddingHorizontal: 4, minHeight: 44, justifyContent: "center" }}
+                style={{
+                  paddingHorizontal: 4,
+                  minHeight: 44,
+                  justifyContent: "center",
+                }}
               >
                 <Text style={{ color: colors.teal, fontSize: 12 }}>Today</Text>
               </Pressable>
@@ -256,19 +284,22 @@ export default function Recurring() {
               </Pressable>
             </View>
             <View style={{ flexDirection: "row", flexWrap: "wrap" }}>
-              {["S", "M", "T", "W", "T", "F", "S"].map((name, index) => (
-                <Text
-                  key={index}
-                  style={{
-                    width: "14.2857%",
-                    color: colors.muted,
-                    textAlign: "center",
-                    paddingBottom: 8,
-                  }}
-                >
-                  {name}
-                </Text>
-              ))}
+              {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map(
+                (name, index) => (
+                  <Text
+                    key={index}
+                    style={{
+                      width: "14.2857%",
+                      color: colors.muted,
+                      textAlign: "center",
+                      paddingBottom: 8,
+                      fontSize: 10,
+                    }}
+                  >
+                    {name}
+                  </Text>
+                ),
+              )}
               {Array.from({ length: month.getDay() }, (_, index) => (
                 <View key={`blank-${index}`} style={{ width: "14.2857%" }} />
               ))}
@@ -294,7 +325,8 @@ export default function Recurring() {
                       style={{
                         width: "14.2857%",
                         minHeight: 76,
-                        padding: 3,
+                        padding: 4,
+                        borderRadius: 8,
                         borderWidth: 1,
                         borderColor: colors.line,
                         backgroundColor:

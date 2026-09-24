@@ -1,7 +1,8 @@
 import { Text } from "../src/app-text";
 import { useEffect, useState } from "react";
 import { router, useLocalSearchParams } from "expo-router";
-import {} from "react-native";
+import { View, Pressable } from "react-native";
+import { Icon } from "../src/ui";
 import { useSession } from "../src/session";
 import { useDisplayPreferences } from "../src/display-preferences";
 import { Body, Button, Card, Field, Notice, Screen, useTheme } from "../src/ui";
@@ -162,36 +163,44 @@ export default function Settings() {
         back={() => (section === "menu" ? router.back() : setSection("menu"))}
       />
       {section === "menu" ? (
-        <Card style={{ borderRadius: 16 }}>
+        <View>
           {(
             [
-              ["account", "Account"],
-              ["security", "Security"],
-              ["data", "Data"],
-              ["review", "Review"],
-              ["profiles", "Profiles"],
-              ["categories", "Categories"],
-              ["display", "Display"],
-              ["region", "Region"],
+              ["account", "Account", "person-outline"],
+              ["profiles", "Profiles", "people-outline"],
+              ["display", "Display", "desktop-outline"],
+              ["data", "Data", "server-outline"],
+              ["review", "Review", "document-text-outline"],
+              ["categories", "Categories", "grid-outline"],
+              ["notifications", "Notifications", "notifications-outline"],
+              ["security", "Security", "shield-checkmark-outline"],
+              ["region", "Region", "globe-outline"],
+              ["plan", "Plan", "card-outline"],
             ] as const
-          ).map(([key, label]) => (
-            <Button
+          ).map(([key, label, icon]) => (
+            <Pressable
               key={key}
-              title={label}
-              secondary
+              accessibilityRole="button"
+              accessibilityLabel={label}
               onPress={() => {
                 setSection(key);
                 setMessage("");
               }}
-            />
+              style={{
+                minHeight: 52,
+                flexDirection: "row",
+                alignItems: "center",
+                gap: 16,
+                borderBottomWidth: key === "plan" ? 0 : 1,
+                borderBottomColor: colors.line,
+                paddingHorizontal: 8,
+              }}
+            >
+              <Icon name={icon} size={26} />
+              <Text style={{ fontSize: 13, color: colors.muted }}>{label}</Text>
+            </Pressable>
           ))}
-          <Button
-            title="Notifications"
-            secondary
-            onPress={() => setSection("notifications")}
-          />
-          <Button title="Plan" secondary onPress={() => setSection("plan")} />
-        </Card>
+        </View>
       ) : null}
       {section === "account" && !accountReady ? (
         <Body>Loading account details…</Body>

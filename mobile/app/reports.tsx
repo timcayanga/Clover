@@ -234,7 +234,7 @@ export default function Reports() {
                   unit: "% vs prior period",
                 },
                 {
-                  title: "Spending",
+                  title: "Expenses",
                   value: money(String(summary.expense), currency),
                   delta: percentage(summary.expense, prior.expense),
                   lower: true,
@@ -282,7 +282,7 @@ export default function Reports() {
                       color={
                         row.title === "Income"
                           ? colors.positive
-                          : row.title === "Spending"
+                          : row.title === "Expenses"
                             ? colors.danger
                             : colors.ink
                       }

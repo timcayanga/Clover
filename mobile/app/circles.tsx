@@ -1,3 +1,4 @@
+import { CreateDirectoryCard } from "../src/create-directory-card";
 import { Icon } from "../src/ui";
 import { CircleInvitations } from "../src/circle-invitations";
 import { Text } from "../src/app-text";
@@ -580,8 +581,11 @@ export default function Circles() {
             title="Circle invitations"
             onPress={() => setInvitations(true)}
           />
-          <Body>A little more together. A lot less to juggle.</Body>
-          <Body>Share what matters. Personal accounts stay private.</Body>
+          <Body>
+            Split bills, coordinate shared expenses, track commitments, and work
+            toward budgets and goals together—while keeping personal accounts
+            private.
+          </Body>
           <Field
             label="Find a Circle"
             value={search}
@@ -663,13 +667,6 @@ export default function Circles() {
                     <Body>+{circle.memberCount - 5}</Body>
                   ) : null}
                 </View>
-                <Body muted={false}>
-                  {money(
-                    String(circle.expenseTotalThisMonth ?? 0),
-                    circle.currency,
-                  )}
-                </Body>
-                <Body>shared this month</Body>
                 <PlanAction
                   title="View Circle"
                   tone="primary"
@@ -680,15 +677,12 @@ export default function Circles() {
                 />
               </Card>
             ))}
-          <Card>
-            <Icon name="add" size={32} />
-            <PlanAction
-              title="Create Circle"
-              tone="primary"
-              onPress={() => setEditor({ circle: null, type: "household" })}
-            />
-            <Body>Start sharing with a new group</Body>
-          </Card>
+          <CreateDirectoryCard
+            title="Create Circle"
+            subtitle="Start sharing with a new group"
+            onPress={() => setEditor({ circle: null, type: "household" })}
+            filled
+          />
         </>
       )}
     </Screen>
