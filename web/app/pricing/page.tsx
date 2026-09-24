@@ -18,7 +18,7 @@ export default async function PricingPage() {
   const premium = plannedPremiumPrices(market);
   const session = await getSessionContext().catch(() => null);
   const signedIn = Boolean(session?.userId);
-  const proHref = signedIn ? "/settings#billing" : "/sign-up?intent=pro&interval=annual";
+  const proHref = signedIn ? "/settings/plan" : "/sign-up?intent=pro&interval=annual";
   return <main className={styles.page} data-pricing-market={market}>
     <JourneyHeader />
     <PostHogEvent event="upgrade_prompt_viewed" onceKey={analyticsOnceKey("upgrade_prompt_viewed", `pricing:${signedIn ? "signed-in" : "guest"}`)} properties={{ prompt_location: "pricing_page", cta_href: proHref }} />
@@ -35,7 +35,7 @@ export default async function PricingPage() {
       <section className={styles.plans} aria-label="Planned regional pricing">
         <article><h2>Free</h2><strong>Free</strong><p>Organize your finances with Clover’s core tools.</p><Link className="button button-secondary button-pill" href={signedIn ? "/home" : "/sign-up"}>{signedIn ? "Open Clover" : "Start free"} →</Link></article>
         <article><h2>Plus</h2><strong>{prices.monthly}<small> / month</small></strong><p>Or {prices.annual} per year</p><Link className="button button-primary button-pill" href={proHref}>Upgrade to Plus →</Link><small>You can keep using Clover for free.</small></article>
-        <article><h2>Pro</h2><strong>{premium.monthly}<small> / month</small></strong><p>Or {premium.annual} per year</p><p>More accounts, linked banks and AI capacity.</p><Link className="button button-primary button-pill" href={signedIn ? "/settings?plan=premium#billing" : "/sign-up?intent=premium"}>Explore Pro →</Link></article>
+        <article><h2>Pro</h2><strong>{premium.monthly}<small> / month</small></strong><p>Or {premium.annual} per year</p><p>More accounts, linked banks and AI capacity.</p><Link className="button button-primary button-pill" href={signedIn ? "/settings/plan" : "/sign-up?intent=premium"}>Explore Pro →</Link></article>
       </section>
       <p className={styles.region}>Pricing region: {market === "ph" ? "Philippines · PHP" : "Global · USD"}</p>
       <PlanComparisonTable variant="full" className={styles.table} />

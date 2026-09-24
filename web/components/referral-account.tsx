@@ -93,7 +93,7 @@ export function ReferralAccount({ summary = false }: { summary?: boolean }) {
           <section className={styles.card}>
             <h2>Plan & access</h2>
             <p>
-              <strong>{data.access.planTier.toUpperCase()}</strong> ·{" "}
+              <strong>{data.access.planTier === "premium" ? "Pro" : data.access.planTier === "pro" ? "Plus" : "Free"}</strong> ·{" "}
               {data.access.source}
             </p>
             <p>
@@ -101,8 +101,8 @@ export function ReferralAccount({ summary = false }: { summary?: boolean }) {
                 ? "Your account has an Admin-managed plan override."
                 : data.access.renewing
                   ? `Next renewal: ${date(data.access.subscription?.nextBillingTime ?? data.access.subscription?.currentPeriodEnd ?? null)}`
-                  : data.access.planTier === "pro"
-                    ? `Plus access ends: ${date(data.access.accessEndsAt)}`
+                  : (data.access.planTier === "pro" || data.access.planTier === "premium")
+                    ? `${data.access.planTier === "premium" ? "Pro" : "Plus"} access ends: ${date(data.access.accessEndsAt)}`
                     : "You can keep using Clover for free."}
             </p>
             {data.access.paidThrough && (
