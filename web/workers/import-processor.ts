@@ -1,3 +1,4 @@
+import { finalizePortfolioImport, isHoldingsOnlyPortfolio, portfolioConfidence } from "@/lib/portfolio-import";
 import { assessImportEvidenceSafety, assertSafeImportEvidence } from "@/lib/import-evidence-safety";
 import { startImportTiming, measureImportTiming } from "@/lib/import-timing";
 import { shouldRefineReceiptCore } from "@/lib/receipt-detail-refinement";
@@ -11464,7 +11465,15 @@ export const processImportFileText = async (
       !shouldPreferLocalSnapshotOnlyStatementParse &&
       !hasDeterministicBpiMobileScreenshotRows &&
       (!deterministicStatementParseLooksStrong || openAiStatementRowsAreCompetitive));
-  const useOpenAiParse =
+  // A holdings-only document has no ledger rows for statement arbitration.
+  const usableHoldingsOnlyPortfolio = isHoldingsOnlyPortfolio({
+    mode: effectiveImportMode,
+    schemaValidated: Boolean(openAiParsed?.audit.schemaValidated),
+    localRows: parsedRows.length,
+    backupRows: openAiParsed?.rows.length ?? 0,
+    holdings: openAiParsed?.holdings ?? [],
+  });
+  const useOpenAiParse = usableHoldingsOnlyPortfolio ||
     Boolean(openAiParsed?.audit.schemaValidated) &&
     openAiStatementQualityIsAcceptable &&
     shouldAdoptOpenAiStatementParse &&
@@ -12396,7 +12405,7 @@ export const processImportFileText = async (
           gainLossPercent: holding.gain_loss_percent,
           currency: holding.currency,
           status: holding.status,
-          confidence: holding.confidence_score,
+          confidence: portfolioConfidence(holding.confidence_score),
           rawPayload: holding.parser_evidence as Prisma.InputJsonValue,
           source: "openai" as const,
         }));
@@ -12431,10 +12440,21 @@ export const processImportFileText = async (
             parserEvidence: holding.rawPayload ?? null,
             source: holding.source,
             documentType: effectiveImportMode,
+            currencyEvidence: holding.currency ?? resolvedMetadata.currency ?? null,
           } as Prisma.InputJsonValue,
         })),
       });
     }
+  }
+
+  if (usableHoldingsOnlyPortfolio && documentImportRecord) {
+    const result = await confirmImportFileWithRetry("portfolio_holdings", linkedImportAccountId);
+    if (result.status !== "done") throw new Error("Portfolio holdings could not be linked to Investments. Please retry the import.");
+    emitImportProcessingEvent("import_processing_completed", {
+      processing_status: "done", processing_phase: "complete", imported_rows: 0,
+    });
+    return { ...result, duplicate: Boolean(result.duplicate), metadata: resolvedMetadata, resolvedImportMode: effectiveImportMode,
+      insightSummary: result.insightSummary ?? undefined, status: "done" };
   }
 
   const runTemplateLearning = async () => {
@@ -13636,6 +13656,21 @@ export const confirmImportFile = async (
   const isDocumentImport =
     importMode !== "statement" &&
     (imageImport || importMode === "receipt" || importMode === "portfolio" || importMode === "account_detail" || importMode === "notes");
+
+  if ((importMode === "portfolio" || importMode === "account_detail") &&
+      await hasCompatibleTable("InvestmentHolding")) {
+    const portfolio = await prisma.$transaction(
+      tx => finalizePortfolioImport(tx, {
+        importFileId, workspaceId: String(importFile.workspaceId),
+        accountLimit: planLimits?.accountLimit ?? null,
+      }),
+      { timeout: 30_000 },
+    );
+    if (portfolio) return {
+      imported: 0, confirmedTransactionsCount: 0, duplicate: importFile.status === "done",
+      accountId: portfolio.accountId, status: "done", insightSummary: null, accountBalance: null,
+    };
+  }
 
   if (isDocumentImport) {
     const documentImport =
