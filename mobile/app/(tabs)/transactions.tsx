@@ -172,7 +172,7 @@ export default function Transactions() {
         renderItem={({ item }) => (
           <Pressable
             accessibilityRole="button"
-            accessibilityLabel={`${item.merchantClean ?? item.merchantRaw}, ${item.type === "income" ? "+" : item.type === "expense" ? "−" : ""}{money(String(Math.abs(Number(item.amount))), item.currency)}, ${dateLabel(item.date)}.${item.reviewStatus === "pending_review" ? " Needs review." : ""} Open transaction.`}
+            accessibilityLabel={`${item.merchantClean ?? item.merchantRaw}, ${item.type === "income" ? "+" : item.type === "expense" ? "−" : ""}${money(item.amount.replace(/^-/, ""), item.currency)}, ${dateLabel(item.date)}.${item.reviewStatus === "pending_review" ? " Needs review." : ""} Open transaction.`}
             onPress={() =>
               router.push({
                 pathname: "/transaction/[id]",
@@ -232,7 +232,7 @@ export default function Transactions() {
                       : colors.ink,
               }}
             >
-              {money(item.amount, item.currency)}
+              {item.type === "income" ? "+" : item.type === "expense" ? "−" : ""}{money(item.amount.replace(/^-/, ""), item.currency)}
             </Text>
             <Icon line name="chevron-forward" size={14} color={colors.muted} />
           </Pressable>
