@@ -44,6 +44,7 @@ type PaddleCheckoutButtonProps = {
   clientToken: string;
   environment: "sandbox" | "live";
   priceId: string;
+  planTier?: "pro" | "premium";
   customerId: string;
   customerEmail: string;
   interval: BillingInterval;
@@ -55,12 +56,14 @@ export function PaddleCheckoutButton({
   clientToken,
   environment,
   priceId,
+  planTier = "pro",
   customerId,
   customerEmail,
   interval,
   className,
   onStart,
 }: PaddleCheckoutButtonProps) {
+  const checkoutActiveRef = useRef(false);
   const initializedTokenRef = useRef<string | null>(null);
   const [scriptReady, setScriptReady] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
@@ -94,11 +97,13 @@ export function PaddleCheckoutButton({
 
   useEffect(() => {
     const handleCheckoutEvent = (event: Event) => {
+      if (!checkoutActiveRef.current) return;
       const paddleEvent = (event as CustomEvent<PaddleCheckoutEvent>).detail;
       if (paddleEvent.name === "checkout.completed") {
-        setMessage("Payment received. Clover is confirming your Plus access.");
+        setMessage(`Payment received. Clover is confirming your ${planTier === "premium" ? "Pro" : "Plus"} access.`);
       } else if (paddleEvent.name === "checkout.closed") {
         setMessage((current) => current ?? "Checkout closed.");
+        checkoutActiveRef.current = false;
       }
     };
 
@@ -113,7 +118,7 @@ export function PaddleCheckoutButton({
     };
     // Paddle may only be initialized once for a page load.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [clientToken, environment]);
+  }, [clientToken, environment, planTier]);
 
   const openCheckout = async () => {
     if (preparing) return;
@@ -134,13 +139,14 @@ export function PaddleCheckoutButton({
     setPreparing(true);
     try {
     const checkout = await prepareCheckout("paddle", priceId, referralCode);
+    checkoutActiveRef.current = true;
     window.Paddle.Checkout.open({
       items: [{ priceId, quantity: 1 }],
       customer: customerEmail ? { email: customerEmail } : undefined,
       customData: {
         cloverUserId: customerId,
         cloverCheckoutId: checkout.checkoutId,
-        planTier: "pro",
+        planTier,
         interval,
       },
       settings: {
@@ -149,7 +155,7 @@ export function PaddleCheckoutButton({
         locale: "en",
       },
     });
-    } catch(error) { setMessage(error instanceof Error ? error.message : "Unable to prepare checkout."); }
+    } catch(error) { checkoutActiveRef.current = false; setMessage(error instanceof Error ? error.message : "Unable to prepare checkout."); }
     finally { setPreparing(false); }
   };
 

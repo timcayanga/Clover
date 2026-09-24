@@ -1,3 +1,4 @@
+import { getPaddlePlanById } from "./paddle-plans";
 import { prisma } from "@/lib/prisma";
 import { getDeploymentEnvironment } from "@/lib/deployment-environment";
 import {
@@ -115,7 +116,7 @@ export async function handlePaddleGrowth(event: PaddleWebhookEvent) {
     .find(
       (id) =>
         id &&
-        [env.PADDLE_MONTHLY_PRICE_ID, env.PADDLE_ANNUAL_PRICE_ID].includes(id),
+        Boolean(getPaddlePlanById(id, env)),
     );
   if (!planId || !subscriptionId || !paymentId) return;
   const captured = (Array.isArray(data.payments) ? data.payments : [])

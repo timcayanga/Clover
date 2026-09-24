@@ -115,7 +115,7 @@
     "qa:confirmed-data": "tsx scripts/confirmed-data-regression.ts",
     "qa:finverse": "tsx scripts/finverse-integration-regression.ts && tsx scripts/finverse-connect-route-regression.ts",
     "qa:lunchflow": "tsx scripts/lunch-flow-integration-regression.ts",
-    "qa:billing-lifecycle": "tsx scripts/billing-lifecycle-regression.ts",
+    "qa:billing-lifecycle": "tsx scripts/paddle-tiers-regression.ts && tsx scripts/billing-lifecycle-regression.ts",
     "qa:goal-intent": "tsx scripts/goal-intent-regression.ts",
     "qa:goal-persistence": "tsx scripts/goal-persistence-regression.ts && tsx scripts/personal-goals-regression.ts && tsx scripts/displayed-figures-regression.ts",
     "qa:split-bill-quick-add": "tsx scripts/split-bill-quick-add-regression.ts",

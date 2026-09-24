@@ -1,3 +1,4 @@
+import { getPaddlePlanById, getPaddlePlans } from "./paddle-plans";
 import { createHmac, timingSafeEqual } from "node:crypto";
 import {
   BillingProvider,
@@ -120,26 +121,19 @@ export function getPaddleBillingStatus(status: string | null | undefined) {
   }
 }
 
-function getPaddlePlan(data: Record<string, unknown>, env: AppEnv) {
+export function getPaddlePlan(data: Record<string, unknown>, env: AppEnv) {
   const items = Array.isArray(data.items) ? data.items : [];
-
-  for (const itemValue of items) {
+  const matches = items.flatMap(itemValue => {
     const item = asRecord(itemValue);
     const price = asRecord(item?.price);
     const priceId = readString(price?.id) ?? readString(item?.price_id);
     const productId = readString(price?.product_id) ?? readString(item?.product_id);
-    const productMatches = !env.PADDLE_PRODUCT_ID || productId === env.PADDLE_PRODUCT_ID;
-
-    if (productMatches && priceId === env.PADDLE_MONTHLY_PRICE_ID) {
-      return { providerPlanId: priceId, interval: "monthly" as const };
-    }
-
-    if (productMatches && priceId === env.PADDLE_ANNUAL_PRICE_ID) {
-      return { providerPlanId: priceId, interval: "annual" as const };
-    }
-  }
-
-  return { providerPlanId: null, interval: null };
+    const plan = getPaddlePlanById(priceId, env);
+    return plan && (!plan.productId || productId === plan.productId) ? [plan] : [];
+  });
+  if (matches.length !== 1) return { providerPlanId: null, interval: null, tier: null };
+  const plan = matches[0];
+  return { providerPlanId: plan.priceId, interval: plan.interval, tier: plan.planTier };
 }
 
 function getPaddleSubscriptionId(event: PaddleWebhookEvent) {
@@ -245,10 +239,11 @@ async function recordPaddleEvent(params: {
 
 export function getPaddlePlanTier(
   status: BillingSubscriptionStatus,
-  interval: "monthly" | "annual" | null
+  interval: "monthly" | "annual" | null,
+  tier: "pro" | "premium" = "pro"
 ) {
   return status === BillingSubscriptionStatus.active && interval
-    ? PlanTier.pro
+    ? tier
     : PlanTier.free;
 }
 
@@ -295,16 +290,18 @@ export async function applyPaddleEntitlement(
     return { matched: true, duplicate: false, applied: false, stale: true };
   }
 
-  const { providerPlanId, interval } = getPaddlePlan(data, env);
+  const { providerPlanId, interval, tier } = getPaddlePlan(data, env);
+  if (!tier) return { matched: true, duplicate: false, applied: false, unrecognizedPlan: true };
   const status = getPaddleBillingStatus(statusText);
-  const planTier = getPaddlePlanTier(status, interval);
+  // Retain the purchased tier for paid-through access after cancellation.
+  const planTier = tier ?? PlanTier.free;
   const billingPeriod = asRecord(data.current_billing_period);
   const currentPeriodEnd =
     parseDate(billingPeriod?.ends_at) ??
     parseDate(data.next_billed_at);
   const rawPayload = toJsonValue(event as Record<string, unknown>);
   const wasActive = existing?.status === BillingSubscriptionStatus.active;
-  const wasPro = existing?.planTier === PlanTier.pro;
+  const wasPro = existing?.planTier === PlanTier.pro || existing?.planTier === PlanTier.premium;
   const wasCancelled = existing?.status === BillingSubscriptionStatus.cancelled;
 
   const subscriptionData: Prisma.BillingSubscriptionUncheckedCreateInput = {
@@ -380,8 +377,8 @@ export function isPaddleCheckoutReady(env = getEnv()) {
     env.PADDLE_ENV === requiredEnvironment &&
       env.PADDLE_CLIENT_TOKEN &&
       env.PADDLE_WEBHOOK_SECRET &&
-      env.PADDLE_MONTHLY_PRICE_ID &&
-      env.PADDLE_ANNUAL_PRICE_ID
+      env.PADDLE_API_KEY &&
+      getPaddlePlans(env).length > 0
   );
 }
 

@@ -1,9 +1,16 @@
 import { type PricingMarket } from "./public-plan-comparison";
 
 // Approved provider charges: Paddle bills Philippine customers in USD.
-export const paddleProPricing = {
+export const paddlePlusPricing = {
   ph: { currency: "USD", monthly: { amount: 2.69, label: "US$2.69" }, annual: { amount: 19.99, label: "US$19.99" } },
   global: { currency: "USD", monthly: { amount: 7.99, label: "US$7.99" }, annual: { amount: 59.99, label: "US$59.99" } },
+} as const;
+
+// Compatibility name for existing Plus callers.
+export const paddleProPricing = paddlePlusPricing;
+export const paddlePremiumPricing = {
+  ph: { currency: "USD", monthly: { amount: 5.99, label: "US$5.99" }, annual: { amount: 49.99, label: "US$49.99" } },
+  global: { currency: "USD", monthly: { amount: 12.99, label: "US$12.99" }, annual: { amount: 99.99, label: "US$99.99" } },
 } as const;
 
 type PaddlePrice = {
@@ -17,8 +24,8 @@ type PaddlePrice = {
 export const pricingMarketForCountry = (country: string | null | undefined): PricingMarket =>
   country?.toUpperCase() === "PH" ? "ph" : "global";
 
-export function matchesPaddleApprovedPrice(price: PaddlePrice | null, country: string, interval: "monthly" | "annual") {
-  const expected = paddleProPricing[pricingMarketForCountry(country)];
+export function matchesPaddleApprovedPrice(price: PaddlePrice | null, country: string, interval: "monthly" | "annual", tier: "plus" | "pro" = "plus") {
+  const expected = (tier === "pro" ? paddlePremiumPricing : paddlePlusPricing)[pricingMarketForCountry(country)];
   const unit = price?.unit_price_overrides?.find(override => override.country_codes?.includes(country.toUpperCase()))?.unit_price ?? price?.unit_price;
   return price?.status === "active" && !price.trial_period &&
     price.billing_cycle?.interval === (interval === "monthly" ? "month" : "year") &&
@@ -27,6 +34,7 @@ export function matchesPaddleApprovedPrice(price: PaddlePrice | null, country: s
 }
 
 export type BillingOffers = {
+  pro?: { paddle: { monthly: string | null; annual: string | null }; paddlePrices: { monthly: string; annual: string } };
   market: PricingMarket;
   prices: { monthly: string; annual: string };
   paddlePrices: { monthly: string; annual: string };
