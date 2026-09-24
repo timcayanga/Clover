@@ -425,6 +425,9 @@ export function AppHeader({
   const home = title === "Home";
   const adviserShortcut = [
     "Reports",
+    "Transactions",
+    "Recurring",
+    "Accounts",
     "Investments",
     "Split Bills",
     "Budgeting",
@@ -455,8 +458,8 @@ export function AppHeader({
             styles.headerTitle,
             {
               position: "absolute",
-              left: 54,
-              fontSize: width < 360 && title.length > 10 ? 14 : 18,
+              left: title === "Investments" ? 144 : adviserShortcut || home || trailing ? 100 : 54,
+              fontSize: title === "Investments" ? (width < 380 ? 11 : 14) : width < 360 && title.length > 10 ? 14 : 18,
               right:
                 title === "Investments"
                   ? 144
@@ -476,7 +479,7 @@ export function AppHeader({
             alignItems: "center",
           }}
         >
-          {adviserShortcut && (trailing || back || onClose) ? adviser : null}
+          {adviserShortcut && (trailing || back || onClose || canAdd) ? adviser : null}
           {trailing ??
             (title === "Adviser" ? (
               <Pressable

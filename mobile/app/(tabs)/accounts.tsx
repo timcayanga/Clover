@@ -233,6 +233,7 @@ function AccountsContent() {
   if (selected || adding)
     return (
       <AccountEditor
+        defaultCurrency={session.data?.defaultCurrency ?? "PHP"}
         callbackConnection={finverseConnection}
         initial={selected}
         onClose={() => {

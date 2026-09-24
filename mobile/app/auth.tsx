@@ -18,6 +18,7 @@ type Step =
   | "reset"
   | "reset-code"
   | "new-password"
+  | "email-verification"
   | "extra-verification";
 export default function Authentication() {
   const access = useAccess();
@@ -86,7 +87,12 @@ function AuthForm() {
   };
   const finishSignIn = async () => {
     if (signIn.status === "complete") await check(signIn.finalize());
-    else {
+    else if ((signIn.status === "needs_client_trust" || signIn.status === "needs_second_factor") && signIn.supportedSecondFactors?.some(factor => factor.strategy === "email_code")) {
+      await check(signIn.mfa.sendEmailCode());
+      setCode("");
+      setStep("email-verification");
+      setMessage("");
+    } else {
       setStep("extra-verification");
       setMessage(
         "Your account needs an additional security check to finish signing in.",
@@ -98,6 +104,10 @@ function AuthForm() {
     if (step === "sign-in") {
       await check(signIn.password({ emailAddress: email.trim(), password }));
       setPassword("");
+      await finishSignIn();
+    } else if (step === "email-verification") {
+      await check(signIn.mfa.verifyEmailCode({ code: code.trim() }));
+      setCode("");
       await finishSignIn();
     } else if (step === "sign-up") {
       await check(
@@ -156,11 +166,12 @@ function AuthForm() {
     "reset-code": "Check your email",
     "new-password": "Reset password",
     "extra-verification": "Verify your account",
+    "email-verification": "Verify your account",
   }[step];
   const valid =
     step === "extra-verification"
       ? false
-      : step === "verify" || step === "reset-code"
+      : step === "verify" || step === "reset-code" || step === "email-verification"
         ? code.trim().length > 0
         : step === "reset"
           ? email.includes("@")
@@ -258,7 +269,7 @@ function AuthForm() {
               ) : null}
             </>
           ) : null}
-          {step === "verify" || step === "reset-code" ? (
+          {step === "verify" || step === "reset-code" || step === "email-verification" ? (
             <>
               <Body>Enter the code sent to {email}.</Body>
               <Field
@@ -278,7 +289,9 @@ function AuthForm() {
                     await check(
                       step === "verify"
                         ? signUp.verifications.sendEmailCode()
-                        : signIn.resetPasswordEmailCode.sendCode(),
+                        : step === "email-verification"
+                          ? signIn.mfa.sendEmailCode()
+                          : signIn.resetPasswordEmailCode.sendCode(),
                     );
                     setMessage("A new code was requested. Check your email.");
                   })

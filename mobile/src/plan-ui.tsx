@@ -2,7 +2,7 @@ import { Text } from "./app-text";
 import { LinearGradient } from "expo-linear-gradient";
 import { useEffect, useState, useCallback, type ComponentProps, type ReactNode } from "react";
 import { router, useFocusEffect } from "expo-router";
-import { Platform, Pressable, View, useWindowDimensions } from "react-native";
+import { Alert, Platform, Pressable, View, useWindowDimensions } from "react-native";
 import { useSession } from "./session";
 import { AppHeader, AddNavigationMark, Icon, useTheme } from "./ui";
 /** Square at normal text size, but grows rather than clipping larger text. */
@@ -288,6 +288,7 @@ export function usePlanData<T>(path: string, sample: T) {
 }
 
 export function SummaryCard({
+  help,
   title,
   value,
   detail,
@@ -299,9 +300,11 @@ export function SummaryCard({
   detail?: string;
   color?: string;
   detailColor?: string;
+  help?: string;
 }) {
   const { colors } = useTheme();
   const [cardWidth, setCardWidth] = useState(0);
+  const [showHelp, setShowHelp] = useState(false);
   const valueSize =
     Platform.OS === "web" && cardWidth > 0
       ? Math.max(
@@ -331,17 +334,11 @@ export function SummaryCard({
         alignItems: "center",
       }}
     >
-      <Text
-        style={{
-          fontFamily: "Poppins-SemiBold",
-          fontSize: 12,
-          lineHeight: 18,
-          textAlign: "center",
-          color: "#7A879C",
-        }}
-      >
-        {title}
-      </Text>
+      <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 4, paddingHorizontal: 6 }}>
+        <Text style={{ fontFamily: "Poppins-SemiBold", fontSize: 12, lineHeight: 18, textAlign: "center", color: "#7A879C", flexShrink: 1 }}>{title}</Text>
+        {help ? <Pressable accessibilityRole="button" accessibilityLabel={help} onPress={() => Platform.OS === "web" ? setShowHelp(value => !value) : Alert.alert(title, help)} hitSlop={6} style={{ width: 28, height: 28, borderRadius: 14, borderWidth: 1, borderColor: colors.line, alignItems: "center", justifyContent: "center" }}><Icon name="information" size={14} color={colors.muted}/></Pressable> : null}
+      </View>
+      {showHelp && help ? <Text style={{ color: colors.muted, fontSize: 12, textAlign: "center", paddingHorizontal: 8 }}>{help}</Text> : null}
       <Text
         style={{
           fontFamily: "Poppins-SemiBold",

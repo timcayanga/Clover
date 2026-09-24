@@ -1,3 +1,4 @@
+import { convertHomeWindow } from "./home-currency-total";
 import { finverseBalances } from "./finverse-balances";
 import { mobileHomePeriods, homeDateKey } from "./mobile-home-periods";
 import { buildReviewQueueWhere } from "./review-queue";
@@ -74,9 +75,9 @@ export async function mobileHome(workspaceId: string, currency: string) {
     prisma.transaction.findMany({
       where: buildActiveWorkspaceTransactionWhere(workspaceId, {
         date: { gte: since, lt: tomorrow },
-        currency,
       }),
       select: {
+        currency: true,
         date: true,
         amount: true,
         type: true,
@@ -102,7 +103,7 @@ export async function mobileHome(workspaceId: string, currency: string) {
   const rates = new Map<string, number>();
   rates.set(currency, 1);
   await Promise.all(
-    [...new Set(spendable.map((a) => a.currency))]
+    [...new Set([...spendable.map((a) => a.currency), ...transactions.map(t => t.currency)])]
       .filter((c) => c !== currency)
       .map(async (base) => {
         try {
@@ -177,7 +178,7 @@ export async function mobileHome(workspaceId: string, currency: string) {
     : null;
   const totals = (from: Date, to: Date) =>
     transactions
-      .filter((t) => t.date >= from && t.date < to)
+      .filter((t) => t.currency === currency && t.date >= from && t.date < to)
       .reduce(
         (sum, t) => {
           const type = resolveFinancialTransactionType({
@@ -217,7 +218,7 @@ export async function mobileHome(workspaceId: string, currency: string) {
   const categories = new Map<string, number>();
   for (const t of transactions) {
     if (
-      t.date < month ||
+      t.currency !== currency || t.date < month ||
       resolveFinancialTransactionType({
         ...t,
         categoryName: t.category?.name,
@@ -231,6 +232,7 @@ export async function mobileHome(workspaceId: string, currency: string) {
     );
   }
   return {
+    heroTotals: { current: convertHomeWindow(transactions, month, tomorrow, Object.fromEntries(rates)), previous: convertHomeWindow(transactions, previousMonth, month, Object.fromEntries(rates)) },
     currencies: [
       ...new Set([
         currency,

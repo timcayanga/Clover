@@ -1,3 +1,5 @@
+import { normalizeRegionalPreferences } from "@/lib/regional-preferences";
+import { resolveReportCurrency } from "@/lib/report-currency";
 import { PlanQuotaError } from "@/lib/plan-quota";
 import { NativeInputError } from "@/lib/native-input-error";
 import { hasFullFeatureAccess } from "@/lib/beta-access";
@@ -85,7 +87,7 @@ async function handle(
     }
     const user = await prisma.user.findUnique({
       where: { clerkUserId: userId },
-      select: { id: true, firstName: true, lastName: true, email: true, clerkUserId: true, planTier: true, accountLimit:true, monthlyUploadLimit:true, transactionLimit:true, dataWipedAt: true, onboardingCompletedAt: true },
+      select: { id: true, firstName: true, lastName: true, email: true, clerkUserId: true, planTier: true, accountLimit:true, monthlyUploadLimit:true, transactionLimit:true, dataWipedAt: true, onboardingCompletedAt: true, regionalPreferences: true },
     });
     const catalog = operation === "bootstrap" ? await import("@/lib/currencies") : null;
     const currencyChoices = catalog ? catalog.getCurrencyCatalogOptions(catalog.getCurrencyCatalogCodes()) : undefined;
@@ -172,6 +174,7 @@ async function handle(
         preferences,
         needsOnboarding: !user.onboardingCompletedAt,
         currencyChoices,
+        defaultCurrency: normalizeRegionalPreferences(user.regionalPreferences).baseCurrency,
         firstName: user.firstName,
         profiles,
         entitlement: {
@@ -298,7 +301,11 @@ async function handle(
     }
 
     if (operation === "reports") {
-      const currency = z.string().regex(/^[A-Z]{3}$/).parse(url.searchParams.get("currency") ?? "PHP");
+      const requested = url.searchParams.get("currency") ?? undefined;
+      if (requested) z.string().regex(/^[A-Z]{3}$/).parse(requested);
+      const accounts = await prisma.account.findMany({ where: { workspaceId }, select: { currency: true } });
+      const selection = resolveReportCurrency(accounts.map(account => account.currency), normalizeRegionalPreferences(user.regionalPreferences).baseCurrency, requested);
+      const currency = selection.currentCurrency;
       const {mobileHome} = await import("@/lib/mobile-home");
       const {loadReportNetWorth} = await import("@/lib/report-net-worth");
       const { mobileReportBalances } = await import("@/lib/mobile-report-balances");
@@ -308,7 +315,7 @@ async function handle(
       const details=await nativeReportDetails(workspaceId,currency,window,hasFullFeatureAccess(access.planTier));
       const now = new Date();
       const [data, netWorth, balances] = await Promise.all([mobileHome(workspaceId,currency),loadReportNetWorth(workspaceId,currency,window.start,window.end),mobileReportBalances(workspaceId,currency,now,window)]);
-      return reply({...data,netWorth,balances,details});
+      return reply({...data,currencies:selection.currencies,netWorth,balances,details});
     }
     if (operation === "together-options") {
       const [groups, people, profiles] = await Promise.all([
@@ -452,7 +459,7 @@ async function handle(
       return reply(await (await import("@/lib/mobile-recurring")).mobileRecurring(workspaceId, year, month));
     }
     if (operation === "home") {
-      const currency = z.string().regex(/^[A-Z]{3}$/).parse(url.searchParams.get("currency") ?? "PHP");
+      const currency = z.string().regex(/^[A-Z]{3}$/).parse(url.searchParams.get("currency") ?? normalizeRegionalPreferences(user.regionalPreferences).baseCurrency);
       return reply(await mobileHome(workspaceId, currency));
     }
     if (operation === "transaction") {

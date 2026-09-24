@@ -163,7 +163,6 @@ function Routes() {
             "/offline",
             "/settings",
             "/notifications",
-            "/onboarding",
             "/budgeting",
             "/goals",
             "/investments",

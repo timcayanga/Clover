@@ -110,7 +110,8 @@ export default function Transactions() {
           <View style={{ flex: 1 }}>
             <Field
               accessibilityLabel="Search transactions"
-              placeholder="Search transactions"
+              placeholder="Search"
+              style={{ height: 44, minHeight: 44, paddingVertical: 0, fontSize: 13 }}
               value={query}
               onChangeText={setQuery}
               returnKeyType="search"
@@ -171,7 +172,7 @@ export default function Transactions() {
         renderItem={({ item }) => (
           <Pressable
             accessibilityRole="button"
-            accessibilityLabel={`${item.merchantClean ?? item.merchantRaw}, ${money(item.amount, item.currency)}, ${dateLabel(item.date)}.${item.reviewStatus === "pending_review" ? " Needs review." : ""} Open transaction.`}
+            accessibilityLabel={`${item.merchantClean ?? item.merchantRaw}, ${item.type === "income" ? "+" : item.type === "expense" ? "−" : ""}{money(String(Math.abs(Number(item.amount))), item.currency)}, ${dateLabel(item.date)}.${item.reviewStatus === "pending_review" ? " Needs review." : ""} Open transaction.`}
             onPress={() =>
               router.push({
                 pathname: "/transaction/[id]",
@@ -193,9 +194,11 @@ export default function Transactions() {
           >
             <CategoryMark name={item.categoryName} size={24} />
             <View style={{ flex: 1, minWidth: 0, gap: 4 }}>
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 5 }}>
               <Text
-                numberOfLines={2}
+                numberOfLines={1}
                 style={{
+                  flexShrink: 1,
                   fontSize: 13,
                   fontFamily: "Poppins-SemiBold",
                   color: colors.ink,
@@ -203,6 +206,8 @@ export default function Transactions() {
               >
                 {item.merchantClean ?? item.merchantRaw}
               </Text>
+              {item.reviewStatus === "pending_review" ? <Icon line name="warning-outline" size={12} color="#D6A226"/> : null}
+              </View>
               <Text
                 numberOfLines={2}
                 style={{ fontSize: 10, color: colors.muted }}
@@ -229,20 +234,7 @@ export default function Transactions() {
             >
               {money(item.amount, item.currency)}
             </Text>
-            <Icon
-              line
-              name={
-                item.reviewStatus === "pending_review"
-                  ? "warning-outline"
-                  : "chevron-forward"
-              }
-              size={14}
-              color={
-                item.reviewStatus === "pending_review"
-                  ? "#D6A226"
-                  : colors.muted
-              }
-            />
+            <Icon line name="chevron-forward" size={14} color={colors.muted} />
           </Pressable>
         )}
         ListEmptyComponent={

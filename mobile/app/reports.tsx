@@ -124,16 +124,19 @@ const sample: Report = {
 export default function Reports() {
   const session = useSession();
   const { colors } = useTheme();
-  const [currency, setCurrency] = useState("PHP");
+  const [selection, setSelection] = useState<{profileId:string;currency:string} | null>(null);
+  const requestedCurrency = selection?.profileId === session.profileId ? selection.currency : "";
+  const setCurrency = (currency: string) => setSelection({profileId:session.profileId,currency});
   const [tab, setTab] = useState("Overview");
   const [period, setPeriod] = useState<"weekly" | "monthly">("monthly");
   const [from,setFrom]=useState("");const [to,setTo]=useState("");const [comparison,setComparison]=useState("previous");const [range,setRange]=useState("");
   const [filters, setFilters] = useState(false);
   const [chart, setChart] = useState("Donut");
   const { data, error, reload } = usePlanData(
-    `reports?currency=${currency}${range}`,
+    `reports?${requestedCurrency ? `currency=${requestedCurrency}` : ""}${range}`,
     sample,
   );
+  const currency = data?.currency ?? session.data?.defaultCurrency ?? "PHP";
   const summary = data?.details?{...data.details.current,previous:data.details.previous}:data?.[period];
   const categories=data?.details?.categories??data?.categories??[];
   const expenseTotal=summary?.expense??0;
@@ -228,6 +231,7 @@ export default function Reports() {
               const rows = [
                 {
                   title: "Income",
+                  help: "All money coming in during the selected range.",
                   value: money(String(summary.income), currency),
                   delta: percentage(summary.income, prior.income),
                   lower: false,
@@ -235,6 +239,7 @@ export default function Reports() {
                 },
                 {
                   title: "Expenses",
+                  help: "All spending recorded in the selected range.",
                   value: money(String(summary.expense), currency),
                   delta: percentage(summary.expense, prior.expense),
                   lower: true,
@@ -242,6 +247,7 @@ export default function Reports() {
                 },
                 {
                   title: "Net income",
+                  help: "Income minus spending for the selected range.",
                   value: money(String(net), currency),
                   delta: net - priorNet,
                   lower: false,
@@ -249,6 +255,7 @@ export default function Reports() {
                 },
                 {
                   title: "Savings rate",
+                  help: "The share of income left after spending.",
                   value: rate === null ? "N/A" : `${rate.toFixed(1)}%`,
                   delta:
                     rate !== null && priorRate !== null
@@ -278,6 +285,7 @@ export default function Reports() {
                   >
                     <SummaryCard
                       title={row.title}
+                      help={row.help}
                       value={row.value}
                       color={
                         row.title === "Income"

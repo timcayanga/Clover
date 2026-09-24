@@ -38,6 +38,7 @@ export type TransactionPage = {
 };
 export type Profile = { id: string; name: string };
 export type Bootstrap = {
+  defaultCurrency?: string;
   offlineEpoch?: string | null;
   preferences?: import("../../shared/app-preferences").AppPreferences;
   needsOnboarding?: boolean;

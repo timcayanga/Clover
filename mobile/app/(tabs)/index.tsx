@@ -20,6 +20,7 @@ import {
 } from "../../src/ui";
 type Totals = { income: number; expense: number };
 type HomeData = {
+  heroTotals?: { current: {income: string | null; expense: string | null}; previous: {income: string | null; expense: string | null} };
   currencies?: string[];
   reviewCount?: number;
   categories?: { name: string; amount: number }[];
@@ -60,7 +61,7 @@ export default function Home() {
   const [data, setData] = useState<HomeData | null>(null);
   const [error, setError] = useState("");
   const [hidden, setHidden] = useState(true);
-  const [currency, setCurrency] = useState("PHP");
+  const currency = session.data?.defaultCurrency ?? "PHP";
   useEffect(() => {
     let active = true;
     const read =
@@ -236,12 +237,16 @@ export default function Home() {
                       color: key === "income" ? colors.positive : colors.danger,
                     }}
                   >
-                    {amount(data.month[key])}
+                    {amount(data.heroTotals ? data.heroTotals.current[key] : data.month[key])}
                   </Text>
                   <Text style={{ fontSize: 10, color: colors.muted }}>
                     {hidden
                       ? "••••"
-                      : homePeriodLabel(data.month[key], data.previousMonth[key])}
+                      : data.heroTotals
+                        ? data.heroTotals.current[key] === null || data.heroTotals.previous[key] === null
+                          ? "Unavailable"
+                          : homePeriodLabel(Number(data.heroTotals.current[key]), Number(data.heroTotals.previous[key]))
+                        : homePeriodLabel(data.month[key], data.previousMonth[key])}
                   </Text>
                 </View>
               ))}
