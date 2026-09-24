@@ -1,4 +1,5 @@
 "use client";
+import { readImportActivity, subscribeImportActivity } from "@/lib/import-activity";
 import { AddEntryMethods } from "@/components/add-entry-methods";
 import { InvestmentTableEntry } from "@/components/investment-table-entry";
 import { useMobileCreationRoute } from "@/lib/use-mobile-creation-route";
@@ -1330,6 +1331,18 @@ export default function InvestmentsPage() {
 
     window.addEventListener("storage", handleStorage);
     return () => window.removeEventListener("storage", handleStorage);
+  }, [selectedWorkspaceId]);
+
+  useEffect(() => {
+    let completedImport: string | null = null;
+    return subscribeImportActivity(() => {
+      const activity = readImportActivity();
+      if (activity?.workspaceId !== selectedWorkspaceId || activity.status !== "done" || !activity.importFileId) return;
+      const completion = `${activity.importFileId}:${activity.timing?.completedAt ?? activity.completedFiles}`;
+      if (completion === completedImport) return;
+      completedImport = completion;
+      setInvestmentRefresh(value => value + 1);
+    });
   }, [selectedWorkspaceId]);
 
   const investmentAccounts = useMemo(

@@ -85,3 +85,11 @@ Unsigned activity amounts with explicit direction labels (for example Expense pa
 - Require every non-total row to parse safely; incomplete or unfamiliar OCR column layouts fail closed with an actionable message.
 - Generic amount extraction must remove the date before looking for money, so a trailing year cannot become an amount.
 - Deterministic investment inventories remain separate account groups during confirmation and cannot be replaced by an AI-generated expense ledger.
+
+## Holdings-only portfolios
+
+- A schema-validated portfolio with holdings and no ledger rows is a complete source type. Do not reject its institution/currency metadata using statement transaction-count scoring.
+- Persist the original document, snapshot, holding evidence and confidence. Normalize fractional confidence to the 0–100 scale.
+- Finalize holdings into per-asset investment account links and derived snapshots in one transaction. Create no expense, income or transfer transactions. Keep holdings pending review.
+- Preserve all existing account fields and reviewed holdings. Reject ambiguous matches, unresolved currency/provider, duplicate assets, and deleted-account recreation with actionable errors. Enforce the account allowance across Profiles; any failure rolls back the whole portfolio.
+- Retry completed imports without recreating assets or duplicating snapshots. Refresh Investments when the active Profile’s import completes.

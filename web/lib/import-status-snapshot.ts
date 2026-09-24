@@ -230,6 +230,22 @@ const supportedSnapshotAccountTypes = new Set<AccountType>([
   "other",
 ]);
 
+// Holdings-only portfolios have no ledger rows; verify their persisted account/snapshot joins.
+const loadPortfolioAccountSummaries = async (importFileId: string, workspaceId: string): Promise<ImportAccountSummary[]> => {
+  const holdings = await prisma.investmentHolding.findMany({
+    where: { workspaceId, documentImport: { importFileId, documentFamily: { in: ["portfolio", "account_detail"] } } },
+    include: { account: true, investmentSnapshot: true },
+  });
+  if (!holdings.length || holdings.some(h => !h.account || h.account.workspaceId !== workspaceId ||
+      h.account.type !== "investment" || h.investmentSnapshot.accountId !== h.accountId)) return [];
+  return Array.from(new Map(holdings.map(h => {
+    const account = h.account!;
+    return [account.id, { accountId: account.id, accountName: account.name, institution: account.institution,
+      accountNumber: account.accountNumber, accountType: account.type as AccountType, currency: account.currency,
+      balance: account.balance?.toString() ?? null, rowsImported: 0 }];
+  })).values());
+};
+
 const loadSnapshotInventoryAccountSummaries = async (
   importFileId: string,
   workspaceId: string
@@ -671,7 +687,11 @@ export const loadImportStatusSnapshot = async (
     );
   const receiptHasVisibleTransaction = Boolean(receiptTransaction);
   const receiptHasVisibleDocument = Boolean(receiptDocument);
+  const portfolioAccountSummaries = importFile.status === "done" && documentImport &&
+    parsedRowsCount === 0 && confirmedTransactionsCount === 0 && await hasCompatibleTable("InvestmentHolding")
+      ? await loadPortfolioAccountSummaries(importFileId, String(importFile.workspaceId)) : [];
   const visibleImportComplete =
+    portfolioAccountSummaries.length > 0 ||
     confirmedTransactionsCount > 0 || hasConfirmedRows || accountDetailOnlyImport || receiptHasVisibleTransaction;
   const hasVisibleImportData =
     visibleImportComplete || parsedRowsCount > 0 || checkpointRowCount > 0 || receiptHasVisibleDocument;
@@ -691,6 +711,7 @@ export const loadImportStatusSnapshot = async (
       ? await buildReceiptDocumentAccountSummary(receiptDocument)
       : [];
   const computedAccountSummaries =
+    portfolioAccountSummaries.length > 0 ? portfolioAccountSummaries :
     visibleTransactionAccountSummaries.length > 0
       ? visibleTransactionAccountSummaries
       : snapshotInventoryAccountSummaries.length > 0
