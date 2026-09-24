@@ -22,10 +22,12 @@ Connect is the fourth entry method beside Manual, Ask Clover and Upload. Existin
 - Native UI preview checked at 393×852 and 320×568. Four equal tabs, no horizontal overflow, bottom navigation visible; unsaved manual draft preserved across Connect switching. No console errors observed.
 - Figma composition visually checked after correcting auto-layout and text sizing.
 - Full prepush gate passed. Finverse route regressions were added to the permanent release gate; the complete gate is run again before push.
+- Staging bank search and empty results verified; unsaved manual draft retained when switching to Connect and back. Desktop verification caught a shared three-column CSS override; creation tabs now use equal-width flex items, and bank choices span the panel.
+- Signed native builds completed successfully from commit `74dafc2a`: [iOS build 10](https://expo.dev/accounts/clover-innovations/projects/clover-mobile/builds/04740911-ad99-47aa-ac79-aa18af87a33a) and [Android build 11](https://expo.dev/accounts/clover-innovations/projects/clover-mobile/builds/b223918f-2203-4214-9e95-b356c454e610). No store submission or physical-device authorization test was performed.
 - Local web production preview requires a Clerk publishable key not present in this worktree; web visual verification uses staging.
 
 ## Configuration dependency
 
-Staging environment inventory currently contains FINVERSE_ENABLED, FINVERSE_MODE and FINVERSE_REDIRECT_URI, but not FINVERSE_CLIENT_ID, FINVERSE_CLIENT_SECRET or FINVERSE_TOKEN_ENCRYPTION_KEY. No real bank authorization was performed. Live bank availability and a real account connection require those credentials and Finverse approval.
+Staging is configured for test mode, as requested. The deployed Connect screen successfully retrieves Testbank from Finverse. Environment exports did not reflect usable runtime credentials, so deployment behavior is the authoritative configuration check. No live bank authorization was performed.
 
 Primary API reference: https://docs.finverse.com/ — GET /institutions and POST /link/token.
