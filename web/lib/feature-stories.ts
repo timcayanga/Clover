@@ -39,7 +39,7 @@ export const FEATURE_STORIES: FeatureStory[] = [
     { id: "start", title: "Your money. Your records.", accent: "Your control." },
   ] },
   { slug: "pro", title: "Pro", asset: "pro", chapters: [
-    { id: "overview", title: "More perspective as", accent: "your finances grow.", copy: "Start free. Consider Pro when you want more guidance and tools alongside a more involved financial life.", visual: "accounts" },
+    { id: "overview", title: "More perspective as", accent: "your finances grow.", copy: "Start free. Consider Plus or Pro when you want more guidance and tools alongside a more involved financial life.", visual: "accounts" },
     { id: "deeper-guidance", title: "Look beyond", accent: "the immediate question.", copy: "Explore advanced Adviser guidance to help connect spending, plans, and the wider financial picture. You choose which suggestions to act on.", visual: "adviser" },
     { id: "investment-context", title: "Keep the bigger", accent: "picture in view.", copy: "Bring investment tracking into the same financial picture, alongside the accounts, reports, budgets, and goals you already use.", visual: "reports" },
     { id: "compare", title: "Choose what works", accent: "for you.", copy: "Compare Free, Plus and Pro. Monthly and annual options are shown for your region, and you can keep using Clover for free.", visual: "pricing" },

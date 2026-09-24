@@ -110,7 +110,7 @@ export function ReportsTopTabs() {
         key: section,
         label: reportsSectionLabels[section],
         icon: <ReportsTabIcon section={section} />,
-        badge: section === "advanced" ? "Pro" : null,
+        badge: section === "advanced" ? "Plus" : null,
         locked: lockedSections.includes(section),
       }))}
     />

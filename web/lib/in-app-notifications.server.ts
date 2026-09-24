@@ -269,13 +269,13 @@ export const buildInAppNotificationCandidates = async (
       productHref: "/settings?section=plan",
       title: exhausted ? `${input.label} limit reached` : `${input.label} usage is at ${Math.round(percent)}%`,
       message: user.planTier === "free"
-        ? `You’re using ${input.used} of ${input.limit} available ${input.label.toLowerCase()}. Upgrade to Pro for more room.`
+        ? `You’re using ${input.used} of ${input.limit} available ${input.label.toLowerCase()}. Upgrade to Plus or Pro for more room.`
         : `You’re using ${input.used} of ${input.limit} available ${input.label.toLowerCase()}.`,
       tone: exhausted ? "danger" : "warning",
       priority: exhausted ? "critical" : "high",
       createdAt: now.toISOString(),
       href: "/settings?section=plan",
-      ctaLabel: user.planTier === "free" ? "View Pro" : "View plan",
+      ctaLabel: user.planTier === "free" ? "View plans" : "View plan",
       progress: { used: input.used, limit: input.limit, percent, label: input.label },
     });
   };
@@ -298,7 +298,7 @@ export const buildInAppNotificationCandidates = async (
       priority: usage.exhausted ? "critical" : "high",
       createdAt: now.toISOString(),
       href: "/settings?section=plan",
-      ctaLabel: user.planTier === "free" ? "View Pro" : "View plan",
+      ctaLabel: user.planTier === "free" ? "View plans" : "View plan",
       progress: { used: usage.used, limit, percent: usage.percent, label: "Monthly Clover tokens" },
     });
   }

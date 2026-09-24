@@ -70,7 +70,7 @@ export function ReferralAccount({ summary = false }: { summary?: boolean }) {
       await load();
       setMessage(
         action === "claim"
-          ? "Your Pro reward is activated. Billing has not changed."
+          ? "Your Plus reward is activated. Billing has not changed."
           : "Your referral code is ready to share.",
       );
     } catch (e) {
@@ -125,7 +125,7 @@ export function ReferralAccount({ summary = false }: { summary?: boolean }) {
                   <a
                     href={`/settings/plan?ref=${encodeURIComponent(incoming)}`}
                   >
-                    View Pro and use this code →
+                    View Plus and use this code →
                   </a>
                 </section>
               )}
@@ -133,7 +133,7 @@ export function ReferralAccount({ summary = false }: { summary?: boolean }) {
                 <h2>Refer & Earn</h2>
                 <p>
                   Share your code with a friend. Eligible, confirmed first paid
-                  purchases earn Pro months after the campaign’s review period.
+                  purchases earn Plus months after the campaign’s review period.
                 </p>
                 {!data.campaigns.length && (
                   <p>
@@ -224,7 +224,7 @@ export function ReferralAccount({ summary = false }: { summary?: boolean }) {
                       return (
                         <article key={r.id}>
                           <strong>
-                            {r.months} Pro month(s) ·{" "}
+                            {r.months} Plus month(s) ·{" "}
                             {expired
                               ? "Expired"
                               : ready

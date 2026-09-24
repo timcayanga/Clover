@@ -73,7 +73,7 @@ export function AdminSecurityConsole({ role }: { role: AdminRole }) {
     ["read", "View Admin records"],
     ["support", "Support notes and replies"],
     ["operate", "Imports, content and operations"],
-    ["entitlements", "Temporary Pro grants"],
+    ["entitlements", "Temporary Plus grants"],
     ["security", "Account access and recovery"],
     ["destructive", "Destructive data actions (different Owner approval)"],
     ["manage_staff", "Manage team access"],

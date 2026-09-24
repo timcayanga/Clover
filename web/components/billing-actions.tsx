@@ -197,7 +197,7 @@ export function BillingActions({
             <div className="billing-actions__intro">
               <p className="billing-actions__eyebrow">Payment approval in progress</p>
               <p className="billing-actions__text">
-                Clover is waiting for PayPal to confirm your subscription. We will unlock Pro automatically after confirmation.
+                Clover is waiting for PayPal to confirm your subscription. We will unlock Plus automatically after confirmation.
               </p>
             </div>
           </div>
@@ -206,7 +206,7 @@ export function BillingActions({
           <div className="billing-actions__intro">
             <p className="billing-actions__eyebrow">Upgrade options</p>
             <p className="billing-actions__text">
-              Choose the Clover Plus cadence that fits you best. Both options unlock the same Pro feature set.
+              Choose the Clover Plus cadence that fits you best. Both options unlock the same Plus feature set.
             </p>
           </div>
 

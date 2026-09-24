@@ -198,7 +198,7 @@ export default function Reports() {
       ) : null}
       <PlanTabs
         compact
-        items={["Overview", "Spending", "Trends", "Insights · Pro"]}
+        items={["Overview", "Spending", "Trends", "Insights · Plus"]}
         value={tab}
         onChange={setTab}
       />

@@ -256,9 +256,9 @@ export default function Investments() {
         items={[
           "Overview",
           "Portfolio",
-          "Planner · Pro",
-          "Markets · Pro",
-          "Analysis · Pro",
+          "Planner · Plus",
+          "Markets · Plus",
+          "Analysis · Plus",
         ]}
         value={tab}
         onChange={setTab}
@@ -270,7 +270,7 @@ export default function Investments() {
         </>
       ) : !data ? (
         <Body>Loading investments…</Body>
-      ) : tab.includes("Pro") && !pro ? (
+      ) : tab.includes("Plus") && !pro ? (
         <Notice>This section requires Clover Plus.</Notice>
       ) : tab === "Overview" ? (
         <>

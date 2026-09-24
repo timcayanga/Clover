@@ -809,8 +809,8 @@ export function AdminUsersConsole({
             <option value="custom">Custom filters</option>
             <option value="attention">Attention review</option>
             <option value="unverified">Unverified users</option>
-            <option value="locked-pro">Locked Pro users</option>
-            <option value="active-pro">Active Pro users</option>
+            <option value="locked-pro">Locked paid users</option>
+            <option value="active-pro">Active paid users</option>
           </select>
           <select
             className="admin-users__inline-select"
