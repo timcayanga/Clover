@@ -230,7 +230,8 @@ enum LearningRuleStatus {
 
 enum PlanTier {
   free
-  pro
+  pro // Plus: preserved legacy provider identity
+  premium // New Pro tier
 }
 
 enum BillingProvider {
@@ -2303,6 +2304,7 @@ model MobileOfflineMutation {
 
 model MobileLocalAllowance {
   id String @id
+  unit String @default("requests")
   userId String
   deviceId String
   month String

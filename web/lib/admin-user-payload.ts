@@ -5,7 +5,7 @@ export const adminUserUpdateSchema = z.object({
   firstName: z.union([z.string(), z.null()]).optional(),
   lastName: z.union([z.string(), z.null()]).optional(),
   email: z.string().email().optional(),
-  planTier: z.enum(["free", "pro"]).optional(),
+  planTier: z.enum(["free", "pro", "premium"]).optional(),
   planTierLocked: z.boolean().optional(),
   accountLimit: z.number().int().nullable().optional(),
   monthlyUploadLimit: z.number().int().nullable().optional(),

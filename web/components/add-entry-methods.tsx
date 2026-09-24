@@ -89,7 +89,7 @@ export function AddEntryMethods({
     void fetch("/api/me")
       .then((r) => (r.ok ? r.json() : null))
       .then((v) => {
-        if (active) setIsPro(v?.user?.planTier === "pro");
+        if (active) setIsPro((v?.user?.planTier === "pro" || v?.user?.planTier === "premium"));
       })
       .catch(() => {});
     return () => {

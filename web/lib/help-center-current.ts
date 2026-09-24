@@ -125,16 +125,16 @@ export const currentProductHelpSections: HelpSection[] = [
       ),
       article(
         "profile-limits-on-free-and-pro",
-        "Profile limits on Free and Pro",
+        "Profile limits on Free, Plus and Pro",
         "Know how many separate financial Profiles are included with each plan.",
-        "Compare the Clover Profile limits included with Free and Pro.",
-        ["Profile limit", "Free Profiles", "Pro Profiles", "plan limits"],
+        "Compare the Clover Profile limits included with Free, Plus and Pro.",
+        ["Profile limit", "Free Profiles", "Plus Profiles", "plan limits"],
         [],
         [
           {
             question: "How many Profiles can I create?",
             answer:
-              "Free supports up to 3 Profiles, including your Personal Profile. Pro supports up to 10 Profiles.",
+              "Free supports up to 3 Profiles, including your Personal Profile. Plus supports up to 10 Profiles, and Pro supports up to 20 Profiles.",
           },
           {
             question: "What happens to my Profiles if I change plans?",
@@ -146,7 +146,7 @@ export const currentProductHelpSections: HelpSection[] = [
           {
             label: "See pricing",
             href: "/pricing",
-            description: "Compare Free and Pro.",
+            description: "Compare Free, Plus and Pro.",
           },
         ]
       ),
@@ -747,9 +747,9 @@ export const currentProductHelpSections: HelpSection[] = [
               "Open the holding and check its price source, latest price, and currency. Correct stale or mismatched information before relying on the portfolio total.",
           },
           {
-            question: "Which investment tools require Pro?",
+            question: "Which investment tools require Plus?",
             answer:
-              "Free includes basic investment tracking. Pro adds the fuller portfolio tools and higher limits shown on the Pricing page.",
+              "Free includes basic investment tracking. Plus adds the fuller portfolio tools and higher limits shown on the Pricing page.",
           },
         ],
         [

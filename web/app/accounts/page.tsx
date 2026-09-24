@@ -1459,7 +1459,7 @@ function AccountsPageContent() {
   const [accountsLoadFailed, setAccountsLoadFailed] = useState(false);
   const [accountsHydrationPending, setAccountsHydrationPending] = useState(false);
   const [hasInitialWorkspaceDataLoaded, setHasInitialWorkspaceDataLoaded] = useState(false);
-  const [planTier, setPlanTier] = useState<"free" | "pro" | "unknown">("unknown");
+  const [planTier, setPlanTier] = useState<"free" | "pro" | "premium" | "unknown">("unknown");
   const [planLimits, setPlanLimits] = useState<UserLimits | null>(null);
   const [planUsage, setPlanUsage] = useState<PlanUsage | null>(null);
   const [luxuryAccountCardsEnabled, setLuxuryAccountCardsEnabled] = useState(false);
@@ -1596,7 +1596,7 @@ function AccountsPageContent() {
       }
 
       const payload = await response.json();
-      const nextPlanTier = payload?.user?.planTier === "pro" ? "pro" : "free";
+      const nextPlanTier = payload?.user?.planTier === "premium" ? "premium" : payload?.user?.planTier === "pro" ? "pro" : "free";
       const nextLimits = payload?.user
         ? {
             accountLimit:

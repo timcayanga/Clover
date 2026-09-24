@@ -1,14 +1,15 @@
-# Clover regional pricing
+# Clover plans — approved 24 September 2026
 
-Approved by the user on September 14, 2026. This supersedes the earlier QA expectation of PHP 169/1,699 and USD 9.99/99.99; existing provider rates were confirmed as correct.
+| Plan | PH monthly / annual | Global monthly / annual | Non-cash accounts | Profiles | Active budgets | Active goals | Circles created | Bank accounts linked | AI/month | AI/rolling 24h |
+|---|---|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| Free | Free | Free | 10 | 3 | 2 | 2 | 1 | 0 | 100,000 | 30,000 |
+| Plus | PHP 169 / 1,259 | USD 7.99 / 59.99 | 20 | 10 | 5 | 5 | 5 | 2 | 1,000,000 | 250,000 |
+| Pro | PHP 349 / 2,999 | USD 12.99 / 99.99 | 40 | 20 | 10 | 10 | 10 | 5 | 4,000,000 | 1,000,000 |
 
-| Market | Advertised monthly | Advertised annual |
-| --- | --- | --- |
-| Philippines | PHP 99 | PHP 999 |
-| Global | USD 2.99 | USD 29.99 |
+Plus is the previous Pro plan. Persisted `pro` and existing billing product IDs continue to mean Plus; `premium` identifies the new Pro. No existing subscription is repriced or automatically promoted. New Pro purchases require separately configured, validated provider products. Existing Plus Philippine Paddle prices remain USD 2.69 / 19.99, with the actual currency disclosed before checkout. App-store checkout uses provider-localized prices.
 
-Paddle's approved Philippine charge is USD 1.59 monthly or USD 15.99 annually. Its global charge is USD 2.99 monthly or USD 29.99 annually. Present the actual USD charge before Paddle checkout; do not describe it as a guaranteed peso conversion. PayPal offers must match the advertised market's currency, amount and billing interval.
+All limits aggregate across Profiles. Cash is excluded from the non-cash account count. Linked bank accounts also count toward the account limit; Finverse availability is independent of entitlement. Existing records are preserved on downgrade. Inactive budgets do not count. Saved personal goals count toward the goal limit; Circle limits count unarchived Circles you own, not accepted invitations.
 
-Keep country-specific pricing separate. Validate configured provider products against their approved rates, active status and billing cadence; unavailable or unverifiable products do not enable checkout. A displayed annual price does not imply that its provider product has been configured.
+AI-assisted cloud and on-device work share a token budget. No separate 50/500 request allowance. Offline devices must reserve tokens while online, preventing separate devices from each spending the entire allowance. Raw usage or a conservative documented estimate determines local charges.
 
-This update changes Clover's advertised pricing and acceptance of existing approved provider rates. It does not modify provider products, existing subscriber billing, App Store Connect or Google Play products. Native store checkout must display its localized store product price.
+Offline accounting: reserve at most 10,000 shared tokens per device, valid for up to 24 hours or the monthly reset. The reservation counts when issued in both server windows, and is not refunded on expiry. Current native APIs do not expose tokenizer counts: charge UTF-8 input bytes plus the enforced maximum 512 output tokens per model request, a conservative estimate. Legacy request-count clients must update before reserving shared tokens. Deterministic calculations/OCR/transcription do not call a language model and do not consume model tokens.

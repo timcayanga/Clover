@@ -1,3 +1,4 @@
+import { PLAN_CATALOG } from "../../shared/plan-catalog";
 import { Text } from "./app-text";
 import { useEffect, useRef, useState } from "react";
 import { Linking } from "react-native";
@@ -68,12 +69,12 @@ export function SettingsPlan() {
       );
       if (!mounted.current) return;
       setStatus(next);
-      if (next.planTier === "pro") setVerificationPending(false);
+      if ((next.planTier === "pro" || next.planTier === "premium")) setVerificationPending(false);
       session.refresh();
       setMessage(
-        next.planTier === "pro"
-          ? "Clover Pro access verified."
-          : "No active Clover Pro purchase was found for this account.",
+        (next.planTier === "pro" || next.planTier === "premium")
+          ? "Clover Plus access verified."
+          : "No active Clover Plus purchase was found for this account.",
       );
     } catch (e) {
       if (mounted.current && e && typeof e === "object" && "userCancelled" in e && e.userCancelled) setVerificationPending(false);
@@ -102,8 +103,9 @@ export function SettingsPlan() {
             fontSize: 24,
           }}
         >
-          {access?.planTier === "pro" ? "Clover Pro" : "Clover Free"}
+          {(access?.planTier === "pro" || access?.planTier === "premium") ? (access?.planTier === "premium" ? "Clover Pro" : "Clover Plus") : "Clover Free"}
         </Text>
+        {access ? <Body>{PLAN_CATALOG[access.planTier].accounts} accounts · {PLAN_CATALOG[access.planTier].profiles} Profiles · {PLAN_CATALOG[access.planTier].linkedBanks} linked bank accounts. {PLAN_CATALOG[access.planTier].budgets} active budgets · {PLAN_CATALOG[access.planTier].goals} goals · {PLAN_CATALOG[access.planTier].circles} Circles. {PLAN_CATALOG[access.planTier].monthlyTokens.toLocaleString()} shared AI tokens monthly; {PLAN_CATALOG[access.planTier].dailyTokens.toLocaleString()} per rolling 24 hours.</Body> : null}
         <Body>Your plan belongs to your Clover account across devices.</Body>
         {access?.accessEndsAt ? (
           <Body>Access through {dateLabel(access.accessEndsAt)}</Body>
@@ -113,7 +115,7 @@ export function SettingsPlan() {
         ) : null}
         {status && canUseStore(status) ? (
           <>
-            {access?.planTier !== "pro"
+            {(access?.planTier !== "pro" && access?.planTier !== "premium")
               ? packages.map((item) => (
                   <Button
                     key={item.identifier}
@@ -125,7 +127,7 @@ export function SettingsPlan() {
                   />
                 ))
               : null}
-            {!packages.length && access?.planTier !== "pro" ? (
+            {!packages.length && (access?.planTier !== "pro" && access?.planTier !== "premium") ? (
               <Body>No store plans are currently available.</Body>
             ) : null}
             <Button
@@ -138,7 +140,7 @@ export function SettingsPlan() {
         ) : (
           <Body>
             Store purchases and restoration will be available after store setup.
-            Existing Clover Pro access is recognized when you sign in.
+            Existing Clover Plus or Pro access is recognized when you sign in.
           </Body>
         )}
         <Button

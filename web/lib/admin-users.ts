@@ -745,7 +745,7 @@ async function fetchAdminOverview(): Promise<AdminUserOverview> {
   for (const row of userCounts) {
     if (row.planTier === "free") {
       planCounts.free += row._count._all;
-    } else if (row.planTier === "pro") {
+    } else if ((row.planTier === "pro" || row.planTier === "premium")) {
       planCounts.pro += row._count._all;
     }
 

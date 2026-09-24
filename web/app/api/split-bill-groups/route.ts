@@ -1,3 +1,4 @@
+import { assertPlanQuota, PlanQuotaError } from "@/lib/plan-quota";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
@@ -41,6 +42,7 @@ export async function GET() {
 
     return NextResponse.json({ groups });
   } catch (error) {
+    if (error instanceof PlanQuotaError) return NextResponse.json({error:error.message},{status:403});
     return NextResponse.json({ error: "Unable to load groups" }, { status: 400 });
   }
 }
@@ -52,6 +54,7 @@ export async function POST(request: Request) {
     const body = createGroupSchema.parse(await request.json());
 
     const { group, people } = await prisma.$transaction(async (tx) => {
+      if (body.createCircle) await assertPlanQuota(tx, user.id, "circles");
       const avatarUrl = body.avatarUrl?.trim() || pickSplitBillAvatarUrl(body.name);
       const circle = body.createCircle
         ? await tx.circle.create({
@@ -129,6 +132,7 @@ export async function POST(request: Request) {
 
     return NextResponse.json({ group, people }, { status: 201 });
   } catch (error) {
+    if (error instanceof PlanQuotaError) return NextResponse.json({error:error.message},{status:403});
     return NextResponse.json(
       {
         error: error instanceof Error ? error.message : "Unable to create group",

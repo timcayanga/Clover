@@ -49,7 +49,7 @@ const local = (v: string) => {
     .slice(0, 16);
 };
 const fresh = () => ({
-  name: "Refer a friend to Clover Pro",
+  name: "Refer a friend to Clover Plus",
   startsAt: new Date().toISOString(),
   endsAt: new Date(Date.now() + 90 * 86400000).toISOString(),
   rules: campaignRulesSchema.parse({}),

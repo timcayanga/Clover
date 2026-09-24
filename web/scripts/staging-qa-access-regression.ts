@@ -21,7 +21,7 @@ try {
   assert.equal(hasStagingProAccess({ ...owner, email: "another@example.com" }), false);
   assert.equal(hasStagingProAccess(other), false);
   assert.equal(hasUnlimitedPlanLimits(other), false);
-  assert.equal(getEffectiveUserLimits(other).accountLimit, 5);
+  assert.equal(getEffectiveUserLimits(other).accountLimit, 10);
   assert.equal(calculateProAccess({ ...access, stagingQaAccess: hasStagingQaAccess(other) }).planTier, "free");
   for (const [key, value] of [["VERCEL_ENV", "production"], ["CLOVER_DEPLOYMENT_ENVIRONMENT", "production"], ["VERCEL_GIT_COMMIT_REF", "feature-branch"]]) {
     const before = process.env[key];
@@ -29,7 +29,7 @@ try {
     assert.equal(hasStagingProAccess(owner), false, `${key} must disable owner staging Pro access`);
     assert.equal(calculateProAccess({ ...access, stagingQaAccess: hasStagingProAccess(owner) }).planTier, "free");
     assert.equal(hasUnlimitedPlanLimits(qa), false, `${key} must disable QA override`);
-    assert.equal(getEffectiveUserLimits(qa).accountLimit, 5);
+    assert.equal(getEffectiveUserLimits(qa).accountLimit, 10);
     assert.equal(getEffectiveProfileLimit(qa), 3);
     assert.equal(calculateProAccess({ ...access, stagingQaAccess: hasStagingQaAccess(qa) }).planTier, "free");
     process.env[key] = before;

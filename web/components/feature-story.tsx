@@ -87,7 +87,7 @@ export function FeatureStory({ story, authEnabled, initialMarket, countryResolve
           {current.copy && <p className={styles.description}>{current.copy}</p>}
           {current.link && <Link className={styles.contextLink} href={current.link.href}>{current.link.label}</Link>}
           {pricing ? <ProActions market={market} /> : null}
-          {(active===0 || final) && (story.slug==="pro" ? <div className={styles.proCta}><Link className="button button-primary button-pill" href="/sign-up?intent=pro&interval=annual">Upgrade to Pro <span aria-hidden="true">→</span></Link><small>You can keep using Clover for free.</small></div> : <JourneyActions authEnabled={authEnabled} final={final} />)}
+          {(active===0 || final) && (story.slug==="pro" ? <div className={styles.proCta}><Link className="button button-primary button-pill" href="/sign-up?intent=pro&interval=annual">Upgrade to Plus <span aria-hidden="true">→</span></Link><small>You can keep using Clover for free.</small></div> : <JourneyActions authEnabled={authEnabled} final={final} />)}
         </div>
         {pricing && <div className={styles.pricing}><ProComparison market={market} variant="feature" style={{opacity:1}} showActions={false} /></div>}
       </section>

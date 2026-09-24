@@ -292,7 +292,7 @@ export const buildInAppNotificationCandidates = async (
       productHref: "/settings?section=plan",
       title: usage.exhausted ? "Monthly Clover tokens used" : `Monthly Clover tokens are at ${percentage}%`,
       message: user.planTier === "free"
-        ? `You’ve used ${formatTokens(usage.used)} of ${formatTokens(limit)} tokens. Upgrade to Pro for a 1,000,000-token monthly allowance.`
+        ? `You’ve used ${formatTokens(usage.used)} of ${formatTokens(limit)} tokens. Upgrade to Plus for a 1,000,000-token monthly allowance.`
         : `You’ve used ${formatTokens(usage.used)} of ${formatTokens(limit)} tokens. Your allowance resets at the start of next month.`,
       tone: usage.exhausted ? "danger" : "warning",
       priority: usage.exhausted ? "critical" : "high",

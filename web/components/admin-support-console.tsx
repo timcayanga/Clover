@@ -17,7 +17,7 @@ type Detail = User & {
   clerkUserId: string;
   firstName: string | null;
   lastName: string | null;
-  planTier: "free" | "pro";
+  planTier: "free" | "pro" | "premium";
   planTierLocked: boolean;
   accountCount: number;
   investmentAccountCount: number;

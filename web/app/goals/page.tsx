@@ -221,7 +221,7 @@ async function GoalsPageStream({ goalId }: { goalId?: string }) {
     redirect("/onboarding");
   }
   const planLimits = getEffectiveUserLimits(user);
-  const isPro = user.planTier === "pro";
+  const isPro = user.planTier === "pro" || user.planTier === "premium";
   const cookieStore = await cookies();
   const selectedWorkspaceCookieId = cookieStore.get(selectedWorkspaceKey)?.value ?? "";
   const workspaceSelect = {

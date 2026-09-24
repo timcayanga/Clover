@@ -779,7 +779,7 @@ export function CloverShell({
   // initializers caused a full hydration rebuild on authenticated page loads.
   const [searchWorkspaceId, setSearchWorkspaceId] = useState(workspaceId || "");
   const [searchAccounts, setSearchAccounts] = useState<SidebarSearchAccount[]>([]);
-  const [searchPlanTier, setSearchPlanTier] = useState<"free" | "pro" | "unknown">("unknown");
+  const [searchPlanTier, setSearchPlanTier] = useState<"free" | "pro" | "premium" | "unknown">("unknown");
   const [searchTicker, setSearchTicker] = useState<SidebarSearchMarket | null>(null);
   const [searchTickerLoading, setSearchTickerLoading] = useState(false);
   const [notifications, setNotifications] = useState<InAppNotification[]>([]);
@@ -1295,7 +1295,7 @@ export function CloverShell({
         }
 
         const payload = response.json;
-        setSearchPlanTier(payload?.user?.planTier === "pro" ? "pro" : "free");
+        setSearchPlanTier(payload?.user?.planTier === "premium" ? "premium" : payload?.user?.planTier === "pro" ? "pro" : "free");
       } catch {
         if (!cancelled) {
           setSearchPlanTier("free");

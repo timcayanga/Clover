@@ -15,11 +15,11 @@ type BillingSubscriptionSummary = {
   providerSubscriptionId: string | null;
   currentPeriodEnd: string | null;
   nextBillingTime: string | null;
-  planTier: "free" | "pro";
+  planTier: "free" | "pro" | "premium";
 };
 
 type BillingActionsProps = {
-  planTier: "free" | "pro";
+  planTier: "free" | "pro" | "premium";
   clientId?: string | null;
   monthlyPlanId?: string | null;
   annualPlanId?: string | null;
@@ -42,7 +42,7 @@ const planMeta: Record<BillingInterval, { label: string; price: string; helper: 
   monthly: {
     label: "Monthly",
     price: "USD 2.99",
-    helper: "Upgrade anytime. Great if you want flexibility while you test Clover Pro.",
+    helper: "Upgrade anytime. Great if you want flexibility while you test Clover Plus.",
   },
   annual: {
     label: "Annual",
@@ -206,7 +206,7 @@ export function BillingActions({
           <div className="billing-actions__intro">
             <p className="billing-actions__eyebrow">Upgrade options</p>
             <p className="billing-actions__text">
-              Choose the Clover Pro cadence that fits you best. Both options unlock the same Pro feature set.
+              Choose the Clover Plus cadence that fits you best. Both options unlock the same Pro feature set.
             </p>
           </div>
 
@@ -270,7 +270,7 @@ export function BillingActions({
           <div className="billing-actions__intro">
             <p className="billing-actions__eyebrow">Manage subscription</p>
             <p className="billing-actions__text">
-              You are on {subscription?.interval ? `the ${getBillingPlanLabel(subscription.interval)} Clover Pro plan` : "the Clover Pro plan"}.
+              You are on {subscription?.interval ? `the ${getBillingPlanLabel(subscription.interval)} Clover Plus plan` : "the Clover Plus plan"}.
               {pendingInterval ? ` A change to ${getBillingPlanLabel(pendingInterval)} is waiting for approval.` : ""}
             </p>
             {renewalDate ? (

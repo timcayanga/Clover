@@ -102,7 +102,7 @@ export function ReferralAccount({ summary = false }: { summary?: boolean }) {
                 : data.access.renewing
                   ? `Next renewal: ${date(data.access.subscription?.nextBillingTime ?? data.access.subscription?.currentPeriodEnd ?? null)}`
                   : data.access.planTier === "pro"
-                    ? `Pro access ends: ${date(data.access.accessEndsAt)}`
+                    ? `Plus access ends: ${date(data.access.accessEndsAt)}`
                     : "You can keep using Clover for free."}
             </p>
             {data.access.paidThrough && (
@@ -119,7 +119,7 @@ export function ReferralAccount({ summary = false }: { summary?: boolean }) {
                   <h2>You have a referral code</h2>
                   <p className={styles.code}>{incoming}</p>
                   <p>
-                    Enter this code when starting an eligible Pro subscription.
+                    Enter this code when starting an eligible Plus subscription.
                     Eligibility and campaign terms are checked before checkout.
                   </p>
                   <a

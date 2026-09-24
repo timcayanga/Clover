@@ -66478,3 +66478,22 @@ html[data-theme="dark"] .content.content--reports .reports-range-menu__summary {
   .split-bill-action-button.split-bill-action-button--add,
   .content--investments .investments-page__add-button { width:40px !important; height:40px !important; min-width:40px !important; min-height:40px !important; max-width:40px; max-height:40px; flex:0 0 40px !important; padding:0 !important; aspect-ratio:1; border-radius:50% !important; }
 }
+
+/* Shared Free / Plus / Pro comparison, including narrow Settings layouts. */
+.settings-plan-comparison { width:100%; border-collapse:collapse; table-layout:fixed; font-size:13px; margin:24px 0; }
+.settings-plan-comparison caption { text-align:left; font-weight:600; padding-bottom:12px; }
+.settings-plan-comparison th,.settings-plan-comparison td { padding:12px 8px; text-align:left; border-bottom:1px solid var(--border-color,#dce9eb); vertical-align:top; overflow-wrap:anywhere; }
+.settings-plan-comparison th:first-child { width:32%; }
+@media(max-width:600px) { .settings-plan-comparison {font-size:11px} .settings-plan-comparison th,.settings-plan-comparison td {padding:10px 5px} }
+
+/* Show the complete three-tier comparison without hiding plans off-screen. */
+.settings-section--plan .settings-plan-grid {
+  grid-template-columns: minmax(0, 1fr);
+  grid-auto-flow: row;
+  grid-auto-columns: auto;
+  width: 100%;
+  margin-right: 0;
+  overflow: visible;
+  padding-right: 0;
+}
+.settings-section--plan .settings-plan-card { order: initial; }

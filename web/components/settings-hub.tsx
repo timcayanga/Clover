@@ -89,7 +89,7 @@ type BillingSubscriptionSummary = {
   providerSubscriptionId: string | null;
   currentPeriodEnd: string | null;
   nextBillingTime: string | null;
-  planTier: "free" | "pro";
+  planTier: "free" | "pro" | "premium";
 };
 
 type NotificationPreferences = {
@@ -154,7 +154,7 @@ type SettingsHubProps = {
   lastName: string | null;
   email: string;
   avatarUrl?: string | null;
-  planTier: "free" | "pro";
+  planTier: "free" | "pro" | "premium";
   profileLimit: number | null;
   initialPlanLimits?: {
     accountLimit: number | null;
@@ -565,7 +565,7 @@ export function SettingsHub({
   const [lastName, setLastName] = useState<string | null>(initialLastName);
   const [avatarUrl, setAvatarUrl] = useState<string | null>(() => user?.imageUrl ?? initialAvatarUrl ?? readAccountIdentityCache()?.imageUrl ?? null);
   const [email, setEmail] = useState(initialEmail);
-  const [planTier, setPlanTier] = useState<"free" | "pro">(initialPlanTier);
+  const [planTier, setPlanTier] = useState<"free" | "pro" | "premium">(initialPlanTier);
   const [paypalClientId, setPaypalClientId] = useState<string | null>(initialPaypalClientId ?? null);
   const [paypalMonthlyPlanId, setPaypalMonthlyPlanId] = useState<string | null>(initialPaypalMonthlyPlanId ?? null);
   const [paypalAnnualPlanId, setPaypalAnnualPlanId] = useState<string | null>(initialPaypalAnnualPlanId ?? null);
@@ -736,7 +736,7 @@ export function SettingsHub({
           lastName?: string | null;
           email?: string;
           imageUrl?: string | null;
-          planTier?: "free" | "pro";
+          planTier?: "free" | "pro" | "premium";
           paypalClientId?: string | null;
           paypalMonthlyPlanId?: string | null;
           paypalAnnualPlanId?: string | null;
@@ -833,7 +833,7 @@ export function SettingsHub({
       lastName?: string | null;
       email?: string;
       imageUrl?: string | null;
-      planTier?: "free" | "pro";
+      planTier?: "free" | "pro" | "premium";
       paypalClientId?: string | null;
       paypalMonthlyPlanId?: string | null;
       paypalAnnualPlanId?: string | null;

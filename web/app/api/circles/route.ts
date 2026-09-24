@@ -1,3 +1,4 @@
+import { assertPlanQuota, PlanQuotaError } from "@/lib/plan-quota";
 import { randomBytes } from "node:crypto";
 import { after, NextResponse } from "next/server";
 import { z } from "zod";
@@ -58,6 +59,7 @@ export async function GET(request: Request) {
     }
     return NextResponse.json(data, { headers: { "Cache-Control": "private, no-store" } });
   } catch (error) {
+    if (error instanceof PlanQuotaError) return NextResponse.json({error:error.message},{status:403});
     const failure = getCircleErrorResponse(error);
     return NextResponse.json(
       { error: failure.message },
@@ -91,6 +93,7 @@ export async function POST(request: Request) {
     }));
 
     const circle = await prisma.$transaction(async (tx) => {
+      await assertPlanQuota(tx, user.id, "circles");
       const created = await tx.circle.create({
         data: {
           ownerUserId: user.id,
@@ -219,6 +222,7 @@ export async function POST(request: Request) {
       { status: 201 },
     );
   } catch (error) {
+    if (error instanceof PlanQuotaError) return NextResponse.json({error:error.message},{status:403});
     const failure = getCircleErrorResponse(error);
     return NextResponse.json(
       { error: failure.message },

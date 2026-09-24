@@ -127,7 +127,7 @@ export function AdminPlanAccess({ userId }: { userId: string }) {
               <dd>{data.subscription?.status ?? "No paid subscription"}</dd>
               <dt>Verified paid through</dt>
               <dd>{dateText(data.paidThrough)}</dd>
-              <dt>{data.renewing ? "Next renewal" : "Pro access ends"}</dt>
+              <dt>{data.renewing ? "Next renewal" : "Plus access ends"}</dt>
               <dd>
                 {data.renewing
                   ? dateText(

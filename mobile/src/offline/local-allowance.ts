@@ -7,6 +7,7 @@ export type Grant = {
   issuedAt: string;
 };
 export type Allowance = {
+  unit?: "tokens";
   grant: Grant | null;
   monthlyLimit: number;
   resetsAt: string;
@@ -34,25 +35,27 @@ export class LocalAllowance {
       await this.store.set("local-allowance", value);
     });
   }
-  async use<T>(run: () => Promise<T>): Promise<T> {
+  async use<T>(run: () => Promise<T>, tokenCost = 1): Promise<T> {
     return this.locked(async () => {
       const allowance = await this.get(),
         grant = allowance?.grant;
       if (
         !grant ||
+        allowance?.unit !== "tokens" ||
+        !Number.isSafeInteger(tokenCost) || tokenCost <= 0 ||
         this.now() >= Date.parse(grant.expiresAt) ||
         this.now() < Date.parse(grant.issuedAt) - 60000 ||
-        grant.used >= grant.issued
+        grant.used + tokenCost > grant.issued
       )
         throw new Error(
-          "Connect to refresh your on-device allowance. Local calculations and transcription remain available.",
+          "Connect to refresh your shared AI token reservation. Local calculations and transcription remain available.",
         );
-      grant.used++;
+      grant.used += tokenCost;
       await this.store.set("local-allowance", allowance);
       try {
         return await run();
       } catch (e) {
-        grant.used--;
+        grant.used -= tokenCost;
         await this.store.set("local-allowance", allowance);
         throw e;
       }

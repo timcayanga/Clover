@@ -113,8 +113,8 @@ for (const section of allSections) {
         body: section.body
           .replace(/Review the Free limits\./, "Review what Free includes.")
           .replace(
-            /Compare them with the Pro limits\./,
-            "Compare Free with Pro. Where a table labels limits as planned, those limits are not yet enabled.",
+            /Compare them with the Plus and Pro limits\./,
+            "Compare Free, Plus and Pro allowances on the Pricing page.",
           ),
       }));
     }

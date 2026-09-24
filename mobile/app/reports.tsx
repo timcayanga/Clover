@@ -475,8 +475,8 @@ export default function Reports() {
         </>
       ) : !session.demo &&
         !session.data?.entitlement.fullFeatureAccess &&
-        session.data?.entitlement.planTier !== "pro" ? (
-        <Notice>Insights requires Clover Pro.</Notice>
+        (session.data?.entitlement.planTier !== "pro" && session.data?.entitlement.planTier !== "premium") ? (
+        <Notice>Insights requires Clover Plus.</Notice>
       ) : (
         <>
           <Card>

@@ -1287,44 +1287,44 @@ export const helpSections: HelpSection[] = [
     slug: "billing-plan",
     eyebrow: "Billing",
     title: "Billing and plan",
-    summary: "Compare Free and Pro, understand limits, and manage regional Clover pricing: PHP 99 monthly or PHP 999 annually in the Philippines; USD 2.99 monthly or USD 29.99 annually globally.",
+    summary: "Compare Free, Plus and Pro, understand limits, and manage regional Clover pricing: PHP 169 monthly or PHP 1,259 annually in the Philippines; USD 7.99 monthly or USD 59.99 annually globally.",
     icon: "pricing",
     accent: "violet",
     keywords: ["pricing", "plan", "billing", "free", "pro", "upgrade", "subscription", "refund", "limits", "investment tools"],
     searchPhrases: [
-      "Free vs Pro Clover pricing",
+      "Free, Plus and Pro Clover pricing",
       "how to upgrade Clover plan",
       "how to manage Clover billing",
-      "what is included in Clover Pro plan",
+      "what is included in Clover Plus plan",
     ],
     highlights: [
       "Free is useful for trying Clover and starting small.",
-      "Pro gives you more room for accounts, uploads, analysis, and investing.",
-      "Philippine pricing is PHP 99 monthly or PHP 999 annually. Global pricing is USD 2.99 monthly or USD 29.99 annually. Paddle bills Philippine customers in USD at USD 1.59 monthly or USD 15.99 annually.",
+      "Plus gives you more room for accounts, uploads, analysis, and investing.",
+      "Philippine pricing is PHP 169 monthly or PHP 1,259 annually. Global pricing is USD 7.99 monthly or USD 59.99 annually. Paddle bills Philippine customers in USD at USD 2.69 monthly or USD 19.99 annually.",
       "Billing lives in Settings once you are signed in.",
     ],
     articles: [
       createArticle(
         "free-vs-pro-clover-pricing",
-        "Free vs Pro in Clover",
-        "Compare the two plans and decide whether you need more room.",
-        "Compare Free vs Pro in Clover and understand which plan fits your workflow.",
+        "Free, Plus and Pro in Clover",
+        "Compare the three plans and decide whether you need more room.",
+        "Compare Free, Plus and Pro in Clover and understand which plan fits your workflow.",
         ["free vs pro", "pricing", "plan comparison"],
         [
           "Review the Free limits.",
-          "Compare them with the Pro limits.",
+          "Compare them with the Plus and Pro limits.",
           "Choose the plan that matches your volume and reporting needs.",
         ],
         [
           {
-            question: "What is the difference between Free and Pro in Clover?",
+            question: "What is the difference between Free, Plus and Pro in Clover?",
             answer:
-              "Free is best for trying the product or managing a smaller setup, while Pro unlocks more room for accounts, uploads, deeper analysis, and investment tools.",
+              "Free is best for trying the product or managing a smaller setup, while Plus unlocks more room for accounts, uploads, deeper analysis, and investment tools.",
           },
           {
-            question: "How much does Clover Pro cost?",
+            question: "How much does Clover Plus cost?",
             answer:
-              "Clover Pro is PHP 99 monthly or PHP 999 annually in the Philippines, and USD 2.99 monthly or USD 29.99 annually globally. Paddle bills Philippine customers USD 1.59 monthly or USD 15.99 annually.",
+              "Clover Plus is PHP 169 monthly or PHP 1,259 annually in the Philippines, and USD 7.99 monthly or USD 59.99 annually globally. Clover Pro is PHP 349 monthly or PHP 2,999 annually in the Philippines, and USD 12.99 monthly or USD 99.99 annually globally. Review availability, currency and final terms before payment.",
           },
           {
             question: "What is included in the Free plan?",
@@ -1343,12 +1343,12 @@ export const helpSections: HelpSection[] = [
       createArticle(
         "how-to-upgrade-your-clover-plan",
         "How to upgrade your Clover plan",
-        "Move from Free to Pro when you need more account or upload headroom.",
+        "Move from Free to Plus when you need more account or upload headroom.",
         "Learn how to upgrade your Clover plan and manage the billing flow from your account.",
         ["upgrade plan", "billing", "subscription"],
         [
           "Open Pricing or Settings.",
-          "Choose the Pro plan.",
+          "Choose the Plus plan.",
           "Complete the billing flow.",
         ],
         [
@@ -1389,9 +1389,9 @@ export const helpSections: HelpSection[] = [
               "Clover should point you toward the next plan or keep you within the available limits until you decide to upgrade.",
           },
           {
-            question: "What does Pro unlock?",
+            question: "What does Plus unlock?",
             answer:
-              "Pro gives you more headroom for accounts, uploads, transactions, the deeper reports and goals features that benefit from a fuller data set, and investment tools for a more complete view of your finances.",
+              "Plus gives you more headroom for accounts, uploads, transactions, the deeper reports and goals features that benefit from a fuller data set, and investment tools for a more complete view of your finances.",
           },
         ],
         [
@@ -1405,7 +1405,7 @@ export const helpSections: HelpSection[] = [
       createArticle(
         "how-to-cancel-or-change-your-clover-plan",
         "How to cancel or change your Clover plan",
-        "Switch plans when your needs change or step away from Pro if you no longer need it.",
+        "Switch plans when your needs change or step away from Plus if you no longer need it.",
         "Learn how to cancel or change your Clover plan from the billing and settings area.",
         ["cancel plan", "change plan", "billing change", "subscription management"],
         [
@@ -1441,14 +1441,14 @@ export const helpSections: HelpSection[] = [
           "Free is designed for lighter use while you explore Clover. It still lets you try the core workflow and see how the app works for your finances.",
       },
       {
-        question: "What does Pro unlock?",
+        question: "What does Plus unlock?",
         answer:
-          "Pro gives you more headroom for accounts, uploads, transactions, the deeper reports and goals features that benefit from a fuller data set, and investment tools for a more complete view of your finances.",
+          "Plus gives you more headroom for accounts, uploads, transactions, the deeper reports and goals features that benefit from a fuller data set, and investment tools for a more complete view of your finances.",
       },
       {
-        question: "How much does Clover Pro cost?",
+        question: "How much does Clover Plus cost?",
         answer:
-          "Clover Pro is PHP 99 monthly or PHP 999 annually in the Philippines, and USD 2.99 monthly or USD 29.99 annually globally. Paddle bills Philippine customers USD 1.59 monthly or USD 15.99 annually.",
+          "Clover Plus is PHP 169 monthly or PHP 1,259 annually in the Philippines, and USD 7.99 monthly or USD 59.99 annually globally. Clover Pro is PHP 349 monthly or PHP 2,999 annually in the Philippines, and USD 12.99 monthly or USD 99.99 annually globally. Review availability, currency and final terms before payment.",
       },
       {
         question: "Where do I manage billing?",
@@ -1456,9 +1456,9 @@ export const helpSections: HelpSection[] = [
           "Open Settings after signing in. That is where Clover surfaces the plan and billing actions tied to your account.",
       },
       {
-        question: "What is the difference between Free and Pro in Clover?",
+        question: "What is the difference between Free, Plus and Pro in Clover?",
         answer:
-          "Free is best for trying the product or managing a smaller setup, while Pro unlocks more room for accounts, uploads, deeper analysis, and investment tools.",
+          "Free is best for trying the product or managing a smaller setup, while Plus unlocks more room for accounts, uploads, deeper analysis, and investment tools.",
       },
       {
         question: "How do I upgrade my Clover plan?",

@@ -1,3 +1,4 @@
+import { PlanQuotaError } from "@/lib/plan-quota";
 import { NativeInputError } from "@/lib/native-input-error";
 import { hasFullFeatureAccess } from "@/lib/beta-access";
 import { mobileAccountPatch, mobileRecurringCreate, mobileRecurringPatch, mobileRecurringCompletion, mobileRecurringDismiss } from "@/lib/mobile-organize-input";
@@ -759,6 +760,7 @@ async function handle(
     }
     return reply(mobileApiResponse(operation, responseData), response.status);
   } catch (error) {
+    if (error instanceof PlanQuotaError) return reply({ error: error.message }, 403);
     if(error instanceof NativeInputError)return reply({error:error.message},400);
     if (error instanceof z.ZodError)
       return reply({ error: "Please check the entered fields." }, 400);

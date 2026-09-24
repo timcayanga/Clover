@@ -20,7 +20,7 @@ type AdminUserDraft = {
   firstName: string;
   lastName: string;
   email: string;
-  planTier: "free" | "pro";
+  planTier: "free" | "pro" | "premium";
   accountLimit: string;
   monthlyUploadLimit: string;
   transactionLimit: string;
@@ -199,7 +199,7 @@ export function AdminUsersConsole({
   );
   const [queryInput, setQueryInput] = useState("");
   const [query, setQuery] = useState("");
-  const [planFilter, setPlanFilter] = useState<"all" | "free" | "pro">("all");
+  const [planFilter, setPlanFilter] = useState<"all" | "free" | "pro" | "premium">("all");
   const [verifiedFilter, setVerifiedFilter] = useState<"all" | "yes" | "no">(
     "all",
   );
@@ -817,12 +817,12 @@ export function AdminUsersConsole({
             value={planFilter}
             onChange={(event) => {
               setSavedView("custom");
-              setPlanFilter(event.target.value as "all" | "free" | "pro");
+              setPlanFilter(event.target.value as "all" | "free" | "pro" | "premium");
             }}
           >
             <option value="all">All plans</option>
             <option value="free">Free</option>
-            <option value="pro">Pro</option>
+            <option value="pro">Plus</option><option value="premium">Pro</option>
           </select>
           <select
             className="admin-users__inline-select"
@@ -948,13 +948,13 @@ export function AdminUsersConsole({
                           value={draft.planTier}
                           onChange={(event) =>
                             updateDraft(user.id, {
-                              planTier: event.target.value as "free" | "pro",
+                              planTier: event.target.value as "free" | "pro" | "premium",
                             })
                           }
                           aria-label={`${user.email} plan tier`}
                         >
                           <option value="free">Free</option>
-                          <option value="pro">Pro</option>
+                          <option value="pro">Plus</option><option value="premium">Pro</option>
                         </select>
                         <small className="admin-users__cell-note">
                           {user.planTierLocked

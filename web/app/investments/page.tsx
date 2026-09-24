@@ -1066,7 +1066,7 @@ export default function InvestmentsPage() {
   const [hasLoaded, setHasLoaded] = useState(Boolean(initialCachedWorkspace));
   const [isHydrated, setIsHydrated] = useState(false);
   const [message, setMessage] = useState("");
-  const [planTier, setPlanTier] = useState<"free" | "pro" | "unknown">("unknown");
+  const [planTier, setPlanTier] = useState<"free" | "pro" | "premium" | "unknown">("unknown");
   const [investmentSearch, setInvestmentSearch] = useState(searchQueryFromUrl);
   const [investmentSubtypeFilter, setInvestmentSubtypeFilter] = useState<InvestmentSubtype | "all">("all");
   const [investmentSortKey, setInvestmentSortKey] = useState<InvestmentSortKey>("value_desc");
@@ -1162,7 +1162,7 @@ export default function InvestmentsPage() {
       }
 
       const payload = await response.json();
-      const nextPlanTier = payload?.user?.planTier === "pro" ? "pro" : "free";
+      const nextPlanTier = payload?.user?.planTier === "premium" ? "premium" : payload?.user?.planTier === "pro" ? "pro" : "free";
 
       setPlanTier(nextPlanTier);
     };
@@ -2986,9 +2986,9 @@ export default function InvestmentsPage() {
           <PlanUpgradeCallout
             planTier="free"
             title={`Unlock ${selectedTab === "market" ? "Markets" : selectedTab === "planner" ? "Growth Planner" : "Analysis"}`}
-            copy="Upgrade to Pro to unlock the full investment workspace, including growth scenarios, market context, and portfolio analysis."
+            copy="Upgrade to Plus to unlock the full investment workspace, including growth scenarios, market context, and portfolio analysis."
             ctaHref="/settings?upgrade=pro&interval=annual"
-            ctaLabel="Upgrade to Pro"
+            ctaLabel="Upgrade to Plus"
             secondaryHref="/pricing"
             secondaryLabel="Compare plans"
             className="investments-pro-gate"

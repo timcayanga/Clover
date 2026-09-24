@@ -19,7 +19,7 @@ async function main() {
         "@/lib/request-security": 'export function assertTrustedRequestOrigin(request){if(request.headers.get("origin")!=="http://localhost")throw Error("Untrusted request origin.")}',
         "@/lib/workspace-summary-cache": 'export function invalidateWorkspaceSummaryCache(){}',
         "next/server": 'export const NextResponse={json:(body,init)=>new Response(JSON.stringify(body),{status:init?.status??200})}',
-        "@/lib/prisma": `export const prisma={personalGoal:{
+        "@/lib/prisma": `export const prisma={async $transaction(run){return run(prisma)},async $executeRaw(){return 0},user:{async findUniqueOrThrow(){return {planTier:"free",clerkUserId:"quota-test"}}},workspace:{async findUniqueOrThrow(){return {userId:"test"}}},personalGoal:{async count(){return globalThis.goalTest.rows.length},
           async create({data}){const row={...data,id:String(globalThis.goalTest.rows.length+1)};globalThis.goalTest.rows.push(row);return row},
           async updateMany({where,data}){const row=globalThis.goalTest.rows.find(row=>row.id===where.id&&row.workspaceId===where.workspaceId);if(!row)return {count:0};Object.assign(row,data);return {count:1}}
         }};`,
@@ -34,6 +34,7 @@ async function main() {
     assert.equal((await save(payload)).status, 201);
     assert.equal((await save({ ...payload, targetAmount: "40000" })).status, 201);
     assert.equal(state.rows.length, 2, "Two goals of the same kind must remain independent.");
+    assert.equal((await save(payload)).status, 403, "Free cannot create a third goal, but can edit existing goals.");
     assert.equal((await save({ ...payload, id: "1", targetAmount: "30000" })).status, 200);
     assert.equal(state.rows[0].targetAmount, 30000);
     assert.equal(state.rows[1].targetAmount, 40000, "Editing one goal must preserve another.");

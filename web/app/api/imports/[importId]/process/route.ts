@@ -1339,7 +1339,7 @@ const importJsonResponse: typeof NextResponse.json = (body, init) => {
 export async function POST(_request: Request, { params }: { params: Promise<{ importId: string }> }) {
   const requestStartedAt = Date.now();
   let stage = "initializing";
-  let responsePlanTier: "free" | "pro" | "unknown" = "unknown";
+  let responsePlanTier: "free" | "pro" | "premium" | "unknown" = "unknown";
   // The parser worker is substantial. Start loading it while authentication,
   // upload decoding, and deterministic text extraction run so a cold function
   // does not add its module-startup cost after the file is already uploaded.

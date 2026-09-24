@@ -5,6 +5,9 @@ import { useRouter, useSearchParams } from "next/navigation";
 
 type SyncResponse = {
   status?: string;
+  connectionId?: string;
+  remaining?: number;
+  accounts?: {id:string;name:string}[];
   error?: string;
   transactions?: { imported?: number };
 };
@@ -39,6 +42,8 @@ export function FinverseConnectButton({
   const actionRef = useRef<"connecting" | "syncing" | null>(null);
   const onSyncedRef = useRef(onSynced);
   const [action, setAction] = useState<"connecting" | "syncing" | null>(null);
+  const [selection,setSelection] = useState<{connectionId:string;remaining:number;accounts:{id:string;name:string}[]}|null>(null);
+  const [selected,setSelected] = useState<string[]>([]);
   const [message, setMessage] = useState("");
   const connectionId = searchParams?.get("finverseConnection") ?? undefined;
   const callbackStatus = searchParams?.get("finverse") ?? null;
@@ -47,7 +52,7 @@ export function FinverseConnectButton({
     onSyncedRef.current = onSynced;
   }, [onSynced]);
 
-  const sync = useCallback(async (requestedConnectionId?: string) => {
+  const sync = useCallback(async (requestedConnectionId?: string, selectedAccountIds?: string[]) => {
     if (!workspaceId || actionRef.current) return;
     const controller = new AbortController();
     activeSyncRef.current = controller;
@@ -59,12 +64,14 @@ export function FinverseConnectButton({
         const response = await fetch("/api/integrations/finverse/sync", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ workspaceId, connectionId: requestedConnectionId }),
+          body: JSON.stringify({ workspaceId, connectionId: requestedConnectionId, selectedAccountIds }),
           signal: controller.signal,
           cache: "no-store",
         });
         const body = await response.json() as SyncResponse;
         if (!response.ok) throw new Error(body.error || "Unable to sync your bank.");
+        if(body.status === "select_accounts" && body.connectionId && body.accounts){setSelection({connectionId:body.connectionId,remaining:body.remaining ?? 0,accounts:body.accounts});setSelected([]);setMessage(body.error ?? "Choose bank accounts to link.");return;}
+        setSelection(null);
         if (body.status === "retrieving") {
           if (attempt === FINVERSE_MAX_POLL_ATTEMPTS) {
             setMessage("Finverse is still retrieving your bank data. You can leave this page and use Sync bank again later.");
@@ -133,6 +140,7 @@ export function FinverseConnectButton({
       <button className="button button-secondary button-small" type="button" onClick={() => void sync()} disabled={!workspaceId || action !== null}>
         {action === "syncing" ? "Syncing…" : "Sync bank"}
       </button>
+      {selection ? <fieldset><legend>Choose up to {selection.remaining} bank accounts</legend>{selection.accounts.map(account=><label key={account.id} style={{display:"block"}}><input type="checkbox" checked={selected.includes(account.id)} disabled={action !== null || (!selected.includes(account.id) && selected.length>=selection.remaining)} onChange={event=>setSelected(current=>event.target.checked?[...current,account.id]:current.filter(id=>id!==account.id))}/>{account.name}</label>)}<button type="button" className="button button-primary" disabled={action !== null || selected.length>selection.remaining} onClick={()=>void sync(selection.connectionId,selected)}>Sync selected accounts</button></fieldset> : null}
       {message ? <span className="finverse-connect__status" role="status" aria-live="polite">{message}</span> : null}
     </div>
   );

@@ -98,7 +98,7 @@ export function AnimatedTabs({ className, activeKey, onChange, tabs }: AnimatedT
         >
           {tab.icon ? <span className="animated-tabs__icon" aria-hidden="true">{tab.icon}</span> : null}
           {tab.label ? <span className="animated-tabs__label">{tab.label}</span> : null}
-          {tab.badge ? <span className="animated-tabs__badge">{tab.badge.toLowerCase() === "pro" ? "Pro" : tab.badge}</span> : null}
+          {tab.badge ? <span className="animated-tabs__badge">{tab.badge.toLowerCase() === "pro" ? "Plus" : tab.badge}</span> : null}
         </button>
       );
       })}

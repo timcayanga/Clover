@@ -101,7 +101,7 @@ export default function Investments() {
   const pro =
     session.demo ||
     session.data?.entitlement.fullFeatureAccess ||
-    session.data?.entitlement.planTier === "pro";
+    (session.data?.entitlement.planTier === "pro" || session.data?.entitlement.planTier === "premium");
   if (editor)
     return (
       <AccountEditor
@@ -271,7 +271,7 @@ export default function Investments() {
       ) : !data ? (
         <Body>Loading investments…</Body>
       ) : tab.includes("Pro") && !pro ? (
-        <Notice>This section requires Clover Pro.</Notice>
+        <Notice>This section requires Clover Plus.</Notice>
       ) : tab === "Overview" ? (
         <>
           <View style={{ flexDirection: "row", gap: 8 }}>

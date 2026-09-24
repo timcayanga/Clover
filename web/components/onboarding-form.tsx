@@ -388,7 +388,7 @@ export function OnboardingForm({
 
   const upgradeStep = (
     <>
-      <p className="eyebrow">Clover Pro</p>
+      <p className="eyebrow">Clover Plus</p>
       <h3>Get more room when you need it.</h3>
       <p className="onboarding-card__copy">
         Choose monthly or annual billing now, or continue with Free and upgrade later. Your choice will not stop you from finishing setup.

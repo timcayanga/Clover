@@ -439,7 +439,7 @@ export function ImportFilesModal({
   const [validationNotice, setValidationNotice] = useState<string | null>(null);
   const [selectedPasswordItemId, setSelectedPasswordItemId] = useState<string | null>(null);
   const [validatingPasswordItemId, setValidatingPasswordItemId] = useState<string | null>(null);
-  const [planTier, setPlanTier] = useState<"free" | "pro" | "unknown">("unknown");
+  const [planTier, setPlanTier] = useState<"free" | "pro" | "premium" | "unknown">("unknown");
   const [monthlyUploadLimit, setMonthlyUploadLimit] = useState<number | null>(10);
   const [showWeeklyUploadPrivacyReminder, setShowWeeklyUploadPrivacyReminder] = useState(false);
   const [planLimitNudge, setPlanLimitNudge] = useState<PlanLimitPayload | null>(null);
@@ -1266,7 +1266,7 @@ export function ImportFilesModal({
         }
 
         const payload = await response.json();
-        const nextPlanTier = payload?.user?.planTier === "pro" ? "pro" : "free";
+        const nextPlanTier = payload?.user?.planTier === "premium" ? "premium" : payload?.user?.planTier === "pro" ? "pro" : "free";
         const nextMonthlyUploadLimit =
           payload?.user?.monthlyUploadLimit === null || payload?.user?.monthlyUploadLimit === undefined
             ? null

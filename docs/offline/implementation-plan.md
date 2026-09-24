@@ -1,5 +1,6 @@
 # Offline and on-device work — 14 September 2026
 
+Current plan policy (24 September 2026): the separate local request allowance below is superseded by [pricing-policy.md](../pricing-policy.md). Cloud and on-device AI share the monthly and rolling 24-hour token budgets, with online reservations for offline use.
 Authorized: offline data/sync first; native speech/OCR and deterministic parsing; local Adviser/enrichment with separate local allowance; preserve cloud limits. Figma additions authorized. Worktree: qa-staging-release. Staging only after full quality gate.
 
 ## Acceptance scope

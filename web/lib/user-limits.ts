@@ -15,11 +15,13 @@ export type ProfileLimitSource = {
 const PLAN_PROFILE_LIMITS: Record<PlanTier, number> = {
   free: 3,
   pro: 10,
+  premium: 20,
 };
 
 const PLAN_DEFAULT_LIMITS: Record<PlanTier, UserLimits> = {
+  premium: { accountLimit: 40, monthlyUploadLimit: null, transactionLimit: null },
   free: {
-    accountLimit: 5,
+    accountLimit: 10,
     monthlyUploadLimit: null,
     transactionLimit: null,
   },
@@ -132,12 +134,12 @@ export const getPlanDisplayLabel = (planTier: PlanTier, interval?: "monthly" | "
   }
 
   if (interval === "monthly") {
-    return "Pro Monthly";
+    return planTier === "premium" ? "Pro Monthly" : "Plus Monthly";
   }
 
   if (interval === "annual") {
-    return "Pro Annual";
+    return planTier === "premium" ? "Pro Annual" : "Plus Annual";
   }
 
-  return "Pro";
+  return planTier === "premium" ? "Pro" : "Plus";
 };
