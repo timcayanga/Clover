@@ -66493,3 +66493,10 @@ html[data-theme="dark"] .content.content--reports .reports-range-menu__summary {
     padding: 0 !important; aspect-ratio: 1; border-radius: 50% !important;
   }
 }
+
+@media (max-width: 1100px) {
+  .content.content .shell-mobile-subheader .clover-tabs.clover-tabs.recurring-tabs--mobile .recurring-tab-label {
+    white-space: normal !important; flex-shrink: 1; line-height: 14px !important;
+    overflow-wrap: normal !important; word-break: normal !important;
+  }
+}

@@ -1336,8 +1336,8 @@ export function SplitBillWorkspace({
     <CloverShell
       active="split-bill"
       title="Split Bills"
-      titleAddon={<AnimatedTabs className="split-bill-tabs" activeKey={homeTab} onChange={setHomeTab} tabs={["Bills", "Groups", "People", "Payment options"].map(label => ({key:label,label,icon:<InterfaceIcon name="details" size={14} />}))} />}
-      mobileSubheader={<AnimatedTabs className="split-bill-tabs split-bill-tabs--mobile" activeKey={homeTab} onChange={setHomeTab} tabs={["Bills", "Groups", "People", "Payment options"].map(label => ({key:label,label,icon:<InterfaceIcon name="details" size={14} />}))} />}
+      titleAddon={<AnimatedTabs className="split-bill-tabs" activeKey={homeTab} onChange={setHomeTab} tabs={["Bills", "Groups", "People", "Payment options"].map(label => ({key:label,label:label === "Payment options" ? "Payments" : label,icon:<InterfaceIcon name="details" size={14} />}))} />}
+      mobileSubheader={<AnimatedTabs className="split-bill-tabs split-bill-tabs--mobile" activeKey={homeTab} onChange={setHomeTab} tabs={["Bills", "Groups", "People", "Payment options"].map(label => ({key:label,label:label === "Payment options" ? "Payments" : label,icon:<InterfaceIcon name="details" size={14} />}))} />}
       actions={
         <SplitBillPageActions
           currentUserName={currentUserName}
