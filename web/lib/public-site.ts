@@ -40,11 +40,11 @@ export const FEATURE_PAGES: FeatureNeedPage[] = [
     slug: "manage-money",
     navLabel: "Manage Money",
     shortLabel: "Manage Money",
-    overview: "Organize uploads, accounts, transactions, and recurring activity without rebuilding everything by hand.",
+    overview: "Bring connected accounts, uploads, and manual entries together for a clearer financial overview.",
     heroEyebrow: "Manage money",
-    heroTitle: "Organize months of money without starting from zero.",
+    heroTitle: "Bring your money together, your way.",
     heroCopy:
-      "Upload statements, receipts, screenshots, or spreadsheets. Clover turns the records you already have into a financial history you can review and use.",
+      "Connect supported banks, upload statements, receipts or screenshots, or enter details manually. Bring your financial life into one view.",
     heroImageSrc: "/assets/landing page/Organize months of money.png",
     heroImageAlt: "Uploaded financial records becoming organized Clover data",
     accent: "teal",
@@ -54,7 +54,7 @@ export const FEATURE_PAGES: FeatureNeedPage[] = [
         eyebrow: "Accounts",
         title: "See every account in context.",
         body: [
-          "Bring cash, bank accounts, cards, e-wallets, and other balances into one view.",
+          "Connect supported banks on Plus or Pro, or add accounts manually. Bring cash, cards, wallets, and bank balances into one view.",
           "You can see what each account holds and how it contributes to your overall financial picture.",
         ],
         imageSrc: "/assets/landing page/See every account in context.png",

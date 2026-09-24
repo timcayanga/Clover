@@ -84,7 +84,7 @@ async function main() {
   assert.match(landingJourneySource, /const chapterLayouts = \[0, 0, 5, 2, 3, 4, 6, 7\]/);
   assert.match(landingJourneySource, /const productChapters = \[0, 3, 4, 5\]/);
   assert.doesNotMatch(landingJourneySource, /rebuilding\.<\/em>|Once your records are organized|Clover Adviser helps turn your financial history/);
-  assert.match(landingJourneySource, /Most finance apps require you to enter transactions manually\. With Clover, simply upload your records and gain insights right away\./);
+  assert.match(landingJourneySource, /Connect supported banks\. Upload statements, receipts, screenshots, or spreadsheets\. Add details manually\./, "The landing story must present connected banks, uploads, and manual entry together.");
   assert.match(landingJourneyStyles, /background:transparent!important;border-radius:0!important;backdrop-filter:none;-webkit-backdrop-filter:none;text-align:center/, "Mobile table sections must have centered copy without an enclosing frosted panel.");
   assert.doesNotMatch(landingJourneySource, /className=\{styles\.sceneBackdrop\}/, "Each scene must use one photo layer rather than offset duplicates of the cast.");
   assert.match(landingJourneyStyles, /\.journey \.scene \.sceneSubject\{width:100%;mask-image:none;-webkit-mask-image:none\}/, "The single scene photo must cover the full stage without a duplicate backdrop.");

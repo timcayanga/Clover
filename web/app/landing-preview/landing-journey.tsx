@@ -15,13 +15,13 @@ import typography from "@/components/landing-type.module.css";
 import styles from "./landing-preview.module.css";
 
 const chapters = [
-  { title: <>Months of finances.<br /><em>Organized in minutes.</em></>, copy: "Upload statements, receipts, screenshots, or spreadsheets. Understand your money and take one clearer step at a time." },
-  { title: <>Skip the <em>manual typing</em></>, copy: "Most finance apps require you to enter transactions manually. With Clover, simply upload your records and gain insights right away." },
+  { title: <>Your finances.<br /><em>Together, your way.</em></>, copy: "Connect supported banks, upload records, or add details manually. See your finances together, your way." },
+  { title: <>Start with <em>what suits you.</em></>, copy: "Connect supported banks. Upload statements, receipts, screenshots, or spreadsheets. Add details manually. Choose what works for you." },
   { title: <>Your financial data stays <em>under your control.</em></>, copy: "Your financial records are private, reviewable, and traceable. You can edit, export, or delete your data through your account." },
   { title: <>Understand your finances.<br /><em>Build better habits.</em></>, copy: "Your financial life in one view. Track accounts, balances, recurring obligations, investments, and trends across your accounts." },
   { title: <>Ask what your money can make <em>possible.</em></>, copy: "Your Clover Adviser can tell you what you can safely spend, what changed this month, or assist you with creating budgets and goals." },
   { title: <>Manage money together <em>with less effort.</em></>, copy: "Split expenses with friends on Split Bills. Manage household expenses with a partner on Circles." },
-  { title: <>Do more when your finances <em>get more complex.</em></>, copy: "Start free. Upgrade for more accounts, deeper insights, and more help from Clover Adviser." },
+  { title: <>Do more when your finances <em>get more complex.</em></>, copy: "Start free. Upgrade to Plus or Pro for connected bank accounts, higher limits, and more help from Adviser." },
   { title: <>Feel clearer about your money, and more confident <em>about what comes next.</em></>, copy: null },
 ] as const;
 
@@ -86,8 +86,8 @@ function ComparisonTable() {
     <caption>The old way compared with organizing your finances in Clover</caption>
     <thead><tr><th scope="col">The old way</th><th scope="col">A simpler way</th></tr></thead>
     <tbody>
-      <tr><td>Enter transactions one by one</td><td><strong>1. Upload</strong> statements, receipts, or screenshots</td></tr>
-      <tr><td>Build your financial history manually</td><td><strong>2. Organize</strong> months of transactions in minutes</td></tr>
+      <tr><td>Jump between apps and files</td><td><strong>1. Bring together</strong> connect, upload, or add manually</td></tr>
+      <tr><td>Piece together your financial history</td><td><strong>2. Organize</strong> accounts and transactions in one place</td></tr>
       <tr><td>Guess what changed in your finances</td><td><strong>3. Understand</strong> patterns, reports, and Adviser guidance</td></tr>
       <tr><td>Make decisions without knowing what to do next</td><td><strong>4. Improve</strong> by acting on one clear recommendation at a time</td></tr>
     </tbody>

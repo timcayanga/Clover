@@ -4,15 +4,15 @@ export type FeatureStory = { slug: string; title: string; products?: string; ass
 
 export const FEATURE_STORIES: FeatureStory[] = [
   { slug: "manage-money", title: "Manage Money", products: "Transactions · Accounts · Recurring", asset: "manage", chapters: [
-    { id: "overview", title: "Bring your money", accent: "records together.", copy: "Receipts from errands. Statements from your bank. Screenshots from your wallet. Start with the records you already have, and let Clover help organize them.", visual: "transactions" },
+    { id: "overview", title: "Bring your money", accent: "together.", copy: "Connect supported banks, upload statements, receipts or screenshots, or enter details manually. Bring your financial life into one view.", visual: "transactions" },
     { id: "transactions", title: "Find the transaction.", accent: "Keep the context.", copy: "Search your financial history, review imported details, and correct merchants or categories. You decide what gets confirmed.", visual: "transactions" },
-    { id: "accounts", title: "Every account.", accent: "A clearer picture.", copy: "See bank, cash, card, and wallet balances together, with currencies clearly identified. Understand what you hold without opening every app.", visual: "accounts" },
+    { id: "accounts", title: "Every account.", accent: "A clearer picture.", copy: "Connect supported banks on Plus or Pro, or add accounts manually. See bank, cash, card, and wallet balances together, with currencies clearly identified.", visual: "accounts" },
     { id: "recurring", title: "Know what keeps", accent: "coming back.", copy: "Keep recurring bills, subscriptions, income, and other commitments in view. Review what is expected next before it becomes a surprise.", visual: "recurring" },
     { id: "start", title: "Less money admin.", accent: "More room for your day." },
   ] },
   { slug: "understand-your-money", title: "Understand Your Money", products: "Adviser · Reports", asset: "understand", chapters: [
     { id: "overview", title: "Understand the story", accent: "behind your spending.", copy: "A total tells you how much. Clover helps you see what changed, what contributed to it, and what deserves a closer look.", visual: "reports" },
-    { id: "reports", title: "See the pattern", accent: "behind the total.", copy: "Explore spending, income, cash flow, and balance trends across your accounts. Compare periods and connect the bigger picture to your records.", visual: "reports" },
+    { id: "reports", title: "See the pattern", accent: "behind the total.", copy: "Explore spending, income, and cash flow from connected accounts, uploads, and manual entries. Compare periods and see the bigger picture.", visual: "reports" },
     { id: "adviser", title: "Ask your next", accent: "money question.", copy: "Ask Adviser about your actual spending, commitments, savings, and goals. Start with a question in your own words—not a spreadsheet formula.", visual: "adviser" },
     { id: "next-step", title: "From an answer", accent: "to a clearer next step.", copy: "Use the explanation to decide what to review or adjust. Adviser suggests; you remain in control of the decision.", visual: "adviser", link: { href: "/features/plan-ahead", label: "Explore Investments, Budgeting and Goals →" } },
     { id: "start", title: "Know what changed.", accent: "Decide what comes next." },
@@ -32,14 +32,14 @@ export const FEATURE_STORIES: FeatureStory[] = [
     { id: "start", title: "Enjoy the shared moments.", accent: "Keep the money clear." },
   ] },
   { slug: "security", title: "Security", asset: "security", chapters: [
-    { id: "overview", title: "Your financial data stays", accent: "under your control.", copy: "Your records deserve clear boundaries. Clover keeps review, traceability, and account controls part of the way you manage your money.", visual: "source" },
+    { id: "overview", title: "Your financial data stays", accent: "under your control.", copy: "Choose which supported banks to connect through Finverse. Keep connected, uploaded, and manually entered records reviewable and under your control.", visual: "source" },
     { id: "uploaded-files", title: "Keep the record", accent: "behind the transaction.", copy: "Imported details stay connected to their source. Review the original evidence when something needs a closer look.", visual: "source" },
     { id: "review", title: "AI suggests.", accent: "You confirm.", copy: "Review extracted details and correct what needs attention. Your confirmed records should reflect your decisions—not an unexplained guess.", visual: "transactions" },
     { id: "private-account", title: "Your account.", accent: "Your choices.", copy: "Use your account controls to edit, export, or delete your data. Read how Clover handles your information before you bring in your records.", visual: "control", link: { href: "/privacy-policy", label: "Read the Privacy Policy →" } },
     { id: "start", title: "Your money. Your records.", accent: "Your control." },
   ] },
   { slug: "pro", title: "Pro", asset: "pro", chapters: [
-    { id: "overview", title: "More perspective as", accent: "your finances grow.", copy: "Start free. Consider Plus or Pro when you want more guidance and tools alongside a more involved financial life.", visual: "accounts" },
+    { id: "overview", title: "More perspective as", accent: "your finances grow.", copy: "Start free with uploads and manual entry. Connect up to 2 bank accounts on Plus or 5 on Pro, with more room for your finances.", visual: "accounts" },
     { id: "deeper-guidance", title: "Look beyond", accent: "the immediate question.", copy: "Explore advanced Adviser guidance to help connect spending, plans, and the wider financial picture. You choose which suggestions to act on.", visual: "adviser" },
     { id: "investment-context", title: "Keep the bigger", accent: "picture in view.", copy: "Bring investment tracking into the same financial picture, alongside the accounts, reports, budgets, and goals you already use.", visual: "reports" },
     { id: "compare", title: "Choose what works", accent: "for you.", copy: "Compare Free, Plus and Pro. Monthly and annual options are shown for your region, and you can keep using Clover for free.", visual: "pricing" },

@@ -5,7 +5,7 @@ import { LandingJourney } from "./landing-journey";
 
 export const metadata: Metadata = {
   title: { absolute: "Clover" },
-  description: "Follow one day with Clover, from scattered financial records to a clearer plan and more time for life.",
+  description: "Connect supported banks, upload statements, receipts or screenshots, or add details manually. See your finances together with Clover.",
 };
 
 export default async function ScrollableLandingPreviewPage() {
