@@ -1,4 +1,5 @@
 "use client";
+import { FinverseConnectButton } from "./finverse-connect-button";
 import { TransactionTableEntry } from "@/components/transaction-table-entry";
 import { UploadSourcePicker, UploadSecurityCopy } from "@/components/upload-source-buttons";
 
@@ -103,7 +104,7 @@ export function DashboardManualTransactionModal({
   const initialAccount = accounts.find((account) => account.id === initialAccountId) ?? accounts[0] ?? null;
   const [tableMode, setTableMode] = useState(false);
   const [tableLocked, setTableLocked] = useState(false);
-  const [entryTab, setEntryTab] = useState<"manual" | "ask" | "upload">("manual");
+  const [entryTab, setEntryTab] = useState<"manual" | "ask" | "upload" | "sync">("manual");
   const [askVisited, setAskVisited] = useState(false);
   const [isPro, setIsPro] = useState(false);
   const [entryUploadOpen, setEntryUploadOpen] = useState(false);
@@ -493,12 +494,13 @@ export function DashboardManualTransactionModal({
 
 
         <div className="transaction-creation-tabs" role="tablist" aria-label="How to add transactions">
-          {(["manual", "ask", "upload"] as const).map((tab, index) => <button key={tab} type="button" disabled={isSaving || tableLocked} role="tab" id={`quick-entry-tab-${tab}`} aria-controls={`quick-entry-panel-${tab}`} aria-selected={entryTab === tab} tabIndex={entryTab === tab ? 0 : -1} onClick={() => { setEntryTab(tab); if (tab === "ask") setAskVisited(true); }} onKeyDown={event => {
-            const tabs = ["manual", "ask", "upload"] as const;
-            const next = event.key === "ArrowRight" ? tabs[(index + 1) % 3] : event.key === "ArrowLeft" ? tabs[(index + 2) % 3] : event.key === "Home" ? tabs[0] : event.key === "End" ? tabs[2] : null;
+          {(["manual", "ask", "upload", "sync"] as const).map((tab, index) => <button key={tab} type="button" disabled={isSaving || tableLocked} role="tab" id={`quick-entry-tab-${tab}`} aria-controls={`quick-entry-panel-${tab}`} aria-selected={entryTab === tab} tabIndex={entryTab === tab ? 0 : -1} onClick={() => { setEntryTab(tab); if (tab === "ask") setAskVisited(true); }} onKeyDown={event => {
+            const tabs = ["manual", "ask", "upload", "sync"] as const;
+            const next = event.key === "ArrowRight" ? tabs[(index + 1) % 4] : event.key === "ArrowLeft" ? tabs[(index + 3) % 4] : event.key === "Home" ? tabs[0] : event.key === "End" ? tabs[3] : null;
             if (next) { event.preventDefault(); setEntryTab(next); if (next === "ask") setAskVisited(true); document.getElementById(`quick-entry-tab-${next}`)?.focus(); }
-          }}><img src={`/assets/organize/method-${tab}.svg`} alt="" width="20" height="20" />{tab === "manual" ? "Manual" : tab === "ask" ? "Ask Clover" : "Upload"}</button>)}
+          }}><img src={`/assets/organize/method-${tab === "sync" ? "connect" : tab}.svg`} alt="" width="20" height="20" />{tab === "manual" ? "Manual" : tab === "ask" ? "Ask Clover" : tab === "sync" ? "Sync" : "Upload"}</button>)}
         </div>
+        {entryTab === "sync" ? <div id="quick-entry-panel-sync" role="tabpanel" aria-labelledby="quick-entry-tab-sync"><FinverseConnectButton workspaceId={workspaceId} mode="sync" /></div> : null}
         <div id="quick-entry-panel-manual" role="tabpanel" aria-labelledby="quick-entry-tab-manual" hidden={entryTab !== "manual"}>
         <div style={{display:"flex",justifyContent:"flex-end",marginBottom:12}}><button className="button button-secondary" type="button" disabled={isSaving || tableLocked} onClick={() => setTableMode(!tableMode)}>{tableMode ? "Single entry" : "▦ Table entry"}</button></div>
         <div hidden={!tableMode}><TransactionTableEntry workspaceId={workspaceId} accounts={accounts} categories={categories} onSaved={() => router.refresh()} onLockChange={setTableLocked} /></div>

@@ -1,4 +1,6 @@
 "use client";
+import { FinversePendingAccounts } from "@/components/finverse-pending-accounts";
+import { FinverseConnectButton as AccountBankSync } from "@/components/finverse-connect-button";
 import { AccountTypePicker } from "@/components/account-type-picker";
 import { AddEntryMethods } from "@/components/add-entry-methods";
 import { getInvestmentInstitutionSnapshotSummary } from "@/lib/investment-institution-summary";
@@ -4525,6 +4527,7 @@ function AccountsPageContent() {
       actions={<div className="accounts-desktop-tools">{accountsShellActions}</div>}
       >
       <div className="accounts-page">
+        {selectedWorkspaceId ? <FinversePendingAccounts workspaceId={selectedWorkspaceId} /> : null}
 
         {visibleAccounts.length > 0 ? (
           <section className="accounts-overview-grid" aria-label="Account summary">
@@ -4942,6 +4945,8 @@ function AccountsPageContent() {
                 </button>
               </div>
             </section>
+
+            {selectedAccount && selectedWorkspaceId ? <AccountBankSync mode="sync" accountId={selectedAccount.id} workspaceId={selectedWorkspaceId} onSynced={() => loadWorkspaceData(selectedWorkspaceId, {silent:true,awaitHydration:true})} /> : null}
 
             {openingBalanceEntry ? (
               <section className="accounts-drawer__section">

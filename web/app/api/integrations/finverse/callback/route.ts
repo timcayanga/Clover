@@ -19,10 +19,10 @@ const corsHeaders = {
 const callbackValues = async (request: Request) => {
   if (request.method === "POST") {
     const form = await request.formData();
-    return { code: String(form.get("code") ?? ""), state: String(form.get("state") ?? "") };
+    return { code: String(form.get("code") ?? ""), state: String(form.get("state") ?? ""), error: String(form.get("error") ?? "") };
   }
   const url = new URL(request.url);
-  return { code: url.searchParams.get("code") ?? "", state: url.searchParams.get("state") ?? "" };
+  return { code: url.searchParams.get("code") ?? "", state: url.searchParams.get("state") ?? "", error: url.searchParams.get("error") ?? "" };
 };
 
 const redirectToAccounts = (status: string, connectionId?: string, native = false, workspaceId?: string) => {
@@ -47,7 +47,7 @@ const handleCallback = async (request: Request) => {
 
   let native = false;
   try {
-    const { code, state } = await callbackValues(request);
+    const { code, state, error } = await callbackValues(request);
     if (!state) return redirectToAccounts("invalid_callback");
     const connection = await prisma.finverseConnection.findUnique({ where: { stateHash: hashFinverseState(state) } });
     if (!connection || connection.stateExpiresAt.getTime() < Date.now() || connection.status !== "link_pending") {
@@ -55,6 +55,15 @@ const handleCallback = async (request: Request) => {
     }
 
     native = state.startsWith("native.");
+    if (state.startsWith("refresh.") || state.startsWith("native.refresh.")) {
+      const claimed = await prisma.finverseConnection.updateMany({
+        where: { id: connection.id, status: "link_pending", stateExpiresAt: { gt: new Date() } },
+        data: { status: error ? "error" : "retrieving", stateExpiresAt: new Date(0) },
+      });
+      if (claimed.count !== 1) return redirectToAccounts("invalid_callback");
+      // Refresh retains the same login identity/token. The sync endpoint checks provider readiness.
+      return redirectToAccounts(error ? "error" : "connected", connection.id, native, connection.workspaceId);
+    }
     // Claim the one-time callback before exchanging credentials (including concurrent replays).
     const claimed = await prisma.finverseConnection.updateMany({ where: { id: connection.id, status: "link_pending", stateExpiresAt: { gt: new Date() } }, data: { status: code ? "authorizing" : "cancelled", stateExpiresAt: new Date(0) } });
     if (claimed.count !== 1) return redirectToAccounts("invalid_callback");

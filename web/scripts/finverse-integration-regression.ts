@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import {
+  createFinverseRefresh,
+  createFinverseLink,
   visibleFinverseBanks,
   decryptFinverseToken,
   encryptFinverseToken,
@@ -67,7 +69,7 @@ assert.match(connectButtonSource, /FINVERSE_MAX_POLL_ATTEMPTS = 30/);
 assert.match(connectButtonSource, /await onSyncedRef\.current\?\.\(\)/);
 assert.doesNotMatch(connectButtonSource, /window\.location\.assign\("\/accounts"\)/);
 const accountsPageSource = readFileSync(new URL("../app/accounts/page.tsx", import.meta.url), "utf8");
-assert.doesNotMatch(accountsPageSource, /FinverseConnectButton/);
+assert.match(accountsPageSource, /FinversePendingAccounts/);
 assert.doesNotMatch(accountsPageSource, />Connect bank</);
 assert.doesNotMatch(accountsPageSource, />Sync bank</);
 
@@ -76,11 +78,11 @@ console.log("Finverse integration regression checks passed.");
 const realBank = { institution_id: "bank-one", institution_name: "One Bank", countries: ["PHL"], products_supported: ["ACCOUNTS", "TRANSACTIONS"], tags: ["real"], status: "SUPPORTED", login_actions: ["PRIVATE"] };
 const testBank = { ...realBank, institution_id: "test", institution_name: "Test bank", tags: ["test"], status: "BETA" };
 const bankCases = [realBank, testBank, {...realBank,institution_id:"other-country",countries:["SGP"]}, {...realBank,institution_id:"no-transactions",products_supported:["ACCOUNTS"]}, {...realBank,institution_id:"alpha",status:"ALPHA"}, null];
-assert.deepEqual(visibleFinverseBanks(bankCases,"live"),[{id:"bank-one",name:"One Bank"}]);
-assert.deepEqual(visibleFinverseBanks(bankCases,"test"),[{id:"test",name:"Test bank"}]);
+assert.deepEqual(visibleFinverseBanks(bankCases,"live"),[{id:"bank-one",name:"One Bank",countries:["PHL"]},{id:"other-country",name:"One Bank",countries:["SGP"]}]);
+assert.deepEqual(visibleFinverseBanks(bankCases,"test"),[{id:"test",name:"Test bank",countries:["PHL"]}]);
 assert.deepEqual(visibleFinverseBanks([],"live"),[]);
 assert.throws(()=>visibleFinverseBanks({error:"bad response"},"live"));
-assert.deepEqual(visibleFinverseBanks([realBank,realBank],"live"),[{id:"bank-one",name:"One Bank"}]);
+assert.deepEqual(visibleFinverseBanks([realBank,realBank],"live"),[{id:"bank-one",name:"One Bank",countries:["PHL"]}]);
 import { mobileOperation } from "../lib/mobile-api-policy";
 assert.equal(mobileOperation("GET",["finverse","institutions"]),"finverse-institutions");
 assert.equal(mobileOperation("POST",["finverse","link"]),"finverse-link");
@@ -89,3 +91,33 @@ assert.equal(mobileOperation("GET",["finverse","link"]),null);
 assert.equal(mobileOperation("POST",["finverse","institutions"]),null);
 assert.equal(mobileOperation("GET",["finverse","callback"]),null);
 console.log("Finverse bank discovery: mode, region, products, status, deduplication and mobile method boundaries passed.");
+
+import { finverseCountries } from "../../shared/finverse-countries";
+assert.deepEqual(finverseCountries([]).map(c=>c.name),["Hong Kong","Indonesia","Malaysia","Philippines","Singapore","Vietnam"]);
+assert.equal(mobileOperation("GET",["finverse","connections"]),"finverse-connections");
+assert.equal(mobileOperation("POST",["finverse","connections"]),null);
+
+async function refreshRequests() {
+  const originalFetch = globalThis.fetch;
+  const originalEnv = { ...process.env };
+  Object.assign(process.env, { FINVERSE_ENABLED:"true", FINVERSE_CLIENT_ID:"test", FINVERSE_CLIENT_SECRET:"test", FINVERSE_REDIRECT_URI:"https://clover.test/callback", FINVERSE_TOKEN_ENCRYPTION_KEY:encryptionKey });
+  const requests: {url:string;body:Record<string,unknown>}[]=[];
+  globalThis.fetch = async (url,init) => {
+    requests.push({url:String(url),body:JSON.parse(String(init?.body || "{}"))});
+    return new Response(JSON.stringify(String(url).includes("customer/token")?{access_token:"customer"}:{link_url:"https://link.finverse.com/test"}),{status:200});
+  };
+  try {
+    await createFinverseRefresh("existing-access","refresh.state","identity",true);
+    assert(requests.at(-1)?.url.endsWith("/login_identity/refresh"));
+    assert.equal(requests.at(-1)?.body.user_present,true);
+    assert.deepEqual(requests.at(-1)?.body.link_customizations,{redirect_uri:"https://clover.test/callback",state:"refresh.state",ui_mode:"auto_redirect"});
+    await createFinverseRefresh("existing-access","state","identity",false);
+    assert(requests.at(-1)?.url.endsWith("/link/token"));
+    assert.equal(requests.at(-1)?.body.login_identity_id,"identity","Relink must reuse the existing identity");
+    await createFinverseLink("owner","state","sg-bank");
+    assert.equal(requests.at(-1)?.body.institution_id,"sg-bank");
+    assert.equal(requests.at(-1)?.body.countries,undefined,"Selected banks outside the Philippines must remain connectable");
+    console.log("Finverse refresh, relink and multi-country requests passed.");
+  } finally { globalThis.fetch=originalFetch; for(const key of Object.keys(process.env)) if(!(key in originalEnv)) delete process.env[key];Object.assign(process.env,originalEnv); }
+}
+refreshRequests().catch(error=>{console.error(error);process.exitCode=1;});

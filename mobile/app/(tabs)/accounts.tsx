@@ -17,6 +17,7 @@ import {
   AppHeader,
   Body,
   Card,
+  Button,
   Field,
   Heading,
   Icon,
@@ -41,6 +42,13 @@ function AccountsContent() {
   const [expandedAccount, setExpandedAccount] = useState<string | null>(null);
   const [selected, setSelected] = useState<Account | null>(null);
   const [adding, setAdding] = useState(false);
+  const [pendingBanks,setPendingBanks]=useState<{id:string;name:string}[]>([]);
+  useEffect(()=>{
+    const controller=new AbortController();
+    if(session.demo||adding){setPendingBanks([]);return;}
+    void session.request<{pending:{id:string;name:string}[]}>(`finverse/connections?workspaceId=${encodeURIComponent(session.profileId)}`,{signal:controller.signal}).then(data=>{if(!controller.signal.aborted)setPendingBanks(data.pending);}).catch(()=>{});
+    return()=>controller.abort();
+  },[session.profileId,session.demo,adding]);
   const { add, accountId, finverseConnection, finverseWorkspace } =
     useLocalSearchParams<{
       add?: string;
@@ -258,6 +266,7 @@ function AccountsContent() {
     );
   return (
     <Screen gap={24}>
+      {pendingBanks.map(connection=><Button key={connection.id} secondary icon="alert-circle" title={`Select accounts · ${connection.name}`} onPress={()=>router.push({pathname:"/accounts",params:{finverseConnection:connection.id,finverseWorkspace:session.profileId}})}/>)}
       {summaries.map((summary) => (
         <View key={summary.currency} style={{ gap: 8 }}>
           {summaries.length > 1 ? <Body>{summary.currency}</Body> : null}

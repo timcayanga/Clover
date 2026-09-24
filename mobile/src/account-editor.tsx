@@ -380,6 +380,7 @@ export function AccountEditor({
           ) : (
             <>
               <AccountIdentity account={record} onEdit={beginEdit} />
+              <FinverseConnect mode="sync" accountId={record.id} onSynced={()=>{}} />
               {Object.keys(labels)
                 .filter(
                   (k) =>

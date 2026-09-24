@@ -1,3 +1,4 @@
+import { FinverseConnect } from "../../src/finverse-connect";
 import { beginTelemetry } from "../../../shared/analytics";
 import { Text } from "../../src/app-text";
 import { TransactionTableEntry } from "../../src/transaction-table-entry";
@@ -253,7 +254,7 @@ export default function Add() {
               backgroundColor: dark ? "#0e1b21" : "#ecf4f5",
             }}
           >
-            {(["manual", "ask", "upload"] as const).map((method) => (
+            {(["manual", "ask", "upload", "sync"] as const).map((method) => (
               <Pressable
                 key={method}
                 accessibilityRole="tab"
@@ -277,7 +278,7 @@ export default function Add() {
                     gap: 4,
                   }}
                 >
-                  <Image
+                  {method === "sync" ? <Text style={{fontSize:20,color:tab===method?"white":colors.teal}}>↻</Text> : <Image
                     source={
                       method === "manual"
                         ? require("../../assets/organize/method-manual.png")
@@ -290,7 +291,7 @@ export default function Add() {
                       height: 20,
                       tintColor: tab === method ? "white" : colors.teal,
                     }}
-                  />
+                  />}
                   <Text
                     style={{
                       color: tab === method ? "white" : colors.ink,
@@ -301,12 +302,13 @@ export default function Add() {
                       ? "Manual"
                       : method === "ask"
                         ? "Ask Clover"
-                        : "Upload"}
+                        : method === "sync" ? "Sync" : "Upload"}
                   </Text>
                 </LinearGradient>
               </Pressable>
             ))}
           </View>
+          {tab === "sync" ? <FinverseConnect mode="sync" onSynced={()=>{}} /> : null}
           <View style={{ display: tab === "manual" ? "flex" : "none" }}>
             <View style={{ flexDirection: "row", justifyContent: "flex-end" }}>
               <Button

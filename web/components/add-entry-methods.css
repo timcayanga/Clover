@@ -85,3 +85,28 @@
 .add-entry-methods .finverse-connect__banks .button { width: 100% !important; max-width: none; height: auto; min-height: 48px; justify-content: space-between; text-align: left; white-space: normal; }
 .finverse-connect fieldset { display: grid; gap: 12px; border: 1px solid var(--line, #d4e0e8); border-radius: 16px; padding: 16px; }
 @media (max-width: 420px) { .accounts-add-modal .add-entry-methods .transaction-creation-tabs.transaction-creation-tabs button { font-size: 11px !important; padding-inline: 2px; } }
+.finverse-connect.finverse-connect--picker { display: grid; width: 100%; gap: 16px; }
+.finverse-connect__grid { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 12px; }
+.finverse-connect__tile, .finverse-connect__sync-card { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; min-width: 0; padding: 12px 8px; border: 1px solid var(--line,#d4e0e8); border-radius: 16px; background: var(--surface,#fff); color: var(--text,#22313b); text-align: center; font: inherit; overflow-wrap: anywhere; }
+.finverse-connect__tile { cursor: pointer; }
+.finverse-connect__tile:hover { border-color: #03a8c0; }
+.finverse-connect__tile img, .finverse-connect__sync-card img { width: 48px; height: 48px; object-fit: contain; }
+.finverse-connect__flag { font-size: 32px; line-height: 1.2; }
+.finverse-connect__inline-status { position: static; }
+.finverse-connect__selection { order: -1; }
+.finverse-pending { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 16px; }
+.finverse-pending .button { gap: 8px; }
+@media(max-width:767px){.finverse-connect__grid {gap:8px;} .finverse-connect__tile{font-size:12px;} .finverse-connect__sync-card {grid-column:span 3;} .transaction-creation-tabs:has([id$="-sync"]) > button {flex:1;min-width:0;font-size:11px;padding-inline:4px;} }
+@media(max-width:767px){
+  .add-entry-methods .transaction-creation-tabs:has(> button:nth-child(4)) > button {
+    font-size: 11px !important;
+    padding-inline: 2px;
+    white-space: nowrap;
+  }
+}
+.finverse-connect__selection label { display:flex; align-items:center; gap:12px; min-height:44px; font-size:13px; }
+.finverse-connect__selection input[type="checkbox"] { flex:0 0 20px; width:20px; height:20px; min-height:20px; margin:0; accent-color:#03a8c0; }
+.transaction-creation-tabs:has(> button:nth-child(4)) { grid-template-columns:repeat(4,minmax(0,1fr)); }
+@media(max-width:767px){
+  .transaction-creation-tabs:has(> button:nth-child(4)) > button {font-size:11px !important;white-space:nowrap;}
+}

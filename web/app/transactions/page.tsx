@@ -1,4 +1,5 @@
 "use client";
+import { FinverseConnectButton } from "@/components/finverse-connect-button";
 import { reconcileTransactionTotal } from "@/lib/transaction-mobile-pagination";
 import { TransactionTableEntry } from "@/components/transaction-table-entry";
 import { TransactionDetailLabel } from "@/components/transaction-detail-label";
@@ -2289,7 +2290,7 @@ function TransactionsPageContent() {
   const [manualOpen, setManualOpen] = useState(false);
   const [tableMode, setTableMode] = useState(false);
   const [tableLocked, setTableLocked] = useState(false);
-  const [creationTab, setCreationTab] = useState<"manual" | "ask" | "upload">("manual");
+  const [creationTab, setCreationTab] = useState<"manual" | "ask" | "upload" | "sync">("manual");
   const [creationChatVisited, setCreationChatVisited] = useState(false);
   const enlargedText = useEnlargedText();
   const [manualSaveError, setManualSaveError] = useState("");
@@ -8684,16 +8685,17 @@ function TransactionsPageContent() {
 
             {(
               <div className="transaction-creation-tabs" role="tablist" aria-label="How to add transactions">
-                {([['manual', 'Manual'], ['ask', 'Ask Clover'], ['upload', 'Upload']] as const).map(([tab, label]) => (
+                {([['manual', 'Manual'], ['ask', 'Ask Clover'], ['upload', 'Upload'], ['sync', 'Sync']] as const).map(([tab, label]) => (
                   <button key={tab} type="button" disabled={isSaving || tableLocked} role="tab" id={`creation-tab-${tab}`} aria-selected={creationTab === tab} aria-controls={`creation-panel-${tab}`} tabIndex={creationTab === tab ? 0 : -1} onKeyDown={(event) => {
-                    const tabs = ["manual", "ask", "upload"] as const;
+                    const tabs = ["manual", "ask", "upload", "sync"] as const;
                     const index = tabs.indexOf(tab);
-                    const next = event.key === "ArrowRight" ? tabs[(index + 1) % 3] : event.key === "ArrowLeft" ? tabs[(index + 2) % 3] : event.key === "Home" ? tabs[0] : event.key === "End" ? tabs[2] : null;
+                    const next = event.key === "ArrowRight" ? tabs[(index + 1) % tabs.length] : event.key === "ArrowLeft" ? tabs[(index + tabs.length - 1) % tabs.length] : event.key === "Home" ? tabs[0] : event.key === "End" ? tabs[tabs.length - 1] : null;
                     if (next) { event.preventDefault(); setCreationTab(next); if (next === "ask") setCreationChatVisited(true); document.getElementById(`creation-tab-${next}`)?.focus(); }
-                  }} onClick={() => { setCreationTab(tab); if (tab === "ask") setCreationChatVisited(true); }}><img src={`/assets/organize/method-${tab}.svg`} alt="" width="20" height="20" />{label}</button>
+                  }} onClick={() => { setCreationTab(tab); if (tab === "ask") setCreationChatVisited(true); }}><img src={`/assets/organize/method-${tab === "sync" ? "connect" : tab}.svg`} alt="" width="20" height="20" />{label}</button>
                 ))}
               </div>
             )}
+            {creationTab === "sync" && selectedWorkspaceId ? <div id="creation-panel-sync" role="tabpanel" aria-labelledby="creation-tab-sync"><FinverseConnectButton workspaceId={selectedWorkspaceId} mode="sync" /></div> : null}
             <div id="creation-panel-manual" role="tabpanel" aria-labelledby="creation-tab-manual" hidden={creationTab !== "manual"}>
             <div style={{display:"flex",justifyContent:"flex-end",marginBottom:12}}><button className="button button-secondary" type="button" disabled={isSaving || tableLocked} onClick={() => setTableMode(!tableMode)}>{tableMode ? "Single entry" : "▦ Table entry"}</button></div>
             <div hidden={!tableMode}><TransactionTableEntry key={selectedWorkspaceId} workspaceId={selectedWorkspaceId} accounts={accounts} categories={categories} onLockChange={setTableLocked} onSaved={() => { if (selectedWorkspaceId) void loadTransactionsPage(selectedWorkspaceId, {background:true}); }} /></div>

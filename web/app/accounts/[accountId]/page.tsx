@@ -1,4 +1,5 @@
 "use client";
+import { FinverseConnectButton } from "@/components/finverse-connect-button";
 
 import { InterfaceIcon } from "@/components/interface-icon";
 
@@ -4086,6 +4087,7 @@ function AccountDetailPageContent() {
               </div>
             ) : null}
 
+            <FinverseConnectButton mode="sync" accountId={account.id} workspaceId={account.workspaceId} />
             <div className={`accounts-detail__hero-layout${isCreditAccount ? " is-credit-account" : ""}`}>
               <div className="accounts-detail__hero-card-row">
                 <FinancialAccountCard

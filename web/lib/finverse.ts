@@ -145,13 +145,28 @@ export const createFinverseLink = async (userId: string, state: string, institut
       redirect_uri: config.redirectUri,
       state,
       ui_mode: "auto_redirect",
-      countries: ["PHL"],
       link_mode: config.mode === "live" ? "real" : "test",
       institution_id: institutionId,
       products_supported: ["ACCOUNTS", "TRANSACTIONS"],
       products_requested: ["ACCOUNTS", "TRANSACTIONS"],
     }),
   }, customerToken);
+};
+
+// User-present refresh lets Finverse handle any bank-required 2FA in its secure UI.
+export const createFinverseRefresh = async (accessToken: string, state: string, loginIdentityId: string, refreshAllowed: boolean) => {
+  const config = getFinverseConfig();
+  const customizations = { redirect_uri: config.redirectUri, state, ui_mode: "auto_redirect" };
+  if (refreshAllowed) return requestFinverse<{ link_url: string }>("/login_identity/refresh", {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ user_present: true, link_customizations: customizations }),
+  }, accessToken);
+  return requestFinverse<{ link_url: string }>("/link/token", {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ ...customizations, client_id: config.clientId, login_identity_id: loginIdentityId,
+      grant_type: "client_credentials", response_mode: "form_post", response_type: "code",
+      products_requested: ["ACCOUNTS", "TRANSACTIONS"] }),
+  }, await getFinverseCustomerToken());
 };
 
 export type FinverseLoginToken = {
@@ -240,23 +255,23 @@ export const normalizeFinverseTransaction = (transaction: FinverseTransaction) =
 };
 
 /** Public display data only; never forward institution login fields or tokens. */
-export type ConnectBank = { id: string; name: string };
+export type ConnectBank = { id: string; name: string; countries: string[] };
 export function visibleFinverseBanks(institutions: unknown, mode: "live" | "test"): ConnectBank[] {
   if (!Array.isArray(institutions)) throw new Error("FINVERSE_INVALID_INSTITUTIONS");
   const banks = new Map<string, ConnectBank>();
   for (const item of institutions) {
     if (!item || typeof item.institution_id !== "string" || typeof item.institution_name !== "string") continue;
-    if (!Array.isArray(item.countries) || !item.countries.includes("PHL")) continue;
+    if (!Array.isArray(item.countries) || !item.countries.some((country: unknown) => typeof country === "string")) continue;
     if (!Array.isArray(item.products_supported) || !["ACCOUNTS", "TRANSACTIONS"].every(p => item.products_supported.includes(p))) continue;
     if (!Array.isArray(item.tags) || !item.tags.includes(mode === "live" ? "real" : "test")) continue;
     if (!(mode === "live" ? ["SUPPORTED"] : ["SUPPORTED", "BETA"]).includes(item.status)) continue;
-    banks.set(item.institution_id, { id: item.institution_id, name: item.institution_name });
+    banks.set(item.institution_id, { id: item.institution_id, name: item.institution_name, countries: item.countries.filter((country: unknown): country is string => typeof country === "string") });
   }
   return [...banks.values()].sort((a, b) => a.name.localeCompare(b.name));
 }
 export async function getFinverseBanks() {
   const { mode } = getFinverseConfig();
   const token = await getFinverseCustomerToken();
-  const data = await requestFinverse<unknown>("/institutions?countries=PHL", { method: "GET" }, token);
+  const data = await requestFinverse<unknown>("/institutions", { method: "GET" }, token);
   return { banks: visibleFinverseBanks(data, mode), mode };
 }

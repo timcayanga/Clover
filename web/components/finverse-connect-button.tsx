@@ -1,11 +1,14 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { finverseCountries } from "../../shared/finverse-countries";
+import "./add-entry-methods.css";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 
 type SyncResponse = {
   status?: string;
+  linkUrl?: string;
   connectionId?: string;
   remaining?: number;
   accounts?: {id:string;name:string}[];
@@ -32,20 +35,27 @@ const waitForNextPoll = (signal: AbortSignal) =>
 export function FinverseConnectButton({
   workspaceId,
   onSynced,
+  mode = "connect",
+  accountId,
 }: {
   workspaceId: string;
+  mode?: "connect" | "sync";
+  accountId?: string;
   onSynced?: () => Promise<void> | void;
 }) {
   const [access, setAccess] = useState<{ workspaceId: string; upgradeRequired: boolean } | null>(null);
   const allowed = access?.workspaceId === workspaceId && !access.upgradeRequired;
-  const [banks, setBanks] = useState<{id:string;name:string}[]>([]);
-  const [bankQuery, setBankQuery] = useState("");
+  const [banks, setBanks] = useState<{id:string;name:string;countries:string[];logoUrl:string}[]>([]);
+  const [country, setCountry] = useState<string | null>(null);
+  const [linked, setLinked] = useState<{id:string;connectionId:string;name:string;last4:string|null;logoUrl:string;lastSyncedAt:string|null}[]>([]);
+  const [connectionsLoaded, setConnectionsLoaded] = useState(false);
+  const [connectionsError, setConnectionsError] = useState("");
   const [bankStatus, setBankStatus] = useState("Loading banks…");
   const [bankRevision, setBankRevision] = useState(0);
   const [testMode, setTestMode] = useState(false);
   const router = useRouter();
   const searchParams = useSearchParams();
-  const autoSyncStarted = useRef(false);
+  const autoSyncStarted = useRef("");
   const activeSyncRef = useRef<AbortController | null>(null);
   const actionRef = useRef<"connecting" | "syncing" | null>(null);
   const onSyncedRef = useRef(onSynced);
@@ -71,7 +81,17 @@ export function FinverseConnectButton({
     return () => controller.abort();
   }, [workspaceId, bankRevision]);
 
-  const sync = useCallback(async (requestedConnectionId?: string, selectedAccountIds?: string[]) => {
+  useEffect(() => {
+    const controller = new AbortController();
+    setConnectionsLoaded(false); setConnectionsError(""); setLinked([]);
+    void fetch(`/api/integrations/finverse/connections?workspaceId=${encodeURIComponent(workspaceId)}`,{signal:controller.signal,cache:"no-store"})
+      .then(async response => { if(!response.ok) throw new Error("Unable to load linked accounts.");return response.json(); })
+      .then(data => {if(!controller.signal.aborted){setLinked(data.accounts);setConnectionsLoaded(true);}})
+      .catch(error => {if(!controller.signal.aborted)setConnectionsError(error.message);});
+    return () => controller.abort();
+  }, [workspaceId, bankRevision]);
+
+  const sync = useCallback(async (requestedConnectionId?: string, selectedAccountIds?: string[], refresh = false) => {
     if (!allowed || !workspaceId || actionRef.current) return;
     const controller = new AbortController();
     activeSyncRef.current = controller;
@@ -83,13 +103,14 @@ export function FinverseConnectButton({
         const response = await fetch("/api/integrations/finverse/sync", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ workspaceId, connectionId: requestedConnectionId, selectedAccountIds }),
+          body: JSON.stringify({ workspaceId, connectionId: requestedConnectionId, selectedAccountIds, refresh: refresh && attempt === 1 }),
           signal: controller.signal,
           cache: "no-store",
         });
         const body = await response.json() as SyncResponse;
         if (!response.ok) throw new Error(body.error || "Unable to sync your bank.");
-        if(body.status === "select_accounts" && body.connectionId && body.accounts){setSelection({connectionId:body.connectionId,remaining:body.remaining ?? 0,accounts:body.accounts});setSelected([]);setMessage(body.error ?? "Choose bank accounts to link.");return;}
+        if (body.status === "authorize" && body.linkUrl) { window.location.assign(body.linkUrl); return; }
+        if(body.status === "select_accounts" && body.connectionId && body.accounts){setSelection({connectionId:body.connectionId,remaining:body.remaining ?? 0,accounts:body.accounts});setSelected([]);setMessage("");window.dispatchEvent(new Event("finverse-updated"));return;}
         setSelection(null);
         if (body.status === "retrieving") {
           if (attempt === FINVERSE_MAX_POLL_ATTEMPTS) {
@@ -104,7 +125,10 @@ export function FinverseConnectButton({
         await onSyncedRef.current?.();
         const imported = body.transactions?.imported ?? 0;
         setMessage(imported > 0 ? `Bank synced — ${imported} new transaction${imported === 1 ? "" : "s"} ready for review.` : "Bank synced — your accounts are now up to date.");
-        router.replace("/accounts", { scroll: false });
+        setBankRevision(v=>v+1);
+        window.dispatchEvent(new Event("finverse-updated"));
+        if (mode === "connect") router.replace("/accounts", { scroll: false });
+        else router.refresh();
         return;
       }
     } catch (error) {
@@ -115,13 +139,13 @@ export function FinverseConnectButton({
       actionRef.current = null;
       setAction(null);
     }
-  }, [allowed, router, workspaceId]);
+  }, [allowed, mode, router, workspaceId]);
 
   useEffect(() => () => activeSyncRef.current?.abort(), []);
 
   useEffect(() => {
-    if (allowed && callbackStatus === "connected" && connectionId && workspaceId && !autoSyncStarted.current) {
-      autoSyncStarted.current = true;
+    if (allowed && callbackStatus === "connected" && connectionId && workspaceId && autoSyncStarted.current !== connectionId) {
+      autoSyncStarted.current = connectionId;
       void sync(connectionId);
     } else if (callbackStatus === "invalid_callback") {
       setMessage("The bank connection expired. Please start again.");
@@ -153,6 +177,7 @@ export function FinverseConnectButton({
     }
   };
 
+  if (mode === "sync" && accountId && (!connectionsLoaded || !linked.some(a=>a.id===accountId))) return null;
   if (access?.workspaceId === workspaceId && access.upgradeRequired) return (
     <div className="finverse-connect finverse-connect--upgrade">
       <h4>Unlock bank connections</h4>
@@ -163,25 +188,19 @@ export function FinverseConnectButton({
   );
   if (!allowed) return <div role="status"><p>{bankStatus}</p>{bankStatus !== "Loading banks…" ? <button type="button" className="button button-secondary" onClick={() => setBankRevision(v => v + 1)}>Try again</button> : null}</div>;
 
+  if (mode === "sync" && !connectionsLoaded) return <div role="status">{connectionsError || "Loading linked accounts…"}{connectionsError ? <button type="button" className="button button-secondary" onClick={()=>setBankRevision(v=>v+1)}>Try again</button> : null}</div>;
+  const syncAccounts = linked.filter(a=>!accountId || a.id===accountId);
+  if (mode === "sync" && accountId && !syncAccounts.length) return null;
   return (
-    <div className="finverse-connect">
-      <h4>Connect your bank</h4>
-      <p>Choose a bank to securely connect through Finverse. Review the accounts before adding them to Clover.</p>
+    <div className="finverse-connect finverse-connect--picker">
+      {selection ? <fieldset className="finverse-connect__selection"><legend>Choose up to {selection.remaining} bank accounts</legend>{selection.accounts.map(account=><label key={account.id}><input type="checkbox" checked={selected.includes(account.id)} disabled={action !== null || (!selected.includes(account.id) && selected.length>=selection.remaining)} onChange={event=>setSelected(current=>event.target.checked?[...current,account.id]:current.filter(id=>id!==account.id))}/>{account.name}</label>)}<button type="button" className="button button-primary" disabled={action !== null || selected.length === 0 || selected.length>selection.remaining} onClick={()=>void sync(selection.connectionId,selected)}>Link selected accounts</button></fieldset> : null}
+      {mode === "sync" && syncAccounts.length ? <div className="finverse-connect__grid">{syncAccounts.map(account=><div key={account.id} className="finverse-connect__sync-card"><img src={account.logoUrl} alt="" onError={event=>{event.currentTarget.onerror=null;event.currentTarget.src="/assets/account-types/bank.png";}}/><strong>{account.name}</strong><span>{account.last4 ? `•••• ${account.last4}` : "Linked account"}</span><small>Last Synced · {account.lastSyncedAt ? new Date(account.lastSyncedAt).toLocaleString() : "Not yet synced"}</small><button className="button button-secondary" type="button" disabled={action !== null} onClick={()=>void sync(account.connectionId,[],true)}>{action === "syncing" ? "Syncing…" : "↻ Sync"}</button></div>)}</div> : <>
       {testMode ? <p role="status">Test mode · Only test banks are shown.</p> : null}
-      <label className="finverse-connect__search">Find your bank<input type="search" placeholder="Search banks" value={bankQuery} onChange={event => setBankQuery(event.target.value)} /></label>
-      <p className="finverse-connect__region">Philippines</p>
-      {bankStatus ? <div role="status"><p>{bankStatus}</p>{bankStatus !== "Loading banks…" ? <button type="button" className="button button-secondary" onClick={() => setBankRevision(v => v + 1)}>Refresh bank list</button> : null}</div> : null}
-      <div className="finverse-connect__banks">
-        {banks.filter(bank => bank.name.toLowerCase().includes(bankQuery.trim().toLowerCase())).map(bank => <button key={bank.id} className="button button-secondary" type="button" disabled={action !== null} onClick={() => void connect(bank.id)}><span>{bank.name}</span><span aria-hidden="true">›</span></button>)}
-        {banks.length > 0 && !banks.some(bank => bank.name.toLowerCase().includes(bankQuery.trim().toLowerCase())) ? <p>No matching banks. Try another name or use Manual or Upload.</p> : null}
-      </div>
-      <p>Can’t find your bank? Use Manual or Upload.</p>
-      <p>Authorization happens with Finverse. Clover never asks for your bank password.</p>
-      {banks.length > 0 || connectionId ? <button className="button button-secondary" type="button" onClick={() => void sync(connectionId)} disabled={!workspaceId || action !== null}>
-        {action === "syncing" ? "Retrieving accounts…" : "Resume bank sync"}
-      </button> : null}
-      {selection ? <fieldset><legend>Choose up to {selection.remaining} bank accounts</legend>{selection.accounts.map(account=><label key={account.id} style={{display:"block"}}><input type="checkbox" checked={selected.includes(account.id)} disabled={action !== null || (!selected.includes(account.id) && selected.length>=selection.remaining)} onChange={event=>setSelected(current=>event.target.checked?[...current,account.id]:current.filter(id=>id!==account.id))}/>{account.name}</label>)}<button type="button" className="button button-primary" disabled={action !== null || selected.length === 0 || selected.length>selection.remaining} onClick={()=>void sync(selection.connectionId,selected)}>Sync selected accounts</button></fieldset> : null}
-      {message ? <span className="finverse-connect__status" role="status" aria-live="polite">{message}</span> : null}
+      {country ? <button className="button button-secondary" type="button" onClick={()=>setCountry(null)}>‹ Countries · {finverseCountries(banks).find(c=>c.code===country)?.name}</button> : null}
+      {!country ? <div className="finverse-connect__grid" aria-label="Countries">{finverseCountries(banks).map(c=><button key={c.code} className="finverse-connect__tile" type="button" onClick={()=>setCountry(c.code)}><span className="finverse-connect__flag" aria-hidden="true">{c.flag}</span><span>{c.name}</span></button>)}</div> : <div className="finverse-connect__grid" aria-label="Banks">{banks.filter(bank=>bank.countries.includes(country)).map(bank=><button key={bank.id} className="finverse-connect__tile" type="button" disabled={action !== null} onClick={()=>void connect(bank.id)}><img src={bank.logoUrl} alt="" onError={event=>{event.currentTarget.onerror=null;event.currentTarget.src="/assets/account-types/bank.png";}}/><span>{bank.name}</span></button>)}{!banks.some(bank=>bank.countries.includes(country)) ? <p>No {testMode ? "test " : ""}banks are available here yet.</p> : null}</div>}
+      {bankStatus && bankStatus !== "Loading banks…" ? <div role="status"><p>{bankStatus}</p><button type="button" className="button button-secondary" onClick={()=>setBankRevision(v=>v+1)}>Refresh banks</button></div> : null}
+      </>}
+      {message ? <p className="finverse-connect__inline-status" role="status" aria-live="polite">{message}</p> : null}
     </div>
   );
 }

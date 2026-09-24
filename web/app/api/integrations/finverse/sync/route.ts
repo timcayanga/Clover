@@ -1,3 +1,5 @@
+import { randomBytes } from "node:crypto";
+import { getMobileRequestContext } from "@/lib/mobile-request-context";
 import { PLAN_CATALOG } from "../../../../../../shared/plan-catalog";
 import { assertPlanQuota, PlanQuotaError } from "@/lib/plan-quota";
 import { getEffectiveUserLimits } from "@/lib/user-limits";
@@ -8,6 +10,8 @@ import { requireAuth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { assertWorkspaceAccess } from "@/lib/workspace-access";
 import {
+  createFinverseRefresh,
+  hashFinverseState,
   decryptFinverseToken,
   encryptFinverseToken,
   getAllFinverseTransactions,
@@ -177,7 +181,7 @@ export async function POST(request: Request) {
 
   try {
     const { userId } = await requireAuth();
-    const body = await request.json().catch(() => ({})) as { workspaceId?: string; connectionId?: string; selectedAccountIds?: string[] };
+    const body = await request.json().catch(() => ({})) as { workspaceId?: string; connectionId?: string; selectedAccountIds?: string[]; refresh?: boolean };
     if (!body.workspaceId) return NextResponse.json({ error: "Workspace is required." }, { status: 400 });
     await assertWorkspaceAccess(userId, body.workspaceId);
     const connection = await prisma.finverseConnection.findFirst({
@@ -186,6 +190,7 @@ export async function POST(request: Request) {
         ...(body.connectionId ? { id: body.connectionId } : {}),
         user: { clerkUserId: userId },
         encryptedRefreshToken: { not: null },
+        status: { not: "disconnected" },
       },
       orderBy: { createdAt: "desc" },
     });
@@ -201,6 +206,18 @@ export async function POST(request: Request) {
     const institution = identityResult.institution ?? {};
     const institutionName = typeof institution.institution_name === "string" ? institution.institution_name : undefined;
     const institutionId = typeof institution.institution_id === "string" ? institution.institution_id : undefined;
+
+    if (body.refresh === true) {
+      if (!body.connectionId || !connection.loginIdentityId) return NextResponse.json({ error: "Choose a linked bank account." }, { status: 400 });
+      const refreshAllowed = (identity.refresh as { refresh_allowed?: boolean } | undefined)?.refresh_allowed === true;
+      const state = (getMobileRequestContext() ? "native." : "") + (refreshAllowed ? "refresh." : "") + randomBytes(32).toString("base64url");
+      const result = await createFinverseRefresh(token, state, connection.loginIdentityId, refreshAllowed);
+      if (!result.link_url) throw new Error("FINVERSE_LINK_URL_MISSING");
+      await prisma.finverseConnection.update({ where: { id: connection.id }, data: {
+        stateHash: hashFinverseState(state), stateExpiresAt: new Date(Date.now() + 15 * 60_000), status: "link_pending",
+      } });
+      return NextResponse.json({ status: "authorize", connectionId: connection.id, linkUrl: result.link_url });
+    }
 
     await prisma.finverseConnection.update({
       where: { id: connection.id },
@@ -230,7 +247,10 @@ export async function POST(request: Request) {
     if(body.selectedAccountIds !== undefined && (!Array.isArray(body.selectedAccountIds) || body.selectedAccountIds.some(id=>typeof id!=="string" || !newAccounts.some(a=>a.account_id===id)))) return NextResponse.json({error:"Choose valid bank accounts."},{status:400});
     const selectedIds = body.selectedAccountIds ? new Set(body.selectedAccountIds) : null;
     const chosen = newAccounts.filter(a=>!selectedIds || selectedIds.has(a.account_id));
-    if((!selectedIds && newAccounts.length > 0) || chosen.length>capacity) return NextResponse.json({status:"select_accounts",connectionId:connection.id,remaining:capacity,accounts:newAccounts.map(a=>({id:a.account_id,name:normalizeFinverseAccount(a,resolvedInstitutionName).name})),error:`Choose up to ${capacity} bank accounts to fit your plan.`});
+    if((!selectedIds && newAccounts.length > 0) || chosen.length>capacity) {
+      await prisma.finverseConnection.update({where:{id:connection.id},data:{status:"awaiting_selection"}});
+      return NextResponse.json({status:"select_accounts",connectionId:connection.id,remaining:capacity,accounts:newAccounts.map(a=>({id:a.account_id,name:normalizeFinverseAccount(a,resolvedInstitutionName).name})),});
+    }
     const accountsToImport = providerAccounts.filter(a=>linkedIds.has(a.account_id)||chosen.some(c=>c.account_id===a.account_id));
     for (const account of accountsToImport) {
       await importAccount(connection.id, connection.workspaceId, account, resolvedInstitutionName);
