@@ -1,7 +1,7 @@
 import { PLAN_CATALOG } from "../../shared/plan-catalog";
 import { Text } from "./app-text";
 import { useEffect, useRef, useState } from "react";
-import { Linking } from "react-native";
+import { Linking, View } from "react-native";
 import type { PurchasesPackage } from "react-native-purchases";
 import { useSession } from "./session";
 import { Body, Button, Card, Notice, dateLabel, useTheme } from "./ui";
@@ -15,7 +15,7 @@ import {
 } from "./store-billing";
 export function SettingsPlan() {
   const session = useSession();
-  const { colors } = useTheme();
+  const { colors, styles } = useTheme();
   const [status, setStatus] = useState<StoreStatus | null>(null);
   const [packages, setPackages] = useState<PurchasesPackage[]>([]);
   const [verificationPending, setVerificationPending] = useState(false);
@@ -93,6 +93,7 @@ export function SettingsPlan() {
     }
   };
   const access = status ?? session.data?.entitlement;
+  const limits = access ? PLAN_CATALOG[access.planTier] : null;
   return (
     <>
       <Card>
@@ -105,7 +106,7 @@ export function SettingsPlan() {
         >
           {(access?.planTier === "pro" || access?.planTier === "premium") ? (access?.planTier === "premium" ? "Clover Pro" : "Clover Plus") : "Clover Free"}
         </Text>
-        {access ? <Body>{PLAN_CATALOG[access.planTier].accounts} accounts · {PLAN_CATALOG[access.planTier].profiles} Profiles · {PLAN_CATALOG[access.planTier].linkedBanks} linked bank accounts. {PLAN_CATALOG[access.planTier].budgets} active budgets · {PLAN_CATALOG[access.planTier].goals} goals · {PLAN_CATALOG[access.planTier].circles} Circles. {PLAN_CATALOG[access.planTier].monthlyTokens.toLocaleString()} shared AI tokens monthly; {PLAN_CATALOG[access.planTier].dailyTokens.toLocaleString()} per rolling 24 hours.</Body> : null}
+        {limits ? <Body>{limits.linkedBanks} linked bank accounts · {limits.budgets} active budgets · {limits.goals} goals · {limits.circles} Circles.</Body> : null}
         <Body>Your plan belongs to your Clover account across devices.</Body>
         {access?.accessEndsAt ? (
           <Body>Access through {dateLabel(access.accessEndsAt)}</Body>
@@ -162,6 +163,42 @@ export function SettingsPlan() {
           />
         ) : null}
       </Card>
+      {limits ? (
+        <Card>
+          <Text style={styles.sectionTitle}>Plan limits</Text>
+          <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 12 }}>
+            {[
+              { label: "Profiles", value: limits.profiles },
+              { label: "Accounts", value: limits.accounts },
+              { label: "Clover tokens this month", value: limits.monthlyTokens },
+              { label: "Clover tokens, rolling 24h", value: limits.dailyTokens },
+            ].map(({ label, value }) => (
+              <View
+                key={label}
+                style={{
+                  flexBasis: "45%", flexGrow: 1, minWidth: 0,
+                  borderWidth: 1, borderColor: colors.line,
+                  borderRadius: 16, padding: 12, gap: 8,
+                }}
+              >
+                <Text style={{ color: colors.muted, fontFamily: "Poppins-SemiBold", fontSize: 13 }}>
+                  {label}
+                </Text>
+                <Text
+                  style={{ color: colors.ink, fontFamily: "Poppins-SemiBold", fontSize: 19 }}
+                  adjustsFontSizeToFit
+                  numberOfLines={1}
+                >
+                  {value.toLocaleString()}
+                </Text>
+                <Text style={{ color: colors.muted, fontSize: 12 }}>
+                  limit
+                </Text>
+              </View>
+            ))}
+          </View>
+        </Card>
+      ) : null}
       {packages.length ? (
         <Body>
           Subscriptions renew automatically until canceled in your store

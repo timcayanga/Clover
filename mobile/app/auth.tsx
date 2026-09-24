@@ -1,6 +1,7 @@
 import { beginTelemetry } from "../../shared/analytics";
 import { useState, useRef } from "react";
-import { Image, Linking, Platform, Pressable, Switch, View } from "react-native";
+import { Image, KeyboardAvoidingView, Linking, Platform, Pressable, Switch, View } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { router, useLocalSearchParams } from "expo-router";
 import { useSignIn, useSignUp } from "@clerk/expo";
 import { useSSO } from "@clerk/expo/experimental";
@@ -31,6 +32,7 @@ export default function Authentication() {
 }
 function AuthForm() {
   const { colors } = useTheme();
+  const insets = useSafeAreaInsets();
   const params = useLocalSearchParams<{ mode?: string }>();
   const { signIn } = useSignIn();
   const { signUp } = useSignUp();
@@ -169,6 +171,12 @@ function AuthForm() {
               (step !== "sign-up" || terms),
             );
   return (
+    <KeyboardAvoidingView
+      style={{ flex: 1 }}
+      enabled={Platform.OS === "android"}
+      behavior="padding"
+      keyboardVerticalOffset={insets.top}
+    >
     <Screen>
       <View style={{ paddingVertical: 8, maxWidth: 520, width: "100%", alignSelf: "center" }}>
         <Pressable accessibilityRole="button" accessibilityLabel="Back to tutorial" onPress={() => router.back()} style={{ minHeight: 44, alignSelf: "flex-start", justifyContent: "center", marginBottom: 8 }}>
@@ -417,5 +425,6 @@ function AuthForm() {
         </Card>
       </View>
     </Screen>
+    </KeyboardAvoidingView>
   );
 }
