@@ -39364,18 +39364,20 @@ button.accounts-detail__transaction-head-cell {
     gap: 12px;
     color: var(--text);
     font-size: 0.78rem;
-    line-height: 1;
+    line-height: 1.45;
   }
 
   .import-upload-dock__mobile-progress-copy span {
     min-width: 0;
     font-weight: 600;
+    padding-block: 2px;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
   }
 
   .import-upload-dock__mobile-progress-copy strong {
+    flex-shrink: 0;
     color: var(--accent-hover);
     font-size: 0.78rem;
     font-weight: 700;
