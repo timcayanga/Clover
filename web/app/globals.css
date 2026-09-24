@@ -66459,22 +66459,37 @@ html[data-theme="dark"] .content.content--reports .reports-range-menu__summary {
 }
 
 /* Mobile web is the native presentation reference. */
-@media (max-width: 760px) {
- .shell-topbar-leading .shell-mobile-more-link { display:flex!important; visibility:visible!important; }
- .shell-topbar-leading__actions { display:none!important; }
- .shell-topbar-leading { display:flex!important; gap:0!important; }
- .shell-mobile-subheader :is(.investments-tabs,.investments-tabs--mobile,.recurring-tabs).clover-tabs { display:flex!important; flex-wrap:wrap!important; overflow:visible!important; }
- .shell-mobile-subheader :is(.investments-tabs,.investments-tabs--mobile,.recurring-tabs).clover-tabs > :is(button,.animated-tabs__tab) { flex:1 1 30%!important; min-width:0!important; }
- .shell-mobile-subheader .split-bill-tabs.clover-tabs { display:flex!important; flex-wrap:nowrap!important; width:100%!important; }
- .shell-mobile-subheader .split-bill-tabs.clover-tabs > .animated-tabs__tab { flex:1 1 0!important; min-width:0!important; padding:8px 2px!important; justify-content:center!important; }
- .content--investments .investments-page__add-button,.content--split-bill :is(.split-bill-add-button,.split-bill-header-add) { width:40px!important; height:40px!important; min-width:40px!important; flex:0 0 40px!important; padding:0!important; aspect-ratio:1; border-radius:50%!important; }
-}
-
 .shell-mobile-relocated-action { display: none; }
-@media (max-width:760px) {
-  .shell-mobile-relocated-action { display: inline-flex; align-items:center; flex-shrink:0; }
-  .shell-mobile-subheader .clover-tabs.clover-tabs:is(.recurring-tabs--mobile,.investments-tabs--mobile) { flex-wrap:wrap !important; overflow:visible !important; }
-  .shell-mobile-subheader .clover-tabs.clover-tabs:is(.recurring-tabs--mobile,.investments-tabs--mobile) .clover-tab { flex:1 1 30% !important; min-width:0 !important; white-space:nowrap; }
-  .split-bill-action-button.split-bill-action-button--add,
-  .content--investments .investments-page__add-button { width:40px !important; height:40px !important; min-width:40px !important; min-height:40px !important; max-width:40px; max-height:40px; flex:0 0 40px !important; padding:0 !important; aspect-ratio:1; border-radius:50% !important; }
+@media (max-width: 1100px) {
+  .content.content > :is(.topbar, .shell-compact-bar) .shell-topbar-leading .shell-mobile-more-link {
+    display: inline-flex !important; visibility: visible !important;
+  }
+  .content.content > :is(.topbar, .shell-compact-bar) .shell-topbar-leading__actions { display: none !important; }
+  .content.content > :is(.topbar, .shell-compact-bar) .shell-mobile-relocated-action {
+    display: inline-flex !important; align-items: center; flex-shrink: 0;
+  }
+  .content.content > :is(.topbar, .shell-compact-bar) .shell-mobile-relocated-action .adviser-header-link {
+    display: inline-flex !important; width: 36px !important; min-width: 36px !important;
+  }
+  .content.content .shell-mobile-subheader:has(:is(.recurring-tabs--mobile, .investments-tabs--mobile)) {
+    height: auto !important; max-height: none !important; overflow: visible !important;
+  }
+  .content.content .shell-mobile-subheader .clover-tabs.clover-tabs:is(.recurring-tabs--mobile, .investments-tabs--mobile) {
+    display: flex !important; flex-flow: row wrap !important;
+    height: auto !important; max-height: none !important; overflow: visible !important;
+  }
+  .content.content .shell-mobile-subheader .clover-tabs.clover-tabs:is(.recurring-tabs--mobile, .investments-tabs--mobile) > :is(button, .animated-tabs__tab) {
+    flex: 1 1 30% !important; min-width: 0 !important; padding: 8px 2px !important;
+  }
+  .content.content .shell-mobile-subheader .split-bill-tabs.clover-tabs {
+    display: flex !important; flex-flow: row nowrap !important; width: 100% !important;
+  }
+  .content.content .shell-mobile-subheader .split-bill-tabs.clover-tabs > .animated-tabs__tab {
+    flex: 1 1 0 !important; min-width: 0 !important; padding: 8px 2px !important; justify-content: center !important;
+  }
+  .content.content > :is(.topbar, .shell-compact-bar) :is(.investments-page__add-button, .split-bill-action-button--add) {
+    width: 40px !important; height: 40px !important; min-width: 40px !important; min-height: 40px !important;
+    max-width: 40px !important; max-height: 40px !important; flex: 0 0 40px !important;
+    padding: 0 !important; aspect-ratio: 1; border-radius: 50% !important;
+  }
 }
