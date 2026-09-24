@@ -1,3 +1,4 @@
+import { connectedBankQuestions } from "@/lib/help-connected-banks";
 import type { HelpArticle, HelpSection } from "@/lib/help-center";
 
 const article = (
@@ -51,6 +52,24 @@ export const currentProductHelpSections: HelpSection[] = [
       "The active Profile receives new imports and manual entries.",
     ],
     articles: [
+      article(
+        "connect-and-manage-bank-accounts",
+        "Connect and manage bank accounts",
+        "Connect supported banks, understand your plan allowance, and review synced records.",
+        "Learn how connected bank accounts work in Clover, including Finverse, Free, Plus and Pro limits, syncing, duplicates, and disconnecting.",
+        ["connected bank accounts", "bank linking", "Finverse", "bank sync", "disconnect bank", "linked bank limit"],
+        [
+          "Select the Profile where you want the connected accounts and transactions to appear.",
+          "Open Connect your bank and choose a supported bank. Complete the authorization through Finverse.",
+          "Select accounts if prompted, stay within your plan allowance, and review the retrieved records.",
+        ],
+        connectedBankQuestions,
+        [
+          { label: "Open Accounts", href: "/accounts", description: "View accounts and available bank connections." },
+          { label: "Compare plans", href: "/pricing", description: "Check connected-bank and financial-account allowances." },
+          { label: "Contact support", href: "/contact-us", description: "Get help with a bank connection." },
+        ]
+      ),
       article(
         "profiles-and-your-clover-account",
         "Profiles and your Clover account",

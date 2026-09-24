@@ -1,3 +1,4 @@
+import { connectedBankAllowanceAnswer } from "@/lib/help-connected-banks";
 import { currentProductHelpSections } from "@/lib/help-center-current";
 
 export type HelpQuestion = {
@@ -1319,7 +1320,7 @@ export const helpSections: HelpSection[] = [
           {
             question: "What is the difference between Free, Plus and Pro in Clover?",
             answer:
-              "Free is best for trying the product or managing a smaller setup, while Plus unlocks more room for accounts, uploads, deeper analysis, and investment tools.",
+              `Free supports manual accounts and file uploads. Plus and Pro add bank connections and higher allowances for managing your finances. ${connectedBankAllowanceAnswer}`,
           },
           {
             question: "How much does Clover Plus cost?",
@@ -1329,7 +1330,7 @@ export const helpSections: HelpSection[] = [
           {
             question: "What is included in the Free plan?",
             answer:
-              "Free is designed for lighter use while you explore Clover. It still lets you try the core workflow and see how the app works for your finances.",
+              "Free supports manual accounts and file uploads, with up to 10 financial accounts. It does not include connected bank accounts. Upgrade to Plus or Pro to connect a supported bank.",
           },
         ],
         [
@@ -1391,7 +1392,7 @@ export const helpSections: HelpSection[] = [
           {
             question: "What does Plus unlock?",
             answer:
-              "Plus gives you more headroom for accounts, uploads, transactions, the deeper reports and goals features that benefit from a fuller data set, and investment tools for a more complete view of your finances.",
+              "Plus includes 2 connected bank accounts across your Profiles, along with higher allowances for financial accounts, AI usage, budgets and goals. Connected accounts also count toward your overall financial-account allowance.",
           },
         ],
         [
@@ -1438,12 +1439,12 @@ export const helpSections: HelpSection[] = [
       {
         question: "What is included in the Free plan?",
         answer:
-          "Free is designed for lighter use while you explore Clover. It still lets you try the core workflow and see how the app works for your finances.",
+          "Free supports manual accounts and file uploads, with up to 10 financial accounts. It does not include connected bank accounts. Upgrade to Plus or Pro to connect a supported bank.",
       },
       {
         question: "What does Plus unlock?",
         answer:
-          "Plus gives you more headroom for accounts, uploads, transactions, the deeper reports and goals features that benefit from a fuller data set, and investment tools for a more complete view of your finances.",
+          "Plus includes 2 connected bank accounts across your Profiles, along with higher allowances for financial accounts, AI usage, budgets and goals. Connected accounts also count toward your overall financial-account allowance.",
       },
       {
         question: "How much does Clover Plus cost?",
@@ -1458,7 +1459,7 @@ export const helpSections: HelpSection[] = [
       {
         question: "What is the difference between Free, Plus and Pro in Clover?",
         answer:
-          "Free is best for trying the product or managing a smaller setup, while Plus unlocks more room for accounts, uploads, deeper analysis, and investment tools.",
+          `Free supports manual accounts and file uploads. Plus and Pro add bank connections and higher allowances for managing your finances. ${connectedBankAllowanceAnswer}`,
       },
       {
         question: "How do I upgrade my Clover plan?",
