@@ -1,19 +1,16 @@
 "use client";
 
+import { useSocialProviders } from "@/components/use-social-providers";
+import type { SocialProvider } from "@/lib/social-providers";
 import { useState } from "react";
 import { useReverification, useUser } from "@clerk/nextjs";
 
-const providers = [
-  { label: "Google", provider: "google", strategy: "oauth_google" },
-] as const;
-
-// Use explicit connection actions in hosted builds so Clerk's provider picker
-// cannot expose Apple while the development instance still has it enabled.
 export function AvailableSocialConnections() {
   const { isLoaded, user } = useUser();
+  const providers = useSocialProviders();
   const [busy, setBusy] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
-  const connect = useReverification(async (provider: typeof providers[number]) => {
+  const connect = useReverification(async (provider: SocialProvider) => {
     if (!user) throw new Error("Sign in before connecting an account.");
     const existing = user.externalAccounts.find((account) => account.provider === provider.provider);
     const redirectUrl = new URL("/settings?section=account", window.location.origin).href;
@@ -22,7 +19,7 @@ export function AvailableSocialConnections() {
       : user.createExternalAccount({ strategy: provider.strategy, redirectUrl });
   });
 
-  async function handleConnect(provider: typeof providers[number]) {
+  async function handleConnect(provider: SocialProvider) {
     setBusy(provider.provider);
     setMessage(null);
     try {
@@ -44,7 +41,7 @@ export function AvailableSocialConnections() {
 
   return (
     <div>
-      <p className="settings-helper">Connect Google to this Clover account.</p>
+      <p className="settings-helper">Connect a sign-in method to this Clover account.</p>
       <div className="settings-account-form__actions">
         {providers.map((provider) => {
           const connected = user?.externalAccounts.some((account) =>

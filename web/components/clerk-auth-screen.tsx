@@ -4,6 +4,8 @@ import Link from "next/link";
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth, useSignIn, useSignUp } from "@clerk/nextjs";
+import { useSocialProviders } from "@/components/use-social-providers";
+import type { SocialProvider } from "@/lib/social-providers";
 import { PasswordIcon } from "@/components/password-icon";
 import { CloverRouteLoadingScreen } from "@/components/clover-route-loading-screen";
 import {
@@ -18,20 +20,8 @@ type ClerkAuthScreenProps = {
   completeRedirectUrl?: string;
 };
 
-type SocialStrategy = "oauth_google";
+type SocialStrategy = SocialProvider["strategy"];
 type SecondFactorStrategy = "totp" | "phone_code" | "email_code" | "backup_code";
-
-const socialProviders: Array<{
-  label: string;
-  strategy: SocialStrategy;
-  icon: "google";
-}> = [
-  {
-    label: "Google",
-    strategy: "oauth_google",
-    icon: "google",
-  },
-];
 
 const callbackUrl = "/sso-callback";
 
@@ -80,7 +70,7 @@ function getSignInErrorMessage(error: unknown, context: "password" | "verificati
   }
 
   if (code.includes("strategy_for_user_invalid") || code.includes("password_not_set")) {
-    return "This account may use Google sign-in instead of a password. Try the same method you used when creating it.";
+    return "This account may use a connected sign-in provider instead of a password. Try the same method you used when creating it.";
   }
 
   if (code.includes("verification") || code.includes("code_incorrect") || code.includes("code_expired")) {
@@ -175,7 +165,14 @@ function GoogleIcon() {
   );
 }
 
-function SocialIcon({ provider: _provider }: { provider: "google" }) {
+function SocialIcon({ provider }: { provider: SocialProvider["provider"] }) {
+  if (provider === "apple") {
+    return (
+      <svg viewBox="0 0 24 24" aria-hidden="true" className="clover-auth-button__icon" fill="currentColor">
+        <path d="M17.05 12.54c.03 3.23 2.83 4.3 2.86 4.32-.02.08-.45 1.54-1.48 3.05-.9 1.3-1.84 2.61-3.31 2.64-1.44.03-1.91-.86-3.56-.86-1.64 0-2.16.83-3.53.89-1.42.05-2.5-1.42-3.4-2.72-1.85-2.67-3.26-7.55-1.36-10.84a5.27 5.27 0 0 1 4.46-2.71c1.39-.03 2.7.94 3.55.94.85 0 2.45-1.16 4.13-.99.7.03 2.67.28 3.94 2.14-.1.06-2.35 1.37-2.3 4.14ZM14.33 4.46c.75-.91 1.26-2.18 1.12-3.46-1.08.04-2.39.72-3.16 1.63-.69.8-1.3 2.09-1.14 3.32 1.2.1 2.43-.61 3.18-1.49Z" />
+      </svg>
+    );
+  }
   return <GoogleIcon />;
 }
 
@@ -198,6 +195,7 @@ export function ClerkAuthScreen({ enabled, mode, completeRedirectUrl = "/continu
 
 function ClerkAuthScreenInner({ mode, completeRedirectUrl }: { mode: "sign-in" | "sign-up"; completeRedirectUrl: string }) {
   const router = useRouter();
+  const socialProviders = useSocialProviders();
   const auth = useAuth();
   const signInState = useSignIn();
   const signUpState = useSignUp();
@@ -346,7 +344,7 @@ function ClerkAuthScreenInner({ mode, completeRedirectUrl }: { mode: "sign-in" |
           factors.find((candidate) => candidate.strategy === "backup_code");
 
         if (!factor) {
-          setError("This account needs an additional verification method that Clover cannot show yet. Please use Google sign-in.");
+          setError("This account needs an additional verification method that Clover cannot show yet. Please use a connected sign-in provider.");
           return;
         }
 
@@ -371,7 +369,7 @@ function ClerkAuthScreenInner({ mode, completeRedirectUrl }: { mode: "sign-in" |
       if (response.status === "needs_first_factor") {
         const strategies = (response.supportedFirstFactors ?? []).map((factor) => factor.strategy);
         if (!strategies.includes("password")) {
-          setError("This account does not use a password. Sign in with Google below.");
+          setError("This account does not use a password. Use the sign-in method you connected to this account.");
           return;
         }
       }
@@ -1125,7 +1123,7 @@ function ClerkAuthScreenInner({ mode, completeRedirectUrl }: { mode: "sign-in" |
                   void handleSocialLogin(provider.strategy);
                 }}
               >
-                <SocialIcon provider={provider.icon} />
+                <SocialIcon provider={provider.provider} />
                 <span>{socialBusy === provider.strategy ? "Connecting..." : provider.label}</span>
               </button>
             ))}
