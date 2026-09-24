@@ -2002,6 +2002,8 @@ const parseStructuredWorkbookWorksheet = (
   context: ImportParseContext
 ): ParsedImportRow[] => {
   const worksheetText = serializeStructuredDelimitedRows(worksheet.rows, ",");
+  const investmentSummaryRows = parseInvestmentSummary(worksheetText, context);
+  if (investmentSummaryRows) return investmentSummaryRows;
   const worksheetFileName = `${worksheet.sheetName}.csv`;
   const netWorthRows = parseNetWorthSnapshotCsv(worksheetText, worksheetFileName, "text/csv");
   if (netWorthRows) return netWorthRows;
@@ -3246,6 +3248,77 @@ const buildGenericScreenshotAccountRows = (
     });
   }
 
+  return rows;
+};
+
+// A holdings inventory is a set of dated balances, never spending. Require
+// explicit column evidence before interpreting an OCR table this way.
+const parseInvestmentSummary = (
+  text: string,
+  context: ImportParseContext = {}
+): ParsedImportRow[] | null => {
+  const lines = text.split(/\r?\n/).map(line => line.trim()).filter(Boolean);
+  const headerIndex = lines.findIndex(line =>
+    /\binvestment\b/i.test(line) && /\bplatform\b/i.test(line) &&
+    /\bmarket\s+value\b/i.test(line) && /\bvaluation\s+date\b/i.test(line)
+  );
+  if (headerIndex < 0) return null;
+  const header = lines[headerIndex]!;
+  const delimiter = header.includes('\t') ? '\t' : header.includes(',') ? ',' : null;
+  if (!delimiter && !/^investment\s+platform\s+contrib(?:ution)?\s*\/\s*month\s+units\s*\/\s*shares\s+market\s+value\s+valuation\s+date$/i.test(header)) {
+    throw new Error('Clover could not identify the investment summary column order safely. Upload the original spreadsheet. Nothing was added.');
+  }
+  const table = delimiter ? parseDelimitedRows(lines.slice(headerIndex).join('\n'), delimiter) : null;
+  const headers = table?.[0]?.map(normalizeStructuredHeader);
+  const valueFor = (cells: string[], pattern: RegExp) => cells[headers?.findIndex(h => pattern.test(h)) ?? -1]?.trim() ?? '';
+  const rows: ParsedImportRow[] = [];
+  const data = table ? table.slice(1) : lines.slice(headerIndex + 1).map(line => [line]);
+  for (const [index, cells] of data.entries()) {
+    const sourceText = cells.join(delimiter ?? ' ');
+    if (!sourceText.trim() || /^(?:grand\s+)?(?:total|subtotal)\b/i.test(sourceText)) continue;
+    let name: string, platform: string, contribution: string, units: string, value: string, date: string;
+    if (table) {
+      name = valueFor(cells, /^investment$/);
+      platform = valueFor(cells, /^platform$/);
+      contribution = valueFor(cells, /^(?:contrib|contribution)/);
+      units = valueFor(cells, /^(?:units|shares)/);
+      value = valueFor(cells, /^market_value$/);
+      date = valueFor(cells, /^valuation_date$/);
+    } else {
+      // OCR loses cell boundaries. Only recover platform boundaries with
+      // explicit provider evidence; unknown layouts must fail closed.
+      const match = sourceText.match(/^(.*?)\s+(BPI\s+Invest|GFunds|Ayala)\s+([\d,]+(?:\.\d+)?|-)\s+([\d,]+(?:\.\d+)?|-)\s+([\d,]+(?:\.\d{2})?)\s+(\d{1,2}\/\d{1,2}\/\d{4}|\d{4}-\d{2}-\d{2})$/i);
+      if (!match) throw new Error('Clover could not read every investment summary row safely. Upload the original spreadsheet with Investment, Platform, Market Value and Valuation Date columns. Nothing was added.');
+      [, name, platform, contribution, units, value, date] = match as [string, string, string, string, string, string, string];
+    }
+    const marketValue = parseMoney(value);
+    const quantity = units === '-' || !units ? null : parseMoney(units);
+    const parsedDate = parseStructuredDate(date, 'PH', 'month_first');
+    if (!name || !platform || marketValue === null || marketValue < 0 || !parsedDate || (units !== '-' && units && quantity === null)) {
+      throw new Error('Clover could not read an investment balance or valuation date safely. Check the summary columns and try again. Nothing was added.');
+    }
+    const institution = /^BPI\s+Invest$/i.test(platform) ? 'BPI' : /^GFunds$/i.test(platform) ? 'GFunds' : platform;
+    const currency = context.currency ?? detectCurrencyFromText(header) ?? null;
+    rows.push({
+      date: parsedDate.toISOString().slice(0, 10), amount: '0.00', currency,
+      accountName: name, institution, merchantRaw: name, merchantClean: name,
+      description: `${name} investment snapshot`, type: 'transfer', categoryName: 'Investments',
+      confidence: 65, parserConfidence: 95, categoryConfidence: 65,
+      rawPayload: {
+        kind: 'account_snapshot_marker', source: 'investment_summary',
+        documentType: 'account_detail', accountType: 'investment', accountName: name,
+        institution, assetName: name, investmentName: name,
+        investmentSubtype: /\bfund\b/i.test(name) ? 'mutual_fund' : 'other',
+        balance: marketValue, statementEndingBalance: marketValue, marketValue,
+        ...(quantity !== null ? { quantity } : {}),
+        monthlyContribution: parseMoney(contribution),
+        sourceText, sourceRowIndex: headerIndex + index + 2, sourceHeaders: header,
+        reviewRequired: true,
+        reviewReasons: ['Confirm the investment name, currency, units and market value from this summary. Monthly contributions are not transactions or cost basis.'],
+      },
+    });
+  }
+  if (!rows.length) throw new Error('No investment balances were readable in this summary. Nothing was added.');
   return rows;
 };
 
@@ -24159,6 +24232,8 @@ export const parseImportTextGenericOnly = (
   if (structuredWorkbookRows) {
     return structuredWorkbookRows;
   }
+  const investmentSummaryRows = parseInvestmentSummary(text, context);
+  if (investmentSummaryRows) return investmentSummaryRows;
   const netWorthSnapshotRows = parseNetWorthSnapshotCsv(text, fileName, fileType);
   if (netWorthSnapshotRows) {
     return netWorthSnapshotRows;
@@ -25455,6 +25530,8 @@ const filterSharedScreenshotParsedRows = (
 };
 
 export const detectStatementMetadata = (text: string, fileName = ""): DetectedStatementMetadata | null => {
+  const investmentSummaryRows = text.includes("__CLOVER_WORKSHEET__") ? null : parseInvestmentSummary(text);
+  if (investmentSummaryRows) return { institution: null, accountName: null, accountNumber: null, accountType: "investment", currency: null, openingBalance: null, endingBalance: null, startDate: null, endDate: null, confidence: 65 };
   // Recognized tabular exports have explicit columns. Their headings and row
   // descriptions are not screenshot controls or evidence of a bank identity.
   const structuredRows = parseStructuredTransactionCsv(text, fileName, "");
@@ -25909,7 +25986,7 @@ const parseHeuristicLines = (text: string, institution?: string | null, fileName
         line.match(/\b\d{1,2}[/-][A-Za-z]{3}[/-]\d{2,4}\b/) ||
         line.match(/\b\d{1,2}[/-]\d{1,2}[/-]\d{2,4}\b/) ||
         line.match(/\b\d{1,2}[A-Za-z]{3}\d{4}\b/);
-      const amountMatch = line.match(/[-+]?(?:PHP|USD|EUR|GBP|SGD|AED|AUD|CAD|JPY|HKD|CNY|THB|INR|KRW|BRL|MXN|ZAR|RUB|TRY|PLN|SEK|NOK|DKK|ILS|VND|IDR|MYR|TWD|BDT|SAR|QAR|₱|£|€|¥|₹|฿|₩|\$)?\s?\d[\d,]*(?:\.\d{2})?/g);
+      const amountMatch = line.replace(dateMatch?.[0] ?? "", " ").match(/[-+]?(?:PHP|USD|EUR|GBP|SGD|AED|AUD|CAD|JPY|HKD|CNY|THB|INR|KRW|BRL|MXN|ZAR|RUB|TRY|PLN|SEK|NOK|DKK|ILS|VND|IDR|MYR|TWD|BDT|SAR|QAR|₱|£|€|¥|₹|฿|₩|\$)?\s?\d[\d,]*(?:\.\d{2})?/g);
       const amount = amountMatch?.at(-1) ?? "";
       const merchant = line
         .replace(dateMatch?.[0] ?? "", "")
@@ -25931,7 +26008,7 @@ const parseHeuristicLines = (text: string, institution?: string | null, fileName
         }
       }
 
-      if (!dateMatch && !amount) {
+      if (!amount) {
         return null;
       }
 
@@ -26406,6 +26483,8 @@ export const parseImportText = (
   if (structuredWorkbookRows) {
     return structuredWorkbookRows;
   }
+  const investmentSummaryRows = parseInvestmentSummary(text, context);
+  if (investmentSummaryRows) return investmentSummaryRows;
   const netWorthSnapshotRows = parseNetWorthSnapshotCsv(text, fileName, fileType);
   if (netWorthSnapshotRows) {
     return netWorthSnapshotRows;

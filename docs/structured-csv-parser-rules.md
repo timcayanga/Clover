@@ -123,3 +123,9 @@ Generic headings such as Type and Currency are not evidence of Wise. Use explici
 row/preamble account identity, keep absent account numbers absent, and leave shared
 file identity unset when rows identify different accounts. Preserve each row's
 Account Name through normalization; do not replace it with a guessed institution.
+
+## Investment summaries
+
+- Recognize the Investment / Platform / Contrib/ Month / Units/ Shares / Market Value / Valuation Date layout in Excel workbooks and delimited exports as investment snapshots.
+- Keep platforms and funds separate, preserve units and market values, and never turn recurring contribution amounts or valuation dates into transactions or cost basis.
+- Apply the same ambiguity and provenance rules as screenshot investment summaries in `docs/generic-screenshot-parser-rules.md`.

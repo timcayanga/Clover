@@ -472,6 +472,7 @@ const inferStructuredDocumentImportModeFromParsedRows = (
           : null;
       return (
         rawPayload?.source === "net_worth_snapshot_csv" ||
+        rawPayload?.source === "investment_summary" ||
         rawPayload?.source === "account_snapshot_csv" ||
         rawPayload?.source === "wide_account_snapshot_csv"
       );
@@ -4884,6 +4885,7 @@ const parsedRowsAreAccountSnapshotInventory = (rows: Array<Record<string, unknow
     return (
       rawPayload?.kind === "account_snapshot_marker" &&
       (rawPayload.source === "net_worth_snapshot_csv" ||
+        rawPayload.source === "investment_summary" ||
         rawPayload.source === "account_snapshot_csv" ||
         rawPayload.source === "wide_account_snapshot_csv")
     );
@@ -11445,9 +11447,12 @@ export const processImportFileText = async (
     parsedRows.every((row) => isSnapshotOnlyParsedRow(row));
   const shouldPreferLocalSnapshotOnlyStatementParse =
     parsedRowsAreSnapshotOnlyStatement && (openAiParsed?.rows.length ?? 0) === 0;
+  const hasDeterministicInvestmentSummary = parsedRows.length > 0 &&
+    parsedRows.every(row => (row.rawPayload as Record<string, unknown> | null)?.source === "investment_summary");
   const shouldAdoptOpenAiStatementParse =
     importMode !== "statement" ||
-    (!hasLocalDeterministicPdaxPortfolioSnapshot &&
+    (!hasDeterministicInvestmentSummary &&
+      !hasLocalDeterministicPdaxPortfolioSnapshot &&
       !shouldPreferLocalSnapshotOnlyStatementParse &&
       !hasDeterministicBpiMobileScreenshotRows &&
       (!deterministicStatementParseLooksStrong || openAiStatementRowsAreCompetitive));
@@ -14565,6 +14570,7 @@ export const confirmImportFile = async (
             ? (payload as Record<string, unknown>).source
             : null;
         return (
+          source === "investment_summary" ||
           source === "structured_transaction_csv" ||
           source === "account_snapshot_csv" ||
           source === "wide_account_snapshot_csv" ||
@@ -15464,7 +15470,7 @@ export const confirmImportFile = async (
   const shouldPersistNetWorthSnapshotGroupBalances =
     multiAccountImport && parsedRows.every((row) => (row.rawPayload as Record<string, unknown> | null)?.source === "net_worth_snapshot_csv");
   const shouldPersistAccountSnapshotCsvGroupBalances =
-    multiAccountImport && parsedRows.every((row) => (row.rawPayload as Record<string, unknown> | null)?.source === "account_snapshot_csv");
+    multiAccountImport && parsedRows.every((row) => (row.rawPayload as Record<string, unknown> | null)?.source === "account_snapshot_csv" || (row.rawPayload as Record<string, unknown> | null)?.source === "investment_summary");
   const shouldPersistWideAccountSnapshotCsvGroupBalances =
     multiAccountImport &&
     parsedRows.every((row) => (row.rawPayload as Record<string, unknown> | null)?.source === "wide_account_snapshot_csv");

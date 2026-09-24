@@ -75,3 +75,13 @@ These rules apply when an uploaded screenshot does not match a trained instituti
 A transaction-history screen with multiple signed amounts represents separate events, not receipt line items. Keep date/time headings out of descriptions and retain repeated same-day purchases when timestamps differ. Generic layout rows remain pending review with raw source evidence.
 
 Unsigned activity amounts with explicit direction labels (for example Expense paid PHP 25.00) and multiple full dates are transaction history, not a single receipt. Support a date and merchant on the same line; retain review-required status for generic fallback rows.
+
+### Investment summary tables
+
+- A table headed Investment, Platform, Contrib/ Month, Units/ Shares, Market Value and Valuation Date is a holdings inventory, not a transaction ledger.
+- Preserve each named investment and its own platform. BPI Invest maps to BPI; GFunds funds stay separate. Do not assign every row to the last recognized provider.
+- Use Market Value as the snapshot balance, Units/ Shares as quantity when present, and Valuation Date as the snapshot date. Monthly contributions are neither expenses nor total cost basis.
+- Keep uncertain currency and classification review-required. A COOP entry without units must not acquire invented shares.
+- Require every non-total row to parse safely; incomplete or unfamiliar OCR column layouts fail closed with an actionable message.
+- Generic amount extraction must remove the date before looking for money, so a trailing year cannot become an amount.
+- Deterministic investment inventories remain separate account groups during confirmation and cannot be replaced by an AI-generated expense ledger.
