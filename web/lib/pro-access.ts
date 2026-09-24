@@ -41,7 +41,7 @@ export async function refreshProAccess(userId: string) {
     select: {
       clerkUserId: true,
       email: true,
-      storeAccess: { select: { expiresAt: true, renewing: true } },
+      storeAccess: { select: { expiresAt: true, renewing: true, productId: true } },
       planTier: true,
       planTierLocked: true,
       billingSubscription: {

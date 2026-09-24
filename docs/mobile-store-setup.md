@@ -1,73 +1,76 @@
 # Clover iOS and Android store setup
 
-Expo account: `cloverph`. Organization/project owner: `clover-innovations`. Mac login verified and EAS project created: `@clover-innovations/clover-mobile`, project ID `742a3fe2-1cb2-4d71-8ed7-bc7e2e89b0ff`. Local Expo config contains this project link.
+Updated September 24, 2026. Setup status below is based on the user's confirmations; live purchase tests are still pending.
 
-Status updated September 14, 2026: the user has created the Apple App ID and App Store Connect record, and a Google Play draft for **Clover: Personal Finance**, under **Clover Innovations OPC**. Google developer account type: **Organization**. Both app identifiers are `ph.clover.app`. Apple Team ID: `6XX38GYURG`; App Store Connect numeric app ID: `6811711508`. Subscription products remain pending. The first signed iOS build completed and the user confirmed delivery through Transporter. Replacement builds are being prepared with the September 14 Figma refresh and dark app icon. Public release and real subscription testing remain pending.
+## Apps and build environments
 
-`mobile/eas.json` now prepares a `store-test` profile for TestFlight and Google Play internal testing, pointing at staging. Development builds retain the preview identifier and scheme. Store-test builds use the `clover` scheme; configure matching Clerk callbacks before authentication testing.
+- Expo: `@clover-innovations/clover-mobile`, project `742a3fe2-1cb2-4d71-8ed7-bc7e2e89b0ff`; username `cloverph`.
+- Apple and Google app identifiers: `ph.clover.app`. App: **Clover: Personal Finance**, organization **Clover Innovations OPC**.
+- Apple Team ID `6XX38GYURG`; App Store Connect app ID `6811711508`. TestFlight access works.
+- Google organization developer account and internal-testing setup exist.
+- `mobile/eas.json` profile `store-test` uses EAS Preview, staging API, registered store identifiers and `clover` scheme. These builds must not be promoted to public production.
+- No replacement signed build is created by this integration change. Compile/bundle checks do not test store purchases.
 
-Next: sign in to Expo/EAS and link this app to a project, configure its preview public Clerk key, set up Apple distribution signing and the Android upload keystore, and connect submission credentials privately. The first Android AAB must be uploaded manually in Play Console before automated API submissions. Then, from `mobile/`, use `eas build --profile store-test --platform ios` (or `android`) and submit the selected build with `eas submit --profile store-test --platform ios` (or `android`). Store-test is staging-only and must not be promoted to public production.
+## Configured RevenueCat catalog
 
-The subscription integration is prepared and sales remain disabled. Live purchase, restore, renewal and refund tests remain blocked on product/provider setup.
+The user uses one RevenueCat **Clover** project with Apple, Google, Paddle Sandbox and Paddle Live apps. Native verification accepts only Apple/Google subscriptions whose sandbox flag matches Clover's deployment and whose owner matches the signed-in Clerk ID. Paddle billing remains handled separately.
 
-## Prepared integration
+| Tier | Entitlement | Custom package | Apple product | Google product/base plan |
+|---|---|---|---|---|
+| Pro | `clover_pro` | `pro_monthly` | `clover.pro.monthly` | `clover.pro:monthly` |
+| Pro | `clover_pro` | `pro_annual` | `clover.pro.annual` | `clover.pro:annual` |
+| Plus | `clover_plus` | `plus_monthly` | `clover.plus.monthly` | `clover.plus:monthly` |
+| Plus | `clover_plus` | `plus_annual` | `clover.plus.annual` | `clover.plus:annual` |
 
-- Native RevenueCat adapter: authenticated Clerk ID, current offering, localized price, purchase, explicit restore and store management.
-- `GET/POST /api/mobile/v1/billing/store`: authenticated status and server verification. Clients cannot submit a Pro flag, expiry or another identity.
-- `/api/billing/revenuecat/webhook`: secret authorization, current-state refetch, duplicate/out-of-order protection. `StoreAccess` stays separate from web billing and Admin grants.
-- Sandbox cannot grant production access. Unsupported products, expired/refunded purchases, malformed responses and ownership mismatch do not grant access.
+All four packages belong to **`clover_membership`**. The app selects that offering explicitly. Keep the old `default` Test Store offering unchanged; it cannot grant native access. Shared catalog: `shared/store-catalog.ts`. The persisted tier `pro` means Plus; `premium` means current Pro. Verified native product IDs determine this mapping without a data migration.
 
-## Create apps and products
+Plus has eight attached products across Apple, Google and the two Paddle apps. Pro has ten including two legacy Test Store products. Product membership alone never grants access: Clover verifies entitlement, exact product, store, environment, ownership and expiry. Restore behavior: **Keep with original App User ID**.
 
-1. Registered identifiers: `ph.clover.app` for both stores. The separate development identifier remains `ph.clover.preview`.
-2. Apple app registration is complete. Configure required capabilities, complete outstanding agreements/tax/banking, and add sandbox testers.
-3. Google Play draft creation is complete. Configure Play App Signing, complete outstanding app requirements, upload a signed internal-test AAB, and add license/internal testers.
-4. Build with `CLOVER_IOS_BUNDLE_ID` and `CLOVER_ANDROID_PACKAGE_ID` matching the registered IDs. Update Clerk native redirects for that build. Keep staging identifiers/configuration separate.
-5. Apple: create one Clover Pro subscription group with monthly and annual auto-renewing products. Proposed IDs: `clover.pro.monthly` and `clover.pro.annual` (not created).
-6. Google: create Clover Pro with monthly/annual auto-renewing base plans. Record the exact product identifiers RevenueCat returns, including base-plan suffixes where applicable.
-7. Configure **advertised regional pricing** in both consoles. Native uses the store's local price; it does not guess exchange-rate conversions. Complete subscription descriptions, review screenshots, availability and disclosures.
+## Provider setup status
 
-## RevenueCat and environment setup
+- Apple: Clover Membership subscription group with Pro at level 1 and Plus at level 2; four products imported into RevenueCat. Review screenshots/remaining metadata and submission are pending. App Store Connect and In-App Purchase credentials were entered privately.
+- Apple production and sandbox server-notification URLs point to RevenueCat. Notification version and receipt remain unverified.
+- Google: Plus and Pro monthly/annual base plans created. Activation has not yet been confirmed. Credentials validated in RevenueCat.
+- Google RTDN topic `projects/clover-493710/topics/Play-Store-Notifications` connected; user confirmed a test notification received by RevenueCat.
+- Regional store pricing configured: Plus US$7.99/month or US$59.99/year, Philippines ₱169/month or ₱1,259/year; Pro US$12.99/month or US$99.99/year, Philippines ₱349/month or ₱2,999/year. Store checkout supplies final localized prices.
 
-Use separate staging/production RevenueCat projects, as prepared in Clover's existing architecture. Connect Apple/Google credentials privately in its dashboard. Never put private keys or service-account JSON in the app, repository or chat.
+## Secrets and webhooks
 
-Import store products; create a Pro entitlement and a current offering containing monthly/annual packages. Set restore behavior to **Keep with original App User ID**. Do not enable automatic transfer between Clover accounts. Family sharing and anonymous-purchase migration need a separately tested policy.
-
-Server environment, matching the deployment:
+Vercel Preview, scoped to staging:
 
 ```
 CLOVER_NATIVE_PURCHASES_ENABLED=false
-REVENUECAT_SECRET_API_KEY=<server-only secret key>
-REVENUECAT_WEBHOOK_SECRET=<unique random secret>
-REVENUECAT_ENTITLEMENT_ID=<actual Pro entitlement identifier>
-CLOVER_STORE_PRODUCT_IDS=<comma-separated exact product identifiers>
+REVENUECAT_SECRET_API_KEY=<RevenueCat V1 server secret>
+REVENUECAT_WEBHOOK_SECRET=<shared random secret, without Bearer prefix>
 ```
 
-Native build environment, public SDK keys only:
+The catalog is explicit in code. Old `REVENUECAT_ENTITLEMENT_ID` and `CLOVER_STORE_PRODUCT_IDS` values no longer determine tier mappings.
+
+Two RevenueCat webhooks, each Sandbox only / All events:
+
+- iOS app: `https://staging.clover.ph/api/billing/revenuecat/webhook?source=ios`
+- Android app: `https://staging.clover.ph/api/billing/revenuecat/webhook?source=android`
+
+Both use `Authorization: Bearer <REVENUECAT_WEBHOOK_SECRET>`. The source query differentiates dashboard URLs; it does not authorize a request. Authenticated TEST events work while purchases are disabled. Real events return 503 while disabled so they cannot silently disappear. Once enabled, the server refetches current customer state; webhook claims and SDK CustomerInfo cannot grant access directly. Store access stays separate from web billing and Admin grants, with snapshot ordering protection.
+
+EAS Preview public keys added by user:
 
 ```
-EXPO_PUBLIC_API_URL=https://staging.clover.ph
-EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY=<public key from the matching Clerk instance>
-EXPO_PUBLIC_REVENUECAT_IOS_KEY=<appl_... public SDK key>
-EXPO_PUBLIC_REVENUECAT_ANDROID_KEY=<goog_... public SDK key>
-CLOVER_IOS_BUNDLE_ID=<registered bundle ID>
-CLOVER_ANDROID_PACKAGE_ID=<registered package ID>
+EXPO_PUBLIC_REVENUECAT_IOS_KEY=<appl_...>
+EXPO_PUBLIC_REVENUECAT_ANDROID_KEY=<goog_...>
 ```
 
-Webhook URL: the matching deployment's `/api/billing/revenuecat/webhook`, authorization `Bearer <REVENUECAT_WEBHOOK_SECRET>`. Configure store server notifications/Google RTDN through RevenueCat. Enable the server flag in **staging only** after verifying configuration and webhook delivery. Build a native development/TestFlight/internal-test app; Expo Go and RN-web do not prove store billing works.
+The Clerk publishable key and API URL must match staging. Never place private API keys, P8 files or service-account JSON in the native bundle or repository.
 
-## Required tests before production sales
+## Remaining before purchase tests and production
 
-Run on both installed platforms:
+1. Redeploy staging with new secret variables and integration code, then send RevenueCat TEST events from both webhooks and verify HTTP 200.
+2. Confirm Google base-plan activation, Apple product metadata and required store agreements. Capture real native paywall screenshots for Apple review.
+3. Enable native purchases in staging only when ready for controlled sandbox testing, then create/install fresh store-test builds with the Preview public keys.
+4. Test each of four packages on both platforms: localized price/period, purchase, cancel, pending approval, restore, expiry, refund, renewal, grace, network interruption and restart.
+5. Check correct Plus/Pro limits, account switching, ownership protection, sandbox isolation, webhook retries, and independent web subscription/Admin-grant preservation. Existing paid users use provider management; this change does not introduce a cross-provider upgrade checkout.
+6. Configure and validate production separately after sandbox tests pass. Production sales remain disabled.
 
-- Monthly/annual price, currency and billing interval for advertised regions.
-- Purchase success, cancellation, pending approval, network interruption and restart; uncertain outcomes must not prompt another purchase.
-- Same-account restore on another device; different Clover accounts cannot inherit the purchase.
-- Renewal, canceled-but-paid-through access, expiry, grace, billing retry, refunds and revocation.
-- Duplicate/out-of-order webhooks, provider outage and recovery.
-- Overlapping web subscription and temporary Admin grant; store events cannot revoke unrelated access. Manual plan locks retain precedence.
-- Logout/account switching, sandbox isolation, subscription management, account deletion disclosures and store review.
+Automated coverage: `npm --prefix web run qa:store-tiers` (included in the required pre-push gate); isolated DB persistence fixture: `web/scripts/store-access-fixture.ts`. Neither substitutes for installed store purchase tests.
 
-Do not enable production sales until these pass. Clover account deletion does not cancel an Apple/Google subscription; manage it through the store. This document does not create subscriptions, make purchases or deploy to production.
-
-References checked September 13, 2026: [RevenueCat Expo](https://www.revenuecat.com/docs/getting-started/installation/expo), [customer API](https://www.revenuecat.com/docs/api-v1/customers), [webhooks](https://www.revenuecat.com/docs/integrations/webhooks), [restore behavior](https://www.revenuecat.com/docs/projects/restore-behavior), [Apple server API](https://developer.apple.com/documentation/appstoreserverapi), [Google subscription lifecycle](https://developer.android.com/google/play/billing/lifecycle/subscriptions).
+References: [RevenueCat Android products](https://www.revenuecat.com/docs/getting-started/entitlements/android-products), [customer API](https://www.revenuecat.com/docs/api-v1/customers), [webhooks](https://www.revenuecat.com/docs/integrations/webhooks), [restore behavior](https://www.revenuecat.com/docs/projects/restore-behavior).

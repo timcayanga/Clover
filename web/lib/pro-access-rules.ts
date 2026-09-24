@@ -1,3 +1,4 @@
+import { storeProductTier } from "../../shared/store-catalog";
 export function addCalendarMonths(date: Date, months: number) {
   const result = new Date(date);
   const day = result.getUTCDate();
@@ -20,7 +21,7 @@ export type AccessInput = {
     interval: string | null;
     paidThrough: Date | null;
   } | null;
-  storeAccess?: { planTier?: "pro" | "premium"; expiresAt: Date | null; renewing: boolean } | null;
+  storeAccess?: { productId?: string | null; planTier?: "pro" | "premium"; expiresAt: Date | null; renewing: boolean } | null;
   grants: { startsAt: Date; endsAt: Date; revokedAt: Date | null }[];
 };
 
@@ -35,7 +36,7 @@ export function calculateProAccess(input: AccessInput, now = new Date()) {
   const renewing = (storePaid && input.storeAccess!.renewing) || subscriptionRenewing;
   const paid = storePaid || subscriptionPaid;
   const premiumPaid = (subscriptionPaid && input.subscription?.planTier === "premium") ||
-    (storePaid && input.storeAccess?.planTier === "premium");
+    (storePaid && (input.storeAccess?.planTier ?? storeProductTier(input.storeAccess?.productId)) === "premium");
   const planTier: AccessInput["planTier"] = input.stagingQaAccess ? "pro"
     : input.planTierLocked ? input.planTier
     : premiumPaid ? "premium"

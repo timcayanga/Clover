@@ -1,24 +1,26 @@
+import { STORE_OFFERING_ID, STORE_PACKAGES } from "../../shared/store-catalog";
 import { prisma } from "./prisma";
 import { getDeploymentEnvironment } from "./deployment-environment";
 import { verifiedStoreAccess } from "./store-access-rules";
 import { refreshProAccess } from "./pro-access";
 export function storeBillingConfig() {
-  const products = (process.env.CLOVER_STORE_PRODUCT_IDS ?? "")
-    .split(",")
-    .map((p) => p.trim())
-    .filter(Boolean);
-  const entitlementId = process.env.REVENUECAT_ENTITLEMENT_ID ?? "";
+  const products = STORE_PACKAGES.flatMap((p) => [p.ios, p.android]);
+  const tiers = ["premium", "pro"].map((tier) => ({
+    entitlementId: tier === "premium" ? "clover_pro" : "clover_plus",
+    products: STORE_PACKAGES.filter((p) => p.tier === tier).flatMap((p) => [p.ios, p.android]),
+  }));
   const enabled =
     process.env.CLOVER_NATIVE_PURCHASES_ENABLED === "true" &&
     Boolean(
       process.env.REVENUECAT_SECRET_API_KEY &&
-      entitlementId &&
       products.length &&
       process.env.REVENUECAT_WEBHOOK_SECRET,
     );
   return {
     enabled,
-    entitlementId,
+    entitlementId: "clover_plus", // Compatibility field for older clients; never used for verification.
+    offeringId: STORE_OFFERING_ID,
+    tiers,
     products,
     sandbox: getDeploymentEnvironment() !== "production",
   };

@@ -14,8 +14,9 @@ const now = new Date();
 const future = new Date(+now + 86400000).toISOString();
 const config = {
   appUserId: "user_storeFixture",
-  entitlementId: "pro",
-  products: ["clover.pro.monthly"],
+  entitlementId: "clover_plus",
+  products: ["clover.plus.monthly"],
+  tiers: [{ entitlementId: "clover_plus", products: ["clover.plus.monthly"] }],
   sandbox: true,
 };
 const sample = () => ({
@@ -23,7 +24,7 @@ const sample = () => ({
   subscriber: {
     original_app_user_id: config.appUserId,
     entitlements: {
-      pro: { product_identifier: config.products[0], expires_date: future },
+      clover_plus: { product_identifier: config.products[0], expires_date: future },
     },
     subscriptions: {
       [config.products[0]]: {
@@ -55,7 +56,7 @@ async function main() {
       null,
     );
     assert.equal(
-      verifiedStoreAccess(sample(), { ...config, products: [] }, now).expiresAt,
+      verifiedStoreAccess(sample(), { ...config, tiers: [] }, now).expiresAt,
       null,
     );
     assert.throws(
@@ -80,7 +81,7 @@ async function main() {
   });
   test("Expired, malformed and stale responses cannot grant Pro", () => {
     const data = sample();
-    data.subscriber.entitlements.pro.expires_date = new Date(0).toISOString();
+    data.subscriber.entitlements.clover_plus.expires_date = new Date(0).toISOString();
     assert.equal(verifiedStoreAccess(data, config, now).expiresAt, null);
     assert.throws(() => verifiedStoreAccess({ planTier: "pro" }, config, now));
     assert.throws(

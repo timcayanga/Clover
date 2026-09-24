@@ -43,7 +43,7 @@ export function SettingsPlan() {
           const verified = await session.request<StoreStatus>("billing/store", { method: "POST", body: "{}" });
           if (!active) return;
           setStatus(verified);
-          const choices = await loadStorePackages(result);
+          const choices = await loadStorePackages(verified);
           if (active) setPackages(choices);
         } else setStatus(result);
       })
@@ -73,8 +73,8 @@ export function SettingsPlan() {
       session.refresh();
       setMessage(
         (next.planTier === "pro" || next.planTier === "premium")
-          ? "Clover Plus access verified."
-          : "No active Clover Plus purchase was found for this account.",
+          ? `Clover ${PLAN_CATALOG[next.planTier].name} access verified.`
+          : "No active Clover Plus or Pro purchase was found for this account.",
       );
     } catch (e) {
       if (mounted.current && e && typeof e === "object" && "userCancelled" in e && e.userCancelled) setVerificationPending(false);

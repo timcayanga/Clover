@@ -30,8 +30,7 @@ export function verifiedStoreAccess(
   raw: unknown,
   config: {
     appUserId: string;
-    entitlementId: string;
-    products: string[];
+    tiers: { entitlementId: string; products: readonly string[] }[];
     sandbox: boolean;
   },
   now = new Date(),
@@ -44,37 +43,45 @@ export function verifiedStoreAccess(
     data.request_date_ms < now.getTime() - 10 * 60000
   )
     throw new Error("Store verification is stale.");
-  const entitlement = data.subscriber.entitlements[config.entitlementId];
-  const plan =
-    entitlement &&
-    data.subscriber.subscriptions[entitlement.product_identifier];
-  const matches =
-    entitlement &&
-    plan &&
-    config.products.includes(entitlement.product_identifier) &&
-    ["app_store", "play_store"].includes(plan.store) &&
-    plan.is_sandbox === config.sandbox;
-  const expiration =
-    matches && entitlement.expires_date && plan.expires_date
-      ? new Date(
-          Math.min(
-            +new Date(
-              entitlement.grace_period_expires_date ?? entitlement.expires_date,
+  // Catalog order is highest tier first; never combine an entitlement with a
+  // product from another tier, or accept Paddle/Test Store access as native.
+  const states = config.tiers.map((tier) => {
+    const entitlement = data.subscriber.entitlements[tier.entitlementId];
+    const plan =
+      entitlement &&
+      data.subscriber.subscriptions[entitlement.product_identifier];
+    const matches =
+      entitlement &&
+      plan &&
+      tier.products.includes(entitlement.product_identifier) &&
+      ["app_store", "play_store"].includes(plan.store) &&
+      plan.is_sandbox === config.sandbox;
+    const expiration =
+      matches && entitlement.expires_date && plan.expires_date
+        ? new Date(
+            Math.min(
+              +new Date(
+                entitlement.grace_period_expires_date ?? entitlement.expires_date,
+              ),
+              +new Date(plan.grace_period_expires_date ?? plan.expires_date),
             ),
-            +new Date(plan.grace_period_expires_date ?? plan.expires_date),
-          ),
-        )
-      : null;
-  const active = Boolean(expiration && expiration > now && !plan?.refunded_at);
-  return {
-    verifiedAt: new Date(data.request_date_ms),
-    expiresAt: active ? expiration : null,
-    store: matches ? plan.store : null,
-    productId: matches ? entitlement.product_identifier : null,
-    renewing:
-      active &&
-      !plan?.unsubscribe_detected_at &&
-      !plan?.billing_issues_detected_at,
-    sandbox: config.sandbox,
+          )
+        : null;
+    const active = Boolean(expiration && expiration > now && !plan?.refunded_at);
+    return {
+      verifiedAt: new Date(data.request_date_ms),
+      expiresAt: active ? expiration : null,
+      store: matches ? plan.store : null,
+      productId: matches ? entitlement.product_identifier : null,
+      renewing:
+        active &&
+        !plan?.unsubscribe_detected_at &&
+        !plan?.billing_issues_detected_at,
+      sandbox: config.sandbox,
+    };
+  });
+  return states.find((state) => state.expiresAt) ?? {
+    verifiedAt: new Date(data.request_date_ms), expiresAt: null,
+    store: null, productId: null, renewing: false, sandbox: config.sandbox,
   };
 }
