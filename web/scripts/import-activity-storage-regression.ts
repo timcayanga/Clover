@@ -144,7 +144,31 @@ const main = async () => {
   assert.ok(persistedRaw.length <= 35_000);
   assert.ok(dispatchedEvents.length > 0);
 
-  console.log("Import activity storage quota regression passed.");
+  assert.ok(liveSnapshot);
+  const active = { ...liveSnapshot, importFileId: "progress-upload", status: "active" as const,
+    completedFiles: 0, progress: 70, summary: null };
+  setImportActivity(active);
+  for (const progress of [90, 70, 90, 70]) {
+    setImportActivity({ ...active, surface: "background", progress });
+    assert.equal(readImportActivity()?.progress, 90);
+    assert.equal(JSON.parse(localStorage.getItem(importActivityStorageKey)!).progress, 90);
+    assert.equal(readImportActivity()?.status, "active");
+  }
+  setImportActivity({ ...active, status: "done", completedFiles: 1, progress: 100 });
+  setImportActivity({ ...active, progress: 70 });
+  assert.equal(readImportActivity()?.progress, 100);
+  assert.equal(readImportActivity()?.status, "done");
+  setImportActivity({ ...active, importFileId: "new-upload", progress: 10 });
+  assert.equal(readImportActivity()?.progress, 10);
+  setImportActivity({ ...active, workspaceId: "another-profile", progress: 30 });
+  assert.equal(readImportActivity()?.progress, 30);
+  setImportActivity({ ...active, status: "error", progress: 70, errorMessage: "Save failed" });
+  assert.equal(readImportActivity()?.status, "error");
+  setImportActivity({ ...active, progress: 10 });
+  assert.equal(readImportActivity()?.progress, 10);
+  setImportActivity({ ...active, fileTotal: 2, fileIndex: 2, progress: 50 });
+  assert.equal(readImportActivity()?.progress, 50);
+  console.log("Import activity storage quota and monotonic progress regressions passed.");
 };
 
 void main();

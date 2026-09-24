@@ -376,8 +376,24 @@ export const setImportActivity = (
     return;
   }
 
+  const previous = readImportActivity();
+  // Independent pollers and modal handoffs can deliver older milestones.
+  // Only preserve progress for the same file in the same workspace/batch.
+  const sameUpload = Boolean(
+    previous && snapshot.importFileId &&
+    previous.importFileId === snapshot.importFileId &&
+    previous.workspaceId === snapshot.workspaceId &&
+    previous.fileTotal === snapshot.fileTotal &&
+    previous.fileIndex === snapshot.fileIndex
+  );
+  if (sameUpload && previous?.status === "done" && snapshot.status === "active") return;
+  const progress = sameUpload && previous?.status === "active" && snapshot.status === "active"
+    ? Math.max(Math.min(previous.progress, 99), snapshot.progress)
+    : snapshot.progress;
+
   const nextSnapshot: ImportActivitySnapshot = {
     ...snapshot,
+    progress,
     errorCode: snapshot.errorCode ?? null,
     errorTitle: snapshot.errorTitle ?? null,
     errorNextSteps: snapshot.errorNextSteps ?? null,
