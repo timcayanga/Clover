@@ -1,8 +1,8 @@
 import { Text } from "./app-text";
 import { LinearGradient } from "expo-linear-gradient";
-import { useEffect, useState, useCallback, type ReactNode } from "react";
+import { useEffect, useState, useCallback, type ComponentProps, type ReactNode } from "react";
 import { router, useFocusEffect } from "expo-router";
-import { Platform, Pressable, View } from "react-native";
+import { Platform, Pressable, View, useWindowDimensions } from "react-native";
 import { useSession } from "./session";
 import { AppHeader, AddNavigationMark, Icon, useTheme } from "./ui";
 /** Square at normal text size, but grows rather than clipping larger text. */
@@ -93,11 +93,20 @@ export function PlanHeader({
   );
 }
 
+const tabIcons: Record<string, ComponentProps<typeof Icon>["name"]> = {
+  Overview: "apps-outline", Bills: "receipt-outline", Groups: "people-outline",
+  People: "person-outline", Payments: "card-outline", Spending: "bar-chart-outline",
+  Trends: "trending-up-outline", Insights: "sparkles-outline", Portfolio: "briefcase-outline",
+  Planner: "calendar-outline", Markets: "trending-up-outline", Analysis: "analytics-outline",
+  "Planned Payments": "calendar-outline", "Debt & Loans": "briefcase-outline",
+  "Money Owed": "swap-horizontal-outline", Installments: "list-outline",
+};
+
+/** Shared mobile-web tab treatment: four equal columns, or three then two. */
 export function PlanTabs({
   items,
   value,
   onChange,
-  compact = false,
 }: {
   compact?: boolean;
   items: string[];
@@ -105,98 +114,36 @@ export function PlanTabs({
   onChange: (value: string) => void;
 }) {
   const { colors } = useTheme();
+  const { width } = useWindowDimensions();
   return (
-    <View
-      accessibilityRole="tablist"
-      style={{
-        flexDirection: "row",
-        flexWrap: items.length > 4 ? "wrap" : "nowrap",
-        gap: 4,
-      }}
-    >
-      {items.map((item, index) => (
-        <Pressable
-          key={item}
-          accessibilityRole="tab"
-          accessibilityLabel={item}
-          aria-label={item}
-          accessibilityState={{ selected: item === value }}
-          aria-selected={item === value}
-          onPress={() => onChange(item)}
-          style={{
-            flexGrow: 1,
-            flexBasis: items.length > 4 ? "30%" : 0,
-            paddingVertical: compact ? 8 : 12,
-            paddingHorizontal: compact ? 2 : 0,
-            minHeight: 40,
-            flexDirection: compact ? "row" : "column",
-            justifyContent: "center",
-            backgroundColor:
-              compact && item === value ? colors.pale : undefined,
-            borderWidth: 1,
-            borderColor: item === value ? colors.bright : colors.line,
-            borderTopLeftRadius: 8,
-            borderTopRightRadius: 8,
-            alignItems: "center",
-            gap: 4,
-          }}
-        >
-          <Icon
-            line={compact}
-            name={
-              index === 0
-                ? compact
-                  ? "apps-outline"
-                  : "grid-outline"
-                : /history|activity/i.test(item)
-                  ? "time-outline"
-                  : /transaction|payment/i.test(item)
-                    ? "swap-horizontal-outline"
-                    : /people|group/i.test(item)
-                      ? "people-outline"
-                      : /roadmap/i.test(item)
-                        ? "map-outline"
-                        : /goal/i.test(item)
-                          ? "flag-outline"
-                          : /planner|budget/i.test(item)
-                            ? "calculator-outline"
-                            : /market/i.test(item)
-                              ? "globe-outline"
-                              : /analysis|insight/i.test(item)
-                                ? "pie-chart-outline"
-                                : /portfolio|item|bill/i.test(item)
-                                  ? "list-outline"
-                                  : "stats-chart-outline"
-            }
-            size={compact ? 14 : 28}
-          />
-          <Text
+    <View accessibilityRole="tablist" style={{ flexDirection: "row", flexWrap: items.length > 4 ? "wrap" : "nowrap" }}>
+      {items.map((item, index) => {
+        const label = item.replace(" · Plus", "");
+        const selected = item === value;
+        const color = selected ? colors.teal : colors.muted;
+        return (
+          <Pressable key={item} accessibilityRole="tab" accessibilityLabel={item}
+            accessibilityState={{ selected }} aria-selected={selected}
+            onPress={() => onChange(item)}
             style={{
-              fontSize: 11,
-              textAlign: "center",
-              flexShrink: compact ? 1 : undefined,
-              fontFamily: "Poppins-Regular",
-              color: colors.teal,
-            }}
-          >
-            {compact ? item.replace(" · Plus", "") : item}
-          </Text>
-          {compact && item.includes(" · Plus") ? (
-            <Text
-              style={{
-                position: "absolute",
-                top: 1,
-                right: 3,
-                fontSize: 7,
-                fontFamily: "Poppins-SemiBold",
-                color: colors.teal,
-              }}
-            >
-              Plus
-            </Text>
-          ) : null}
-        </Pressable>
-      ))}
+              flexGrow: 1, flexBasis: items.length > 4 ? "30%" : 0, minWidth: 0,
+              minHeight: 44, paddingVertical: 8, paddingHorizontal: 2,
+              flexDirection: "row", flexWrap: "wrap", justifyContent: "center", alignItems: "center", gap: 4,
+              borderWidth: 1, borderColor: selected ? colors.line : "transparent",
+              borderBottomColor: selected ? colors.white : colors.line,
+              borderTopLeftRadius: 10, borderTopRightRadius: 10,
+              backgroundColor: selected ? colors.white : "transparent",
+            }}>
+            <View style={{ flexDirection: "row", alignItems: "center", gap: width < 360 ? 3 : 4, minWidth: 0, maxWidth: "100%" }}>
+            <Icon line name={tabIcons[label] ?? (index === 0 ? "apps-outline" : /history|activity/i.test(label) ? "time-outline" : /goal/i.test(label) ? "flag-outline" : "list-outline")} size={14} color={color} />
+            <Text style={{ fontSize: width < 360 ? 10.5 : 12, lineHeight: 18, textAlign: "center", flexShrink: 1, fontFamily: "Poppins-Medium", color }}>{label}</Text>
+            </View>
+            {item.includes(" · Plus") ? (
+              <Text style={{ fontSize: 8, lineHeight: 14, paddingHorizontal: 3, borderRadius: 7, backgroundColor: colors.pale, color: colors.teal, fontFamily: "Poppins-SemiBold" }}>Plus</Text>
+            ) : null}
+          </Pressable>
+        );
+      })}
     </View>
   );
 }

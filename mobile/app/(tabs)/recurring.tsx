@@ -1,3 +1,4 @@
+import { PlanTabs } from "../../src/plan-ui";
 import { Text } from "../../src/app-text";
 import { useFocusEffect, useLocalSearchParams } from "expo-router";
 import { useCallback, useEffect, useState } from "react";
@@ -156,67 +157,11 @@ export default function Recurring() {
     );
   return (
     <Screen>
-      <View
-        accessibilityRole="tablist"
-        style={{ flexDirection: "row", flexWrap: "wrap", gap: 4 }}
-      >
-        {kinds.map((item, index) => (
-          <Pressable
-            key={item.value}
-            accessibilityRole="tab"
-            accessibilityLabel={item.label}
-            accessibilityState={{ selected: kind === item.value }}
-            onPress={() => setKind(item.value)}
-            style={{
-              flexGrow: 1,
-              flexBasis: "30%",
-              minHeight: 40,
-              flexDirection: "row",
-              alignItems: "center",
-              justifyContent: "center",
-              gap: 4,
-              borderWidth: 1,
-              borderColor: kind === item.value ? colors.bright : colors.line,
-              borderTopLeftRadius: 8,
-              borderTopRightRadius: 8,
-              backgroundColor: kind === item.value ? colors.pale : colors.white,
-            }}
-          >
-            <Icon
-              line
-              name={
-                (
-                  [
-                    "apps-outline",
-                    "calendar-outline",
-                    "card-outline",
-                    "swap-horizontal-outline",
-                    "list-outline",
-                  ] as const
-                )[index]
-              }
-              size={14}
-            />
-            <Text
-              style={{
-                fontSize: 10,
-                textAlign: "center",
-                color: kind === item.value ? colors.teal : colors.muted,
-              }}
-            >
-              {
-                [
-                  "Overview",
-                  "Planned Payments",
-                  "Debt & Loans",
-                  "Money Owed",
-                  "Installments",
-                ][index]
-              }
-            </Text>
-          </Pressable>
-        ))}
-      </View>
+      <PlanTabs
+        items={kinds.map((item) => item.label)}
+        value={kinds.find((item) => item.value === kind)?.label ?? "Overview"}
+        onChange={(label) => setKind(kinds.find((item) => item.label === label)?.value ?? "")}
+      />
       {filters ? (
         <Card>
           <Body>Account</Body>
@@ -256,8 +201,8 @@ export default function Recurring() {
               style={{
                 flexDirection: "row",
                 alignItems: "center",
-                flexWrap: "wrap",
-                gap: 4,
+                flexWrap: "nowrap",
+                gap: 2,
               }}
             >
               <Pressable
@@ -272,9 +217,9 @@ export default function Recurring() {
                     ),
                   )
                 }
-                style={{ padding: 8, minHeight: 44, justifyContent: "center" }}
+                style={{ paddingHorizontal: 4, minHeight: 44, justifyContent: "center" }}
               >
-                <Text style={{ color: colors.teal }}>Today</Text>
+                <Text style={{ color: colors.teal, fontSize: 12 }}>Today</Text>
               </Pressable>
               <Pressable
                 accessibilityRole="button"
@@ -287,13 +232,13 @@ export default function Recurring() {
               <View
                 style={{
                   flex: 1,
-                  minWidth: 100,
+                  minWidth: 0,
                   flexDirection: "row",
                   alignItems: "center",
-                  gap: 5,
+                  gap: 3,
                 }}
               >
-                <Icon name="calendar-outline" size={18} />
+                <Icon line name="calendar-outline" size={14} />
                 <Text style={{ flex: 1, color: colors.ink, fontSize: 12 }}>
                   {month.toLocaleDateString(undefined, {
                     month: "long",
