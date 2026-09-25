@@ -79,14 +79,14 @@ assert.doesNotMatch(accountsPageSource, />Sync bank</);
 
 console.log("Finverse integration regression checks passed.");
 
-const realBank = { institution_id: "bank-one", institution_name: "One Bank", countries: ["PHL"], products_supported: ["ACCOUNTS", "TRANSACTIONS"], tags: ["real"], status: "SUPPORTED", login_actions: ["PRIVATE"] };
+const realBank = { institution_id: "bank-one", institution_name: "Standard Chartered", countries: ["PHL"], products_supported: ["ACCOUNTS", "TRANSACTIONS"], tags: ["real"], status: "SUPPORTED", login_actions: ["PRIVATE"] };
 const testBank = { ...realBank, institution_id: "test", institution_name: "Test bank", tags: ["test"], status: "BETA" };
 const bankCases = [realBank, testBank, {...realBank,institution_id:"other-country",countries:["SGP"]}, {...realBank,institution_id:"no-transactions",products_supported:["ACCOUNTS"]}, {...realBank,institution_id:"alpha",status:"ALPHA"}, null];
-assert.deepEqual(visibleFinverseBanks(bankCases,"live"),[{id:"bank-one",name:"One Bank",countries:["PHL"]},{id:"other-country",name:"One Bank",countries:["SGP"]}]);
+assert.deepEqual(visibleFinverseBanks(bankCases,"live"),[{id:"bank-one",name:"Standard Chartered",countries:["PHL"]},{id:"other-country",name:"Standard Chartered",countries:["SGP"]}]);
 assert.deepEqual(visibleFinverseBanks(bankCases,"test"),[{id:"test",name:"Test bank",countries:["PHL"]}]);
 assert.deepEqual(visibleFinverseBanks([],"live"),[]);
 assert.throws(()=>visibleFinverseBanks({error:"bad response"},"live"));
-assert.deepEqual(visibleFinverseBanks([realBank,realBank],"live"),[{id:"bank-one",name:"One Bank",countries:["PHL"]}]);
+assert.deepEqual(visibleFinverseBanks([realBank,realBank],"live"),[{id:"bank-one",name:"Standard Chartered",countries:["PHL"]}]);
 import { mobileOperation } from "../lib/mobile-api-policy";
 assert.equal(mobileOperation("GET",["finverse","institutions"]),"finverse-institutions");
 assert.equal(mobileOperation("POST",["finverse","link"]),"finverse-link");
@@ -101,8 +101,8 @@ assert.deepEqual(finverseCountries([]),[]);
 assert.deepEqual(finverseCountries([{countries:["PHL","SGP"]}]).map(c=>c.name),["Philippines","Singapore"]);
 const citi=visibleFinverseBanks([{...realBank,institution_id:"citi",institution_name:"Citibank",countries:["USA","GBR","HKG","SGP","PHL"]}],"live");
 assert.deepEqual(citi[0].countries,["PHL","SGP"]);
-assert.equal(visibleFinverseBanks([{...realBank,countries:["USA"]}],"live")[0].countries[0],"USA");
-assert.deepEqual(finverseCountries([{countries:["GBR","NLD"]}]).map(c=>c.name),["Netherlands","United Kingdom"]);
+assert.deepEqual(visibleFinverseBanks([{...realBank,countries:["USA","THA"]}],"live"),[]);
+assert.deepEqual(finverseCountries([{countries:["GBR","NLD"]}]).map(c=>c.name),[]);
 assert.deepEqual(visibleFinverseBanks([{...realBank,countries:["ZZZ"]}],"live"),[]);
 assert.equal(mobileOperation("GET",["finverse","connections"]),"finverse-connections");
 assert.equal(mobileOperation("POST",["finverse","connections"]),null);
@@ -158,3 +158,11 @@ assert.equal(report[0].shownInClover,true);
 assert(report[1].excludedReasons.includes("Provider status: BETA"));
 assert(report[2].excludedReasons.includes("Missing Accounts or Transactions support"));
 assert(!JSON.stringify(report).includes("PRIVATE"),"Never export institution login fields");
+
+import { documentedFinverseCountries } from "../../shared/finverse-coverage";
+assert.deepEqual(documentedFinverseCountries("BPI", ["PHL", "THA", "SGP"]), ["PHL"]);
+assert.deepEqual(documentedFinverseCountries("VietinBank", ["VNM"]), ["VNM"]);
+assert.deepEqual(documentedFinverseCountries("Citibank", ["THA", "PHL", "VNM"]), ["PHL", "VNM"]);
+
+assert.equal(finverseBankPresentation({name:"Citibank",countries:["PHL","SGP"]}).accountTypes.PHL,"Business accounts only");
+assert.equal(finverseBankPresentation({name:"Citibank",countries:["PHL","SGP"]}).accountTypes.SGP,undefined);

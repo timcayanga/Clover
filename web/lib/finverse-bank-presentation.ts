@@ -14,5 +14,13 @@ export function finverseBankPresentation(bank: { name: string; countries: string
     const regional = findAdditionalBankLogo(`${shortName} ${country?.name ?? ""}`);
     logoUrls[code] = regional?.src || bankLogo || brand.fallbackIconSrc;
   }
-  return { name: bankLogo ? brand.label : shortName, logoUrl: logoUrls[bank.countries[0]] || bankLogo || brand.fallbackIconSrc, logoUrls };
+  const accountType = /business|corporate|citidirect|hsbcnet/i.test(bank.name) ? "Business accounts" : /personal|individual|retail/i.test(bank.name) ? "Personal accounts" : undefined;
+  const accountTypes: Record<string, string> = {};
+  for (const country of bank.countries) {
+    const businessOnly = (["PHL", "VNM"].includes(country) && /citi|dbs|standard chartered|uob|hsbc/i.test(bank.name)) ||
+      (["IDN", "MYS"].includes(country) && /dbs|hsbc|standard chartered|ocbc/i.test(bank.name)) ||
+      (country === "SGP" && /hsbc|standard chartered/i.test(bank.name));
+    if (businessOnly || accountType) accountTypes[country] = businessOnly ? "Business accounts only" : accountType!;
+  }
+  return { accountType, accountTypes, name: bankLogo ? brand.label : shortName, logoUrl: logoUrls[bank.countries[0]] || bankLogo || brand.fallbackIconSrc, logoUrls };
 }

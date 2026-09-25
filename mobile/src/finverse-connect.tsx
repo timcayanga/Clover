@@ -30,7 +30,7 @@ export function FinverseConnect({ onSynced, callbackConnection, mode = "connect"
   const { colors } = useTheme();
   const [access, setAccess] = useState<{ profileId: string; upgradeRequired: boolean } | null>(null);
   const allowed = access?.profileId === session.profileId && !access.upgradeRequired;
-  const [banks, setBanks] = useState<(Bank & {countries:string[];logoUrl:string;logoUrls?:Record<string,string>})[]>([]);
+  const [banks, setBanks] = useState<(Bank & {countries:string[];logoUrl:string;accountType?:string;accountTypes?:Record<string,string>;logoUrls?:Record<string,string>})[]>([]);
   const [country,setCountry] = useState<string|null>(null);
   const [linked,setLinked] = useState<{id:string;connectionId:string;name:string;last4:string|null;logoUrl:string;lastSyncedAt:string|null}[]>([]);
   const [connectionsLoaded,setConnectionsLoaded] = useState(false);
@@ -55,7 +55,7 @@ export function FinverseConnect({ onSynced, callbackConnection, mode = "connect"
     setAccess(null);
     setBanks([]); setCountry(null); setBankMessage("Loading banks…");
     if (session.demo) { setBankMessage("Sign in to connect your bank. Demo mode does not access bank accounts."); return; }
-    void requestRef.current<{ banks: (Bank & {countries:string[];logoUrl:string;logoUrls?:Record<string,string>})[]; mode?: string; message?: string; upgradeRequired?: boolean }>(`finverse/institutions?workspaceId=${encodeURIComponent(session.profileId)}`, { signal: controller.signal })
+    void requestRef.current<{ banks: (Bank & {countries:string[];logoUrl:string;accountType?:string;accountTypes?:Record<string,string>;logoUrls?:Record<string,string>})[]; mode?: string; message?: string; upgradeRequired?: boolean }>(`finverse/institutions?workspaceId=${encodeURIComponent(session.profileId)}`, { signal: controller.signal })
       .then(data => { if (!controller.signal.aborted) { setAccess({ profileId: session.profileId, upgradeRequired: data.upgradeRequired === true }); setBanks(data.banks); setTest(data.mode === "test"); setBankMessage(data.message || (data.banks.length ? "" : "No banks are available right now. Use Manual or Upload.")); } })
       .catch(error => { if (!controller.signal.aborted) setBankMessage(error.message || "Unable to load banks."); });
     return () => controller.abort();
@@ -156,7 +156,7 @@ export function FinverseConnect({ onSynced, callbackConnection, mode = "connect"
       {test?<Notice>Test mode · Only test banks are shown.</Notice>:null}
       {country?<Button secondary title={`‹ Countries · ${finverseCountries(banks).find(c=>c.code===country)?.name}`} onPress={()=>setCountry(null)}/>:null}
       <View style={{flexDirection:"row",flexWrap:"wrap",gap:8}}>
-        {!country ? finverseCountries(banks).map(c=><Pressable key={c.code} accessibilityRole="button" accessibilityLabel={c.name} onPress={()=>setCountry(c.code)} style={{width:"31%",padding:12,alignItems:"center",gap:8,borderWidth:1,borderColor:colors.line,borderRadius:16}}><CountryFlag code={c.code} fallback={c.flag} /><Text style={{fontSize:11,color:colors.ink,textAlign:"center"}}>{c.name}</Text></Pressable>) : banks.filter(bank=>bank.countries.includes(country)).map(bank=><Pressable key={bank.id} accessibilityRole="button" accessibilityLabel={bank.name} disabled={busy} onPress={()=>void connect(bank)} style={{width:"31%",padding:8,alignItems:"center",gap:8,borderWidth:1,borderColor:colors.line,borderRadius:16}}><BankLogo path={bank.logoUrls?.[country] || bank.logoUrl}/><Text style={{fontSize:11,color:colors.ink,textAlign:"center"}}>{bank.name}</Text></Pressable>)}
+        {!country ? finverseCountries(banks).map(c=><Pressable key={c.code} accessibilityRole="button" accessibilityLabel={c.name} onPress={()=>setCountry(c.code)} style={{width:"31%",padding:12,alignItems:"center",gap:8,borderWidth:1,borderColor:colors.line,borderRadius:16}}><CountryFlag code={c.code} fallback={c.flag} /><Text style={{fontSize:11,color:colors.ink,textAlign:"center"}}>{c.name}</Text></Pressable>) : banks.filter(bank=>bank.countries.includes(country)).map(bank=><Pressable key={bank.id} accessibilityRole="button" accessibilityLabel={[bank.name, bank.accountTypes?.[country] || bank.accountType].filter(Boolean).join(", ")} disabled={busy} onPress={()=>void connect(bank)} style={{width:"31%",padding:8,alignItems:"center",gap:8,borderWidth:1,borderColor:colors.line,borderRadius:16}}><BankLogo path={bank.logoUrls?.[country] || bank.logoUrl}/><Text style={{fontSize:11,color:colors.ink,textAlign:"center"}}>{bank.name}</Text>{(bank.accountTypes?.[country] || bank.accountType) ? <Text style={{fontSize:10,color:colors.muted,textAlign:"center"}}>{bank.accountTypes?.[country] || bank.accountType}</Text> : null}</Pressable>)}
       </View>
       {country&&!banks.some(bank=>bank.countries.includes(country))?<Body>No {test?"test ":""}banks are available here yet.</Body>:null}
     </>}
