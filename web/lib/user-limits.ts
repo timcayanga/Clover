@@ -59,8 +59,11 @@ export const hasStagingQaAccess = (user: { clerkUserId?: string | null }) =>
 
 // Owner-authorized Pro access for staging UI verification. This grants no Admin
 // role or unlimited usage, and never applies to production or other previews.
-export const hasStagingProAccess = (user: { clerkUserId?: string | null; email?: string | null }) =>
+export const hasStagingProAccess = (user: { clerkUserId?: string | null; email?: string | null }, now = Date.now()) =>
   hasStagingQaAccess(user) ||
+  // Owner-authorized disposable native QA identity: standard Plus limits, no
+  // Admin role or unlimited usage. Expires automatically after device audit.
+  (isStagingQaDeployment() && user.clerkUserId === "user_3Jn5l6dedVoPWWZnTP74VJpspEf" && now < Date.parse("2026-09-28T00:00:00Z")) ||
   (isStagingQaDeployment() && user.email?.trim().toLowerCase() === "timcayanga@gmail.com");
 
 export const hasUnlimitedPlanLimits = (user: { clerkUserId?: string | null }) =>

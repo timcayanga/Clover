@@ -16,6 +16,10 @@ try {
   const other = { ...qa, clerkUserId: "user_other_staging" };
   const owner = { ...other, email: "timcayanga@gmail.com" };
   assert.equal(hasStagingProAccess(owner), true);
+  const nativeQa = { clerkUserId: "user_3Jn5l6dedVoPWWZnTP74VJpspEf" };
+  assert.equal(hasStagingProAccess(nativeQa, Date.parse("2026-09-25T00:00:00Z")), true);
+  assert.equal(hasUnlimitedPlanLimits(nativeQa), false);
+  assert.equal(hasStagingProAccess(nativeQa, Date.parse("2026-09-28T00:00:00Z")), false);
   assert.equal(calculateProAccess({ ...access, stagingQaAccess: hasStagingProAccess(owner) }).planTier, "pro");
   assert.equal(hasUnlimitedPlanLimits(owner), false, "Owner Pro access must not grant unlimited QA usage");
   assert.equal(hasStagingProAccess({ ...owner, email: "another@example.com" }), false);
@@ -26,6 +30,7 @@ try {
   for (const [key, value] of [["VERCEL_ENV", "production"], ["CLOVER_DEPLOYMENT_ENVIRONMENT", "production"], ["VERCEL_GIT_COMMIT_REF", "feature-branch"]]) {
     const before = process.env[key];
     process.env[key] = value;
+    assert.equal(hasStagingProAccess(nativeQa, Date.parse("2026-09-25T00:00:00Z")), false);
     assert.equal(hasStagingProAccess(owner), false, `${key} must disable owner staging Pro access`);
     assert.equal(calculateProAccess({ ...access, stagingQaAccess: hasStagingProAccess(owner) }).planTier, "free");
     assert.equal(hasUnlimitedPlanLimits(qa), false, `${key} must disable QA override`);
