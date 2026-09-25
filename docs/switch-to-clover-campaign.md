@@ -43,3 +43,9 @@ The automated `qa:switch-campaign` exercises the actual review and activation se
 
 ## September 25 UI revision
 Admin Campaigns lists Switch to Clover and referral campaigns in one table. Select Manage to configure or review. Settings Plan shows usage, three tier cards, the compact offer, and subscription actions. Referral codes are entered in checkout. Closed intake and ineligible accounts see an explicit reason with the receipt area disabled; paid members remain excluded. No additional environment variables are required.
+
+### Application form refinement
+- Offer terms are shared bullet items on the public offer and application pages; the stored terms string is unchanged.
+- Plus benefits use Clover icons. Consent is a text-sized checkbox labelled “I agree to the offer terms”.
+- Receipt, note and consent remain editable while intake is closed or the user is ineligible. Submit validates eligibility/intake and explains restrictions without sending evidence; the server repeats these checks. Inputs disable only during submission. Drafts are not saved.
+- Removed redundant Get Plus/Get Pro labels from Plan, retaining clearly named subscription controls.
