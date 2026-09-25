@@ -2,7 +2,7 @@ import { telemetry, safeAction } from "../../shared/analytics";
 import { Text, TextInput } from "./app-text";
 import { useUser } from "@clerk/expo";
 import { Image as ExpoImage } from "expo-image";
-import { GlassBackdrop } from "./glass-backdrop";
+import { GlassBackdrop, GlassContent } from "./glass-backdrop";
 import { navigationGroups } from "./navigation-groups";
 import { Children, isValidElement } from "react";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -260,7 +260,7 @@ export function Screen({
   const content = Children.toArray(children);
   const headerIndex = content.findIndex(child => isValidElement(child) && Boolean((child.type as { screenHeader?: boolean }).screenHeader));
   const header = headerIndex >= 0 ? content.splice(headerIndex, 1)[0] : null;
-  return (
+  const body = (
     <Animated.View style={{ flex: 1, backgroundColor: sheet ? colors.white : colors.bg, ...(sheet ? { marginTop: 12, borderTopLeftRadius: 28, borderTopRightRadius: 28, overflow: "hidden" as const, transform: [{ translateY: slide }] } : {}) }}>
       {sheet ? <View {...drag.panHandlers} accessible accessibilityRole="button" accessibilityLabel="Dismiss sheet" accessibilityHint="Swipe down to return to the previous page" accessibilityActions={[{name:"activate",label:"Dismiss"}]} onAccessibilityAction={() => onDismiss?.()} style={{ height: 28, alignItems: "center", justifyContent: "center" }}><View style={{ width: 36, height: 4, borderRadius: 4, backgroundColor: colors.line }}/></View> : null}
       {header}
@@ -292,9 +292,13 @@ export function Screen({
       ) : null}
       {content}
     </ScrollView>
-      {detailNavigation ? <DetailNavigation/> : null}
     </Animated.View>
   );
+  // Keep the blur target and its navigation backdrop as siblings. Including
+  // the backdrop in its own Android target creates a recursive render tree.
+  return detailNavigation ? (
+    <View style={{ flex: 1 }}><GlassContent>{body}</GlassContent><DetailNavigation /></View>
+  ) : body;
 }
 export function Field({
   label,

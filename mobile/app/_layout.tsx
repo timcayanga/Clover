@@ -1,4 +1,4 @@
-import { GlassContent, GlassNavigationProvider } from "../src/glass-backdrop";
+import { GlassNavigationProvider } from "../src/glass-backdrop";
 import { Image } from "expo-image";
 import * as SplashScreen from "expo-splash-screen";
 import { NativeAnalytics } from "../src/analytics-provider";
@@ -86,7 +86,6 @@ function Routes() {
     <PrivacyShield>
       <GlassNavigationProvider>
         <StatusBar style={active && dark ? "light" : "dark"} />
-        <GlassContent>
           <Stack
             screenOptions={{
               headerTintColor: colors.teal,
@@ -158,7 +157,6 @@ function Routes() {
               />
             </Stack.Protected>
           </Stack>
-        </GlassContent>
       </GlassNavigationProvider>
     </PrivacyShield>
   );
