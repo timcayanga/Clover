@@ -1,4 +1,5 @@
 "use client";
+import { MobileSheetHandle } from "@/components/mobile-sheet-handle";
 
 import { InterfaceIcon } from "@/components/interface-icon";
 
@@ -154,6 +155,7 @@ export function CircleCreateDialog({
         aria-modal={creationPage ? undefined : true}
         aria-labelledby="circle-create-title"
       >
+        <MobileSheetHandle onClose={close} disabled={isSaving} />
         <div className="circles-dialog__head">
           <div>
             <p className="eyebrow">Add a Circle · Step {step + 1} of 3</p>
@@ -180,17 +182,9 @@ export function CircleCreateDialog({
         </div>
 
         {step === 0 ? (
-          <div className="circles-template-grid">
-            {circleTemplates.map((template) => (
-              <button
-                key={template.type}
-                className={`circles-template-card ${type === template.type ? "is-selected" : ""}`}
-                type="button"
-                onClick={() => selectTemplate(template.type)}
-              >
-                <strong>{template.title}</strong>
-              </button>
-            ))}
+          <div className="circles-form-stack">
+            <div className="circle-create-photo" aria-label="Circle photo preview"><span aria-hidden="true">📷</span></div>
+            <label className="creation-select-row"><span>Circle Type</span><select value={type} onChange={event => selectTemplate(event.target.value as CircleTypeValue)}>{circleTemplates.map(template => <option key={template.type} value={template.type}>{template.title}</option>)}</select></label>
           </div>
         ) : null}
 

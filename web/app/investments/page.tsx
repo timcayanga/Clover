@@ -1,4 +1,5 @@
 "use client";
+import { MobileSheetHandle } from "@/components/mobile-sheet-handle";
 import { readImportActivity, subscribeImportActivity } from "@/lib/import-activity";
 import { AddEntryMethods } from "@/components/add-entry-methods";
 import { InvestmentTableEntry } from "@/components/investment-table-entry";
@@ -3993,6 +3994,7 @@ export default function InvestmentsPage() {
             aria-labelledby="add-investment-title"
             onClick={(event) => event.stopPropagation()}
           >
+            <MobileSheetHandle onClose={() => setAddOpen(false)} disabled={isSaving} />
             <div className="modal-head">
               <div>
                 <p className="eyebrow">Investments</p>
@@ -4013,7 +4015,7 @@ export default function InvestmentsPage() {
             </div>
 
             <AddEntryMethods key={selectedWorkspaceId} kind="investments" workspaceId={selectedWorkspaceId} disabled={isSaving}>
-            <div className="investments-entry-toolbar"><button type="button" className="button button-secondary button-small" disabled={isSaving} onClick={() => setManualEntryMode(mode => mode === "single" ? "table" : "single")}><span aria-hidden="true">▦</span> {manualEntryMode === "single" ? "Table Entry" : "Single Entry"}</button></div>
+            <div className="investments-entry-toolbar"><button type="button" className="button button-secondary button-small entry-table-toggle" aria-label={manualEntryMode === "single" ? "Table Entry" : "Single Entry"} title={manualEntryMode === "single" ? "Table Entry" : "Single Entry"} disabled={isSaving} onClick={() => setManualEntryMode(mode => mode === "single" ? "table" : "single")}><span aria-hidden="true">{manualEntryMode === "single" ? "▦" : "✎"}</span></button></div>
             <div hidden={manualEntryMode !== "table"}>{selectedWorkspaceId ? <InvestmentTableEntry key={selectedWorkspaceId} workspaceId={selectedWorkspaceId} currencies={currencyCatalogCodes} currency={manualCurrency} onBusyChange={setIsSaving} onSaved={() => setInvestmentRefresh(value => value + 1)} /> : null}</div>
             <div hidden={manualEntryMode !== "single"}>
             <div className="accounts-add-grid">

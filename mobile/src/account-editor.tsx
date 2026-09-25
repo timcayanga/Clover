@@ -7,7 +7,7 @@ import { AccountValuationHistory } from "./investment-views";
 import { AccountHistory } from "./account-history";
 import { AccountIdentity } from "./account-identity";
 import { PlanAction, PlanHeader } from "./plan-ui";
-import { Choices } from "./transaction-entry";
+import { Choices, ChoiceField } from "./transaction-entry";
 import { useSession } from "./session";
 export const accountDisplayBalance = (account: AccountRecord) =>
   account.displayBalance === undefined
@@ -121,6 +121,7 @@ export function AccountEditor({
     type: defaultType,
     currency: defaultCurrency,
     balance: "",
+    investmentSubtype: defaultType === "investment" ? "stock" : "",
   });
   const alive = useRef(true);
   useEffect(() => {
@@ -171,7 +172,7 @@ export function AccountEditor({
     const payload: Record<string, string | null> = {};
     const fields = record
       ? [...Object.keys(labels), "type"]
-      : ["name", "institution", "type", "currency", "balance"];
+      : ["name", "institution", "type", "currency", "balance", ...(draft.type === "investment" ? ["investmentSubtype", ...investmentFields] : [])];
     for (const field of fields) {
       const value = (draft[field] ?? "").trim();
       if (
@@ -244,37 +245,19 @@ export function AccountEditor({
       if (alive.current) setBusy(false);
     }
   };
-  const extra = record
-    ? [
-        "accountNumber",
-        ...(record.source === "manual" ? ["balance"] : []),
-        ...(["credit_card", "line_of_credit"].includes(draft.type)
-          ? ["creditLimit", "creditPeriodStart", "creditPeriodEnd"]
-          : []),
-        ...(draft.type === "investment"
-          ? [
-              "investmentSubtype",
-              "investmentSymbol",
-              "investmentQuantity",
-              "investmentCostBasis",
-              "investmentPrincipal",
-              "investmentStartDate",
-              "investmentMaturityDate",
-              "investmentInterestRate",
-              "investmentMaturityValue",
-            ]
-          : []),
-      ]
-    : ["balance"];
+  const investmentTypes = ["stock","etf","mutual_fund","money_market_fund","uitf","reit","crypto","real_world_asset","bond","time_deposit","savings","other"];
+  const fixedIncome = ["bond", "time_deposit", "savings"].includes(draft.investmentSubtype);
+  const investmentFields = fixedIncome ? ["investmentPrincipal", "investmentStartDate", "investmentMaturityDate", "investmentInterestRate", "investmentMaturityValue"] : ["investmentSymbol", "investmentQuantity", "investmentCostBasis"];
+  const extra = [...(record ? ["accountNumber", ...(record.source === "manual" ? ["balance"] : [])] : ["balance"]), ...(["credit_card", "line_of_credit"].includes(draft.type) ? ["creditLimit", "creditPeriodStart", "creditPeriodEnd"] : []), ...(draft.type === "investment" ? investmentFields : [])];
   return (
-    <Screen>
+    <Screen sheet={editing && !record} onDismiss={() => { if (!busy) onClose(); }}>
       <PlanHeader
         titleInset={52}
         title={
           editing
             ? record
               ? "Edit Account"
-              : "Add Account"
+              : defaultType === "investment" ? "Add Investment" : "Add Account"
             : record?.type === "investment"
               ? "Asset Details"
               : "Account Details"
@@ -318,18 +301,23 @@ export function AccountEditor({
           }}
         >
           <Card>
-            <Choices
+            {defaultType !== "investment" ? <>
+            <ChoiceField
+              label="Account Type"
               value={draft.type}
               options={types.map((value) => ({
                 value,
-                label: value.replaceAll("_", " "),
-              }))}
-              onChange={(type) => setDraft((d) => ({ ...d, type }))}
+                label: value === "bnpl" ? "Buy Now, Pay Later" : value === "line_of_credit" ? "Line of Credit" : value.replaceAll("_", " ").replace(/\b\w/g, c => c.toUpperCase()),
+                group: ["bank", "wallet", "cash", "prepaid"].includes(value) ? "Banks & Savings" : value === "investment" ? "Investments" : ["credit_card", "line_of_credit", "bnpl"].includes(value) ? "Credit Cards & Credit" : "Other Accounts",
+              })).sort((a, b) => a.group.localeCompare(b.group))}
+              onChange={(type) => setDraft((d) => ({ ...d, type, ...(type === "investment" ? {investmentSubtype:d.investmentSubtype || "stock"} : {}) }))}
             />
+            </> : null}
+            {draft.type === "investment" ? <ChoiceField label="Investment Type" value={draft.investmentSubtype || "stock"} onChange={investmentSubtype=>setDraft(d=>({...d,investmentSubtype}))} options={investmentTypes.map(value=>({value,label:["etf","uitf","reit"].includes(value)?value.toUpperCase():value.replaceAll("_"," ").replace(/\b\w/g,c=>c.toUpperCase())}))}/> : null}
             {["name", "institution", "currency", ...extra].map((field) => (
               <Field
                 key={field}
-                label={labels[field]}
+                label={draft.type === "investment" && field === "name" ? "Investment Name" : draft.type === "investment" && field === "balance" ? "Current Value" : labels[field]}
                 value={draft[field] ?? ""}
                 placeholder={dateFields.has(field) ? "YYYY-MM-DD" : undefined}
                 autoCapitalize={
@@ -352,14 +340,14 @@ export function AccountEditor({
                 opening balance changes the calculated account balance.
               </Body>
             ) : null}
-            {!record ? (
+            {!record && draft.type !== "investment" ? (
               <Body>
                 After adding the account, open Edit account for its credit or
                 asset details.
               </Body>
             ) : null}
             <Button
-              title={busy ? "Saving…" : "Save account"}
+              title={busy ? "Saving…" : draft.type === "investment" ? "Save Investment" : "Save Account"}
               disabled={busy}
               onPress={() => void save()}
             />
@@ -446,14 +434,7 @@ export function AccountEditor({
           ) : null}
         </Card>
       ) : null}
-      {!editing ? (
-        <Button
-          title="Close details"
-          secondary
-          disabled={busy}
-          onPress={onClose}
-        />
-      ) : null}
+
     </Screen>
   );
 }

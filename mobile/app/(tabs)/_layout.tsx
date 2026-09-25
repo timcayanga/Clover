@@ -4,7 +4,7 @@ import {
   GlassNavigationProvider,
 } from "../../src/glass-backdrop";
 import { Text } from "../../src/app-text";
-import { Tabs } from "expo-router";
+import { Tabs, router } from "expo-router";
 import { View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAccess } from "../../src/access";
@@ -118,12 +118,7 @@ export default function TabLayout() {
             />
             <Tabs.Screen
               name="add"
-              listeners={({ navigation }) => ({
-                tabPress: (event) => {
-                  event.preventDefault();
-                  navigation.navigate("add", { entry: String(Date.now()) });
-                },
-              })}
+              listeners={{ tabPress: event => { event.preventDefault(); router.push("/add-transaction"); } }}
               options={{
                 title: "Add Transaction",
                 tabBarAccessibilityLabel: "Add",

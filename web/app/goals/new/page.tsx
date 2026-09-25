@@ -1,3 +1,4 @@
+import { MobileSheetHandle } from "@/components/mobile-sheet-handle";
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { CloverShell } from "@/components/clover-shell";
@@ -19,8 +20,9 @@ export default async function NewGoalPage({ searchParams }: { searchParams: Prom
   if (edit && !goal) notFound();
   const plan = goal ? normalizeGoalPlan(goal.goalPlan, goal.goalKey as GoalKey, Number(goal.targetAmount)) : null;
   return <CloverShell active="goals" title={edit ? "Edit goal" : "Create goal"} mobileBackHref="/goals">
-    <section className="goals-blank-state glass">
-      <Link href="/goals" className="pill-link">← All goals</Link>
+    <section className="goals-blank-state goal-creation-sheet glass">
+      <MobileSheetHandle href="/goals" />
+
       <h2>{edit ? "Update your plan" : "What would you like to work toward?"}</h2>
       <GoalInlineSetup goals={GOAL_OPTIONS} suggestedTargetAmount={null} monthlyIncome={null} currency={goal?.currency ?? "PHP"} personalGoal={{ id: goal?.id, goal: (goal?.goalKey ?? presetGoal) as GoalKey | undefined, amount: goal ? Number(goal.targetAmount) : undefined, purpose: plan?.purpose ?? undefined, cadence: plan?.cadence }} />
     </section>

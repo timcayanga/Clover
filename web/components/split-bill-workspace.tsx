@@ -1,4 +1,5 @@
 "use client";
+import { AdviserHeaderLink } from "@/components/adviser-header-link";
 
 import { getParticipantOutstandingBalance } from "@/lib/split-bill-view-models";
 
@@ -1366,13 +1367,14 @@ export function SplitBillWorkspace({
         <div className="split-bill-modal split-bill-detail-backdrop" role="presentation" onClick={closeDetail}>
           <section className="split-bill-modal__card glass split-bill-detail-modal" role="dialog" aria-modal="true" aria-label={selectedDetailLabel} onClick={(event) => event.stopPropagation()}>
             <div className="split-bill-manual-modal__head">
+              <button className="split-detail-mobile-back icon-button" type="button" aria-label="Back to Split Bills" onClick={closeDetail}><span aria-hidden="true">‹</span></button>
               <div>
                 <p className="eyebrow">
                   {selectedDetailKind === "bill" ? "Bill details" : selectedDetailKind === "group" ? "Group details" : "Person details"}
                 </p>
                 <h3>{selectedDetailLabel}</h3>
               </div>
-              <button className="split-bill-icon-button" type="button" onClick={closeDetail} aria-label="Close details"><InterfaceIcon name="close" /></button>
+              <span className="split-detail-mobile-adviser"><AdviserHeaderLink /></span><button className="split-bill-icon-button split-detail-desktop-close" type="button" onClick={closeDetail} aria-label="Close details"><InterfaceIcon name="close" /></button>
             </div>
 
             {selectedBill ? (

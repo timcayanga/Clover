@@ -9,6 +9,7 @@ import { router } from "expo-router";
 import { useSession } from "../src/session";
 import {
   Body,
+  SectionTitle,
   Card,
   Field,
   CategoryMark,
@@ -451,9 +452,9 @@ export default function Reports() {
         </Card>
       ) : tab === "Trends" ? (
         <>
-          {data.details?<><Card><Body muted={false}>Spending pace</Body><ReportLineChart currency={currency} series={[{name:"Selected period",color:colors.teal,points:data.details.pace.map(p=>({date:p.date,value:p.current}))},{name:"Comparison period",color:colors.muted,points:data.details.pace.map(p=>({date:p.date,value:p.previous}))}]}/><Body>Cumulative spending compared at the same elapsed day.</Body></Card><Card><Body muted={false}>Income and spending</Body><ReportLineChart currency={currency} series={[{name:"Income",color:colors.positive,points:data.details.days.map(p=>({date:p.date,value:p.income}))},{name:"Spending",color:colors.danger,points:data.details.days.map(p=>({date:p.date,value:p.expense}))}]}/></Card><Card><Body muted={false}>Biggest merchants</Body>{data.details.merchants.map(m=><Body key={m.name}>{m.name} · {money(String(m.amount),currency)} · {m.count} transactions</Body>)}</Card><Card><Body muted={false}>Repeat bills</Body><Body>Repeated merchants on different days. These are observations, not confirmed recurring bills.</Body>{data.details.repeats.length?data.details.repeats.map(m=><Body key={m.name}>{m.name} · {m.count} payments · {money(String(m.amount),currency)}</Body>):<Body>No repeated merchants in this period.</Body>}</Card></>:null}
+          {data.details?<><Card><SectionTitle>Spending Pace</SectionTitle><ReportLineChart currency={currency} series={[{name:"Selected period",color:colors.teal,points:data.details.pace.map(p=>({date:p.date,value:p.current}))},{name:"Comparison period",color:colors.muted,points:data.details.pace.map(p=>({date:p.date,value:p.previous}))}]}/><Body>Cumulative spending compared at the same elapsed day.</Body></Card><Card><SectionTitle>Income and Spending</SectionTitle><ReportLineChart currency={currency} series={[{name:"Income",color:colors.positive,points:data.details.days.map(p=>({date:p.date,value:p.income}))},{name:"Spending",color:colors.danger,points:data.details.days.map(p=>({date:p.date,value:p.expense}))}]}/></Card><Card><SectionTitle>Biggest Merchants</SectionTitle>{data.details.merchants.map(m=><Body key={m.name}>{m.name} · {money(String(m.amount),currency)} · {m.count} transactions</Body>)}</Card><Card><SectionTitle>Repeat Bills</SectionTitle><Body>Repeated merchants on different days. These are observations, not confirmed recurring bills.</Body>{data.details.repeats.length?data.details.repeats.map(m=><Body key={m.name}>{m.name} · {m.count} payments · {money(String(m.amount),currency)}</Body>):<Body>No repeated merchants in this period.</Body>}</Card></>:null}
           <Card>
-            <Body muted={false}>Weekly Summary</Body>
+            <SectionTitle>Weekly Summary</SectionTitle>
             <Body>
               Income {money(String(data.weekly.income), currency)} · Spending{" "}
               {money(String(data.weekly.expense), currency)}
@@ -465,7 +466,7 @@ export default function Reports() {
             </Body>
           </Card>
           <Card>
-            <Body muted={false}>Monthly Summary</Body>
+            <SectionTitle>Monthly Summary</SectionTitle>
             <Body>
               Income {money(String(data.monthly.income), currency)} · Spending{" "}
               {money(String(data.monthly.expense), currency)}
@@ -484,11 +485,11 @@ export default function Reports() {
       ) : !session.demo &&
         !session.data?.entitlement.fullFeatureAccess &&
         (session.data?.entitlement.planTier !== "pro" && session.data?.entitlement.planTier !== "premium") ? (
-        <Notice>Insights requires Clover Plus.</Notice>
+        <Notice>Insights is available with Clover Plus and Pro.</Notice>
       ) : (
         <>
           <Card>
-            <Body muted={false}>Cash flow</Body>
+            <SectionTitle>Cash Flow</SectionTitle>
             <CashFlowChart flows={data.details?.flows??[]} currency={currency}/>
             <Body>Income {money(String(summary.income), currency)}</Body>
             <Body>Expenses {money(String(summary.expense), currency)}</Body>
@@ -501,7 +502,7 @@ export default function Reports() {
             <Body>Internal transfers are excluded.</Body>
           </Card>
           <Card>
-            <Body muted={false}>Next steps</Body>
+            <SectionTitle>Next Steps</SectionTitle>
             <Body>{data.reviewCount} transactions need review.</Body>
             <PlanAction
               title="Open review"

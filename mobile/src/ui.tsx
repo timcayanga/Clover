@@ -2,17 +2,20 @@ import { telemetry, safeAction } from "../../shared/analytics";
 import { Text, TextInput } from "./app-text";
 import { useUser } from "@clerk/expo";
 import { Image as ExpoImage } from "expo-image";
-import { GlassBackdrop } from "./glass-backdrop";
+import { GlassBackdrop, GlassContent } from "./glass-backdrop";
 import { navigationGroups } from "./navigation-groups";
-import { Children } from "react";
+import { Children, isValidElement } from "react";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
 import { useAccess } from "./access";
 import { useDisplayPreferences } from "./display-preferences";
 import Ionicons from "@expo/vector-icons/Ionicons";
-import { router } from "expo-router";
+import { router, usePathname } from "expo-router";
 import {
   Image,
+  Animated,
+  PanResponder,
+  AccessibilityInfo,
   Modal,
   Linking,
   useColorScheme,
@@ -177,7 +180,7 @@ export function Button({
           color={secondary ? colors.ink : "#FFFFFF"}
         />
       ) : null}
-      <Text style={[styles.buttonText, secondary && { color: colors.ink }]}>
+      <Text style={[styles.buttonText, secondary && { color: colors.ink }, /^delete /i.test(title) && { color: colors.danger }]}>
         {title}
       </Text>
     </Pressable>
@@ -217,24 +220,50 @@ export function Body({
 export function Card({
   children,
   style,
+  onPress,
 }: {
   children: ReactNode;
+  onPress?: () => void;
   style?: ViewStyle;
 }) {
   const { colors, styles, dark } = useTheme();
-  return <View style={[styles.card, style]}>{children}</View>;
+  return onPress ? <Pressable onPress={onPress} style={[styles.card, style]}>{children}</Pressable> : <View style={[styles.card, style]}>{children}</View>;
 }
 export function Screen({
   children,
   gap = 16,
+  sheet = false,
+  onDismiss,
 }: {
   children: ReactNode;
   gap?: number;
+  sheet?: boolean;
+  onDismiss?: () => void;
 }) {
   const { colors, styles, dark } = useTheme();
   const session = useSession();
   const insets = useSafeAreaInsets();
-  return (
+  const slide = useRef(new Animated.Value(0)).current;
+  const dismissRef = useRef(onDismiss); dismissRef.current = onDismiss;
+  const drag = useRef(PanResponder.create({
+    onStartShouldSetPanResponder: () => true,
+    onMoveShouldSetPanResponder: (_, gesture) => Math.abs(gesture.dy) > Math.abs(gesture.dx),
+    onPanResponderMove: (_, gesture) => slide.setValue(Math.max(0, gesture.dy)),
+    onPanResponderRelease: (_, gesture) => {
+      if (gesture.dy > 90 || gesture.vy > 0.8) Animated.timing(slide, { toValue: 900, duration: 180, useNativeDriver: true }).start(() => { dismissRef.current?.(); slide.setValue(0); });
+      else Animated.spring(slide, { toValue: 0, useNativeDriver: true, bounciness: 0 }).start();
+    },
+    onPanResponderTerminate: () => Animated.spring(slide, { toValue: 0, useNativeDriver: true, bounciness: 0 }).start(),
+  })).current;
+  const path = usePathname();
+  const detailNavigation = !sheet && (path.startsWith("/transaction/") || path.startsWith("/import/") || ["/offline", "/settings", "/notifications", "/budgeting", "/goals", "/investments", "/circles", "/split-bills", "/reports"].includes(path));
+  const content = Children.toArray(children);
+  const headerIndex = content.findIndex(child => isValidElement(child) && Boolean((child.type as { screenHeader?: boolean }).screenHeader));
+  const header = headerIndex >= 0 ? content.splice(headerIndex, 1)[0] : null;
+  const body = (
+    <Animated.View style={{ flex: 1, backgroundColor: sheet ? colors.white : colors.bg, ...(sheet ? { marginTop: 12, borderTopLeftRadius: 28, borderTopRightRadius: 28, overflow: "hidden" as const, transform: [{ translateY: slide }] } : {}) }}>
+      {sheet ? <View {...drag.panHandlers} accessible accessibilityRole="button" accessibilityLabel="Dismiss sheet" accessibilityHint="Swipe down to return to the previous page" accessibilityActions={[{name:"activate",label:"Dismiss"}]} onAccessibilityAction={() => onDismiss?.()} style={{ height: 28, alignItems: "center", justifyContent: "center" }}><View style={{ width: 36, height: 4, borderRadius: 4, backgroundColor: colors.line }}/></View> : null}
+      {header}
     <ScrollView
       style={{ flex: 1, backgroundColor: colors.bg }}
       contentContainerStyle={[
@@ -261,9 +290,15 @@ export function Screen({
           </Text>
         </Pressable>
       ) : null}
-      {children}
+      {content}
     </ScrollView>
+    </Animated.View>
   );
+  // Keep the blur target and its navigation backdrop as siblings. Including
+  // the backdrop in its own Android target creates a recursive render tree.
+  return detailNavigation ? (
+    <View style={{ flex: 1 }}><GlassContent>{body}</GlassContent><DetailNavigation /></View>
+  ) : body;
 }
 export function Field({
   label,
@@ -345,6 +380,22 @@ export function AppHeader({
   const profileRef = useRef(session.profileId);
   profileRef.current = session.profileId;
   const [panel, setPanel] = useState<"menu" | "notifications" | null>(null);
+  const drawerProgress = useRef(new Animated.Value(0)).current;
+  const reduceMotion = useRef(false);
+  useEffect(() => {
+    void AccessibilityInfo.isReduceMotionEnabled().then(value => { reduceMotion.current = value; });
+    const listener = AccessibilityInfo.addEventListener("reduceMotionChanged", value => { reduceMotion.current = value; });
+    return () => listener.remove();
+  }, []);
+  useEffect(() => {
+    if (panel) Animated.timing(drawerProgress, { toValue: 1, duration: reduceMotion.current ? 0 : 220, useNativeDriver: true }).start();
+  }, [panel, drawerProgress]);
+  const closePanel = (after?: () => void) => {
+    Animated.timing(drawerProgress, { toValue: 0, duration: reduceMotion.current ? 0 : 180, useNativeDriver: true }).start(({ finished }) => {
+      if (finished) { setPanel(null); after?.(); }
+    });
+  };
+  const goBack = onClose ?? (() => router.canGoBack() ? router.back() : router.navigate("/(tabs)"));
   const [feed, setFeed] = useState<
     Array<{ id: string; title: string; message: string; href: string | null }>
   >([]);
@@ -390,7 +441,6 @@ export function AppHeader({
     </Pressable>
   );
   const navigate = (href: string) => {
-    setPanel(null);
     const native: Record<
       string,
       | "/(tabs)"
@@ -399,13 +449,14 @@ export function AppHeader({
       | "/(tabs)/recurring"
       | "/(tabs)/adviser"
       | "/(tabs)/account"
-      | "/(tabs)/add"
+      | "/add-transaction"
       | "/budgeting"
       | "/goals"
       | "/investments"
       | "/circles"
       | "/reports"
       | "/split-bills"
+      | "/settings"
     > = {
       "/": "/(tabs)",
       "/dashboard": "/(tabs)",
@@ -414,17 +465,20 @@ export function AppHeader({
       "/recurring": "/(tabs)/recurring",
       "/adviser": "/(tabs)/adviser",
       "/account": "/(tabs)/account",
-      "/add": "/(tabs)/add",
+      "/add": "/add-transaction",
       "/budgeting": "/budgeting",
       "/goals": "/goals",
       "/investments": "/investments",
       "/circles": "/circles",
       "/reports": "/reports",
       "/split-bills": "/split-bills",
+      "/settings": "/settings",
     };
-    if (native[href]) router.navigate(native[href]);
-    else if (href.startsWith("/") && !href.startsWith("//"))
-      void Linking.openURL(`https://staging.clover.ph${href}`);
+    closePanel(() => {
+      if (native[href]) router.navigate(native[href]);
+      else if (href.startsWith("/") && !href.startsWith("//"))
+        void Linking.openURL(`https://staging.clover.ph${href}`);
+    });
   };
   const home = title === "Home";
   const adviserShortcut = [
@@ -448,11 +502,11 @@ export function AppHeader({
         <View style={{ width: 48, flexDirection: "row" }}>
           <Pressable
             accessibilityRole="button"
-            accessibilityLabel="Open navigation menu"
-            onPress={() => setPanel("menu")}
+            accessibilityLabel={back || onClose ? "Back" : "Open navigation menu"}
+            onPress={back || onClose ? goBack : () => setPanel("menu")}
             style={styles.iconButton}
           >
-            <Icon name="menu-outline" size={22} />
+            <Icon name={back || onClose ? "arrow-back-outline" : "menu-outline"} size={22} />
           </Pressable>
         </View>
         <Text
@@ -462,14 +516,9 @@ export function AppHeader({
             styles.headerTitle,
             {
               position: "absolute",
-              left: title === "Investments" ? 144 : adviserShortcut || home || trailing ? 100 : 54,
-              fontSize: title === "Investments" ? (width < 380 ? 11 : 14) : width < 360 && title.length > 10 ? 14 : 18,
-              right:
-                title === "Investments"
-                  ? 144
-                  : adviserShortcut || home || trailing
-                    ? 100
-                    : 54,
+              left: back || onClose ? 54 : title === "Investments" ? 120 : adviserShortcut || home || trailing ? 100 : 54,
+              fontSize: 18,
+              right: back || onClose ? 54 : title === "Investments" ? 120 : adviserShortcut || home || trailing ? 100 : 54,
             },
           ]}
         >
@@ -483,7 +532,7 @@ export function AppHeader({
             alignItems: "center",
           }}
         >
-          {adviserShortcut && (trailing || back || onClose || canAdd) ? adviser : null}
+          {adviserShortcut && !(back || onClose) && (trailing || canAdd) ? adviser : null}
           {trailing ??
             (title === "Adviser" ? (
               <Pressable
@@ -521,7 +570,7 @@ export function AppHeader({
                 style={styles.iconButton}
                 onPress={() =>
                   title === "Transactions"
-                    ? router.navigate("/(tabs)/add")
+                    ? router.navigate("/add-transaction")
                     : router.navigate({
                         pathname:
                           title === "Accounts"
@@ -534,20 +583,7 @@ export function AppHeader({
                 <AddNavigationMark size={32} />
               </Pressable>
             ) : back || onClose ? (
-              <Pressable
-                accessibilityRole="button"
-                accessibilityLabel="Close details"
-                style={styles.iconButton}
-                onPress={
-                  onClose ??
-                  (() =>
-                    router.canGoBack()
-                      ? router.back()
-                      : router.navigate("/(tabs)"))
-                }
-              >
-                <Icon name="close" />
-              </Pressable>
+              adviser
             ) : (
               adviser
             ))}
@@ -556,19 +592,20 @@ export function AppHeader({
       <Modal
         visible={panel !== null}
         transparent
-        animationType="fade"
-        onRequestClose={() => setPanel(null)}
+        animationType="none"
+        onRequestClose={() => closePanel()}
       >
         <View style={{ flex: 1, backgroundColor: "#0007" }}>
           <Pressable
             accessibilityLabel="Close panel"
-            onPress={() => setPanel(null)}
+            onPress={() => closePanel()}
             style={StyleSheet.absoluteFill}
           />
-          <View
+          <Animated.View
             accessibilityViewIsModal
             style={{
-              width: panel === "menu" ? "82%" : "100%",
+              width: panel === "menu" ? Math.min(width - 48, 248) : "100%",
+              transform: [{ translateX: drawerProgress.interpolate({ inputRange: [0, 1], outputRange: [-320, 0] }) }],
               maxWidth: panel === "menu" ? 320 : 600,
               flex: 1,
               backgroundColor: colors.white,
@@ -584,7 +621,7 @@ export function AppHeader({
               <Pressable
                 accessibilityRole="button"
                 accessibilityLabel="Close panel"
-                onPress={() => setPanel(null)}
+                onPress={() => closePanel()}
                 style={styles.iconButton}
               >
                 <Icon name="close" />
@@ -681,7 +718,7 @@ export function AppHeader({
                 </>
               )}
             </ScrollView>
-          </View>
+          </Animated.View>
         </View>
       </Modal>
     </>
@@ -974,7 +1011,7 @@ export function DetailNavigation({
             route: "/(tabs)/transactions",
             icon: "swap-horizontal-outline",
           },
-          { title: "Add", route: "/(tabs)/add", icon: "add" },
+          { title: "Add", route: "/add-transaction", icon: "add" },
           {
             title: "Adviser",
             route: "/(tabs)/adviser",

@@ -1,3 +1,4 @@
+import { AccountBrandLogo } from "./account-brand-logo";
 import { beginTelemetry } from "../../shared/analytics";
 import { Text } from "./app-text";
 import {
@@ -11,10 +12,10 @@ import { AdviserInputTools } from "./adviser-input-tools";
 import { ApiError } from "./api";
 import * as Crypto from "expo-crypto";
 import type { EntryDraft, EntryFormContext } from "./adviser-entry-types";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Platform, Pressable, View } from "react-native";
 import { useSession } from "./session";
-import { Body, Button, Card, Field, Notice, useTheme } from "./ui";
+import { Body, Button, Card, Field, Notice, Icon, CategoryMark, useTheme } from "./ui";
 
 export type TransactionDraft = {
   adviserEntry?: EntryDraft;
@@ -42,7 +43,7 @@ export const emptyTransaction = (): TransactionDraft => ({
   description: "",
 });
 type Options = {
-  accounts: { id: string; name: string; currency: string }[];
+  accounts: { id: string; name: string; currency: string; institution?: string | null; type?: string; brandLogoUrl?: string | null }[];
   categories: { id: string; name: string; type: string }[];
 };
 export function Choices({
@@ -92,54 +93,30 @@ export function Choices({
     </View>
   );
 }
-export function ChoiceField({
-  label,
-  options,
-  value,
-  onChange,
-}: {
+export function ChoiceField({ label, options, value, onChange }: {
   label: string;
-  options: { value: string; label: string }[];
+  options: { value: string; label: string; icon?: ReactNode; group?: string }[];
   value: string;
   onChange: (value: string) => void;
 }) {
   const [open, setOpen] = useState(false);
-  const [query, setQuery] = useState("");
-  return (
-    <View style={{ gap: 10 }}>
-      <Body>{label}</Body>
-      <Button
-        secondary
-        title={`${options.find((option) => option.value === value)?.label ?? `Choose ${label.toLowerCase()}`} ${open ? "▴" : "▾"}`}
-        onPress={() => setOpen(!open)}
-      />
-      {open ? (
-        <Card>
-          <Field
-            label={`Search ${label.toLowerCase()}`}
-            value={query}
-            onChangeText={setQuery}
-          />
-          {options
-            .filter((option) =>
-              option.label.toLowerCase().includes(query.toLowerCase()),
-            )
-            .map((option) => (
-              <Button
-                key={option.value}
-                secondary
-                title={option.label}
-                onPress={() => {
-                  onChange(option.value);
-                  setOpen(false);
-                  setQuery("");
-                }}
-              />
-            ))}
-        </Card>
-      ) : null}
-    </View>
-  );
+  const { colors } = useTheme();
+  const selected = options.find(option => option.value === value);
+  const row = { minHeight: 48, paddingVertical: 10, paddingHorizontal: 12, flexDirection: "row" as const, alignItems: "center" as const, gap: 10 };
+  return <View style={{ gap: 6 }}>
+    <Text style={{ color: colors.muted, fontSize: 13 }}>{label}</Text>
+    <Pressable accessibilityRole="button" accessibilityLabel={`${label}: ${selected?.label ?? "Choose"}`} accessibilityState={{ expanded: open }} onPress={() => setOpen(!open)} style={{ ...row, borderWidth: 1, borderColor: colors.line, borderRadius: 14, backgroundColor: colors.white }}>
+      {selected?.icon}<Text style={{ flex: 1, color: colors.ink, fontSize: 15 }}>{selected?.label ?? `Choose ${label.toLowerCase()}`}</Text><Icon line name={open ? "chevron-up" : "chevron-down"} size={16}/>
+    </Pressable>
+    {open ? <View style={{ borderWidth: 1, borderColor: colors.line, borderRadius: 14, overflow: "hidden", backgroundColor: colors.white }}>
+      {options.map((option, index) => <View key={option.value}>
+        {option.group && option.group !== options[index - 1]?.group ? <Text style={{ padding: 12, color: colors.muted, fontSize: 12, fontFamily: "Poppins-SemiBold" }}>{option.group}</Text> : null}
+        <Pressable accessibilityRole="button" accessibilityState={{ selected: option.value === value }} onPress={() => { onChange(option.value); setOpen(false); }} style={{ ...row, backgroundColor: option.value === value ? colors.pale : colors.white }}>
+          {option.icon}<Text style={{ flex: 1, color: colors.ink, fontSize: 15 }}>{option.label}</Text>{option.value === value ? <Icon line name="checkmark" size={16}/> : null}
+        </Pressable>
+      </View>)}
+    </View> : null}
+  </View>;
 }
 export function ManualTransaction({
   draft,
@@ -327,6 +304,7 @@ export function ManualTransaction({
             options={options.accounts.map((a) => ({
               value: a.id,
               label: `${a.name} · ${a.currency}`,
+              icon: <AccountBrandLogo account={{...a,type:a.type ?? "bank",institution:a.institution ?? null,balance:null}} size={24}/>,
             }))}
             value={draft.accountId}
             onChange={(accountId) =>
@@ -343,13 +321,9 @@ export function ManualTransaction({
             Add an account in Account before creating a transaction.
           </Notice>
         )
-      ) : (
-        <Button
-          title="Retry loading accounts"
-          secondary
-          onPress={() => setRetry((n) => n + 1)}
-        />
-      )}
+      ) : error ? (
+        <Button title="Retry loading accounts" secondary onPress={() => {setError("");setRetry((n) => n + 1);}}/>
+      ) : <Body>Loading accounts…</Body>}
       {options && draft.type !== "transfer" ? (
         <>
           <ChoiceField
@@ -358,7 +332,7 @@ export function ManualTransaction({
               { value: "", label: "Uncategorized" },
               ...options.categories
                 .filter((c) => c.type === draft.type)
-                .map((c) => ({ value: c.id, label: c.name })),
+                .map((c) => ({ value: c.id, label: c.name, icon: <CategoryMark name={c.name} size={24}/> })),
             ]}
             value={draft.categoryId ?? ""}
             onChange={(categoryId) =>
@@ -614,6 +588,9 @@ export function TransactionChat({
   return (
     <View style={{ gap: 16 }}>
       <AdviserInputTools
+        value={input}
+        onChangeText={setInput}
+        onSend={() => void send()}
         disabled={busy || attaching}
         onText={(text) =>
           setInput((current) => `${current}${current ? " " : ""}${text}`)
@@ -686,20 +663,8 @@ export function TransactionChat({
           />
         </Card>
       ))}
-      <Field
-        label="Tell Clover what to add"
-        placeholder="Lunch ₱250 with cash…"
-        multiline
-        value={input}
-        onChangeText={setInput}
-        maxLength={4000}
-      />
       {error ? <Notice>{error}</Notice> : null}
-      <Button
-        title={busy ? "Clover is preparing your draft…" : "Send"}
-        disabled={busy || attaching || (!input.trim() && !attachments.length)}
-        onPress={() => void send()}
-      />
+      {busy ? <Body>Clover is preparing your draft…</Body> : null}
     </View>
   );
 }

@@ -1,3 +1,5 @@
+import { PlanHeader } from "../../src/plan-ui";
+import { EntrySelector, EntryTransition } from "../../src/entry-controls";
 import { FinverseConnect } from "../../src/finverse-connect";
 import { beginTelemetry } from "../../../shared/analytics";
 import { Text } from "../../src/app-text";
@@ -223,7 +225,8 @@ export default function Add() {
       keyboardVerticalOffset={insets.top + 70}
       behavior={Platform.OS === "ios" ? "padding" : "height"}
     >
-      <Screen>
+      <Screen sheet onDismiss={() => { if(!busy) router.back(); }}>
+        <PlanHeader title="Add Transaction" back={() => router.back()}/>
         <View
           style={{
             backgroundColor: colors.white,
@@ -233,89 +236,12 @@ export default function Add() {
             minHeight: 650,
           }}
         >
-          <View
-            style={{
-              width: 36,
-              height: 4,
-              borderRadius: 4,
-              backgroundColor: colors.line,
-              alignSelf: "center",
-            }}
-          />
-
-          <View
-            accessibilityRole="tablist"
-            style={{
-              flexDirection: "row",
-              padding: 4,
-              borderRadius: 999,
-              borderWidth: 1,
-              borderColor: colors.line,
-              backgroundColor: dark ? "#0e1b21" : "#ecf4f5",
-            }}
-          >
-            {(["manual", "ask", "upload", "sync"] as const).map((method) => (
-              <Pressable
-                key={method}
-                accessibilityRole="tab"
-                accessibilityState={{ selected: tab === method }}
-                aria-selected={tab === method}
-                onPress={() => setTab(method)}
-                style={{ flex: 1, borderRadius: 999, overflow: "hidden" }}
-              >
-                <LinearGradient
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 1, y: 0 }}
-                  colors={
-                    tab === method
-                      ? ["#03a8c0", "#28cfca"]
-                      : ["transparent", "transparent"]
-                  }
-                  style={{
-                    minHeight: 52,
-                    alignItems: "center",
-                    justifyContent: "center",
-                    gap: 4,
-                  }}
-                >
-                  {method === "sync" ? <Text style={{fontSize:20,color:tab===method?"white":colors.teal}}>↻</Text> : <Image
-                    source={
-                      method === "manual"
-                        ? require("../../assets/organize/method-manual.png")
-                        : method === "ask"
-                          ? require("../../assets/organize/method-ask.png")
-                          : require("../../assets/organize/method-upload.png")
-                    }
-                    style={{
-                      width: 20,
-                      height: 20,
-                      tintColor: tab === method ? "white" : colors.teal,
-                    }}
-                  />}
-                  <Text
-                    style={{
-                      color: tab === method ? "white" : colors.ink,
-                      fontSize: 12,
-                    }}
-                  >
-                    {method === "manual"
-                      ? "Manual"
-                      : method === "ask"
-                        ? "Ask Clover"
-                        : method === "sync" ? "Sync" : "Upload"}
-                  </Text>
-                </LinearGradient>
-              </Pressable>
-            ))}
-          </View>
+          <EntrySelector value={tab} items={["manual", "ask", "upload", "sync"]} onChange={method => setTab(method as typeof tab)}/>
+          <EntryTransition value={tab}>
           {tab === "sync" ? <FinverseConnect mode="sync" onSynced={()=>{}} /> : null}
           <View style={{ display: tab === "manual" ? "flex" : "none" }}>
             <View style={{ flexDirection: "row", justifyContent: "flex-end" }}>
-              <Button
-                secondary
-                title={tableMode ? "Single entry" : "Table entry"}
-                onPress={() => setTableMode(!tableMode)}
-              />
+              <Pressable accessibilityRole="button" accessibilityLabel={tableMode ? "Single entry" : "Table entry"} onPress={() => setTableMode(!tableMode)} style={{ width: 44, height: 44, alignItems: "center", justifyContent: "center" }}><Icon line name={tableMode ? "create-outline" : "grid-outline"} size={22}/></Pressable>
             </View>
             <View style={{ display: tableMode ? "none" : "flex" }}>
               <ManualTransaction draft={draft} onChange={setDraft} />
@@ -417,6 +343,7 @@ export default function Add() {
               </Card>
             )}
           </View>
+          </EntryTransition>
         </View>
       </Screen>
     </KeyboardAvoidingView>

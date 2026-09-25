@@ -1,3 +1,4 @@
+import { InlineDetailRow } from "../../src/inline-detail-row";
 import { TransactionRelatedActions } from "../../src/transaction-related-actions";
 import { Text } from "../../src/app-text";
 import { ChoiceField } from "../../src/transaction-entry";
@@ -243,61 +244,28 @@ export default function TransactionDetail() {
                       {dateLabel(row.date)}
                     </Text>
                   </View>
-                  <View style={{ alignItems: "flex-end", gap: 4, maxWidth: "42%" }}>
+                  <View style={{ alignItems: "flex-end", alignSelf: "flex-start", gap: 4, maxWidth: "42%" }}>
                     <Text style={{ fontSize: 15, fontFamily: "Poppins-SemiBold", color: row.type === "expense" ? colors.danger : row.type === "income" ? colors.positive : colors.ink }}>{money(row.amount, row.currency)}</Text>
-                    <Pressable accessibilityRole="button" accessibilityLabel="Edit transaction" onPress={() => setEditing(true)} style={{ padding: 10 }}><Icon line name="create-outline" size={18} /></Pressable>
+
                   </View>
                 </View>
                 <Card
-                  style={{ padding: 0, overflow: "hidden", borderRadius: 16 }}
+                  style={{ padding: 0, gap: 0, overflow: "hidden", borderRadius: 16 }}
                 >
                   {[
-                    [
-                      "Type",
-                      row.type.charAt(0).toUpperCase() + row.type.slice(1),
-                    ],
-                    ["Name", row.merchantClean || row.merchantRaw],
-                    ["Account", row.accountName],
-                    ["Category", row.categoryName || "Uncategorized"],
-                    [
-                      "Tags",
-                      row.tags?.map((t) => t.name).join(", ") || "No tags",
-                    ],
-                    ["Date", dateLabel(row.date)],
-                    ["Amount", money(row.amount, row.currency)],
-                    ["Notes", row.userNote || "No notes"],
-                  ].map(([label, value]) => (
-                    <Pressable
-                      key={label}
-                      accessibilityRole="button"
-                      accessibilityLabel={`Edit ${label}`}
-                      onPress={() => setEditing(true)}
-                      style={{
-                        minHeight: 48,
-                        padding: 14,
-                        flexDirection: "row",
-                        alignItems: "center",
-                        gap: 12,
-                        borderBottomWidth: 1,
-                        borderBottomColor: colors.line,
-                      }}
-                    >
-                      <View style={{ flexDirection: "row", alignItems: "center", gap: 6, width: 98 }}>
-                        {label === "Category" ? <CategoryMark name={row.categoryName} size={18} /> : <Icon line name={({ Type: "swap-horizontal-outline", Name: "text-outline", Account: "wallet-outline", Tags: "pricetag-outline", Date: "calendar-outline", Amount: "cash-outline", Notes: "document-text-outline" } as const)[label as "Type"] || "document-text-outline"} color={colors.muted} size={16} />}
-                        <Text style={{ fontSize: 12, color: colors.muted }}>{label}</Text>
-                      </View>
-                      <Text
-                        style={{
-                          flex: 1,
-                          fontSize: 14,
-                          textAlign: "right",
-                          color: colors.ink,
-                        }}
-                      >
-                        {value}
-                      </Text>
-                    </Pressable>
-                  ))}
+                    {label:"Type",key:"type",value:row.type,display:row.type[0].toUpperCase()+row.type.slice(1),options:["expense","income","transfer"].map(value=>({value,label:value[0].toUpperCase()+value.slice(1)}))},
+                    {label:"Name",key:"merchantClean",value:row.merchantClean||row.merchantRaw},
+                    {label:"Account",key:"accountId",value:row.accountId,display:row.accountName,options:accounts.filter(a=>a.currency===row.currency).map(a=>({value:a.id,label:a.name}))},
+                    {label:"Category",key:"categoryId",value:row.categoryId||"",display:row.categoryName||"Uncategorized",options:[{value:"",label:"Uncategorized"},...categories.filter(c=>c.type===row.type).map(c=>({value:c.id,label:c.name}))]},
+                    {label:"Tags",key:"tags",value:row.tags?.map(t=>t.name).join(", ")||"",display:row.tags?.map(t=>t.name).join(", ")||"No tags"},
+                    {label:"Date",key:"date",value:row.date.slice(0,10),display:dateLabel(row.date)},
+                    {label:"Amount",key:"amount",value:row.amount,display:money(row.amount,row.currency)},
+                    {label:"Notes",key:"userNote",value:row.userNote||"",display:row.userNote||"No notes"},
+                  ].map(field=><InlineDetailRow key={field.key} label={field.label} value={field.value} displayValue={field.display} options={field.options} numeric={field.key==="amount"} onSave={async value=>{
+                    const patch = {[field.key]:field.key==="tags"?value.split(",").map(t=>t.trim()).filter(Boolean):field.key==="categoryId"?value||null:value};
+                    if(session.demo){session.updateSample({...row,...patch,...(field.key === "tags" ? { tags: value.split(",").map(t=>t.trim()).filter(Boolean).map(name=>({id:name,name})) } : {})} as Transaction);}else await session.request(`transactions/${id}?workspaceId=${encodeURIComponent(session.profileId)}`,{method:"PATCH",body:JSON.stringify(patch)});
+                    setReload(v=>v+1);
+                  }}/>) }
                 </Card>
                 <TransactionRelatedActions key={row.id} transaction={row} />
                 <Pressable
@@ -324,9 +292,7 @@ export default function TransactionDetail() {
                   </Card>
                 ) : null}
                 <Card>
-                  <Text style={{ fontSize: 14, color: colors.ink }}>
-                    Line Items
-                  </Text>
+                  <View style={{flexDirection:"row",alignItems:"center",justifyContent:"space-between"}}><Text style={{ fontSize: 16, fontFamily: "Poppins-SemiBold", color: colors.muted }}>Line Items</Text><Pressable accessibilityLabel="Edit line items" onPress={()=>setEditing(true)}><Icon line name="create-outline" size={16}/></Pressable></View>
                   {row.receiptLineItems?.length ? (
                     row.receiptLineItems.map((item, i) => (
                       <Body key={i}>

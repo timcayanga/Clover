@@ -4071,7 +4071,7 @@ function AccountDetailPageContent() {
     <CloverShell
       active="accounts"
       title={account?.type === "investment" ? "Asset Details" : "Account Details"}
-      mobileTrailingAction={<Link className="icon-button" href="/accounts" aria-label="Close account details">×</Link>}
+      mobileBackHref="/accounts"
       kicker={account?.type === "investment" ? "Asset history" : "Account history"}
       subtitle={
         account?.type === "investment"

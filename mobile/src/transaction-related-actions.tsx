@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 import { View } from "react-native";
 import { router } from "expo-router";
 import { useSession } from "./session";
-import { Body, Button, Card, Field, Heading, Notice } from "./ui";
+import { Body, Button, Card, Field, SectionTitle, Notice } from "./ui";
 import { ChoiceField } from "./transaction-entry";
 import type { Transaction } from "./types";
 
@@ -39,7 +39,7 @@ export function TransactionRelatedActions({ transaction }: { transaction: Transa
     finally { setBusy(false); }
   };
   return <Card>
-    <Heading>Add To</Heading>
+    <SectionTitle>Add To</SectionTitle>
     <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
       <Button title={transaction.splitBill ? "Open in Split Bills" : "Split Bills"} secondary disabled={busy || session.demo} onPress={() => router.push({ pathname: "/split-bills", params: transaction.splitBill ? { billId: transaction.splitBill.id } : { transactionId: transaction.id } })} />
       <Button title="Circles" secondary disabled={busy || session.demo || transaction.type !== "expense"} onPress={() => { setPanel(panel === "circles" ? null : "circles"); setMessage(""); }} />

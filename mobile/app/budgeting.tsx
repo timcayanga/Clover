@@ -1,3 +1,5 @@
+import { EntryOverlay } from "../src/entry-overlay";
+import { ChoiceField } from "../src/transaction-entry";
 import { CreateDirectoryCard } from "../src/create-directory-card";
 import { Icon } from "../src/ui";
 import { Text } from "../src/app-text";
@@ -117,8 +119,8 @@ export default function Budgeting() {
       active = false;
     };
   }, [selected, session.demo, session.profileId, session.request]);
-  if (editor)
-    return (
+  const entryOverlay = editor ? (
+    <EntryOverlay onClose={() => setEditor(null)}>
       <BudgetEditor
         key={session.profileId}
         budget={editor.budget}
@@ -143,11 +145,13 @@ export default function Budgeting() {
           else reload();
         }}
       />
-    );
+    </EntryOverlay>
+  ) : null;
   return (
     <Screen gap={20}>
+      {entryOverlay}
       <PlanHeader
-        title={selected ? "Budget Details" : "Budgeting"}
+        title={selected ? selected.name : "Budgeting"}
         back={selected ? () => setSelected(null) : undefined}
         add={() => setEditor({ budget: null })}
       />
@@ -160,18 +164,8 @@ export default function Budgeting() {
         <Body>Loading budgets…</Body>
       ) : selected ? (
         <>
-          <Text
-            style={{
-              fontFamily: "Poppins-SemiBold",
-              fontSize: 20,
-              color: colors.ink,
-            }}
-          >
-            {selected.name}
-          </Text>
-          <Body>
-            {selected.periodLabel} · {selected.isActive ? "Active" : "Paused"}
-          </Body>
+
+
           <PlanTabs
             items={["Overview", "Reports", "Transactions"]}
             value={tab}
@@ -324,6 +318,7 @@ export default function Budgeting() {
             data.budgets.map((budget) => (
               <PlanDirectoryCard
                 key={budget.id}
+                onPress={() => { setSelected(budget); setTab("Overview"); }}
                 color={
                   budget.appearance?.color ??
                   (budget.kind === "savings_target"
@@ -519,9 +514,9 @@ function BudgetEditor({
     }
   };
   return (
-    <Screen>
+    <Screen sheet onDismiss={() => { if (!saving) onClose(); }}>
       <PlanHeader
-        title={budget ? "Edit Budget" : "Create Budget"}
+        title={budget ? "Edit Budget" : "Add Budget"}
         back={() => {
           if (!saving) onClose();
         }}
@@ -545,65 +540,9 @@ function BudgetEditor({
         onChangeText={(v) => setCurrency(v.toUpperCase())}
         maxLength={3}
       />
-      <Body>Type</Body>
-      <PlanAction
-        title={kind === "spend_limit" ? "Spending limit ✓" : "Spending limit"}
-        onPress={() => setKind("spend_limit")}
-      />
-      <PlanAction
-        title={
-          kind === "savings_target" ? "Savings target ✓" : "Savings target"
-        }
-        onPress={() => {
-          setKind("savings_target");
-          setScope("global");
-        }}
-      />
-      {kind === "spend_limit" ? (
-        <>
-          <Body>Applies to</Body>
-          <PlanAction
-            title={scope === "global" ? "All spending ✓" : "All spending"}
-            onPress={() => setScope("global")}
-          />
-          {options?.categories.map((c) => (
-            <PlanAction
-              key={c.id}
-              title={`${c.name}${scope === "category" && categoryId === c.id ? " ✓" : ""}`}
-              onPress={() => {
-                setScope("category");
-                setCategory(c.id);
-              }}
-            />
-          ))}
-          {options?.accounts.map((a) => (
-            <PlanAction
-              key={a.id}
-              title={`${a.name} · ${a.currency}${scope === "account" && accountId === a.id ? " ✓" : ""}`}
-              onPress={() => {
-                setScope("account");
-                setAccount(a.id);
-                setCurrency(a.currency);
-              }}
-            />
-          ))}
-        </>
-      ) : (
-        <Body>
-          Savings means income left after spending, not a reserved account
-          balance.
-        </Body>
-      )}
-      <Body>Cadence</Body>
-      {["daily", "weekly", "biweekly", "monthly", "quarterly", "annual"].map(
-        (value) => (
-          <PlanAction
-            key={value}
-            title={`${value}${cadence === value ? " ✓" : ""}`}
-            onPress={() => setCadence(value)}
-          />
-        ),
-      )}
+      <ChoiceField label="Type" value={kind} options={[{value:"spend_limit",label:"Spending Limit"},{value:"savings_target",label:"Savings Target"}]} onChange={value=>{setKind(value as typeof kind); if(value==="savings_target")setScope("global");}}/>
+      {kind === "spend_limit" ? <ChoiceField label="Applies To" value={scope === "category" ? `category:${categoryId}` : scope === "account" ? `account:${accountId}` : "global"} options={[{value:"global",label:"All Spending"},...(options?.categories??[]).map(c=>({value:`category:${c.id}`,label:c.name,group:"Categories"})),...(options?.accounts??[]).map(a=>({value:`account:${a.id}`,label:`${a.name} · ${a.currency}`,group:"Accounts"}))]} onChange={value=>{if(value==="global")setScope("global"); else if(value.startsWith("category:")){setScope("category");setCategory(value.slice(9));}else{setScope("account");setAccount(value.slice(8));const account=options?.accounts.find(a=>a.id===value.slice(8));if(account)setCurrency(account.currency);}}}/> : <Body>Savings means income left after spending, not a reserved account balance.</Body>}
+      <ChoiceField label="Cadence" value={cadence} onChange={setCadence} options={["daily","weekly","biweekly","monthly","quarterly","annual"].map(value=>({value,label:value[0].toUpperCase()+value.slice(1)}))}/>
       {error ? <Notice>{error}</Notice> : null}
       {deleting ? (
         <Card>

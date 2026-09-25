@@ -371,7 +371,7 @@ export default function TransactionDetailPage() {
   };
 
   return (
-    <CloverShell active="transactions" title="Transaction Details" showTopbar={false} mobileBackHref="/transactions" mobileTrailingAction={<button className="icon-button" type="button" aria-label="Close transaction details" onClick={goBack}><span aria-hidden="true">×</span></button>}>
+    <CloverShell active="transactions" title="Transaction Details" showTopbar={false} mobileBackHref="/transactions" mobileBackAction={goBack}>
       <main className="transaction-detail-page">
         <header className="transaction-detail-page__header">
           <button className="transaction-detail-page__back" type="button" onClick={goBack} aria-label="Back to transactions">
@@ -441,7 +441,7 @@ export default function TransactionDetailPage() {
                     field === "notes" ? <textarea aria-label="Notes" value={draft.description} onChange={event => setDraft({...draft,description:event.target.value})} /> :
                     field === "amount" ? <span className="transaction-detail-page__money-control"><CurrencySelector value={draft.currency} onChange={currency => setDraft({...draft,currency})} options={getCurrencyCatalogCodes()} ariaLabel="Select transaction currency" /><input id="transaction-detail-amount" type="number" aria-label="Amount" min="0" step="0.01" value={draft.amount} onChange={event => setDraft({...draft,amount:event.target.value})} /></span> :
                     <input aria-label={label} type={field === "date" ? "date" : "text"} value={field === "date" ? draft.date : draft.merchantClean} onChange={event => setDraft({...draft,[field === "date" ? "date" : "merchantClean"]:event.target.value})} />
-                  }</div> : <button type="button" onClick={() => beginEditing(field)}>{value}</button>}
+                  }</div> : <button type="button" aria-label={`Edit ${label}: ${value}`} onClick={() => beginEditing(field)}><span>{value}</span><span className="detail-row-edit" aria-hidden="true">✎</span></button>}
                 </div>;
               })}
             </section>

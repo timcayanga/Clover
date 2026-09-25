@@ -1,7 +1,8 @@
+import { PlanHeader } from "./plan-ui";
 import { AddEntryMethods } from "./add-entry-methods";
 import { useEffect, useRef, useState } from "react";
 import { Body, Button, Card, Field, Heading, Notice, Screen } from "./ui";
-import { Choices } from "./transaction-entry";
+import { Choices, ChoiceField } from "./transaction-entry";
 import { useSession } from "./session";
 export type Tracking = {
   version: 1;
@@ -56,9 +57,9 @@ export type Suggestion = {
   statementCheckpointId: string | null;
 };
 export const recurringKinds = [
-  { value: "planned_payment", label: "Planned payment" },
-  { value: "debt", label: "Debt & loans" },
-  { value: "receivable", label: "Money owed" },
+  { value: "planned_payment", label: "Planned Payment" },
+  { value: "debt", label: "Debt & Loans" },
+  { value: "receivable", label: "Money Owed" },
   { value: "reminder", label: "Installments" },
 ];
 const emptyTracking: Tracking = {
@@ -238,14 +239,8 @@ export function RecurringEditor({
     }
   };
   return (
-    <Screen>
-      <Heading>
-        {initial
-          ? "Edit recurring"
-          : suggestion
-            ? "Review suggestion"
-            : "Add recurring"}
-      </Heading>
+    <Screen sheet={!initial} onDismiss={() => { if (!busy) onClose(); }}>
+      <PlanHeader title={initial ? "Edit Recurring" : suggestion ? "Review Suggestion" : "Add Recurring"} back={() => {if(!busy)onClose();}}/>
       {suggestion ? (
         <Notice>
           Suggested · {suggestion.confidence}% confidence. {suggestion.reason}{" "}
@@ -255,7 +250,8 @@ export function RecurringEditor({
       {error ? <Notice>{error}</Notice> : null}
       <AddEntryMethods enabled={!initial} kind="recurring" disabled={busy} context={{kind:"recurring",fields:{kind:draft.kind,title:draft.title,amount:draft.amount,currency:draft.currency,dueDate:draft.dueDate,recurrence:draft.recurrence,counterparty:draft.counterparty,accountId:draft.accountId,notes:draft.notes}}} onReviewForm={({fields})=>setDraft(current=>({...current,...fields,kind:recurringKinds.some(k=>k.value===fields.kind)?fields.kind:current.kind}))}>
       <Card>
-        <Choices
+        <ChoiceField
+          label="Recurring Type"
           value={draft.kind}
           options={recurringKinds}
           onChange={(kind) => setDraft((d) => ({ ...d, kind }))}
@@ -291,8 +287,7 @@ export function RecurringEditor({
             }
           />
         ))}
-        <Body>Repeat</Body>
-        <Choices
+        <ChoiceField label="Repeat"
           value={draft.recurrence}
           options={[
             "once",
@@ -301,11 +296,10 @@ export function RecurringEditor({
             "monthly",
             "quarterly",
             "annual",
-          ].map((value) => ({ value, label: value }))}
+          ].map((value) => ({ value, label: value[0].toUpperCase() + value.slice(1) }))}
           onChange={(recurrence) => setDraft((d) => ({ ...d, recurrence }))}
         />
-        <Body>Account</Body>
-        <Choices
+        <ChoiceField label="Account"
           value={draft.accountId}
           options={[
             { value: "", label: "No linked account" },

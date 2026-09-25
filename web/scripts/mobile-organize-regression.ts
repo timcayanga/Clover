@@ -33,6 +33,11 @@ check(
       balance: "100",
     };
     assert.ok(mobileAccountCreateSchema.safeParse(input).success);
+    assert.ok(mobileAccountCreateSchema.safeParse({...input, investmentSubtype: "stock", investmentSymbol: "AC", investmentQuantity: "5.25", investmentCostBasis: "80"}).success);
+    assert.ok(mobileAccountCreateSchema.safeParse({...input, investmentSubtype: "bond", investmentPrincipal: "1000", investmentInterestRate: "4.5", investmentMaturityDate: "2027-01-01"}).success);
+    for (const extra of [{investmentQuantity: "-2"}, {investmentMaturityDate: "2026-02-30"}, {type: "bank", investmentSymbol: "AC"}]) {
+      assert.equal(mobileAccountCreateSchema.safeParse({...input,...extra}).success, false);
+    }
     for (const extra of [
       { accountNumber: "1234" },
       { investmentPurchaseDate: "2026-09-01" },

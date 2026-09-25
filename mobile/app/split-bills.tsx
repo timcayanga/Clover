@@ -1,3 +1,4 @@
+import { EntryOverlay } from "../src/entry-overlay";
 import type { Transaction } from "../src/types";
 import { Text } from "../src/app-text";
 import { AddEntryMethods } from "../src/add-entry-methods";
@@ -195,8 +196,8 @@ export default function SplitBills() {
         }}
       />
     );
-  if (adding)
-    return (
+  const entryOverlay = adding ? (
+    <EntryOverlay onClose={() => setAdding(false)}>
       <BillEditor
         key={sourceTransaction?.id || session.profileId}
         sourceTransaction={sourceTransaction}
@@ -212,7 +213,8 @@ export default function SplitBills() {
           else reload();
         }}
       />
-    );
+    </EntryOverlay>
+  ) : null;
   if (paymentDetail)
     return (
       <Screen>
@@ -283,6 +285,7 @@ export default function SplitBills() {
     );
   return (
     <Screen>
+      {entryOverlay}
       <PlanHeader
         title={selected ? "Bill Details" : "Split Bills"}
         back={selected ? () => setSelected(null) : undefined}
@@ -558,8 +561,8 @@ export default function SplitBills() {
             <>
               {options.data.groups.length ? (
                 options.data.groups.map((group) => (
+                  <Pressable key={group.id} onPress={() => setEntity({ group })}>
                   <LinearGradient
-                    key={group.id}
                     colors={
                       dark ? ["#193A43", "#182B36"] : ["#E4FAF3", "#DFF2FA"]
                     }
@@ -611,6 +614,7 @@ export default function SplitBills() {
                       onPress={() => setEntity({ group })}
                     />
                   </LinearGradient>
+                  </Pressable>
                 ))
               ) : (
                 <Notice>No groups yet.</Notice>
@@ -887,7 +891,7 @@ function BillEditor({
     }
   };
   return (
-    <Screen>
+    <Screen sheet onDismiss={() => { if(!busy)onClose(); }}>
       <PlanHeader
         title="Add Split Bill"
         back={() => {

@@ -1,3 +1,5 @@
+import { EntryOverlay } from "../src/entry-overlay";
+import { ChoiceField } from "../src/transaction-entry";
 import { CreateDirectoryCard } from "../src/create-directory-card";
 import { Icon } from "../src/ui";
 import { CircleInvitations } from "../src/circle-invitations";
@@ -212,8 +214,8 @@ export default function Circles() {
         onChanged={reload}
       />
     );
-  if (editor)
-    return (
+  const entryOverlay = editor ? (
+    <EntryOverlay onClose={() => setEditor(null)}>
       <CircleEditor
         key={session.profileId}
         initial={editor.circle}
@@ -232,11 +234,13 @@ export default function Circles() {
           else reload();
         }}
       />
-    );
+    </EntryOverlay>
+  ) : null;
   return (
     <Screen gap={20}>
+      {entryOverlay}
       <PlanHeader
-        title={selected ? "Circle Details" : "Circles"}
+        title={selected ? selected.name : "Circles"}
         back={selected ? () => setSelected(null) : undefined}
         add={() => setEditor({ circle: null })}
       />
@@ -249,15 +253,7 @@ export default function Circles() {
         <Body>Loading Circles…</Body>
       ) : selected ? (
         <>
-          <Text
-            style={{
-              fontFamily: "Poppins-SemiBold",
-              fontSize: 20,
-              color: colors.ink,
-            }}
-          >
-            {selected.name}
-          </Text>
+
           <PlanTabs
             items={[
               "Overview",
@@ -577,10 +573,7 @@ export default function Circles() {
         </>
       ) : (
         <>
-          <PlanAction
-            title="Circle invitations"
-            onPress={() => setInvitations(true)}
-          />
+
           <Body>
             Split bills, coordinate shared expenses, track commitments, and work
             toward budgets and goals together—while keeping personal accounts
@@ -596,6 +589,7 @@ export default function Circles() {
             .map((circle) => (
               <Card
                 key={circle.id}
+                onPress={() => { setSelected(circle); setTab("Overview"); }}
                 style={{
                   backgroundColor: dark
                     ? circle.type === "household"
@@ -681,7 +675,10 @@ export default function Circles() {
             title="Create Circle"
             subtitle="Start sharing with a new group"
             onPress={() => setEditor({ circle: null, type: "household" })}
-            filled
+          />
+          <PlanAction
+            title="Circle invitations"
+            onPress={() => setInvitations(true)}
           />
         </>
       )}
@@ -700,6 +697,7 @@ function CircleEditor({
   onSaved: (circle: Circle) => void;
 }) {
   const session = useSession();
+  const { colors } = useTheme();
   const [name, setName] = useState(initial?.name ?? "");
   const [kind, setKind] = useState(initial?.type ?? type ?? "household");
   const [description, setDescription] = useState(initial?.description ?? "");
@@ -759,7 +757,7 @@ function CircleEditor({
     }
   };
   return (
-    <Screen>
+    <Screen sheet onDismiss={() => { if (!busy) onClose(); }}>
       <PlanHeader
         title={initial ? "Edit Circle" : "Create Circle"}
         back={() => {
@@ -771,9 +769,14 @@ function CircleEditor({
           source={{
             uri: (avatar === undefined ? initial?.avatarUrl : avatar) ?? "",
           }}
-          style={{ width: 96, height: 96, borderRadius: 24 }}
+          style={{ width: 96, height: 96, borderRadius: 48, alignSelf: "center" }}
         />
-      ) : null}
+      ) : (
+        <View style={{ width: 96, height: 96, borderRadius: 48, alignSelf: "center", alignItems: "center", justifyContent: "center", backgroundColor: colors.white, borderColor: colors.line, borderWidth: 1 }}>
+          <Icon name="camera-outline" size={32} color={colors.teal} />
+        </View>
+      )}
+      <View style={{ alignItems: "center", gap: 8 }}>
       <PlanAction
         title="Choose Circle photo"
         onPress={() => {
@@ -795,7 +798,8 @@ function CircleEditor({
             .catch((e) => setError(e.message));
         }}
       />
-      <PlanAction title="Remove photo" onPress={() => setAvatar(null)} />
+      {(avatar === undefined ? initial?.avatarUrl : avatar) ? <PlanAction title="Remove photo" onPress={() => setAvatar(null)} /> : null}
+      </View>
       <Field
         label="Circle name"
         value={name}
@@ -814,22 +818,7 @@ function CircleEditor({
         onChangeText={(v) => setCurrency(v.toUpperCase())}
         maxLength={3}
       />
-      <Body>Circle type</Body>
-      {[
-        "household",
-        "couple",
-        "family",
-        "travel",
-        "friends",
-        "goal",
-        "custom",
-      ].map((value) => (
-        <PlanAction
-          key={value}
-          title={`${value}${kind === value ? " ✓" : ""}`}
-          onPress={() => setKind(value)}
-        />
-      ))}
+      <ChoiceField label="Circle Type" value={kind} onChange={setKind} options={["household","couple","family","travel","friends","goal","custom"].map(value=>({value,label:value[0].toUpperCase()+value.slice(1)}))}/>
       {error ? <Notice>{error}</Notice> : null}
       <PlanAction title="Cancel" disabled={busy} onPress={onClose} />
       <PlanAction

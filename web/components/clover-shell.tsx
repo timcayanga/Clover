@@ -2072,6 +2072,10 @@ export function CloverShell({
               ))}
             </div>
           ))}
+          <div className="sidebar-nav__section">
+            <p className="sidebar-nav__section-label">Personal</p>
+            {([{href:"/settings",label:"Settings",icon:"settings"},{href:"/help",label:"Help",icon:"help"}] as const).map(item => <Link key={item.href} href={item.href} prefetch={false} className="nav-link" onClick={event => handleNavigationLinkClick(event,item.href)}><span className="nav-link__icon" aria-hidden="true"><MenuIcon name={item.icon} /></span>{item.label}</Link>)}
+          </div>
         </nav>
 
         {planUsageWarning?.progress ? (
@@ -2566,7 +2570,7 @@ export function CloverShell({
       </nav>
 
       <main
-        className={`content content--${active} ${mobileBackAction || /Details|Edit |Create |Add /.test(title) ? "content--plan-detail" : ""} ${titleAddon ? "content--has-title-addon" : "content--plain-title"}${
+        className={`content content--${active} ${shouldShowBackButton ? "content--has-back" : ""} ${mobileBackAction || /Details|Edit |Create |Add /.test(title) ? "content--plan-detail" : ""} ${titleAddon ? "content--has-title-addon" : "content--plain-title"}${
           mobileLeadingAction ? " content--has-mobile-leading-action" : ""
         }${mobileSubheader ? " content--has-mobile-subheader" : ""}`}
         onClickCapture={(event) => {

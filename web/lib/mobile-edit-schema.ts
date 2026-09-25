@@ -1,14 +1,23 @@
 import { z } from "zod";
 
-// Deliberately excludes accountNumber and investment-history fields: the shared
-// web create route may update an existing account when those fields are sent.
+// Account numbers remain excluded. Investment creation enforces createOnly
+// so duplicate identities cannot mutate existing accounts or history.
 export const mobileAccountCreateSchema = z.object({
   name: z.string().trim().min(1).max(200),
   institution: z.string().trim().max(200).optional(),
   type: z.enum(["bank", "wallet", "credit_card", "cash", "investment", "loan", "mortgage", "line_of_credit", "receivable", "payable", "bnpl", "prepaid", "insurance", "other"]),
   currency: z.string().regex(/^[A-Z]{3}$/),
   balance: z.string().regex(/^-?\d{1,12}(\.\d{1,2})?$/).nullable(),
-}).strict();
+  investmentSubtype: z.enum(["stock","etf","mutual_fund","money_market_fund","uitf","reit","crypto","real_world_asset","bond","time_deposit","savings","other"]).optional(),
+  investmentSymbol: z.string().trim().max(200).nullable().optional(),
+  investmentQuantity: z.string().regex(/^\d{1,12}(\.\d{1,8})?$/).nullable().optional(),
+  investmentCostBasis: z.string().regex(/^\d{1,12}(\.\d{1,8})?$/).nullable().optional(),
+  investmentPrincipal: z.string().regex(/^\d{1,12}(\.\d{1,8})?$/).nullable().optional(),
+  investmentInterestRate: z.string().regex(/^\d{1,12}(\.\d{1,8})?$/).nullable().optional(),
+  investmentMaturityValue: z.string().regex(/^\d{1,12}(\.\d{1,8})?$/).nullable().optional(),
+  investmentStartDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).refine(v=>{const d=new Date(`${v}T00:00:00Z`);return Number.isFinite(+d)&&d.toISOString().slice(0,10)===v;}).nullable().optional(),
+  investmentMaturityDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).refine(v=>{const d=new Date(`${v}T00:00:00Z`);return Number.isFinite(+d)&&d.toISOString().slice(0,10)===v;}).nullable().optional(),
+}).strict().refine(value => value.type === "investment" || !Object.keys(value).some(key => key.startsWith("investment")), "Investment fields require an investment account.");
 
 const date = z.string().regex(/^\d{4}-\d{2}-\d{2}$/).refine(value => {
   const parsed = new Date(`${value}T00:00:00Z`);

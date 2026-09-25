@@ -9,14 +9,17 @@ import { AppHeader, AddNavigationMark, Icon, useTheme } from "./ui";
 export function PlanDirectoryCard({
   children,
   color,
+  onPress,
 }: {
   children: ReactNode;
+  onPress?: () => void;
   color: string;
 }) {
   const { dark, colors } = useTheme();
   const [width, setWidth] = useState(0);
   const tint = /^#[0-9a-f]{6}$/i.test(color) ? color : "#35b875";
   return (
+    <Pressable onPress={onPress}>
     <LinearGradient
       colors={dark ? [colors.white, `${tint}24`] : [`${tint}38`, `${tint}0a`]}
       start={{ x: 0, y: 0 }}
@@ -34,6 +37,7 @@ export function PlanDirectoryCard({
     >
       {children}
     </LinearGradient>
+    </Pressable>
   );
 }
 export function PlanAmount({ children }: { children: ReactNode }) {
@@ -66,7 +70,7 @@ export function PlanHeader({
   titleInset?: number;
 }) {
   return (
-    <View style={{ marginHorizontal: -16, marginTop: -16 }}>
+    <View>
       <AppHeader
         title={title}
         onClose={back}
@@ -93,7 +97,10 @@ export function PlanHeader({
   );
 }
 
+PlanHeader.screenHeader = true;
+
 const tabIcons: Record<string, ComponentProps<typeof Icon>["name"]> = {
+  Expenses: "receipt-outline", Budgets: "wallet-outline", Goals: "flag-outline", Commitments: "calendar-outline", Contributions: "gift-outline", Reports: "bar-chart-outline", Transactions: "swap-horizontal-outline", Roadmap: "map-outline", Progress: "trending-up-outline",
   Overview: "apps-outline", Bills: "receipt-outline", Groups: "people-outline",
   People: "person-outline", Payments: "card-outline", Spending: "bar-chart-outline",
   Trends: "trending-up-outline", Insights: "sparkles-outline", Portfolio: "briefcase-outline",
@@ -113,16 +120,17 @@ export function PlanTabs({
   value: string;
   onChange: (value: string) => void;
 }) {
-  const { colors } = useTheme();
+  const { colors, dark } = useTheme();
   const { width } = useWindowDimensions();
   return (
     <View accessibilityRole="tablist" style={{ flexDirection: "row", flexWrap: items.length > 4 ? "wrap" : "nowrap" }}>
       {items.map((item, index) => {
         const label = item.replace(" · Plus", "");
         const selected = item === value;
-        const color = selected ? colors.teal : colors.muted;
+        const premium = item.includes(" · Plus");
+        const color = premium ? (dark ? "#C7A5EE" : "#8561AF") : selected ? colors.teal : colors.muted;
         return (
-          <Pressable key={item} accessibilityRole="tab" accessibilityLabel={item}
+          <Pressable key={item} accessibilityRole="tab" accessibilityLabel={premium ? `${label}, Plus and Pro` : label}
             accessibilityState={{ selected }} aria-selected={selected}
             onPress={() => onChange(item)}
             style={{
@@ -138,9 +146,7 @@ export function PlanTabs({
             <Icon line name={tabIcons[label] ?? (index === 0 ? "apps-outline" : /history|activity/i.test(label) ? "time-outline" : /goal/i.test(label) ? "flag-outline" : "list-outline")} size={14} color={color} />
             <Text style={{ fontSize: width < 360 ? 10.5 : 12, lineHeight: 18, textAlign: "center", flexShrink: 1, fontFamily: "Poppins-Medium", color }}>{label}</Text>
             </View>
-            {item.includes(" · Plus") ? (
-              <Text style={{ fontSize: 8, lineHeight: 14, paddingHorizontal: 3, borderRadius: 7, backgroundColor: colors.pale, color: colors.teal, fontFamily: "Poppins-SemiBold" }}>Plus</Text>
-            ) : null}
+
           </Pressable>
         );
       })}
@@ -326,18 +332,19 @@ export function SummaryCard({
         borderColor: colors.line,
         backgroundColor: colors.white,
         borderRadius: 16,
-        paddingVertical: 12,
-        paddingHorizontal: 4,
+        paddingVertical: 18,
+        paddingHorizontal: 8,
         gap: 6,
         minHeight: 94,
         justifyContent: "center",
         alignItems: "center",
       }}
     >
-      <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 4, paddingHorizontal: 6 }}>
+      <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 4, paddingHorizontal: 14 }}>
         <Text style={{ fontFamily: "Poppins-SemiBold", fontSize: 12, lineHeight: 18, textAlign: "center", color: "#7A879C", flexShrink: 1 }}>{title}</Text>
-        {help ? <Pressable accessibilityRole="button" accessibilityLabel={help} onPress={() => Platform.OS === "web" ? setShowHelp(value => !value) : Alert.alert(title, help)} hitSlop={6} style={{ width: 28, height: 28, borderRadius: 14, borderWidth: 1, borderColor: colors.line, alignItems: "center", justifyContent: "center" }}><Icon name="information" size={14} color={colors.muted}/></Pressable> : null}
+
       </View>
+        {help ? <Pressable accessibilityRole="button" accessibilityLabel={help} onPress={() => Platform.OS === "web" ? setShowHelp(value => !value) : Alert.alert(title, help)} hitSlop={6} style={{ position: "absolute", right: 5, top: 5, width: 20, height: 20, borderRadius: 10, borderWidth: 1, borderColor: colors.line, alignItems: "center", justifyContent: "center" }}><Icon name="information" size={11} color={colors.muted}/></Pressable> : null}
       {showHelp && help ? <Text style={{ color: colors.muted, fontSize: 12, textAlign: "center", paddingHorizontal: 8 }}>{help}</Text> : null}
       <Text
         style={{

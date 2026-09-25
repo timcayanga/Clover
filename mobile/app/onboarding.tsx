@@ -33,7 +33,7 @@ export default function Onboarding() {
       router.replace(
         destination !== "skip"
           ? {
-              pathname: "/(tabs)/add",
+              pathname: "/add-transaction",
               params: { entry: `upload-${destination}`, picker: destination },
             }
           : "/(tabs)",

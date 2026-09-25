@@ -1,3 +1,4 @@
+import { EntryOverlay } from "../src/entry-overlay";
 import { Text } from "../src/app-text";
 import { LinearGradient } from "expo-linear-gradient";
 import { compactSummaryMoney } from "../../shared/summary-format";
@@ -102,8 +103,8 @@ export default function Investments() {
     session.demo ||
     session.data?.entitlement.fullFeatureAccess ||
     (session.data?.entitlement.planTier === "pro" || session.data?.entitlement.planTier === "premium");
-  if (editor)
-    return (
+  const entryOverlay = editor ? (
+    <EntryOverlay onClose={() => setEditor(null)}>
       <AccountEditor
         initial={editor.account}
         defaultType="investment"
@@ -133,7 +134,8 @@ export default function Investments() {
           else reload();
         }}
       />
-    );
+    </EntryOverlay>
+  ) : null;
   const openHolding = (item: PortfolioHolding) => setHolding(item);
   if (holding)
     return (
@@ -170,6 +172,7 @@ export default function Investments() {
     );
   return (
     <Screen gap={20}>
+      {entryOverlay}
       <PlanHeader
         title="Investments"
         stackedTitle={width < 360}
@@ -271,7 +274,7 @@ export default function Investments() {
       ) : !data ? (
         <Body>Loading investments…</Body>
       ) : tab.includes("Plus") && !pro ? (
-        <Notice>This section requires Clover Plus.</Notice>
+        <Notice>This section is available with Clover Plus and Pro.</Notice>
       ) : tab === "Overview" ? (
         <>
           <View style={{ flexDirection: "row", gap: 8 }}>
