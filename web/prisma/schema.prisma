@@ -333,6 +333,7 @@ enum ContactInquiryStatus {
 }
 
 model User {
+  switchApplications SwitchApplication[]
   adviserConversations AdviserConversation[]
   mobileLocalAllowances MobileLocalAllowance[]
   mobileOfflineMutations MobileOfflineMutation[]
@@ -2441,4 +2442,59 @@ model InvestmentPositionRevision {
  after Json
  createdAt DateTime @default(now())
  position InvestmentPosition @relation(fields:[positionId],references:[id],onDelete:Cascade)
+}
+
+// Receipt-based acquisition campaign. Evidence is private and separate from imports.
+model SwitchCampaign {
+  id String @id
+  environment String @unique
+  status String @default("draft")
+  capacity Int @default(100)
+  redeemedCount Int @default(0)
+  endsAt DateTime?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  applications SwitchApplication[]
+}
+model SwitchApplication {
+  id String @id @default(cuid())
+  campaignId String
+  userId String
+  status String @default("submitted")
+  claimBy DateTime?
+  activatedAt DateTime?
+  expiresAt DateTime?
+  convertedAt DateTime?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  campaign SwitchCampaign @relation(fields:[campaignId], references:[id], onDelete:Cascade)
+  user User @relation(fields:[userId], references:[id], onDelete:Cascade)
+  evidence SwitchEvidence[]
+  events SwitchEvent[]
+  @@unique([campaignId,userId])
+  @@index([status,claimBy])
+}
+model SwitchEvidence {
+  id String @id @default(cuid())
+  applicationId String
+  storageKey String @unique
+  digest String
+  mime String
+  fileName String
+  purgedAt DateTime?
+  createdAt DateTime @default(now())
+  application SwitchApplication @relation(fields:[applicationId], references:[id], onDelete:Cascade)
+  @@index([digest])
+}
+model SwitchEvent {
+  id String @id @default(cuid())
+  applicationId String
+  kind String
+  message String
+  actorId String
+  emailStatus String @default("pending")
+  createdAt DateTime @default(now())
+  application SwitchApplication @relation(fields:[applicationId], references:[id], onDelete:Cascade)
+  @@unique([applicationId,kind])
+  @@index([emailStatus,createdAt])
 }

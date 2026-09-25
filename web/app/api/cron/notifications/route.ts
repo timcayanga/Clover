@@ -14,8 +14,11 @@ export async function GET(request: Request) {
   )
     return Response.json({ error: "Unauthorized" }, { status: 401 });
   try {
+    const { sweepSwitchCampaign, dispatchSwitchEmails } = await import("@/lib/switch-campaign-notifications.server");
+    const campaign = await sweepSwitchCampaign().catch(() => ({error:"Campaign lifecycle failed; retry required."}));
+    const campaignEmails = await dispatchSwitchEmails().catch(() => ({error:"Campaign email delivery failed; inspect ledger."}));
     const bankConnections=await sweepBankConnections();
-    return Response.json({ ...(await dispatchNotificationEmails()), bankConnections });
+    return Response.json({ ...(await dispatchNotificationEmails()), bankConnections, campaign, campaignEmails });
   } catch {
     return Response.json(
       {

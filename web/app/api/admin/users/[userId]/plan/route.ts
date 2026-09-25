@@ -47,7 +47,8 @@ export async function GET(
     });
     const limits = getEffectiveUserLimits({ ...account, planTier: access.planTier }, { ignoreDevelopmentOverride: true });
     const tokens = await getCloverTokenUsage({ ...account, planTier: access.planTier });
-    return NextResponse.json({ ...access, history, allowances: { ...PLAN_CATALOG[access.planTier], accounts: limits.accountLimit }, accountLimitOverride: account.accountLimit, tokens });
+    const switchCampaign = await prisma.switchApplication.findFirst({where:{userId},select:{status:true,activatedAt:true,expiresAt:true,claimBy:true}});
+    return NextResponse.json({ ...access, switchCampaign, history, allowances: { ...PLAN_CATALOG[access.planTier], accounts: limits.accountLimit }, accountLimitOverride: account.accountLimit, tokens });
   } catch {
     return NextResponse.json(
       { error: "Unable to access this account." },

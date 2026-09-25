@@ -16,7 +16,7 @@ export default async function SignUpPage({ searchParams }: { searchParams?: Prom
   const circleInvite = Array.isArray(params.circleInvite)
     ? params.circleInvite[0]
     : params.circleInvite;
-  const completeRedirectUrl = isCircleInvitationToken(circleInvite)
+  const completeRedirectUrl = params.campaign === "switch-to-clover" ? "/onboarding?campaign=switch-to-clover" : isCircleInvitationToken(circleInvite)
     ? `/onboarding?circleInvite=${encodeURIComponent(circleInvite)}`
     : intent === "pro"
       ? `/onboarding?upgrade=pro&interval=${interval}`

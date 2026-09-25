@@ -760,14 +760,14 @@ function ClerkAuthScreenInner({ mode, completeRedirectUrl }: { mode: "sign-in" |
         </button>
       ) : (
         <>
-          New to Clover? <Link className="clover-auth-card__link" href="/sign-up">
+          New to Clover? <Link className="clover-auth-card__link" href={completeRedirectUrl === "/onboarding?campaign=switch-to-clover" ? "/sign-up?campaign=switch-to-clover" : "/sign-up"}>
             Create an account
           </Link>
         </>
       )
     ) : (
       <>
-        Already have an account? <Link className="clover-auth-card__link" href="/sign-in">
+        Already have an account? <Link className="clover-auth-card__link" href={completeRedirectUrl === "/onboarding?campaign=switch-to-clover" ? "/sign-in?campaign=switch-to-clover" : "/sign-in"}>
           Sign In
         </Link>
       </>

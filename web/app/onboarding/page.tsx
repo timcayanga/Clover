@@ -25,7 +25,7 @@ export default async function OnboardingPage({ searchParams }: { searchParams?: 
   const circleInvite = Array.isArray(params.circleInvite)
     ? params.circleInvite[0]
     : params.circleInvite;
-  const completionUrl = isCircleInvitationToken(circleInvite)
+  const completionUrl = params.campaign === "switch-to-clover" ? "/settings/plan/switch-to-clover" : isCircleInvitationToken(circleInvite)
     ? getCircleInvitationPath(circleInvite, { accept: true })
     : "/dashboard";
   let session;

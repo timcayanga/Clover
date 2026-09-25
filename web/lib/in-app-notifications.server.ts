@@ -560,6 +560,8 @@ export const buildInAppNotificationCandidates = async (
       tone:'warning',priority:'high',createdAt:new Date(Math.min(+now,+deadline-(planEnding?14:stage??14)*DAY_MS)).toISOString(),href:'/accounts',ctaLabel:'Manage connected banks'
     });
   }
+  const { switchNotifications } = await import("./switch-campaign-notifications.server");
+  items.push(...await switchNotifications(user.id));
   const configured = options.raw ? items : applyInAppTemplates(items, await loadRuntimeNotificationTemplates(
     (await prisma.user.findUnique({ where: { id: user.id }, select: { environment: true } }))?.environment ?? "local",
   ));
