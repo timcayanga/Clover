@@ -935,3 +935,14 @@ html[data-theme="dark"] .admin-adoption-range input { background: #0b1521; color
 .admin-case-layout { display: grid; grid-template-columns: minmax(240px, .7fr) minmax(0, 1.8fr); gap: 20px; align-items: start; }
 .admin-case-layout article { padding: 14px 0; border-bottom: 1px solid var(--border, #dbe3e8); overflow-wrap: anywhere; }
 @media(max-width: 760px) { .admin-case-layout { grid-template-columns: minmax(0, 1fr); } }
+
+/* Available in every Admin header, including narrow screens. */
+.admin-page-header { flex-wrap: wrap; }
+.admin-page-chrome__actions { flex-wrap: wrap; margin-left: auto; }
+.admin-sign-out { display: grid; gap: 4px; }
+.admin-sign-out__button { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 44px; padding: 8px 12px; border: 1px solid var(--stroke); border-radius: 12px; background: transparent; color: var(--text); font: 500 13px/20px var(--font-poppins),sans-serif; cursor: pointer; white-space: nowrap; }
+.admin-sign-out__button img { object-fit: contain; filter: url('/assets/icon-transparency.svg?v=2#remove-white'); }
+.admin-sign-out__button:hover { border-color: var(--accent); color: var(--accent); }
+.admin-sign-out__button:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+.admin-sign-out__button:disabled { opacity: .65; cursor: wait; }
+.admin-sign-out p { margin: 0; max-width: 240px; font-size: 12px; color: var(--text); }
