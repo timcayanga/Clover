@@ -92,8 +92,8 @@
 
 @media(max-width:600px) {
   [aria-label="Reports sections"] {width:100%;min-width:0;}
-   .content.content [aria-label="Reports sections"].clover-tabs.clover-tabs > .animated-tabs__tab {flex:1 1 0 !important;min-width:0 !important;padding:8px 4px !important;gap:3px !important;font-size:11px !important;}
-   .content.content [aria-label="Reports sections"].clover-tabs.clover-tabs > .animated-tabs__tab svg {width:12px;height:12px;flex-shrink:0;}
+   .content.content [aria-label="Reports sections"] .clover-tabs.clover-tabs > .animated-tabs__tab {flex:1 1 0 !important;min-width:0 !important;padding:8px 4px !important;gap:3px !important;font-size:11px !important;}
+   .content.content [aria-label="Reports sections"] .clover-tabs.clover-tabs > .animated-tabs__tab svg {width:12px;height:12px;flex-shrink:0;}
 }
 
 @media(max-width:1100px) {
@@ -116,4 +116,8 @@
  .transactions-entry--figma .transactions-manual-field:has(> .transaction-category-picker) {display:grid !important;grid-template-columns:80px minmax(0,1fr) !important;align-items:center;gap:10px;}
  .transactions-entry--figma .transactions-manual-field:has(> .transaction-category-picker) > .transactions-manual-field__label {position:static !important;margin:0 !important;}
  .transactions-entry--figma .transaction-category-picker {min-width:0;}
+}
+
+@media(max-width:1100px) {
+ .goal-creation-sheet .goal-inline-setup input {width:100%;min-width:0;max-width:100%;}
 }
