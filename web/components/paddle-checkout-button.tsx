@@ -63,6 +63,7 @@ export function PaddleCheckoutButton({
   className,
   onStart,
 }: PaddleCheckoutButtonProps) {
+  const checkoutDialogRef = useRef<HTMLDialogElement>(null);
   const checkoutActiveRef = useRef(false);
   const initializedTokenRef = useRef<string | null>(null);
   const [scriptReady, setScriptReady] = useState(false);
@@ -142,6 +143,7 @@ export function PaddleCheckoutButton({
     try {
     const checkout = await prepareCheckout("paddle", priceId, referralCode);
     checkoutActiveRef.current = true;
+    checkoutDialogRef.current?.close();
     window.Paddle.Checkout.open({
       items: [{ priceId, quantity: 1 }],
       customer: customerEmail ? { email: customerEmail } : undefined,
@@ -163,7 +165,13 @@ export function PaddleCheckoutButton({
 
   return (
     <div className={className}>
-      <ReferralCheckoutField value={referralCode} onChange={setReferralCode} provider="paddle" planId={priceId} />
+      <dialog ref={checkoutDialogRef} className="clover-checkout-dialog" aria-label="Checkout">
+        <h2>Subscribe to {planTier === "premium" ? "Pro" : "Plus"}</h2>
+        <p>Review the final price and currency in secure checkout before paying.</p>
+        <ReferralCheckoutField value={referralCode} onChange={setReferralCode} provider="paddle" planId={priceId} />
+        <div className="settings-plan-management__actions"><button type="button" className="button button-primary" disabled={preparing} onClick={() => void openCheckout()}>{preparing ? "Preparing…" : "Continue to payment"}</button><button type="button" className="button button-secondary" onClick={() => checkoutDialogRef.current?.close()}>Back</button></div>
+        {message ? <p role="status">{message}</p> : null}
+      </dialog>
       <Script
         src="https://cdn.paddle.com/paddle/v2/paddle.js"
         strategy="afterInteractive"
@@ -175,7 +183,7 @@ export function PaddleCheckoutButton({
       <button
         type="button"
         className="button-primary settings-plan-card__paddle-button"
-        onClick={openCheckout}
+        onClick={() => checkoutDialogRef.current?.showModal()}
         disabled={!scriptReady || preparing}
       >
         {preparing ? "Preparing checkout…" : scriptReady ? "Subscribe" : "Loading secure checkout..."}

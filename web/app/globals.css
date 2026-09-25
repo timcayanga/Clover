@@ -66583,3 +66583,28 @@ html[data-theme="dark"] .content.content--reports .reports-range-menu__summary {
 .settings-plan-retention label { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; }
 .settings-plan-retention select { max-width: 100%; padding: 10px 14px; border-radius: 12px; color: inherit; background: transparent; border: 1px solid var(--line, #d9e4e1); }
 
+
+/* Plan overview: usage, comparable tiers, offer, then subscription actions. */
+.settings-section--plan .settings-plan-usage {grid-template-columns:repeat(5,minmax(0,1fr));gap:10px}
+.settings-section--plan .settings-plan-usage__legend {flex-wrap:wrap;gap:4px}
+.settings-section--plan .settings-plan-grid {grid-template-columns:repeat(3,minmax(0,1fr));align-items:stretch}
+.settings-section--plan .settings-plan-card {min-width:0}
+.settings-section--plan .settings-plan-card__band {padding:16px;min-height:100px}
+.settings-section--plan .settings-plan-card__body {padding:16px}
+.settings-section--plan .settings-plan-card__band-price {font-size:14px;white-space:normal}
+.settings-section--plan .settings-plan-card__features {font-size:12px}
+.settings-section--plan .settings-plan-card--premium {background:linear-gradient(145deg,rgba(3,168,192,.22),rgba(3,168,192,.07));backdrop-filter:blur(12px)}
+.settings-section--plan .settings-plan-card--pro {background:linear-gradient(145deg,rgba(110,231,183,.3),rgba(110,231,183,.08));backdrop-filter:blur(12px)}
+.settings-section--plan .settings-plan-card--free {background:var(--surface,#fff)}
+.settings-plan-management__actions {display:flex;flex-wrap:wrap;align-items:flex-start;gap:16px}
+.settings-plan-management__actions > div {display:grid;gap:8px}
+.settings-hub__menu-icon,.sidebar-popover__link-icon,.sidebar-profile,.sidebar-profile:hover,.sidebar-profile.is-active,.shell-profile-drawer__account-avatar {background:transparent!important;box-shadow:none!important}
+.settings-hub__menu-icon {border:0!important;border-radius:0!important}
+@media(max-width:1100px){.settings-section--plan .settings-plan-usage{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:700px){.settings-section--plan .settings-plan-grid{grid-template-columns:minmax(0,1fr)}}
+.clover-checkout-dialog {width:min(480px,calc(100vw - 32px));max-height:calc(100dvh - 48px);overflow:auto;padding:24px;border:1px solid var(--stroke);border-radius:24px;background:var(--surface,#fff);color:var(--text);margin:auto}
+.clover-checkout-dialog::backdrop {background:rgba(15,30,35,.4);backdrop-filter:blur(4px)}
+.clover-checkout-dialog h2 {font-size:20px;margin-bottom:12px}.clover-checkout-dialog p {font-size:13px;line-height:1.6}
+.sidebar-popover.sidebar-popover--profile {background:transparent!important;border:0;box-shadow:none;backdrop-filter:blur(16px)}
+/* The canonical Figma artwork has a white matte; remove it at render time. */
+.settings-hub__menu-icon,.sidebar-popover--profile .menu-icon-3d,.sidebar-profile__avatar-icon,.shell-profile-drawer__account-avatar .menu-icon-3d {filter:url('/assets/icon-transparency.svg#remove-white')}

@@ -35,7 +35,7 @@ export function ReferralCheckoutField({
         />
       </label>
       <small>
-        For eligible first paid purchases. Your referrer earns Pro time; your
+        For eligible first paid purchases. Your referrer earns Plus time; your
         checkout price is unchanged.
       </small>
       {value && (

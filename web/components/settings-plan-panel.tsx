@@ -1,12 +1,10 @@
 "use client";
 import { SwitchOfferNotice } from "./switch-campaign";
 
+import { plannedPremiumPrices } from "@/lib/public-plan-comparison";
 import { PLAN_CATALOG, planName } from "../../shared/plan-catalog";
-import { PlanRetentionPanel } from "@/components/plan-retention-panel";
-import { PlanComparisonTable } from "@/components/plan-comparison-table";
 import { useEffect, useState } from "react";
 import { BillingActions } from "@/components/billing-actions";
-import { ReferralAccount } from "@/components/referral-account";
 import { PayPalSubscribeButton } from "@/components/paypal-subscribe-button";
 import { PaddleCheckoutButton } from "@/components/paddle-checkout-button";
 import { PlanFeatureItem } from "@/components/plan-feature-item";
@@ -62,39 +60,6 @@ type SettingsPlanPanelProps = {
   planLoading: boolean;
   planLoaded: boolean;
 };
-
-const freeFeatures = [
-  "Manual transaction tracking",
-  "3 profiles and 10 non-cash accounts",
-  "100,000 Clover tokens monthly",
-  "Unlimited files and transaction rows within the token allowance",
-  "Receipt scanning",
-  "Basic investment tracking",
-  "Basic Adviser guidance",
-  "Basic goal tracking",
-];
-
-const proFeatures = [
-  "Everything in Free",
-  "10 profiles and 20 non-cash accounts",
-  "2 linked bank accounts",
-  "1,000,000 Clover tokens monthly",
-  "Full investment portfolio tools",
-  "Advanced Adviser guidance",
-  "Enhanced goal tracking and recommendations",
-];
-
-function PlanIcon({ pro = false }: { pro?: boolean }) {
-  return pro ? (
-    <svg viewBox="0 0 24 24" aria-hidden="true">
-      <path d="m12 3 1.7 4.8 4.9.2-3.8 3 1.3 4.7L12 13.3 7.9 15.7l1.3-4.7-3.8-3 4.9-.2L12 3Z" />
-    </svg>
-  ) : (
-    <svg viewBox="0 0 24 24" aria-hidden="true">
-      <path d="M12 3.5 5.5 8l6.5 4.5L18.5 8 12 3.5ZM5.5 16l6.5 4.5 6.5-4.5" />
-    </svg>
-  );
-}
 
 function getUsagePercent(used: number, limit: number | null) {
   return limit === null ? 100 : Math.max(0, Math.min((used / limit) * 100, 100));
@@ -280,232 +245,49 @@ export function SettingsPlanPanel({
           </article>
         ))}
       </div>
-      <p className="settings-plan-token-note">
-        Adviser and AI-assisted parsing share these Clover-token allowances. The monthly allowance resets at midnight
-        Asia/Manila on the first day of each month and does not roll over.
-      </p>
-
-      <PlanRetentionPanel planTier={planTier} />
-      <PlanComparisonTable variant="full" className="settings-plan-comparison" />
-      <div className={`settings-plan-grid settings-plan-grid--current-${planTier}`} aria-label="Available plans">
-        <article className={`settings-plan-card settings-plan-card--free${planTier === "free" ? " is-current" : ""}`}>
-          <div className="settings-plan-card__band">
-            <span className="settings-plan-card__icon"><PlanIcon /></span>
-            <span className="settings-plan-card__band-text">
-              <strong className="settings-plan-card__band-title">Free</strong>
-            </span>
-          </div>
-          <div className="settings-plan-card__body">
-            <ul className="settings-plan-card__features">
-              {freeFeatures.map((feature) => (
-                <PlanFeatureItem key={feature} label={feature} className="settings-plan-card__feature-row" />
-              ))}
-            </ul>
-            {planTier === "free" ? <span className="settings-pill">Current plan</span> : null}
-          </div>
-        </article>
-
-        <article className={`settings-plan-card settings-plan-card--pro${planTier === "pro" ? " is-current" : ""}`}>
-          <div className="settings-plan-card__band">
-            <span className="settings-plan-card__icon"><PlanIcon pro /></span>
-            <span className="settings-plan-card__band-text">
-              <strong className="settings-plan-card__band-title">Plus</strong>
-              <span className="settings-plan-card__band-price">
-                {offers?.prices[billingInterval] ?? (offersLoading ? "Checking regional pricing…" : "Regional pricing unavailable")}
-                {offers ? (billingInterval === "monthly" ? " / month" : " / year") : ""}
-              </span>
-            </span>
-          </div>
-          <div className="settings-plan-card__body">
-            <div className="settings-plan-interval" role="group" aria-label="Plus billing interval">
-              <button
-                type="button"
-                className={billingInterval === "monthly" ? "is-selected" : ""}
-                onClick={() => setBillingInterval("monthly")}
-              >
-                Monthly
-              </button>
-              <button
-                type="button"
-                className={billingInterval === "annual" ? "is-selected" : ""}
-                onClick={() => setBillingInterval("annual")}
-              >
-                Annually
-              </button>
-            </div>
-            <ul className="settings-plan-card__features">
-              {proFeatures.map((feature) => (
-                <PlanFeatureItem key={feature} label={feature} className="settings-plan-card__feature-row" />
-              ))}
-            </ul>
-            {paddleReady && offers ? (
-              <p className="settings-helper">
-                Paddle bills {offers.paddlePrices[billingInterval]}{billingInterval === "monthly" ? " / month" : " / year"} in USD. Your payment provider may apply currency conversion.
-              </p>
-            ) : null}
-            <div className="settings-plan-card__cta">
-              {planTier === "free" ? (
-                isAwaitingApproval ? (
-                  <p className="settings-helper">Waiting for PayPal confirmation.</p>
-                ) : paddleReady ? (
-                  <PaddleCheckoutButton
-                    clientToken={paddleClientToken!}
-                    environment={paddleEnvironment}
-                    priceId={paddlePriceId!}
-                    customerId={billingCustomerId ?? ""}
-                    customerEmail={customerEmail}
-                    interval={billingInterval}
-                    className="settings-plan-card__paddle"
-                    onStart={() =>
-                      capturePostHogClientEvent("upgrade_cta_clicked", {
-                        cta_location: `settings_billing_${billingInterval}`,
-                        billing_provider: "paddle",
-                        plan_tier: planTier,
-                        plan_interval: billingInterval,
-                      })
-                    }
-                  />
-                ) : paypalCheckoutReady ? (
-                  <PayPalSubscribeButton
-                    clientId={paypalClientId!}
-                    planId={checkoutPlanId!}
-                    customId={billingCustomerId ?? ""}
-                    buyerCountry={paypalBuyerCountry}
-                    className="settings-plan-card__paypal"
-                    fundingSource="card"
-                    onStart={() =>
-                      capturePostHogClientEvent("upgrade_cta_clicked", {
-                        cta_location: `settings_billing_${billingInterval}`,
-                        plan_tier: planTier,
-                        plan_interval: billingInterval,
-                      })
-                    }
-                  />
-                ) : (
-                  <p className="settings-helper">
-                    {offersLoading ? "Checking subscription availability…" : "Checkout is temporarily unavailable for the advertised regional price. You can keep using Clover Free."}
-                  </p>
-                )
-              ) : !billingDetailsReady ? (
-                <p className="settings-helper">Loading subscription details...</p>
-              ) : planTier === "premium" ? <span className="settings-pill">Your Pro plan includes all Plus features</span> : currentProvider === "paddle" && hasPaddleSubscription ? (
-                billingInterval === currentInterval ? (
-                  <div className="settings-plan-card__management">
-                    <button
-                      type="button"
-                      className="button button-secondary button-small settings-billing-action-button"
-                      onClick={() => void openPaddlePortal("manage")}
-                      disabled={paddlePortalAction !== null}
-                    >
-                      {paddlePortalAction === "manage" ? "Opening portal..." : "Manage Subscription"}
-                    </button>
-                    <button
-                      type="button"
-                      className="button button-secondary button-small settings-billing-action-button"
-                      onClick={() => void openPaddlePortal("payment_method")}
-                      disabled={paddlePortalAction !== null}
-                    >
-                      {paddlePortalAction === "payment_method" ? "Opening payment methods..." : "Change Payment Method"}
-                    </button>
-                    <button
-                      type="button"
-                      className="button button-danger button-small settings-billing-action-button"
-                      onClick={() => void openPaddlePortal("cancel")}
-                      disabled={paddlePortalAction !== null}
-                    >
-                      {paddlePortalAction === "cancel" ? "Opening cancellation..." : "Cancel Subscription"}
-                    </button>
-                    {paddlePortalMessage ? (
-                      <p className="billing-helper" aria-live="polite">
-                        {paddlePortalMessage}
-                      </p>
-                    ) : null}
-                  </div>
-                ) : currentInterval ? (
-                  <button
-                    type="button"
-                    className="button button-primary button-small settings-billing-action-button"
-                    onClick={() => void openPaddlePortal("plan_change")}
-                    disabled={paddlePortalAction !== null}
-                  >
-                    {paddlePortalAction === "plan_change"
-                      ? "Opening plan options..."
-                      : currentInterval === "monthly" && billingInterval === "annual"
-                        ? "Upgrade to Annual"
-                        : `Switch to ${billingInterval === "monthly" ? "Monthly" : "Annual"}`}
-                  </button>
-                ) : null
-              ) : currentProvider === "paddle" ? (
-                null
-              ) : currentProvider === "paypal" && billingInterval === currentInterval ? (
-                <span className="settings-pill">Current plan</span>
-              ) : currentProvider === "paypal" && currentInterval ? (
-                <BillingActions
-                  planTier="pro"
-                  clientId={paypalClientId}
-                  monthlyPlanId={paypalMonthlyPlanId}
-                  annualPlanId={paypalAnnualPlanId}
-                  buyerCountry={paypalBuyerCountry}
-                  customId={billingCustomerId ?? ""}
-                  returnPath="/settings"
-                  subscription={billingSubscription}
-                  compactInterval={billingInterval}
-                />
-              ) : (
-                <p className="settings-helper">Subscription details are unavailable.</p>
-              )}
-            </div>
-          </div>
-        </article>
-        <article className={`settings-plan-card settings-plan-card--pro${planTier === "premium" ? " is-current" : ""}`} aria-label="Pro plan">
-          <div className="settings-plan-card__band">
-            <span className="settings-plan-card__icon"><PlanIcon pro /></span>
-            <span className="settings-plan-card__band-text">
-              <strong className="settings-plan-card__band-title">Pro</strong>
-              <span className="settings-plan-card__band-price">₱349/month · ₱2,999/year<br />US$12.99/month · US$99.99/year</span>
-            </span>
-          </div>
-          <div className="settings-plan-card__body">
-            <ul className="settings-plan-card__features">
-              {["Everything in Plus", "20 Profiles and 40 non-cash accounts", "5 linked bank accounts", "10 budgets, 10 goals and 10 Circles", "4 million shared AI tokens monthly", "1 million AI tokens per rolling 24 hours"].map(feature => <PlanFeatureItem key={feature} label={feature} className="settings-plan-card__feature-row" />)}
-            </ul>
-            <div className="settings-plan-interval" role="group" aria-label="Pro billing interval">
-              <button type="button" className={billingInterval === "monthly" ? "is-selected" : ""} onClick={() => setBillingInterval("monthly")}>Monthly</button>
-              <button type="button" className={billingInterval === "annual" ? "is-selected" : ""} onClick={() => setBillingInterval("annual")}>Annually</button>
-            </div>
-            {premiumReady && offers?.pro ? <p className="settings-helper">Paddle bills {offers.pro.paddlePrices[billingInterval]}{billingInterval === "monthly" ? " / month" : " / year"} in USD. Your payment provider may apply currency conversion.</p> : null}
-            <div className="settings-plan-card__cta">
-              {!billingDetailsReady ? <p className="settings-helper">Loading subscription details...</p>
-                : hasPaddleSubscription ? <div className="settings-plan-card__management">
-                  {planTier === "premium" ? <span className="settings-pill">Current plan</span> : <p className="settings-helper">Manage your existing subscription before starting a different plan.</p>}
-                  <button type="button" className="button button-secondary" disabled={paddlePortalAction !== null} onClick={() => void openPaddlePortal("manage")}>Manage subscription</button>
-                  {paddlePortalMessage ? <p className="billing-helper" aria-live="polite">{paddlePortalMessage}</p> : null}
-                </div>
-                : isAwaitingApproval || (currentProvider === "paypal" && !["cancelled", "expired"].includes(billingSubscription?.status ?? "")) ? <p className="settings-helper">Manage your existing subscription before starting a different plan.</p>
-                : planTier === "premium" ? <span className="settings-pill">Current plan</span>
-                : premiumReady ? <PaddleCheckoutButton clientToken={paddleClientToken!} environment={paddleEnvironment} priceId={premiumPriceId!} planTier="premium" customerId={billingCustomerId ?? ""} customerEmail={customerEmail} interval={billingInterval} className="settings-plan-card__paddle" />
-                : <p className="settings-helper">{offersLoading ? "Checking subscription availability…" : "Pro checkout is temporarily unavailable. Your current plan remains active."}</p>}
-            </div>
-          </div>
-        </article>
+      <div className="settings-plan-interval" role="group" aria-label="Billing interval">
+        <button type="button" className={billingInterval === "monthly" ? "is-selected" : ""} onClick={() => setBillingInterval("monthly")}>Monthly</button>
+        <button type="button" className={billingInterval === "annual" ? "is-selected" : ""} onClick={() => setBillingInterval("annual")}>Annually</button>
       </div>
-
-      {planTier === "pro" && billingDetailsReady && currentProvider === "paypal" ? (
-        <BillingActions
-          planTier="pro"
-          clientId={paypalClientId}
-          monthlyPlanId={paypalMonthlyPlanId}
-          annualPlanId={paypalAnnualPlanId}
-          buyerCountry={paypalBuyerCountry}
-          customId={billingCustomerId ?? ""}
-          returnPath="/settings"
-          subscription={billingSubscription}
-          className="settings-plan-unsubscribe"
-          minimalManagement
-        />
-      ) : null}
+      <div className={`settings-plan-grid settings-plan-grid--current-${planTier}`} aria-label="Available plans">
+        {(["premium", "pro", "free"] as const).map(tier => {
+          const plan = PLAN_CATALOG[tier];
+          const price = tier === "free" ? "₱0 forever" : tier === "premium" ? (offers ? plannedPremiumPrices(offers.market)[billingInterval] : undefined) : offers?.prices[billingInterval];
+          const features = [
+            ...(tier === "premium" ? ["Everything in Plus"] : tier === "pro" ? ["Everything in Free"] : ["Manual tracking and file imports"]),
+            `${plan.profiles} profiles · ${plan.accounts} non-cash accounts`,
+            `${plan.linkedBanks} linked bank accounts`,
+            `${plan.budgets} budgets · ${plan.goals} goals · ${plan.circles} Circles`,
+            `${plan.monthlyTokens.toLocaleString()} Clover tokens monthly`,
+            `${plan.dailyTokens.toLocaleString()} tokens per rolling 24 hours`,
+            ...(tier === "free" ? ["Basic Adviser and investment tracking"] : ["Full Adviser and investment tools"]),
+          ];
+          return <article key={tier} className={`settings-plan-card settings-plan-card--${tier === "premium" ? "premium" : tier === "pro" ? "pro" : "free"}${planTier === tier ? " is-current" : ""}`}>
+            <div className="settings-plan-card__band"><span className="settings-plan-card__band-text">
+              <strong className="settings-plan-card__band-title">{plan.name}</strong>
+              <span className="settings-plan-card__band-price">{price ?? (offersLoading ? "Checking pricing…" : "Pricing unavailable")}{tier !== "free" && price ? (billingInterval === "monthly" ? " / month" : " / year") : ""}</span>
+            </span></div>
+            <div className="settings-plan-card__body"><ul className="settings-plan-card__features">{features.map(feature => <PlanFeatureItem key={feature} label={feature} className="settings-plan-card__feature-row" />)}</ul>
+              {planTier === tier ? <span className="settings-pill">Current plan</span> : null}
+            </div>
+          </article>;
+        })}
+      </div>
       <SwitchOfferNotice always />
-      <ReferralAccount summary />
+      <div className="settings-plan-management" aria-label="Subscription options">
+        {hasPaddleSubscription ? <div className="settings-plan-management__actions">
+          <button type="button" className="button button-primary" disabled={paddlePortalAction !== null} onClick={() => void openPaddlePortal("plan_change")}>Change plan</button>
+          <button type="button" className="button button-secondary" disabled={paddlePortalAction !== null} onClick={() => void openPaddlePortal("payment_method")}>Change payment method</button>
+          <button type="button" className="button button-secondary" disabled={paddlePortalAction !== null} onClick={() => void openPaddlePortal("cancel")}>Unsubscribe</button>
+        </div> : currentProvider === "paypal" && billingDetailsReady ? <BillingActions planTier={planTier} clientId={paypalClientId} monthlyPlanId={paypalMonthlyPlanId} annualPlanId={paypalAnnualPlanId} buyerCountry={paypalBuyerCountry} customId={billingCustomerId ?? ""} returnPath="/settings/plan" subscription={billingSubscription} />
+        : !billingDetailsReady ? <p role="status">Loading subscription options…</p>
+        : isAwaitingApproval ? <p role="status">Waiting for payment confirmation.</p>
+        : <div className="settings-plan-management__actions">
+          {planTier === "free" && (paddleReady ? <div><strong>Get Plus</strong><PaddleCheckoutButton clientToken={paddleClientToken!} environment={paddleEnvironment} priceId={paddlePriceId!} customerId={billingCustomerId ?? ""} customerEmail={customerEmail} interval={billingInterval} onStart={() => capturePostHogClientEvent("upgrade_cta_clicked", {cta_location:"settings_billing",billing_provider:"paddle",plan_tier:planTier,plan_interval:billingInterval})} /></div> : paypalCheckoutReady ? <PayPalSubscribeButton clientId={paypalClientId!} planId={checkoutPlanId!} customId={billingCustomerId ?? ""} buyerCountry={paypalBuyerCountry} fundingSource="card" /> : null)}
+          {planTier !== "premium" && premiumReady ? <div><strong>Get Pro</strong><PaddleCheckoutButton clientToken={paddleClientToken!} environment={paddleEnvironment} priceId={premiumPriceId!} planTier="premium" customerId={billingCustomerId ?? ""} customerEmail={customerEmail} interval={billingInterval} /></div> : null}
+        </div>}
+        {paddlePortalMessage ? <p role="status">{paddlePortalMessage}</p> : null}
+      </div>
     </section>
   );
 }
