@@ -1,3 +1,4 @@
+import { retainedPlanRows, RETENTION_MESSAGE, DOWNGRADE_MESSAGE, type RetentionSnapshot } from "../../shared/plan-retention";
 import { SettingsReferrals } from "./settings-referrals";
 import { telemetry } from "../../shared/analytics";
 import { PLAN_CATALOG } from "../../shared/plan-catalog";
@@ -19,7 +20,8 @@ type Usage = Record<"profiles" | "accounts" | "monthly" | "rolling24h", { used: 
 export function SettingsPlan() {
   const session = useSession();
   const { colors, styles } = useTheme();
-  const [usage, setUsage] = useState<Usage | null>(null);
+  const [previewTier, setPreviewTier] = useState<"free" | "pro" | "premium" | null>(null);
+  const [usage, setUsage] = useState<(Usage & { retention?: RetentionSnapshot }) | null>(null);
   const [usageError, setUsageError] = useState(false);
   const [status, setStatus] = useState<StoreStatus | null>(null);
   const [packages, setPackages] = useState<PurchasesPackage[]>([]);
@@ -64,7 +66,7 @@ export function SettingsPlan() {
     if (session.demo) return;
     setUsage(null);
     setUsageError(false);
-    void session.request<Usage>("billing/usage").then((value) => {
+    void session.request<Usage & { retention?: RetentionSnapshot }>("billing/usage").then((value) => {
       if (active) setUsage(value);
     }).catch(() => { if (active) setUsageError(true); });
     return () => { active = false; };
@@ -217,6 +219,18 @@ export function SettingsPlan() {
           <Body>Monthly tokens reset on the first day of each month in Asia/Manila. Unused tokens do not roll over. Cash accounts do not count toward the account limit.</Body>
         </Card>
       ) : null}
+      <Card>
+        <Text style={styles.sectionTitle}>Changing plans</Text>
+        <Body>{RETENTION_MESSAGE}</Body>
+        <Body>{DOWNGRADE_MESSAGE}</Body>
+        {usage?.retention ? <>
+          <Body>Preview plan limits. This does not change your subscription.</Body>
+          {(["premium", "pro", "free"] as const).map(tier => <Button key={tier} secondary title={`${PLAN_CATALOG[tier].name}${tier === usage.retention!.planTier ? " (current)" : ""}`} onPress={() => setPreviewTier(tier)} />)}
+          <Body>{PLAN_CATALOG[previewTier ?? usage.retention.planTier].name} usage and limits</Body>
+          {retainedPlanRows(usage.retention.usage, previewTier ?? usage.retention.planTier, !previewTier || previewTier === usage.retention.planTier ? usage.retention.limits : {}).map(row => <Body key={row.key}>{row.label}: {row.used} / {row.limit === null ? "Unlimited" : row.limit}{row.excess > 0 ? ` — ${row.excess} above limit. Existing items stay usable; creating more requires room or an upgrade.` : !row.canCreate ? " — At limit. Existing items stay usable." : ""}</Body>)}
+          <Body>Investments count by institution. Only active budgets and non-archived Circles you own count. All saved personal goals count. Reactivating a budget needs an available slot.</Body>
+        </> : <Body>{usageError ? "Usage unavailable. Refresh plan status to try again." : session.demo ? "Sign in to preview your account usage." : "Loading plan usage…"}</Body>}
+      </Card>
       {packages.length ? (
         <Body>
           Subscriptions renew automatically until canceled in your store

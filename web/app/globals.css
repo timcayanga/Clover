@@ -66571,3 +66571,9 @@ html[data-theme="dark"] .content.content--reports .reports-range-menu__summary {
     background: var(--surface); color: var(--text); font: 400 12px var(--font-body) !important;
   }
 }
+
+.settings-plan-retention { padding: 20px; border: 1px solid var(--line, #d9e4e1); border-radius: 20px; margin-block: 20px; overflow-wrap: anywhere; }
+.settings-plan-retention p, .settings-plan-retention li { font-size: 14px; line-height: 1.65; }
+.settings-plan-retention li + li { margin-top: 10px; }
+.settings-plan-retention label { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; }
+.settings-plan-retention select { max-width: 100%; padding: 10px 14px; border-radius: 12px; color: inherit; background: transparent; border: 1px solid var(--line, #d9e4e1); }

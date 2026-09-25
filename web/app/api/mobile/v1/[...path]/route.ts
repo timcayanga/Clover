@@ -122,19 +122,14 @@ async function handle(
       });
     }
     if (operation === "billing-usage") {
-      const { getUserPlanUsage } = await import("@/lib/plan-access");
-      const { getEffectiveUserLimits, getEffectiveProfileLimit } = await import("@/lib/user-limits");
       const { getCloverTokenUsage } = await import("@/lib/clover-token-usage");
-      const access = await getProAccess(user.id);
-      const effectiveUser = { ...user, planTier: access.planTier };
-      const [usage, profiles, tokens] = await Promise.all([
-        getUserPlanUsage(user.id),
-        prisma.workspace.count({ where: { userId: user.id } }),
-        getCloverTokenUsage(effectiveUser),
-      ]);
+      const { getPlanRetentionSnapshot } = await import("@/lib/plan-retention.server");
+      const retention = await getPlanRetentionSnapshot(user.id);
+      const tokens = await getCloverTokenUsage({ ...user, planTier: retention.planTier });
       return reply({
-        profiles: { used: profiles, limit: getEffectiveProfileLimit(effectiveUser) },
-        accounts: { used: usage.accountCount, limit: getEffectiveUserLimits(effectiveUser).accountLimit },
+        retention,
+        profiles: { used: retention.usage.profiles, limit: retention.limits.profiles },
+        accounts: { used: retention.usage.accounts, limit: retention.limits.accounts },
         monthly: tokens.monthly,
         rolling24h: tokens.rolling24h,
       });

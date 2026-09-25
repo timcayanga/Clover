@@ -248,3 +248,11 @@ In the product UI, Clover should present each user-scoped container as a `Profil
 2. Decide the minimum onboarding questions.
 3. Confirm the social login providers for launch.
 4. Add the plan and goal fields to the data model when implementation starts.
+
+## Plan reductions and existing records
+
+Free / Plus / Pro limits are 10/20/40 non-cash accounts, 3/10/20 Profiles, 2/5/10 active budgets, 2/5/10 saved personal goals, and 1/5/10 owned non-archived Circles. Investment accounts count by institution; cash accounts are excluded.
+
+When a lower entitlement takes effect, preserve existing records, history and ordinary access. Never automatically archive, delete, or make excess items read-only. Existing active budgets keep running. Block additional creation (and budget reactivation) at or above the new limit. Users need not delete records to continue using Clover. Upgrade or voluntarily reduce counted usage to create more. Joined Circles do not consume ownership slots.
+
+Settings Plan on web and native shows account-wide usage and a read-only plan preview. Previewing does not schedule or perform a billing change. The billing provider determines the effective change date. Paid features, AI allowances and bank connections follow the effective entitlement; consumed AI usage does not reset. Bank connection lifecycle remains a separate policy and preserves financial history.
