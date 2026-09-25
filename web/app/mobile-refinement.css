@@ -128,3 +128,7 @@
   .split-bill-modal__card.split-bill-detail-modal {padding-bottom:calc(110px + env(safe-area-inset-bottom)) !important;}
   .split-bill-detail-modal .split-bill-manual-modal__head {top:-18px !important;margin:-18px -18px 0;padding:18px;min-height:72px;}
 }
+
+.split-bill-group-card {position:relative;}
+.split-bill-group-card__open::after {content:"";position:absolute;inset:0;cursor:pointer;border-radius:inherit;}
+.split-bill-group-card:has(.split-bill-group-card__open:focus-visible) {outline:2px solid var(--teal,#03a8c0);outline-offset:3px;}

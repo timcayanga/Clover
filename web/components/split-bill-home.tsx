@@ -526,7 +526,8 @@ export function SplitBillHome({
                   ) : null}
                 </div>
                 <button
-                  className="button button-secondary"
+                  className="button button-secondary split-bill-group-card__open"
+                  aria-label={`View group ${group.name}`}
                   onClick={() => onOpenGroup(group.id)}
                 >
                   View Group
