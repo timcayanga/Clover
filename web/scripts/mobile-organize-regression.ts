@@ -1,3 +1,4 @@
+import { nextMonth, transactionRecurringInput } from "../../shared/transaction-recurring";
 import { mobileHomePayments } from "../lib/mobile-home-payments";
 import type { FinancialCommitmentSummary } from "../lib/commitments";
 import assert from "node:assert/strict";
@@ -214,4 +215,15 @@ check("Old unresolved one-time bills remain visible as overdue", () => {
     "2024-01-01",
   );
 });
+
+check("Native transaction-to-recurring payload preserves decimal precision and clamps month-end", () => {
+  const source = { id: "owned-transaction", amount: "-123456789012.12345678", currency: "PHP", accountId: "owned-account" };
+  const payload = transactionRecurringInput(source, "QA schedule", nextMonth("2028-01-31"), "monthly");
+  assert.equal(payload.amount, "123456789012.12345678");
+  assert.equal(payload.dueDate, "2028-02-29");
+  assert.deepEqual(mobileRecurringCreate.parse(payload), payload);
+  assert.equal(nextMonth("2026-01-31"), "2026-02-28");
+  assert.equal(source.amount, "-123456789012.12345678");
+});
+
 console.log(`${checks}/${checks} mobile Organize regression checks passed.`);

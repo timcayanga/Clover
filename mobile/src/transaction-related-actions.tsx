@@ -1,3 +1,4 @@
+import { nextMonth, transactionRecurringInput } from "../../shared/transaction-recurring";
 import { useEffect, useState } from "react";
 import { View } from "react-native";
 import { router } from "expo-router";
@@ -6,13 +7,6 @@ import { Body, Button, Card, Field, Heading, Notice } from "./ui";
 import { ChoiceField } from "./transaction-entry";
 import type { Transaction } from "./types";
 
-function nextMonth(value: string) {
-  const date = new Date(`${value.slice(0, 10)}T00:00:00Z`);
-  const day = date.getUTCDate();
-  date.setUTCMonth(date.getUTCMonth() + 1, 1);
-  date.setUTCDate(Math.min(day, new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth() + 1, 0)).getUTCDate()));
-  return date.toISOString().slice(0, 10);
-}
 export function TransactionRelatedActions({ transaction }: { transaction: Transaction }) {
   const session = useSession();
   const [panel, setPanel] = useState<"circles" | "recurring" | null>(null);
@@ -26,19 +20,19 @@ export function TransactionRelatedActions({ transaction }: { transaction: Transa
   useEffect(() => {
     let active = true;
     if (panel !== "circles" || session.demo) return;
-    void session.request<{ circles: { id: string; name: string }[] }>("circles").then(data => {
+    void session.request<{ circles: { id: string; name: string }[] }>(`circles?workspaceId=${encodeURIComponent(session.profileId)}`).then(data => {
       if (active) { setCircles(data.circles); setCircleId(data.circles[0]?.id || ""); }
     }).catch((e: Error) => { if (active) setMessage(e.message); });
     return () => { active = false; };
-  }, [panel, session.demo, session.request]);
+  }, [panel, session.demo, session.profileId, session.request]);
   const save = async () => {
     if (busy || !panel) return;
     setBusy(true); setMessage("");
     try {
       if (panel === "circles") {
-        await session.request(`circles/${encodeURIComponent(circleId)}/resources`, { method: "POST", body: JSON.stringify({ action: "share_transaction", transactionId: transaction.id, visibility: "item", sharedTitle: title, sharedAmount: Math.abs(Number(transaction.amount)) }) });
+        await session.request(`circles/${encodeURIComponent(circleId)}/resources?workspaceId=${encodeURIComponent(session.profileId)}`, { method: "POST", body: JSON.stringify({ action: "share_transaction", transactionId: transaction.id, visibility: "item", sharedTitle: title, sharedAmount: Math.abs(Number(transaction.amount)) }) });
       } else {
-        await session.request(`recurring?workspaceId=${encodeURIComponent(session.profileId)}`, { method: "POST", body: JSON.stringify({ title, kind: "planned_payment", counterparty: title, amount: Math.abs(Number(transaction.amount)), currency: transaction.currency, dueDate, nextDueDate: dueDate, recurrence, accountId: transaction.accountId, evidenceTransactionIds: [transaction.id], status: "active" }) });
+        await session.request(`recurring?workspaceId=${encodeURIComponent(session.profileId)}`, { method: "POST", body: JSON.stringify(transactionRecurringInput(transaction, title, dueDate, recurrence)) });
       }
       setMessage(panel === "circles" ? "Added to Circles." : "Added to Recurring."); setPanel(null);
     } catch (e) { setMessage((e as Error).message); }

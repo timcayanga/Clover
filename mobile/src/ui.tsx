@@ -66,11 +66,14 @@ export function Icon({
   const source = line
     ? undefined
     : (mobileNavigationIcons[name] ?? mobileInterfaceIcons[name]);
+  // Bundled Android resource IDs can change between same-version preview installs.
+  // Keep these small local icons out of the persistent resource-ID cache.
   if (name === "chatbubble-ellipses-outline" && source)
     return (
       <View style={{ width: size, height: size, overflow: "hidden" }}>
         <ExpoImage
           source={source}
+          cachePolicy="memory"
           accessible={false}
           resizeMode="contain"
           style={{
@@ -87,6 +90,7 @@ export function Icon({
     return (
       <ExpoImage
         source={source}
+        cachePolicy="memory"
         accessible={false}
         resizeMode="contain"
         style={{

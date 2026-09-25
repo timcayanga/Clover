@@ -1,4 +1,9 @@
 import { normalizeBankName } from "./data-qa-banks";
+/** Preserve the first metered identity when Finverse rotates IDs on reauthorization. */
+export function bankLinkUsageIdentity(link: { externalAccountId: string; normalizedPayload?: unknown }) {
+  const payload = link.normalizedPayload as { quotaIdentity?: unknown } | null;
+  return typeof payload?.quotaIdentity === "string" && payload.quotaIdentity ? payload.quotaIdentity : link.externalAccountId;
+}
 /** Never collapse masks into apparently complete account numbers. */
 export const cleanBankNumber = (value?: string | null) => (value ?? '').replace(/[\s-]/g, '').toUpperCase();
 const institutionKey = (value?: string | null) => (normalizeBankName(value) ?? value ?? '').toLowerCase().replace(/[^a-z0-9]/g, '');

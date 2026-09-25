@@ -1,6 +1,7 @@
 import type { Prisma } from '@prisma/client';
 import { PLAN_CATALOG } from '../../shared/plan-catalog';
 import { hasUnlimitedPlanLimits } from './user-limits';
+import { bankLinkUsageIdentity } from './finverse-matching';
 
 /** Monthly anniversaries also apply to annual subscriptions; clamp short months. */
 export function bankLinkPeriod(anchor: Date, now = new Date()) {
@@ -22,8 +23,8 @@ export async function bankLinkAllowance(tx: Prisma.TransactionClient, userId: st
   const anchor = subscription?.approvedAt ?? (rawStart && Number.isFinite(+rawStart) ? rawStart : subscription?.createdAt ?? store?.expiresAt ?? user.createdAt);
   const period = bankLinkPeriod(anchor, now);
   // Carry active accounts into every new period; reserve legacy links before unlinking.
-  const active = await tx.finverseAccountLink.findMany({ where: { workspace: { userId }, accountId: { not: null }, unlinkedAt: null, connection: { status: { not: 'disconnected' } } }, select: { externalAccountId: true } });
-  await tx.bankLinkUsage.createMany({ data: active.map(a => ({ userId, externalAccountId: a.externalAccountId, ...period })), skipDuplicates: true });
+  const active = await tx.finverseAccountLink.findMany({ where: { workspace: { userId }, accountId: { not: null }, unlinkedAt: null, connection: { status: { not: 'disconnected' } } }, select: { externalAccountId: true, normalizedPayload: true } });
+  await tx.bankLinkUsage.createMany({ data: active.map(a => ({ userId, externalAccountId: bankLinkUsageIdentity(a), ...period })), skipDuplicates: true });
   const usage = await tx.bankLinkUsage.findMany({ where: { userId, periodStart: period.periodStart } });
   const usedIds = new Set(usage.map(a => a.externalAccountId));
   const limit = hasUnlimitedPlanLimits(user) ? Number.MAX_SAFE_INTEGER : PLAN_CATALOG[user.planTier].linkedBanks;

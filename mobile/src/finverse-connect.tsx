@@ -40,6 +40,7 @@ export function FinverseConnect({ onSynced, callbackConnection, mode = "connect"
   const [test, setTest] = useState(false);
   const [revision, setRevision] = useState(0);
   const [busy, setBusy] = useState(false);
+  const [retrySync, setRetrySync] = useState<{ id?: string; accountIds?: string[] } | null>(null);
   const [connection, setConnection] = useState(callbackConnection);
   const [selection, setSelection] = useState<{ accounts: Bank[]; remaining: number; connectionId: string } | null>(null);
   const [selected, setSelected] = useState<string[]>([]);
@@ -67,7 +68,7 @@ export function FinverseConnect({ onSynced, callbackConnection, mode = "connect"
   },[session.demo,session.profileId,revision]);
   const sync = useCallback(async (id?: string, accountIds?: string[], refresh = false) => {
     if (!allowed || action.current) return;
-    action.current = true; setBusy(true); setMessage("Retrieving your bank accounts…");
+    action.current = true; setBusy(true); setRetrySync(null); setMessage("Retrieving your bank accounts…");
     const controller = new AbortController(); abortRef.current = controller;
     try {
       for (let attempt = 0; attempt < 30; attempt++) {
@@ -92,11 +93,11 @@ export function FinverseConnect({ onSynced, callbackConnection, mode = "connect"
         setSelection(null); setMessage("Bank connected. New transactions are ready for review."); setRevision(v=>v+1); syncedRef.current(); return;
       }
       setMessage("Finverse is still retrieving your data. Use Sync to check again.");
-    } catch (error) { if (active.current && !controller.signal.aborted) setMessage(error instanceof Error ? error.message : "Unable to sync your bank."); }
+    } catch (error) { if (active.current && !controller.signal.aborted) { setMessage(error instanceof Error ? error.message : "Unable to sync your bank."); setRetrySync({ id, accountIds }); } }
     finally { action.current = false; if (active.current) setBusy(false); }
   }, [allowed, session.profileId]);
   const callbackHandled = useRef("");
-  useEffect(() => { if (allowed && callbackConnection && callbackHandled.current !== callbackConnection) { callbackHandled.current = callbackConnection; setConnection(callbackConnection); void sync(callbackConnection); } }, [allowed, callbackConnection, sync]);
+  useEffect(() => { if (allowed && session.offlineStatus.online && callbackConnection && callbackHandled.current !== callbackConnection) { callbackHandled.current = callbackConnection; setConnection(callbackConnection); void sync(callbackConnection); } }, [allowed, session.offlineStatus.online, callbackConnection, sync]);
   function confirmUnlink(account: {id:string;name:string}) {
     Alert.alert(`Unlink ${account.name}?`, "Your Clover account and history will stay. This account still uses a slot until your monthly allowance resets. Reconnecting it uses no extra slot.", [
       { text: "Keep linked", style: "cancel" },
@@ -160,5 +161,6 @@ export function FinverseConnect({ onSynced, callbackConnection, mode = "connect"
       {country&&!banks.some(bank=>bank.countries.includes(country))?<Body>No {test?"test ":""}banks are available here yet.</Body>:null}
     </>}
     {message?<Notice>{message}</Notice>:null}
+    {retrySync ? <Button secondary title="Try again" disabled={busy || !session.offlineStatus.online} onPress={() => void sync(retrySync.id, retrySync.accountIds)} /> : null}
   </View>;
 }
