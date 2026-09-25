@@ -7,11 +7,11 @@ import { SWITCH_PATH,SWITCH_TERM_ITEMS } from "../../shared/switch-campaign";
 import { getNavigationIconSrc } from "@/lib/navigation-icons";
 import styles from "./switch-campaign.module.css";
 export type SwitchData={config:{status:string;open:boolean;};eligibilityReason:string|null;terms:string;application:null|{id:string;status:string;claimBy:string|null;expiresAt:string|null;activatedAt:string|null;evidence:{id:string;fileName:string;purgedAt:string|null}[];events:{id:string;message:string;createdAt:string}[]}};
-export function SwitchOfferNotice({always=false}:{always?:boolean}){
- const [open,setOpen]=useState(always);
- useEffect(()=>{if(always)return;let active=true;void fetch("/api/campaigns/switch-offer").then(r=>r.ok?r.json():null).then(d=>{if(active)setOpen(Boolean(d?.open));}).catch(()=>{});return()=>{active=false;};},[always]);
+export function SwitchOfferNotice({directToApplication=false}:{directToApplication?:boolean}){
+ const [open,setOpen]=useState(false);
+ useEffect(()=>{let active=true;void fetch("/api/campaigns/switch-offer",{cache:"no-store"}).then(r=>r.ok?r.json():null).then(d=>{if(active)setOpen(Boolean(d?.open));}).catch(()=>{});return()=>{active=false;};},[]);
  if(!open)return null;
- return <aside className={styles.notice}><strong>Already paid for another budgeting app?</strong><p>Try Clover Plus free for 30 days. Bring your exported records and connect supported banks. No card required.</p><Link href={always?SWITCH_PATH:"/offers/switch-to-clover"} onClick={()=>capturePostHogClientEvent("campaign_progress",{campaign_stage:"offer_clicked",campaign_id:"switch-to-clover"})}>See offer →</Link></aside>;
+ return <aside className={styles.notice}><strong>Already paid for another budgeting app?</strong><p>Try Clover Plus free for 30 days. Bring your exported records and connect supported banks. No card required.</p><Link href={directToApplication?SWITCH_PATH:"/offers/switch-to-clover"} onClick={()=>capturePostHogClientEvent("campaign_progress",{campaign_stage:"offer_clicked",campaign_id:"switch-to-clover"})}>See offer →</Link></aside>;
 }
 export function SwitchApplication(){
  const router=useRouter();
@@ -24,7 +24,6 @@ export function SwitchApplication(){
  {!data&&!error?<p role="status">Loading your application…</p>:null}
  {error?<p role="alert">{error} <button onClick={()=>setRevision(v=>v+1)}>Retry</button></p>:null}
  {data?<section className={styles.card}><h2>{app?`Application: ${app.status.replaceAll("_"," ")}`:"Your application"}</h2>
- {!app&&!data.config.open?<p role="status">Applications are currently closed. You can prepare the form, but submission is available only while the campaign is open. Unsubmitted information is not saved.</p>:null}
  {showUpload&&data.eligibilityReason?<p role="status">{data.eligibilityReason}</p>:null}
  {app?.claimBy&&app.status==="approved"?<><p>Activate by {new Date(app.claimBy).toLocaleString()}. Activate to begin your 30 days.</p><button className="button button-primary" disabled={busy} onClick={()=>void act(true)}>Start my 30 days</button></>:null}
  {app?.expiresAt?<p>Reward ends {new Date(app.expiresAt).toLocaleString()}. Your records stay accessible after expiry. Bank connections need qualifying paid access.</p>:null}

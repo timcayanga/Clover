@@ -273,7 +273,7 @@ export function SettingsPlanPanel({
           </article>;
         })}
       </div>
-      <SwitchOfferNotice always />
+      <SwitchOfferNotice directToApplication />
       <div className="settings-plan-management" aria-label="Subscription options">
         {hasPaddleSubscription ? <div className="settings-plan-management__actions">
           <button type="button" className="button button-primary" disabled={paddlePortalAction !== null} onClick={() => void openPaddlePortal("plan_change")}>Change plan</button>

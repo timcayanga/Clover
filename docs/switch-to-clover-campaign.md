@@ -49,3 +49,6 @@ Admin Campaigns lists Switch to Clover and referral campaigns in one table. Sele
 - Plus benefits use Clover icons. Consent is a text-sized checkbox labelled “I agree to the offer terms”.
 - Receipt, note and consent remain editable while intake is closed or the user is ineligible. Submit validates eligibility/intake and explains restrictions without sending evidence; the server repeats these checks. Inputs disable only during submission. Drafts are not saved.
 - Removed redundant Get Plus/Get Pro labels from Plan, retaining clearly named subscription controls.
+
+### Campaign CTA visibility
+Plan, landing and Pricing all hide the offer until the uncached campaign-status request confirms active intake and a future or unset end date. Plan links directly to the application, while public pages link to the offer. Removed the preparatory closed-campaign message from the application page. Existing application history remains available from its direct link.
