@@ -13,6 +13,8 @@ export const refreshProAccess=async()=>planTier;
 export function reset(){claimed=false;exchanges=0;created=0;bankCalls=0;refreshCalls=0;updates=[];}
 export function stats(){return {exchanges,created,bankCalls,refreshCalls,updates};}
 export const requireAuth=async()=>({userId:'owner'});
+export const requireAdminAuth=async()=>{if(planTier==='free')throw Error('FORBIDDEN');return {userId:'owner'};};
+export const getFinverseInstitutionCatalog=async()=>({mode:'live',institutions:[{id:'bpi',name:'BPI',countries:['PHL'],status:'BETA',products:['ACCOUNTS'],tags:['real'],shownInClover:false,excludedReasons:['Provider status: BETA']}]});
 export const assertWorkspaceAccess=async(user,id)=>{if(id!=='profile')throw Error('WORKSPACE_NOT_FOUND');return {id,userId:user};};
 export class PlanQuotaError extends Error {}
 export const assertPlanQuota=async()=>{};
@@ -47,9 +49,21 @@ export const prisma={user:{findUniqueOrThrow:async()=>({planTier})},$transaction
  update:async({data})=>{updates.push(data);return{};}
 }};
 `;
-  const bundled = await build({ stdin: { contents: `export {POST as sync} from './app/api/integrations/finverse/sync/route'; export {GET as connections} from './app/api/integrations/finverse/connections/route'; export {GET as institutions} from './app/api/integrations/finverse/institutions/route'; export {POST as link} from './app/api/integrations/finverse/link/route'; export {GET as callback} from './app/api/integrations/finverse/callback/route'; export {reset,stats,setPlan} from 'fixture';`, resolveDir: process.cwd() }, bundle: true, platform: "node", format: "cjs", packages: "external", write: false, plugins: [{ name: "finverse-boundaries", setup(b) { b.onResolve({filter:/^(fixture|@\/lib\/(auth|finverse-access-token|bank-link-usage|user-limits|account-limit-count|account-brand|workspace-access|finverse|prisma|plan-quota|pro-access|mobile-request-context))$/},()=>({path:"fixture",namespace:"test"})); b.onLoad({filter:/.*/,namespace:"test"},()=>({contents:fixture,loader:"ts",resolveDir:process.cwd()})); }}] });
+  const bundled = await build({ stdin: { contents: `export {GET as catalog} from './app/api/admin/finverse/catalog/route'; export {POST as sync} from './app/api/integrations/finverse/sync/route'; export {GET as connections} from './app/api/integrations/finverse/connections/route'; export {GET as institutions} from './app/api/integrations/finverse/institutions/route'; export {POST as link} from './app/api/integrations/finverse/link/route'; export {GET as callback} from './app/api/integrations/finverse/callback/route'; export {reset,stats,setPlan} from 'fixture';`, resolveDir: process.cwd() }, bundle: true, platform: "node", format: "cjs", packages: "external", write: false, plugins: [{ name: "finverse-boundaries", setup(b) { b.onResolve({filter:/^(fixture|@\/lib\/(admin|auth|finverse-access-token|bank-link-usage|user-limits|account-limit-count|account-brand|workspace-access|finverse|prisma|plan-quota|pro-access|mobile-request-context))$/},()=>({path:"fixture",namespace:"test"})); b.onLoad({filter:/.*/,namespace:"test"},()=>({contents:fixture,loader:"ts",resolveDir:process.cwd()})); }}] });
   const Module = requireFixture("node:module"), mod = new Module(resolve("finverse-test.cjs")); mod.filename=resolve("finverse-test.cjs");mod.paths=Module._nodeModulePaths(process.cwd());mod._compile(bundled.outputFiles[0].text,mod.filename);
   const api=mod.exports;
+  api.setPlan('free');
+  assert.equal((await api.catalog(new Request('https://clover.test/catalog'))).status,403);
+  api.setPlan('pro');
+  const catalog=await api.catalog(new Request('https://clover.test/catalog'));
+  assert.equal(catalog.headers.get('cache-control'),'private, no-store');
+  const catalogue=await catalog.json(); assert.equal(catalogue.total,1);
+  assert.equal(catalogue.institutions[0].shownInClover,false);
+  assert.deepEqual(catalogue.institutions[0].countryNames,['Philippines']);
+  const csv=await api.catalog(new Request('https://clover.test/catalog?format=csv'));
+  assert(csv.headers.get('content-disposition').includes('finverse-institutions.csv'));
+  assert((await csv.text()).includes('BETA'));
+
   assert.equal((await api.connections(new Request('https://clover.test/api?workspaceId=other'))).status,404);
   const connections=await api.connections(new Request('https://clover.test/api?workspaceId=profile'));
   assert.equal(connections.headers.get('cache-control'),'private, no-store');

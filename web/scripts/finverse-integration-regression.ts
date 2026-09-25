@@ -16,7 +16,11 @@ const encryptionKey = Buffer.alloc(32, 7).toString("base64");
 const encrypted = encryptFinverseToken("sensitive-login-token", encryptionKey);
 assert.notEqual(encrypted, "sensitive-login-token");
 assert.equal(decryptFinverseToken(encrypted, encryptionKey), "sensitive-login-token");
-assert.throws(() => decryptFinverseToken(`${encrypted.slice(0, -1)}x`, encryptionKey));
+const tampered = encrypted.split(".");
+const ciphertext = Buffer.from(tampered[3], "base64url");
+ciphertext[0] ^= 1;
+tampered[3] = ciphertext.toString("base64url");
+assert.throws(() => decryptFinverseToken(tampered.join("."), encryptionKey));
 assert.equal(hashFinverseState("state"), hashFinverseState("state"));
 assert.notEqual(hashFinverseState("state"), hashFinverseState("other-state"));
 assert.equal(isFinverseDataReady("DATA_RETRIEVAL_COMPLETE"), true);
@@ -146,3 +150,11 @@ for (const [input, expected, country] of [["BDO Personal", "BDO", "PHL"], ["BPI 
 assert(finverseBankPresentation({name:"Citibank",countries:["SGP"]}).logoUrl.includes("singapore"));
 assert(finverseBankPresentation({name:"HSBC",countries:["HKG"]}).logoUrl.includes("hong kong"));
 console.log("Connect flags, full country names, short bank names and regional logos passed.");
+
+import { summarizeFinverseCatalog } from "../lib/finverse";
+const report = summarizeFinverseCatalog([realBank,{...realBank,institution_id:"beta",status:"BETA"},{...realBank,institution_id:"limited",products_supported:["ACCOUNTS"]}],"live");
+assert.equal(report.length,3,"Catalogue must retain entries hidden by Connect filters");
+assert.equal(report[0].shownInClover,true);
+assert(report[1].excludedReasons.includes("Provider status: BETA"));
+assert(report[2].excludedReasons.includes("Missing Accounts or Transactions support"));
+assert(!JSON.stringify(report).includes("PRIVATE"),"Never export institution login fields");
