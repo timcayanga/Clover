@@ -207,20 +207,6 @@ export default function Home() {
             >
               {amount(data.balance)}
             </Text>
-            <Text
-              style={{
-                color: "white",
-                fontSize: 11,
-                fontFamily: "Poppins-SemiBold",
-                textAlign: "center",
-                marginTop: 8,
-              }}
-            >
-              {new Date().toLocaleDateString("en-US", {
-                month: "long",
-                year: "numeric",
-              })}
-            </Text>
             <View style={{ flexDirection: "row", gap: 8 }}>
               {(["income", "expense"] as const).map((key) => (
                 <View

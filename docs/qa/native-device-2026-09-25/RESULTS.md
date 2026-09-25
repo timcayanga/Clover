@@ -156,3 +156,7 @@ The requested primary-screen parity corrections and the sandbox Connect → sele
 | Settings | Account/profile data, Display, Region, Plan usage/referrals, Review, Notifications, Security session list, Categories and Sync & Offline inspected; no real-user preferences or credentials changed |
 
 This is internal preview readiness, not App Store/Play production certification. iOS final verification used the unchanged verified native runtime plus the latest Release Hermes bundle; Android used a fresh local Release APK. Store purchase/restore, push delivery, physical-device accessibility and live-bank institution behavior are outside the sandbox/UI checks above. The temporary QA Plus override expires September 28 and does not grant ordinary users access.
+
+## Home icon/date follow-up
+
+Removed the month/year label from shared native Home and web Home, including obsolete CSS. Figma Home `1240:59000` already omits this label. A fresh local Android arm64 Release APK built successfully and was installed over `ph.clover.preview`; `android-home-icons-no-month.png` verifies the house Home icon, Clover speech-bubble Adviser icons, no date label, and one converted Income/Expense pair. The emulator also contains an older `ph.clover.app` installation predating the bundled-icon cache fix; its data was preserved. No EAS cloud build was used.

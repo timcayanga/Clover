@@ -1070,7 +1070,6 @@ async function DashboardStream({
             </strong>
           </div>
           <div className="dashboard-home__hero-aside" aria-label="Monthly balance summary">
-            <span className="dashboard-home__balance-month">{monthStart.toLocaleDateString("en-US", { month: "long", year: "numeric" })}</span>
             {balanceHighlights.map((pill) => (
               <div key={pill.key} className={`dashboard-home__hero-mini-pill dashboard-home__hero-mini-pill--${pill.isExpense ? "expense" : "income"}`}>
                 <span className="dashboard-home__hero-mini-label" title={`All currencies converted to ${balanceCurrency}`}>{pill.label}</span>
