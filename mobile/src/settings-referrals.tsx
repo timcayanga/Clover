@@ -1,3 +1,4 @@
+import { apiBase } from "./api-base";
 import { useEffect, useState } from "react";
 import { Share } from "react-native";
 import { useSession } from "./session";
@@ -43,7 +44,7 @@ export function SettingsReferrals() {
     {data?.campaigns.map(campaign => <Card key={campaign.id}>
       <Heading>{campaign.name}</Heading>
       <Body>{campaign.terms}</Body>
-      {campaign.codes.length ? campaign.codes.map(({ code }) => <Button key={code} title={`Share referral code ${code}`} secondary onPress={() => void Share.share({ message: `https://clover.ph/referrals?ref=${encodeURIComponent(code)}` }).catch(() => setError("Unable to share this referral code."))} />) : <>
+      {campaign.codes.length ? campaign.codes.map(({ code }) => <Button key={code} title={`Share referral code ${code}`} secondary onPress={() => void Share.share({ message: `${apiBase()}/referrals?ref=${encodeURIComponent(code)}` }).catch(() => setError("Unable to share this referral code."))} />) : <>
         <Button title={accepted[campaign.id] ? "✓ Campaign terms accepted" : "Accept campaign terms"} secondary disabled={busy} onPress={() => setAccepted(v => ({ ...v, [campaign.id]: !v[campaign.id] }))} />
         <Button title="Get referral code" disabled={busy || !data.verified || !accepted[campaign.id]} onPress={() => void act("code", campaign.id)} />
       </>}
