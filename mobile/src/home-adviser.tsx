@@ -6,7 +6,7 @@ import { Body, Card, money, useTheme } from "./ui";
 
 function openInsight(item: HomeInsight) {
   if (item.actionLabel === "Upload now") {
-    router.navigate({ pathname: "/(tabs)/add", params: { entry: "upload-files" } });
+    router.navigate({ pathname: "/add-transaction", params: { entry: "upload-files" } });
   } else if (item.href.startsWith("/recurring")) {
     router.navigate("/(tabs)/recurring");
   } else if (item.href.startsWith("/transactions")) {

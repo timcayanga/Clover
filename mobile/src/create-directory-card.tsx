@@ -64,6 +64,7 @@ export function CreateDirectoryCard({
             borderRadius: 28,
             borderWidth: 1,
             borderStyle: "dashed",
+            backgroundColor: colors.white,
             borderColor: colors.teal,
             alignItems: "center",
             justifyContent: "center",

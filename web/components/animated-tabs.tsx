@@ -74,6 +74,7 @@ export function AnimatedTabs({ className, activeKey, onChange, tabs }: AnimatedT
       />
       {tabs.map((tab) => {
         const isActive = tab.key === activeKey;
+        const premium = /^(plus|pro)$/i.test(tab.badge ?? "");
         return (
           <button
             key={tab.key}
@@ -85,7 +86,7 @@ export function AnimatedTabs({ className, activeKey, onChange, tabs }: AnimatedT
               }
             }}
             type="button"
-            className={`animated-tabs__tab${isActive ? " is-active" : ""}${tab.locked ? " is-locked" : ""}`}
+            className={`animated-tabs__tab${isActive ? " is-active" : ""}${tab.locked ? " is-locked" : ""}${premium ? " is-premium" : ""}`}
             onClick={() => {
               if (!tab.disabled) {
                 onChange(tab.key);
@@ -94,11 +95,11 @@ export function AnimatedTabs({ className, activeKey, onChange, tabs }: AnimatedT
             disabled={tab.disabled}
             aria-disabled={tab.locked || undefined}
             aria-pressed={isActive}
-          aria-label={tab.ariaLabel ?? tab.label}
+          aria-label={premium ? `${tab.ariaLabel ?? tab.label}, Plus and Pro` : tab.ariaLabel ?? tab.label}
         >
           {tab.icon ? <span className="animated-tabs__icon" aria-hidden="true">{tab.icon}</span> : null}
           {tab.label ? <span className="animated-tabs__label">{tab.label}</span> : null}
-          {tab.badge ? <span className="animated-tabs__badge">{tab.badge.toLowerCase() === "pro" ? "Plus" : tab.badge}</span> : null}
+          {tab.badge && !premium ? <span className="animated-tabs__badge">{tab.badge}</span> : null}
         </button>
       );
       })}

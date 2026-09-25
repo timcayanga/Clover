@@ -102,10 +102,13 @@ function Routes() {
               <Stack.Screen name="auth" options={{ headerShown: false }} />
             </Stack.Protected>
             <Stack.Protected guard={active}>
+
               <Stack.Screen
                 name="(tabs)"
                 options={{ headerShown: false, title: "Clover" }}
               />
+              <Stack.Screen name="add-transaction" options={{ headerShown: false, presentation: "transparentModal", animation: "slide_from_bottom", contentStyle: { backgroundColor: "#0005" } }}/>
+
               <Stack.Screen
                 name="offline"
                 options={{
@@ -156,22 +159,6 @@ function Routes() {
             </Stack.Protected>
           </Stack>
         </GlassContent>
-        {active &&
-        (path.startsWith("/transaction/") ||
-          path.startsWith("/import/") ||
-          [
-            "/offline",
-            "/settings",
-            "/notifications",
-            "/budgeting",
-            "/goals",
-            "/investments",
-            "/circles",
-            "/split-bills",
-            "/reports",
-          ].includes(path)) ? (
-          <DetailNavigation />
-        ) : null}
       </GlassNavigationProvider>
     </PrivacyShield>
   );

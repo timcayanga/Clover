@@ -15,20 +15,20 @@ export function HoldingLogo({ holding }: { holding: PortfolioHolding }) {
         borderRadius: 12,
         overflow: "hidden",
         backgroundColor: "#fff",
-        padding: 4,
+        padding: 0,
       }}
     >
       {!failed && path?.startsWith("/assets/investments/") ? (
         <SvgUri
           uri={`${apiBase()}${path}`}
-          width={36}
-          height={36}
+          width={44}
+          height={44}
           onError={() => setFailed(true)}
         />
       ) : (
         <Image
           source={investmentIcons[holding.subtype] ?? investmentIcons.other}
-          style={{ width: 36, height: 36 }}
+          style={{ width: 44, height: 44 }}
         />
       )}
     </View>

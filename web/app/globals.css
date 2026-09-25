@@ -66571,3 +66571,9 @@ html[data-theme="dark"] .content.content--reports .reports-range-menu__summary {
     background: var(--surface); color: var(--text); font: 400 12px var(--font-body) !important;
   }
 }
+
+/* Shared Plus/Pro access is indicated by tab text, without a tier badge. */
+.animated-tabs .animated-tabs__tab.is-premium .animated-tabs__label,
+.animated-tabs .animated-tabs__tab.is-premium .animated-tabs__icon { color: #8561af; }
+[data-theme="dark"] .animated-tabs .animated-tabs__tab.is-premium .animated-tabs__label,
+[data-theme="dark"] .animated-tabs .animated-tabs__tab.is-premium .animated-tabs__icon { color: #c7a5ee; }

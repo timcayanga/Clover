@@ -599,7 +599,7 @@ async function handle(
       if (Number(request.headers.get("content-length") ?? 0) > 4096)
         return reply({ error: "Account details are too large." }, 413);
       const body = mobileAccountCreateSchema.parse(await request.json());
-      forwarded = new Request(request.url, { method: "POST", headers: request.headers, body: JSON.stringify({ ...body, workspaceId, source: "manual" }) });
+      forwarded = new Request(request.url, { method: "POST", headers: request.headers, body: JSON.stringify({ ...body, workspaceId, source: "manual", ...(body.type === "investment" ? { createOnly: true } : {}) }) });
     }
     if (operation === "transaction-create") {
       const body = mobileCreateSchema.parse(await request.json());

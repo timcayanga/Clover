@@ -1,3 +1,5 @@
+import { EntryOverlay } from "../../src/entry-overlay";
+import { ChoiceField } from "../../src/transaction-entry";
 import { Text } from "../../src/app-text";
 import { AccountBrandLogo } from "../../src/account-brand-logo";
 import { AccountTypeMark } from "../../src/account-type-mark";
@@ -38,6 +40,7 @@ export default function Accounts() {
 function AccountsContent() {
   const { colors, styles, dark } = useTheme();
   const session = useSession();
+  const [currencyFilter, setCurrencyFilter] = useState("");
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [expandedAccount, setExpandedAccount] = useState<string | null>(null);
   const [selected, setSelected] = useState<Account | null>(null);
@@ -161,11 +164,13 @@ function AccountsContent() {
       prepaid: "Tracked assets",
       other: "Tracked assets",
     })[type] ?? "Other accounts";
+  const ownedCurrencies = [...new Set(accounts.map(account => account.currency))];
+  const displayedCurrency = ownedCurrencies.includes(currencyFilter) ? currencyFilter : ownedCurrencies.includes(session.data?.defaultCurrency ?? "") ? session.data!.defaultCurrency : ownedCurrencies[0];
   const groups = new Map<
     string,
     { title: string; currency: string; rows: Account[] }
   >();
-  for (const account of accounts) {
+  for (const account of accounts.filter(account => account.currency === displayedCurrency)) {
     const title = sectionName(account.type),
       key = `${title}:${account.currency}`;
     if (!groups.has(key))
@@ -230,8 +235,7 @@ function AccountsContent() {
       };
     },
   );
-  if (selected || adding)
-    return (
+  const accountEditor = selected || adding ? (
       <AccountEditor
         defaultCurrency={session.data?.defaultCurrency ?? "PHP"}
         callbackConnection={finverseConnection}
@@ -264,11 +268,14 @@ function AccountsContent() {
           setAdding(false);
         }}
       />
-    );
+  ) : null;
+  if (selected) return accountEditor;
   return (
     <Screen gap={24}>
+      {adding ? <EntryOverlay onClose={() => setAdding(false)}>{accountEditor}</EntryOverlay> : null}
       {pendingBanks.map(connection=><Button key={connection.id} secondary icon="alert-circle" title={`Select accounts · ${connection.name}`} onPress={()=>router.push({pathname:"/accounts",params:{finverseConnection:connection.id,finverseWorkspace:session.profileId}})}/>)}
-      {summaries.map((summary) => (
+      {ownedCurrencies.length > 1 ? <ChoiceField label="Currency" value={displayedCurrency ?? ""} options={ownedCurrencies.map(value=>({value,label:value}))} onChange={setCurrencyFilter}/> : null}
+      {summaries.filter(summary => summary.currency === displayedCurrency).map((summary) => (
         <View key={summary.currency} style={{ gap: 8 }}>
           {summaries.length > 1 ? <Body>{summary.currency}</Body> : null}
           <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
@@ -372,7 +379,7 @@ function AccountsContent() {
                         }
                       >
                         <LinearGradient
-                          colors={[background, background, `${foreground}33`]}
+                          colors={[background, background]}
                           start={{ x: 0, y: 0 }}
                           end={{ x: 1, y: 1 }}
                           style={{

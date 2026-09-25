@@ -65,6 +65,8 @@ export const navigationGroups: {
     title: "Personal",
     icon: "person-outline",
     items: [
+      { label: "Settings", route: "/settings", icon: "settings-outline" },
+      { label: "Help", route: "/help", icon: "help-circle-outline" },
       {
         label: "Account & Profiles",
         route: "/account",

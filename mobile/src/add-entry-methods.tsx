@@ -1,3 +1,4 @@
+import { EntrySelector, EntryTransition, UploadTiles } from "./entry-controls";
 import { Text } from "./app-text";
 import type { AddFormDraft } from "../../shared/add-form-draft";
 import { useState, type ReactNode } from "react";
@@ -36,58 +37,8 @@ export function AddEntryMethods({
   if (!enabled) return <>{children}</>;
   return (
     <View style={{ gap: 16 }}>
-      <View
-        accessibilityRole="tablist"
-        style={{
-          flexDirection: "row",
-          padding: 4,
-          borderRadius: 999,
-          backgroundColor: colors.pale,
-        }}
-      >
-        {(connect ? ["manual", "ask", "upload", "connect"] : ["manual", "ask", "upload"]).map((method) => (
-          <Pressable
-            key={method}
-            accessibilityRole="tab"
-            accessibilityState={{ selected: tab === method, disabled }}
-            disabled={disabled}
-            onPress={() => {
-              setTab(method);
-              if (method === "ask") setVisited(true);
-            }}
-            style={{ flex: 1, borderRadius: 999, overflow: "hidden" }}
-          >
-            <LinearGradient
-              colors={
-                tab === method
-                  ? ["#03a8c0", "#34d3d0"]
-                  : ["transparent", "transparent"]
-              }
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 0 }}
-              style={{
-                height: 40,
-                alignItems: "center",
-                justifyContent: "center",
-              }}
-            >
-              <Text
-                style={{
-                  fontFamily: "Poppins-Medium",
-                  fontSize: connect ? 11 : 15,
-                  color: tab === method ? "white" : colors.ink,
-                }}
-              >
-                {method === "manual"
-                  ? "Manual"
-                  : method === "ask"
-                    ? "Ask Clover"
-                    : method === "connect" ? "Connect" : "Upload"}
-              </Text>
-            </LinearGradient>
-          </Pressable>
-        ))}
-      </View>
+      <EntrySelector value={tab} items={connect ? ["manual", "ask", "upload", "connect"] : ["manual", "ask", "upload"]} disabled={disabled} onChange={method => { setTab(method); if (method === "ask") setVisited(true); }}/>
+      <EntryTransition value={tab}>
       <View style={{ display: tab === "manual" ? "flex" : "none", gap: 16 }}>
         {children}
       </View>
@@ -139,46 +90,13 @@ export function AddEntryMethods({
               ? "Review a bill or statement first. Confirm its repeating schedule in Manual; a single bill never establishes a recurring payment."
               : "Upload a statement and review the account or holding match before confirming."}
         </Body>
-        <Button
-          title={kind === "split" ? "Choose receipt" : "Choose files"}
-          disabled={disabled}
-          onPress={() => {
-            if (onUpload) {
-              onUpload();
-              setTab("manual");
-            } else
-              router.push({
-                pathname: "/(tabs)/add",
-                params: { entry: "upload-file", picker: "file" },
-              });
-          }}
-        />
-        {kind !== "split" ? (
-          <>
-            <Button
-              secondary
-              title="Take photo"
-              onPress={() =>
-                router.push({
-                  pathname: "/(tabs)/add",
-                  params: { entry: "upload-camera", picker: "camera" },
-                })
-              }
-            />
-            <Button
-              secondary
-              title="Photo library"
-              onPress={() =>
-                router.push({
-                  pathname: "/(tabs)/add",
-                  params: { entry: "upload-library", picker: "library" },
-                })
-              }
-            />
-          </>
-        ) : null}
+        <UploadTiles disabled={disabled} onChoose={source => {
+          if (onUpload && source === "file") { onUpload(); setTab("manual"); }
+          else router.push({ pathname: "/add-transaction", params: { entry: `upload-${source}`, picker: source } });
+        }}/>
         <Body>Your manual draft stays here while you switch methods.</Body>
       </View>
+      </EntryTransition>
     </View>
   );
 }

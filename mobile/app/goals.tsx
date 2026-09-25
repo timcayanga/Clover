@@ -1,3 +1,5 @@
+import { EntryOverlay } from "../src/entry-overlay";
+import { ChoiceField } from "../src/transaction-entry";
 import { CreateDirectoryCard } from "../src/create-directory-card";
 import { Icon } from "../src/ui";
 import { Text } from "../src/app-text";
@@ -45,13 +47,13 @@ type Goal = {
 };
 const sample = { goals: [] as Goal[] };
 const presets = [
-  { name: "Save more", key: "save_more", icon: "Income" },
+  { name: "Save More", key: "save_more", icon: "Income" },
   {
-    name: "Emergency fund",
+    name: "Emergency Fund",
     key: "build_emergency_fund",
     icon: "Health & Wellness",
   },
-  { name: "Invest better", key: "invest_better", icon: "Investments" },
+  { name: "Invest Better", key: "invest_better", icon: "Investments" },
 ];
 export default function Goals() {
   const session = useSession();
@@ -86,8 +88,8 @@ export default function Goals() {
       }
     }
   }, [params.goalId, data, session.profileId]);
-  if (editor)
-    return (
+  const entryOverlay = editor ? (
+    <EntryOverlay onClose={() => setEditor(null)}>
       <GoalEditor
         key={session.profileId}
         goal={editor.goal}
@@ -106,7 +108,8 @@ export default function Goals() {
           else reload();
         }}
       />
-    );
+    </EntryOverlay>
+  ) : null;
   const icon = (goal: Goal) =>
     goal.goal === "invest_better"
       ? "Investments"
@@ -115,8 +118,9 @@ export default function Goals() {
         : "Income";
   return (
     <Screen gap={20}>
+      {entryOverlay}
       <PlanHeader
-        title={selected ? "Goal Details" : "Goals"}
+        title={selected ? selected.name : "Goals"}
         back={selected ? () => setSelected(null) : undefined}
         add={() => setEditor({ goal: null })}
       />
@@ -129,19 +133,6 @@ export default function Goals() {
         <Body>Loading goals…</Body>
       ) : selected ? (
         <>
-          <View style={{ flexDirection: "row", gap: 10, alignItems: "center" }}>
-            <CategoryMark name={icon(selected)} size={32} />
-            <Text
-              style={{
-                color: colors.ink,
-                fontFamily: "Poppins-SemiBold",
-                fontSize: 20,
-                flex: 1,
-              }}
-            >
-              {selected.name}
-            </Text>
-          </View>
           <PlanTabs
             items={["Overview", "Roadmap", "Progress", "History"]}
             value={tab}
@@ -150,7 +141,7 @@ export default function Goals() {
           {tab === "Overview" ? (
             <>
               <Card>
-                <Body>{selected.cadence} target</Body>
+                <Body>{selected.cadence[0].toUpperCase() + selected.cadence.slice(1)} Target</Body>
                 <Body muted={false}>
                   {selected.targetAmount === null
                     ? "Set a target"
@@ -410,6 +401,7 @@ export default function Goals() {
             data.goals.map((goal) => (
               <PlanDirectoryCard
                 key={goal.id}
+                onPress={() => { setSelected(goal); setTab("Overview"); }}
                 color={
                   goal.goal === "build_emergency_fund"
                     ? "#ef8e99"
@@ -557,25 +549,14 @@ function GoalEditor({
     }
   };
   return (
-    <Screen>
+    <Screen sheet onDismiss={() => { if (!saving) onClose(); }}>
       <PlanHeader
-        title={goal ? "Edit Goal" : "Create Goal"}
+        title={goal ? "Edit Goal" : "Add Goal"}
         back={() => {
           if (!saving) onClose();
         }}
       />
-      <Body>Goal type</Body>
-      {[
-        ...presets,
-        { name: "Pay down debt", key: "pay_down_debt", icon: "Loans" },
-        { name: "Track spending", key: "track_spending", icon: "Shopping" },
-      ].map((p) => (
-        <PlanAction
-          key={p.key}
-          title={`${p.name}${kind === p.key ? " ✓" : ""}`}
-          onPress={() => setKind(p.key)}
-        />
-      ))}
+      <ChoiceField label="Goal Type" value={kind} onChange={setKind} options={[...presets, {name:"Pay Down Debt",key:"pay_down_debt"}, {name:"Track Spending",key:"track_spending"}].map(p=>({value:p.key,label:p.name}))}/>
       <Field
         label="Goal name (optional)"
         value={name}
@@ -594,20 +575,13 @@ function GoalEditor({
         onChangeText={(v) => setCurrency(v.toUpperCase())}
         maxLength={3}
       />
-      <PlanAction
-        title={`Monthly${cadence === "monthly" ? " ✓" : ""}`}
-        onPress={() => setCadence("monthly")}
-      />
-      <PlanAction
-        title={`Annual${cadence === "annual" ? " ✓" : ""}`}
-        onPress={() => setCadence("annual")}
-      />
+      <ChoiceField label="Cadence" value={cadence} onChange={setCadence} options={[{value:"monthly",label:"Monthly"},{value:"annual",label:"Annual"}]}/>
       <Body>
         This creates an independent goal in the selected Profile. Progress uses
         matching-currency activity.
       </Body>
       {error ? <Notice>{error}</Notice> : null}
-      <PlanAction title="Cancel" disabled={saving} onPress={onClose} />
+
       <PlanAction
         title={saving ? "Saving…" : goal ? "Save changes" : "Create Goal"}
         tone="primary"

@@ -1,8 +1,11 @@
+import { InlineDetailRow } from "../../src/inline-detail-row";
+import { PlanHeader } from "../../src/plan-ui";
+import { EntryOverlay } from "../../src/entry-overlay";
 import { recurringSummaryAmounts } from "../../src/recurring-summary";
 import { PlanTabs } from "../../src/plan-ui";
 import { Text } from "../../src/app-text";
-import { useFocusEffect, useLocalSearchParams } from "expo-router";
-import { useCallback, useEffect, useState } from "react";
+import { useFocusEffect, useLocalSearchParams, useNavigation } from "expo-router";
+import { useCallback, useEffect, useState, useLayoutEffect } from "react";
 import { Pressable, View } from "react-native";
 import { useSession } from "../../src/session";
 import { Choices } from "../../src/transaction-entry";
@@ -46,6 +49,12 @@ export default function Recurring() {
   const [month, setMonth] = useState(
     () => new Date(new Date().getFullYear(), new Date().getMonth(), 1),
   );
+  const [accounts, setAccounts] = useState<{id:string;name:string;currency:string}[]>([]);
+  useEffect(() => {
+    let active = true;
+    if (!session.demo) void session.request<{accounts:typeof accounts}>(`accounts?workspaceId=${encodeURIComponent(session.profileId)}`).then(r=>{if(active)setAccounts(r.accounts);}).catch(()=>{});
+    return ()=>{active=false;};
+  },[session.demo,session.profileId,session.request]);
   const [data, setData] = useState<Data | null>(null);
   const [kind, setKind] = useState("");
   const [query, setQuery] = useState("");
@@ -135,8 +144,10 @@ export default function Recurring() {
       setBusy(false);
     }
   };
-  if (editor)
-    return (
+  const navigation = useNavigation();
+  useLayoutEffect(()=>{navigation.setOptions({headerShown:!selected});},[navigation,selected]);
+  const entryOverlay = editor ? (
+    <EntryOverlay onClose={() => setEditor(false)}>
       <RecurringEditor
         initial={selected}
         suggestion={suggestion}
@@ -160,27 +171,48 @@ export default function Recurring() {
           setRevision((v) => v + 1);
         }}
       />
-    );
+    </EntryOverlay>
+  ) : null;
   if (selected) return (
     <Screen key={selected.id}>
+      <PlanHeader title={selected.title} back={()=>{setSelected(null);setConfirmDelete(false);}}/>
+      {entryOverlay}
       {error ? <Notice>{error}</Notice> : null}
-        <Card>
-          <Heading>{selected.title}</Heading>
-          <Body>{amount(selected)}</Body>
-          <Body>
-            {selected.date?.slice(0, 10) || "No date"} · {selected.recurrence} ·{" "}
-            {selected.status}
-          </Body>
-          {selected.accountName ? <Body>{selected.accountName}</Body> : null}
-          {selected.categoryName ? <Body>{selected.categoryName}</Body> : null}
-          {selected.notes ? <Body>{selected.notes}</Body> : null}
-          <Button
-            title="Edit recurring"
-            onPress={() => {
-              setSuggestion(null);
-              setEditor(true);
-            }}
-          />
+        <Card style={{gap:0}}>
+          {[
+            {label:"Name",key:"title",value:selected.title},
+            {label:"Type",key:"kind",value:selected.kind,display:kinds.find(k=>k.value===selected.kind)?.label,options:kinds.filter(k=>k.value)},
+            {label:"Account",key:"accountId",value:selected.accountId||"",display:selected.accountName||"No account",options:[{value:"",label:"No account"},...accounts.filter(a=>a.currency===selected.currency).map(a=>({value:a.id,label:a.name}))]},
+            {label:"Status",key:"status",value:selected.status,display:selected.status[0].toUpperCase()+selected.status.slice(1),options:["active","paused","resolved"].map(value=>({value,label:value[0].toUpperCase()+value.slice(1)}))},
+            {label:"Payee",key:"counterparty",value:selected.counterparty||""},
+            {label:"Amount",key:"amount",value:String(selected.amount??""),display:amount(selected)},
+            {label:"Due Date",key:"dueDate",value:selected.dueDate?.slice(0,10)||selected.date?.slice(0,10)||""},
+            {label:"Repeat",key:"recurrence",value:selected.recurrence,options:["once","weekly","biweekly","monthly","quarterly","annual"].map(value=>({value,label:value[0].toUpperCase()+value.slice(1)}))},
+            {label:"Category",key:"categoryName",value:selected.categoryName||""},
+            {label:"Notes",key:"notes",value:selected.notes||""},
+          ].map(field=><InlineDetailRow key={field.key} label={field.label} value={field.value} displayValue={field.display} options={field.options} numeric={field.key==="amount"} onSave={async value=>{
+            if(!session.demo)await session.request(`recurring/${selected.id}?workspaceId=${encodeURIComponent(session.profileId)}`,{method:"PATCH",body:JSON.stringify({[field.key]:value||null})});
+            const patch = {[field.key]:field.key==="amount"?(value?Number(value):null):value,...(field.key==="accountId"?{accountName:accounts.find(a=>a.id===value)?.name||null}:{})};
+            setSelected(current=>current?{...current,...patch}:current);
+            setData(current=>current?{...current,items:current.items.map(item=>item.id===selected.id?{...item,...patch}:item)}:current);
+          }}/>) }
+          {selected.tracking ? <View style={{marginTop:16}}>
+            <Heading>Payment Details</Heading>
+            {([
+              {key:"paymentAmount",label:"Payment",numeric:true},
+              {key:"totalPayments",label:"Payments",numeric:true},
+              {key:"paymentsMade",label:"Paid",numeric:true},
+              {key:"endDate",label:"End Date",numeric:false},
+              {key:"interestRate",label:"Rate (%)",numeric:true},
+              {key:"reference",label:"Reference",numeric:false},
+            ] as const).map(field=><InlineDetailRow key={field.key} label={field.label} value={String(selected.tracking?.[field.key]??"")} numeric={field.numeric} onSave={async value=>{
+              if(!selected.tracking)return;
+              const tracking={...selected.tracking,[field.key]:field.numeric?(value?Number(value):field.key==="paymentsMade"?0:null):value|| (field.key==="reference"?"":null)};
+              if(!session.demo)await session.request(`recurring/${selected.id}?workspaceId=${encodeURIComponent(session.profileId)}`,{method:"PATCH",body:JSON.stringify({tracking})});
+              setSelected(current=>current?{...current,tracking}:current);
+              setData(current=>current?{...current,items:current.items.map(item=>item.id===selected.id?{...item,tracking}:item)}:current);
+            }}/>) }
+          </View> : null}
           {occurrences
             .filter((o) => o.id === selected.id)
             .map((o) => (
@@ -232,16 +264,13 @@ export default function Recurring() {
               />
             </Notice>
           ) : null}
-          <Button
-            title="Close details"
-            secondary
-            onPress={() => { setSelected(null); setConfirmDelete(false); }}
-          />
+
         </Card>
     </Screen>
   );
   return (
     <Screen>
+      {entryOverlay}
       <PlanTabs
         items={kinds.map((item) => item.label)}
         value={kinds.find((item) => item.value === kind)?.label ?? "Overview"}
@@ -408,7 +437,7 @@ export default function Recurring() {
                         {index + 1}
                       </Text>
                       {bills.slice(0, 1).map((item) => (
-                        <View key={item.id}>
+                        <View key={item.id} style={{ backgroundColor: colors.pale, borderLeftWidth: 2, borderLeftColor: colors.teal, borderRadius: 3, padding: 2, marginTop: 3 }}>
                           <Text
                             numberOfLines={1}
                             style={{ color: colors.teal, fontSize: 8 }}

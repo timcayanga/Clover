@@ -249,7 +249,7 @@ export default function Adviser() {
       }
       onPhoto={() =>
         router.push({
-          pathname: "/(tabs)/add",
+          pathname: "/add-transaction",
           params: { entry: `upload-${Date.now()}` },
         })
       }
