@@ -97,7 +97,9 @@ assert.deepEqual(finverseCountries([]),[]);
 assert.deepEqual(finverseCountries([{countries:["PHL","SGP"]}]).map(c=>c.name),["Philippines","Singapore"]);
 const citi=visibleFinverseBanks([{...realBank,institution_id:"citi",institution_name:"Citibank",countries:["USA","GBR","HKG","SGP","PHL"]}],"live");
 assert.deepEqual(citi[0].countries,["PHL","SGP"]);
-assert.deepEqual(visibleFinverseBanks([{...realBank,countries:["USA"]}],"live"),[]);
+assert.equal(visibleFinverseBanks([{...realBank,countries:["USA"]}],"live")[0].countries[0],"USA");
+assert.deepEqual(finverseCountries([{countries:["GBR","NLD"]}]).map(c=>c.name),["Netherlands","United Kingdom"]);
+assert.deepEqual(visibleFinverseBanks([{...realBank,countries:["ZZZ"]}],"live"),[]);
 assert.equal(mobileOperation("GET",["finverse","connections"]),"finverse-connections");
 assert.equal(mobileOperation("POST",["finverse","connections"]),null);
 
@@ -129,11 +131,11 @@ refreshRequests().catch(error=>{console.error(error);process.exitCode=1;});
 
 import { finverseBankPresentation } from "../lib/finverse-bank-presentation";
 import { existsSync } from "node:fs";
-import { resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import { FINVERSE_COUNTRIES } from "../../shared/finverse-countries";
 for (const country of FINVERSE_COUNTRIES) if (country.flagSrc) {
-  assert(existsSync(resolve("..", decodeURIComponent(country.flagSrc.slice(1)))));
-  assert(existsSync(resolve("../mobile", decodeURIComponent(country.flagSrc.slice(1)))));
+  assert(existsSync(fileURLToPath(new URL(`../../${country.flagSrc.slice(1)}`, import.meta.url))));
+  assert(existsSync(fileURLToPath(new URL(`../../mobile/${country.flagSrc.slice(1)}`, import.meta.url))));
 }
 for (const [input, expected, country] of [["BDO Personal", "BDO", "PHL"], ["BPI (Business)", "BPI", "PHL"], ["Citibank Personal", "Citibank", "SGP"], ["CitiDirect", "Citibank", "SGP"], ["HSBC Business", "HSBC", "HKG"]]) {
   const display = finverseBankPresentation({name:input,countries:[country]});

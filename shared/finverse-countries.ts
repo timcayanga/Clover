@@ -1,5 +1,6 @@
-// Clover's supported Connect markets. A market is shown only if a usable
-// institution explicitly lists it; global corporate coverage is not availability.
+import { ISO_COUNTRY_NAMES } from "./iso-country-names";
+
+// Supplied flag artwork. Availability still comes from the provider catalogue.
 export const FINVERSE_COUNTRIES = [
   { code: "HKG", alpha2: "HK", name: "Hong Kong", flag: "🇭🇰", flagSrc: "/assets/countries/hong%20kong.png" },
   { code: "IDN", alpha2: "ID", name: "Indonesia", flag: "🇮🇩", flagSrc: "/assets/countries/indonesia.png" },
@@ -9,13 +10,18 @@ export const FINVERSE_COUNTRIES = [
   { code: "THA", alpha2: "TH", name: "Thailand", flag: "🇹🇭", flagSrc: null },
   { code: "VNM", alpha2: "VN", name: "Vietnam", flag: "🇻🇳", flagSrc: "/assets/countries/vietnam.png" },
 ] as const;
+const allCountries = ISO_COUNTRY_NAMES.map(([code, alpha2, name]) => {
+  const supplied = FINVERSE_COUNTRIES.find(c => c.code === code);
+  return { code, alpha2, name: supplied?.name ?? name, flagSrc: supplied?.flagSrc ?? null,
+    flag: supplied?.flag ?? [...alpha2].map(c => String.fromCodePoint(127397 + c.charCodeAt(0))).join("") };
+});
 export function connectBankCountries(name: string, codes: string[]) {
   const southeastAsia = new Set(["IDN", "MYS", "PHL", "SGP", "THA", "VNM"]);
   const isCiti = /\bciti(?:bank|direct)?\b/i.test(name);
-  return FINVERSE_COUNTRIES.filter(c => codes.some(code => [c.code, c.alpha2, c.name.toUpperCase()].includes(code.trim().toUpperCase())) &&
+  return allCountries.filter(c => codes.some(code => [c.code, c.alpha2, c.name.toUpperCase()].includes(code.trim().toUpperCase())) &&
     (!isCiti || southeastAsia.has(c.code))).map(c => c.code);
 }
 export function finverseCountries(banks: { countries: string[] }[]) {
   const available = new Set(banks.flatMap(bank => bank.countries));
-  return FINVERSE_COUNTRIES.filter(country => available.has(country.code));
+  return allCountries.filter(country => available.has(country.code)).sort((a,b) => a.name.localeCompare(b.name));
 }
