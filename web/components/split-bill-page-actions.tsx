@@ -1,5 +1,6 @@
 "use client";
 
+import { createPortal } from "react-dom";
 import { MobileSheetHandle } from "@/components/mobile-sheet-handle";
 import { InterfaceIcon } from "@/components/interface-icon";
 
@@ -228,7 +229,7 @@ export function SplitBillPageActions({ currentUserName, people, groups, onBillSa
       <SplitBillImportModal open={openAddMode === "import"} currentUserName={currentUserName} onClose={closeAddModal} onSaved={onBillSaved} />
       <SplitBillPersonModal open={isPersonModalOpen} onClose={closePersonModal} onSaved={onPersonSaved} />
 
-      {isGroupModalOpen ? (
+      {isGroupModalOpen ? createPortal(
         <div className="split-bill-modal split-bill-simple-entry-modal" role="presentation" onClick={closeGroupModal}>
           <form className="split-bill-modal__card glass split-bill-group-modal" role="dialog" aria-modal="true" aria-label="Add group" onSubmit={(event) => { event.preventDefault(); void saveGroup(); }} onClick={(event) => event.stopPropagation()}>
             <MobileSheetHandle onClose={closeGroupModal} disabled={isSavingGroup} />
@@ -257,7 +258,8 @@ export function SplitBillPageActions({ currentUserName, people, groups, onBillSa
               </button>
             </div>
           </form>
-        </div>
+        </div>,
+        document.body,
       ) : null}
     </>
   );
