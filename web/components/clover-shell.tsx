@@ -20,6 +20,7 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useClerk, useUser } from "@clerk/nextjs";
 import { formatCurrencyAmount } from "@/lib/currency-format";
 import {
+  chooseWorkspaceId,
   persistSelectedWorkspaceId,
   readSelectedWorkspaceId,
   selectedWorkspaceEventName,
@@ -1406,8 +1407,19 @@ export function CloverShell({
     let cancelled = false;
 
     const refreshSearchWorkspace = async () => {
-      const nextWorkspaceId = readSelectedWorkspaceId() || workspaceId || "";
-      if (nextWorkspaceId === searchWorkspaceId) {
+      let nextWorkspaceId = readSelectedWorkspaceId() || workspaceId || "";
+      if (!nextWorkspaceId) {
+        // Server-rendered directories can open before any client page has saved
+        // a workspace selection. Resolve it before mounting the quick-add sheet.
+        const response = await fetchJsonOnce<{ workspaces?: Array<{ id: string }> }>({
+          key: "shell:workspaces",
+          route: "shell.workspaces",
+          input: "/api/workspaces",
+        }).catch(() => null);
+        if (cancelled) return;
+        nextWorkspaceId = chooseWorkspaceId(response?.json?.workspaces ?? []);
+      }
+      if (cancelled || nextWorkspaceId === searchWorkspaceId) {
         return;
       }
 
