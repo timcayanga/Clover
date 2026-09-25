@@ -1,3 +1,4 @@
+import { documentedFinverseCountries } from "../../shared/finverse-coverage";
 import { connectBankCountries } from "../../shared/finverse-countries";
 import { createCipheriv, createDecipheriv, createHash, randomBytes } from "node:crypto";
 
@@ -279,7 +280,8 @@ export function visibleFinverseBanks(institutions: unknown, mode: "live" | "test
     if (!Array.isArray(item.products_supported) || !["ACCOUNTS", "TRANSACTIONS"].every(p => item.products_supported.includes(p))) continue;
     if (!Array.isArray(item.tags) || !item.tags.includes(mode === "live" ? "real" : "test")) continue;
     if (!(mode === "live" ? ["SUPPORTED"] : ["SUPPORTED", "BETA"]).includes(item.status)) continue;
-    const countries = connectBankCountries(item.institution_name, item.countries.filter((country: unknown): country is string => typeof country === "string"));
+    const providerCountries = connectBankCountries(item.institution_name, item.countries.filter((country: unknown): country is string => typeof country === "string"));
+    const countries = mode === "test" ? providerCountries : documentedFinverseCountries(item.institution_name, providerCountries);
     if (!countries.length) continue;
     banks.set(item.institution_id, { id: item.institution_id, name: item.institution_name, countries });
   }
@@ -296,7 +298,9 @@ export function summarizeFinverseCatalog(data: unknown, mode: "live" | "test") {
     if (!tags.includes(mode === "live" ? "real" : "test")) reasons.push("Different live/test mode");
     if (!(mode === "live" ? ["SUPPORTED"] : ["SUPPORTED", "BETA"]).includes(status)) reasons.push(`Provider status: ${status}`);
     if (!["ACCOUNTS", "TRANSACTIONS"].every(p => products.includes(p))) reasons.push("Missing Accounts or Transactions support");
-    if (!connectBankCountries(item.institution_name, countries).length) reasons.push("No eligible Connect countries");
+    const eligibleCountries = connectBankCountries(item.institution_name, countries);
+    if (!eligibleCountries.length) reasons.push("No eligible Connect countries");
+    else if (mode === "live" && !documentedFinverseCountries(item.institution_name, eligibleCountries).length) reasons.push("Outside documented Clover coverage");
     return { id: item.institution_id as string, name: item.institution_name as string, countries, products, tags, status,
       shownInClover: visible.has(item.institution_id), excludedReasons: reasons };
   });
