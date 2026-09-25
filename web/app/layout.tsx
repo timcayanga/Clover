@@ -4,6 +4,7 @@ import { Poppins, Raleway } from "next/font/google";
 import "./globals.css";
 import "./shared-app-styles.css";
 import "./collection-layouts.css";
+import "./mobile-refinement.css";
 import { GlobalImportActivity } from "@/components/global-import-activity";
 import { ClerkAppProvider } from "@/components/clerk-app-provider";
 import { PostHogAnalytics, PostHogClerkIdentity } from "@/components/posthog-analytics";

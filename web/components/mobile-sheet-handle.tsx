@@ -29,5 +29,5 @@ export function MobileSheetHandle({ onClose, href, disabled = false }: { onClose
     }}
     onPointerUp={() => { const dismiss = (gesture.current?.distance ?? 0) > 80; reset(); if (dismiss) close(); }}
     onPointerCancel={reset}
-    onClick={() => { if (!dragged.current) close(); }}><span aria-hidden="true" /></button>;
+    onClick={event => { if (event.detail === 0 || !dragged.current) close(); }}><span aria-hidden="true" /></button>;
 }
