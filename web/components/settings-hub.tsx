@@ -1,5 +1,6 @@
 "use client";
 
+import { getTimeZoneOptions, formatTimeZoneLabel } from "../../shared/region-options";
 import { createPortal } from "react-dom";
 import dynamic from "next/dynamic";
 import Link from "next/link";
@@ -187,27 +188,7 @@ const SETTINGS_REGIONAL_KEY = regionalPreferencesStorageKey;
 const SETTINGS_DATA_USE_KEY = "clover.settings.data-use.v1";
 const SETTINGS_WORKSPACE_DEFAULTS_KEY = "clover.settings.workspace-defaults.v1";
 const SETTINGS_GUIDANCE_KEY = "clover.settings.guidance-level.v1";
-const FALLBACK_TIME_ZONES = [
-  "GMT",
-  "UTC",
-  "Africa/Johannesburg",
-  "America/Chicago",
-  "America/Denver",
-  "America/Los_Angeles",
-  "America/New_York",
-  "America/Phoenix",
-  "Asia/Dubai",
-  "Asia/Hong_Kong",
-  "Asia/Kolkata",
-  "Asia/Manila",
-  "Asia/Singapore",
-  "Asia/Tokyo",
-  "Australia/Sydney",
-  "Europe/Berlin",
-  "Europe/London",
-  "Europe/Paris",
-  "Pacific/Auckland",
-] as const;
+
 
 type GuidancePresetLevel = "learning" | "comfortable" | "very-comfortable";
 type GuidanceLevel = GuidancePresetLevel | "custom";
@@ -296,13 +277,7 @@ const normalizeProfileList = (profiles: ProfileSummary[], fallbackProfile?: { id
   return sortProfiles(nextProfiles);
 };
 
-const getTimeZoneOptions = () => {
-  const supportedValuesOf = (Intl as typeof Intl & { supportedValuesOf?: (key: string) => string[] }).supportedValuesOf;
-  const browserTimeZones = typeof supportedValuesOf === "function" ? supportedValuesOf("timeZone") : [];
-  return Array.from(new Set(["GMT", "UTC", ...browserTimeZones, ...FALLBACK_TIME_ZONES])).sort((left, right) => left.localeCompare(right));
-};
 
-const formatTimeZoneLabel = (value: string) => (value === "GMT" || value === "UTC" ? value : value.replaceAll("_", " / "));
 
 const formatSettingsDate = (value: string, format: RegionalPreferences["dateFormat"]) => {
   const [year, month, day] = value.split("-");

@@ -1,3 +1,5 @@
+import { getTimeZoneOptions, formatTimeZoneLabel } from "../../shared/region-options";
+import { ChoiceField } from "../src/transaction-entry";
 import { Text } from "../src/app-text";
 import { useEffect, useState } from "react";
 import { router, useLocalSearchParams } from "expo-router";
@@ -302,52 +304,30 @@ export default function Settings() {
           <Body>
             Display preferences do not convert existing financial records.
           </Body>
-          <Field
+          <ChoiceField
             label="Default currency"
             value={regional.baseCurrency}
-            maxLength={3}
-            autoCapitalize="characters"
-            onChangeText={(baseCurrency) =>
-              setRegional((current) => ({
-                ...current,
-                baseCurrency: baseCurrency.toUpperCase(),
-              }))
-            }
+            options={(session.data?.currencyChoices ?? [{ code: regional.baseCurrency, name: regional.baseCurrency }]).map(option => ({ value: option.code, label: `${option.code} · ${option.name}` }))}
+            onChange={baseCurrency => setRegional(current => ({ ...current, baseCurrency }))}
           />
-          <Field
+          <ChoiceField
+            label="Number format"
+            value={regional.numberFormat}
+            options={["1,234.56", "1.234,56"].map(value => ({ value, label: value }))}
+            onChange={numberFormat => setRegional(current => ({ ...current, numberFormat }))}
+          />
+          <ChoiceField
+            label="Date format"
+            value={regional.dateFormat}
+            options={["MM/DD/YYYY", "DD/MM/YYYY", "YYYY-MM-DD"].map(value => ({ value, label: value }))}
+            onChange={dateFormat => setRegional(current => ({ ...current, dateFormat }))}
+          />
+          <ChoiceField
             label="Time zone"
             value={regional.timeZone}
-            onChangeText={(timeZone) =>
-              setRegional((current) => ({ ...current, timeZone }))
-            }
+            options={getTimeZoneOptions(regional.timeZone).map(value => ({ value, label: formatTimeZoneLabel(value) }))}
+            onChange={timeZone => setRegional(current => ({ ...current, timeZone }))}
           />
-          <Field
-            label="Locale"
-            value={regional.locale}
-            onChangeText={(locale) =>
-              setRegional((current) => ({ ...current, locale }))
-            }
-          />
-          {["MM/DD/YYYY", "DD/MM/YYYY", "YYYY-MM-DD"].map((dateFormat) => (
-            <Button
-              key={dateFormat}
-              title={dateFormat}
-              secondary={dateFormat !== regional.dateFormat}
-              onPress={() =>
-                setRegional((current) => ({ ...current, dateFormat }))
-              }
-            />
-          ))}
-          {["1,234.56", "1.234,56"].map((numberFormat) => (
-            <Button
-              key={numberFormat}
-              title={numberFormat}
-              secondary={numberFormat !== regional.numberFormat}
-              onPress={() =>
-                setRegional((current) => ({ ...current, numberFormat }))
-              }
-            />
-          ))}
           <Button
             title={busy ? "Saving…" : "Save preferences"}
             disabled={busy}
@@ -362,7 +342,7 @@ export default function Settings() {
                       body: JSON.stringify(regional),
                     })
               )
-                .then(() => setMessage("Regional preferences saved."))
+                .then(() => { setMessage("Regional preferences saved."); session.refresh(); })
                 .catch((e) => setError(e.message))
                 .finally(() => setBusy(false));
             }}
