@@ -257,7 +257,7 @@ export function SettingsPlanPanel({
             ...(tier === "premium" ? ["Everything in Plus"] : tier === "pro" ? ["Everything in Free"] : ["Manual tracking and file imports"]),
             `${plan.profiles} profiles · ${plan.accounts} non-cash accounts`,
             `${plan.linkedBanks} linked bank accounts`,
-            `${plan.budgets} budgets · ${plan.goals} goals · ${plan.circles} Circles`,
+            `${plan.budgets} budgets · ${plan.goals} goals · ${plan.circles} ${plan.circles === 1 ? "Circle" : "Circles"}`,
             `${plan.monthlyTokens.toLocaleString()} Clover tokens monthly`,
             `${plan.dailyTokens.toLocaleString()} tokens per rolling 24 hours`,
             ...(tier === "free" ? ["Basic Adviser and investment tracking"] : ["Full Adviser and investment tools"]),
@@ -266,9 +266,9 @@ export function SettingsPlanPanel({
             <div className="settings-plan-card__band"><span className="settings-plan-card__band-text">
               <strong className="settings-plan-card__band-title">{plan.name}</strong>
               <span className="settings-plan-card__band-price">{price ?? (offersLoading ? "Checking pricing…" : "Pricing unavailable")}{tier !== "free" && price ? (billingInterval === "monthly" ? " / month" : " / year") : ""}</span>
+              {planTier === tier ? <span className="settings-pill">Current plan</span> : null}
             </span></div>
             <div className="settings-plan-card__body"><ul className="settings-plan-card__features">{features.map(feature => <PlanFeatureItem key={feature} label={feature} className="settings-plan-card__feature-row" />)}</ul>
-              {planTier === tier ? <span className="settings-pill">Current plan</span> : null}
             </div>
           </article>;
         })}
