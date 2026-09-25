@@ -17,7 +17,7 @@ export function MobileSheetHandle({ onClose, href, disabled = false }: { onClose
     onPointerDown={event => {
       if (disabled || event.button !== 0) return;
       dragged.current = false;
-      gesture.current = { y: event.clientY, distance: 0, card: event.currentTarget.closest<HTMLElement>(".modal-card, .recurring-create, .budget-editor, .goals-blank-state, .split-bill-manual-modal") };
+      gesture.current = { y: event.clientY, distance: 0, card: event.currentTarget.closest<HTMLElement>(".modal-card, .recurring-create, .budget-editor, .goals-blank-state, .split-bill-manual-modal, .split-bill-modal__card") };
       event.currentTarget.setPointerCapture(event.pointerId);
     }}
     onPointerMove={event => {

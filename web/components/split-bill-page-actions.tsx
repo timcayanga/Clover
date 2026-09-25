@@ -1,5 +1,6 @@
 "use client";
 
+import { MobileSheetHandle } from "@/components/mobile-sheet-handle";
 import { InterfaceIcon } from "@/components/interface-icon";
 
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
@@ -230,6 +231,7 @@ export function SplitBillPageActions({ currentUserName, people, groups, onBillSa
       {isGroupModalOpen ? (
         <div className="split-bill-modal split-bill-simple-entry-modal" role="presentation" onClick={closeGroupModal}>
           <form className="split-bill-modal__card glass split-bill-group-modal" role="dialog" aria-modal="true" aria-label="Add group" onSubmit={(event) => { event.preventDefault(); void saveGroup(); }} onClick={(event) => event.stopPropagation()}>
+            <MobileSheetHandle onClose={closeGroupModal} disabled={isSavingGroup} />
             <div className="split-bill-manual-modal__head">
               <div>
                 <p className="eyebrow">{editingGroupId ? "Edit Group" : "Add Group"}</p>
