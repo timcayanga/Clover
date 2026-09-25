@@ -134,3 +134,25 @@ Remaining coverage is unchanged for Finverse Plus/Pro return/sync/unlink, profil
 - Android Reports defaulted to USD and offered only PHP/USD, matching this Profile. Evidence: `android-reports-currencies.png`.
 - Extracted the web Recurring dashboard summary calculations for both clients: debt principal versus due payment, expected income, installment remainder and review counts now share one implementation. Mobile overview retains the one visible card used by mobile web; other tabs display three cards. Focused regressions and both TypeScript checks passed. Final deployed summary check remains pending.
 - No additional EAS cloud builds were started during this continuation. Android is a local Release compilation. iOS uses the verified native runtime with a refreshed Release Hermes bundle because native dependencies/configuration did not change.
+
+- Final staging `3afe53056cb64f9093950784cec2dd7039461f62` is READY (`dpl_8veS5MHf9hEANizjaLNiMXLnkPjc`) and aliased to staging.clover.ph. Full pre-push gate passed again, including the added shared-summary regressions, native bundle exports and production web build.
+- Refreshed iOS Release Hermes bundle installed successfully. Home showed the same combined USD2821.36 / income189.32 / expense8.93 as Android. Add Transaction → Sync showed the same reconnected USD FX account, last four digits and Last Synced timestamp, plus Sync/Unlink. All five Recurring tabs were opened: Overview600; Planned Payments600 due/600 next/0 review; empty Debt/Owed/Installment summaries displayed the shared explicit empty states. Three-card layout visually checked. Settings Review, Notifications, Security sessions and Categories loaded without changing preferences or credentials.
+
+- Android final deployed-summary check passed: Overview PHP600; Planned Payments PHP600 due, PHP600 next and zero review suggestions, with three aligned cards, shared header, five tabs in two rows and the floating navigation. Visually verified `android-recurring-summary-final.png`.
+
+## Preview-build readiness
+
+The requested primary-screen parity corrections and the sandbox Connect → select → sync → unlink → reconnect flows have passed the checks recorded above. The candidate is ready for another internal preview-build round. No additional EAS cloud build was started in this continuation.
+
+| Area | Verification |
+| --- | --- |
+| Welcome / authentication | iOS and Android tutorial, light default, password eye, Google action and absence of authenticated navigation checked in earlier device passes; Android keyboard fix verified |
+| Shared shell / Home | Sectioned menu, centered headings, Adviser shortcuts, round actions, floating navigation, profile photo, wallet quick access, combined two-box totals and Adviser cards checked |
+| Reports / Transactions | Preferred and owned currencies, shared information controls, compact signed transaction rows, filters and detail navigation checked |
+| Transaction actions | Persisted notes/line items, linked Split Bill, recurring creation and Circle sharing verified with synthetic data |
+| Accounts / bank connections | Summary cards, Metrobank branding, visual-card expansion, details/history, Free gate, four selectors, country picker, callback, selection, Last Synced, repeat sync, unlink and reconnect checked; reconnect preserved account and transaction IDs |
+| Recurring / Split Bills | Five-tab/two-row layout, shared tab summaries, focused detail, four equal Split Bills tabs and Payments label checked |
+| Circles / Budgeting / Goals / Investments | Populated fixture screens, detail navigation, bottom creation actions, investment summaries and same-row range controls checked in this audit series |
+| Settings | Account/profile data, Display, Region, Plan usage/referrals, Review, Notifications, Security session list, Categories and Sync & Offline inspected; no real-user preferences or credentials changed |
+
+This is internal preview readiness, not App Store/Play production certification. iOS final verification used the unchanged verified native runtime plus the latest Release Hermes bundle; Android used a fresh local Release APK. Store purchase/restore, push delivery, physical-device accessibility and live-bank institution behavior are outside the sandbox/UI checks above. The temporary QA Plus override expires September 28 and does not grant ordinary users access.
