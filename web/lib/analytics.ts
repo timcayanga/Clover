@@ -7,6 +7,7 @@ export type AnalyticsValue = string | number | boolean | null | undefined;
 export type AnalyticsProperties = Record<string, AnalyticsValue>;
 
 export type AnalyticsEventName = TelemetryEvent
+  | "campaign_progress"
   | "plan_changed" | "plan_override_changed" | "plan_grant_changed" | "billing_renewed" | "billing_expired" | "billing_refunded" | "billing_restored"
   | "signup_started"
   | "signup_completed"
@@ -167,7 +168,7 @@ export type AnalyticsEventName = TelemetryEvent
 // Keep the Admin event inventory aligned with the compile-time event contract.
 // This is intentionally data-free: event names are safe to expose in internal tooling.
 export const ANALYTICS_EVENT_NAMES: AnalyticsEventName[] = Array.from(new Set<AnalyticsEventName>([
-  ...TELEMETRY_EVENTS,
+  ...TELEMETRY_EVENTS, "campaign_progress",
   "signup_started", "signup_completed", "identity_environment_conflict", "onboarding_started", "onboarding_completed", "onboarding_missions_viewed",
   "onboarding_mission_started", "onboarding_mission_completed", "onboarding_missions_dismissed", "first_login",
   "workspace_created", "workspace_updated", "workspace_deleted", "workspace_switched",

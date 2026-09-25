@@ -160,6 +160,12 @@ export const deleteLocalUserAccount = async (clerkUserId: string) => {
     });
   }
 
+  // Private promotional receipts follow the same permanent-erasure policy.
+  const campaignEvidence = await prisma.switchEvidence.findMany({where:{application:{userId:user.id},purgedAt:null},select:{id:true,storageKey:true}});
+  for (const evidence of campaignEvidence) {
+    await deleteImportObject(evidence.storageKey);
+    await prisma.switchEvidence.update({where:{id:evidence.id},data:{purgedAt:new Date()}});
+  }
   // Do not leave raw statements or restorable financial snapshots after erasure.
   const files = await prisma.importFile.findMany({
     where: { workspace: { userId: user.id }, storageKey: { not: "" } },

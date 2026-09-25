@@ -1,3 +1,4 @@
+import { SwitchOfferNotice } from "@/components/switch-campaign";
 import { headers } from "next/headers";
 import Link from "next/link";
 import { JourneyHeader } from "@/app/landing-preview/landing-journey";
@@ -29,6 +30,7 @@ export default async function PricingPage() {
         <article className={styles.plus}><h2>Plus</h2><strong>{prices.monthly}<small> / month</small></strong><p>Or {prices.annual} per year</p><Link className="button button-primary button-pill" href={proHref}>Explore Plus →</Link></article>
         <article className={styles.free}><h2>Free</h2><strong>₱0<small> forever</small></strong><p>Organize your finances with Clover’s core tools.</p><Link className="button button-secondary button-pill" href={signedIn ? "/home" : "/sign-up"}>{signedIn ? "Open Clover" : "Start free"} →</Link></article>
       </section>
+      <SwitchOfferNotice />
       <PlanComparisonTable variant="full" paidFirst className={styles.table} />
       <section className={styles.notes} aria-label="Plan details">
         <h2>How the allowances work</h2>

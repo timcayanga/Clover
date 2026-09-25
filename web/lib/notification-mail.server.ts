@@ -5,6 +5,7 @@ export async function sendNotificationMail(
   to: string,
   subject: string,
   text: string,
+  html?: string,
 ) {
   const env = getEnv();
   if (!env.ZOHO_SMTP_PASSWORD)
@@ -26,6 +27,7 @@ export async function sendNotificationMail(
       to: to.trim().toLowerCase(),
       subject: subject.replace(/[\r\n]/g, " "),
       text,
+      ...(html ? { html } : {}),
     });
     if (result.accepted.length === 0)
       throw new Error("Email was not accepted.");

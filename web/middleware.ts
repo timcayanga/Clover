@@ -26,9 +26,14 @@ const isProtectedAppRoute = createRouteMatcher([
 ]);
 
 export default clerkMiddleware(async (auth, request) => {
+    const signIn = new URL("/sign-in", request.url);
+    if (request.nextUrl.pathname === "/settings/plan/switch-to-clover" ||
+      (request.nextUrl.pathname === "/onboarding" && request.nextUrl.searchParams.get("campaign") === "switch-to-clover")) {
+      signIn.searchParams.set("campaign", "switch-to-clover");
+    }
   if (isProtectedAppRoute(request)) {
     await auth.protect({
-      unauthenticatedUrl: new URL("/sign-in", request.url).toString(),
+      unauthenticatedUrl: signIn.toString(),
     });
   }
 });

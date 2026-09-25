@@ -1,4 +1,5 @@
 "use client";
+import { SwitchOfferNotice } from "./switch-campaign";
 
 import { PLAN_CATALOG, planName } from "../../shared/plan-catalog";
 import { PlanRetentionPanel } from "@/components/plan-retention-panel";
@@ -503,6 +504,7 @@ export function SettingsPlanPanel({
           minimalManagement
         />
       ) : null}
+      <SwitchOfferNotice always />
       <ReferralAccount summary />
     </section>
   );

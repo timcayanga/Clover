@@ -17,7 +17,7 @@ export default async function SignInPage({ searchParams }: { searchParams?: Prom
   const circleInvite = Array.isArray(params.circleInvite)
     ? params.circleInvite[0]
     : params.circleInvite;
-  const completeRedirectUrl = isCircleInvitationToken(circleInvite)
+  const completeRedirectUrl = params.campaign === "switch-to-clover" ? "/onboarding?campaign=switch-to-clover" : isCircleInvitationToken(circleInvite)
     ? getCircleInvitationPath(circleInvite, { accept: true })
     : "/continue";
   const session = await auth().catch(() => null);

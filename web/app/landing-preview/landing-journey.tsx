@@ -1,4 +1,5 @@
 "use client";
+import { SwitchOfferNotice } from "@/components/switch-campaign";
 import { StoryBackground } from "@/components/story-background";
 import { cloverPhoneScreens } from "@/lib/connect-platform-designs";
 import { useLandingTableFit } from "@/lib/use-landing-table-fit";
@@ -113,6 +114,7 @@ export function ProComparison({ market, style, showActions = true, variant = "la
   return <div className={styles.proDetails} style={style}>
     <div className={styles.proComparisonCard}>
       <PlanComparisonTable variant={variant} className={styles.proTable} />
+      <SwitchOfferNotice />
       <Link className={styles.proCompareLink} href="/pricing">Compare all Free, Plus and Pro features <span aria-hidden="true">→</span></Link>
     </div>
     {showActions ? <ProActions market={market} /> : null}

@@ -14,6 +14,7 @@ type Grant = {
   reason: string;
 };
 type Access = {
+  switchCampaign?: {status:string;activatedAt:string|null;expiresAt:string|null;claimBy:string|null}|null;
   planTier: CloverPlanTier;
   source: string;
   renewing: boolean;
@@ -132,6 +133,7 @@ export function AdminPlanAccess({ userId }: { userId: string }) {
               <dd>
                 {planName(data.planTier)} · {data.source}
               </dd>
+              {data.switchCampaign ? <><dt>Switch to Clover campaign</dt><dd>{data.switchCampaign.status} · {data.switchCampaign.activatedAt ? "Redeemed" : "Not redeemed"} · Reward ends {dateText(data.switchCampaign.expiresAt)} · <a href="/admin/campaigns">View application</a></dd></> : null}
               <dt>Subscription</dt>
               <dd>{data.subscription?.status ?? "No paid subscription"}</dd>
               <dt>Native subscription</dt>

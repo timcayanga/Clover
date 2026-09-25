@@ -1,0 +1,12 @@
+CREATE TABLE "SwitchCampaign" ("id" TEXT PRIMARY KEY, "environment" TEXT NOT NULL UNIQUE, "status" TEXT NOT NULL DEFAULT 'draft', "capacity" INTEGER NOT NULL DEFAULT 100 CHECK ("capacity" > 0), "redeemedCount" INTEGER NOT NULL DEFAULT 0, "endsAt" TIMESTAMP(3), "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP, "updatedAt" TIMESTAMP(3) NOT NULL);
+CREATE TABLE "SwitchApplication" ("id" TEXT PRIMARY KEY, "campaignId" TEXT NOT NULL REFERENCES "SwitchCampaign"("id") ON DELETE CASCADE, "userId" TEXT NOT NULL REFERENCES "User"("id") ON DELETE CASCADE, "status" TEXT NOT NULL DEFAULT 'submitted', "claimBy" TIMESTAMP(3), "activatedAt" TIMESTAMP(3), "expiresAt" TIMESTAMP(3), "convertedAt" TIMESTAMP(3), "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP, "updatedAt" TIMESTAMP(3) NOT NULL, UNIQUE ("campaignId","userId"));
+CREATE INDEX "SwitchApplication_status_claimBy_idx" ON "SwitchApplication"("status","claimBy");
+CREATE TABLE "SwitchEvidence" ("id" TEXT PRIMARY KEY, "applicationId" TEXT NOT NULL REFERENCES "SwitchApplication"("id") ON DELETE CASCADE, "storageKey" TEXT NOT NULL UNIQUE, "digest" TEXT NOT NULL, "mime" TEXT NOT NULL, "fileName" TEXT NOT NULL, "purgedAt" TIMESTAMP(3), "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP);
+CREATE INDEX "SwitchEvidence_digest_idx" ON "SwitchEvidence"("digest");
+CREATE TABLE "SwitchEvent" ("id" TEXT PRIMARY KEY, "applicationId" TEXT NOT NULL REFERENCES "SwitchApplication"("id") ON DELETE CASCADE, "kind" TEXT NOT NULL, "message" TEXT NOT NULL, "actorId" TEXT NOT NULL, "emailStatus" TEXT NOT NULL DEFAULT 'pending', "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP, UNIQUE ("applicationId","kind"));
+CREATE INDEX "SwitchEvent_emailStatus_createdAt_idx" ON "SwitchEvent"("emailStatus","createdAt");
+ALTER TABLE "SwitchCampaign" ENABLE ROW LEVEL SECURITY;
+ALTER TABLE "SwitchApplication" ENABLE ROW LEVEL SECURITY;
+ALTER TABLE "SwitchEvidence" ENABLE ROW LEVEL SECURITY;
+ALTER TABLE "SwitchEvent" ENABLE ROW LEVEL SECURITY;
+REVOKE ALL PRIVILEGES ON TABLE "SwitchCampaign", "SwitchApplication", "SwitchEvidence", "SwitchEvent" FROM PUBLIC, anon, authenticated, service_role;
