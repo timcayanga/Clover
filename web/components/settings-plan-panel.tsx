@@ -1,6 +1,7 @@
 "use client";
 
 import { PLAN_CATALOG, planName } from "../../shared/plan-catalog";
+import { PlanRetentionPanel } from "@/components/plan-retention-panel";
 import { PlanComparisonTable } from "@/components/plan-comparison-table";
 import { useEffect, useState } from "react";
 import { BillingActions } from "@/components/billing-actions";
@@ -283,6 +284,7 @@ export function SettingsPlanPanel({
         Asia/Manila on the first day of each month and does not roll over.
       </p>
 
+      <PlanRetentionPanel planTier={planTier} />
       <PlanComparisonTable variant="full" className="settings-plan-comparison" />
       <div className={`settings-plan-grid settings-plan-grid--current-${planTier}`} aria-label="Available plans">
         <article className={`settings-plan-card settings-plan-card--free${planTier === "free" ? " is-current" : ""}`}>

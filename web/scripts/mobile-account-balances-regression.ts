@@ -30,8 +30,10 @@ async function main() {
     assert.equal(balances.get('cash'),'1000.00');
     assert.equal(balances.get('usd'),'100.00');
     assert.equal(JSON.stringify(fixtures),before);
-    bankRows = [{ accountId: "bank", normalizedPayload: { balance: 45000 }, lastSeenAt: new Date("2026-09-25") }];
+    bankRows = [{ accountId: "bank", unlinkedAt: null, connection: { status: "linked" }, normalizedPayload: { balance: 45000 }, lastSeenAt: new Date("2026-09-25") }];
     assert.equal((await mobileAccountBalances("qa-profile",["bank","cash","usd"])).get("bank"), "45000.00", "bank snapshot outranks replayed ledger without changing opening balance");
+    bankRows.push({ accountId: "bank", unlinkedAt: new Date(), connection: { status: "disconnected" }, normalizedPayload: { balance: 1200 }, lastSeenAt: new Date("2026-09-20") });
+    assert.equal((await mobileAccountBalances("qa-profile",["bank","cash","usd"])).get("bank"), "45000.00", "an older disconnected snapshot cannot replace the latest balance");
     const account={id:'bank',balance:'10000',displayBalance:balances.get('bank'),rawPayload:'private'};
     assert.deepEqual(mobileApiResponse('accounts',{accounts:[account]}),{accounts:[{id:'bank',balance:'10000',displayBalance:'10500.00'}]});
     assert.deepEqual(mobileApiResponse('account',{account}),{account:{id:'bank',balance:'10000',displayBalance:'10500.00'}});

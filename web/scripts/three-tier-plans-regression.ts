@@ -37,3 +37,23 @@ console.log("All plan creation and linked-bank boundary checks passed.");
 
 }
 void quotas().catch(error=>{console.error(error);process.exitCode=1;});
+
+// A downgrade retains all usage: only additional creation is blocked.
+import { retainedPlanRows } from "../../shared/plan-retention";
+const retained = Object.freeze({ accounts: 30, profiles: 15, budgets: 8, goals: 8, circles: 8 });
+for (const tier of ["pro", "free"] as const) {
+  const rows = retainedPlanRows(retained, tier);
+  assert.equal(rows.length, 5);
+  for (const row of rows) {
+    assert.equal(row.used, retained[row.key]);
+    assert.equal(row.canCreate, false);
+    assert.equal(row.excess, retained[row.key] - PLAN_CATALOG[tier][row.key]);
+  }
+}
+assert.ok(retainedPlanRows(retained, "premium").every(row => row.canCreate));
+const boundary = { accounts: 10, profiles: 3, budgets: 2, goals: 2, circles: 1 };
+assert.ok(retainedPlanRows(boundary, "free").every(row => !row.canCreate && row.excess === 0));
+assert.equal(retainedPlanRows(retained, "free", { accounts: null })[0].canCreate, true);
+assert.equal(retainedPlanRows(retained, "free", { accounts: 35 })[0].limit, 35);
+assert.deepEqual(retained, { accounts: 30, profiles: 15, budgets: 8, goals: 8, circles: 8 });
+console.log("Downgrade previews preserve all records across Pro, Plus and Free, including at-limit and override cases.");

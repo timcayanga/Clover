@@ -24,3 +24,5 @@ export function bankTransactionMatches(a: { merchantRaw?: string | null; merchan
   const left = [a.merchantRaw, a.merchantClean, a.description].map(bankTransactionText).filter(s => s.length >= 4 && s !== "banktransaction");
   return [b.merchantRaw, b.merchantClean, b.description].map(bankTransactionText).some(s => s.length >= 4 && s !== "banktransaction" && left.includes(s));
 }
+
+export const bankInstitutionsMatch=(left?:string|null,right?:string|null)=>Boolean(institutionKey(left) && institutionKey(left)===institutionKey(right));

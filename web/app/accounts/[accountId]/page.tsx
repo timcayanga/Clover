@@ -131,6 +131,7 @@ type Account = {
   balance: string | null;
   bankBalance?: string;
   bankBalanceAt?: string;
+  bankConnectionStatus?:string;
   creditLimit?: string | null;
   creditLimitSource?: string | null;
   creditLimitUpdatedAt?: string | null;
@@ -1507,7 +1508,7 @@ function AccountDetailPageContent() {
             // this provisional view with the authoritative page below.
             cachedTransactions = mergeImportedWorkspaceTransactions(transactions, cachedTransactions);
           }
-          setAccount(activeCachedAccount);
+          setAccount(current => current?.id === activeCachedAccount.id && current.bankBalanceAt && (!activeCachedAccount.bankBalanceAt || current.bankBalanceAt > activeCachedAccount.bankBalanceAt) ? { ...activeCachedAccount, bankBalance: current.bankBalance, bankBalanceAt: current.bankBalanceAt, bankConnectionStatus:current.bankConnectionStatus, balance: current.bankBalance ?? current.balance } : activeCachedAccount);
           setTransactions(cachedTransactions);
           setImportFiles(cachedImportFiles);
           setCategories(cachedCategories);
@@ -2156,7 +2157,7 @@ function AccountDetailPageContent() {
   // needs the complete ledger projection. Cached rows may be only one page.
   // Receipt publication can temporarily label cached Cash as upload-sourced;
   // it still needs its ledger before an opening balance is shown as current.
-  const isManualBalancePending = Boolean(account && (account.source === "manual" || account.type === "cash") &&
+  const isManualBalancePending = Boolean(account && account.bankBalance == null && (account.source === "manual" || account.type === "cash") &&
     account.type !== "investment" && ledgerReadyAccountId !== account.id);
   const isPendingBalance = isManualBalancePending || (
     account?.source === "upload" &&
@@ -4090,6 +4091,7 @@ function AccountDetailPageContent() {
               </div>
             ) : null}
 
+            {account.bankBalanceAt?<p className="panel-muted">{account.bankConnectionStatus==='disconnected'?'Disconnected · Historical bank balance':account.bankConnectionStatus==='disconnect_pending'?'Disconnection pending · Bank balance':'Bank balance'} · Last synced {new Date(account.bankBalanceAt).toLocaleString()}</p>:null}
             <FinverseConnectButton mode="sync" accountId={account.id} workspaceId={account.workspaceId} />
             <div className={`accounts-detail__hero-layout${isCreditAccount ? " is-credit-account" : ""}`}>
               <div className="accounts-detail__hero-card-row">
@@ -4108,7 +4110,7 @@ function AccountDetailPageContent() {
                   editableAmount={Math.abs(parseAmount(displayBalance)).toFixed(2)}
                   onNameCommit={account.type === "investment" ? undefined : (value) => saveInlineCardIdentity("name", value)}
                   onAccountNumberCommit={account.type === "investment" ? undefined : (value) => saveInlineCardIdentity("accountNumber", value)}
-                  onAmountCommit={isPendingBalance ? undefined : saveInlineCardBalance}
+                  onAmountCommit={isPendingBalance || account.bankBalance != null ? undefined : saveInlineCardBalance}
                   logoUrl={account.logoUrl}
                   onLogoCommit={saveAccountLogo}
                   showChevron={false}

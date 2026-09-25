@@ -12,5 +12,5 @@ export async function assertPlanQuota(tx: Prisma.TransactionClient, userId: stri
     : kind === "goals" ? await tx.personalGoal.count({where:{workspace:{userId}}})
     : kind === "circles" ? await tx.circle.count({where:{ownerUserId:userId,archivedAt:null}})
     : (await bankLinkAllowance(tx, userId)).usedIds.size;
-  if (count + additional > plan[kind]) throw new PlanQuotaError(`${plan.name} includes ${plan[kind]} ${kind === "linkedBanks" ? "linked bank accounts" : kind === "circles" ? "Circles you create" : `active ${kind}`} across your Profiles. ${kind === "linkedBanks" ? "Unlinking does not free a slot this period. Reconnect the same account or upgrade." : "Upgrade or free an available slot to continue."}`);
+  if (count + additional > plan[kind]) throw new PlanQuotaError(`${plan.name} includes ${plan[kind]} ${kind === "linkedBanks" ? "linked bank accounts" : kind === "circles" ? "Circles you create" : `active ${kind}`} across your Profiles. ${kind === "linkedBanks" ? "Unlinking does not free a slot this period. Reconnect the same account or upgrade." : "Your existing records stay accessible. Creating more or reactivating a budget requires an available slot or an upgrade."}`);
 }

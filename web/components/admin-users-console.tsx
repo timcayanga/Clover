@@ -1,4 +1,5 @@
 "use client";
+import { AdminBankLifecycle } from "./admin-bank-lifecycle";
 import { AdminUserIdentityControls } from "@/components/admin-user-identity-controls";
 
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -744,7 +745,7 @@ export function AdminUsersConsole({
         </div>
 
         <section className="admin-bank-links" aria-label="Linked bank accounts">
-          <h2>Linked bank accounts</h2>
+          <h2>Linked bank accounts</h2><AdminBankLifecycle/>
           <p>Current Finverse links across this environment, independent of user search filters. Disconnected links, deleted accounts and manual accounts are excluded.</p>
           <div className="admin-bank-links__totals">
             <div className="admin-users__stat"><strong>{(data.overview.bankLinks?.totalAccounts ?? 0).toLocaleString()}</strong><span>Linked accounts</span></div>

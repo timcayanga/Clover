@@ -1,3 +1,4 @@
+import { BankLifecyclePanel } from "./finverse-lifecycle-panel";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { finverseCountries } from "../../shared/finverse-countries";
 import { Image } from "expo-image";
@@ -23,7 +24,7 @@ function BankLogo({path}:{path:string}) {
   return <Image source={failed?require("../assets/account-types/bank.png"):{uri:path.startsWith("/")?apiBase()+path:path}} style={{width:48,height:48}} contentFit="contain" onError={()=>setFailed(true)}/>;
 }
 
-type Bank = { id: string; name: string; reserved?: boolean; existingAccountName?: string | null };
+type Bank = { id: string; name: string; reserved?: boolean; existingAccountName?: string | null; suggestedAccountId?:string|null; candidates?:{id:string;name:string;last4:string|null}[] };
 type SyncResult = { status: string; linkUrl?: string; connectionId?: string; remaining?: number; accounts?: Bank[]; transactions?: { imported: number }; error?: string };
 export function FinverseConnect({ onSynced, callbackConnection, mode = "connect", accountId }: { onSynced: () => void; callbackConnection?: string; mode?: "connect" | "sync"; accountId?: string }) {
   const session = useSession();
@@ -43,6 +44,7 @@ export function FinverseConnect({ onSynced, callbackConnection, mode = "connect"
   const [retrySync, setRetrySync] = useState<{ id?: string; accountIds?: string[] } | null>(null);
   const [connection, setConnection] = useState(callbackConnection);
   const [selection, setSelection] = useState<{ accounts: Bank[]; remaining: number; connectionId: string } | null>(null);
+  const [mappings,setMappings]=useState<Record<string,string>>({});
   const [selected, setSelected] = useState<string[]>([]);
   const active = useRef(true);
   const action = useRef(false);
@@ -72,7 +74,7 @@ export function FinverseConnect({ onSynced, callbackConnection, mode = "connect"
     const controller = new AbortController(); abortRef.current = controller;
     try {
       for (let attempt = 0; attempt < 30; attempt++) {
-        const data = await requestRef.current<SyncResult>("finverse/sync", { method: "POST", signal: controller.signal, body: JSON.stringify({ workspaceId: session.profileId, connectionId: id, selectedAccountIds: accountIds, refresh: refresh && attempt === 0 }) });
+        const data = await requestRef.current<SyncResult>("finverse/sync", { method: "POST", signal: controller.signal, body: JSON.stringify({ workspaceId: session.profileId, connectionId: id, selectedAccountIds: accountIds, accountMappings:Object.fromEntries(Object.entries(mappings).filter(([id,target])=>accountIds?.includes(id)&&target)), refresh: refresh && attempt === 0 }) });
         if (!active.current || controller.signal.aborted) return;
         if (data.status === "authorize" && data.linkUrl) {
           const result = await WebBrowser.openAuthSessionAsync(data.linkUrl, "clover://accounts");
@@ -95,15 +97,15 @@ export function FinverseConnect({ onSynced, callbackConnection, mode = "connect"
       setMessage("Finverse is still retrieving your data. Use Sync to check again.");
     } catch (error) { if (active.current && !controller.signal.aborted) { setMessage(error instanceof Error ? error.message : "Unable to sync your bank."); setRetrySync({ id, accountIds }); } }
     finally { action.current = false; if (active.current) setBusy(false); }
-  }, [allowed, session.profileId]);
+  }, [mappings, allowed, session.profileId]);
   const callbackHandled = useRef("");
   useEffect(() => { if (allowed && session.offlineStatus.online && callbackConnection && callbackHandled.current !== callbackConnection) { callbackHandled.current = callbackConnection; setConnection(callbackConnection); void sync(callbackConnection); } }, [allowed, session.offlineStatus.online, callbackConnection, sync]);
   function confirmUnlink(account: {id:string;name:string}) {
-    Alert.alert(`Unlink ${account.name}?`, "Your Clover account and history will stay. This account still uses a slot until your monthly allowance resets. Reconnecting it uses no extra slot.", [
+    Alert.alert(`Unlink ${account.name}?`, "Your Clover accounts and history will stay. All accounts sharing this bank login disconnect. Reconnection requires bank authentication. Used slots remain reserved until the monthly reset.", [
       { text: "Keep linked", style: "cancel" },
       { text: "Unlink", style: "destructive", onPress: () => { void (async () => {
         if (action.current) return; action.current = true; setBusy(true);
-        try { await requestRef.current("finverse/unlink", { method: "POST", body: JSON.stringify({ workspaceId: session.profileId, accountId: account.id }) }); setRevision(v => v + 1); setMessage("Bank unlinked. Your account and history are preserved."); syncedRef.current(); }
+        try { const result=await requestRef.current<{message?:string}>("finverse/unlink", { method: "POST", body: JSON.stringify({ workspaceId: session.profileId, accountId: account.id }) }); setRevision(v => v + 1); setMessage(result.message || "Bank disconnected. Your account and history are preserved."); syncedRef.current(); }
         catch (error) { setMessage(error instanceof Error ? error.message : "Unable to unlink."); }
         finally { action.current = false; if (active.current) setBusy(false); }
       })(); } },
@@ -133,7 +135,7 @@ export function FinverseConnect({ onSynced, callbackConnection, mode = "connect"
   if (mode === "sync" && accountId && !connectionsLoaded) return <Body>Checking bank connection…</Body>;
   if (mode === "sync" && accountId && !linked.some(a => a.id === accountId)) return null;
   if (access?.profileId === session.profileId && access.upgradeRequired && !(mode === "sync" && linked.length)) return <View style={{ gap: 16 }}>
-    <Heading>Unlock bank connections</Heading>
+    <BankLifecyclePanel key={revision}/><Heading>Unlock bank connections</Heading>
     <Body>Upgrade to Clover Plus or Pro to securely connect your banks through Finverse.</Body>
     <Button title="Upgrade plan" fullWidth onPress={() => router.push("/settings?section=plan")} />
     <Body muted>You can still add accounts with Manual or Upload on Free.</Body>
@@ -141,10 +143,10 @@ export function FinverseConnect({ onSynced, callbackConnection, mode = "connect"
   if (!allowed && !(access?.upgradeRequired && mode === "sync" && linked.length)) return <View style={{ gap: 16 }}><Notice>{bankMessage}</Notice>{bankMessage !== "Loading banks…" && !session.demo ? <Button secondary title="Try again" onPress={() => setRevision(v => v + 1)} /> : null}</View>;
   if(mode==="sync"&&!connectionsLoaded)return <Notice>{connectionsError||"Loading linked accounts…"}</Notice>;
   const syncAccounts=linked.filter(a=>!accountId||a.id===accountId);
-  return <View style={{gap:16}}>
+  return <View style={{gap:16}}><BankLifecyclePanel key={revision}/>
     {selection ? <View style={{ gap: 12 }}><Heading>Select bank accounts</Heading><Body>{selection.remaining} new account slots available. Previously used accounts can be reconnected.</Body>{selection.accounts.map(account => {
       const checked = selected.includes(account.id), disabled = busy || (!checked && !account.reserved && selection.accounts.filter(a => selected.includes(a.id) && !a.reserved).length >= selection.remaining);
-      return <Pressable key={account.id} accessibilityRole="checkbox" accessibilityState={{ checked, disabled }} disabled={disabled} onPress={() => setSelected(current => checked ? current.filter(id => id !== account.id) : [...current, account.id])} style={{ padding: 14, borderWidth: 1, borderColor: checked ? colors.teal : colors.line, borderRadius: 12 }}><Text style={{ color: colors.ink }}>{checked ? "✓ " : "○ "}{account.name}{account.existingAccountName ? ` · Reuse ${account.existingAccountName}; keep all history` : ""}{account.reserved ? " · Already included this period" : ""}</Text></Pressable>;
+      return <View key={account.id} style={{gap:6}}><Pressable accessibilityRole="checkbox" accessibilityState={{ checked, disabled }} disabled={disabled} onPress={() => setSelected(current => checked ? current.filter(id => id !== account.id) : [...current, account.id])} style={{ padding: 14, borderWidth: 1, borderColor: checked ? colors.teal : colors.line, borderRadius: 12 }}><Text style={{ color: colors.ink }}>{checked ? "✓ " : "○ "}{account.name}{account.existingAccountName ? ` · Reuse ${account.existingAccountName}; keep all history` : ""}{account.reserved ? " · Already included this period" : ""}</Text></Pressable>{checked?<View style={{gap:6}}><Body>Link to an existing account:</Body><Button secondary title={account.suggestedAccountId?'Use matching account':'Create a new account card'} onPress={()=>setMappings(m=>({...m,[account.id]:''}))}/>{account.candidates?.map(c=><Button key={c.id} secondary title={`${mappings[account.id]===c.id?'✓ ':''}${c.name}${c.last4?` •••• ${c.last4}`:''}`} onPress={()=>setMappings(m=>({...m,[account.id]:c.id}))}/>)}</View>:null}</View>;
     })}<Button title="Link selected accounts" disabled={busy || !selected.length} onPress={() => void sync(selection.connectionId, selected)} /></View> : null}
     {mode==="sync"&&syncAccounts.length ? syncAccounts.map(account=><View key={account.id} style={{gap:8,padding:12,borderWidth:1,borderColor:colors.line,borderRadius:16}}>
       <BankLogo path={account.logoUrl} />

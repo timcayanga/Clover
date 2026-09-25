@@ -1,3 +1,4 @@
+import { planName } from "../../../../shared/plan-catalog";
 import { prisma } from "@/lib/prisma";
 import { isLocalDevHost, requireAuth } from "@/lib/auth";
 import { syncClerkUser } from "@/lib/clerk";
@@ -141,7 +142,7 @@ export async function POST(request: Request) {
       const profileCount = await prisma.workspace.count({ where: { userId: user.id } });
       if (profileCount >= profileLimit) {
         return NextResponse.json(
-          { error: `${user.planTier === "free" ? "Free" : "Plus / Pro"} includes up to ${profileLimit} Profiles, including Personal.` },
+          { error: `${planName(user.planTier)} includes up to ${profileLimit} Profiles, including Personal. Existing Profiles stay accessible. Creating another requires an available slot or an upgrade.` },
           { status: 400 }
         );
       }

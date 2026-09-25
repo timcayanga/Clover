@@ -3,6 +3,7 @@ import type { InAppNotification } from "@/lib/in-app-notifications";
 
 // Original runtime copy remains the source of dynamic amounts, names and links.
 export const notificationTriggers = [
+  ["bank-lifecycle", "Bank connection lifecycle", "A bank needs syncing, plan review or disconnection attention.", "Sync to keep connected", "Your bank connection will disconnect after inactivity. Sync to keep connected; financial history stays."],
   [
     "import-processing",
     "Import in progress",

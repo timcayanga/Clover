@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import ts from "typescript";
+import { planName } from "../../shared/plan-catalog";
 
 // Run the real route against isolated in-memory dependencies, without sessions,
 // network access, or a database. Exercises both local and authenticated ownership.
@@ -25,7 +26,9 @@ async function check(local: boolean) {
       findUnique: async ({ where }: { where: { id: string } }) => profiles.find(row => row.id === where.id),
     },
   };
+  let profileLimit = 10;
   const deps: Record<string, unknown> = {
+    "../../../../shared/plan-catalog": { planName },
     "@/lib/prisma": { prisma },
     "@/lib/auth": { isLocalDevHost: async () => local, requireAuth: async () => ({ userId: local ? "staging-guest" : owner }) },
     "@/lib/clerk": { syncClerkUser: async (id: string) => ({ ...user, clerkUserId: id }) },
@@ -35,7 +38,7 @@ async function check(local: boolean) {
       repairDuplicateStarterWorkspaces: async () => {}, seedWorkspaceDefaults: async () => {},
     },
     "@/lib/user-environment": { getCurrentUserEnvironment: () => "staging", resolvePersistedUserEnvironment: () => "staging" },
-    "@/lib/user-limits": { getEffectiveProfileLimit: () => 10 },
+    "@/lib/user-limits": { getEffectiveProfileLimit: () => profileLimit },
     "@/lib/analytics-server": { capturePostHogServerEvent: async () => {} },
     "@/lib/request-security": { assertTrustedRequestOrigin: () => {} },
     "@/lib/transient-data": { isTransientDataError: () => false, isUnauthorizedDataError: () => false },
@@ -50,6 +53,15 @@ async function check(local: boolean) {
   assert.equal(created.workspace.userId, owner);
   const refreshed = await route.GET();
   assert.deepEqual(refreshed.workspaces.map((row: { name: string }) => row.name), ["Personal", "QA Profile"]);
+  // Simulate an effective downgrade while preserving records owned by this user.
+  profileLimit = 1;
+  const blocked = await route.POST({ json: async () => ({ name: "Excess Profile", type: "personal" }) });
+  assert.match(blocked.error, /Existing Profiles stay accessible/);
+  assert.equal(profiles.length, 2, "downgrade must neither create nor delete profiles");
+  assert.equal((await route.GET()).workspaces.length, 2, "over-limit profiles remain readable");
+  profileLimit = 10;
+  const upgraded = await route.POST({ json: async () => ({ name: "After upgrade", type: "personal" }) });
+  assert.equal(upgraded.workspace.name, "After upgrade");
 }
 async function main() { await check(true); await check(false); console.log("Profile create/reload ownership regression passed (local and authenticated)"); }
 void main();

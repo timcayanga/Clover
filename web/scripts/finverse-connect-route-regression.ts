@@ -8,6 +8,9 @@ async function main() {
 let claimed=false, exchanges=0, created=0, bankCalls=0, refreshCalls=0, updates=[], planTier='pro';
 export function setPlan(value){planTier=value;}
 export const getAccountBrand=()=>({logoSrc:null,fallbackIconSrc:"/assets/account-types/bank.png"});
+export const enforceBankAllowance=async()=>{};
+export const bankLifecycleOverview=async()=>({limit:2,connections:[]});
+export const hasUnlimitedPlanLimits=()=>false;
 export const getProAccess=async()=>({planTier});
 export const refreshProAccess=async()=>planTier;
 export function reset(){claimed=false;exchanges=0;created=0;bankCalls=0;refreshCalls=0;updates=[];}
@@ -41,6 +44,7 @@ export const hashFinverseState=s=>s;
 export const encryptFinverseToken=()=> 'encrypted';
 export const exchangeFinverseCode=async()=>{exchanges++;return {login_identity_id:'identity',access_token:'secret',refresh_token:'secret',expires_in:3600};};
 export const prisma={user:{findUniqueOrThrow:async()=>({planTier})},$transaction:async f=>f({}),finverseConnection:{
+ findUniqueOrThrow:async()=>({status:"ready"}),
  findFirst:async({where})=>{if(where.workspaceId!=='profile'||where.user.clerkUserId!=='owner'||where.status.not!=='disconnected')throw Error('unsafe scope');return {id:'connection',userId:'owner',loginIdentityId:'identity',encryptedAccessToken:'cipher',accessTokenExpiresAt:new Date(Date.now()+3600000)};},
  findMany:async({where,select})=>{if(where.workspaceId!=='profile'||where.user.clerkUserId!=='owner')throw Error('unsafe scope');return [{id:'pending',status:'awaiting_selection',institutionName:'Test bank',lastSyncedAt:null,accountLinks:[]},{id:'linked',status:'ready',institutionName:'Test bank',lastSyncedAt:'2026-09-24T00:00:00Z',accountLinks:[{account:{id:'account',name:'Savings',institution:'Test bank',accountNumber:'1234567890',type:'bank'}}]}];},
  create:async({data})=>{created++;return{id:'connection'};},
@@ -49,7 +53,7 @@ export const prisma={user:{findUniqueOrThrow:async()=>({planTier})},$transaction
  update:async({data})=>{updates.push(data);return{};}
 }};
 `;
-  const bundled = await build({ stdin: { contents: `export {GET as catalog} from './app/api/admin/finverse/catalog/route'; export {POST as sync} from './app/api/integrations/finverse/sync/route'; export {GET as connections} from './app/api/integrations/finverse/connections/route'; export {GET as institutions} from './app/api/integrations/finverse/institutions/route'; export {POST as link} from './app/api/integrations/finverse/link/route'; export {GET as callback} from './app/api/integrations/finverse/callback/route'; export {reset,stats,setPlan} from 'fixture';`, resolveDir: process.cwd() }, bundle: true, platform: "node", format: "cjs", packages: "external", write: false, plugins: [{ name: "finverse-boundaries", setup(b) { b.onResolve({filter:/^(fixture|@\/lib\/(admin|auth|finverse-access-token|bank-link-usage|user-limits|account-limit-count|account-brand|workspace-access|finverse|prisma|plan-quota|pro-access|mobile-request-context))$/},()=>({path:"fixture",namespace:"test"})); b.onLoad({filter:/.*/,namespace:"test"},()=>({contents:fixture,loader:"ts",resolveDir:process.cwd()})); }}] });
+  const bundled = await build({ stdin: { contents: `export {GET as catalog} from './app/api/admin/finverse/catalog/route'; export {POST as sync} from './app/api/integrations/finverse/sync/route'; export {GET as connections} from './app/api/integrations/finverse/connections/route'; export {GET as institutions} from './app/api/integrations/finverse/institutions/route'; export {POST as link} from './app/api/integrations/finverse/link/route'; export {GET as callback} from './app/api/integrations/finverse/callback/route'; export {reset,stats,setPlan} from 'fixture';`, resolveDir: process.cwd() }, bundle: true, platform: "node", format: "cjs", packages: "external", write: false, plugins: [{ name: "finverse-boundaries", setup(b) { b.onResolve({filter:/^(fixture|@\/lib\/(admin|auth|finverse-access-token|bank-link-usage|user-limits|account-limit-count|account-brand|finverse-lifecycle|workspace-access|finverse|prisma|plan-quota|pro-access|mobile-request-context))$/},()=>({path:"fixture",namespace:"test"})); b.onLoad({filter:/.*/,namespace:"test"},()=>({contents:fixture,loader:"ts",resolveDir:process.cwd()})); }}] });
   const Module = requireFixture("node:module"), mod = new Module(resolve("finverse-test.cjs")); mod.filename=resolve("finverse-test.cjs");mod.paths=Module._nodeModulePaths(process.cwd());mod._compile(bundled.outputFiles[0].text,mod.filename);
   const api=mod.exports;
   api.setPlan('free');

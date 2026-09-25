@@ -274,6 +274,11 @@ export const deleteAccountsAndImportArtifacts = async (
     await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`plan-quota:${owner.userId}`}, 0))`;
     await bankLinkAllowance(tx, owner.userId);
   }
+  const affectedBankLinks=await tx.finverseAccountLink.findMany({where:{workspaceId,accountId:accountIdFilter},select:{connectionId:true}});
+  for(const connectionId of new Set(affectedBankLinks.map((l:{connectionId:string})=>l.connectionId))) {
+    const remaining=await tx.finverseAccountLink.count({where:{connectionId,unlinkedAt:null,accountId:{not:null},NOT:{accountId:accountIdFilter}}});
+    if(!remaining) await tx.finverseConnection.updateMany({where:{id:connectionId,status:{not:'disconnected'}},data:{status:'disconnect_pending',disconnectRequestedAt:new Date(),disconnectRetryAt:new Date(),disconnectReason:'Linked account deleted'}});
+  }
   const deletedAccounts = await tx.account.deleteMany({
     where: {
       workspaceId,

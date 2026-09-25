@@ -1017,6 +1017,17 @@ model Transaction {
 }
 
 model FinverseConnection {
+  @@index([disconnectRetryAt])
+  disconnectRequestedAt DateTime?
+  disconnectReason String?
+  disconnectError String?
+  disconnectAttempts Int @default(0)
+  disconnectRetryAt DateTime?
+  disconnectedAt DateTime?
+  lastSyncAttemptAt DateTime?
+  syncFailureSince DateTime?
+  inactivityWarnedAt DateTime?
+
   id                    String                      @id @default(cuid())
   userId                String
   workspaceId           String
@@ -1057,6 +1068,8 @@ model BankLinkUsage {
 }
 
 model FinverseAccountLink {
+  retainOnDowngrade Boolean @default(false)
+
   unlinkedAt DateTime?
   id                String             @id @default(cuid())
   connectionId      String

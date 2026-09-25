@@ -1,3 +1,5 @@
+import { bankLifecycleOverview } from "./finverse-lifecycle";
+import { bankWarningStage } from "../../shared/finverse-lifecycle";
 import { getAppPreferences } from "./app-preferences";
 import { notificationAllowed } from "../../shared/app-preferences";
 import { isSplitBillResolved } from "./split-bill-resolution";
@@ -544,6 +546,19 @@ export const buildInAppNotificationCandidates = async (
     const previous = new Date(+start - 7 * DAY_MS);
     const count = await prisma.transaction.count({ where: { workspaceId, deletedAt: null, type: { not: "transfer" }, date: { gte: previous, lt: start } } });
     if (count > 0) items.push({ id: `weekly-summary:${workspaceId}:${toDateKey(start)}`, product: "transactions", productLabel: "Reports", productHref: "/reports", title: "Your weekly summary", message: `${count} income and spending transactions were recorded last week. Open Reports to review your finances.`, tone: "neutral", priority: "low", createdAt: start.toISOString(), href: "/reports", ctaLabel: "View reports" });
+  }
+  const bankLifecycle=await bankLifecycleOverview(user.id);
+  for(const c of bankLifecycle.connections.filter(c=>c.workspaceId===workspaceId && c.status!=='disconnected')) {
+    const stage=bankWarningStage(c.inactivityDeadline,now);
+    const planEnding=bankLifecycle.accessEndsAt && +bankLifecycle.accessEndsAt-+now<=14*DAY_MS ? bankLifecycle.accessEndsAt : null;
+    const deadline=planEnding??c.inactivityDeadline;
+    if(stage || c.disconnectError || planEnding) items.push({
+      id:`bank-lifecycle:${c.id}:${c.disconnectError?'pending':planEnding?'plan':stage}:${deadline.toISOString()}`,
+      product:'accounts',productLabel:'Connected banks',productHref:'/accounts',
+      title:c.disconnectError?'Bank disconnection pending':planEnding?'Review your connected banks':'Sync to keep connected',
+      message:c.disconnectError?'Finverse disconnection is pending. Your history remains available.':planEnding?`Paid access ends ${toMonthDay(planEnding)}. Bank connections exceeding your next allowance will disconnect; records remain.`:`${c.name} has not synced recently. Sync before ${toMonthDay(c.inactivityDeadline)} to keep connected. Your history will remain if disconnected.`,
+      tone:'warning',priority:'high',createdAt:new Date(Math.min(+now,+deadline-(planEnding?14:stage??14)*DAY_MS)).toISOString(),href:'/accounts',ctaLabel:'Manage connected banks'
+    });
   }
   const configured = options.raw ? items : applyInAppTemplates(items, await loadRuntimeNotificationTemplates(
     (await prisma.user.findUnique({ where: { id: user.id }, select: { environment: true } }))?.environment ?? "local",

@@ -1,3 +1,4 @@
+import { planName } from "../../../../shared/plan-catalog";
 import { finverseBalances } from "@/lib/finverse-balances";
 import { positionHoldingView } from "../../../../shared/investment-position-view";
 import { listInvestmentPositions } from "@/lib/investment-position-store";
@@ -4072,12 +4073,9 @@ export async function POST(request: Request) {
       const nonCashAccountCount = await countWorkspaceOwnerPlanLimitedAccounts(workspaceId);
 
       if (effectiveLimits.accountLimit !== null && nonCashAccountCount >= effectiveLimits.accountLimit) {
-        const isFreePlan = user.planTier === "free";
         return NextResponse.json(
           {
-            error: isFreePlan
-              ? `Free includes up to ${effectiveLimits.accountLimit} non-cash accounts. Upgrade to Pro to add more.`
-              : `You’ve reached the current ${effectiveLimits.accountLimit}-account limit on Pro. Remove an account or manage billing if you need more room.`,
+            error: `${planName(user.planTier)} includes ${effectiveLimits.accountLimit} non-cash accounts. Your existing accounts and history stay accessible. Adding more requires an available slot or an upgrade.`,
             planTier: user.planTier,
             limitType: "account_limit",
             limitValue: effectiveLimits.accountLimit,
