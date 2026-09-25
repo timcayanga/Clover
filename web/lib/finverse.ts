@@ -1,3 +1,4 @@
+import { connectBankCountries } from "../../shared/finverse-countries";
 import { createCipheriv, createDecipheriv, createHash, randomBytes } from "node:crypto";
 
 const FINVERSE_API_BASE = "https://api.prod.finverse.net";
@@ -278,7 +279,9 @@ export function visibleFinverseBanks(institutions: unknown, mode: "live" | "test
     if (!Array.isArray(item.products_supported) || !["ACCOUNTS", "TRANSACTIONS"].every(p => item.products_supported.includes(p))) continue;
     if (!Array.isArray(item.tags) || !item.tags.includes(mode === "live" ? "real" : "test")) continue;
     if (!(mode === "live" ? ["SUPPORTED"] : ["SUPPORTED", "BETA"]).includes(item.status)) continue;
-    banks.set(item.institution_id, { id: item.institution_id, name: item.institution_name, countries: item.countries.filter((country: unknown): country is string => typeof country === "string") });
+    const countries = connectBankCountries(item.institution_name, item.countries.filter((country: unknown): country is string => typeof country === "string"));
+    if (!countries.length) continue;
+    banks.set(item.institution_id, { id: item.institution_id, name: item.institution_name, countries });
   }
   return [...banks.values()].sort((a, b) => a.name.localeCompare(b.name));
 }

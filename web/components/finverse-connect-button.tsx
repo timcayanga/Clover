@@ -46,7 +46,7 @@ export function FinverseConnectButton({
 }) {
   const [access, setAccess] = useState<{ workspaceId: string; upgradeRequired: boolean } | null>(null);
   const allowed = access?.workspaceId === workspaceId && !access.upgradeRequired;
-  const [banks, setBanks] = useState<{id:string;name:string;countries:string[];logoUrl:string}[]>([]);
+  const [banks, setBanks] = useState<{id:string;name:string;countries:string[];logoUrl:string;logoUrls?:Record<string,string>}[]>([]);
   const [country, setCountry] = useState<string | null>(null);
   const [linked, setLinked] = useState<{id:string;connectionId:string;name:string;last4:string|null;logoUrl:string;lastSyncedAt:string|null}[]>([]);
   const [connectionsLoaded, setConnectionsLoaded] = useState(false);
@@ -75,7 +75,7 @@ export function FinverseConnectButton({
   useEffect(() => {
     const controller = new AbortController();
     setAccess(null);
-    setBanks([]); setBankStatus("Loading banks…");
+    setBanks([]); setCountry(null); setBankStatus("Loading banks…");
     void fetch(`/api/integrations/finverse/institutions?workspaceId=${encodeURIComponent(workspaceId)}`, { signal: controller.signal, cache: "no-store" })
       .then(async response => { const data = await response.json(); if (!response.ok) throw new Error(data.error || "Unable to load banks."); return data; })
       .then(data => { if (controller.signal.aborted) return; setAccess({ workspaceId, upgradeRequired: data.upgradeRequired === true }); setBanks(data.banks); setTestMode(data.mode === "test"); setBankStatus(data.message || (data.banks.length ? "" : "No banks are available right now. Use Manual or Upload.")); })
@@ -216,7 +216,7 @@ export function FinverseConnectButton({
       {mode === "sync" && syncAccounts.length ? <div className="finverse-connect__grid">{syncAccounts.map(account=><div key={account.id} className="finverse-connect__sync-card"><img src={account.logoUrl} alt="" onError={event=>{event.currentTarget.onerror=null;event.currentTarget.src="/assets/account-types/bank.png";}}/><strong>{account.name}</strong><span>{account.last4 ? `•••• ${account.last4}` : "Linked account"}</span><small>Last Synced · {account.lastSyncedAt ? new Date(account.lastSyncedAt).toLocaleString() : "Not yet synced"}</small><button className="button button-secondary" type="button" disabled={action !== null || !allowed} onClick={()=>void sync(account.connectionId,[],true)}>{action === "syncing" ? "Syncing…" : "↻ Sync"}</button><button className="button button-secondary" type="button" disabled={action !== null} onClick={() => setUnlinkTarget(account)}>Unlink</button></div>)}</div> : <>
       {testMode ? <p role="status">Test mode · Only test banks are shown.</p> : null}
       {country ? <button className="button button-secondary" type="button" onClick={()=>setCountry(null)}>‹ Countries · {finverseCountries(banks).find(c=>c.code===country)?.name}</button> : null}
-      {!country ? <div className="finverse-connect__grid" aria-label="Countries">{finverseCountries(banks).map(c=><button key={c.code} className="finverse-connect__tile" type="button" onClick={()=>setCountry(c.code)}><span className="finverse-connect__flag" aria-hidden="true">{c.flag}</span><span>{c.name}</span></button>)}</div> : <div className="finverse-connect__grid" aria-label="Banks">{banks.filter(bank=>bank.countries.includes(country)).map(bank=><button key={bank.id} className="finverse-connect__tile" type="button" disabled={action !== null} onClick={()=>void connect(bank.id)}><img src={bank.logoUrl} alt="" onError={event=>{event.currentTarget.onerror=null;event.currentTarget.src="/assets/account-types/bank.png";}}/><span>{bank.name}</span></button>)}{!banks.some(bank=>bank.countries.includes(country)) ? <p>No {testMode ? "test " : ""}banks are available here yet.</p> : null}</div>}
+      {!country ? <div className="finverse-connect__grid" aria-label="Countries">{finverseCountries(banks).map(c=><button key={c.code} className="finverse-connect__tile" type="button" onClick={()=>setCountry(c.code)}><span className="finverse-connect__flag" aria-hidden="true">{c.flagSrc ? <img src={c.flagSrc} alt="" /> : c.flag}</span><span>{c.name}</span></button>)}</div> : <div className="finverse-connect__grid" aria-label="Banks">{banks.filter(bank=>bank.countries.includes(country)).map(bank=><button key={bank.id} className="finverse-connect__tile" type="button" disabled={action !== null} onClick={()=>void connect(bank.id)}><img src={bank.logoUrls?.[country] || bank.logoUrl} alt="" onError={event=>{event.currentTarget.onerror=null;event.currentTarget.src="/assets/account-types/bank.png";}}/><span>{bank.name}</span></button>)}{!banks.some(bank=>bank.countries.includes(country)) ? <p>No {testMode ? "test " : ""}banks are available here yet.</p> : null}</div>}
       {bankStatus && bankStatus !== "Loading banks…" ? <div role="status"><p>{bankStatus}</p><button type="button" className="button button-secondary" onClick={()=>setBankRevision(v=>v+1)}>Refresh banks</button></div> : null}
       </>}
       {message ? <p className="finverse-connect__inline-status" role="status" aria-live="polite">{message}</p> : null}

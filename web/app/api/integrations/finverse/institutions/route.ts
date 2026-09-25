@@ -1,4 +1,4 @@
-import { getAccountBrand } from "@/lib/account-brand";
+import { finverseBankPresentation } from "@/lib/finverse-bank-presentation";
 import { NextResponse } from "next/server";
 import { requireAuth } from "@/lib/auth";
 import { assertWorkspaceAccess } from "@/lib/workspace-access";
@@ -14,7 +14,7 @@ export async function GET(request: Request) {
     if ((await getProAccess(workspace.userId)).planTier === "free") return NextResponse.json({ banks: [], available: false, upgradeRequired: true }, { headers: { "Cache-Control": "private, no-store" } });
     if (!isFinverseEnabled()) return NextResponse.json({ banks: [], available: false, message: "Bank connections are not available yet. You can still use Manual or Upload." });
     const result = await getFinverseBanks();
-    return NextResponse.json({ ...result, banks: result.banks.map(bank => { const brand = getAccountBrand({ institution: bank.name, type: "bank" }); return { ...bank, logoUrl: brand.logoSrc || brand.fallbackIconSrc }; }), available: true }, { headers: { "Cache-Control": "private, no-store" } });
+    return NextResponse.json({ ...result, banks: result.banks.map(bank => ({ ...bank, ...finverseBankPresentation(bank) })), available: true }, { headers: { "Cache-Control": "private, no-store" } });
   } catch (error) {
     const message = error instanceof Error ? error.message : "";
     const status = message === "UNAUTHORIZED" ? 401 : message === "WORKSPACE_NOT_FOUND" ? 404 : 503;
