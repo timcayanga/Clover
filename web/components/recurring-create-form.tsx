@@ -1,4 +1,5 @@
 "use client";
+import { MobileSheetHandle } from "@/components/mobile-sheet-handle";
 import { AddEntryMethods } from "@/components/add-entry-methods";
 
 import { useEffect, useRef, useState } from "react";
@@ -75,10 +76,11 @@ export function RecurringCreateForm({workspaceId,initialKind,accounts,categoryOp
     }catch(err){setError(err instanceof Error?err.message:"Unable to save recurring item");}finally{setSaving(false);}
   };
   return <div className="recurring-add-modal" role="presentation" onClick={()=>{if(!saving)onClose();}}><section ref={card} className="panel recurring-add-modal__card recurring-create" role={creationPage?"region":"dialog"} aria-modal={creationPage?undefined:true} aria-label="Add recurring" onClick={e=>e.stopPropagation()}>
+    <MobileSheetHandle onClose={onClose} disabled={saving} />
     <header><h2>Add recurring</h2><button type="button" className="recurring-modal-close" aria-label="Close add recurring" disabled={saving} onClick={onClose}><InterfaceIcon name="close" size={20}/></button></header>
     <AddEntryMethods kind="recurring" workspaceId={workspaceId} accounts={accounts} disabled={saving} formContext={{kind:"recurring",fields:{kind,title,amount,currency,dueDate,recurrence,counterparty,accountId,notes}}} onReviewForm={({fields:f})=>{if(f.title!==undefined)setTitle(f.title);if(f.amount!==undefined)setAmount(f.amount);if(f.currency!==undefined)setCurrency(f.currency);if(f.dueDate!==undefined)setDueDate(f.dueDate);if(f.recurrence&&commitmentRecurrenceOptions.some(o=>o.value===f.recurrence))setRecurrence(f.recurrence);if(f.kind&&types.some(([k])=>k===f.kind))setKind(f.kind as Kind);if(f.counterparty!==undefined)setCounterparty(f.counterparty);if(f.accountId&&accounts.some(a=>a.id===f.accountId))setAccountId(f.accountId);if(f.notes!==undefined)setNotes(f.notes);}}>
     <form onSubmit={submit}>
-      <fieldset className="recurring-create__types" disabled={saving}><legend className="sr-only">Recurring type</legend>{types.map(([value,label])=><button key={value} type="button" aria-pressed={kind===value} onClick={()=>changeKind(value)}>{label}</button>)}</fieldset>
+      <label className="recurring-create__row"><span>Recurring Type</span><select aria-label="Recurring Type" disabled={saving} value={kind} onChange={event=>changeKind(event.target.value as Kind)}>{types.map(([value,label])=><option key={value} value={value}>{label}</option>)}</select></label>
       <label className="settings-field"><span>{variable?"Estimated payment amount · optional":labels[0]}</span><div className="recurring-create__amount"><input aria-label={labels[0]} inputMode="decimal" value={amount} onChange={e=>setAmount(e.target.value)} placeholder="0.00" required={!variable}/><CurrencySelector value={currency} onChange={setCurrency} options={getCurrencyCatalogCodes()} ariaLabel="Select commitment currency" showCurrencyCode /></div></label>
       {field(labels[1],title,setTitle,"text",true)}
       {kind==="planned_payment"?<label className="recurring-create__row"><span>Amount type</span><select value={variable?"variable":"fixed"} onChange={e=>setVariable(e.target.value==="variable")}><option value="fixed">Fixed</option><option value="variable">Variable</option></select></label>:null}

@@ -679,7 +679,7 @@ async function GoalsPageStream({ goalId }: { goalId?: string }) {
     <RouteSplash label="goals">
       <CloverShell
         active="goals"
-        title="Goals"
+        title={currentGoalPlan?.purpose || selectedGoal.title}
         mobileBackHref="/goals"
         actions={<Link href="/goals" className="button button-secondary plan-back">Back to Goals</Link>}
       >

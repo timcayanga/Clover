@@ -1,4 +1,5 @@
 "use client";
+import { MobileSheetHandle } from "@/components/mobile-sheet-handle";
 import { FinverseConnectButton } from "@/components/finverse-connect-button";
 import { reconcileTransactionTotal } from "@/lib/transaction-mobile-pagination";
 import { TransactionTableEntry } from "@/components/transaction-table-entry";
@@ -8602,6 +8603,7 @@ function TransactionsPageContent() {
             aria-labelledby="bulk-edit-title"
             onClick={(event) => event.stopPropagation()}
           >
+            <MobileSheetHandle onClose={() => setManualOpen(false)} disabled={isSaving || tableLocked} />
             <div className="modal-head">
               <div>
                 <p className="eyebrow">Transactions</p>
@@ -8673,6 +8675,7 @@ function TransactionsPageContent() {
             aria-labelledby="add-transaction-title"
             onClick={(event) => event.stopPropagation()}
           >
+            <MobileSheetHandle onClose={() => setManualOpen(false)} disabled={isSaving || tableLocked} />
             <div className="modal-head">
               <div>
                 <p className="eyebrow">Transactions</p>
@@ -8697,7 +8700,7 @@ function TransactionsPageContent() {
             )}
             {creationTab === "sync" && selectedWorkspaceId ? <div id="creation-panel-sync" role="tabpanel" aria-labelledby="creation-tab-sync"><FinverseConnectButton workspaceId={selectedWorkspaceId} mode="sync" /></div> : null}
             <div id="creation-panel-manual" role="tabpanel" aria-labelledby="creation-tab-manual" hidden={creationTab !== "manual"}>
-            <div style={{display:"flex",justifyContent:"flex-end",marginBottom:12}}><button className="button button-secondary" type="button" disabled={isSaving || tableLocked} onClick={() => setTableMode(!tableMode)}>{tableMode ? "Single entry" : "▦ Table entry"}</button></div>
+            <div style={{display:"flex",justifyContent:"flex-end",marginBottom:12}}><button className="button button-secondary entry-table-toggle" type="button" aria-label={tableMode ? "Single entry" : "Table entry"} title={tableMode ? "Single entry" : "Table entry"} disabled={isSaving || tableLocked} onClick={() => setTableMode(!tableMode)}><span aria-hidden="true">{tableMode ? "✎" : "▦"}</span></button></div>
             <div hidden={!tableMode}><TransactionTableEntry key={selectedWorkspaceId} workspaceId={selectedWorkspaceId} accounts={accounts} categories={categories} onLockChange={setTableLocked} onSaved={() => { if (selectedWorkspaceId) void loadTransactionsPage(selectedWorkspaceId, {background:true}); }} /></div>
             <form onSubmit={saveManualTransaction} hidden={tableMode}>
 
@@ -8867,7 +8870,7 @@ function TransactionsPageContent() {
                 {manualForm.type === "transfer" ? (
                   <label className="transactions-manual-field transactions-manual-field--embedded-label">
                     <span className="transactions-manual-field__label">To account</span>
-                    <TransactionAccountPicker
+                    <TransactionAccountPicker searchable={false}
                       accounts={manualTransferDestinationPickerOptions}
                       selectedId={manualForm.destinationAccountId}
                       placeholder="Choose destination account"
@@ -8895,7 +8898,7 @@ function TransactionsPageContent() {
                   </span>
                   <div className="transactions-manual-field transactions-manual-field--embedded-label transactions-manual-inline-row__field">
                     <span className="transactions-manual-field__label">Category</span>
-                    <TransactionCategoryPicker
+                    <TransactionCategoryPicker searchable={false}
                       categories={categories}
                       selectedId={manualSelectedCategoryId}
                       buttonRef={manualCategoryButtonRef}
@@ -9131,7 +9134,7 @@ function TransactionsPageContent() {
             aria-labelledby="transaction-notes-title"
             onClick={(event) => event.stopPropagation()}
           >
-            <div className="transaction-drawer__mobile-header"><ContextualAskClover context="transactions" planTier={planTier} /><h4>Transaction Details</h4><button className="icon-button" type="button" aria-label="Close transaction details" onClick={closeTransactionDetail}><InterfaceIcon name="close" /></button></div>
+            <div className="transaction-drawer__mobile-header"><button className="icon-button" type="button" aria-label="Back to transactions" onClick={closeTransactionDetail}><span aria-hidden="true">‹</span></button><h4>Transaction Details</h4><ContextualAskClover context="transactions" planTier={planTier} /></div>
             <div className="modal-head transaction-drawer__head">
               <div className="transaction-drawer__head-title">
                 <button

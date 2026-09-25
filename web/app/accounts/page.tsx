@@ -1,4 +1,5 @@
 "use client";
+import { MobileSheetHandle } from "@/components/mobile-sheet-handle";
 import { FinversePendingAccounts } from "@/components/finverse-pending-accounts";
 import { FinverseConnectButton as AccountBankSync } from "@/components/finverse-connect-button";
 import { AccountTypePicker } from "@/components/account-type-picker";
@@ -4529,6 +4530,7 @@ function AccountsPageContent() {
       actions={<div className="accounts-desktop-tools">{accountsShellActions}</div>}
       >
       <div className="accounts-page">
+        <div className="accounts-mobile-currency"><CurrencySelector value={selectedCurrency} onChange={next => { const code=next.toLowerCase()==="all"?"":formatCurrencyCode(next); setSelectedCurrency(code);persistSelectedCurrency(selectedWorkspaceId,code); }} options={availableCurrencies} ariaLabel="Filter accounts by currency" showCurrencyCode /></div>
         {selectedWorkspaceId ? <FinversePendingAccounts workspaceId={selectedWorkspaceId} /> : null}
 
         {visibleAccounts.length > 0 ? (
@@ -5145,6 +5147,7 @@ function AccountsPageContent() {
             ref={addRef}
             onClick={(event) => event.stopPropagation()}
           >
+            <MobileSheetHandle onClose={() => setAddOpen(false)} />
             <div className="modal-head">
               <div>
                 <p className="eyebrow">Accounts</p>

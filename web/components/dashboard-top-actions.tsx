@@ -1,4 +1,5 @@
 "use client";
+import { MobileSheetHandle } from "@/components/mobile-sheet-handle";
 import { FinverseConnectButton } from "./finverse-connect-button";
 import { TransactionTableEntry } from "@/components/transaction-table-entry";
 import { UploadSourcePicker, UploadSecurityCopy } from "@/components/upload-source-buttons";
@@ -483,6 +484,7 @@ export function DashboardManualTransactionModal({
         aria-labelledby="dashboard-manual-title"
         onClick={(event) => event.stopPropagation()}
       >
+        <MobileSheetHandle onClose={handleClose} disabled={isSaving || tableLocked} />
         <div className="modal-head">
           <div>
             <p className="eyebrow">Transactions</p>
@@ -502,7 +504,7 @@ export function DashboardManualTransactionModal({
         </div>
         {entryTab === "sync" ? <div id="quick-entry-panel-sync" role="tabpanel" aria-labelledby="quick-entry-tab-sync"><FinverseConnectButton workspaceId={workspaceId} mode="sync" /></div> : null}
         <div id="quick-entry-panel-manual" role="tabpanel" aria-labelledby="quick-entry-tab-manual" hidden={entryTab !== "manual"}>
-        <div style={{display:"flex",justifyContent:"flex-end",marginBottom:12}}><button className="button button-secondary" type="button" disabled={isSaving || tableLocked} onClick={() => setTableMode(!tableMode)}>{tableMode ? "Single entry" : "▦ Table entry"}</button></div>
+        <div style={{display:"flex",justifyContent:"flex-end",marginBottom:12}}><button className="button button-secondary entry-table-toggle" type="button" aria-label={tableMode ? "Single entry" : "Table entry"} title={tableMode ? "Single entry" : "Table entry"} disabled={isSaving || tableLocked} onClick={() => setTableMode(!tableMode)}><span aria-hidden="true">{tableMode ? "✎" : "▦"}</span></button></div>
         <div hidden={!tableMode}><TransactionTableEntry workspaceId={workspaceId} accounts={accounts} categories={categories} onSaved={() => router.refresh()} onLockChange={setTableLocked} /></div>
         <form onSubmit={handleSubmit} hidden={tableMode}>
           <div className="manual-form-layout manual-form-layout--compact dashboard-manual-form" data-transaction-type={form.type}>
@@ -665,7 +667,7 @@ export function DashboardManualTransactionModal({
 
             {form.type !== "transfer" ? <div className="transactions-manual-field transactions-manual-field--embedded-label">
               <span className="transactions-manual-field__label">Category</span>
-              <TransactionCategoryPicker
+              <TransactionCategoryPicker searchable={false}
                 categories={categories}
                 selectedId={form.categoryId}
                 buttonRef={categoryButtonRef}

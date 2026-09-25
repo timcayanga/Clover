@@ -1,4 +1,5 @@
 "use client";
+import { MobileSheetHandle } from "@/components/mobile-sheet-handle";
 
 import { PlanTabs } from "@/components/plan-tabs";
 import { CategoryBrandMark } from "@/components/category-brand-mark";
@@ -154,7 +155,7 @@ export function BudgetingWorkspace({
       ? "Edit Budget"
       : "Create Budget"
     : selectedBudget
-      ? "Budget Details"
+      ? selectedBudget.name
       : "Budgeting";
   return (
     <CloverShell
@@ -200,7 +201,7 @@ export function BudgetingWorkspace({
       <section
         className={`budgeting-page${editorOpen ? " budgeting-page--editing" : ""}`}
       >
-        <div className="budget-directory-content" hidden={mobileEditor}>
+        <div className="budget-directory-content">
           {!selectedBudget ? (
             <>
               {!budgets.length ? (
@@ -858,6 +859,7 @@ function BudgetEditor({
         aria-label={budget ? "Edit budget" : "Create Budget"}
         onClick={(event) => event.stopPropagation()}
       >
+        <MobileSheetHandle onClose={onClose} disabled={saving} />
         <div className="budget-editor__head">
           <h2>{budget ? "Edit budget" : "Create Budget"}</h2>
           {!mobile ? (

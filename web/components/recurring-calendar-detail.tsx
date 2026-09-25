@@ -1,4 +1,5 @@
 "use client";
+import { AdviserHeaderLink } from "@/components/adviser-header-link";
 
 import { InterfaceIcon } from "@/components/interface-icon";
 
@@ -204,7 +205,7 @@ export function RecurringCalendarDetail({
               </h2>
             )}
           </div>
-          <button type="button" className="recurring-calendar-detail__close" onClick={onClose} aria-label="Close payment details"><InterfaceIcon name="close" /></button>
+          <AdviserHeaderLink />
         </header>
 
         <div className="recurring-calendar-detail__hero">

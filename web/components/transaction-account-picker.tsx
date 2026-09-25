@@ -20,6 +20,7 @@ type TransactionAccountPickerProps = {
   buttonClassName?: string;
   menuClassName?: string;
   ariaLabel?: string;
+  searchable?: boolean;
   placeholder?: string;
 };
 
@@ -33,6 +34,7 @@ export function TransactionAccountPicker({
   className,
   buttonClassName,
   menuClassName,
+  searchable = true,
   ariaLabel = "Choose account",
   placeholder = "Choose account",
 }: TransactionAccountPickerProps) {
@@ -74,6 +76,7 @@ export function TransactionAccountPicker({
         aria-expanded={open}
         onClick={() => setOpen((current) => !current)}
       >
+        {selected ? <span className="transactions-manual-picker__brand" aria-hidden="true"><AccountBrandMark accountBrand={selected.brand} label={selected.label} /></span> : null}
         <span className="transactions-manual-picker__text">{selected?.label ?? placeholder}</span>
         <span className="transactions-manual-picker__chevron" aria-hidden="true">▾</span>
       </button>
@@ -83,7 +86,7 @@ export function TransactionAccountPicker({
             <strong>{ariaLabel}</strong>
             <button type="button" onClick={() => setOpen(false)} aria-label="Close accounts">×</button>
           </div>
-          {accounts.length > 7 ? (
+          {searchable && accounts.length > 7 ? (
             <label className="transaction-account-picker__search">
               <span aria-hidden="true">⌕</span>
               <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search accounts" autoFocus />

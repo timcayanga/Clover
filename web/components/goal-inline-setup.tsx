@@ -86,19 +86,7 @@ export function GoalInlineSetup({ goals, suggestedTargetAmount, monthlyIncome, c
 
   return (
     <div className="goal-inline-setup">
-      <div className="goal-inline-setup__chips" aria-label="Goal choices">
-        {availableGoals.map((goal) => (
-          <button
-            key={goal.value}
-            type="button"
-            className={`goal-inline-setup__chip${selectedGoal === goal.value ? " is-selected" : ""}`}
-            onClick={() => setSelectedGoal(goal.value)}
-          >
-            <span aria-hidden="true">{goalEmojis[goal.value]}</span>
-            {goal.value === "save_more" ? "Save More" : goal.value === "pay_down_debt" ? "Pay Debt" : goal.value === "build_emergency_fund" ? "Emergency Fund" : "Invest Better"}
-          </button>
-        ))}
-      </div>
+      <label className="creation-select-row"><span>Goal Type</span><select value={selectedGoal} onChange={event => setSelectedGoal(event.target.value as GoalKey)}>{availableGoals.map(goal => <option key={goal.value} value={goal.value}>{goalEmojis[goal.value]} {goal.title}</option>)}</select></label>
       <label className="goal-inline-setup__field">
         <span>Or describe it in your own words</span>
         <input maxLength={120} value={intent} onChange={(event) => handleIntentChange(event.target.value)} placeholder="e.g. Save 25k for a phone" />

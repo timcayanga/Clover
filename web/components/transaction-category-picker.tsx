@@ -20,6 +20,7 @@ type TransactionCategoryPickerProps = {
   buttonClassName?: string;
   menuClassName?: string;
   ariaLabel?: string;
+  searchable?: boolean;
 };
 
 const normalize = (value: string) => value.trim().toLowerCase();
@@ -38,6 +39,7 @@ export function TransactionCategoryPicker({
   className,
   buttonClassName,
   menuClassName,
+  searchable = true,
   ariaLabel = "Choose category",
 }: TransactionCategoryPickerProps) {
   const rootRef = useRef<HTMLDivElement | null>(null);
@@ -119,6 +121,7 @@ export function TransactionCategoryPicker({
         aria-expanded={open}
         onClick={() => setOpen((current) => !current)}
       >
+        <CategoryBrandMark categoryName={selected?.name ?? "Other"} size={24} radius={6} />
         <span className="transactions-manual-picker__text">{selected?.name ?? "Other"}</span>
         <span className="transactions-manual-picker__chevron" aria-hidden="true">▾</span>
       </button>
@@ -128,10 +131,10 @@ export function TransactionCategoryPicker({
             <strong>Choose category</strong>
             <button type="button" onClick={() => setOpen(false)} aria-label="Close categories">×</button>
           </div>
-          <label className="transaction-category-picker__search">
+{searchable ? (          <label className="transaction-category-picker__search">
             <span aria-hidden="true">⌕</span>
             <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search categories" autoFocus />
-          </label>
+          </label>) : null}
           <div className="transaction-category-picker__list">
             {groups.map((section) => (
               <section className="transaction-category-picker__type-group" key={section.type} aria-label={section.label}>

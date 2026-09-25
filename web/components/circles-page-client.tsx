@@ -283,7 +283,7 @@ export function CirclesPageClient({
   return (
     <CloverShell
       active="circles"
-      title="Circles"
+      title={circles.find(circle => circle.id === selectedCircleId)?.name ?? "Circles"}
       mobileBackAction={selectedCircleId ? () => setSelectedCircleId(null) : undefined}
       actions={selectedCircleId ? <CollectionBack label="Circles" onClick={() => setSelectedCircleId(null)} /> :
         <button

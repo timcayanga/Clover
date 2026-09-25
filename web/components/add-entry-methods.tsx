@@ -57,6 +57,7 @@ export function AddEntryMethods({
   accounts = [],
   children,
   onUpload,
+  onUploadFiles,
   disabled = false,
   enabled = true,
   formContext,
@@ -77,6 +78,7 @@ export function AddEntryMethods({
   }[];
   children: ReactNode;
   onUpload?: () => void;
+  onUploadFiles?: (files: File[]) => void;
   disabled?: boolean;
   enabled?: boolean;
   formContext?: EntryFormContext;
@@ -144,6 +146,7 @@ export function AddEntryMethods({
               }
             }}
           >
+            <img src={`/assets/organize/method-${method === "connect" ? "sync" : method}.svg`} width="18" height="18" alt="" />
             {method === "manual"
               ? "Manual"
               : method === "ask"
@@ -188,7 +191,7 @@ export function AddEntryMethods({
                   : (kind as AdviserPlanningSurface)
             }
             pageLabel={info.title}
-            initialPrompt={info.prompt}
+            initialPrompt=""
             storageKey={`clover-add-${kind}`}
           />
         </div>
@@ -205,7 +208,7 @@ export function AddEntryMethods({
             : "Upload statements, receipts, and screenshots"}
         </h4>
         {kind !== "accounts" && kind !== "recurring" && kind !== "investments" ? <p>{info.upload}</p> : null}
-        {onUpload ? (
+        {onUploadFiles ? <UploadSourcePicker onSelect={onUploadFiles} /> : onUpload ? (
           <button
             className="button button-primary"
             type="button"

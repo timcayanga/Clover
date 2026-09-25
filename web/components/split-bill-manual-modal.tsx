@@ -1,4 +1,5 @@
 "use client";
+import { MobileSheetHandle } from "@/components/mobile-sheet-handle";
 import { SplitBillImportModal } from "./split-bill-import-modal";
 import { readSelectedWorkspaceId } from "@/lib/workspace-selection";
 import { AddEntryMethods } from "@/components/add-entry-methods";
@@ -47,6 +48,7 @@ async function readJsonResponse<T>(response: Response): Promise<T> {
 
 export function SplitBillManualModal({ open, currentUserName, people, groups, onClose, onSaved }: SplitBillManualModalProps) {
   const [entryUpload,setEntryUpload]=useState(false);
+  const [receiptFile,setReceiptFile]=useState<File | null>(null);
   const [selectedPeople, setSelectedPeople] = useState<string[]>([]);
   const [selectedGroupId, setSelectedGroupId] = useState<string | null>(null);
   const [query, setQuery] = useState("");
@@ -262,10 +264,11 @@ export function SplitBillManualModal({ open, currentUserName, people, groups, on
   return createPortal(
     <div className="split-bill-modal split-bill-manual-modal-backdrop" role="presentation" onClick={closeModal}>
       <section className="split-bill-modal__card glass split-bill-manual-modal" role="dialog" aria-modal="true" aria-label="Add manual split bill" onClick={(event) => event.stopPropagation()}>
+        <MobileSheetHandle onClose={closeModal} disabled={isSaving} />
         <div className="split-bill-manual-modal__head">
           <div>
             <p className="eyebrow">Add Expense</p>
-            <h3>Split Bill</h3>
+            <h3>Add Split Bill</h3>
           </div>
           <button className="split-bill-icon-button split-bill-manual-modal__back" type="button" onClick={closeModal} aria-label="Back to Split Bills">
             <span className="split-bill-manual-modal__back-mobile" aria-hidden="true">
@@ -279,7 +282,7 @@ export function SplitBillManualModal({ open, currentUserName, people, groups, on
           </button>
         </div>
 
-        <AddEntryMethods kind="split" workspaceId={readSelectedWorkspaceId() || undefined} disabled={isSaving} formContext={{kind:"split",fields:{title:description,amount,currency,date:billDate,people:selectedPeople.join("\n")}}} onReviewForm={({fields:f})=>{if(f.title!==undefined)setDescription(f.title);if(f.amount!==undefined)setAmount(f.amount);if(f.currency!==undefined)setCurrency(f.currency);if(f.date!==undefined)setBillDate(f.date);if(f.people!==undefined)setSelectedPeople(f.people.split("\n").map(s=>s.trim()).filter(Boolean));}} onUpload={()=>setEntryUpload(true)}>
+        <AddEntryMethods kind="split" workspaceId={readSelectedWorkspaceId() || undefined} disabled={isSaving} formContext={{kind:"split",fields:{title:description,amount,currency,date:billDate,people:selectedPeople.join("\n")}}} onReviewForm={({fields:f})=>{if(f.title!==undefined)setDescription(f.title);if(f.amount!==undefined)setAmount(f.amount);if(f.currency!==undefined)setCurrency(f.currency);if(f.date!==undefined)setBillDate(f.date);if(f.people!==undefined)setSelectedPeople(f.people.split("\n").map(s=>s.trim()).filter(Boolean));}} onUploadFiles={files=>{setReceiptFile(files[0] ?? null);setEntryUpload(true);}}>
         <label className="settings-field">
           <span>Description</span>
           <input
@@ -418,7 +421,7 @@ export function SplitBillManualModal({ open, currentUserName, people, groups, on
         </div>
         </AddEntryMethods>
       </section>
-      <SplitBillImportModal open={entryUpload} currentUserName={currentUserName} onClose={()=>setEntryUpload(false)} onSaved={bill=>{setEntryUpload(false);onSaved?.(bill);onClose();}}/>
+      <SplitBillImportModal initialFile={receiptFile} open={entryUpload} currentUserName={currentUserName} onClose={()=>setEntryUpload(false)} onSaved={bill=>{setEntryUpload(false);onSaved?.(bill);onClose();}}/>
     </div>,
     document.body
   );

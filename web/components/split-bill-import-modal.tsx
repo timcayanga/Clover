@@ -17,6 +17,7 @@ import {
 
 type SplitBillImportModalProps = {
   open: boolean;
+  initialFile?: File | null;
   currentUserName: string;
   onClose: () => void;
   onSaved?: (bill: SplitBillSerializedBill) => void;
@@ -53,7 +54,7 @@ const validateFile = (file: File | null) => {
 
 const createId = () => globalThis.crypto?.randomUUID?.() ?? `receipt-${Date.now()}-${Math.random().toString(16).slice(2)}`;
 
-export function SplitBillImportModal({ open, currentUserName, onClose, onSaved }: SplitBillImportModalProps) {
+export function SplitBillImportModal({ open, initialFile, currentUserName, onClose, onSaved }: SplitBillImportModalProps) {
   const router = useRouter();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const cameraInputRef = useRef<HTMLInputElement>(null);
@@ -83,12 +84,12 @@ export function SplitBillImportModal({ open, currentUserName, onClose, onSaved }
       return;
     }
 
-    setFile(null);
+    setFile(initialFile ?? null);
     setError(null);
     setDragActive(false);
     setIsUploading(false);
     setMessage("Drop a receipt file here or browse from your computer.");
-  }, [open]);
+  }, [open, initialFile]);
 
   const closeModal = () => {
     if (isUploading) {
