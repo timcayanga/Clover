@@ -285,9 +285,31 @@ export function visibleFinverseBanks(institutions: unknown, mode: "live" | "test
   }
   return [...banks.values()].sort((a, b) => a.name.localeCompare(b.name));
 }
-export async function getFinverseBanks() {
+export function summarizeFinverseCatalog(data: unknown, mode: "live" | "test") {
+  if (!Array.isArray(data)) throw new Error("FINVERSE_INVALID_INSTITUTIONS");
+  const visible = new Set(visibleFinverseBanks(data, mode).map(bank => bank.id));
+  const strings = (value: unknown): string[] => Array.isArray(value) ? value.filter((v): v is string => typeof v === "string") : [];
+  return data.filter(item => item && typeof item.institution_id === "string" && typeof item.institution_name === "string").map(item => {
+    const countries = strings(item.countries), products = strings(item.products_supported), tags = strings(item.tags);
+    const status = typeof item.status === "string" ? item.status : "UNKNOWN";
+    const reasons = [];
+    if (!tags.includes(mode === "live" ? "real" : "test")) reasons.push("Different live/test mode");
+    if (!(mode === "live" ? ["SUPPORTED"] : ["SUPPORTED", "BETA"]).includes(status)) reasons.push(`Provider status: ${status}`);
+    if (!["ACCOUNTS", "TRANSACTIONS"].every(p => products.includes(p))) reasons.push("Missing Accounts or Transactions support");
+    if (!connectBankCountries(item.institution_name, countries).length) reasons.push("No eligible Connect countries");
+    return { id: item.institution_id as string, name: item.institution_name as string, countries, products, tags, status,
+      shownInClover: visible.has(item.institution_id), excludedReasons: reasons };
+  });
+}
+export async function getFinverseInstitutionCatalog() {
   const { mode } = getFinverseConfig();
   const token = await getFinverseCustomerToken();
   const data = await requestFinverse<unknown>("/institutions", { method: "GET" }, token);
-  return { banks: visibleFinverseBanks(data, mode), mode };
+  return { institutions: summarizeFinverseCatalog(data, mode), mode };
+}
+export async function getFinverseBanks() {
+  const { institutions, mode } = await getFinverseInstitutionCatalog();
+  const banks = visibleFinverseBanks(institutions.map(item => ({institution_id:item.id, institution_name:item.name,
+    countries:item.countries, products_supported:item.products, tags:item.tags, status:item.status})), mode);
+  return { banks, mode };
 }

@@ -8,4 +8,4 @@
 - Regional logo files are preferred; existing multi-logo brand definitions now resolve a real logo instead of the generic bank icon.
 - Regression coverage includes empty lists, Citi outside Southeast Asia, full names, bundled flag existence, short bank labels, regional logo selection, and the existing authorization/connection route suite.
 
-The full unfiltered Finverse catalogue could not be retrieved locally: downloaded Vercel environment exports omit sensitive credential values. A founder-provided list still needs reconciliation with API statuses and supported products; no unsupported connection has been enabled on that basis.
+Admin can retrieve the full institution catalogue at `/api/admin/finverse/catalog` or download `?format=csv`. This calls Finverse on the server using its configured credentials and exports only display metadata, provider status, supported products and exclusion reasons. Hidden entries remain in the report, but no unsupported connection is enabled. The founder-provided list can be reconciled against this export.
