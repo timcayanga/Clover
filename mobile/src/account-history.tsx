@@ -410,7 +410,7 @@ export function AccountHistory({
               >
                 {item.amount === null
                   ? "Not recorded"
-                  : money(item.amount, item.currency)}
+                  : `${item.transactionId && item.type === "expense" ? "−" : item.transactionId && item.type === "income" ? "+" : ""}${money(item.transactionId ? String(Math.abs(Number(item.amount))) : item.amount, item.currency)}`}
                 {item.transactionId ? " ›" : ""}
               </Text>
             </Pressable>

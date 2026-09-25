@@ -1,8 +1,9 @@
 export type Transaction = {
+  splitBill?: { id: string; title: string } | null;
   source?: string;
   userNote?: string | null;
   parsedNote?: string | null;
-  receiptLineItems?: { description: string; amount?: string | null; currency?: string | null }[];
+  receiptLineItems?: { description: string; quantity?: string | null; unitPrice?: string | null; amount?: string | null; currency?: string | null }[];
   updatedAt?: string;
   pendingSync?: boolean;
   isTransfer?: boolean;

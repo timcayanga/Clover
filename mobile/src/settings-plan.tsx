@@ -1,3 +1,4 @@
+import { SettingsReferrals } from "./settings-referrals";
 import { telemetry } from "../../shared/analytics";
 import { PLAN_CATALOG } from "../../shared/plan-catalog";
 import { Text } from "./app-text";
@@ -14,9 +15,12 @@ import {
   storeManagementUrl,
   type StoreStatus,
 } from "./store-billing";
+type Usage = Record<"profiles" | "accounts" | "monthly" | "rolling24h", { used: number; limit: number | null }>;
 export function SettingsPlan() {
   const session = useSession();
   const { colors, styles } = useTheme();
+  const [usage, setUsage] = useState<Usage | null>(null);
+  const [usageError, setUsageError] = useState(false);
   const [status, setStatus] = useState<StoreStatus | null>(null);
   const [packages, setPackages] = useState<PurchasesPackage[]>([]);
   const [verificationPending, setVerificationPending] = useState(false);
@@ -55,6 +59,16 @@ export function SettingsPlan() {
       active = false;
     };
   }, [session.demo, session.request]);
+  useEffect(() => {
+    let active = true;
+    if (session.demo) return;
+    setUsage(null);
+    setUsageError(false);
+    void session.request<Usage>("billing/usage").then((value) => {
+      if (active) setUsage(value);
+    }).catch(() => { if (active) setUsageError(true); });
+    return () => { active = false; };
+  }, [session.demo, session.request, status]);
   const act = async (run?: () => Promise<void>, restoring = false) => {
     if (locked.current || session.demo) return;
     locked.current = true;
@@ -167,14 +181,14 @@ export function SettingsPlan() {
       </Card>
       {limits ? (
         <Card>
-          <Text style={styles.sectionTitle}>Plan limits</Text>
+          <Text style={styles.sectionTitle}>Plan usage</Text>
           <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 12 }}>
             {[
-              { label: "Profiles", value: limits.profiles },
-              { label: "Accounts", value: limits.accounts },
-              { label: "Clover tokens this month", value: limits.monthlyTokens },
-              { label: "Clover tokens, rolling 24h", value: limits.dailyTokens },
-            ].map(({ label, value }) => (
+              { label: "Profiles", value: limits.profiles, meter: usage?.profiles },
+              { label: "Accounts", value: limits.accounts, meter: usage?.accounts },
+              { label: "Clover tokens this month", value: limits.monthlyTokens, meter: usage?.monthly },
+              { label: "Clover tokens, rolling 24h", value: limits.dailyTokens, meter: usage?.rolling24h },
+            ].map(({ label, value, meter }) => (
               <View
                 key={label}
                 style={{
@@ -191,14 +205,16 @@ export function SettingsPlan() {
                   adjustsFontSizeToFit
                   numberOfLines={1}
                 >
-                  {value.toLocaleString()}
+                  {meter ? `${meter.used.toLocaleString()} / ${meter.limit === null ? "Unlimited" : meter.limit.toLocaleString()}` : value.toLocaleString()}
                 </Text>
                 <Text style={{ color: colors.muted, fontSize: 12 }}>
-                  limit
+                  {meter ? "used" : "limit"}
                 </Text>
               </View>
             ))}
           </View>
+          {usageError ? <Notice>Usage could not be loaded. Refresh plan status to try again.</Notice> : null}
+          <Body>Monthly tokens reset on the first day of each month in Asia/Manila. Unused tokens do not roll over. Cash accounts do not count toward the account limit.</Body>
         </Card>
       ) : null}
       {packages.length ? (
@@ -208,6 +224,7 @@ export function SettingsPlan() {
           local price.
         </Body>
       ) : null}
+      <SettingsReferrals />
       {message ? <Body>{message}</Body> : null}
       {error ? <Notice>{error}</Notice> : null}
     </>

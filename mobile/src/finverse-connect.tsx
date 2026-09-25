@@ -119,7 +119,9 @@ export function FinverseConnect({ onSynced, callbackConnection, mode = "connect"
     } catch (error) { if (active.current) setMessage(error instanceof Error ? error.message : "Unable to connect your bank."); }
     finally { action.current = false; if (active.current) setBusy(false); }
   }
-  if(mode==="sync"&&accountId&&(!connectionsLoaded||!linked.some(a=>a.id===accountId))) return null;
+  if (mode === "sync" && accountId && connectionsError) return <View style={{ gap: 12 }}><Body>{connectionsError}</Body><Button title="Retry bank connection status" secondary onPress={() => setRevision(v => v + 1)} /></View>;
+  if (mode === "sync" && accountId && !connectionsLoaded) return <Body>Checking bank connection…</Body>;
+  if (mode === "sync" && accountId && !linked.some(a => a.id === accountId)) return null;
   if (access?.profileId === session.profileId && access.upgradeRequired && !(mode === "sync" && linked.length)) return <View style={{ gap: 16 }}>
     <Heading>Unlock bank connections</Heading>
     <Body>Upgrade to Clover Plus or Pro to securely connect your banks through Finverse.</Body>

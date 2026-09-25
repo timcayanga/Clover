@@ -15,6 +15,7 @@ export const mobileCircleInput = z
 
 export const mobileSplitBillInput = z
   .object({
+    transactionId: z.string().min(1).max(200).optional(),
     title: z.string().trim().min(1).max(100),
     note: z.string().trim().max(1000),
     billDate: z
@@ -90,6 +91,7 @@ export function mobileSplitBillPayload(
     name: person.name,
   }));
   return {
+    ...(input.transactionId ? { transactionId: input.transactionId } : {}),
     title: input.title,
     note: input.note,
     billDate: input.billDate,

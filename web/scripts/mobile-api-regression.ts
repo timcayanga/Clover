@@ -72,7 +72,15 @@ async function main() {
   for (const extra of [{ ownerUserId: "other" }, { role: "organizer" }, { members: [{ email: "unrequested@example.com" }] }, { avatarUrl: "unsafe" }]) assert.equal(mobileCircleInput.safeParse({ ...circleInput, ...extra }).success, false);
   const splitInput = { title: "Dinner", note: "", billDate: "2026-09-07", currency: "PHP", total: "100.01", participants: [{ name: "Alex" }, { name: "Mia" }], paidByIndex: 0 };
   assert.equal(mobileSplitBillInput.safeParse(splitInput).success, true);
-  for (const extra of [{ rawPayload: { tampered: true } }, { transactionId: "private" }, { groupId: "foreign" }, { sourceType: "receipt" }, { paidByIndex: 2 }, { billDate: "2026-02-30" }, { total: "NaN" }, { participants: [{ name: "Alex", id: "foreign" }, { name: "Mia" }] }]) assert.equal(mobileSplitBillInput.safeParse({ ...splitInput, ...extra }).success, false);
+  for (const extra of [{ rawPayload: { tampered: true } }, { groupId: "foreign" }, { sourceType: "receipt" }, { paidByIndex: 2 }, { billDate: "2026-02-30" }, { total: "NaN" }, { participants: [{ name: "Alex", id: "foreign" }, { name: "Mia" }] }]) assert.equal(mobileSplitBillInput.safeParse({ ...splitInput, ...extra }).success, false);
+  assert.equal(mobileSplitBillPayload(mobileSplitBillInput.parse({ ...splitInput, transactionId: "owned-transaction" })).transactionId, "owned-transaction");
+  assert.equal(mobileOperation("GET", ["billing", "usage"]), "billing-usage");
+  assert.equal(mobileOperation("POST", ["billing", "usage"]), null);
+  assert.equal(mobileOperation("GET", ["referrals"]), "referrals");
+  assert.equal(mobileOperation("DELETE", ["referrals"]), null);
+  assert.equal(mobileEditSchema.safeParse({ userNote: "Confirmed by user", type: "income", isExcluded: true, receiptLineItems: [{ description: "Item", amount: "12.00", currency: "USD" }] }).success, true);
+  assert.equal(mobileEditSchema.safeParse({ receiptLineItems: [{ description: "Item", rawPayload: {} }] }).success, false);
+  assert.equal(mobileEditSchema.safeParse({ receiptLineItems: Array.from({ length: 101 }, () => ({ description: "Item" })) }).success, false);
   const splitPayload = mobileSplitBillPayload(mobileSplitBillInput.parse(splitInput));
   assert.equal(splitPayload.sourceType, "manual");
   assert.equal(splitPayload.payments[0].participantId, splitPayload.participants[0].id);

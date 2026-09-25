@@ -1,3 +1,4 @@
+import type { Transaction } from "../src/types";
 import { Text } from "../src/app-text";
 import { AddEntryMethods } from "../src/add-entry-methods";
 import { LinearGradient } from "expo-linear-gradient";
@@ -83,7 +84,7 @@ const optionsSample = {
   }[],
 };
 export default function SplitBills() {
-  const params = useLocalSearchParams<{ billId?: string }>();
+  const params = useLocalSearchParams<{ billId?: string; transactionId?: string }>();
   const session = useSession();
   const { colors, dark } = useTheme();
   const [statusFilter, setStatusFilter] = useState("All");
@@ -114,6 +115,17 @@ export default function SplitBills() {
   const [tab, setTab] = useState("Bills");
   const [selected, setSelected] = useState<Bill | null>(null);
   const [adding, setAdding] = useState(false);
+  const [sourceTransaction, setSourceTransaction] = useState<Transaction | null>(null);
+  useEffect(() => {
+    let active = true;
+    setSourceTransaction(null);
+    if (!params.transactionId || !session.profileId) return;
+    void session.request<{ transaction: Transaction }>(`transactions/${encodeURIComponent(params.transactionId)}?workspaceId=${encodeURIComponent(session.profileId)}`).then(({ transaction }) => {
+      if (active) { setSourceTransaction(transaction); setAdding(true); }
+    }).catch((e: Error) => { if (active) setDetailError(e.message); });
+    return () => { active = false; };
+  }, [params.transactionId, session.profileId, session.request]);
+
   const [search, setSearch] = useState("");
   const [detailError, setDetailError] = useState("");
   const [loading, setLoading] = useState(false);
@@ -186,10 +198,12 @@ export default function SplitBills() {
   if (adding)
     return (
       <BillEditor
-        key={session.profileId}
-        onClose={() => setAdding(false)}
+        key={sourceTransaction?.id || session.profileId}
+        sourceTransaction={sourceTransaction}
+        onClose={() => { setAdding(false); setSourceTransaction(null); }}
         onSaved={(bill) => {
           setAdding(false);
+          setSourceTransaction(null);
           if (session.demo)
             setData((current) => ({
               ...sample,
@@ -700,18 +714,20 @@ export default function SplitBills() {
   );
 }
 function BillEditor({
+  sourceTransaction,
   onClose,
   onSaved,
 }: {
   onClose: () => void;
   onSaved: (bill: Bill) => void;
+  sourceTransaction?: Transaction | null;
 }) {
   const session = useSession();
-  const [title, setTitle] = useState("");
-  const [total, setTotal] = useState("");
-  const [currency, setCurrency] = useState("PHP");
+  const [title, setTitle] = useState(sourceTransaction?.merchantClean || sourceTransaction?.merchantRaw || "");
+  const [total, setTotal] = useState(sourceTransaction?.amount || "");
+  const [currency, setCurrency] = useState(sourceTransaction?.currency || "PHP");
   const [date, setDate] = useState(
-    new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Manila" }),
+    sourceTransaction?.date.slice(0, 10) || new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Manila" }),
   );
   const [receipt, setReceipt] = useState<{
     fileName: string;
@@ -836,6 +852,7 @@ function BillEditor({
     setError("");
     try {
       const payload = {
+        ...(sourceTransaction ? { transactionId: sourceTransaction.id } : {}),
         title: title.trim(),
         note,
         billDate: date,

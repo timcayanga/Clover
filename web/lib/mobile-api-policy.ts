@@ -1,4 +1,6 @@
 export function mobileOperation(method: string, segments: string[]) {
+  if (segments.join("/") === "referrals" && ["GET", "POST"].includes(method)) return "referrals";
+  if (segments.join("/") === "billing/usage" && method === "GET") return "billing-usage";
   if (segments.join("/") === "billing/store" && ["GET", "POST"].includes(method)) return "store-billing";
   if (segments.join("/") === "settings/preferences" && ["GET", "PATCH"].includes(method)) return "settings-preferences";
   const path = segments.join("/");

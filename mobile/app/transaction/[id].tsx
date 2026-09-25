@@ -1,3 +1,4 @@
+import { TransactionRelatedActions } from "../../src/transaction-related-actions";
 import { Text } from "../../src/app-text";
 import { ChoiceField } from "../../src/transaction-entry";
 import { router, useLocalSearchParams } from "expo-router";
@@ -7,6 +8,7 @@ import {
   KeyboardAvoidingView,
   Platform,
   Pressable,
+  Switch,
   View,
 } from "react-native";
 import { useAccess } from "../../src/access";
@@ -44,7 +46,10 @@ export default function TransactionDetail() {
     { id: string; name: string; type: string }[]
   >([]);
   const [name, setName] = useState("");
-  const [description, setDescription] = useState("");
+  const [userNote, setUserNote] = useState("");
+  const [type, setType] = useState<Transaction["type"]>("expense");
+  const [lineItems, setLineItems] = useState<NonNullable<Transaction["receiptLineItems"]>>([]);
+  const [excluded, setExcluded] = useState(false);
   const [tags, setTags] = useState("");
   const [error, setError] = useState("");
   const [editing, setEditing] = useState(false);
@@ -79,7 +84,10 @@ export default function TransactionDetail() {
       setAccounts(response?.accounts ?? []);
       setCategories(response?.categories ?? []);
       setName(result.merchantClean ?? result.merchantRaw);
-      setDescription(result.description ?? "");
+      setUserNote(result.userNote ?? "");
+      setType(result.type);
+      setLineItems(result.receiptLineItems ?? []);
+      setExcluded(result.isExcluded ?? false);
       setTags(result.tags?.map((t) => t.name).join(", ") ?? "");
     };
     if (access.active && session.profileId)
@@ -138,7 +146,10 @@ export default function TransactionDetail() {
         session.updateSample({
           ...row,
           merchantClean: name.trim(),
-          description,
+          userNote,
+          type,
+          amount, date, accountId, categoryId: categoryId || null,
+          receiptLineItems: lineItems, isExcluded: excluded,
           tags: selectedTags.map((tag) => ({ id: tag, name: tag })),
         });
       else
@@ -154,7 +165,10 @@ export default function TransactionDetail() {
                 ? { categoryId: categoryId || null }
                 : {}),
               merchantClean: name.trim(),
-              description,
+              userNote,
+              ...(excluded !== Boolean(row.isExcluded) ? { isExcluded: excluded } : {}),
+              ...(JSON.stringify(lineItems) !== JSON.stringify(row.receiptLineItems ?? []) ? { receiptLineItems: lineItems } : {}),
+              ...(type !== row.type ? { type } : {}),
               tags: selectedTags,
             }),
           },
@@ -229,24 +243,11 @@ export default function TransactionDetail() {
                       {dateLabel(row.date)}
                     </Text>
                   </View>
-                  <Pressable
-                    accessibilityRole="button"
-                    accessibilityLabel="Edit transaction"
-                    onPress={() => setEditing(true)}
-                    style={{ padding: 10 }}
-                  >
-                    <Icon line name="create-outline" size={18} />
-                  </Pressable>
+                  <View style={{ alignItems: "flex-end", gap: 4, maxWidth: "42%" }}>
+                    <Text style={{ fontSize: 15, fontFamily: "Poppins-SemiBold", color: row.type === "expense" ? colors.danger : row.type === "income" ? colors.positive : colors.ink }}>{money(row.amount, row.currency)}</Text>
+                    <Pressable accessibilityRole="button" accessibilityLabel="Edit transaction" onPress={() => setEditing(true)} style={{ padding: 10 }}><Icon line name="create-outline" size={18} /></Pressable>
+                  </View>
                 </View>
-                <Text
-                  style={{
-                    textAlign: "right",
-                    fontSize: 15,
-                    color: colors.ink,
-                  }}
-                >
-                  {money(row.amount, row.currency)}
-                </Text>
                 <Card
                   style={{ padding: 0, overflow: "hidden", borderRadius: 16 }}
                 >
@@ -281,11 +282,10 @@ export default function TransactionDetail() {
                         borderBottomColor: colors.line,
                       }}
                     >
-                      <Text
-                        style={{ fontSize: 12, color: colors.muted, width: 76 }}
-                      >
-                        {label}
-                      </Text>
+                      <View style={{ flexDirection: "row", alignItems: "center", gap: 6, width: 98 }}>
+                        {label === "Category" ? <CategoryMark name={row.categoryName} size={18} /> : <Icon line name={({ Type: "swap-horizontal-outline", Name: "text-outline", Account: "wallet-outline", Tags: "pricetag-outline", Date: "calendar-outline", Amount: "cash-outline", Notes: "document-text-outline" } as const)[label as "Type"] || "document-text-outline"} color={colors.muted} size={16} />}
+                        <Text style={{ fontSize: 12, color: colors.muted }}>{label}</Text>
+                      </View>
                       <Text
                         style={{
                           flex: 1,
@@ -299,6 +299,7 @@ export default function TransactionDetail() {
                     </Pressable>
                   ))}
                 </Card>
+                <TransactionRelatedActions key={row.id} transaction={row} />
                 <Pressable
                   accessibilityRole="button"
                   accessibilityState={{ expanded: sourceOpen }}
@@ -351,6 +352,12 @@ export default function TransactionDetail() {
                     original record before saving corrections.
                   </Notice>
                 ) : null}
+                <ChoiceField
+                  label="Type"
+                  value={type}
+                  onChange={(value) => { setType(value as Transaction["type"]); setCategoryId(""); }}
+                  options={[{ value: "income", label: "Income" }, { value: "expense", label: "Expense" }, { value: "transfer", label: "Transfer" }]}
+                />
                 <Field
                   label={`Amount (${row.currency})`}
                   value={amount}
@@ -381,7 +388,7 @@ export default function TransactionDetail() {
                         ...categories
                           .filter(
                             (c) =>
-                              c.type === row.type || row.type === "transfer",
+                              c.type === type || type === "transfer",
                           )
                           .map((c) => ({ value: c.id, label: c.name })),
                       ]}
@@ -398,10 +405,10 @@ export default function TransactionDetail() {
                   maxLength={200}
                 />
                 <Field
-                  label="Description"
-                  value={description}
+                  label="Notes"
+                  value={userNote}
                   onChangeText={(v) => {
-                    setDescription(v);
+                    setUserNote(v);
                     setSaved(false);
                   }}
                   multiline
@@ -416,6 +423,19 @@ export default function TransactionDetail() {
                     setSaved(false);
                   }}
                 />
+                <Heading>Line Items</Heading>
+                {lineItems.map((item, index) => <Card key={index}>
+                  <Field label={`Item ${index + 1}`} value={item.description} maxLength={500} onChangeText={description => setLineItems(items => items.map((entry, i) => i === index ? { ...entry, description } : entry))} />
+                  <Field label={`Item ${index + 1} quantity`} value={item.quantity ?? ""} keyboardType="decimal-pad" maxLength={32} onChangeText={quantity => setLineItems(items => items.map((entry, i) => i === index ? { ...entry, quantity: quantity || null } : entry))} />
+                  <Field label={`Item ${index + 1} currency`} value={item.currency ?? row.currency} maxLength={3} autoCapitalize="characters" onChangeText={currency => setLineItems(items => items.map((entry, i) => i === index ? { ...entry, currency: currency.toUpperCase() } : entry))} />
+                  <Field label={`Item ${index + 1} amount (${item.currency || row.currency})`} value={item.amount ?? ""} keyboardType="decimal-pad" maxLength={32} onChangeText={amount => setLineItems(items => items.map((entry, i) => i === index ? { ...entry, amount: amount || null } : entry))} />
+                  <Button title={`Remove item ${index + 1}`} secondary onPress={() => setLineItems(items => items.filter((_, i) => i !== index))} />
+                </Card>)}
+                <Button title="Add line item" secondary disabled={lineItems.length >= 100} onPress={() => setLineItems(items => [...items, { description: "", amount: null, currency: row.currency }])} />
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
+                  <Switch accessibilityLabel="Exclude from reports" value={excluded} onValueChange={setExcluded} />
+                  <Body>Exclude from reports</Body>
+                </View>
                 <Body>
                   Your changes are saved only when you tap Save changes. The
                   original statement data stays traceable.

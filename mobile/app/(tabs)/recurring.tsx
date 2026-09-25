@@ -160,6 +160,85 @@ export default function Recurring() {
         }}
       />
     );
+  if (selected) return (
+    <Screen key={selected.id}>
+      {error ? <Notice>{error}</Notice> : null}
+        <Card>
+          <Heading>{selected.title}</Heading>
+          <Body>{amount(selected)}</Body>
+          <Body>
+            {selected.date?.slice(0, 10) || "No date"} · {selected.recurrence} ·{" "}
+            {selected.status}
+          </Body>
+          {selected.accountName ? <Body>{selected.accountName}</Body> : null}
+          {selected.categoryName ? <Body>{selected.categoryName}</Body> : null}
+          {selected.notes ? <Body>{selected.notes}</Body> : null}
+          <Button
+            title="Edit recurring"
+            onPress={() => {
+              setSuggestion(null);
+              setEditor(true);
+            }}
+          />
+          {occurrences
+            .filter((o) => o.id === selected.id)
+            .map((o) => (
+              <View key={o.date} style={{ gap: 8 }}>
+                <Body>
+                  {o.date} · {o.completed ? "Completed" : "Due"}
+                </Body>
+                <Button
+                  title={`${o.completed ? "Undo completion" : "Mark completed"} · ${o.date}`}
+                  secondary
+                  disabled={busy}
+                  onPress={() =>
+                    void mutate(
+                      `recurring/${selected.id}/completion`,
+                      "PATCH",
+                      { dueDate: o.dueDate, completed: !o.completed },
+                    )
+                  }
+                />
+              </View>
+            ))}
+          <Body>
+            Completion tracks this payment only; it does not create a
+            transaction or move money.
+          </Body>
+          <Button
+            title="Delete recurring"
+            secondary
+            onPress={() => setConfirmDelete(true)}
+          />
+          {confirmDelete ? (
+            <Notice>
+              <Body>
+                Delete this schedule and its completion history? Existing
+                transactions stay unchanged.
+              </Body>
+              <Button
+                title="Confirm recurring deletion"
+                disabled={busy}
+                onPress={() =>
+                  void mutate(`recurring/${selected.id}`, "DELETE")
+                }
+              />
+              <Button
+                title="Keep recurring"
+                secondary
+                disabled={busy}
+                onPress={() => setConfirmDelete(false)}
+              />
+            </Notice>
+          ) : null}
+          <Button
+            title="Close details"
+            secondary
+            onPress={() => { setSelected(null); setConfirmDelete(false); }}
+          />
+        </Card>
+    </Screen>
+  );
   return (
     <Screen>
       <PlanTabs
@@ -450,82 +529,7 @@ export default function Recurring() {
           </Card>
         </>
       )}
-      {selected ? (
-        <Card>
-          <Heading>{selected.title}</Heading>
-          <Body>{amount(selected)}</Body>
-          <Body>
-            {selected.date?.slice(0, 10) || "No date"} · {selected.recurrence} ·{" "}
-            {selected.status}
-          </Body>
-          {selected.accountName ? <Body>{selected.accountName}</Body> : null}
-          {selected.categoryName ? <Body>{selected.categoryName}</Body> : null}
-          {selected.notes ? <Body>{selected.notes}</Body> : null}
-          <Button
-            title="Edit recurring"
-            onPress={() => {
-              setSuggestion(null);
-              setEditor(true);
-            }}
-          />
-          {occurrences
-            .filter((o) => o.id === selected.id)
-            .map((o) => (
-              <View key={o.date} style={{ gap: 8 }}>
-                <Body>
-                  {o.date} · {o.completed ? "Completed" : "Due"}
-                </Body>
-                <Button
-                  title={`${o.completed ? "Undo completion" : "Mark completed"} · ${o.date}`}
-                  secondary
-                  disabled={busy}
-                  onPress={() =>
-                    void mutate(
-                      `recurring/${selected.id}/completion`,
-                      "PATCH",
-                      { dueDate: o.dueDate, completed: !o.completed },
-                    )
-                  }
-                />
-              </View>
-            ))}
-          <Body>
-            Completion tracks this payment only; it does not create a
-            transaction or move money.
-          </Body>
-          <Button
-            title="Delete recurring"
-            secondary
-            onPress={() => setConfirmDelete(true)}
-          />
-          {confirmDelete ? (
-            <Notice>
-              <Body>
-                Delete this schedule and its completion history? Existing
-                transactions stay unchanged.
-              </Body>
-              <Button
-                title="Confirm recurring deletion"
-                disabled={busy}
-                onPress={() =>
-                  void mutate(`recurring/${selected.id}`, "DELETE")
-                }
-              />
-              <Button
-                title="Keep recurring"
-                secondary
-                disabled={busy}
-                onPress={() => setConfirmDelete(false)}
-              />
-            </Notice>
-          ) : null}
-          <Button
-            title="Close details"
-            secondary
-            onPress={() => setSelected(null)}
-          />
-        </Card>
-      ) : null}
+
     </Screen>
   );
 }

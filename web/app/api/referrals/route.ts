@@ -1,3 +1,4 @@
+import { getMobileRequestContext } from "@/lib/mobile-request-context";
 import { randomBytes } from "node:crypto";
 import { NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
@@ -9,7 +10,7 @@ import { claimReferralReward, growthTransaction } from "@/lib/growth";
 import { getProAccess } from "@/lib/pro-access";
 
 async function currentUser() {
-  const { userId } = await auth();
+  const { userId } = getMobileRequestContext() ?? await auth();
   if (!userId) throw new Error("Sign in to view referrals.");
   return getOrCreateCurrentUser(userId);
 }

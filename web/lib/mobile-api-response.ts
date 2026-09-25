@@ -125,7 +125,7 @@ export function mobileApiResponse(operation: string, value: unknown) {
   if (operation === "transaction") {
     const row = record(data.transaction);
     return {
-      transaction: { ...pick(row, transactionFields), confidenceScore: getRecordedTransactionConfidence(row), receiptLineItems: parseReceiptLineItemsFromPayload(row.rawPayload,row.normalizedPayload), userNote: getTransactionUserNoteValue(row), parsedNote: getTransactionParsedNoteValue(row), source: row.source },
+      transaction: { ...pick(row, transactionFields), splitBill: row.splitBill ? pick(row.splitBill, ["id", "title"]) : null, confidenceScore: getRecordedTransactionConfidence(row), receiptLineItems: parseReceiptLineItemsFromPayload(row.rawPayload,row.normalizedPayload), userNote: getTransactionUserNoteValue(row), parsedNote: getTransactionParsedNoteValue(row), source: row.source },
       accounts: Array.isArray(data.accounts) ? data.accounts.map(row => pick(row, ["id", "name", "institution", "currency", "type"])) : [],
       categories: Array.isArray(data.categories) ? data.categories.map(row => pick(row, ["id", "name", "type"])) : [],
     };

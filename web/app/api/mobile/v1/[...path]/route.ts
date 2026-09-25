@@ -114,6 +114,31 @@ async function handle(
         return reply(await result.json(), result.status);
       });
     }
+    if (operation === "referrals") {
+      return await withMobileRequestContext(userId, request, async () => {
+        const handler = await import("@/app/api/referrals/route");
+        const result = request.method === "GET" ? await handler.GET() : await handler.POST(request);
+        return reply(await result.json(), result.status);
+      });
+    }
+    if (operation === "billing-usage") {
+      const { getUserPlanUsage } = await import("@/lib/plan-access");
+      const { getEffectiveUserLimits, getEffectiveProfileLimit } = await import("@/lib/user-limits");
+      const { getCloverTokenUsage } = await import("@/lib/clover-token-usage");
+      const access = await getProAccess(user.id);
+      const effectiveUser = { ...user, planTier: access.planTier };
+      const [usage, profiles, tokens] = await Promise.all([
+        getUserPlanUsage(user.id),
+        prisma.workspace.count({ where: { userId: user.id } }),
+        getCloverTokenUsage(effectiveUser),
+      ]);
+      return reply({
+        profiles: { used: profiles, limit: getEffectiveProfileLimit(effectiveUser) },
+        accounts: { used: usage.accountCount, limit: getEffectiveUserLimits(effectiveUser).accountLimit },
+        monthly: tokens.monthly,
+        rolling24h: tokens.rolling24h,
+      });
+    }
     if (operation === "store-billing") {
       const { storeBillingConfig, syncStoreAccess } = await import("@/lib/store-access");
       const config = storeBillingConfig();
@@ -520,6 +545,9 @@ async function handle(
       let input: unknown;
       try { input = JSON.parse(text); } catch { return reply({ error: "Check the entered details." }, 400); }
       const body = operation === "split-bills" ? mobileSplitBillPayload(mobileSplitBillInput.parse(input)) : mobileCircleInput.parse(input);
+      if (operation === "split-bills" && "transactionId" in body && body.transactionId && !await prisma.transaction.findFirst({ where: { id: body.transactionId, workspaceId, deletedAt: null }, select: { id: true } })) {
+        return reply({ error: "Choose a transaction in this Profile." }, 400);
+      }
       forwarded = new Request(request.url, { method: request.method, headers: request.headers, body: JSON.stringify(body) });
     }
     if ((operation === "circles" || operation === "circle") && request.method === "GET") {
