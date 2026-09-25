@@ -7,7 +7,7 @@ import { calculateProAccess } from "./pro-access-rules";
 import { refreshProAccess } from "./pro-access";
 import { uploadObject } from "./s3";
 import { evidenceMime } from "./switch-evidence";
-import { campaignOpen, occupiesCampaignPlace, applicationStatus, dayMs, SWITCH_TERMS, SWITCH_REWARD_DAYS, SWITCH_CLAIM_DAYS } from "../../shared/switch-campaign";
+import { campaignOpen, applicationStatus, dayMs, SWITCH_TERMS, SWITCH_REWARD_DAYS, SWITCH_CLAIM_DAYS } from "../../shared/switch-campaign";
 import { capturePostHogServerEvent } from "./analytics-server";
 export const campaignId = () => `switch-to-clover-${getCurrentUserEnvironment()}`;
 const applicationInclude = { evidence: { select: { id:true, fileName:true, mime:true, createdAt:true, purgedAt:true } }, events: { orderBy: { createdAt:"asc" as const }, select: { id:true, kind:true, message:true, createdAt:true } } };
@@ -25,11 +25,11 @@ async function eligible(tx: Prisma.TransactionClient, userId: string) {
 }
 export async function switchSnapshot(userId: string) {
   const config=await campaignConfig();
-  const [application,places]=await Promise.all([
-    prisma.switchApplication.findUnique({where:{campaignId_userId:{campaignId:config.id,userId}},include:applicationInclude}),
-    prisma.switchApplication.findMany({where:{campaignId:config.id},select:{activatedAt:true,status:true,claimBy:true}}),
-  ]);
-  return {config:{...config,remaining:Math.max(0,config.capacity-config.redeemedCount-places.filter(a=>!a.activatedAt&&occupiesCampaignPlace(a,new Date())).length),open:campaignOpen(config,new Date())},terms:SWITCH_TERMS,application:application?{...application,status:applicationStatus(application,new Date())}:null};
+  const application=await prisma.switchApplication.findUnique({where:{campaignId_userId:{campaignId:config.id,userId}},include:applicationInclude});
+  let eligibilityReason:string|null=null;
+  try { await eligible(prisma as unknown as Prisma.TransactionClient,userId); }
+  catch(error) { eligibilityReason=error instanceof Error?error.message:"Unable to verify eligibility."; }
+  return {config:{status:config.status,open:campaignOpen(config,new Date())},eligibilityReason,terms:SWITCH_TERMS,application:application?{...application,status:applicationStatus(application,new Date())}:null};
 }
 export async function submitSwitchEvidence(userId: string, file: File, note: string, consent: boolean) {
   if (!consent) throw new Error("Confirm the eligibility and evidence-use terms.");
@@ -41,7 +41,7 @@ export async function submitSwitchEvidence(userId: string, file: File, note: str
   await eligible(prisma as unknown as Prisma.TransactionClient,userId);
   const before=await switchSnapshot(userId);
   if(before.application && before.application.status!=="needs_information") throw new Error("Your application has already been submitted.");
-  if(!before.application && (!before.config.open || before.config.remaining===0)) throw new Error("Applications are currently closed or full.");
+  if(!before.application && !before.config.open) throw new Error("Applications are currently closed.");
   if((before.application?.evidence.length??0)>=5) throw new Error("Five files have already been submitted. Contact Clover support.");
   const key=`campaign-evidence/${getCurrentUserEnvironment()}/${userId}/${randomUUID()}`;
   await uploadObject(key,bytes,mime);
@@ -53,8 +53,6 @@ export async function submitSwitchEvidence(userId: string, file: File, note: str
       if(existing && existing.status!=="needs_information") throw new Error("Your application has already been submitted. Open its status to continue.");
       if(!existing) {
         if(!campaignOpen(c,new Date())) throw new Error("Applications are currently closed.");
-        const places=await tx.switchApplication.findMany({where:{campaignId:c.id},select:{activatedAt:true,status:true,claimBy:true}});
-        if(c.redeemedCount+places.filter(a=>!a.activatedAt&&occupiesCampaignPlace(a,new Date())).length>=c.capacity) throw new Error("All campaign places are currently reserved or claimed.");
       }
       if(existing && existing.evidence.length>=5) throw new Error("Five files have already been submitted. Contact Clover support for help.");
       const app=existing?await tx.switchApplication.update({where:{id:existing.id},data:{status:"submitted"}}):await tx.switchApplication.create({data:{campaignId:c.id,userId}});
@@ -90,10 +88,7 @@ export async function reviewSwitch(id:string,decision:"approved"|"rejected"|"nee
     let claimBy:Date|null=null;
     if(decision==="approved") {
       await eligible(tx,app.userId);
-      const c=await tx.switchCampaign.findUniqueOrThrow({where:{id:campaignId()}});
       // Closing intake does not invalidate applications already under review.
-      const places=await tx.switchApplication.findMany({where:{campaignId:c.id},select:{activatedAt:true,status:true,claimBy:true}});
-      if(c.redeemedCount+places.filter(a=>!a.activatedAt&&occupiesCampaignPlace(a,new Date())).length>=c.capacity) throw new Error("No places available. Existing approvals are reserved.");
       claimBy=new Date(Date.now()+SWITCH_CLAIM_DAYS*dayMs);
     }
     const result=await tx.switchApplication.update({where:{id},data:{status:decision,claimBy}});

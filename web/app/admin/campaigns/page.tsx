@@ -1,8 +1,7 @@
-import { AdminSwitchCampaign } from "@/components/admin-switch-campaign";
+import { AdminCampaignList } from "@/components/admin-campaign-list";
 import { redirect } from "next/navigation";
 import { requireAdminAuth } from "@/lib/admin";
 import { AdminPageChrome } from "@/components/admin-page-chrome";
-import { AdminCampaigns } from "@/components/admin-campaigns";
 export const dynamic = "force-dynamic";
 export default async function Page() {
   try {
@@ -12,8 +11,7 @@ export default async function Page() {
   }
   return (
     <AdminPageChrome active="campaigns" title="Campaigns & Referrals">
-      <AdminSwitchCampaign />
-      <AdminCampaigns />
+      <AdminCampaignList />
     </AdminPageChrome>
   );
 }

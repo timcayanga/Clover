@@ -56,7 +56,7 @@ const fresh = () => ({
   terms:
     "Refer a different, verified Clover user who makes their first paid Plus purchase using your code. Earn one calendar month of Plus after a 14-day review period. Monthly and annual purchases qualify. Self-referrals are not allowed. Refunds, reversals, and disputes can invalidate rewards. Rewards for active paid subscribers are banked and do not change provider charges. Campaign and per-person limits apply. Review and finalize these terms before publishing.",
 });
-export function AdminCampaigns() {
+export function AdminCampaigns({initialId}:{initialId?:string} = {}) {
   const [data, setData] = useState<Data>({
       campaigns: [],
       rewards: [],
@@ -79,6 +79,10 @@ export function AdminCampaigns() {
   useEffect(() => {
     void load().catch((e) => setMessage(e.message));
   }, [load]);
+  useEffect(() => {
+    const c=data.campaigns.find(c=>c.id===initialId);
+    if(c){setId(c.id);setDraft({name:c.name,startsAt:c.startsAt,endsAt:c.endsAt,rules:c.rules,terms:c.terms});}
+  },[initialId,data.campaigns]);
   async function action(payload: Record<string, unknown>) {
     setBusy(true);
     setMessage("");

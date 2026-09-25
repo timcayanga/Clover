@@ -56,6 +56,8 @@ export function PayPalSubscribeButton({
   onCancelled,
   fundingSource = "paypal",
 }: PayPalSubscribeButtonProps) {
+  const [checkoutOpen, setCheckoutOpen] = useState(false);
+  const checkoutDialogRef = useRef<HTMLDialogElement>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
   const instanceRef = useRef<{ close?: () => void } | null>(null);
   const [scriptReady, setScriptReady] = useState(false);
@@ -88,7 +90,7 @@ export function PayPalSubscribeButton({
   }, [buyerCountry, clientId, fundingSource]);
 
   useEffect(() => {
-    if (!scriptReady || disabled || !containerRef.current || !window.paypal) {
+    if (!checkoutOpen || !scriptReady || disabled || !containerRef.current || !window.paypal) {
       return;
     }
 
@@ -177,10 +179,12 @@ export function PayPalSubscribeButton({
         containerRef.current.innerHTML = "";
       }
     };
-  }, [customId, disabled, fundingSource, onApproved, onCancelled, onStart, planId, scriptReady, referralCode]);
+  }, [checkoutOpen, customId, disabled, fundingSource, onApproved, onCancelled, onStart, planId, scriptReady, referralCode]);
 
   return (
     <div className={className}>
+      <button type="button" className="button button-primary" disabled={disabled} onClick={() => {checkoutDialogRef.current?.showModal();setCheckoutOpen(true);}}>Subscribe</button>
+      <dialog ref={checkoutDialogRef} onClose={() => setCheckoutOpen(false)} className="clover-checkout-dialog" aria-label="PayPal checkout"><h2>Subscribe to Plus</h2>
       <ReferralCheckoutField value={referralCode} onChange={setReferralCode} provider="paypal" planId={planId} />
       <Script
         src={scriptSrc}
@@ -189,6 +193,8 @@ export function PayPalSubscribeButton({
         onLoad={() => setScriptReady(true)}
       />
       <div ref={containerRef} aria-live="polite" />
+      <button type="button" className="button button-secondary" onClick={() => checkoutDialogRef.current?.close()}>Back</button>
+      </dialog>
       {message ? <p className="billing-helper">{message}</p> : null}
       {!scriptReady ? <p className="billing-helper">Loading PayPal checkout...</p> : null}
       {disabled ? <p className="billing-helper">PayPal checkout is not configured for this environment yet.</p> : null}

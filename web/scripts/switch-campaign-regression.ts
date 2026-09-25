@@ -45,11 +45,11 @@ async function main(){
  assert.equal(+api.state().grants[0].endsAt-+api.state().grants[0].startsAt,30*dayMs);
  assert.equal(api.state().events.filter(e=>e.kind==='activated').length,1);
  await assert.rejects(()=>api.reviewSwitch('a','rejected','Late rejection','owner'));
- api.reset();api.setCapacity(0);await assert.rejects(()=>api.reviewSwitch('a','approved','Welcome','owner'),/No places/);
+ api.reset();api.setCapacity(0);await api.reviewSwitch('a','approved','Welcome','owner');assert.equal(api.state().apps[0].status,'approved','legacy capacity no longer limits approval');
  api.reset();api.state().user.verified=false;await assert.rejects(()=>api.reviewSwitch('a','approved','Welcome','owner'),/Verify/);
  api.reset();api.state().user.billingSubscription={status:'active',interval:'monthly',planTier:'premium',paidThrough:new Date(Date.now()+dayMs)};await assert.rejects(()=>api.reviewSwitch('a','approved','Welcome','owner'),/Free users/);
  api.reset();api.state().apps[0].status='approved';api.state().apps[0].claimBy=new Date(Date.now()-1);await assert.rejects(()=>api.activateSwitch('u'),/not available/);
  api.reset();await api.reviewSwitch('a','needs_information','Please show purchase date','owner');assert.equal(api.state().apps[0].status,'needs_information');assert.equal(api.state().grants.length,0);
- console.log('PASS campaign: capacity, reservation expiry, exact 30 days, concurrent idempotent activation, eligibility, paid exclusion, review transitions and file signatures.');
+ console.log('PASS campaign: uncapped approval, reservation expiry, exact 30 days, concurrent idempotent activation, eligibility, paid exclusion, review transitions and file signatures.');
 }
 void main().catch(e=>{console.error(e);process.exitCode=1;});

@@ -10,14 +10,14 @@ This campaign is separate from referral campaigns. It starts as **draft** indepe
 4. For Preview email QA, set **`SWITCH_CAMPAIGN_TEST_EMAIL`** to an inbox you control and redeploy Preview. All campaign emails in non-production go to that inbox. Without this variable they remain pending. Do not set it to a customer's email.
 5. The existing `/api/cron/notifications` job and `CRON_SECRET` process expiry, seven-day/two-day reminders, conversion observations and 90-day receipt cleanup. Verify the production cron is enabled. Vercel Preview deployments do not automatically run production cron schedules; invoke the authenticated endpoint for staging QA through a trusted server-side tool, without exposing its secret.
 6. Existing PostHog configuration is reused. No new analytics key, Paddle price, RevenueCat product or payment secret is needed for the complimentary grant.
-7. As Owner/Admin open **Admin → Campaigns → Switch to Clover**. Set capacity (up to 100), optional end date (UTC), status Active and an audit reason. Leave draft until QA passes. Settings → Plan is the permanent entry. Public notices are visible only during active intake.
+7. As Owner/Admin open **Admin → Campaigns → Switch to Clover**. Set an optional end date (UTC), status Active and an audit reason. There is no participant cap. Leave draft until QA passes. Settings → Plan is the permanent entry. Public notices are visible only during active intake.
 8. After production promotion, repeat the Admin configuration in production: the staging campaign and applications are not copied.
 
 ## Pilot rules
 
 Verified Free accounts without paid or complimentary paid access may apply once. Accept genuine non-refunded purchases of budgeting/personal-finance apps. Receipts may use a different purchasing email; ask for context rather than forcing a name/email match. Never request full card numbers or identity documents. Duplicate file hashes are reviewer flags, not proof of fraud. AI-generated receipt detection is not claimed.
 
-Review in submission order. Approval reserves one place for seven days. Activation creates exactly 30 days of Plus, with no card or automatic renewal. Redeemed places remain counted even after expiry. Reservations expire and release their place. Pausing/ending intake honors previously submitted applications, valid approvals, and active rewards. Reviewers cannot approve above capacity. Capacity cannot be lowered below reserved/redeemed places.
+Review in submission order. Approvals can be activated within seven days. Activation creates exactly 30 days of Plus, with no card or automatic renewal. Redemptions remain counted for reporting after expiry. Pausing/ending intake honors submitted applications, valid approvals and active rewards. There is no capacity limit; the legacy database capacity field is retained for deployment compatibility and ignored.
 
 Evidence accepts PNG/JPEG/PDF up to 3 MB, maximum five files per application. Additional evidence can be submitted after Admin requests information. Evidence is deleted after 90 days and on account deletion; status and consent-version history remain until account deletion. Email delivery is recorded per event; failed/ambiguous sending is not automatically retried to prevent duplicate messages. Investigate the ledger before any manual resend. Application status is always available in-app.
 
@@ -40,3 +40,6 @@ The campaign does **not** change provider billing dates. Buying Plus or Pro thro
 - Check receipt cleanup and account-erasure cleanup; ensure notes, receipt filenames and receipt content never enter analytics.
 
 The automated `qa:switch-campaign` exercises the actual review and activation service against isolated persistence boundaries, plus lifecycle and file-signature rules. Live email and bank disconnection must be verified on disposable staging fixtures, not real customer accounts.
+
+## September 25 UI revision
+Admin Campaigns lists Switch to Clover and referral campaigns in one table. Select Manage to configure or review. Settings Plan shows usage, three tier cards, the compact offer, and subscription actions. Referral codes are entered in checkout. Closed intake and ineligible accounts see an explicit reason with the receipt area disabled; paid members remain excluded. No additional environment variables are required.

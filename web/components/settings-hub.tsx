@@ -34,7 +34,7 @@ import {
   regionalPreferencesStorageKey,
   type RegionalPreferences,
 } from "@/lib/regional-preferences";
-import { type NavigationIconName } from "@/lib/navigation-icons";
+import { getNavigationIconSrc, type NavigationIconName } from "@/lib/navigation-icons";
 import type { CloverTokenUsageSnapshot } from "@/lib/clover-token-usage";
 
 const SettingsCategoriesPanel = dynamic(
@@ -423,7 +423,7 @@ function SettingsToggleRow({
 }
 
 function SettingsIcon({ name }: { name: NavigationIconName }) {
-  return <img aria-hidden="true" src={`/assets/3d%20icons/menu/${name === "profile" ? "account" : name}.png`} alt="" className="settings-hub__menu-icon" loading="eager" decoding="sync" />;
+  return <img aria-hidden="true" src={getNavigationIconSrc(name)} alt="" className="settings-hub__menu-icon" loading="eager" decoding="sync" />;
 }
 
 const sectionCopy: Record<
