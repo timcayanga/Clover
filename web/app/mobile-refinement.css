@@ -89,3 +89,9 @@
  .transactions-entry--figma:has(.mobile-sheet-handle)::before {display:none !important;content:none !important;}
  .transactions-manual-inline-row .transaction-category-picker > .transactions-manual-picker__button > .category-brand-mark {display:none !important;}
 }
+
+@media(max-width:600px) {
+  [aria-label="Reports sections"] {width:100%;min-width:0;}
+  [aria-label="Reports sections"] .animated-tabs__tab {flex:1 1 0 !important;min-width:0 !important;padding:8px 4px !important;gap:3px !important;font-size:11px !important;}
+  [aria-label="Reports sections"] .animated-tabs__tab svg {width:12px;height:12px;flex-shrink:0;}
+}

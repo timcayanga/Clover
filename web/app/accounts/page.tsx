@@ -3915,7 +3915,7 @@ function AccountsPageContent() {
           <button
             type="button"
             className="accounts-mobile-list-row"
-            style={{ background: accountBrand.background, color: accountBrand.foreground }}
+            style={{ background: accountBrand.background.match(/#[0-9a-f]{6}|rgba?\([^)]+\)/i)?.[0] ?? accountBrand.background, color: accountBrand.foreground }}
             data-account-icon={accountBrand.fallbackIconSrc.split("/").pop()?.replace(".png", "")}
             aria-expanded={isExpanded}
             aria-hidden={isExpanded}
@@ -3982,7 +3982,7 @@ function AccountsPageContent() {
         <button
           type="button"
           className="accounts-mobile-list-row"
-            style={{ background: accountBrand.background, color: accountBrand.foreground }}
+            style={{ background: accountBrand.background.match(/#[0-9a-f]{6}|rgba?\([^)]+\)/i)?.[0] ?? accountBrand.background, color: accountBrand.foreground }}
             data-account-icon={accountBrand.fallbackIconSrc.split("/").pop()?.replace(".png", "")}
           aria-expanded={isExpanded}
           aria-hidden={isExpanded}
