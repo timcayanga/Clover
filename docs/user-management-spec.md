@@ -37,6 +37,21 @@ For security and device-storage guidance, also follow `docs/security-architectur
 - Email-based signup and sign-in remain available.
 - Password reset and email verification should be supported.
 
+### Social Account Linking and Platform Availability
+
+- Show Google and Apple on desktop web and non-Android mobile web. Android web shows Google only; email signup/sign-in remain available on every platform.
+- Apply the same provider availability rule to login, signup (including embedded signup), and Settings > Account connection actions. Keep existing linked identities visible on every platform.
+- Clerk owns account linking and verification. Matching verified email addresses resolve to the existing Clerk user. Do not merge Clover users, Profiles, or financial records to connect providers.
+- Connect Google or Apple from the signed-in Account settings using Clerk reverification. Apple Hide My Email can return a different address; connect from the existing account instead of relying on email matching.
+- An Apple-only user needs another connected method to sign in on Android. Platform detection is a presentation rule, not an authentication or security boundary.
+- Each Clerk instance must have its providers configured. Production Apple credentials have been verified through Account Portal signup and repeat sign-in.
+
+Acceptance checks:
+1. Desktop and iPhone/iPad web: Google and Apple on login, signup, and Account connection actions. Android phone/tablet web: Google only. Email forms remain usable.
+2. For a verified existing email/Google user, authenticate with Apple sharing that exact email and confirm the Clerk user ID and Clover Profiles stay the same.
+3. Connect Apple from signed-in Settings, including Hide My Email; return to Account settings and confirm the same user and Profiles. Repeat with Google.
+4. Cancel OAuth or fail verification; existing login methods remain usable. Never bypass a Clerk verification challenge.
+
 ### Signup Experience
 
 - Primary entry points:

@@ -1936,7 +1936,7 @@ export function SettingsHub({
                 ) : (
                   <div className="settings-account-connected-item">
                     <strong>No connected accounts yet</strong>
-                    <span>Connect Google to sign in to this Clover account.</span>
+                    <span>Connect a sign-in method below to use this Clover account.</span>
                   </div>
                 )}
               </div>

@@ -22,7 +22,7 @@ export const getFinverseAccountNumber=async()=>null;
 export const getMobileRequestContext=()=>({userId:'owner'});
 export const isFinverseEnabled=()=>true;
 export const getFinverseConfig=()=>({redirectUri:'https://staging.clover.ph/api/integrations/finverse/callback',encryptionKey:'test'});
-export const getFinverseBanks=async()=>{bankCalls++;return {banks:[{id:'bank',name:'Test bank'}],mode:'test'};};
+export const getFinverseBanks=async()=>{bankCalls++;return {banks:[{id:'bank',name:'Test bank',countries:['PHL']}],mode:'test'};};
 export const createFinverseRefresh=async()=>{refreshCalls++;return {link_url:'https://link.finverse.com/refresh'};};
 export const decryptFinverseToken=()=> 'access';
 export const getFinverseLoginIdentity=async()=>({login_identity:{status:'DATA_RETRIEVAL_IN_PROGRESS',refresh:{refresh_allowed:true}}});
@@ -60,7 +60,7 @@ export const prisma={user:{findUniqueOrThrow:async()=>({planTier})},$transaction
   assert(!JSON.stringify(linkedData).includes('1234567890'));
 
   assert.equal((await api.institutions(new Request('https://clover.test/api?workspaceId=other'))).status,404);
-  assert.deepEqual(await (await api.institutions(new Request('https://clover.test/api?workspaceId=profile'))).json(),{banks:[{id:'bank',name:'Test bank',logoUrl:'/assets/account-types/bank.png'}],mode:'test',available:true});
+  assert.deepEqual(await (await api.institutions(new Request('https://clover.test/api?workspaceId=profile'))).json(),{banks:[{id:'bank',name:'Test bank',countries:['PHL'],logoUrl:'/assets/account-types/bank.png',logoUrls:{PHL:'/assets/account-types/bank.png'}}],mode:'test',available:true});
   const link=(body:object)=>api.link(new Request('https://clover.test/link',{method:'POST',body:JSON.stringify(body)}));
   api.reset(); api.setPlan('free');
   const freeList = await api.institutions(new Request('https://clover.test/api?workspaceId=profile'));

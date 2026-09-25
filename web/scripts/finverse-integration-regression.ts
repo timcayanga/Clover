@@ -93,7 +93,11 @@ assert.equal(mobileOperation("GET",["finverse","callback"]),null);
 console.log("Finverse bank discovery: mode, region, products, status, deduplication and mobile method boundaries passed.");
 
 import { finverseCountries } from "../../shared/finverse-countries";
-assert.deepEqual(finverseCountries([]).map(c=>c.name),["Hong Kong","Indonesia","Malaysia","Philippines","Singapore","Thailand","Vietnam"]);
+assert.deepEqual(finverseCountries([]),[]);
+assert.deepEqual(finverseCountries([{countries:["PHL","SGP"]}]).map(c=>c.name),["Philippines","Singapore"]);
+const citi=visibleFinverseBanks([{...realBank,institution_id:"citi",institution_name:"Citibank",countries:["USA","GBR","HKG","SGP","PHL"]}],"live");
+assert.deepEqual(citi[0].countries,["PHL","SGP"]);
+assert.deepEqual(visibleFinverseBanks([{...realBank,countries:["USA"]}],"live"),[]);
 assert.equal(mobileOperation("GET",["finverse","connections"]),"finverse-connections");
 assert.equal(mobileOperation("POST",["finverse","connections"]),null);
 
@@ -122,3 +126,21 @@ async function refreshRequests() {
   } finally { globalThis.fetch=originalFetch; for(const key of Object.keys(process.env)) if(!(key in originalEnv)) delete process.env[key];Object.assign(process.env,originalEnv); }
 }
 refreshRequests().catch(error=>{console.error(error);process.exitCode=1;});
+
+import { finverseBankPresentation } from "../lib/finverse-bank-presentation";
+import { existsSync } from "node:fs";
+import { resolve } from "node:path";
+import { FINVERSE_COUNTRIES } from "../../shared/finverse-countries";
+for (const country of FINVERSE_COUNTRIES) if (country.flagSrc) {
+  assert(existsSync(resolve("..", decodeURIComponent(country.flagSrc.slice(1)))));
+  assert(existsSync(resolve("../mobile", decodeURIComponent(country.flagSrc.slice(1)))));
+}
+for (const [input, expected, country] of [["BDO Personal", "BDO", "PHL"], ["BPI (Business)", "BPI", "PHL"], ["Citibank Personal", "Citibank", "SGP"], ["CitiDirect", "Citibank", "SGP"], ["HSBC Business", "HSBC", "HKG"]]) {
+  const display = finverseBankPresentation({name:input,countries:[country]});
+  assert.equal(display.name, expected);
+  assert(!display.logoUrl.includes("account-types"), `${input} must use a real bank logo`);
+  assert.equal(display.logoUrls[country],display.logoUrl);
+}
+assert(finverseBankPresentation({name:"Citibank",countries:["SGP"]}).logoUrl.includes("singapore"));
+assert(finverseBankPresentation({name:"HSBC",countries:["HKG"]}).logoUrl.includes("hong kong"));
+console.log("Connect flags, full country names, short bank names and regional logos passed.");
