@@ -95,3 +95,19 @@
   [aria-label="Reports sections"] .animated-tabs__tab {flex:1 1 0 !important;min-width:0 !important;padding:8px 4px !important;gap:3px !important;font-size:11px !important;}
   [aria-label="Reports sections"] .animated-tabs__tab svg {width:12px;height:12px;flex-shrink:0;}
 }
+
+@media(max-width:1100px) {
+ .goal-creation-backdrop {position:fixed;inset:64px 0 0;z-index:100;display:flex;align-items:flex-end;padding:24px 0 calc(84px + env(safe-area-inset-bottom));background:rgba(18,44,54,.18);}
+ .goal-creation-backdrop .goal-creation-sheet {width:100%;max-width:100%;max-height:100%;overflow-y:auto;margin:0;background:var(--surface,#fff);}
+ .goal-creation-sheet .goal-inline-setup,.goal-creation-sheet .goal-inline-setup__target-row,.goal-creation-sheet .goal-inline-setup__field {width:100%;min-width:0;max-width:100%;}
+ .goal-creation-sheet h2 {font-size:18px;}
+}
+
+@media(max-width:1100px) {
+ .transaction-detail-page__summary > .transaction-detail-page__amount {grid-column:3 !important;grid-row:1 !important;align-self:center;}
+ .transaction-detail-page__summary > .category-brand-mark {width:30px !important;height:30px !important;}
+}
+
+@media(max-width:1100px) {
+ body:has(.mobile-sheet-handle) .content > :is(.topbar,.shell-compact-bar) :is(.accounts-toolbar-add,.investments-toolbar-add,.recurring-toolbar-add,[aria-label="Add account"],[aria-label="Add investment"],[aria-label="Add recurring"],[aria-label="Filter portfolio"]) {display:none !important;}
+}
