@@ -66607,4 +66607,9 @@ html[data-theme="dark"] .content.content--reports .reports-range-menu__summary {
 .clover-checkout-dialog h2 {font-size:20px;margin-bottom:12px}.clover-checkout-dialog p {font-size:13px;line-height:1.6}
 .sidebar-popover.sidebar-popover--profile {background:transparent!important;border:0;box-shadow:none;backdrop-filter:blur(16px)}
 /* The canonical Figma artwork has a white matte; remove it at render time. */
-.settings-hub__menu-icon,.sidebar-popover--profile .menu-icon-3d,.sidebar-profile__avatar-icon,.shell-profile-drawer__account-avatar .menu-icon-3d {filter:url('/assets/icon-transparency.svg#remove-white')}
+.settings-hub__menu-icon,.sidebar-popover--profile .menu-icon-3d,.sidebar-profile__avatar-icon,.shell-profile-drawer__account-avatar .menu-icon-3d {filter:url('/assets/icon-transparency.svg?v=2#remove-white')}
+
+.settings-section--plan .settings-plan-card--premium .settings-plan-card__band {background:linear-gradient(135deg,#03a8c0,#26bac4);color:#fff}
+.settings-section--plan .settings-plan-card--pro .settings-plan-card__band {background:linear-gradient(135deg,#6ee7b7,#a2f2d8);color:#17383d}
+.settings-section--plan .settings-plan-card--pro .settings-plan-card__band-title,.settings-section--plan .settings-plan-card--pro .settings-plan-card__band-price {color:#17383d}
+.settings-section--plan .settings-plan-card__band .settings-pill {font-size:11px;margin-top:8px;background:rgba(255,255,255,.65);color:#17383d}
