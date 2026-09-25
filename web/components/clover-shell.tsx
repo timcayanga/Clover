@@ -1828,7 +1828,8 @@ export function CloverShell({
   const openQuickAddTransaction = () => {
     if (window.matchMedia("(max-width: 1100px)").matches) {
       setIsQuickAddOpen(false);
-      navigateTo("/transactions/new");
+      void loadDashboardManualTransactionModal();
+      setQuickAddModal("transaction");
       return;
     }
     if (pathname?.startsWith("/accounts/institutions/")) {
@@ -2453,8 +2454,7 @@ export function CloverShell({
             role="menuitem"
             onClick={() => {
               setIsQuickAddOpen(false);
-              if (window.matchMedia("(max-width: 1100px)").matches) navigateTo("/transactions/new");
-              else setQuickAddModal("transaction");
+              setQuickAddModal("transaction");
             }}
           >
             <MenuIcon name="plus" />
