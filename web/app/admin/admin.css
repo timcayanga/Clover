@@ -938,8 +938,8 @@ html[data-theme="dark"] .admin-adoption-range input { background: #0b1521; color
 
 /* Available in every Admin header, including narrow screens. */
 .admin-page-header { flex-wrap: wrap; }
-.admin-page-chrome__actions { flex-wrap: wrap; margin-left: auto; }
-.admin-sign-out { display: grid; gap: 4px; }
+.admin-page-chrome__actions { flex-wrap: wrap; margin-left: auto; width: auto; justify-content: flex-end; }
+.admin-sign-out { display: grid; justify-items: end; gap: 4px; }
 .admin-sign-out__button { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 44px; padding: 8px 12px; border: 1px solid var(--stroke); border-radius: 12px; background: transparent; color: var(--text); font: 500 13px/20px var(--font-poppins),sans-serif; cursor: pointer; white-space: nowrap; }
 .admin-sign-out__button img { object-fit: contain; filter: url('/assets/icon-transparency.svg?v=2#remove-white'); }
 .admin-sign-out__button:hover { border-color: var(--accent); color: var(--accent); }
