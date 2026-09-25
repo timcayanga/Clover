@@ -1,3 +1,4 @@
+import { recurringDashboardSummary } from "../lib/recurring-dashboard-summary";
 import assert from 'node:assert/strict';
 import { parseRecurringTracking, recurringPaymentAmount, recurringCompletionDate } from '../lib/recurring-tracking';
 import { buildRecurringCalendarOccurrences } from '../lib/recurring-calendar';
@@ -22,3 +23,12 @@ assert.equal(recurringPaymentAmount({...item,kind:'receivable',amount:'5000',due
 assert.equal(recurringCompletionDate({...item,dueDate:'2026-09-20',plannedPaymentDate:'2026-09-18'},'2026-10-18'),'2026-10-20');
 assert.equal(recurringCompletionDate({...item,dueDate:'2026-01-31',plannedPaymentDate:'2026-01-29'},'2026-02-28'),'2026-02-28');
 console.log('17 recurring tracking regressions passed.');
+
+const summaryDate = new Date("2026-09-25T00:00:00Z");
+const debtSummary = recurringDashboardSummary([{...item, kind:"debt", amount:"120000", tracking:{...tracking,paymentAmount:5000}}], "debt", 0, summaryDate);
+assert.match(debtSummary[0][1], /120,000/, "Outstanding uses principal, not the scheduled payment.");
+assert.match(debtSummary[1][1], /5,000/, "Due uses the scheduled payment, not principal.");
+const installmentSummary = recurringDashboardSummary([{...item, completedPaymentCount:2}], "installments", 0, summaryDate);
+assert.match(installmentSummary[0][1], /21,000/, "Remaining excludes both previous and newly recorded completions.");
+assert.equal(recurringDashboardSummary([], "planned", 3, summaryDate)[2][1], "3");
+console.log("Shared web/native Recurring dashboard summary checks passed.");

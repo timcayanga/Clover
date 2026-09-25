@@ -31,6 +31,7 @@ type Data = {
   items: Item[];
   occurrences: Occurrence[];
   suggestions: Suggestion[];
+  summaries?: Record<string, string[][]>;
 };
 const kinds = [
   { value: "", label: "Overview" },
@@ -273,23 +274,14 @@ export default function Recurring() {
         <Body>Loading recurring…</Body>
       ) : (
         <>
-          <Card style={{ backgroundColor: colors.pale, alignItems: "center" }}>
-            <Text style={styles.sectionTitle}>
-              {month.getFullYear() === new Date().getFullYear() &&
-              month.getMonth() === new Date().getMonth()
-                ? "Due this month"
-                : `Due in ${month.toLocaleDateString(undefined, { month: "long", year: "numeric" })}`}
-            </Text>
-            <Text
-              style={{
-                color: colors.teal,
-                fontFamily: "Poppins-SemiBold",
-                fontSize: 18,
-              }}
-            >
-              {dueLabel}
-            </Text>
-          </Card>
+          <View style={{ flexDirection: "row", gap: 8 }}>
+            {(data.summaries?.[({ planned_payment: "planned", debt: "debt", receivable: "owed", reminder: "installments" } as Record<string, string>)[kind] ?? "overview"]?.slice(0, kind ? 3 : 1) ?? [["Due this month", dueLabel]]).map(([label, value]) => (
+              <Card key={label} style={{ flex: 1, backgroundColor: colors.pale, alignItems: "center", padding: kind ? 10 : 16 }}>
+                <Text style={[styles.sectionTitle, { fontSize: kind ? 11 : 16, textAlign: "center" }]}>{label}</Text>
+                <Text style={{ color: colors.teal, fontFamily: "Poppins-SemiBold", fontSize: kind ? 16 : 18, textAlign: "center" }}>{value}</Text>
+              </Card>
+            ))}
+          </View>
           <Card>
             <Text
               style={{

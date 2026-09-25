@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, type ReactNode } from "react";
+import { recurringDashboardSummary } from "@/lib/recurring-dashboard-summary";
 import type { FinancialCommitmentSummary as Item } from "@/lib/commitments";
 import { commitmentRecurrenceLabels, commitmentStatusLabels } from "@/lib/commitments";
 import { buildRecurringCalendarOccurrences, toRecurringCalendarDateKey } from "@/lib/recurring-calendar";
@@ -29,19 +30,7 @@ export function RecurringDashboard({items,tab,reviewCount,review,onOpen,onAdd,on
     const sums=new Map<string,number>();for(const {item,amount} of values)if(amount!==null&&Number.isFinite(amount))sums.set(item.currency,(sums.get(item.currency)??0)+amount);
     return sums.size?[...sums].map(([code,value])=>formatCurrencyAmount(value,code)).join(" · "):"No amount set";
   };
-  const due=totals(monthly.filter(o=>o.commitment.kind!=="receivable").map(o=>({item:o.commitment,amount:recurringPaymentAmount(o.commitment,o.dateKey)})));
-  const balance=totals(active.map(item=>({item,amount:item.amount===null?null:Number(item.amount)})));
-  const remaining=totals(active.map(item=>({item,amount:item.tracking?.totalPayments?Math.max(0,item.tracking.totalPayments-item.tracking.paymentsMade-(item.completedPaymentCount??0))*Number(item.amount):null})));
-  const next=future[0];
-  const summary=tab==="overview"?[
-    ["Due this month",due,`${monthly.filter(o=>o.commitment.kind!=="receivable").length} scheduled payments`],
-    ["Expected income",totals(monthly.filter(o=>o.commitment.kind==="receivable").map(o=>({item:o.commitment,amount:recurringPaymentAmount(o.commitment,o.dateKey)}))),"Scheduled money owed"],
-    ["Subscriptions",totals(monthly.filter(o=>o.commitment.kind==="planned_payment"&&/subscription|membership/i.test(`${o.commitment.title} ${o.commitment.categoryName??""}`)).map(o=>({item:o.commitment,amount:recurringPaymentAmount(o.commitment,o.dateKey)}))),"Identified subscriptions"],
-    ["Needs review",`${reviewCount} suggestions`,"Confirm before adding"],
-  ]:tab==="planned"?[["Due this month",due,`${monthly.length} scheduled`],["Next payment",next?totals([{item:next.commitment,amount:recurringPaymentAmount(next.commitment,next.dateKey)}]):"None scheduled",next?.commitment.title??""],["Needs review",`${reviewCount}`,"See Overview suggestions"]]
-  :tab==="debt"?[["Outstanding",balance,`${active.length} active debts`],["Due this month",due,`${monthly.length} scheduled payments`],["Paid down","Not recorded","Original balances are not recorded"]]
-  :tab==="owed"?[["Total owed",balance,`${active.length} open items`],["Due this month",totals(monthly.map(o=>({item:o.commitment,amount:recurringPaymentAmount(o.commitment,o.dateKey)}))),`${monthly.length} expected payments`],["Received",totals(subset.filter(i=>i.occurrenceCompletedAt?.slice(0,7)===todayString.slice(0,7)).map(item=>({item,amount:recurringPaymentAmount(item)}))),"Marked complete this month"]]
-  :[["Remaining",remaining,`${active.length} plans`],["This month",due,`${monthly.length} payments`],["Ending soon",`${active.filter(i=>i.tracking?.totalPayments&&i.tracking.totalPayments-i.tracking.paymentsMade-(i.completedPaymentCount??0)<=2).length} plans`,"2 payments or fewer left"]];
+  const summary = recurringDashboardSummary(items, tab, reviewCount);
   const accounts=Array.from(new Map(subset.map(i=>{const a=i.account??i.inferredAccount;return a?[a.id,a.name]:["",""];})).entries()).filter(([id])=>id);
   return <div className={`recurring-redesign recurring-redesign--${tab}`}>
     <section className="recurring-summary" aria-label="Recurring summary">{summary.map(([label,value],index)=><article key={label} data-tone={index}><small>{label}</small><strong>{value}</strong></article>)}</section>

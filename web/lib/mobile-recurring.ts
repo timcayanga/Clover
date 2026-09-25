@@ -1,3 +1,4 @@
+import { recurringDashboardSummary, type RecurringSummaryTab } from "./recurring-dashboard-summary";
 import { getPlannedPaymentSuggestions } from "./planned-payment-suggestions";
 import { prisma } from "./prisma";
 import { serializeFinancialCommitment } from "./commitments";
@@ -24,8 +25,10 @@ export async function mobileRecurring(
     orderBy: { createdAt: "desc" },
   });
   const commitments = records.map(serializeFinancialCommitment);
+  const suggestions = await getPlannedPaymentSuggestions(workspaceId);
   return {
-    suggestions: (await getPlannedPaymentSuggestions(workspaceId)).map((s) => ({
+    summaries: Object.fromEntries((["overview", "planned", "debt", "owed", "installments"] as RecurringSummaryTab[]).map(tab => [tab, recurringDashboardSummary(commitments, tab, suggestions.length)])),
+    suggestions: suggestions.map((s) => ({
       id: s.id,
       title: s.title,
       amount: s.amount,
