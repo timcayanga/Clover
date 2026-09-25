@@ -1,4 +1,5 @@
 "use client";
+import { FinverseLifecyclePanel } from "./finverse-lifecycle-panel";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import "./add-entry-methods.css";
@@ -11,6 +12,6 @@ export function FinversePendingAccounts({workspaceId}:{workspaceId:string}) {
     setPending([]);refresh();window.addEventListener("finverse-updated",refresh);
     return()=>{controller.abort();window.removeEventListener("finverse-updated",refresh);};
   },[workspaceId]);
-  if(!pending.length)return null;
-  return <div className="finverse-pending" aria-label="Bank accounts need selection">{pending.map(connection=><button key={connection.id} className="button button-secondary" type="button" onClick={()=>router.push(`/accounts?finverse=connected&finverseConnection=${encodeURIComponent(connection.id)}&finverseWorkspace=${encodeURIComponent(workspaceId)}`)}><span aria-hidden="true">⊕</span>Select accounts · {connection.name}<span aria-label="Action needed">!</span></button>)}</div>;
+  if(!pending.length)return <FinverseLifecyclePanel workspaceId={workspaceId}/>;
+  return <><FinverseLifecyclePanel workspaceId={workspaceId}/><div className="finverse-pending" aria-label="Bank accounts need selection">{pending.map(connection=><button key={connection.id} className="button button-secondary" type="button" onClick={()=>router.push(`/accounts?finverse=connected&finverseConnection=${encodeURIComponent(connection.id)}&finverseWorkspace=${encodeURIComponent(workspaceId)}`)}><span aria-hidden="true">⊕</span>Select accounts · {connection.name}<span aria-label="Action needed">!</span></button>)}</div></>;
 }

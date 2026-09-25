@@ -16,7 +16,7 @@ export async function loadAdminBankLinks(userIds?: string[]) {
     JOIN "Account" a ON a.id = l."accountId" AND a."workspaceId" = l."workspaceId"
     JOIN "Workspace" w ON w.id = l."workspaceId" AND w."userId" = c."userId"
     JOIN "User" u ON u.id = w."userId"
-    WHERE c.status <> 'disconnected' AND ${adminRealUserSqlPredicate("u")}
+    WHERE c.status <> 'disconnected' AND l."unlinkedAt" IS NULL AND ${adminRealUserSqlPredicate("u")}
       ${userIds ? Prisma.sql`AND u.id IN (${Prisma.join(userIds)})` : Prisma.empty}
     GROUP BY w."userId", "bankId"
   `);

@@ -103,7 +103,7 @@ async function handle(
     if (["finverse-connections", "finverse-institutions", "finverse-link", "finverse-sync", "finverse-unlink"].includes(operation)) {
       return await withMobileRequestContext(userId, request, async () => {
         const result = operation === "finverse-connections"
-          ? await (await import("@/app/api/integrations/finverse/connections/route")).GET(request)
+          ? await (await import("@/app/api/integrations/finverse/connections/route"))[request.method === "POST" ? "POST" : "GET"](request)
           : operation === "finverse-institutions"
           ? await (await import("@/app/api/integrations/finverse/institutions/route")).GET(request)
           : operation === "finverse-link"

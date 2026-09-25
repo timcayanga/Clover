@@ -6,7 +6,7 @@ import "./add-entry-methods.css";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 
-type SelectAccount = { id: string; name: string; reserved?: boolean; existingAccountName?: string | null };
+type SelectAccount = { id: string; name: string; reserved?: boolean; existingAccountName?: string | null; suggestedAccountId?:string|null; candidates?:{id:string;name:string;last4:string|null}[] };
 type SyncResponse = {
   status?: string;
   linkUrl?: string;
@@ -62,6 +62,7 @@ export function FinverseConnectButton({
   const onSyncedRef = useRef(onSynced);
   const [action, setAction] = useState<"connecting" | "syncing" | null>(null);
   const [selection,setSelection] = useState<{connectionId:string;remaining:number;accounts:SelectAccount[]}|null>(null);
+  const [mappings,setMappings]=useState<Record<string,string>>({});
   const [selected,setSelected] = useState<string[]>([]);
   const [unlinkTarget, setUnlinkTarget] = useState<{id:string;name:string}|null>(null);
   const [message, setMessage] = useState("");
@@ -105,14 +106,14 @@ export function FinverseConnectButton({
         const response = await fetch("/api/integrations/finverse/sync", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ workspaceId, connectionId: requestedConnectionId, selectedAccountIds, refresh: refresh && attempt === 1 }),
+          body: JSON.stringify({ workspaceId, connectionId: requestedConnectionId, selectedAccountIds, accountMappings: Object.fromEntries(Object.entries(mappings).filter(([id,target])=>selectedAccountIds?.includes(id)&&target)), refresh: refresh && attempt === 1 }),
           signal: controller.signal,
           cache: "no-store",
         });
         const body = await response.json() as SyncResponse;
         if (!response.ok) throw new Error(body.error || "Unable to sync your bank.");
         if (body.status === "authorize" && body.linkUrl) { window.location.assign(body.linkUrl); return; }
-        if(body.status === "select_accounts" && body.connectionId && body.accounts){setSelection({connectionId:body.connectionId,remaining:body.remaining ?? 0,accounts:body.accounts});setSelected([]);setMessage("");window.dispatchEvent(new Event("finverse-updated"));return;}
+        if(body.status === "select_accounts" && body.connectionId && body.accounts){setSelection({connectionId:body.connectionId,remaining:body.remaining ?? 0,accounts:body.accounts});setSelected([]);setMappings({});setMessage("");window.dispatchEvent(new Event("finverse-updated"));return;}
         setSelection(null);
         if (body.status === "retrieving") {
           if (attempt === FINVERSE_MAX_POLL_ATTEMPTS) {
@@ -141,7 +142,7 @@ export function FinverseConnectButton({
       actionRef.current = null;
       setAction(null);
     }
-  }, [allowed, mode, router, workspaceId]);
+  }, [mappings, allowed, mode, router, workspaceId]);
 
   useEffect(() => () => activeSyncRef.current?.abort(), []);
 
@@ -165,7 +166,7 @@ export function FinverseConnectButton({
       const response = await fetch("/api/integrations/finverse/unlink", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ workspaceId, accountId: unlinkTarget.id }) });
       const body = await response.json();
       if (!response.ok) throw new Error(body.error || "Unable to unlink.");
-      setUnlinkTarget(null); setBankRevision(v => v + 1); setMessage("Bank unlinked. Your account and history are preserved.");
+      setUnlinkTarget(null); setBankRevision(v => v + 1); setMessage(body.message || "Bank disconnected. Your account and history are preserved.");
       window.dispatchEvent(new Event("finverse-updated")); await onSyncedRef.current?.();
     } catch (error) { setMessage(error instanceof Error ? error.message : "Unable to unlink."); }
     finally { actionRef.current = null; setAction(null); }
@@ -208,10 +209,10 @@ export function FinverseConnectButton({
   if (mode === "sync" && accountId && !syncAccounts.length) return null;
   return (
     <div className="finverse-connect finverse-connect--picker">
-      {unlinkTarget ? <div role="alertdialog" aria-label="Unlink bank account" className="finverse-connect__selection"><h4>Unlink {unlinkTarget.name}?</h4><p>Your Clover account and transaction history will stay. This account still uses a slot until your monthly allowance resets. Reconnecting the same account uses no extra slot.</p><button type="button" className="button button-secondary" disabled={action !== null} onClick={() => setUnlinkTarget(null)}>Keep linked</button><button type="button" className="button button-secondary" disabled={action !== null} onClick={() => void unlink()}>Unlink account</button></div> : null}
+      {unlinkTarget ? <div role="alertdialog" aria-label="Unlink bank account" className="finverse-connect__selection"><h4>Unlink {unlinkTarget.name}?</h4><p>Your Clover accounts and history will stay. All accounts sharing this bank login will disconnect. Reconnection requires bank authentication. Used slots remain reserved until the monthly reset.</p><button type="button" className="button button-secondary" disabled={action !== null} onClick={() => setUnlinkTarget(null)}>Keep linked</button><button type="button" className="button button-secondary" disabled={action !== null} onClick={() => void unlink()}>Unlink account</button></div> : null}
       {selection ? <fieldset className="finverse-connect__selection"><legend>Select bank accounts</legend><p>{selection.remaining} new account slots available. Previously used accounts can be reconnected.</p>{selection.accounts.map(account => {
         const newSelected = selection.accounts.filter(a => selected.includes(a.id) && !a.reserved).length;
-        return <label key={account.id}><input type="checkbox" checked={selected.includes(account.id)} disabled={action !== null || (!selected.includes(account.id) && !account.reserved && newSelected >= selection.remaining)} onChange={event => setSelected(current => event.target.checked ? [...current,account.id] : current.filter(id => id !== account.id))}/><span>{account.name}{account.existingAccountName ? <small> · Reuse {account.existingAccountName}; keep all history</small> : null}{account.reserved ? <small> · Already included this period</small> : null}</span></label>;
+        return <label key={account.id}><input type="checkbox" checked={selected.includes(account.id)} disabled={action !== null || (!selected.includes(account.id) && !account.reserved && newSelected >= selection.remaining)} onChange={event => setSelected(current => event.target.checked ? [...current,account.id] : current.filter(id => id !== account.id))}/><span>{account.name}{account.existingAccountName ? <small> · Reuse {account.existingAccountName}; keep all history</small> : null}{account.reserved ? <small> · Already included this period</small> : null}<select aria-label={`Destination for ${account.name}`} disabled={action!==null} value={mappings[account.id]??''} onChange={event=>setMappings(current=>({...current,[account.id]:event.target.value}))}><option value="">{account.suggestedAccountId?'Use matching existing account':'Create a new account card'}</option>{account.candidates?.map(c=><option key={c.id} value={c.id}>Link to {c.name}{c.last4?` •••• ${c.last4}`:''}</option>)}</select></span></label>;
       })}<button type="button" className="button button-primary" disabled={action !== null || selected.length === 0} onClick={() => void sync(selection.connectionId,selected)}>Link selected accounts</button></fieldset> : null}
       {mode === "sync" && syncAccounts.length ? <div className="finverse-connect__grid">{syncAccounts.map(account=><div key={account.id} className="finverse-connect__sync-card"><img src={account.logoUrl} alt="" onError={event=>{event.currentTarget.onerror=null;event.currentTarget.src="/assets/account-types/bank.png";}}/><strong>{account.name}</strong><span>{account.last4 ? `•••• ${account.last4}` : "Linked account"}</span><small>Last Synced · {account.lastSyncedAt ? new Date(account.lastSyncedAt).toLocaleString() : "Not yet synced"}</small><button className="button button-secondary" type="button" disabled={action !== null || !allowed} onClick={()=>void sync(account.connectionId,[],true)}>{action === "syncing" ? "Syncing…" : "↻ Sync"}</button><button className="button button-secondary" type="button" disabled={action !== null} onClick={() => setUnlinkTarget(account)}>Unlink</button></div>)}</div> : <>
       {testMode ? <p role="status">Test mode · Only test banks are shown.</p> : null}

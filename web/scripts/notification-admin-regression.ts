@@ -242,7 +242,7 @@ const prisma = {
     403,
   );
   assert.equal((await api.GET()).status, 200);
-  assert.equal((await (await api.GET()).json()).templates.length, 14);
+  assert.equal((await (await api.GET()).json()).templates.length, defaultNotificationTemplates.length);
   let result = await mutate({
     action: "create",
     version: 0,

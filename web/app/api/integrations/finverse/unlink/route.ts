@@ -1,3 +1,4 @@
+import { requestBankDisconnect, revokeBankConnection } from "@/lib/finverse-lifecycle";
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import { requireAuth } from '@/lib/auth';
@@ -13,24 +14,11 @@ export async function POST(request: Request) {
     const { userId } = await requireAuth();
     const body = z.object({ workspaceId: z.string().min(1), accountId: z.string().min(1) }).strict().parse(await request.json());
     const workspace = await assertWorkspaceAccess(userId, body.workspaceId);
-    const result = await prisma.$transaction(async tx => {
-      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`plan-quota:${workspace.userId}`}, 0))`;
-      const link = await tx.finverseAccountLink.findFirst({ where: { accountId: body.accountId, workspaceId: body.workspaceId, connection: { user: { clerkUserId: userId } } }, include: { connection: true } });
-      if (!link) return null;
-      if (link.unlinkedAt) return { resetsAt: null };
-      const allowance = await bankLinkAllowance(tx, workspace.userId);
-      const others = await tx.finverseAccountLink.count({ where: { connectionId: link.connectionId, unlinkedAt: null, accountId: { not: null }, id: { not: link.id } } });
-      // Revoke the provider authorization only after its final account is unlinked.
-      if (!others) {
-        const token = await getActiveFinverseToken(link.connection);
-        await unlinkFinverseIdentity(token);
-        await tx.finverseConnection.update({ where: { id: link.connectionId }, data: { status: 'disconnected', encryptedAccessToken: null, encryptedRefreshToken: null, accessTokenExpiresAt: null, loginIdentityId: null } });
-      }
-      await tx.finverseAccountLink.update({ where: { id: link.id }, data: { unlinkedAt: new Date() } });
-      return { resetsAt: allowance.periodEnd };
-    }, { timeout: 45_000 });
-    if (!result) return NextResponse.json({ error: 'Linked account not found.' }, { status: 404 });
-    return NextResponse.json({ status: 'unlinked', ...result });
+    const link=await prisma.finverseAccountLink.findFirst({where:{accountId:body.accountId,workspaceId:body.workspaceId,connection:{userId:workspace.userId}}});
+    if(!link) return NextResponse.json({error:'Linked account not found.'},{status:404});
+    await requestBankDisconnect(link.connectionId,'User disconnected bank');
+    const revoked=await revokeBankConnection(link.connectionId);
+    return NextResponse.json({status:revoked?'unlinked':'disconnect_pending',message:revoked?'Bank disconnected. Records preserved.':'Disconnection pending; Clover will retry with Finverse. Records preserved.'});
   } catch (error) {
     if (error instanceof z.ZodError || error instanceof SyntaxError) return NextResponse.json({ error: 'Choose a linked account.' }, { status: 400 });
     const message = error instanceof Error ? error.message : '';

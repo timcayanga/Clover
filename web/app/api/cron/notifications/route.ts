@@ -1,3 +1,4 @@
+import { sweepBankConnections } from "@/lib/finverse-lifecycle";
 import { timingSafeEqual } from "node:crypto";
 import { dispatchNotificationEmails } from "@/lib/notification-dispatch.server";
 export const dynamic = "force-dynamic";
@@ -13,7 +14,8 @@ export async function GET(request: Request) {
   )
     return Response.json({ error: "Unauthorized" }, { status: 401 });
   try {
-    return Response.json(await dispatchNotificationEmails());
+    const bankConnections=await sweepBankConnections();
+    return Response.json({ ...(await dispatchNotificationEmails()), bankConnections });
   } catch {
     return Response.json(
       {

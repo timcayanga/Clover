@@ -648,7 +648,8 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ ac
     }).catch(() => null);
 
     invalidateWorkspaceSummaryCache(account.workspaceId);
-    return NextResponse.json({ account: serializeAccount(account) });
+    const bankSnapshot=(await finverseBalances(account.workspaceId,[account.id])).get(account.id);
+    return NextResponse.json({ account: serializeAccount({...account,...bankSnapshot,balance:bankSnapshot?.bankBalance ?? account.balance}) });
   } catch {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }

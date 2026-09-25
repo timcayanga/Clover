@@ -99,6 +99,7 @@ const requestFinverse = async <T>(
 ): Promise<T> => {
   const response = await fetch(`${FINVERSE_API_BASE}${path}`, {
     ...init,
+    signal: init.signal ?? AbortSignal.timeout(20_000),
     cache: "no-store",
     headers: {
       Accept: "application/json",
@@ -220,7 +221,10 @@ export async function getFinverseAccountNumber(accessToken: string, accountId: s
     throw error;
   }
 }
-export const unlinkFinverseIdentity = (accessToken: string) => requestFinverse("/login_identity", { method: "DELETE" }, accessToken);
+export const unlinkFinverseIdentity = async (accessToken: string) => {
+  try { return await requestFinverse("/login_identity", { method: "DELETE" }, accessToken); }
+  catch(error) { if(error instanceof FinverseApiError && error.status === 404) return {}; throw error; }
+};
 
 export const getAllFinverseTransactions = async (accessToken: string) => {
   const transactions: FinverseTransaction[] = [];

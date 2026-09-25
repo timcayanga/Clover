@@ -105,7 +105,7 @@ assert.deepEqual(visibleFinverseBanks([{...realBank,countries:["USA","THA"]}],"l
 assert.deepEqual(finverseCountries([{countries:["GBR","NLD"]}]).map(c=>c.name),[]);
 assert.deepEqual(visibleFinverseBanks([{...realBank,countries:["ZZZ"]}],"live"),[]);
 assert.equal(mobileOperation("GET",["finverse","connections"]),"finverse-connections");
-assert.equal(mobileOperation("POST",["finverse","connections"]),null);
+assert.equal(mobileOperation("POST",["finverse","connections"]),"finverse-connections");
 
 async function refreshRequests() {
   const originalFetch = globalThis.fetch;
