@@ -1,5 +1,7 @@
 "use client";
 
+import { createPortal } from "react-dom";
+import { MobileSheetHandle } from "@/components/mobile-sheet-handle";
 import { InterfaceIcon } from "@/components/interface-icon";
 
 import { useEffect, useLayoutEffect, useState } from "react";
@@ -83,10 +85,11 @@ export function SplitBillPersonModal({ open, onClose, onSaved }: SplitBillPerson
     }
   };
 
-  return (
+  return createPortal(
     <div className="split-bill-modal split-bill-simple-entry-modal" role="presentation" onClick={closeModal}>
       <form className="split-bill-modal__card glass split-bill-person-modal" role="dialog" aria-modal="true" aria-label="Add person" onSubmit={(event) => { event.preventDefault(); void savePerson(); }} onClick={(event) => event.stopPropagation()}>
-        <div className="split-bill-manual-modal__head">
+        <MobileSheetHandle onClose={closeModal} disabled={isSaving} />
+            <div className="split-bill-manual-modal__head">
           <div>
             <p className="eyebrow">Add Person</p>
           </div>
@@ -112,6 +115,7 @@ export function SplitBillPersonModal({ open, onClose, onSaved }: SplitBillPerson
           </button>
         </div>
       </form>
-    </div>
+    </div>,
+    document.body,
   );
 }

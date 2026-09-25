@@ -21,13 +21,13 @@
   .mobile-sheet-handle span {width:36px;height:4px;border-radius:99px;background:var(--line,#d2e2e7);}
   body.mobile-creation-page .content > :is(.topbar,.shell-compact-bar) :is(.topbar-actions,.shell-compact-bar__actions) { visibility:visible;pointer-events:auto; }
   body.mobile-creation-page :is(.modal-backdrop,.recurring-add-modal):has(.mobile-sheet-handle),
-  :is(.modal-backdrop,.recurring-add-modal,.split-bill-manual-modal-backdrop,.budget-editor-page):has(.mobile-sheet-handle) {
+  :is(.modal-backdrop,.recurring-add-modal,.split-bill-manual-modal-backdrop,.split-bill-simple-entry-modal,.budget-editor-page):has(.mobile-sheet-handle) {
     position:fixed !important;inset:64px 0 0 !important;display:flex !important;align-items:flex-end !important;
     padding:24px 0 calc(84px + env(safe-area-inset-bottom)) !important;background:rgba(18,44,54,.18) !important;
     backdrop-filter:none !important;overflow:hidden !important;z-index:100 !important;
   }
   body.mobile-creation-page :is(.modal-backdrop,.recurring-add-modal) > :is(.modal-card,section):has(.mobile-sheet-handle),
-  :is(.modal-card,.recurring-create,.split-bill-manual-modal,.budget-editor--page):has(.mobile-sheet-handle) {
+  :is(.modal-card,.recurring-create,.split-bill-manual-modal,.split-bill-modal__card,.budget-editor--page):has(.mobile-sheet-handle) {
     position:relative !important;inset:auto !important;transform:none;width:100% !important;max-width:100% !important;
     max-height:100% !important;min-height:0 !important;height:auto !important;margin:0 !important;
     padding:8px 20px 24px !important;border-radius:24px 24px 0 0 !important;border:1px solid var(--line) !important;
@@ -120,4 +120,20 @@
 
 @media(max-width:1100px) {
  .goal-creation-sheet .goal-inline-setup input {width:100%;min-width:0;max-width:100%;}
+}
+
+@media(max-width:1100px) {
+  /* Detail dialogs replace the page header; keep their back/adviser chrome above it. */
+  .split-bill-modal:has(> .split-bill-detail-modal) {z-index:100 !important;}
+  .split-bill-modal__card.split-bill-detail-modal {padding-bottom:calc(110px + env(safe-area-inset-bottom)) !important;}
+  .split-bill-detail-modal .split-bill-manual-modal__head {top:-18px !important;margin:-18px -18px 0;padding:18px;min-height:72px;}
+}
+
+.split-bill-group-card {position:relative;cursor:pointer;}
+.split-bill-group-card:has(.split-bill-group-card__open:focus-visible) {outline:2px solid var(--teal,#03a8c0);outline-offset:3px;}
+
+@media(max-width:1100px) {
+  .split-bill-detail-modal__body {grid-template-columns:minmax(0,1fr);grid-auto-rows:max-content;align-content:start;min-width:0;}
+  .split-bill-detail-modal__body .settings-field {min-width:0;}
+  .split-bill-detail-modal__body .settings-input {box-sizing:border-box;width:100%;min-width:0;max-width:100%;}
 }

@@ -508,7 +508,7 @@ export function SplitBillHome({
         <>
           <div className="split-bill-group-grid">
             {visibleGroups.map((group) => (
-              <article className="split-bill-group-card" key={group.id}>
+              <article className="split-bill-group-card" key={group.id} onClick={() => onOpenGroup(group.id)}>
                 <div className="split-bill-group-identity">
                   <SplitBillEntityAvatar name={group.name} avatarUrl={group.avatarUrl || "/assets/split-bills/group-default.jpg"} sizeClass="split-bill-group-photo" />
                   <strong>{group.name}</strong>
@@ -526,8 +526,9 @@ export function SplitBillHome({
                   ) : null}
                 </div>
                 <button
-                  className="button button-secondary"
-                  onClick={() => onOpenGroup(group.id)}
+                  className="button button-secondary split-bill-group-card__open"
+                  aria-label={`View group ${group.name}`}
+                  onClick={(event) => { event.stopPropagation(); onOpenGroup(group.id); }}
                 >
                   View Group
                 </button>
