@@ -465,9 +465,10 @@ async function handle(
       return reply({ notifications: feed.notifications, count: feed.unreadCount, readIds: (await prisma.inAppNotificationRead.findMany({ where: { userId: user.id, notificationKey: { in: feed.notifications.map(item => item.id) } }, select: { notificationKey: true } })).map(row => row.notificationKey) });
     }
     if (operation === "options") {
+      const filtering = url.searchParams.get("context") === "filters";
       const [accounts, categories, tags] = await Promise.all([
-        prisma.account.findMany({ where: { workspaceId, type: { not: "investment" } }, select: { id: true, name: true, currency: true, institution: true, type: true }, orderBy: { name: "asc" } }),
-        prisma.category.findMany({ where: { workspaceId, isArchived: false }, select: { id: true, name: true, type: true }, orderBy: { name: "asc" } }),
+        prisma.account.findMany({ where: { workspaceId, ...(filtering ? {} : { type: { not: "investment" as const } }) }, select: { id: true, name: true, currency: true, institution: true, type: true }, orderBy: { name: "asc" } }),
+        prisma.category.findMany({ where: { workspaceId, ...(filtering ? {} : { isArchived: false }) }, select: { id: true, name: true, type: true }, orderBy: { name: "asc" } }),
         prisma.tag.findMany({ where: { workspaceId }, select: { id: true, name: true }, orderBy: { name: "asc" } }),
       ]);
       return reply({ accounts, categories, tags });

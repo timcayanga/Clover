@@ -66623,3 +66623,29 @@ html[data-theme="dark"] .content.content--reports .reports-range-menu__summary {
   .content.content--accounts .accounts-mobile-currency-button { display: inline-flex; align-items: center; justify-content: center; width: 40px; height: 40px; min-width: 40px; padding: 8px; border: 0; background: transparent; box-shadow: none; color: var(--accent); }
   .content.content--adviser .adviser-reports-link { display: inline-flex !important; padding: 4px; background: transparent; border: 0; box-shadow: none; }
 }
+
+/* Transaction filters: row menus and equal-size mobile search controls. */
+.transactions-filters-overlay .transaction-filter-row__body .transactions-filter-group__options {
+  display: flex; flex-direction: column; gap: 0; border: 1px solid var(--border); border-radius: 12px; overflow: hidden;
+}
+.transactions-filters-overlay .transaction-filter-row__body .transactions-filter-pill {
+  border: 0; border-bottom: 1px solid var(--border); border-radius: 0; margin: 0;
+  min-height: 44px; width: 100%; box-shadow: none; justify-content: flex-start;
+}
+.transactions-filters-overlay .transaction-filter-row__body .transactions-filter-pill:last-child { border-bottom: 0; }
+@media (max-width:1100px) {
+  .content.content--transactions .transaction-selection-toolbar:not(.transaction-selection-toolbar--selected) {
+    display: flex; flex-wrap: nowrap; align-items: center; height: 44px; min-height: 44px; gap: 8px; width: 100%;
+  }
+  .content.content--transactions .transaction-selection-toolbar input[type="search"] {
+    flex: 1; width: 0; max-width: none; min-width: 0; height: 44px!important; min-height: 44px!important;
+    border-radius: 999px!important; margin: 0; box-sizing: border-box;
+  }
+  .content.content--transactions .transaction-selection-toolbar__filter {
+    flex: 0 0 44px; width: 44px; height: 44px!important; min-height: 44px!important;
+    min-width: 44px; border-radius: 999px!important; padding: 0!important; justify-content: center; position: relative;
+  }
+  .transaction-selection-toolbar__filter .transaction-filter-label,
+  .transaction-selection-toolbar__filter .transaction-filter-warning { display: none; }
+  .transaction-selection-toolbar__filter .transaction-filter-count { position: absolute; right: -3px; top: -3px; }
+}

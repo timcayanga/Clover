@@ -7775,24 +7775,19 @@ function TransactionsPageContent() {
         <section className="transactions-inline-filters" aria-label="Transaction filters">
           <div className="transactions-inline-filters__head"><strong>Filters</strong><button className="button button-ghost button-small" type="button" onClick={clearTransactionFilters}>Reset</button><button className="icon-button" type="button" onClick={() => { setFilterOpen(false); document.querySelector<HTMLButtonElement>(".transaction-selection-toolbar__filter")?.focus(); }} aria-label="Close filters"><InterfaceIcon name="close" /></button></div>
           {activeFilterChips.length ? <div className="transactions-active-filters" aria-label="Active filters">{activeFilterChips.map((chip, index) => <button key={`${chip.label}-${index}`} type="button" className="button button-secondary button-small" onClick={chip.clear} aria-label={`Remove ${chip.label} filter`}>{chip.label}<InterfaceIcon name="close" size={12} /></button>)}</div> : null}
-          <div className="transactions-filter-presets" role="group" aria-label="Filter presets">
-            <button type="button" className="button button-secondary button-small" aria-pressed={dateFilterMode === "month"} onClick={() => applyDateFilterMode("month")}>This month</button>
-            <button type="button" className="button button-secondary button-small" aria-pressed={typeFilters.length === 1 && typeFilters[0] === "debit"} onClick={() => setTypeFilters(["debit"])}>Expenses</button>
-            <button type="button" className="button button-secondary button-small" aria-pressed={reviewFilter === "pending"} onClick={() => setReviewFilter("pending")}>Needs review</button>
-          </div>
           <TransactionFilterRow label="Dates" summary={({ ltd: "Lifetime", day: "Today", week: "This week", month: "This month", year: "This year", quarter: "This quarter", custom: [customStart, customEnd].filter(Boolean).join(" – ") || "Custom" })[dateFilterMode]}>
             <div className="transactions-filter-group__options">
               {([["ltd", "Lifetime"], ["day", "Today"], ["week", "This week"], ["month", "This month"], ["quarter", "This quarter"], ["year", "This year"], ["custom", "Custom range"]] as const).map(([mode, label]) => <button key={mode} className="transactions-filter-pill" type="button" aria-pressed={dateFilterMode === mode} onClick={() => applyDateFilterMode(mode)}>{label}</button>)}
             </div>
             {dateFilterMode === "custom" ? <div className="transactions-column-menu__fields transactions-column-menu__fields--amount-range"><label className="transactions-column-menu__field">From<input type="date" value={customStart} onChange={(event) => setCustomStart(event.target.value)} /></label><label className="transactions-column-menu__field">To<input type="date" value={customEnd} onChange={(event) => setCustomEnd(event.target.value)} /></label></div> : null}
           </TransactionFilterRow>
-          <MultiSelectFilterGroup label="Accounts" options={accountFilterOptions.map((option) => ({ ...option, icon: <AccountBrandMark accountBrand={accountBrandById.get(option.value) ?? getAccountBrand({ name: option.label, institution: option.label, type: "bank" })} label={option.label} /> }))} selected={accountFilters} onToggle={(value) => setAccountFilters((current) => toggleFilterValue(current, value))} onClear={() => setAccountFilters([])} />
-          <MultiSelectFilterGroup label="Categories" options={categories.map((category) => ({ value: category.id, label: category.name, icon: <CategoryBrandMark categoryName={category.name} size={22} radius={7} /> }))} selected={categoryFilters} onToggle={(value) => setCategoryFilters((current) => toggleFilterValue(current, value))} onClear={() => setCategoryFilters([])} />
-          <MultiSelectFilterGroup label="Types" options={[
+          <MultiSelectFilterGroup label="Type" options={[
             { value: "debit", label: "Expense", icon: <span className="negative">↓</span> },
             { value: "credit", label: "Income", icon: <span className="positive">↑</span> },
             { value: "transfer", label: "Transfer", icon: <span>↔</span> },
           ]} selected={typeFilters} onToggle={(value) => setTypeFilters((current) => toggleTypedFilterValue(current, value as TransactionTypeFilter))} onClear={() => setTypeFilters([])} />
+          <MultiSelectFilterGroup label="Accounts" options={accountFilterOptions.map((option) => ({ ...option, icon: <AccountBrandMark accountBrand={accountBrandById.get(option.value) ?? getAccountBrand({ name: option.label, institution: option.label, type: "bank" })} label={option.label} /> }))} selected={accountFilters} onToggle={(value) => setAccountFilters((current) => toggleFilterValue(current, value))} onClear={() => setAccountFilters([])} />
+          <MultiSelectFilterGroup label="Categories" options={categories.map((category) => ({ value: category.id, label: category.name, icon: <CategoryBrandMark categoryName={category.name} size={22} radius={7} /> }))} selected={categoryFilters} onToggle={(value) => setCategoryFilters((current) => toggleFilterValue(current, value))} onClear={() => setCategoryFilters([])} />
           <TransactionFilterRow label="Amount" summary={amountMin || amountMax ? `${amountMin || "0"} – ${amountMax || "Any"}` : "Any amount"}><div className="transactions-filter-group transactions-filter-group--amount" role="group" aria-label="Amount Range">
             <span className="transactions-filter-group__label">Amount Range</span>
             <div className="transactions-column-menu__fields transactions-column-menu__fields--amount-range">
@@ -7800,10 +7795,6 @@ function TransactionsPageContent() {
               <label className="transactions-column-menu__field"><span>Maximum</span><input type="number" inputMode="decimal" value={amountMax} onChange={(event) => setAmountMax(event.target.value)} placeholder="0.00" /></label>
             </div>
           </div></TransactionFilterRow>
-          <TransactionFilterRow label="Warnings" summary={reviewFilter === "pending" ? "Needs review" : reviewFilter === "confirmed" ? "Confirmed" : "All transactions"}>
-            <div className="transactions-filter-group__options">{[["", "All transactions"], ["pending", "Needs review"], ["confirmed", "Confirmed"]].map(([value, label]) => <button key={value} type="button" className="transactions-filter-pill" aria-pressed={reviewFilter === value} onClick={() => setReviewFilter(value)}>{label}</button>)}</div>
-          </TransactionFilterRow>
-          <details className="transactions-more-filters"><summary>More filters</summary>
           <TransactionFilterRow label="Currency" summary={currencyFilter || "All currencies"}>
             <div className="transactions-filter-group__options">
               {["", ...workspaceCurrencyCodes].map((code) => <button key={code} type="button" className="transactions-filter-pill" aria-pressed={currencyFilter === code} onClick={() => { setCurrencyFilter(code); persistSelectedCurrency(selectedWorkspaceId, code); }}>{code || "All currencies"}</button>)}
@@ -7816,7 +7807,9 @@ function TransactionsPageContent() {
             <TransactionFilterRow label="Extraction confidence" summary={confidenceFilter || "Any confidence"}>
               <div className="transactions-filter-group__options">{[["", "Any confidence"], ["high", "High · 85–100%"], ["medium", "Medium · 65–84%"], ["low", "Low · below 65%"]].map(([value, label]) => <button key={value} type="button" className="transactions-filter-pill" aria-pressed={confidenceFilter === value} onClick={() => setConfidenceFilter(value)}>{label}</button>)}</div>
             </TransactionFilterRow>
-          </details>
+          <TransactionFilterRow label="Warnings" summary={reviewFilter === "pending" ? "Needs review" : reviewFilter === "confirmed" ? "Confirmed" : "All transactions"}>
+            <div className="transactions-filter-group__options">{[["", "All transactions"], ["pending", "Needs review"], ["confirmed", "Confirmed"]].map(([value, label]) => <button key={value} type="button" className="transactions-filter-pill" aria-pressed={reviewFilter === value} onClick={() => setReviewFilter(value)}>{label}</button>)}</div>
+          </TransactionFilterRow>
           {isCompactViewport ? <TransactionsManageMenu compact /> : null}
           <button type="button" className="button button-primary transactions-filter-show" onClick={() => setFilterOpen(false)}>Show transactions</button>
         </section>
