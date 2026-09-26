@@ -1,5 +1,4 @@
 import { EntryOverlay } from "../../src/entry-overlay";
-import { ChoiceField } from "../../src/transaction-entry";
 import { Text } from "../../src/app-text";
 import { AccountBrandLogo } from "../../src/account-brand-logo";
 import { AccountTypeMark } from "../../src/account-type-mark";
@@ -13,10 +12,11 @@ import {
 import { SummaryCard } from "../../src/plan-ui";
 import { LinearGradient } from "expo-linear-gradient";
 import { useCallback, useEffect, useLayoutEffect, useState } from "react";
-import { Pressable, View } from "react-native";
+import { Modal, Pressable, ScrollView, View } from "react-native";
 import { useSession } from "../../src/session";
 import {
   AppHeader,
+  AddNavigationMark,
   Body,
   Card,
   Button,
@@ -41,6 +41,7 @@ function AccountsContent() {
   const { colors, styles, dark } = useTheme();
   const session = useSession();
   const [currencyFilter, setCurrencyFilter] = useState("");
+  const [currencyOpen, setCurrencyOpen] = useState(false);
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [expandedAccount, setExpandedAccount] = useState<string | null>(null);
   const [selected, setSelected] = useState<Account | null>(null);
@@ -166,6 +167,13 @@ function AccountsContent() {
     })[type] ?? "Other accounts";
   const ownedCurrencies = [...new Set(accounts.map(account => account.currency))];
   const displayedCurrency = ownedCurrencies.includes(currencyFilter) ? currencyFilter : ownedCurrencies.includes(session.data?.defaultCurrency ?? "") ? session.data!.defaultCurrency : ownedCurrencies[0];
+  useLayoutEffect(() => {
+    navigation.setOptions({ header: () => <AppHeader title="Accounts" trailing={<>
+      <Pressable accessibilityRole="button" accessibilityLabel={`Select account currency: ${displayedCurrency ?? "none"}`} onPress={() => setCurrencyOpen(true)} style={styles.iconButton}><Icon line name="globe-outline" size={24} /></Pressable>
+      <Pressable accessibilityRole="button" accessibilityLabel="Add account" onPress={() => setAdding(true)} style={styles.iconButton}><AddNavigationMark size={32} /></Pressable>
+    </>} /> });
+  }, [navigation, displayedCurrency, styles.iconButton]);
+
   const groups = new Map<
     string,
     { title: string; currency: string; rows: Account[] }
@@ -274,7 +282,18 @@ function AccountsContent() {
     <Screen gap={24}>
       {adding ? <EntryOverlay onClose={() => setAdding(false)}>{accountEditor}</EntryOverlay> : null}
       {pendingBanks.map(connection=><Button key={connection.id} secondary icon="alert-circle" title={`Select accounts · ${connection.name}`} onPress={()=>router.push({pathname:"/accounts",params:{finverseConnection:connection.id,finverseWorkspace:session.profileId}})}/>)}
-      {ownedCurrencies.length > 1 ? <ChoiceField label="Currency" value={displayedCurrency ?? ""} options={ownedCurrencies.map(value=>({value,label:value}))} onChange={setCurrencyFilter}/> : null}
+      <Modal visible={currencyOpen} transparent animationType="fade" onRequestClose={() => setCurrencyOpen(false)}>
+        <View style={{ flex: 1, justifyContent: "center", padding: 24, backgroundColor: "#0007" }}>
+          <Pressable accessibilityLabel="Close currency selector" onPress={() => setCurrencyOpen(false)} style={{ position: "absolute", top: 0, bottom: 0, left: 0, right: 0 }} />
+          <View accessibilityViewIsModal style={{ backgroundColor: colors.white, borderRadius: 20, padding: 20, gap: 12 }}>
+            <Heading>Account currency</Heading>
+            <ScrollView style={{ maxHeight: 360 }}>
+            {ownedCurrencies.length ? ownedCurrencies.map(code => <Pressable key={code} accessibilityRole="button" accessibilityLabel={code} accessibilityState={{ selected: displayedCurrency === code }} onPress={() => { setCurrencyFilter(code); setCurrencyOpen(false); }} style={{ minHeight: 48, flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}><Text style={{ color: colors.ink }}>{code}</Text>{displayedCurrency === code ? <Icon line name="checkmark" /> : null}</Pressable>) : <Body>Add an account to see its currency here.</Body>}
+            </ScrollView>
+            <Button secondary title="Close" onPress={() => setCurrencyOpen(false)} />
+          </View>
+        </View>
+      </Modal>
       {summaries.filter(summary => summary.currency === displayedCurrency).map((summary) => (
         <View key={summary.currency} style={{ gap: 8 }}>
           {summaries.length > 1 ? <Body>{summary.currency}</Body> : null}

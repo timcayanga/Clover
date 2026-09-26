@@ -66615,3 +66615,11 @@ html[data-theme="dark"] .content.content--reports .reports-range-menu__summary {
 .settings-section--plan .settings-plan-card--pro .settings-plan-card__band {background:linear-gradient(135deg,#6ee7b7,#a2f2d8);color:#17383d}
 .settings-section--plan .settings-plan-card--pro .settings-plan-card__band-title,.settings-section--plan .settings-plan-card--pro .settings-plan-card__band-price {color:#17383d}
 .settings-section--plan .settings-plan-card__band .settings-pill {font-size:11px;margin-top:8px;background:rgba(255,255,255,.65);color:#17383d}
+
+/* Keep the requested mobile shortcuts beside Menu; currency stays beside Add. */
+@media (max-width: 1100px) {
+  .content.content:is(.content--accounts, .content--investments) > :is(.topbar, .shell-compact-bar) .shell-topbar-leading__actions { display: inline-flex !important; align-items: center; }
+  .content.content:is(.content--accounts, .content--investments) > :is(.topbar, .shell-compact-bar) .shell-mobile-relocated-action { display: none !important; }
+  .content.content--accounts .accounts-mobile-currency-button { display: inline-flex; align-items: center; justify-content: center; width: 40px; height: 40px; min-width: 40px; padding: 8px; border: 0; background: transparent; box-shadow: none; color: var(--accent); }
+  .content.content--adviser .adviser-reports-link { display: inline-flex !important; padding: 4px; background: transparent; border: 0; box-shadow: none; }
+}

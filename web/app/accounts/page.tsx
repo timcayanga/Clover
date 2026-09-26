@@ -4526,11 +4526,10 @@ function AccountsPageContent() {
       title="Accounts"
       mobileLeadingAction={<ContextualAskClover context="accounts" planTier={planTier} />}
       desktopTitleAction={<ContextualAskClover context="accounts" planTier={planTier} />}
-      mobileTrailingAction={<button className="icon-button" type="button" aria-label="Add account" onClick={openAddAccount}><ActionIcon name="plus" /></button>}
+      mobileTrailingAction={<><CurrencySelector value={selectedCurrency} onChange={next => { const code = next.toLowerCase() === "all" ? "" : formatCurrencyCode(next); setSelectedCurrency(code); persistSelectedCurrency(selectedWorkspaceId, code); }} options={availableCurrencies} includeAllOption={availableCurrencies.length > 1} allLabel="All currencies" ariaLabel="Select account currency" iconOnly showChevron={false} portalMenu menuAlignment="end" buttonClassName="accounts-mobile-currency-button" /><button className="icon-button" type="button" aria-label="Add account" onClick={openAddAccount}><ActionIcon name="plus" /></button></>}
       actions={<div className="accounts-desktop-tools">{accountsShellActions}</div>}
       >
       <div className="accounts-page">
-        <div className="accounts-mobile-currency"><CurrencySelector value={selectedCurrency} onChange={next => { const code=next.toLowerCase()==="all"?"":formatCurrencyCode(next); setSelectedCurrency(code);persistSelectedCurrency(selectedWorkspaceId,code); }} options={availableCurrencies} ariaLabel="Filter accounts by currency" showCurrencyCode /></div>
         {selectedWorkspaceId ? <FinversePendingAccounts workspaceId={selectedWorkspaceId} /> : null}
 
         {visibleAccounts.length > 0 ? (

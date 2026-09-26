@@ -496,10 +496,11 @@ export function AppHeader({
     "Account Details",
   ].includes(title);
   const canAdd = ["Accounts", "Transactions", "Recurring"].includes(title);
+  const adviserOnLeft = ["Accounts", "Investments"].includes(title) && !(back || onClose);
   return (
     <>
       <View style={styles.header}>
-        <View style={{ width: 48, flexDirection: "row" }}>
+        <View style={{ width: adviserOnLeft ? 88 : 48, flexDirection: "row", alignItems: "center" }}>
           <Pressable
             accessibilityRole="button"
             accessibilityLabel={back || onClose ? "Back" : "Open navigation menu"}
@@ -508,6 +509,7 @@ export function AppHeader({
           >
             <Icon name={back || onClose ? "arrow-back-outline" : "menu-outline"} size={22} />
           </Pressable>
+          {adviserOnLeft ? adviser : null}
         </View>
         <Text
           accessibilityRole="header"
@@ -516,9 +518,9 @@ export function AppHeader({
             styles.headerTitle,
             {
               position: "absolute",
-              left: back || onClose ? 54 : title === "Investments" ? 120 : adviserShortcut || home || trailing ? 100 : 54,
+              left: back || onClose ? 54 : adviserOnLeft ? 88 : adviserShortcut || home || trailing ? 100 : 54,
               fontSize: 18,
-              right: back || onClose ? 54 : title === "Investments" ? 120 : adviserShortcut || home || trailing ? 100 : 54,
+              right: back || onClose ? 54 : adviserOnLeft ? 88 : adviserShortcut || home || trailing ? 100 : 54,
             },
           ]}
         >
@@ -532,7 +534,7 @@ export function AppHeader({
             alignItems: "center",
           }}
         >
-          {adviserShortcut && !(back || onClose) && (trailing || canAdd) ? adviser : null}
+          {adviserShortcut && !adviserOnLeft && !(back || onClose) && (trailing || canAdd) ? adviser : null}
           {trailing ??
             (title === "Adviser" ? (
               <Pressable
@@ -541,9 +543,7 @@ export function AppHeader({
                 onPress={() => router.navigate("/reports")}
                 style={styles.iconButton}
               >
-                <Text style={{ fontSize: 11, color: colors.teal }}>
-                  View Reports
-                </Text>
+                <Icon name="pie-chart-outline" size={30} />
               </Pressable>
             ) : home ? (
               <>
