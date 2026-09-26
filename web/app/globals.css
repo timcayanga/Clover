@@ -66646,6 +66646,6 @@ html[data-theme="dark"] .content.content--reports .reports-range-menu__summary {
     min-width: 44px; border-radius: 999px!important; padding: 0!important; justify-content: center; position: relative;
   }
   .transaction-selection-toolbar__filter .transaction-filter-label,
-  .transaction-selection-toolbar__filter .transaction-filter-warning { display: none; }
+  .transaction-selection-toolbar__filter .transaction-filter-warning { display: none!important; }
   .transaction-selection-toolbar__filter .transaction-filter-count { position: absolute; right: -3px; top: -3px; }
 }
