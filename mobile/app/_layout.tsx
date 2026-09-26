@@ -8,6 +8,8 @@ import { resourceCache } from "@clerk/expo/resource-cache";
 import { disconnectStoreAccount } from "../src/store-billing";
 import { DisplayPreferences } from "../src/display-preferences";
 import { ClerkProvider, useAuth } from "@clerk/expo";
+import * as SecureStore from "expo-secure-store";
+import { hasVisitedClover, rememberCloverVisit, launchDestination, type LaunchStorage } from "../src/launch-history";
 import { authTokenCache } from "../src/auth-token-cache";
 import { Stack, usePathname, router } from "expo-router";
 import { useFonts } from "expo-font";
@@ -60,10 +62,14 @@ function PrivacyShield({ children }: { children: ReactNode }) {
 }
 function Routes() {
   const { colors, styles, dark } = useTheme();
-  const { active } = useAccess();
+  const { active, welcomeAllowed } = useAccess();
   const path = usePathname();
   const session = useSession();
   const landed = useRef(false);
+  useEffect(() => {
+    // This navigator only mounts once both session hydration and device history resolve.
+    void SplashScreen.hideAsync().catch(() => {});
+  }, []);
   useEffect(() => {
     if (!active) {
       landed.current = false;
@@ -96,8 +102,10 @@ function Routes() {
               headerBackButtonDisplayMode: "minimal",
             }}
           >
-            <Stack.Protected guard={!active}>
+            <Stack.Protected guard={!active && welcomeAllowed}>
               <Stack.Screen name="welcome" options={{ headerShown: false }} />
+            </Stack.Protected>
+            <Stack.Protected guard={!active}>
               <Stack.Screen name="auth" options={{ headerShown: false }} />
             </Stack.Protected>
             <Stack.Protected guard={active}>
@@ -162,6 +170,13 @@ function Routes() {
   );
 }
 const noToken = async () => null;
+const launchStorage: LaunchStorage = {
+  get: async (key) => Platform.OS === "web" ? localStorage.getItem(key) : SecureStore.getItemAsync(key),
+  set: async (key, value) => {
+    if (Platform.OS === "web") localStorage.setItem(key, value);
+    else await SecureStore.setItemAsync(key, value);
+  },
+};
 function AppSession({
   configured,
   loaded,
@@ -180,12 +195,26 @@ function AppSession({
   const { colors, styles, dark } = useTheme();
   const [demo, setDemo] = useState(false);
   const active = demo || Boolean(userId);
+  const [visited, setVisited] = useState<boolean | null>(null);
+  useEffect(() => {
+    let mounted = true;
+    void hasVisitedClover(launchStorage).then(value => { if (mounted) setVisited(value); });
+    return () => { mounted = false; };
+  }, []);
+  useEffect(() => {
+    if (!loaded || visited === null) return;
+    void rememberCloverVisit(launchStorage);
+    // Keep the first tutorial usable throughout this visit, but never after signing in.
+    if (active) setVisited(true);
+  }, [loaded, active, visited]);
+  if (launchDestination(loaded, active, visited) === "loading") return null;
   return (
     <AccessContext.Provider
       value={{
         active,
         configured,
         loaded,
+        welcomeAllowed: !visited && !active,
         enterDemo: () => setDemo(true),
         signIn: () => login("sign-in"),
         signUp: () => login("sign-up"),
@@ -197,6 +226,8 @@ function AppSession({
         userId={userId}
         getToken={getToken}
         signOut={async () => {
+          setVisited(true);
+          await rememberCloverVisit(launchStorage);
           setDemo(false);
           if (!demo) await logout();
         }}
@@ -245,9 +276,6 @@ export default function RootLayout() {
     "Poppins-Regular": require("../assets/fonts/Poppins-Regular.ttf"),
     "Poppins-SemiBold": require("../assets/fonts/Poppins-SemiBold.ttf"),
   });
-  useEffect(() => {
-    if (fontsLoaded || fontError) void SplashScreen.hideAsync();
-  }, [fontsLoaded, fontError]);
   const key = process.env.EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY;
   if (!fontsLoaded && !fontError) return null;
   return (

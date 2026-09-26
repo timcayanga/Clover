@@ -380,6 +380,9 @@ export function AppHeader({
   const profileRef = useRef(session.profileId);
   profileRef.current = session.profileId;
   const [panel, setPanel] = useState<"menu" | "notifications" | null>(null);
+  const [signingOut, setSigningOut] = useState(false);
+  const [signOutError, setSignOutError] = useState("");
+  const signingOutRef = useRef(false);
   const drawerProgress = useRef(new Animated.Value(0)).current;
   const reduceMotion = useRef(false);
   useEffect(() => {
@@ -718,6 +721,30 @@ export function AppHeader({
                 </>
               )}
             </ScrollView>
+            {panel === "menu" && (
+              <View style={{ borderTopWidth: 1, borderTopColor: colors.line, paddingTop: 8 }}>
+                {signOutError ? <Text accessibilityRole="alert" style={{ color: colors.danger, fontSize: 12 }}>{signOutError}</Text> : null}
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel={session.demo ? "Leave sample preview" : "Sign out"}
+                  accessibilityState={{ disabled: signingOut, busy: signingOut }}
+                  disabled={signingOut}
+                  onPress={() => {
+                    if (signingOutRef.current) return;
+                    signingOutRef.current = true;
+                    setSigningOut(true);
+                    setSignOutError("");
+                    void session.signOut()
+                      .catch(() => setSignOutError("Unable to sign out. Please try again."))
+                      .finally(() => { signingOutRef.current = false; setSigningOut(false); });
+                  }}
+                  style={{ minHeight: 44, flexDirection: "row", alignItems: "center", gap: 12, opacity: signingOut ? 0.5 : 1 }}
+                >
+                  <Icon name="log-out-outline" size={24} />
+                  <Text style={{ fontSize: 13, color: colors.ink }}>{signingOut ? "Signing out…" : session.demo ? "Leave sample preview" : "Sign out"}</Text>
+                </Pressable>
+              </View>
+            )}
           </Animated.View>
         </View>
       </Modal>
