@@ -53,6 +53,13 @@ async function main() {
 
   assert.equal(mobileOperation("POST", ["adviser", "chat"]), "adviser-chat");
   assert.equal(mobileOperation("GET", ["adviser", "chat"]), null);
+  const palette = { colors: ["#312E81", "#4F46E5", "#6D5CFF"], locations: [0, 0.48, 1], foreground: "#f8fafc" };
+  for (const operation of ["accounts", "account"] as const) {
+    const payload = operation === "accounts" ? { accounts: [{ id: "test", brandPalette: palette, rawPayload: "private" }] } : { account: { id: "test", brandPalette: palette, rawPayload: "private" } };
+    const result = mobileApiResponse(operation, payload);
+    assert.ok(JSON.stringify(result).includes(JSON.stringify(palette)), "Native account list and details must retain the desktop palette.");
+    assert.ok(!JSON.stringify(result).includes("private"), "Presentation metadata must not expose raw account data.");
+  }
   const chat = mobileApiResponse("adviser-chat", { reply: "Example", grounding: { transactionCount: 42, historyThrough: "2026-09-15T00:00:00Z", rawPayload: "private", accountNumber: "private" }, suggestions: [{ id: "follow-up", label: "Compare spending", prompt: "Compare my spending", secret: "private" }] }) as { grounding: unknown; suggestions: unknown };
   assert.deepEqual(chat.grounding, { transactionCount: 42, historyThrough: "2026-09-15T00:00:00Z" });
   assert.deepEqual(chat.suggestions, [{ id: "follow-up", label: "Compare spending", prompt: "Compare my spending" }]);

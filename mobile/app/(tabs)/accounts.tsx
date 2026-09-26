@@ -2,7 +2,7 @@ import { EntryOverlay } from "../../src/entry-overlay";
 import { Text } from "../../src/app-text";
 import { AccountBrandLogo } from "../../src/account-brand-logo";
 import { AccountTypeMark } from "../../src/account-type-mark";
-import { accountRowColors } from "../../../shared/visual-identity";
+import { accountCardPalette } from "../../../shared/visual-identity";
 import {
   router,
   useFocusEffect,
@@ -296,7 +296,6 @@ function AccountsContent() {
       </Modal>
       {summaries.filter(summary => summary.currency === displayedCurrency).map((summary) => (
         <View key={summary.currency} style={{ gap: 8 }}>
-          {summaries.length > 1 ? <Body>{summary.currency}</Body> : null}
           <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
             {["Net worth", "Spendable", "Assets", "Liabilities"].map(
               (title, i) => (
@@ -374,11 +373,8 @@ function AccountsContent() {
                     a.name.localeCompare(b.name),
                 )
                 .map((account) => {
-                  const [background, foreground] = accountRowColors(
-                    account.type,
-                    account.institution || account.name,
-                    dark,
-                  );
+                  const palette = accountCardPalette(account);
+                  const { foreground } = palette;
                   const expanded = expandedAccount === account.id;
                   const balance = accountDisplayBalance(account);
                   return (
@@ -398,7 +394,8 @@ function AccountsContent() {
                         }
                       >
                         <LinearGradient
-                          colors={[background, background]}
+                          colors={expanded ? palette.colors : [palette.colors[0], palette.colors[0]]}
+                          locations={expanded ? palette.locations : undefined}
                           start={{ x: 0, y: 0 }}
                           end={{ x: 1, y: 1 }}
                           style={{

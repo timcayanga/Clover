@@ -801,6 +801,16 @@ async function handle(
         row.displayBalance = balances.has(row.id) ? balances.get(row.id) : row.balance;
         const brand = getAccountBrand(row);
         row.brandLogoUrl = brand.logoSrc;
+        // Send the same resolved colors used by desktop and mobile web.
+        const stops = [...brand.background.matchAll(/(#[0-9a-f]{6})(?:\s+(\d+(?:\.\d+)?)%)?/gi)];
+        const colors = stops.map((stop) => stop[1]);
+        row.brandPalette = {
+          colors: colors.length >= 2 ? colors : [brand.accent, brand.accent],
+          ...(stops.length >= 2 && stops.every((stop) => stop[2] !== undefined)
+            ? { locations: stops.map((stop) => Number(stop[2]) / 100) }
+            : {}),
+          foreground: brand.foreground,
+        };
       }
     }
     return reply(mobileApiResponse(operation, responseData), response.status);

@@ -4,7 +4,7 @@ import { AccountBrandLogo } from "./account-brand-logo";
 import { Text } from "./app-text";
 import { Pressable, View, useWindowDimensions } from "react-native";
 import type { AccountRecord } from "./account-editor";
-import { accountRowColors } from "../../shared/visual-identity";
+import { accountCardPalette } from "../../shared/visual-identity";
 import { AccountTypeMark } from "./account-type-mark";
 import { Body, Icon, money, useTheme } from "./ui";
 
@@ -15,13 +15,10 @@ export function AccountIdentity({
   account: AccountRecord;
   onEdit: () => void;
 }) {
-  const { dark, colors } = useTheme();
+  const { colors } = useTheme();
   const narrow = useWindowDimensions().width < 360;
-  const [background, foreground] = accountRowColors(
-    account.type,
-    account.institution || account.name,
-    dark,
-  );
+  const palette = accountCardPalette(account);
+  const { foreground } = palette;
   const balance =
     account.displayBalance === undefined
       ? account.balance
@@ -38,7 +35,8 @@ export function AccountIdentity({
         onPress={() => setExpanded((v) => !v)}
       >
         <LinearGradient
-          colors={[background, background]}
+          colors={palette.colors}
+          locations={palette.locations}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 1 }}
           style={{

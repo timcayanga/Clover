@@ -23,6 +23,7 @@ export type AccountRecord = {
   balance: string | null;
   displayBalance?: string | null;
   brandLogoUrl?: string | null;
+  brandPalette?: import("../../shared/visual-identity").AccountCardPalette;
   lastFour?: string;
   source?: string;
   favorite?: boolean;
