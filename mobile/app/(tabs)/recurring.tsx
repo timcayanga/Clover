@@ -1,3 +1,4 @@
+import { registerScreenRefresh } from "../../src/screen-refresh";
 import { InlineDetailRow } from "../../src/inline-detail-row";
 import { PlanHeader } from "../../src/plan-ui";
 import { EntryOverlay } from "../../src/entry-overlay";
@@ -83,21 +84,24 @@ export default function Recurring() {
       setError("");
       setDay(null);
       setSelected(null);
-      const load = session.demo
+      const load = () => session.demo
         ? Promise.resolve({ items: [], occurrences: [], suggestions: [] })
         : session.request<Data>(
             `recurring?workspaceId=${encodeURIComponent(session.profileId)}&year=${month.getFullYear()}&month=${month.getMonth()}`,
           );
-      void load
+      const refresh = () => load()
         .then((value) => {
-          if (active)
-            setData((current) => (session.demo && current ? current : value));
+          if (active) {
+            setData((current) => (session.demo && current ? current : value)); setError("");
+          }
         })
         .catch((e) => {
           if (active) setError(e.message);
         });
+      void refresh();
+      const unregister = registerScreenRefresh("/recurring", refresh);
       return () => {
-        active = false;
+        active = false; unregister();
       };
     }, [session.demo, session.profileId, session.request, month, revision]),
   );

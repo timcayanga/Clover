@@ -1,3 +1,4 @@
+import { registerScreenRefresh } from "../../src/screen-refresh";
 import { EntryOverlay } from "../../src/entry-overlay";
 import { Text } from "../../src/app-text";
 import { AccountBrandLogo } from "../../src/account-brand-logo";
@@ -98,7 +99,7 @@ function AccountsContent() {
       setLoading(true);
       setError("");
       setSelected(null);
-      const load = session.demo
+      const load = () => session.demo
         ? Promise.resolve({
             accounts: [
               {
@@ -122,9 +123,9 @@ function AccountsContent() {
         : session.request<{ accounts: Account[] }>(
             `accounts?workspaceId=${encodeURIComponent(session.profileId)}`,
           );
-      void load
+      const refresh = () => load()
         .then((data) => {
-          if (active) setAccounts(data.accounts);
+          if (active) { setAccounts(data.accounts); setError(""); }
         })
         .catch((e) => {
           if (active) setError(e.message);
@@ -132,8 +133,10 @@ function AccountsContent() {
         .finally(() => {
           if (active) setLoading(false);
         });
+      void refresh();
+      const unregister = registerScreenRefresh("/accounts", refresh);
       return () => {
-        active = false;
+        active = false; unregister();
       };
     }, [session.demo, session.profileId, session.request, revision]),
   );

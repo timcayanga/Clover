@@ -1,4 +1,5 @@
 "use client";
+import { registerPullRefresh } from "./pull-refresh";
 
 import { useEffect, useMemo, useState } from "react";
 import { formatCurrencyCode } from "@/lib/currency-format";
@@ -96,8 +97,9 @@ export const useLiveInvestmentValues = (positions: InvestmentPosition[]) => {
       }
     };
     void load();
+    const unregister = registerPullRefresh(async () => { valueCache.clear(); await load(); });
     return () => {
-      cancelled = true;
+      unregister(); cancelled = true;
     };
   }, [eligible]);
 

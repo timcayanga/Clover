@@ -366,6 +366,7 @@ export function SplitBillWorkspace({
   const [groups, setGroups] = useState(initialGroups);
   const [people, setPeople] = useState(initialPeople);
   const [selected, setSelected] = useState<DetailSelection>(null);
+  useEffect(() => { if (!selected) { setBills(initialBills); setGroups(initialGroups); setPeople(initialPeople); } }, [initialBills, initialGroups, initialPeople, selected]);
   const [detailTab, setDetailTab] = useState<DetailTab>("overview");
   const [transferSettlementDrafts, setTransferSettlementDrafts] = useState<Record<string, string>>({});
   const [transferSettlementNotes, setTransferSettlementNotes] = useState<Record<string, string>>({});

@@ -1,4 +1,5 @@
 "use client";
+import { usePullRefresh } from "@/lib/pull-refresh";
 import { MobileSheetHandle } from "@/components/mobile-sheet-handle";
 import { FinverseConnectButton } from "@/components/finverse-connect-button";
 import { reconcileTransactionTotal } from "@/lib/transaction-mobile-pagination";
@@ -2816,6 +2817,8 @@ function TransactionsPageContent() {
       }
     }
   };
+
+  usePullRefresh(() => loadTransactionsPage(selectedWorkspaceId, { background: true }));
 
   const loadTransactionsPage = async (
     workspaceId: string,

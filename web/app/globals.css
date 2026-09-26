@@ -66649,3 +66649,8 @@ html[data-theme="dark"] .content.content--reports .reports-range-menu__summary {
   .transaction-selection-toolbar__filter .transaction-filter-warning { display: none!important; }
   .transaction-selection-toolbar__filter .transaction-filter-count { position: absolute; right: -3px; top: -3px; }
 }
+
+/* Home currency follows the page, without changing Profile preferences. */
+.home-top-actions { display: flex; align-items: center; gap: 12px; }
+@media (max-width: 1100px) { .home-currency-desktop { display: none; } }
+@media (min-width: 1101px) { .home-header-adviser { display: none !important; } }

@@ -1,4 +1,5 @@
 "use client";
+import { usePullRefresh } from "@/lib/pull-refresh";
 import { MobileSheetHandle } from "@/components/mobile-sheet-handle";
 import { FinversePendingAccounts } from "@/components/finverse-pending-accounts";
 import { FinverseConnectButton as AccountBankSync } from "@/components/finverse-connect-button";
@@ -1729,6 +1730,8 @@ function AccountsPageContent() {
     () => new Set([...deletingAccountIds, ...getDeletingWorkspaceAccountIds(selectedWorkspaceId)]),
     [deletingAccountIds, selectedWorkspaceId]
   );
+
+  usePullRefresh(() => loadWorkspaceData(selectedWorkspaceId, { silent: true, forceFresh: true, awaitHydration: true }));
 
   const loadWorkspaces = async () => {
     setWorkspacesLoading(true);

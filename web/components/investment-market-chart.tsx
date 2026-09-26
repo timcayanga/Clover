@@ -1,4 +1,5 @@
 "use client";
+import { registerPullRefresh } from "@/lib/pull-refresh";
 
 import { MarketAssetNews } from "@/components/market-asset-news";
 import { useEffect, useMemo, useState } from "react";
@@ -423,7 +424,6 @@ export function InvestmentMarketChart({ investmentAccounts, onOpenPortfolio, foc
       setError(null);
       setLoading(false);
       setLastUpdatedAt(cachedHistory.fetchedAt);
-      return;
     }
 
     let cancelled = false;
@@ -461,10 +461,10 @@ export function InvestmentMarketChart({ investmentAccounts, onOpenPortfolio, foc
       }
     };
 
-    void loadHistory();
-
+    if (!cachedHistory) void loadHistory();
+    const unregister = registerPullRefresh(loadHistory);
     return () => {
-      cancelled = true;
+      unregister(); cancelled = true;
       controller.abort();
     };
   }, [queryRevision, range, submittedMarket, submittedSymbol]);

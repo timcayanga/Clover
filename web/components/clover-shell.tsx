@@ -3,6 +3,7 @@
 import {
   createContext,
   startTransition,
+  useTransition,
   useContext,
   useEffect,
   useMemo,
@@ -760,7 +761,13 @@ export function CloverShell({
   const quickAddPhotoLibraryInputRef = useRef<HTMLInputElement | null>(null);
   const mobileShellGestureRef = useRef<MobileShellGesture>(idleMobileShellGesture());
   const mobilePullFrameRef = useRef<number | null>(null);
-  const mobileRefreshTimerRef = useRef<number | null>(null);
+  const [refreshPagePending, startPageRefresh] = useTransition();
+  const [refreshClientsPending, setRefreshClientsPending] = useState(false);
+  useEffect(() => {
+    if (mobileRefreshStateRef.current === "refreshing" && !refreshPagePending && !refreshClientsPending) {
+      setMobilePullDistance(0); mobileRefreshStateRef.current = "idle"; setMobileRefreshState("idle");
+    }
+  }, [refreshPagePending, refreshClientsPending]);
   const mobileRefreshStateRef = useRef<"idle" | "pulling" | "ready" | "refreshing">("idle");
   const [openMenu, setOpenMenu] = useState<"notifications" | "profile" | "more" | null>(null);
   const [guidanceMenuVisibility, setGuidanceMenuVisibility] = useState<GuidanceMenuVisibility>(() =>
@@ -962,7 +969,7 @@ export function CloverShell({
         return;
       }
 
-      if (getGestureScrollTop(target) > 0 || isMobileGestureBlockedTarget(target)) return;
+      if (!["/home", "/dashboard", "/accounts", "/transactions", "/recurring", "/split-bill", "/investments", "/reports", "/budgeting", "/goals", "/circles"].includes(pathname ?? "") || getGestureScrollTop(target) > 0 || isMobileGestureBlockedTarget(target)) return;
 
       mobileShellGestureRef.current = {
         kind: "pull-refresh",
@@ -1034,18 +1041,13 @@ export function CloverShell({
       mobileRefreshStateRef.current = "refreshing";
       setMobileRefreshState("refreshing");
       clearJsonRequestCache();
+      const tasks: Promise<unknown>[] = [];
+      setRefreshClientsPending(true);
       window.dispatchEvent(new CustomEvent(cloverPullToRefreshEvent, {
-        detail: { pathname, workspaceId: workspaceId ?? null },
+        detail: { pathname, workspaceId: workspaceId ?? null, waitUntil: (task: Promise<unknown>) => tasks.push(task) },
       }));
-      startTransition(() => router.refresh());
-
-      if (mobileRefreshTimerRef.current !== null) window.clearTimeout(mobileRefreshTimerRef.current);
-      mobileRefreshTimerRef.current = window.setTimeout(() => {
-        setMobilePullDistance(0);
-        mobileRefreshStateRef.current = "idle";
-        setMobileRefreshState("idle");
-        mobileRefreshTimerRef.current = null;
-      }, 900);
+      startPageRefresh(() => router.refresh());
+      void Promise.allSettled(tasks).finally(() => setRefreshClientsPending(false));
     };
 
     document.addEventListener("touchstart", handleTouchStart, { passive: true });
@@ -1059,7 +1061,6 @@ export function CloverShell({
       document.removeEventListener("touchend", handleTouchEnd);
       document.removeEventListener("touchcancel", resetPullGesture);
       if (mobilePullFrameRef.current !== null) window.cancelAnimationFrame(mobilePullFrameRef.current);
-      if (mobileRefreshTimerRef.current !== null) window.clearTimeout(mobileRefreshTimerRef.current);
     };
   }, [isProfileDrawerOpen, isSidebarOpen, openMenu, pathname, quickAddModal, router, workspaceId]);
   const profileImage = hasMounted ? user?.imageUrl ?? cachedProfileImage : null;
@@ -2617,7 +2618,7 @@ export function CloverShell({
                   <MenuIcon name="chevron-left" />
                 </button>
               ) : null}
-              <div className="shell-topbar-leading__actions">{active === "adviser" || active === "dashboard" ? null : mobileLeadingAction ?? <AdviserHeaderLink />}</div>
+              <div className="shell-topbar-leading__actions">{active === "adviser" ? null : mobileLeadingAction ?? (active === "dashboard" ? null : <AdviserHeaderLink />)}</div>
             </div>
             <div
               className={`shell-compact-bar__copy ${hideCompactBarCopyOnMobile ? "shell-compact-bar__copy--hide-mobile" : ""} ${
@@ -2667,7 +2668,7 @@ export function CloverShell({
                   <MenuIcon name="chevron-left" />
                 </button>
               ) : null}
-              <div className="shell-topbar-leading__actions">{active === "adviser" || active === "dashboard" ? null : mobileLeadingAction ?? <AdviserHeaderLink />}</div>
+              <div className="shell-topbar-leading__actions">{active === "adviser" ? null : mobileLeadingAction ?? (active === "dashboard" ? null : <AdviserHeaderLink />)}</div>
             </div>
             <div className="topbar__title-wrap">
               {kicker ? <p className="eyebrow">{kicker}</p> : null}

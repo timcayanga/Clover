@@ -480,8 +480,8 @@ async function handle(
       return reply(await (await import("@/lib/mobile-recurring")).mobileRecurring(workspaceId, year, month));
     }
     if (operation === "home") {
-      const currency = z.string().regex(/^[A-Z]{3}$/).parse(url.searchParams.get("currency") ?? normalizeRegionalPreferences(user.regionalPreferences).baseCurrency);
-      return reply(await mobileHome(workspaceId, currency));
+      const currency = z.string().regex(/^(ALL|[A-Z]{3})$/).parse(url.searchParams.get("currency") ?? normalizeRegionalPreferences(user.regionalPreferences).baseCurrency);
+      return reply(await mobileHome(workspaceId, currency, normalizeRegionalPreferences(user.regionalPreferences).baseCurrency));
     }
     if (operation === "transaction") {
       const row = await prisma.transaction.findFirst({

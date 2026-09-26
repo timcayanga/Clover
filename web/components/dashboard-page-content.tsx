@@ -1,3 +1,6 @@
+import { homeCurrencyScope } from "../../shared/home-currency-scope";
+import { HomeCurrencySelector } from "./home-currency-selector";
+import { AdviserHeaderLink } from "./adviser-header-link";
 import { buildHomeAdviserInsights } from "../../shared/home-adviser-insights";
 import { finverseBalances } from "@/lib/finverse-balances";
 import { convertHomeTotal } from "@/lib/home-currency-total";
@@ -625,26 +628,19 @@ async function DashboardStream({
   user,
   workspaceSummary,
   defaultCurrency,
+  selectedCurrency,
 }: {
   user: Awaited<ReturnType<typeof getOrCreateCurrentUser>>;
   workspaceSummary: WorkspaceSummary;
   defaultCurrency: string;
+  selectedCurrency: string;
 }) {
   try {
   const cashAccountCount = workspaceSummary.accounts.filter((account) => account.type === "cash").length;
   const shouldShowStarterCard =
     workspaceSummary._count.transactions === 0 && workspaceSummary._count.importFiles === 0 && workspaceSummary._count.accounts === 0;
-  const preferredDashboardCurrency = (() => {
-    const currencies = Array.from(
-      new Set(workspaceSummary.accounts.map((account) => formatCurrencyCode(account.currency)).filter(Boolean))
-    ).sort((left, right) => left.localeCompare(right));
-
-    if (currencies.includes(defaultCurrency)) {
-      return defaultCurrency;
-    }
-
-    return currencies[0] ?? "PHP";
-  })();
+  const allCurrencies = selectedCurrency === "ALL";
+  const preferredDashboardCurrency = allCurrencies ? defaultCurrency : selectedCurrency;
 
   const shouldLoadTransactions = workspaceSummary._count.transactions > 0;
   const now = new Date();
@@ -769,8 +765,8 @@ async function DashboardStream({
     dashboardAccountsPromise,
   ]);
 
-  const allTransactions = recentTransactions as DashboardTransaction[];
   const transactionCurrency = (transaction: DashboardTransaction) => formatCurrencyCode(transaction.currency || transaction.account?.currency || defaultCurrency);
+  const allTransactions = (recentTransactions as DashboardTransaction[]).filter(t => allCurrencies || transactionCurrency(t) === selectedCurrency);
   const reportCurrencies = Array.from(new Set([preferredDashboardCurrency, ...allTransactions.map(transactionCurrency)])).sort();
   // Advice is scoped to its labeled currency; review previews include every currency.
   const currentTransactions = allTransactions.filter((transaction) => transactionCurrency(transaction) === preferredDashboardCurrency);
@@ -806,9 +802,9 @@ async function DashboardStream({
   };
 
   const spendableAccounts = dashboardAccounts.filter((account) =>
-    isSpendableAccountType(account.type as Parameters<typeof isSpendableAccountType>[0])
+    isSpendableAccountType(account.type as Parameters<typeof isSpendableAccountType>[0]) && (allCurrencies || formatCurrencyCode(account.currency) === selectedCurrency)
   );
-  const balanceCurrency = formatCurrencyCode(defaultCurrency);
+  const balanceCurrency = preferredDashboardCurrency;
   const spendableCurrencies = Array.from(
     new Set(spendableAccounts.map((account) => formatCurrencyCode(account.currency)).filter(Boolean))
   );
@@ -877,14 +873,15 @@ async function DashboardStream({
       : null;
   const nextSevenDays = new Date(now);
   nextSevenDays.setDate(nextSevenDays.getDate() + 7);
-  const [plannedPaymentSuggestions, outstandingReviewCount, recurringCommitments] = await Promise.all([
+  const [allPlannedPaymentSuggestions, outstandingReviewCount, recurringCommitments] = await Promise.all([
     getPlannedPaymentSuggestions(workspaceSummary.id).catch(() => []),
-    prisma.transaction.count({ where: buildReviewQueueWhere(workspaceSummary.id) }),
+    prisma.transaction.count({ where: { AND: [buildReviewQueueWhere(workspaceSummary.id), ...(allCurrencies ? [] : [{ currency: selectedCurrency }])] } }),
     prisma.financialCommitment.findMany({
       where: {
         workspaceId: workspaceSummary.id,
         status: "active",
         kind: { in: ["planned_payment", "reminder"] },
+        ...(allCurrencies ? {} : { currency: selectedCurrency }),
         OR: [
           { dueDate: { not: null } },
           { nextDueDate: { not: null } },
@@ -904,6 +901,7 @@ async function DashboardStream({
       take: 30,
     }).catch(() => []),
   ]);
+  const plannedPaymentSuggestions = allPlannedPaymentSuggestions.filter(s => allCurrencies || s.currency === selectedCurrency);
   const plannedPaymentsDueSoon = plannedPaymentSuggestions.filter(
     (suggestion) => suggestion.dueDate && new Date(suggestion.dueDate) <= nextSevenDays
   );
@@ -1072,7 +1070,7 @@ async function DashboardStream({
           <div className="dashboard-home__hero-aside" aria-label="Monthly balance summary">
             {balanceHighlights.map((pill) => (
               <div key={pill.key} className={`dashboard-home__hero-mini-pill dashboard-home__hero-mini-pill--${pill.isExpense ? "expense" : "income"}`}>
-                <span className="dashboard-home__hero-mini-label" title={`All currencies converted to ${balanceCurrency}`}>{pill.label}</span>
+                <span className="dashboard-home__hero-mini-label" title={allCurrencies ? `All currencies converted to ${balanceCurrency}` : `${balanceCurrency} only`}>{pill.label}</span>
                 <div className="dashboard-home__hero-mini-row">
                   <strong className="dashboard-home__hero-mini-value">
                     {pill.unavailable ? "—" : <HomeSensitiveAmount value={pill.value} currency={pill.currency} />}
@@ -1149,7 +1147,7 @@ async function DashboardStream({
           )))}
         </div>
 
-        <DashboardBudgetPulse key={workspaceSummary.id} workspaceId={workspaceSummary.id} refreshKey={now.toISOString()} />
+        <DashboardBudgetPulse currency={selectedCurrency} key={workspaceSummary.id} workspaceId={workspaceSummary.id} refreshKey={now.toISOString()} />
 
         <div className="dashboard-home__snapshot-grid dashboard-home__snapshot-grid--lower">
           <HomeRecurringPaymentsCard
@@ -1238,7 +1236,7 @@ async function DashboardStream({
   }
 }
 
-async function DashboardPageStream() {
+async function DashboardPageStream(currency?: string) {
   try {
     const session = await getPageSessionContext();
     const user = await getOrCreateCurrentUser(session.userId);
@@ -1249,12 +1247,17 @@ async function DashboardPageStream() {
     const cookieStore = await cookies();
     const defaultCurrency = normalizeDefaultCurrency(cookieStore.get(defaultCurrencyCookieKey)?.value);
 
+    const selectedCurrency = homeCurrencyScope(currency, defaultCurrency).selected;
+    const currencyOptions = [...new Set([defaultCurrency, ...workspaceSummary.accounts.map(a => a.currency)])];
     return (
       <CloverShell
         active="dashboard"
         title="Home"
         workspaceId={workspaceSummary.id}
+        desktopTitleAction={<AdviserHeaderLink />}
+        mobileLeadingAction={<HomeCurrencySelector value={selectedCurrency} options={currencyOptions} mobile />}
         actions={(
+        <div className="home-top-actions"><HomeCurrencySelector value={selectedCurrency} options={currencyOptions} />
         <DashboardTopActionsLazy
           workspaceId={workspaceSummary.id}
           accounts={workspaceSummary.accounts.map((account) => ({
@@ -1264,13 +1267,14 @@ async function DashboardPageStream() {
             type: account.type,
             currency: account.currency,
           }))}
-        />
+        /></div>
       )}
       >
         <DashboardStream
           user={user}
           workspaceSummary={workspaceSummary}
           defaultCurrency={defaultCurrency}
+          selectedCurrency={selectedCurrency}
         />
     </CloverShell>
     );
@@ -1291,6 +1295,6 @@ async function DashboardPageStream() {
   }
 }
 
-export async function DashboardPageContent() {
-  return DashboardPageStream();
+export async function DashboardPageContent(currency?: string) {
+  return DashboardPageStream(currency);
 }

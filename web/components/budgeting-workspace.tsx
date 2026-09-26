@@ -1,4 +1,5 @@
 "use client";
+import { registerPullRefresh } from "@/lib/pull-refresh";
 import { MobileSheetHandle } from "@/components/mobile-sheet-handle";
 
 import { PlanTabs } from "@/components/plan-tabs";
@@ -75,6 +76,7 @@ export function BudgetingWorkspace({
   const editingBudget =
     budgets.find((budget) => budget.id === editorId) ?? null;
   const editorOpen = editorId === "new" || Boolean(editingBudget);
+  useEffect(() => { if (!editorOpen) setData(initialData); }, [initialData, editorOpen]);
 
   useEffect(() => {
     const media = window.matchMedia("(max-width: 1100px)");
@@ -94,7 +96,7 @@ export function BudgetingWorkspace({
     setHistoryError(null);
     if (!selectedId) return;
     const controller = new AbortController();
-    void (async () => {
+    const refresh = async () => {
       try {
         const response = await fetch(
           `/api/budgets/${encodeURIComponent(selectedId)}`,
@@ -119,8 +121,10 @@ export function BudgetingWorkspace({
               : "Unable to load budget history.",
           );
       }
-    })();
-    return () => controller.abort();
+    };
+    void refresh();
+    const unregister = registerPullRefresh(refresh);
+    return () => { unregister(); controller.abort(); };
   }, [selectedId, historyVersion]);
 
   const updateAppearance = async (

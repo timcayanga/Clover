@@ -12,7 +12,7 @@ export function AccountBrandLogo({
   size?: number;
 }) {
   const [failed, setFailed] = useState<string | null>(null);
-  const path = account.brandLogoUrl;
+  const path = account.brandLogoUrl?.includes("/assets/account-types/") ? null : account.brandLogoUrl;
   const uri = path?.startsWith("/")
     ? `${apiBase()}${path}`
     : path?.startsWith("https:")

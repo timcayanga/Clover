@@ -24,7 +24,7 @@ type BudgetProgress = {
 };
 type BudgetPulse = { activeBudgetCount: number; budgets: BudgetProgress[] };
 
-export function DashboardBudgetPulse({ workspaceId, refreshKey }: { workspaceId: string; refreshKey: string }) {
+export function DashboardBudgetPulse({ workspaceId, refreshKey, currency = "ALL" }: { workspaceId: string; refreshKey: string; currency?: string }) {
   const [pulse, setPulse] = useState<BudgetPulse | null>(null);
 
   useEffect(() => {
@@ -43,17 +43,18 @@ export function DashboardBudgetPulse({ workspaceId, refreshKey }: { workspaceId:
     return () => controller.abort();
   }, [workspaceId, refreshKey]);
 
-  if (!pulse || pulse.activeBudgetCount === 0) {
+  const visibleBudgets = pulse?.budgets.filter(b => currency === "ALL" || b.currency === currency) ?? [];
+  if (!pulse || visibleBudgets.length === 0) {
     return null;
   }
 
-  const budgets = [...pulse.budgets].sort((a, b) => Number(b.isAtRisk) - Number(a.isAtRisk)).slice(0, 3);
+  const budgets = [...visibleBudgets].sort((a, b) => Number(b.isAtRisk) - Number(a.isAtRisk)).slice(0, 3);
   return (
     <article className="dashboard-home__insight-strip glass" aria-label="Budget status">
       <div className="home-budget-progress__header">
         <h4 className="reports-subtab-title">Budgeting</h4>
         <Link className="dashboard-home__insight-strip-action" href="/budgeting">
-          {pulse.activeBudgetCount > 3 ? `View all ${pulse.activeBudgetCount} budgets` : "Open budgeting"}
+          {visibleBudgets.length > 3 ? `View all ${visibleBudgets.length} budgets` : "Open budgeting"}
         </Link>
       </div>
       <div className="home-budget-progress__list">

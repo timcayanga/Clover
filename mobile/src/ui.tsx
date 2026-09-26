@@ -1,3 +1,4 @@
+import { refreshScreen } from "./screen-refresh";
 import { telemetry, safeAction } from "../../shared/analytics";
 import { Text, TextInput } from "./app-text";
 import { useUser } from "@clerk/expo";
@@ -22,6 +23,7 @@ import {
   useWindowDimensions,
   Pressable,
   ScrollView,
+  RefreshControl,
   StyleSheet,
   View,
   type ColorValue,
@@ -256,6 +258,14 @@ export function Screen({
     onPanResponderTerminate: () => Animated.spring(slide, { toValue: 0, useNativeDriver: true, bounciness: 0 }).start(),
   })).current;
   const path = usePathname();
+  const [refreshing, setRefreshing] = useState(false);
+  const refreshBusy = useRef(false);
+  const refreshable = !sheet && ["/", "/accounts", "/recurring", "/reports", "/investments", "/budgeting", "/goals", "/circles", "/split-bills"].includes(path);
+  const onRefresh = async () => {
+    if (refreshBusy.current) return;
+    refreshBusy.current = true; setRefreshing(true);
+    try { await refreshScreen(path); } finally { refreshBusy.current = false; setRefreshing(false); }
+  };
   const detailNavigation = !sheet && (path.startsWith("/transaction/") || path.startsWith("/import/") || ["/offline", "/settings", "/notifications", "/budgeting", "/goals", "/investments", "/circles", "/split-bills", "/reports"].includes(path));
   const content = Children.toArray(children);
   const headerIndex = content.findIndex(child => isValidElement(child) && Boolean((child.type as { screenHeader?: boolean }).screenHeader));
@@ -265,6 +275,8 @@ export function Screen({
       {sheet ? <View {...drag.panHandlers} accessible accessibilityRole="button" accessibilityLabel="Dismiss sheet" accessibilityHint="Swipe down to return to the previous page" accessibilityActions={[{name:"activate",label:"Dismiss"}]} onAccessibilityAction={() => onDismiss?.()} style={{ height: 28, alignItems: "center", justifyContent: "center" }}><View style={{ width: 36, height: 4, borderRadius: 4, backgroundColor: colors.line }}/></View> : null}
       {header}
     <ScrollView
+      refreshControl={refreshable ? <RefreshControl refreshing={refreshing} onRefresh={() => void onRefresh()} tintColor={colors.teal} colors={[colors.teal]} /> : undefined}
+      alwaysBounceVertical={refreshable}
       style={{ flex: 1, backgroundColor: colors.bg }}
       contentContainerStyle={[
         styles.content,
@@ -368,8 +380,10 @@ export function AppHeader({
   back = false,
   onClose,
   trailing,
+  leading,
 }: {
   trailing?: ReactNode;
+  leading?: ReactNode;
   title: string;
   back?: boolean;
   onClose?: () => void;
@@ -503,7 +517,7 @@ export function AppHeader({
   return (
     <>
       <View style={styles.header}>
-        <View style={{ width: adviserOnLeft ? 88 : 48, flexDirection: "row", alignItems: "center" }}>
+        <View style={{ width: adviserOnLeft || leading ? 88 : 48, flexDirection: "row", alignItems: "center" }}>
           <Pressable
             accessibilityRole="button"
             accessibilityLabel={back || onClose ? "Back" : "Open navigation menu"}
@@ -512,6 +526,7 @@ export function AppHeader({
           >
             <Icon name={back || onClose ? "arrow-back-outline" : "menu-outline"} size={22} />
           </Pressable>
+          {leading}
           {adviserOnLeft ? adviser : null}
         </View>
         <Text

@@ -154,10 +154,10 @@ assert.doesNotMatch(
   /RouteSplash|<Suspense fallback=\{<DashboardStreamFallback \/>\}>/,
   "Home must rely on its route-level loading boundary so custom async trees cannot race hydration.",
 );
-assert.match(dashboardSource, /export async function DashboardPageContent\(\) \{[\s\S]{0,80}return DashboardPageStream\(\)/);
+assert.match(dashboardSource, /export async function DashboardPageContent\(currency\?: string\) \{[\s\S]{0,80}return DashboardPageStream\(currency\)/);
 assert.match(
   homePageSource,
-  /export default async function HomePage[\s\S]{0,200}return DashboardPageContent\(\)/,
+  /export default async function HomePage[\s\S]{0,200}return DashboardPageContent\(\(await searchParams\)\.currency\)/,
   "The Home route must await its server tree inside the standard segment loading boundary.",
 );
 assert.match(dashboardSource, /const todayStart = toDayStart\(now\)/);

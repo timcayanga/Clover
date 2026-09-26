@@ -1,3 +1,4 @@
+import { registerScreenRefresh } from "../src/screen-refresh";
 import { EntryOverlay } from "../src/entry-overlay";
 import { Text } from "../src/app-text";
 import { LinearGradient } from "expo-linear-gradient";
@@ -512,7 +513,7 @@ function NativeMarkets({ accounts }: { accounts: AccountRecord[] }) {
     setLoading(true);
     setError("");
     setHistory(null);
-    void (
+    const refresh = () => (
       session.demo
         ? Promise.resolve({ points: [] })
         : session.request<typeof history>(
@@ -528,8 +529,10 @@ function NativeMarkets({ accounts }: { accounts: AccountRecord[] }) {
       .finally(() => {
         if (active) setLoading(false);
       });
+    void refresh();
+    const unregister = registerScreenRefresh("/investments", refresh);
     return () => {
-      active = false;
+      active = false; unregister();
     };
   }, [
     symbol,
