@@ -6,13 +6,13 @@ import Link from "next/link";
 import styles from "./public-info.module.css";
 import type { ContactInquiryAttachment } from "@/lib/contact-inquiries";
 
-export function ContactUsForm() {
+export function ContactUsForm({ deletion = false }: { deletion?: boolean }) {
   const id = useId();
   const fileInput = useRef<HTMLInputElement>(null);
   const maxAttachmentBytes = 2 * 1024 * 1024;
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
-  const [message, setMessage] = useState("");
+  const [message, setMessage] = useState(deletion ? "Please delete my Clover account and associated data. Please contact me at my account email to verify ownership." : "");
   const [attachment, setAttachment] = useState<ContactInquiryAttachment | null>(
     null,
   );
@@ -122,7 +122,8 @@ export function ContactUsForm() {
         body: JSON.stringify({
           name,
           email,
-          message,
+          sourcePage: deletion ? "/contact-us#delete-account" : window.location.pathname,
+          message: deletion ? `[Account deletion request]\n${message}` : message,
           attachment,
         }),
       });
@@ -139,14 +140,14 @@ export function ContactUsForm() {
 
       setName("");
       setEmail("");
-      setMessage("");
+      setMessage(deletion ? "Please delete my Clover account and associated data." : "");
       setAttachment(null);
       setAttachmentLabel(null);
       if (fileInput.current) fileInput.current.value = "";
       setTouched({ name: false, email: false, message: false });
       setStatus("success");
       setFeedback(
-        "Your message has been received. We aim to reply by email within 1 to 3 days.",
+        deletion ? "Deletion request received. We aim to contact you within 1 to 3 days to verify ownership before deleting anything." : "Your message has been received. We aim to reply by email within 1 to 3 days.",
       );
     } catch (error) {
       setStatus("error");
@@ -266,7 +267,7 @@ export function ContactUsForm() {
         </p>
         <div>
           <button className={styles.submit} type="submit" disabled={!canSubmit}>
-            {status === "submitting" ? "Sending..." : "Send message"}
+            {status === "submitting" ? "Sending..." : deletion ? "Request account deletion" : "Send message"}
           </button>
         </div>
       </div>

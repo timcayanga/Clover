@@ -1,3 +1,4 @@
+import { useCloudAiConsent } from "./ai-consent";
 import { updateNativePlanAnalytics } from "./analytics";
 import { uploadInParts } from "./offline/resumable-upload";
 import { FileQueue, type QueuedFile } from "./offline/file-queue";
@@ -208,14 +209,20 @@ export function SessionProvider({
       })().catch(() => {});
     };
   }, [demo, userId, transport]);
+  const cloudAi = useCloudAiConsent(transport);
+  const cloudAiRef = useRef(cloudAi);
+  cloudAiRef.current = cloudAi;
   const request = useCallback(
     async <T,>(path: string, options?: RequestInit) => {
+      if (path.startsWith("adviser/chat") && options?.method === "POST" && !demo && !(await cloudAiRef.current.ensure())) throw new Error("AI permission was not granted. You can enable it in Privacy and Data Use.");
+      if (path.startsWith("split-bill-receipts/preview") && options?.method === "POST" && !demo) await cloudAiRef.current.ensure().catch(() => false);
+      if (path.startsWith("settings/ai-consent")) return transport<T>(path, options);
       const engine = await offlineReady.current;
       return engine
         ? engine.request<T>(path, options)
         : transport<T>(path, options);
     },
-    [transport],
+    [transport, demo],
   );
   useEffect(() => {
     if (demo) return;
@@ -287,6 +294,7 @@ export function SessionProvider({
         uploads,
         registerUpload: async (id, file, targetProfileId = profileId) => {
           if (!data?.profiles.some((p) => p.id === targetProfileId)) return;
+          if (!demo) await cloudAiRef.current.ensure().catch(() => false);
           const uploadQueue=fileQueue??fileQueueRef.current;
           if(!demo && Platform.OS!=="web" && !uploadQueue)throw new Error("Secure file storage is still opening. Please try again in a moment.");
           if (uploadQueue) {
@@ -358,6 +366,7 @@ export function SessionProvider({
       }}
     >
       {children}
+      {cloudAi.prompt}
     </Context.Provider>
   );
 }

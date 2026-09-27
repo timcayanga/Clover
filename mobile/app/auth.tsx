@@ -4,6 +4,8 @@ import { Image, KeyboardAvoidingView, Linking, Platform, Pressable, Switch, View
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { router, useLocalSearchParams } from "expo-router";
 import { useSignIn, useSignUp } from "@clerk/expo";
+import { useSignInWithApple } from "@clerk/expo/apple";
+import { Ionicons } from "@expo/vector-icons";
 import { useSSO } from "@clerk/expo/experimental";
 import { AuthVerification } from "../src/auth-verification";
 import { useAccess } from "../src/access";
@@ -39,6 +41,7 @@ function AuthForm() {
   const { signIn } = useSignIn();
   const { signUp } = useSignUp();
   const { startSSOFlow } = useSSO();
+  const { startAppleAuthenticationFlow } = useSignInWithApple();
   const [step, setStep] = useState<Step>(
     params.mode === "sign-up" ? "sign-up" : "sign-in",
   );
@@ -375,6 +378,12 @@ function AuthForm() {
           )}
           {initial ? (
             <>
+              {Platform.OS === "ios" ? <Button title="Sign in with Apple" fullWidth secondary leading={<Ionicons name="logo-apple" size={20} color={colors.ink} />} disabled={busy || (step === "sign-up" && !terms)} onPress={() => void run(async () => {
+                await setRememberSession(remember);
+                const result = await startAppleAuthenticationFlow();
+                if (result.createdSessionId && result.setActive) await result.setActive({ session: result.createdSessionId });
+                else if (result.signIn?.status === "needs_second_factor" || result.signUp?.status === "missing_requirements") { setStep("extra-verification"); setMessage("Complete your account verification to continue."); }
+              })} /> : null}
               {(["google"] as const).map((provider) => (
                 <Button
                   key={provider}

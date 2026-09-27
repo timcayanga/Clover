@@ -48,7 +48,9 @@ export const preferencePatch = z
   })
   .strict();
 export function parseAppPreferences(raw: unknown): AppPreferences {
-  const parsed = preferencePatch.safeParse(raw);
+  // Consent is server-managed metadata, not a user-editable preference patch.
+  const input = raw && typeof raw === "object" && !Array.isArray(raw) ? Object.fromEntries(Object.entries(raw).filter(([key]) => key !== "aiConsent")) : raw;
+  const parsed = preferencePatch.safeParse(input);
   const value = parsed.success ? parsed.data : {};
   return {
     notifications: {
@@ -92,7 +94,7 @@ export async function updateAppPreferences(userId: string, raw: unknown) {
     };
     await tx.user.update({
       where: { id: userId },
-      data: { appPreferences: next },
+      data: { appPreferences: { ...((user.appPreferences && typeof user.appPreferences === "object" && !Array.isArray(user.appPreferences)) ? user.appPreferences : {}), ...next } },
     });
     return next;
   });

@@ -14,6 +14,7 @@ const config: ExpoConfig = {
     bundleIdentifier: process.env.CLOVER_IOS_BUNDLE_ID || "ph.clover.preview",
     appleTeamId: "6XX38GYURG",
     supportsTablet: true,
+    usesAppleSignIn: true,
     // SQLCipher adds bundled cryptography; complete Apple’s export declaration for release.
   },
   android: {
@@ -23,6 +24,7 @@ const config: ExpoConfig = {
   },
   plugins: [
     "expo-router",
+    "expo-apple-authentication",
     [
       "expo-splash-screen",
       {
@@ -41,7 +43,7 @@ const config: ExpoConfig = {
     "expo-web-browser",
     "expo-sharing",
     "expo-font",
-    ["@clerk/expo", { appleSignIn: false }],
+    ["@clerk/expo", { appleSignIn: true }],
     [
       "expo-image-picker",
       {

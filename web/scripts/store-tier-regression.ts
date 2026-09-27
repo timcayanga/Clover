@@ -48,6 +48,31 @@ async function main() {
   assert.equal(storeProductTier(verifiedStoreAccess(both, config, now).productId), "pro");
   assert.throws(() => verifiedStoreAccess(both, { ...config, appUserId: "user_someone_else" }, now), /ownership/);
   assert.throws(() => verifiedStoreAccess({ ...both, request_date_ms: +now - 3600000 }, config, now), /stale/);
+  // Store-confirmed lifecycle snapshots, without initiating any purchase.
+  for (const platform of ["ios", "android"] as const) {
+    const store = platform === "ios" ? "app_store" : "play_store";
+    const plusId = platform === "ios" ? "clover.plus.monthly" : "clover.plus:monthly";
+    const proId = platform === "ios" ? "clover.pro.monthly" : "clover.pro:monthly";
+    const tier = (data: unknown) => storeProductTier(verifiedStoreAccess(data, config, now).productId);
+    const plusState = sample("clover_plus", plusId, store);
+    const proState = sample("clover_pro", proId, store);
+    assert.equal(tier(plusState), "pro");
+    assert.equal(tier(proState), "premium");
+    // A scheduled downgrade must keep the currently paid Pro entitlement.
+    const scheduled = structuredClone(proState);
+    Object.assign(scheduled.subscriber.subscriptions[proId], { unsubscribe_detected_at: now.toISOString() });
+    assert.equal(tier(scheduled), "premium");
+    assert.equal(tier(plusState), "pro"); // After store confirmation of the downgrade.
+    const expired = structuredClone(proState);
+    expired.subscriber.entitlements.clover_pro.expires_date = new Date(+now - 1000).toISOString();
+    expired.subscriber.subscriptions[proId].expires_date = new Date(+now - 1000).toISOString();
+    assert.equal(verifiedStoreAccess(expired, config, now).expiresAt, null);
+    const renewal = structuredClone(proState);
+    const renewedUntil = new Date(+now + 30 * 86400000).toISOString();
+    renewal.subscriber.entitlements.clover_pro.expires_date = renewedUntil;
+    renewal.subscriber.subscriptions[proId].expires_date = renewedUntil;
+    assert.equal(verifiedStoreAccess(renewal, config, now).expiresAt?.toISOString(), renewedUntil);
+  }
   const oldSecret = process.env.REVENUECAT_WEBHOOK_SECRET;
   const oldFlag = process.env.CLOVER_NATIVE_PURCHASES_ENABLED;
   try {

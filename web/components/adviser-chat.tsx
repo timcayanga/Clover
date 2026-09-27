@@ -1,4 +1,6 @@
 "use client";
+
+import { requestAiConsent } from "./ai-consent";
 import { parseAddFormDraft, type AddFormDraft } from "../../shared/add-form-draft";
 import type { EntryFormContext } from "@/lib/adviser-entry-types";
 import { parseAdviserChart, type AdviserChart } from "../../shared/adviser-chart";
@@ -246,6 +248,7 @@ function ScopedAdviserChat({ prompts, storageKey = adviserChatStorageKey, initia
       return;
     }
 
+    try { if (!(await requestAiConsent())) return; } catch(e) { setError(e instanceof Error ? e.message : "Unable to check AI permission."); return; }
     setError(null);
     setIsSending(true);
     setActions([]);

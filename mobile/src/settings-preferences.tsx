@@ -1,3 +1,4 @@
+import { AiConsentSettings } from "./ai-consent-settings";
 import { Text } from "./app-text";
 import { useEffect, useRef, useState } from "react";
 import { Switch, View } from "react-native";
@@ -183,6 +184,7 @@ export function SettingsPreferences({
       {section === "privacy" ? (
         <>
           <Text accessibilityRole="header" style={styles.sectionTitle}>Privacy and Data Use</Text>
+          <AiConsentSettings />
           {toggle(
             "privacy",
             "improveSuggestions",

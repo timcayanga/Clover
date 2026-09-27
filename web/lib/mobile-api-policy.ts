@@ -1,4 +1,5 @@
 export function mobileOperation(method: string, segments: string[]) {
+  if (segments.join("/") === "settings/ai-consent" && ["GET", "POST"].includes(method)) return "settings-ai-consent";
   if (segments.join("/") === "referrals" && ["GET", "POST"].includes(method)) return "referrals";
   if (segments.join("/") === "billing/usage" && method === "GET") return "billing-usage";
   if (segments.join("/") === "billing/store" && ["GET", "POST"].includes(method)) return "store-billing";

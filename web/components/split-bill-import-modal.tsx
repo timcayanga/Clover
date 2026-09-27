@@ -1,4 +1,5 @@
 "use client";
+import { requestAiConsent } from "./ai-consent";
 
 import { InterfaceIcon } from "@/components/interface-icon";
 
@@ -241,6 +242,7 @@ export function SplitBillImportModal({ open, initialFile, currentUserName, onClo
   };
 
   const handleUpload = async (selectedFile: File) => {
+    await requestAiConsent().catch(() => false);
     const validationError = validateFile(selectedFile);
     if (validationError) {
       setError(validationError);

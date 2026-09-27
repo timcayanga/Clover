@@ -81,6 +81,7 @@ export default function ContactUsPage() {
           </section>
           <section className={styles.supportCard}>
             <h2>Privacy or account security</h2>
+            <Link href="#delete-account">Delete your Clover account →</Link>
             <p>
               Tell us if you need help with your data or suspect unauthorized
               account access. Do not send passwords, one-time codes, or
@@ -90,6 +91,18 @@ export default function ContactUsPage() {
           </section>
         </aside>
       </div>
+      <section id="delete-account" className={styles.legalSection} style={{ scrollMarginTop: 96 }}>
+        <h2>Delete your Clover account</h2>
+        <p>You can delete your account in Settings → Data, or request deletion here without installing the app. Use the email address associated with your Clover account.</p>
+        <p>We aim to reply within 1 to 3 days to verify ownership and explain next steps. Submitting this form does not immediately delete an account.</p>
+        <ul>
+          <li>Deletion removes your Clover account and financial records and requests deletion of your sign-in identity. Uploaded source files are temporary; cleanup and backup expiration may take additional time.</li>
+          <li>Limited billing, security, support and audit records may remain for legal, fraud-prevention or dispute-resolution needs. Shared records may remain where another user has a legitimate need.</li>
+          <li>Manage Apple or Google subscription cancellation in the store separately. Deleting Clover does not automatically cancel those subscriptions.</li>
+        </ul>
+        <p>Read our <Link href="/privacy-policy#retention">retention and deletion policy</Link>. Never send passwords, one-time codes or identity documents with this request.</p>
+        <ContactUsForm deletion />
+      </section>
     </PublicInfoShell>
   );
 }

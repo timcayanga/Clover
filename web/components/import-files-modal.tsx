@@ -1,4 +1,6 @@
 "use client";
+
+import { requestAiConsent } from "./ai-consent";
 import { UploadSourceButtons } from "@/components/upload-source-buttons";
 
 import { InterfaceIcon } from "@/components/interface-icon";
@@ -7767,6 +7769,8 @@ export function ImportFilesModal({
   }, [open, passwordItems, selectedPasswordItemId]);
 
   const handleStartImport = async () => {
+    // Declining or being offline leaves deterministic imports available; the server blocks cloud calls.
+    await requestAiConsent().catch(() => false);
     primaryVisibilityCompletedRef.current = false;
     uploadCancelRequestedRef.current = false;
     setUploadPaused(false);

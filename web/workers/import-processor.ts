@@ -8330,6 +8330,7 @@ export const processImportFileText = async (
   const autoRerunEnabled = options.qaSource === "import_processing" || options.qaSource === "import_confirmation";
   const skipVisualBackupParser = Boolean(options.skipVisualBackupParser);
   const importFile = await fetchImportFileCompat(importFileId);
+  const consentUserId = importFile?.workspaceId ? (await prisma.workspace.findUnique({ where: { id: String(importFile.workspaceId) }, select: { userId: true } }))?.userId : undefined;
   const recordOpenAIImportUsage = (usage: OpenAIImportModelUsage) => {
     openAIUsageEntries.push(usage);
     if (!importFile?.workspaceId) return;
@@ -9357,6 +9358,7 @@ export const processImportFileText = async (
       imagePreparationOverlappedWithPreflight: Boolean(eagerReceiptImagePromise),
     });
     earlyReceiptVisionPromise = measureImportTiming(importFileId, "receipt_core_vision", () => parseImportTextWithOpenAIFallback({
+            consentUserId,
       text: "",
       fileName,
       fileType,
@@ -9389,6 +9391,7 @@ export const processImportFileText = async (
     }).catch(() => null);
 
     const transcript = await transcribeImportImagesWithOpenAI({
+            consentUserId,
       fileName,
       fileType,
       detectedMetadata: checkpointBankName
@@ -9926,6 +9929,7 @@ export const processImportFileText = async (
           const earlyPageImages = prefetchedAssets?.pageImages ?? pageImages ?? null;
           const earlyPdfFileDataBase64 = prefetchedAssets?.pdfFileDataBase64 ?? pdfFileDataBase64 ?? null;
           return measureImportTiming(importFileId, "model_extraction_and_parse", () => parseImportTextWithOpenAIFallback({
+            consentUserId,
             text: textForParse,
             fileName,
             fileType,
@@ -10035,6 +10039,7 @@ export const processImportFileText = async (
     }).catch(() => null);
 
     const transcript = await transcribeImportImagesWithOpenAI({
+            consentUserId,
       fileName,
       fileType,
       detectedMetadata: {
@@ -10094,6 +10099,7 @@ export const processImportFileText = async (
     }).catch(() => null);
 
     const transcript = await transcribeImportImagesWithOpenAI({
+            consentUserId,
       fileName,
       fileType,
       detectedMetadata: {
@@ -10134,6 +10140,7 @@ export const processImportFileText = async (
       processingMessage: "Reading Wise screenshot transactions...",
     });
     const transcript = await transcribeImportImagesWithOpenAI({
+            consentUserId,
       fileName,
       fileType,
       detectedMetadata: {
@@ -10178,6 +10185,7 @@ export const processImportFileText = async (
     }).catch(() => null);
 
     const transcript = await transcribeImportImagesWithOpenAI({
+            consentUserId,
       fileName,
       fileType,
       detectedMetadata: metadataForParse,
@@ -10739,6 +10747,7 @@ export const processImportFileText = async (
       processingMessage: "Reading detailed PDAX holdings...",
     }).catch(() => null);
     const transcript = await transcribeImportImagesWithOpenAI({
+            consentUserId,
       fileName,
       fileType,
       detectedMetadata: metadataForParse,
@@ -10825,6 +10834,7 @@ export const processImportFileText = async (
           : importMode === "statement" && earlyOpenAiFallbackPromise
           ? await earlyOpenAiFallbackPromise
           : await measureImportTiming(importFileId, "model_extraction_and_parse", () => parseImportTextWithOpenAIFallback({
+            consentUserId,
               text: textForParse,
               fileName,
               fileType,
@@ -10846,6 +10856,7 @@ export const processImportFileText = async (
             }));
       if (!openAiParsed && importMode === "receipt" && earlyReceiptVisionPromise) {
         openAiParsed = await measureImportTiming(importFileId, "model_extraction_and_parse", () => parseImportTextWithOpenAIFallback({
+            consentUserId,
           text: textForParse,
           fileName,
           fileType,
@@ -11083,6 +11094,7 @@ export const processImportFileText = async (
 
   if (receiptTranscriptRequiresRetry && openAiResultLooksSparse) {
     const transcript = await transcribeImportImagesWithOpenAI({
+            consentUserId,
       fileName,
       fileType,
       detectedMetadata: openAiMetadata ?? metadataForParse,
@@ -11105,6 +11117,7 @@ export const processImportFileText = async (
       const transcriptParsed = transcriptPreviewDetails
         ? null
         : await measureImportTiming(importFileId, "model_extraction_and_parse", () => parseImportTextWithOpenAIFallback({
+            consentUserId,
             text: transcriptNormalized,
             fileName,
             fileType,
@@ -11241,6 +11254,7 @@ export const processImportFileText = async (
 
   if (imageTranscriptRequiresRetry && openAiResultLooksSparse) {
     const transcript = await transcribeImportImagesWithOpenAI({
+            consentUserId,
       fileName,
       fileType,
       detectedMetadata: openAiMetadata ?? metadataForParse,
@@ -11252,6 +11266,7 @@ export const processImportFileText = async (
     if (transcript?.transcript.trim()) {
       const transcriptImportMode = normalizeImportImageMode(transcript.documentType);
       const transcriptParsed = await measureImportTiming(importFileId, "model_extraction_and_parse", () => parseImportTextWithOpenAIFallback({
+            consentUserId,
         text: normalizeStatementImageOcrText(transcript.transcript),
         fileName,
         fileType,
@@ -12954,6 +12969,7 @@ export const processImportFileText = async (
           const finishReceiptDetailTiming = startImportTiming(importFileId, "receipt_detail_enrichment");
           const detailStartedAt = Date.now();
           const refined = await measureImportTiming(importFileId, "model_extraction_and_parse", () => parseImportTextWithOpenAIFallback({
+            consentUserId,
             text: textForParse,
             fileName,
             fileType,

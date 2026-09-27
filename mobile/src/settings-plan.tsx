@@ -4,7 +4,7 @@ import { telemetry } from "../../shared/analytics";
 import { PLAN_CATALOG } from "../../shared/plan-catalog";
 import { Text } from "./app-text";
 import { useEffect, useRef, useState } from "react";
-import { Linking, View } from "react-native";
+import { AppState, Linking, View } from "react-native";
 import type { PurchasesPackage } from "react-native-purchases";
 import { useSession } from "./session";
 import { Body, Button, Card, Notice, dateLabel, useTheme } from "./ui";
@@ -110,6 +110,16 @@ export function SettingsPlan() {
       if (mounted.current) setBusy(false);
     }
   };
+  const refreshStoreRef = useRef(act);
+  refreshStoreRef.current = act;
+  useEffect(() => {
+    let previous = AppState.currentState;
+    const subscription = AppState.addEventListener("change", next => {
+      if (next === "active" && previous !== "active") void refreshStoreRef.current();
+      previous = next;
+    });
+    return () => subscription.remove();
+  }, []);
   const access = status ?? session.data?.entitlement;
   const limits = access ? PLAN_CATALOG[access.planTier] : null;
   return (
@@ -168,9 +178,10 @@ export function SettingsPlan() {
           disabled={loading || busy || session.demo}
           onPress={() => void act()}
         />
+        <Body>The store shows the price and effective date before you confirm a plan change. Clover updates after store verification.</Body>
         {storeManagementUrl() ? (
           <Button
-            title="Manage store subscriptions"
+            title="Change plan or cancel in store"
             secondary
             disabled={loading || busy}
             onPress={() =>
@@ -231,13 +242,17 @@ export function SettingsPlan() {
           <Body>Investments count by institution. Only active budgets and non-archived Circles you own count. All saved personal goals count. Reactivating a budget needs an available slot.</Body>
         </> : <Body>{usageError ? "Usage unavailable. Refresh plan status to try again." : session.demo ? "Sign in to preview your account usage." : "Loading plan usage…"}</Body>}
       </Card>
-      {packages.length ? (
+      <Card>
         <Body>
           Subscriptions renew automatically until canceled in your store
           settings. The store confirmation shows the billing period and final
           local price.
         </Body>
-      ) : null}
+        <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 16 }}>
+          <Text accessibilityRole="link" style={{ color: colors.teal }} onPress={() => void Linking.openURL("https://clover.ph/terms-of-service").catch(() => setError("Unable to open Terms of Service."))}>Terms of Service</Text>
+          <Text accessibilityRole="link" style={{ color: colors.teal }} onPress={() => void Linking.openURL("https://clover.ph/privacy-policy").catch(() => setError("Unable to open Privacy Policy."))}>Privacy Policy</Text>
+        </View>
+      </Card>
       <SettingsReferrals />
       {message ? <Body>{message}</Body> : null}
       {error ? <Notice>{error}</Notice> : null}

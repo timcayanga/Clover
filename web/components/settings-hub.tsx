@@ -1,5 +1,7 @@
 "use client";
 
+import { AiConsentControl } from "./ai-consent";
+
 import { getTimeZoneOptions, formatTimeZoneLabel } from "../../shared/region-options";
 import { createPortal } from "react-dom";
 import dynamic from "next/dynamic";
@@ -2518,6 +2520,7 @@ export function SettingsHub({
                 <div className="settings-data-zone__header">
                   <h4>Privacy and Data Use</h4>
                 </div>
+                <AiConsentControl />
                 <div className="settings-preference-card__list">
                   <SettingsToggleRow
                     label="Improve Clover suggestions from my confirmed edits"

@@ -165,6 +165,7 @@ const mergeReceiptBackup = (
 };
 
 const tryReceiptBackup = async (params: {
+  consentUserId: string;
   file: File;
   receiptText: string;
   preview: ReceiptPreviewResult;
@@ -188,6 +189,7 @@ const tryReceiptBackup = async (params: {
       return params.preview;
     }
     const result = await parseImportTextWithOpenAIFallback({
+      consentUserId: params.consentUserId,
       text: params.receiptText,
       fileName: params.file.name,
       fileType: isPdf ? "application/pdf" : params.file.type,
@@ -296,6 +298,7 @@ export async function POST(request: Request) {
       localPreview = parseReceiptText("");
     }
     const preview = await tryReceiptBackup({
+      consentUserId: user.id,
       file: selectedFile,
       receiptText,
       preview: localPreview,

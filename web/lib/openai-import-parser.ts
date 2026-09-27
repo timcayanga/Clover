@@ -1,3 +1,4 @@
+import { maySendToCloudAi } from "./ai-consent";
 import { z } from "zod";
 import { getEnv } from "@/lib/env";
 import { assessFinancialUploadScope } from "@/lib/financial-upload-scope";
@@ -2655,6 +2656,7 @@ const buildFallbackMetadata = (metadata: DetectedStatementMetadata | null): Dete
 };
 
 export const parseImportTextWithOpenAIFallback = async (params: {
+  consentUserId?: string | null;
   text: string;
   fileName?: string | null;
   fileType?: string | null;
@@ -2768,6 +2770,7 @@ export const parseImportTextWithOpenAIFallback = async (params: {
   }
 
   const env = getEnv();
+  if (!(await maySendToCloudAi(params.consentUserId))) return null;
   const apiKey = (env as { OPENAI_API_KEY?: string }).OPENAI_API_KEY?.trim();
   const isPrimaryMode =
     params.preferPrimary ?? isTruthyEnvValue((env as { OPENAI_IMPORT_PARSER_PRIMARY?: string }).OPENAI_IMPORT_PARSER_PRIMARY);
@@ -3084,6 +3087,7 @@ export const parseImportTextWithOpenAIFallback = async (params: {
     requestCount += 1;
     const requestNumber = requestCount;
     try {
+      if (!(await maySendToCloudAi(params.consentUserId))) throw new Error("Cloud AI permission is required.");
       const response = await fetch("https://api.openai.com/v1/responses", {
         method: "POST",
         headers: {
@@ -3911,6 +3915,7 @@ export const shouldPrioritizeStrongImageTranscriptModel = (params: {
   (params.promptImportMode === "statement" && params.pageImageCount > 1);
 
 export const transcribeImportImagesWithOpenAI = async (params: {
+  consentUserId?: string | null;
   fileName?: string | null;
   fileType?: string | null;
   detectedMetadata: DetectedStatementMetadata | null;
@@ -3928,6 +3933,7 @@ export const transcribeImportImagesWithOpenAI = async (params: {
 } | null> => {
   const transcriptionStartedAt = Date.now();
   const env = getEnv();
+  if (!(await maySendToCloudAi(params.consentUserId))) return null;
   const apiKey = (env as { OPENAI_API_KEY?: string }).OPENAI_API_KEY?.trim();
   if (!apiKey || params.pageImages.length === 0) {
     return null;
@@ -4039,6 +4045,7 @@ export const transcribeImportImagesWithOpenAI = async (params: {
       const startedAt = Date.now();
       requestNumber += 1;
       const currentRequestNumber = requestNumber;
+      if (!(await maySendToCloudAi(params.consentUserId))) throw new Error("Cloud AI permission is required.");
       const response = await fetch("https://api.openai.com/v1/responses", {
         method: "POST",
         headers: {

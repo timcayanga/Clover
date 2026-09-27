@@ -145,6 +145,10 @@ async function handle(
       const access = await getProAccess(user.id);
       return reply({ available: config.enabled && !(access.user.planTierLocked && access.planTier === "free"), appUserId: userId, entitlementId: config.entitlementId, offeringId: config.offeringId, productIds: config.products, planTier: access.planTier, accessEndsAt: access.accessEndsAt, renewing: access.renewing });
     }
+    if (operation === "settings-ai-consent") {
+      const { getAiConsent, setAiConsent } = await import("@/lib/ai-consent");
+      return reply(request.method === "GET" ? await getAiConsent(user.id) : await setAiConsent(user.id, await request.json()));
+    }
     if (operation === "settings-preferences") {
       const { getAppPreferences, updateAppPreferences } = await import("@/lib/app-preferences");
       const preferences = request.method === "GET" ? await getAppPreferences(user.id) : await updateAppPreferences(user.id, await request.json());

@@ -1,3 +1,4 @@
+import { assertCloudAiConsent, maySendToCloudAi } from "@/lib/ai-consent";
 import { parseAddFormDraft } from "../../../../../shared/add-form-draft";
 import { buildAdviserChart } from "@/lib/adviser-chart";
 import { adviserAttachmentIds } from "@/lib/adviser-attachments";
@@ -905,6 +906,7 @@ export async function POST(request: Request) {
     assertContentLengthWithin(request, MAX_ADVISER_REQUEST_BYTES);
     const { userId } = await getSessionContext();
     const user = await getOrCreateCurrentUser(userId);
+    if (!(await maySendToCloudAi(user.id))) return NextResponse.json({ error: "Allow AI processing before using cloud Adviser.", code: "AI_CONSENT_REQUIRED" }, { status: 403 });
     if (!(await (await import("@/lib/app-preferences")).getAppPreferences(user.id)).privacy.adviserUsesContext) return NextResponse.json({ error: "Adviser access to your finances is off. Enable it in Settings → Data to use this feature." }, { status: 403 });
     try {
       assertRateLimit(`adviser-chat-security:${user.id}`, ADVISER_SECURITY_RATE_LIMIT, 60_000);
@@ -3396,6 +3398,7 @@ export async function POST(request: Request) {
       const toolSelectionStartedAt = Date.now();
       let response: Response;
       try {
+        await assertCloudAiConsent(user.id);
         response = await fetch("https://api.openai.com/v1/responses", {
           method: "POST",
           headers: { Authorization: `Bearer ${env.OPENAI_API_KEY}`, "Content-Type": "application/json" },
@@ -4038,7 +4041,8 @@ export async function POST(request: Request) {
       const streamStartedAt = Date.now();
       if (!deterministicReply) {
         try {
-          upstreamResponse = await fetch("https://api.openai.com/v1/responses", {
+          await assertCloudAiConsent(user.id);
+        upstreamResponse = await fetch("https://api.openai.com/v1/responses", {
             method: "POST",
             headers: { Authorization: `Bearer ${env.OPENAI_API_KEY}`, "Content-Type": "application/json" },
             body: JSON.stringify({ model, prompt_cache_key: "clover-adviser-v1", stream: true, temperature: 0.2, max_output_tokens: 900, tools: [], input: modelInput }),
@@ -4159,7 +4163,8 @@ export async function POST(request: Request) {
     const finalStartedAt = Date.now();
     let finalResponse: Response;
     try {
-      finalResponse = await fetch("https://api.openai.com/v1/responses", {
+      await assertCloudAiConsent(user.id);
+        finalResponse = await fetch("https://api.openai.com/v1/responses", {
         method: "POST",
         headers: { Authorization: `Bearer ${env.OPENAI_API_KEY}`, "Content-Type": "application/json" },
         body: JSON.stringify({ model, prompt_cache_key: "clover-adviser-v1", temperature: 0.2, max_output_tokens: 900, tools: [], input: modelInput }),

@@ -1,0 +1,7 @@
+.dialog { width: min(440px, calc(100vw - 32px)); box-sizing: border-box; max-height: calc(100dvh - 48px); overflow-y: auto; border: 1px solid var(--border, #d5e7e8); border-radius: 24px; padding: 24px; background: var(--surface, #fff); color: var(--text, #1f2933); font-family: inherit; box-shadow: 0 18px 64px #07343d33; }
+.dialog::backdrop { background: #07343d88; backdrop-filter: blur(4px); }
+.dialog h2 { font-size: 20px; margin: 0 0 16px; }
+.dialog p { font-size: 14px; line-height: 1.65; }
+.dialog a { color: #087f8c; }
+.dialog button { display: block; width: 100%; margin-top: 12px; min-height: 44px; border-radius: 24px; }
+:global([data-theme="dark"]) .dialog { background: #102c31; color: #f0faf8; }
