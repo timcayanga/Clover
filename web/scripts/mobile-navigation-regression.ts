@@ -292,7 +292,7 @@ async function main() {
   assert.doesNotMatch(shell, /shell-bottom-nav__label">Account<\/span>[\s\S]{0,120}NotificationCountBadge/, "The bottom Account tab must not repeat notification badges.");
   assert.match(shell, /active === "dashboard" \? \([\s\S]{0,700}NotificationCountBadge/, "Mobile notifications and their badge belong on Home.");
   const accountMenu = shell.slice(shell.indexOf("const mobileSettingsSections ="), shell.indexOf("const shouldPrefetchNavHref"));
-  assert.deepEqual([...accountMenu.matchAll(/label: "([^"]+)"/g)].map((match) => match[1]), ["Settings", "Help", "Plan"]);
+  assert.deepEqual([...accountMenu.matchAll(/label: "([^"]+)"/g)].map((match) => match[1]), ["Account", "Settings", "Notifications", "Plan", "Help Center", "Privacy Policy"]);
   assert.match(styles, /Mobile navigation: Menu or Back[\s\S]*position: static !important/, "The mobile Menu belongs in the left leading group.");
   assert.doesNotMatch(shell, /shell-mobile-more-link--replaced/, "Menu must remain available alongside Back on every mobile page.");
   assert.match(shell, /shell-mobile-relocated-action/, "Contextual actions move to the trailing group to leave Menu on the left.");
