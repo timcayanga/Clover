@@ -13,7 +13,8 @@ async function main() {
  let preferences:Record<string,unknown>={privacy:{adviserUsesContext:false},defaults:{defaultLandingPage:"accounts"}};
  const audits:unknown[]=[];
  const originalRead=prisma.user.findUniqueOrThrow, originalTx=prisma.$transaction, originalFetch=globalThis.fetch;
- const read=async()=>({appPreferences:preferences});
+ let identity = "user_fixture";
+ const read=async()=>({appPreferences:preferences,clerkUserId:identity});
  Object.assign(prisma.user,{findUniqueOrThrow:read});
  Object.assign(prisma,{$transaction:async(fn:Function)=>fn({$queryRaw:async()=>[],user:{findUniqueOrThrow:read,update:async({data}:any)=>{preferences=data.appPreferences;}},workspace:{findFirst:async()=>({id:"fixture"})},auditLog:{create:async({data}:any)=>audits.push(data)}})});
  let networkCalls=0;
@@ -23,6 +24,10 @@ async function main() {
   assert.equal((await getAiConsent("fixture")).allowed,false);
   await setAiConsent("fixture",{allow:true,version:AI_CONSENT_VERSION});
   assert.equal(await maySendToCloudAi("fixture"),true);
+  identity = "staging-guest";
+  assert.equal(await maySendToCloudAi("fixture"),false);
+  await assert.rejects(()=>setAiConsent("fixture",{allow:true,version:AI_CONSENT_VERSION}),/Sign in/);
+  identity = "user_fixture";
   assert.equal(parseAppPreferences(preferences).privacy.adviserUsesContext,false);
   await updateAppPreferences("fixture",{defaults:{defaultLandingPage:"reports"}});
   assert.equal(await maySendToCloudAi("fixture"),true);
