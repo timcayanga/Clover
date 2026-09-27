@@ -9,6 +9,10 @@ let claimed=false, exchanges=0, created=0, bankCalls=0, refreshCalls=0, updates=
 export function setPlan(value){planTier=value;}
 export const getAccountBrand=()=>({logoSrc:null,fallbackIconSrc:"/assets/account-types/bank.png"});
 export const enforceBankAllowance=async()=>{};
+let refreshLimitReached=false;
+export function setRefreshLimit(value){refreshLimitReached=value;}
+export class BankRefreshLimitError extends Error { retryAt=new Date(Date.now()+60000); }
+export const reserveBankRefresh=async()=>{if(refreshLimitReached)throw new BankRefreshLimitError('Four refresh attempts used.');};
 export const bankLifecycleOverview=async()=>({limit:2,connections:[]});
 export const hasUnlimitedPlanLimits=()=>false;
 export const getProAccess=async()=>({planTier});
@@ -53,7 +57,7 @@ export const prisma={user:{findUniqueOrThrow:async()=>({planTier})},$transaction
  update:async({data})=>{updates.push(data);return{};}
 }};
 `;
-  const bundled = await build({ stdin: { contents: `export {GET as catalog} from './app/api/admin/finverse/catalog/route'; export {POST as sync} from './app/api/integrations/finverse/sync/route'; export {GET as connections} from './app/api/integrations/finverse/connections/route'; export {GET as institutions} from './app/api/integrations/finverse/institutions/route'; export {POST as link} from './app/api/integrations/finverse/link/route'; export {GET as callback} from './app/api/integrations/finverse/callback/route'; export {reset,stats,setPlan} from 'fixture';`, resolveDir: process.cwd() }, bundle: true, platform: "node", format: "cjs", packages: "external", write: false, plugins: [{ name: "finverse-boundaries", setup(b) { b.onResolve({filter:/^(fixture|@\/lib\/(admin|auth|finverse-access-token|bank-link-usage|user-limits|account-limit-count|account-brand|finverse-lifecycle|workspace-access|finverse|prisma|plan-quota|pro-access|mobile-request-context))$/},()=>({path:"fixture",namespace:"test"})); b.onLoad({filter:/.*/,namespace:"test"},()=>({contents:fixture,loader:"ts",resolveDir:process.cwd()})); }}] });
+  const bundled = await build({ stdin: { contents: `export {GET as catalog} from './app/api/admin/finverse/catalog/route'; export {POST as sync} from './app/api/integrations/finverse/sync/route'; export {GET as connections} from './app/api/integrations/finverse/connections/route'; export {GET as institutions} from './app/api/integrations/finverse/institutions/route'; export {POST as link} from './app/api/integrations/finverse/link/route'; export {GET as callback} from './app/api/integrations/finverse/callback/route'; export {reset,stats,setPlan,setRefreshLimit} from 'fixture';`, resolveDir: process.cwd() }, bundle: true, platform: "node", format: "cjs", packages: "external", write: false, plugins: [{ name: "finverse-boundaries", setup(b) { b.onResolve({filter:/^(fixture|@\/lib\/(admin|auth|finverse-refresh-limit|finverse-access-token|bank-link-usage|user-limits|account-limit-count|account-brand|finverse-lifecycle|workspace-access|finverse|prisma|plan-quota|pro-access|mobile-request-context))$/},()=>({path:"fixture",namespace:"test"})); b.onLoad({filter:/.*/,namespace:"test"},()=>({contents:fixture,loader:"ts",resolveDir:process.cwd()})); }}] });
   const Module = requireFixture("node:module"), mod = new Module(resolve("finverse-test.cjs")); mod.filename=resolve("finverse-test.cjs");mod.paths=Module._nodeModulePaths(process.cwd());mod._compile(bundled.outputFiles[0].text,mod.filename);
   const api=mod.exports;
   api.setPlan('free');
@@ -115,6 +119,12 @@ export const prisma={user:{findUniqueOrThrow:async()=>({planTier})},$transaction
   assert.equal((await polling.json()).status,'retrieving');
   assert.equal(api.stats().refreshCalls,1,'Polling must not start another provider refresh');
   assert(api.stats().updates.every((data:Record<string,unknown>)=>!('lastSyncedAt' in data)));
+  api.setRefreshLimit(true);
+  const limited=await sync({workspaceId:'profile',connectionId:'connection',refresh:true});
+  assert.equal(limited.status,429);assert(Number(limited.headers.get('Retry-After'))>0);
+  assert((await limited.json()).retryAt);assert.equal(api.stats().refreshCalls,1);
+  assert.equal((await sync({workspaceId:'profile',connectionId:'connection'})).status,200,'Polling remains available at the refresh limit');
+  api.setRefreshLimit(false);
   const callback=(state:string,code='code')=>api.callback(new Request(`https://clover.test/callback?state=${state}&code=${code}`));
   api.reset();
   const responses=await Promise.all([callback('native.valid'),callback('native.valid')]);
