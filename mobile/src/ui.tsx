@@ -1,3 +1,4 @@
+import { refreshScreen } from "./screen-refresh";
 import { telemetry, safeAction } from "../../shared/analytics";
 import { Text, TextInput } from "./app-text";
 import { useUser } from "@clerk/expo";
@@ -22,6 +23,7 @@ import {
   useWindowDimensions,
   Pressable,
   ScrollView,
+  RefreshControl,
   StyleSheet,
   View,
   type ColorValue,
@@ -256,6 +258,14 @@ export function Screen({
     onPanResponderTerminate: () => Animated.spring(slide, { toValue: 0, useNativeDriver: true, bounciness: 0 }).start(),
   })).current;
   const path = usePathname();
+  const [refreshing, setRefreshing] = useState(false);
+  const refreshBusy = useRef(false);
+  const refreshable = !sheet && ["/", "/accounts", "/recurring", "/reports", "/investments", "/budgeting", "/goals", "/circles", "/split-bills"].includes(path);
+  const onRefresh = async () => {
+    if (refreshBusy.current) return;
+    refreshBusy.current = true; setRefreshing(true);
+    try { await refreshScreen(path); } finally { refreshBusy.current = false; setRefreshing(false); }
+  };
   const detailNavigation = !sheet && (path.startsWith("/transaction/") || path.startsWith("/import/") || ["/offline", "/settings", "/notifications", "/budgeting", "/goals", "/investments", "/circles", "/split-bills", "/reports"].includes(path));
   const content = Children.toArray(children);
   const headerIndex = content.findIndex(child => isValidElement(child) && Boolean((child.type as { screenHeader?: boolean }).screenHeader));
@@ -265,6 +275,8 @@ export function Screen({
       {sheet ? <View {...drag.panHandlers} accessible accessibilityRole="button" accessibilityLabel="Dismiss sheet" accessibilityHint="Swipe down to return to the previous page" accessibilityActions={[{name:"activate",label:"Dismiss"}]} onAccessibilityAction={() => onDismiss?.()} style={{ height: 28, alignItems: "center", justifyContent: "center" }}><View style={{ width: 36, height: 4, borderRadius: 4, backgroundColor: colors.line }}/></View> : null}
       {header}
     <ScrollView
+      refreshControl={refreshable ? <RefreshControl refreshing={refreshing} onRefresh={() => void onRefresh()} tintColor={colors.teal} colors={[colors.teal]} /> : undefined}
+      alwaysBounceVertical={refreshable}
       style={{ flex: 1, backgroundColor: colors.bg }}
       contentContainerStyle={[
         styles.content,
@@ -368,8 +380,10 @@ export function AppHeader({
   back = false,
   onClose,
   trailing,
+  leading,
 }: {
   trailing?: ReactNode;
+  leading?: ReactNode;
   title: string;
   back?: boolean;
   onClose?: () => void;
@@ -380,6 +394,9 @@ export function AppHeader({
   const profileRef = useRef(session.profileId);
   profileRef.current = session.profileId;
   const [panel, setPanel] = useState<"menu" | "notifications" | null>(null);
+  const [signingOut, setSigningOut] = useState(false);
+  const [signOutError, setSignOutError] = useState("");
+  const signingOutRef = useRef(false);
   const drawerProgress = useRef(new Animated.Value(0)).current;
   const reduceMotion = useRef(false);
   useEffect(() => {
@@ -496,10 +513,11 @@ export function AppHeader({
     "Account Details",
   ].includes(title);
   const canAdd = ["Accounts", "Transactions", "Recurring"].includes(title);
+  const adviserOnLeft = ["Accounts", "Investments"].includes(title) && !(back || onClose);
   return (
     <>
       <View style={styles.header}>
-        <View style={{ width: 48, flexDirection: "row" }}>
+        <View style={{ width: adviserOnLeft || leading ? 88 : 48, flexDirection: "row", alignItems: "center" }}>
           <Pressable
             accessibilityRole="button"
             accessibilityLabel={back || onClose ? "Back" : "Open navigation menu"}
@@ -508,6 +526,8 @@ export function AppHeader({
           >
             <Icon name={back || onClose ? "arrow-back-outline" : "menu-outline"} size={22} />
           </Pressable>
+          {leading}
+          {adviserOnLeft ? adviser : null}
         </View>
         <Text
           accessibilityRole="header"
@@ -516,9 +536,9 @@ export function AppHeader({
             styles.headerTitle,
             {
               position: "absolute",
-              left: back || onClose ? 54 : title === "Investments" ? 120 : adviserShortcut || home || trailing ? 100 : 54,
+              left: back || onClose ? 54 : adviserOnLeft ? 88 : adviserShortcut || home || trailing ? 100 : 54,
               fontSize: 18,
-              right: back || onClose ? 54 : title === "Investments" ? 120 : adviserShortcut || home || trailing ? 100 : 54,
+              right: back || onClose ? 54 : adviserOnLeft ? 88 : adviserShortcut || home || trailing ? 100 : 54,
             },
           ]}
         >
@@ -532,7 +552,7 @@ export function AppHeader({
             alignItems: "center",
           }}
         >
-          {adviserShortcut && !(back || onClose) && (trailing || canAdd) ? adviser : null}
+          {adviserShortcut && !adviserOnLeft && !(back || onClose) && (trailing || canAdd) ? adviser : null}
           {trailing ??
             (title === "Adviser" ? (
               <Pressable
@@ -541,9 +561,7 @@ export function AppHeader({
                 onPress={() => router.navigate("/reports")}
                 style={styles.iconButton}
               >
-                <Text style={{ fontSize: 11, color: colors.teal }}>
-                  View Reports
-                </Text>
+                <Icon name="pie-chart-outline" size={30} />
               </Pressable>
             ) : home ? (
               <>
@@ -718,6 +736,30 @@ export function AppHeader({
                 </>
               )}
             </ScrollView>
+            {panel === "menu" && (
+              <View style={{ borderTopWidth: 1, borderTopColor: colors.line, paddingTop: 8 }}>
+                {signOutError ? <Text accessibilityRole="alert" style={{ color: colors.danger, fontSize: 12 }}>{signOutError}</Text> : null}
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel={session.demo ? "Leave sample preview" : "Sign out"}
+                  accessibilityState={{ disabled: signingOut, busy: signingOut }}
+                  disabled={signingOut}
+                  onPress={() => {
+                    if (signingOutRef.current) return;
+                    signingOutRef.current = true;
+                    setSigningOut(true);
+                    setSignOutError("");
+                    void session.signOut()
+                      .catch(() => setSignOutError("Unable to sign out. Please try again."))
+                      .finally(() => { signingOutRef.current = false; setSigningOut(false); });
+                  }}
+                  style={{ minHeight: 44, flexDirection: "row", alignItems: "center", gap: 12, opacity: signingOut ? 0.5 : 1 }}
+                >
+                  <Icon name="log-out-outline" size={24} />
+                  <Text style={{ fontSize: 13, color: colors.ink }}>{signingOut ? "Signing out…" : session.demo ? "Leave sample preview" : "Sign out"}</Text>
+                </Pressable>
+              </View>
+            )}
           </Animated.View>
         </View>
       </Modal>

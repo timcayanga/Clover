@@ -1,3 +1,5 @@
+import { finverseBalances } from "@/lib/finverse-balances";
+import { getNavigationIconSrc } from "@/lib/navigation-icons";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import Link from "next/link";
@@ -1157,7 +1159,9 @@ async function AdviserPageContent({ searchParams }: { searchParams?: Promise<Adv
     existing.push(transaction as unknown as BalanceLikeTransaction);
     manualTransactionsByAccount.set(transaction.accountId, existing);
   }
+  const bankSnapshots = await finverseBalances(resolvedWorkspace.id);
   const reconcileWorkspaceAccountBalance = (account: AdviserWorkspaceAccountSource) => {
+    if (bankSnapshots.has(account.id)) return Number(bankSnapshots.get(account.id)!.bankBalance);
     const latestCheckpoint = selectLatestAccountCheckpoint(account.statementCheckpoints);
     const fallbackBalance = account.source === "manual"
         ? deriveReconciledBalance({
@@ -3168,7 +3172,7 @@ async function AdviserPageContent({ searchParams }: { searchParams?: Promise<Adv
       <CloverShell
         active="adviser"
         title="Adviser"
-        actions={<Link className="button button-secondary button-small" href="/reports">View reports</Link>}
+        actions={<Link className="icon-button adviser-reports-link" href="/reports" aria-label="View Reports" title="View Reports"><img src={getNavigationIconSrc("reports")} alt="" width={32} height={32} /></Link>}
       >
       <section className="adviser-page adviser-page--chat">
         <AdviserChat

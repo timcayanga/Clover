@@ -25,6 +25,9 @@ export type ImportedAccountLike<TType extends SupportedAccountType = SupportedAc
   source?: string | null;
   balance?: string | null;
   publishedImportInventory?: boolean;
+  bankBalance?: string;
+  bankBalanceAt?: string;
+  bankConnectionStatus?: string;
 };
 
 export type ImportedTransactionLike<TType extends SupportedAccountType = SupportedAccountType> = {
@@ -338,14 +341,15 @@ export const mergeAccountsWithOptimisticImports = <TAccount extends ImportedAcco
   );
 
   const mergedFetchedAccounts = visibleFetchedAccounts.map((account) => {
-    const optimistic = visibleCurrentAccounts.find((currentAccount) => {
-      if (currentAccount.source !== "upload") {
-        return false;
-      }
+    const optimistic = visibleCurrentAccounts.find(currentAccount => currentAccount.id === account.id)
+      ?? visibleCurrentAccounts.find(currentAccount => currentAccount.source === "upload" && matchesImportedAccountIdentity(currentAccount, account));
 
-      return matchesImportedAccountIdentity(currentAccount, account);
-    });
-
+    // Provider snapshots outrank optimistic statement balances, including zero.
+    if (account.bankBalance != null) return { ...account, balance: account.bankBalance };
+    if (optimistic?.id === account.id && optimistic.bankBalance != null && optimistic.bankBalanceAt) {
+      return { ...account, bankBalance: optimistic.bankBalance, bankBalanceAt: optimistic.bankBalanceAt,
+        bankConnectionStatus: optimistic.bankConnectionStatus, balance: optimistic.bankBalance };
+    }
     // Receipt previews describe activity, not a replacement opening balance.
     if (!optimistic || account.source === "manual") {
       return account;
@@ -432,6 +436,11 @@ export const mergeProvisionalAccountSnapshot = <TAccount extends ImportedAccount
   for (const account of incoming) {
     if (deletedIds.has(account.id)) continue;
     const loaded = merged.get(account.id);
+    if (loaded?.bankBalance != null && (!account.bankBalanceAt || (loaded.bankBalanceAt ?? "") > account.bankBalanceAt)) {
+      merged.set(account.id, { ...loaded, ...account, bankBalance: loaded.bankBalance,
+        bankBalanceAt: loaded.bankBalanceAt, bankConnectionStatus: loaded.bankConnectionStatus, balance: loaded.bankBalance });
+      continue;
+    }
     merged.set(account.id, loaded?.source === "manual"
       ? { ...loaded, ...account, source: loaded.source, balance: loaded.balance }
       : account);

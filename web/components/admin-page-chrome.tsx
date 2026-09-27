@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { AdminSignOut } from "./admin-sign-out";
 import type { ReactNode } from "react";
 
 type AdminPageChromeProps = {
@@ -63,9 +64,7 @@ export function AdminPageChrome({
     <div className="admin-page-shell">
       <header className="admin-page-header">
         <h1>{title}</h1>
-        {actions ? (
-          <div className="admin-page-chrome__actions">{actions}</div>
-        ) : null}
+        <div className="admin-page-chrome__actions">{actions}<AdminSignOut /></div>
       </header>
       <nav className="admin-section-nav" aria-label="Admin sections">
         {adminNavItems.map((item) => (

@@ -1,4 +1,5 @@
 "use client";
+import { usePullRefresh } from "@/lib/pull-refresh";
 import { MobileSheetHandle } from "@/components/mobile-sheet-handle";
 import { FinversePendingAccounts } from "@/components/finverse-pending-accounts";
 import { FinverseConnectButton as AccountBankSync } from "@/components/finverse-connect-button";
@@ -1221,7 +1222,7 @@ const getLatestCheckpointForAccount = (
   // account in the Accounts API. Its shared document checkpoint represents
   // the whole file, so applying that single ending balance to an individual
   // card can copy another column's value onto it.
-  if (account.publishedImportInventory) {
+  if (account.publishedImportInventory || account.source === "finverse" || account.bankBalance != null) {
     return null;
   }
 
@@ -1678,7 +1679,7 @@ function AccountsPageContent() {
                         const shouldPreserveImportedBalance =
                           account.source === "upload" && checkpointBalance === null;
                         const reconciledBalance =
-                          account.bankBalance ?? checkpointBalance ??
+                          account.bankBalance ?? (account.source === "finverse" ? account.balance : null) ?? checkpointBalance ??
                           (shouldPreserveImportedBalance
                             ? account.balance
                             : deriveReconciledBalance({
@@ -1729,6 +1730,8 @@ function AccountsPageContent() {
     () => new Set([...deletingAccountIds, ...getDeletingWorkspaceAccountIds(selectedWorkspaceId)]),
     [deletingAccountIds, selectedWorkspaceId]
   );
+
+  usePullRefresh(() => loadWorkspaceData(selectedWorkspaceId, { silent: true, forceFresh: true, awaitHydration: true }));
 
   const loadWorkspaces = async () => {
     setWorkspacesLoading(true);
@@ -4526,11 +4529,10 @@ function AccountsPageContent() {
       title="Accounts"
       mobileLeadingAction={<ContextualAskClover context="accounts" planTier={planTier} />}
       desktopTitleAction={<ContextualAskClover context="accounts" planTier={planTier} />}
-      mobileTrailingAction={<button className="icon-button" type="button" aria-label="Add account" onClick={openAddAccount}><ActionIcon name="plus" /></button>}
+      mobileTrailingAction={<><CurrencySelector value={selectedCurrency} onChange={next => { const code = next.toLowerCase() === "all" ? "" : formatCurrencyCode(next); setSelectedCurrency(code); persistSelectedCurrency(selectedWorkspaceId, code); }} options={availableCurrencies} includeAllOption={availableCurrencies.length > 1} allLabel="All currencies" ariaLabel="Select account currency" iconOnly showChevron={false} portalMenu menuAlignment="end" buttonClassName="accounts-mobile-currency-button" /><button className="icon-button" type="button" aria-label="Add account" onClick={openAddAccount}><ActionIcon name="plus" /></button></>}
       actions={<div className="accounts-desktop-tools">{accountsShellActions}</div>}
       >
       <div className="accounts-page">
-        <div className="accounts-mobile-currency"><CurrencySelector value={selectedCurrency} onChange={next => { const code=next.toLowerCase()==="all"?"":formatCurrencyCode(next); setSelectedCurrency(code);persistSelectedCurrency(selectedWorkspaceId,code); }} options={availableCurrencies} ariaLabel="Filter accounts by currency" showCurrencyCode /></div>
         {selectedWorkspaceId ? <FinversePendingAccounts workspaceId={selectedWorkspaceId} /> : null}
 
         {visibleAccounts.length > 0 ? (

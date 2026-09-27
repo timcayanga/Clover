@@ -2018,7 +2018,7 @@ function AccountDetailPageContent() {
 
   const currentBalance = useMemo(
     () => {
-      if (account?.bankBalance != null) return normalizeAccountBalanceSign(account.type, Number(account.bankBalance));
+      if (account?.bankBalance != null || account?.source === "finverse") return normalizeAccountBalanceSign(account.type, Number(account.bankBalance ?? account.balance));
       const checkpoint = latestCheckpoint;
       const checkpointBalance =
         checkpoint?.status !== "mismatch" &&

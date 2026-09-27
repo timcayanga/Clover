@@ -465,9 +465,10 @@ async function handle(
       return reply({ notifications: feed.notifications, count: feed.unreadCount, readIds: (await prisma.inAppNotificationRead.findMany({ where: { userId: user.id, notificationKey: { in: feed.notifications.map(item => item.id) } }, select: { notificationKey: true } })).map(row => row.notificationKey) });
     }
     if (operation === "options") {
+      const filtering = url.searchParams.get("context") === "filters";
       const [accounts, categories, tags] = await Promise.all([
-        prisma.account.findMany({ where: { workspaceId, type: { not: "investment" } }, select: { id: true, name: true, currency: true, institution: true, type: true }, orderBy: { name: "asc" } }),
-        prisma.category.findMany({ where: { workspaceId, isArchived: false }, select: { id: true, name: true, type: true }, orderBy: { name: "asc" } }),
+        prisma.account.findMany({ where: { workspaceId, ...(filtering ? {} : { type: { not: "investment" as const } }) }, select: { id: true, name: true, currency: true, institution: true, type: true }, orderBy: { name: "asc" } }),
+        prisma.category.findMany({ where: { workspaceId, ...(filtering ? {} : { isArchived: false }) }, select: { id: true, name: true, type: true }, orderBy: { name: "asc" } }),
         prisma.tag.findMany({ where: { workspaceId }, select: { id: true, name: true }, orderBy: { name: "asc" } }),
       ]);
       return reply({ accounts, categories, tags });
@@ -479,8 +480,8 @@ async function handle(
       return reply(await (await import("@/lib/mobile-recurring")).mobileRecurring(workspaceId, year, month));
     }
     if (operation === "home") {
-      const currency = z.string().regex(/^[A-Z]{3}$/).parse(url.searchParams.get("currency") ?? normalizeRegionalPreferences(user.regionalPreferences).baseCurrency);
-      return reply(await mobileHome(workspaceId, currency));
+      const currency = z.string().regex(/^(ALL|[A-Z]{3})$/).parse(url.searchParams.get("currency") ?? normalizeRegionalPreferences(user.regionalPreferences).baseCurrency);
+      return reply(await mobileHome(workspaceId, currency, normalizeRegionalPreferences(user.regionalPreferences).baseCurrency));
     }
     if (operation === "transaction") {
       const row = await prisma.transaction.findFirst({
@@ -801,6 +802,16 @@ async function handle(
         row.displayBalance = balances.has(row.id) ? balances.get(row.id) : row.balance;
         const brand = getAccountBrand(row);
         row.brandLogoUrl = brand.logoSrc;
+        // Send the same resolved colors used by desktop and mobile web.
+        const stops = [...brand.background.matchAll(/(#[0-9a-f]{6})(?:\s+(\d+(?:\.\d+)?)%)?/gi)];
+        const colors = stops.map((stop) => stop[1]);
+        row.brandPalette = {
+          colors: colors.length >= 2 ? colors : [brand.accent, brand.accent],
+          ...(stops.length >= 2 && stops.every((stop) => stop[2] !== undefined)
+            ? { locations: stops.map((stop) => Number(stop[2]) / 100) }
+            : {}),
+          foreground: brand.foreground,
+        };
       }
     }
     return reply(mobileApiResponse(operation, responseData), response.status);

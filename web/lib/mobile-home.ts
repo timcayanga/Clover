@@ -1,3 +1,4 @@
+import { homeCurrencyScope } from "../../shared/home-currency-scope";
 import { buildHomeAdviserInsights } from "../../shared/home-adviser-insights";
 import { buildHomeNextSteps } from "./home-next-steps";
 import { getPlannedPaymentSuggestions } from "./planned-payment-suggestions";
@@ -24,7 +25,8 @@ import { resolveFinancialTransactionType } from "./transaction-directions";
 
 // Read-only native dashboard. Reuses Clover's balance/checkpoint and direction
 // rules; never totals a paginated list or mixes currencies without conversion.
-export async function mobileHome(workspaceId: string, currency: string) {
+export async function mobileHome(workspaceId: string, selectedCurrency: string, profileCurrency = "PHP") {
+  const { allCurrencies, displayCurrency: currency } = homeCurrencyScope(selectedCurrency, profileCurrency);
   const { day, tomorrow, month, previousMonth, rolling } = mobileHomePeriods();
   const since = new Date(+day - 90 * 86400000);
   const [
@@ -35,7 +37,7 @@ export async function mobileHome(workspaceId: string, currency: string) {
     reviewCount,
     reportCurrencies,
     latestImport,
-    suggestions,
+    allSuggestions,
   ] = await Promise.all([
     prisma.account.findMany({
       where: { workspaceId },
@@ -80,6 +82,7 @@ export async function mobileHome(workspaceId: string, currency: string) {
     prisma.transaction.findMany({
       where: buildActiveWorkspaceTransactionWhere(workspaceId, {
         date: { gte: since, lt: tomorrow },
+        ...(allCurrencies ? {} : { currency }),
       }),
       select: {
         currency: true,
@@ -92,11 +95,11 @@ export async function mobileHome(workspaceId: string, currency: string) {
       },
     }),
     prisma.financialCommitment.findMany({
-      where: { workspaceId, status: "active", currency },
+      where: { workspaceId, status: "active", ...(allCurrencies ? {} : { currency }) },
       include: { occurrences: { select: { dueDate: true } } },
     }),
     loadCachedBudgetWorkspaceData(workspaceId, { directory: true }),
-    prisma.transaction.count({ where: buildReviewQueueWhere(workspaceId) }),
+    prisma.transaction.count({ where: { AND: [buildReviewQueueWhere(workspaceId), ...(allCurrencies ? [] : [{ currency }])] } }),
     prisma.transaction.findMany({
       where: buildActiveWorkspaceTransactionWhere(workspaceId),
       distinct: ["currency"],
@@ -105,8 +108,9 @@ export async function mobileHome(workspaceId: string, currency: string) {
     prisma.importFile.findFirst({ where: { workspaceId }, orderBy: { uploadedAt: "desc" }, select: { uploadedAt: true } }),
     getPlannedPaymentSuggestions(workspaceId),
   ]);
+  const suggestions = allSuggestions.filter(s => allCurrencies || s.currency === currency);
   const bankSnapshots = await finverseBalances(workspaceId);
-  const spendable = accounts.filter((a) => isSpendableAccountType(a.type));
+  const spendable = accounts.filter((a) => isSpendableAccountType(a.type) && (allCurrencies || a.currency === currency));
   const rates = new Map<string, number>();
   rates.set(currency, 1);
   await Promise.all(
@@ -270,11 +274,11 @@ export async function mobileHome(workspaceId: string, currency: string) {
       recentReviewCount: reviewCount,
     }),
     nextSteps: buildHomeNextSteps({ transactionCount: reviewCount, recurringCount, statementCount: suggestions.filter((s) => s.sourceKind === "statement_reminder").length }),
-    currencyReports: currencies.map((c) => ({ currency: c, weekly: report(7, c), monthly: report(30, c) })),
+    currencyReports: (allCurrencies ? currencies : [currency]).map((c) => ({ currency: c, weekly: report(7, c), monthly: report(30, c) })),
     heroTotals: { current: convertHomeWindow(transactions, month, tomorrow, Object.fromEntries(rates)), previous: convertHomeWindow(transactions, previousMonth, month, Object.fromEntries(rates)) },
     currencies,
     reviewCount,
-    budgets: budgetData.overview.budgets.map((b) => ({
+    budgets: budgetData.overview.budgets.filter(b => allCurrencies || b.currency === currency).map((b) => ({
       id: b.id,
       name: b.name,
       currency: b.currency,

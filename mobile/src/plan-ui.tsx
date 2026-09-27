@@ -1,7 +1,8 @@
+import { registerScreenRefresh } from "./screen-refresh";
 import { Text } from "./app-text";
 import { LinearGradient } from "expo-linear-gradient";
 import { useEffect, useState, useCallback, type ComponentProps, type ReactNode } from "react";
-import { router, useFocusEffect } from "expo-router";
+import { router, useFocusEffect, usePathname } from "expo-router";
 import { Alert, Platform, Pressable, View, useWindowDimensions } from "react-native";
 import { useSession } from "./session";
 import { AppHeader, AddNavigationMark, Icon, useTheme } from "./ui";
@@ -255,6 +256,7 @@ export function Progress({ value }: { value: number }) {
   );
 }
 export function usePlanData<T>(path: string, sample: T) {
+  const screenPath = usePathname();
   const session = useSession();
   const [data, setData] = useState<T | null>(null);
   const [error, setError] = useState("");
@@ -264,7 +266,7 @@ export function usePlanData<T>(path: string, sample: T) {
       let active = true;
       setError("");
       setData(null);
-      void (
+      const refresh = () => (
         session.demo
           ? Promise.resolve(sample)
           : session.request<T>(
@@ -272,15 +274,18 @@ export function usePlanData<T>(path: string, sample: T) {
             )
       )
         .then((result) => {
-          if (active) setData(result);
+          if (active) { setData(result); setError(""); }
         })
         .catch((e) => {
           if (active) setError(e.message);
         });
+      void refresh();
+      const unregister = registerScreenRefresh(screenPath, refresh);
       return () => {
-        active = false;
+        active = false; unregister();
       };
     }, [
+      screenPath,
       session.demo,
       session.profileId,
       session.request,

@@ -1,4 +1,5 @@
 "use client";
+import { usePullRefresh } from "@/lib/pull-refresh";
 import { useMobileCreationRoute } from "@/lib/use-mobile-creation-route";
 
 import { CategoryBrandMark } from "@/components/category-brand-mark";
@@ -282,6 +283,11 @@ export function CirclesWorkspace({
       workspaceRef.current?.closest(".content")?.scrollTo({ top: 0, behavior: "instant" });
     });
   };
+
+  usePullRefresh(async () => {
+    if (openForm || showCreate) return;
+    try { await refresh(); setDetailError(null); } catch (error) { setDetailError(error instanceof Error ? error.message : "Unable to refresh Circles."); }
+  });
 
   const refresh = async (preferredCircleId?: string | null) => {
     const nextId = preferredCircleId === undefined ? selectedCircleId : preferredCircleId;

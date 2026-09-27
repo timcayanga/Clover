@@ -3759,7 +3759,7 @@ export async function GET(request: Request) {
       const effectiveSource =
         account.source === "upload"
           ? "upload"
-          : latestCheckpoint && effectiveInstitution && effectiveAccountNumber
+          : account.source !== "finverse" && latestCheckpoint && effectiveInstitution && effectiveAccountNumber
             ? "upload"
             : account.source;
       const shouldReplaceGenericImageFilename =

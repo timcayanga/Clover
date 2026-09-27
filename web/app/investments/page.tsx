@@ -1,4 +1,5 @@
 "use client";
+import { registerPullRefresh, usePullRefresh } from "@/lib/pull-refresh";
 import { MobileSheetHandle } from "@/components/mobile-sheet-handle";
 import { readImportActivity, subscribeImportActivity } from "@/lib/import-activity";
 import { AddEntryMethods } from "@/components/add-entry-methods";
@@ -1291,9 +1292,9 @@ export default function InvestmentsPage() {
     };
 
     void loadAccounts();
-
+    const unregister = registerPullRefresh(loadAccounts);
     return () => {
-      cancelled = true;
+      unregister(); cancelled = true;
     };
   }, [selectedWorkspaceId, investmentRefresh]);
 
@@ -2340,12 +2341,14 @@ export default function InvestmentsPage() {
     selectInvestmentTab("market");
   };
 
-  const openOutlookNews = async (row: PortfolioDisplayRow) => {
+  usePullRefresh(async () => { if (newsAsset) await openOutlookNews(newsAsset, true); });
+
+  const openOutlookNews = async (row: PortfolioDisplayRow, refreshing = false) => {
     setNewsAsset(row);
     setNewsItems([]);
     setNewsError("");
     setNewsLoading(true);
-    window.requestAnimationFrame(() => newsPanelRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }));
+    if (!refreshing) window.requestAnimationFrame(() => newsPanelRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }));
 
     try {
       const params = new URLSearchParams({

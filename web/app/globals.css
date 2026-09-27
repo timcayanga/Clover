@@ -66573,10 +66573,12 @@ html[data-theme="dark"] .content.content--reports .reports-range-menu__summary {
 }
 
 /* Shared Plus/Pro access is indicated by tab text, without a tier badge. */
+/* Keep paid-feature colors consistent across Free, Plus and Pro access states. */
+:is(.content,.shell-mobile-subheader) .clover-tabs.clover-tabs > .animated-tabs__tab.is-premium { opacity: 1 !important; }
 .animated-tabs .animated-tabs__tab.is-premium .animated-tabs__label,
-.animated-tabs .animated-tabs__tab.is-premium .animated-tabs__icon { color: #8561af !important; }
+.animated-tabs .animated-tabs__tab.is-premium .animated-tabs__icon { color: #087f5b !important; }
 [data-theme="dark"] .animated-tabs .animated-tabs__tab.is-premium .animated-tabs__label,
-[data-theme="dark"] .animated-tabs .animated-tabs__tab.is-premium .animated-tabs__icon { color: #c7a5ee !important; }
+[data-theme="dark"] .animated-tabs .animated-tabs__tab.is-premium .animated-tabs__icon { color: #6ee7b7 !important; }
 .settings-plan-retention { padding: 20px; border: 1px solid var(--line, #d9e4e1); border-radius: 20px; margin-block: 20px; overflow-wrap: anywhere; }
 .settings-plan-retention p, .settings-plan-retention li { font-size: 14px; line-height: 1.65; }
 .settings-plan-retention li + li { margin-top: 10px; }
@@ -66613,3 +66615,48 @@ html[data-theme="dark"] .content.content--reports .reports-range-menu__summary {
 .settings-section--plan .settings-plan-card--pro .settings-plan-card__band {background:linear-gradient(135deg,#6ee7b7,#a2f2d8);color:#17383d}
 .settings-section--plan .settings-plan-card--pro .settings-plan-card__band-title,.settings-section--plan .settings-plan-card--pro .settings-plan-card__band-price {color:#17383d}
 .settings-section--plan .settings-plan-card__band .settings-pill {font-size:11px;margin-top:8px;background:rgba(255,255,255,.65);color:#17383d}
+
+/* Keep the requested mobile shortcuts beside Menu; currency stays beside Add. */
+@media (max-width: 1100px) {
+  .content.content:is(.content--accounts, .content--investments) > :is(.topbar, .shell-compact-bar) .shell-topbar-leading__actions { display: inline-flex !important; align-items: center; }
+  .content.content:is(.content--accounts, .content--investments) > :is(.topbar, .shell-compact-bar) .shell-mobile-relocated-action { display: none !important; }
+  .content.content--accounts .accounts-mobile-currency-button { display: inline-flex; align-items: center; justify-content: center; width: 40px; height: 40px; min-width: 40px; padding: 8px; border: 0; background: transparent; box-shadow: none; color: var(--accent); }
+  .content.content--adviser .adviser-reports-link { display: inline-flex !important; padding: 4px; background: transparent; border: 0; box-shadow: none; }
+}
+
+/* Transaction filters: row menus and equal-size mobile search controls. */
+.transactions-filters-overlay .transaction-filter-row__body .transactions-filter-group__options {
+  display: flex; flex-direction: column; gap: 0; border: 1px solid var(--border); border-radius: 12px; overflow: hidden;
+}
+.transactions-filters-overlay .transaction-filter-row__body .transactions-filter-pill {
+  border: 0; border-bottom: 1px solid var(--border); border-radius: 0; margin: 0;
+  min-height: 44px; width: 100%; box-shadow: none; justify-content: flex-start;
+}
+.transactions-filters-overlay .transaction-filter-row__body .transactions-filter-pill:last-child { border-bottom: 0; }
+@media (max-width:1100px) {
+  .content.content--transactions .transaction-selection-toolbar:not(.transaction-selection-toolbar--selected) {
+    display: flex; flex-wrap: nowrap; align-items: center; height: 44px; min-height: 44px; gap: 8px; width: 100%;
+  }
+  .content.content--transactions .transaction-selection-toolbar input[type="search"] {
+    flex: 1; width: 0; max-width: none; min-width: 0; height: 44px!important; min-height: 44px!important;
+    border-radius: 999px!important; margin: 0; box-sizing: border-box;
+  }
+  .content.content--transactions .transaction-selection-toolbar__filter {
+    flex: 0 0 44px; width: 44px; height: 44px!important; min-height: 44px!important;
+    min-width: 44px; border-radius: 999px!important; padding: 0!important; justify-content: center; position: relative;
+  }
+  .transaction-selection-toolbar__filter .transaction-filter-label,
+  .transaction-selection-toolbar__filter .transaction-filter-warning { display: none!important; }
+  .transaction-selection-toolbar__filter .transaction-filter-count { position: absolute; right: -3px; top: -3px; }
+}
+
+/* Home currency follows the page, without changing Profile preferences. */
+.home-top-actions { display: flex; align-items: center; gap: 12px; }
+@media (max-width: 1100px) { .home-currency-desktop { display: none; } }
+@media (min-width: 1101px) { .home-header-adviser { display: none !important; } }
+@media (max-width: 1100px) {
+  .content.content.content--dashboard > :is(.topbar, .shell-compact-bar) .shell-topbar-leading__actions {
+    display: inline-flex !important;
+    align-items: center;
+  }
+}

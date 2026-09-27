@@ -186,7 +186,7 @@ export function PaddleCheckoutButton({
         onClick={() => checkoutDialogRef.current?.showModal()}
         disabled={!scriptReady || preparing}
       >
-        {preparing ? "Preparing checkout…" : scriptReady ? "Subscribe" : "Loading secure checkout..."}
+        {preparing ? "Preparing checkout…" : scriptReady ? `Subscribe to ${planTier === "premium" ? "Pro" : "Plus"}` : "Loading secure checkout..."}
       </button>
       {message ? <p className="billing-helper" aria-live="polite">{message}</p> : null}
     </div>

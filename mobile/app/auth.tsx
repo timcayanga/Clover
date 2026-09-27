@@ -32,6 +32,7 @@ export default function Authentication() {
   );
 }
 function AuthForm() {
+  const { welcomeAllowed } = useAccess();
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
   const params = useLocalSearchParams<{ mode?: string }>();
@@ -190,9 +191,9 @@ function AuthForm() {
     >
     <Screen>
       <View style={{ paddingVertical: 8, maxWidth: 520, width: "100%", alignSelf: "center" }}>
-        <Pressable accessibilityRole="button" accessibilityLabel="Back to tutorial" onPress={() => router.back()} style={{ minHeight: 44, alignSelf: "flex-start", justifyContent: "center", marginBottom: 8 }}>
+        {welcomeAllowed && <Pressable accessibilityRole="button" accessibilityLabel="Back to tutorial" onPress={() => router.back()} style={{ minHeight: 44, alignSelf: "flex-start", justifyContent: "center", marginBottom: 8 }}>
           <Icon name="arrow-back" size={24} color={colors.teal} />
-        </Pressable>
+        </Pressable>}
         <Card style={{ borderRadius: 24 }}>
           <Image
             source={require("../assets/welcome-clover.png")}

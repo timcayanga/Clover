@@ -1,3 +1,4 @@
+import { finverseBalances } from "@/lib/finverse-balances";
 import { resolveReportCurrency } from "@/lib/report-currency";
 import { getRollingWeekBuckets } from "@/lib/report-week-buckets";
 import { organizeAccountLabels } from "@/lib/organize-account-label";
@@ -597,7 +598,7 @@ export async function ReportsStream({
               statementCheckpoints: { select: { endingBalance: true, status: true, statementEndDate: true, createdAt: true, sourceMetadata: true }, orderBy: { createdAt: "desc" }, take: 50 },
             },
             orderBy: [{ balance: "desc" }, { updatedAt: "desc" }],
-          }).then(accounts => accounts.map(account => ({ id: account.id, name: account.name, accountNumber: account.accountNumber, currency: account.currency, type: account.type, balance: reportAccountBalance({ ...account, transactions: account.transactions.map(t => ({ ...t, amount: t.amount.toString(), rawPayload: t.rawPayload as Parameters<typeof reportAccountBalance>[0]["transactions"][number]["rawPayload"] })) }) }))) as Promise<WorkspaceAccountSnapshot[]>),
+          }).then(async accounts => { const snapshots = await finverseBalances(selectedWorkspaceId); return accounts.map(account => ({ id: account.id, name: account.name, accountNumber: account.accountNumber, currency: account.currency, type: account.type, balance: snapshots.has(account.id) ? Number(snapshots.get(account.id)!.bankBalance) : reportAccountBalance({ ...account, transactions: account.transactions.map(t => ({ ...t, amount: t.amount.toString(), rawPayload: t.rawPayload as Parameters<typeof reportAccountBalance>[0]["transactions"][number]["rawPayload"] })) }) })); }) as Promise<WorkspaceAccountSnapshot[]>),
         loadReportNetWorthAccounts(selectedWorkspaceId, requestedAccountId),
       ]),
     }),

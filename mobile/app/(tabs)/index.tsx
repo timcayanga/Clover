@@ -1,16 +1,19 @@
+import { registerScreenRefresh } from "../../src/screen-refresh";
 import { HomeAdviser } from "../../src/home-adviser";
 import type { HomeInsight } from "../../../shared/home-adviser-insights";
 import { homePeriodLabel } from "../../src/home-period-label";
 import { Text } from "../../src/app-text";
 import { HomeQuickAccess } from "../../src/home-quick-access";
 import { HomeChart } from "../../src/home-chart";
-import { router, useFocusEffect } from "expo-router";
+import { router, useFocusEffect, useNavigation } from "expo-router";
 import { LinearGradient } from "expo-linear-gradient";
 import * as SecureStore from "expo-secure-store";
-import { useCallback, useEffect, useState } from "react";
-import { Platform, Pressable, View } from "react-native";
+import { useCallback, useEffect, useLayoutEffect, useState } from "react";
+import { Modal, ScrollView, Platform, Pressable, View } from "react-native";
 import { useSession } from "../../src/session";
 import {
+  AppHeader,
+  Heading,
   Body,
   Button,
   Card,
@@ -52,12 +55,14 @@ type HomeData = {
     title: string;
     amount: string | null;
     date: string;
+    currency?: string;
   }[];
   upcoming: {
     id: string;
     title: string;
     amount: string | null;
     date: string;
+    currency?: string;
   }[];
 };
 const hiddenKey = "clover.home.hide-balances";
@@ -67,7 +72,15 @@ export default function Home() {
   const [data, setData] = useState<HomeData | null>(null);
   const [error, setError] = useState("");
   const [hidden, setHidden] = useState(true);
-  const currency = session.data?.defaultCurrency ?? "PHP";
+  const profileCurrency = session.data?.defaultCurrency ?? "PHP";
+  const [currency, setCurrency] = useState(profileCurrency);
+  const [currencyOpen, setCurrencyOpen] = useState(false);
+  const [currencyOptions, setCurrencyOptions] = useState<string[]>([profileCurrency]);
+  const navigation = useNavigation();
+  useEffect(() => { setCurrency(profileCurrency); setCurrencyOptions([profileCurrency]); }, [profileCurrency, session.profileId]);
+  useLayoutEffect(() => {
+    navigation.setOptions({ header: () => <AppHeader title="Home" leading={<Pressable accessibilityRole="button" accessibilityLabel={`Home currency: ${currency === "ALL" ? "All Currencies" : currency}`} onPress={() => setCurrencyOpen(true)} style={styles.iconButton}><Icon line name="globe-outline" size={24} /></Pressable>} /> });
+  }, [navigation, currency, styles.iconButton]);
   useEffect(() => {
     let active = true;
     const read =
@@ -96,7 +109,7 @@ export default function Home() {
   const load = useCallback(async () => {
     if (session.demo) {
       const totals = session.rows
-        .filter((row) => row.currency === currency)
+        .filter((row) => row.currency === (currency === "ALL" ? profileCurrency : currency))
         .reduce(
           (sum, row) => {
             if (row.type !== "transfer")
@@ -106,7 +119,8 @@ export default function Home() {
           { income: 0, expense: 0 },
         );
       return {
-        currency,
+        currency: currency === "ALL" ? profileCurrency : currency,
+        currencies: [...new Set(session.rows.map(row => row.currency))],
         balance: null,
         month: totals,
         previousMonth: { income: 0, expense: 0 },
@@ -124,32 +138,46 @@ export default function Home() {
     session.profileId,
     session.request,
     currency,
+    profileCurrency,
   ]);
   useFocusEffect(
     useCallback(() => {
       let active = true;
       setData(null);
       setError("");
-      void load()
+      const refresh = () => load()
         .then((value) => {
-          if (active) setData(value);
+          if (active) { setError(""); setData(value); setCurrencyOptions(value.currencies ?? [value.currency]); }
         })
         .catch((e) => {
           if (active) setError(e.message);
         });
+      void refresh();
+      const unregister = registerScreenRefresh("/", refresh);
       return () => {
-        active = false;
+        active = false; unregister();
       };
     }, [load]),
   );
-  const amount = (value: number | string | null) =>
+  const amount = (value: number | string | null, code = data?.currency ?? profileCurrency) =>
     hidden
       ? "••••"
       : value === null
         ? "Unavailable"
-        : money(String(value), currency);
+        : money(String(value), code);
   return (
     <Screen>
+      <Modal visible={currencyOpen} transparent animationType="fade" onRequestClose={() => setCurrencyOpen(false)}>
+        <View style={{ flex: 1, backgroundColor: "#0006", justifyContent: "center", padding: 24 }}>
+          <Pressable accessibilityLabel="Close currency selector" onPress={() => setCurrencyOpen(false)} style={{ position: "absolute", inset: 0 }} />
+          <View accessibilityViewIsModal style={{ maxHeight: "75%", backgroundColor: colors.white, borderRadius: 20, padding: 20, gap: 12 }}>
+            <Heading>Home currency</Heading>
+            <ScrollView>{["ALL", ...new Set([profileCurrency, ...currencyOptions])].map(code => <Pressable key={code} accessibilityRole="button" accessibilityState={{ selected: currency === code }} onPress={() => { setCurrency(code); setCurrencyOpen(false); }} style={{ minHeight: 48, flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}><Text style={{ color: colors.ink }}>{code === "ALL" ? "All Currencies" : code}</Text>{currency === code ? <Icon line name="checkmark" /> : null}</Pressable>)}</ScrollView>
+            <Body>{currency === "ALL" ? `Combined balance in ${profileCurrency}. Reports remain separated by currency.` : "Applies to every section on Home."}</Body>
+            <Button title="Done" secondary onPress={() => setCurrencyOpen(false)} />
+          </View>
+        </View>
+      </Modal>
       {error ? (
         <Notice>{error}</Notice>
       ) : !data ? (
@@ -258,7 +286,7 @@ export default function Home() {
               </View>)}
             </Card>
           )}
-          {(data.currencyReports ?? [{ currency, weekly: data.weekly, monthly: data.monthly }]).flatMap((report) => (["weekly", "monthly"] as const).map((key) => (
+          {(data.currencyReports ?? [{ currency: data.currency, weekly: data.weekly, monthly: data.monthly }]).flatMap((report) => (["weekly", "monthly"] as const).map((key) => (
             <Card key={`${report.currency}-${key}`}>
               <Text style={styles.sectionTitle}>
                 {key === "weekly" ? "Weekly Report" : "Monthly Report"}
@@ -376,7 +404,7 @@ export default function Home() {
                   }}
                 >
                   <Body>{item.title}</Body>
-                  <Body>{amount(item.amount)}</Body>
+                  <Body>{amount(item.amount, item.currency)}</Body>
                 </View>
               ))
             ) : (

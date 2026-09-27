@@ -299,7 +299,7 @@ async function main() {
   assert.match(transactionsPage, /transactions-main-panel[\s\S]{0,120}isCompactViewport \? <TransactionSelectionToolbar compact/, "Mobile search and filters belong above the transaction list.");
   assert.match(await readSource("components/transaction-selection-toolbar.tsx"), /type="search" aria-label="Search"/, "Mobile search must remain visible rather than hidden in a header overlay.");
   assert.match(shell, /label: "Plan", icon: "plan"/);
-  assert.match(shell, /active === "adviser" \|\| active === "dashboard" \? null : mobileLeadingAction/, "Home leaves the leading slot for navigation; other pages retain contextual Adviser.");
+  assert.match(shell, /active === "adviser" \? null : mobileLeadingAction/, "Home supports a leading currency control; other pages retain contextual Adviser.");
   assert.match(shell, /active === "dashboard" \? <span className="home-header-adviser"><AdviserHeaderLink/, "Home must expose Adviser with the right-side notification controls.");
   const splitBillManual = await readSource("components/split-bill-manual-modal.tsx");
   assert.match(splitBillManual, /return createPortal\([\s\S]*document.body/, "The Split Bills add form must escape the header's clipping and stacking context.");

@@ -51,6 +51,7 @@ export function mobileHomePayments(
     .map((o) => ({
       id: `${o.commitment.id}:${o.dateKey}`,
       title: o.commitment.title,
+      currency: o.commitment.currency,
       date: o.dateKey,
       amount:
         recurringPaymentAmount(o.commitment, o.dateKey)?.toString() ?? null,

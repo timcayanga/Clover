@@ -3,7 +3,9 @@ import { SummaryCard } from "../../src/plan-ui";
 import { router, useFocusEffect, useLocalSearchParams } from "expo-router";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ActivityIndicator, FlatList, Pressable, View } from "react-native";
-import { Choices } from "../../src/transaction-entry";
+import { matchesDemoFilters, demoFilterOptions } from "../../src/transaction-filter-query";
+import { TransactionFilterPanel } from "../../src/transaction-filters";
+import { emptyTransactionFilters, transactionFilterQuery, type TransactionFilters, type FilterOptions } from "../../src/transaction-filter-query";
 import { useSession } from "../../src/session";
 import type { Transaction, TransactionPage } from "../../src/types";
 import {
@@ -24,14 +26,29 @@ export default function Transactions() {
   const [summary, setSummary] = useState<TransactionPage["summary"]>();
   const [filters, setFilters] = useState(false);
   const params = useLocalSearchParams<{ review?: string; query?: string }>();
-  const [review, setReview] = useState("");
+  const [filterValues, setFilterValues] = useState<TransactionFilters>(emptyTransactionFilters);
+  const [filterOptions, setFilterOptions] = useState<FilterOptions>({accounts:[],categories:[],tags:[]});
+  const [optionError, setOptionError] = useState("");
+  useEffect(() => {
+    setFilterValues(emptyTransactionFilters);
+    setFilters(false);
+    setFilterOptions({accounts:[],categories:[],tags:[]});
+  }, [profileId]);
+  useEffect(() => {
+    if (!filters || demo) return;
+    let active = true;
+    setOptionError("");
+    request<FilterOptions>(`options?workspaceId=${encodeURIComponent(profileId)}&context=filters`)
+      .then(data => { if (active) setFilterOptions(data); })
+      .catch((e: Error) => { if (active) setOptionError(e.message); });
+    return () => { active = false; };
+  }, [filters, demo, profileId, request]);
   useEffect(() => {
     if (params.review === "pending_review") {
-      setReview("pending_review");
+      setFilterValues(current => ({ ...current, reviewFilter: "pending" }));
       setFilters(true);
     }
   }, [params.review]);
-  const [type, setType] = useState("");
   const [query, setQuery] = useState("");
   const [search, setSearch] = useState("");
   useEffect(() => { if (params.query !== undefined) setQuery(params.query); }, [params.query]);
@@ -58,8 +75,7 @@ export default function Transactions() {
           ? {
               transactions: samples.filter(
                 (r) =>
-                  (!review || r.reviewStatus === review) &&
-                  (!type || r.type === type) &&
+                  matchesDemoFilters(r, filterValues) &&
                   `${r.merchantClean} ${r.accountName} ${r.categoryName} ${r.tags?.map((t) => t.name).join(" ")}`
                     .toLowerCase()
                     .includes(search.toLowerCase()),
@@ -68,7 +84,7 @@ export default function Transactions() {
               page: 1,
             }
           : await request(
-              `transactions?workspaceId=${encodeURIComponent(profileId)}&query=${encodeURIComponent(search)}&page=${next}&reviewFilter=${review === "pending_review" ? "pending" : review}&type=${type === "income" ? "credit" : type === "expense" ? "debit" : type}`,
+              `transactions?workspaceId=${encodeURIComponent(profileId)}&query=${encodeURIComponent(search)}&page=${next}&${transactionFilterQuery(filterValues)}`,
             );
         if (ticket !== sequence.current) return;
         setRows((previous) =>
@@ -93,7 +109,7 @@ export default function Transactions() {
         }
       }
     },
-    [demo, samples, profileId, request, search, review, type],
+    [demo, samples, profileId, request, search, filterValues],
   );
   useFocusEffect(
     useCallback(() => {
@@ -112,45 +128,19 @@ export default function Transactions() {
             <Field
               accessibilityLabel="Search transactions"
               placeholder="Search"
-              style={{ height: 44, minHeight: 44, paddingVertical: 0, fontSize: 13 }}
+              style={{ height: 44, minHeight: 44, borderRadius: 999, paddingVertical: 0, fontSize: 13 }}
               value={query}
               onChangeText={setQuery}
               returnKeyType="search"
               autoCorrect={false}
             />
           </View>
-          <Button
-            title="Filters"
-            icon="options-outline"
-            secondary
-            onPress={() => setFilters((v) => !v)}
-          />
+          <Pressable accessibilityRole="button" accessibilityLabel="Filter transactions" accessibilityState={{expanded:filters}} onPress={() => setFilters(v=>!v)} style={{width:44,height:44,borderRadius:999,borderWidth:1,borderColor:colors.line,backgroundColor:colors.white,alignItems:"center",justifyContent:"center"}}>
+            <Icon line name="options-outline" size={20} color={colors.teal}/>
+          </Pressable>
         </View>
-        {filters ? (
-          <View style={{ gap: 8 }}>
-            <Body>Warnings</Body>
-            <Choices
-              options={[
-                { value: "", label: "All" },
-                { value: "pending_review", label: "Needs review" },
-                { value: "confirmed", label: "Confirmed" },
-              ]}
-              value={review}
-              onChange={setReview}
-            />
-            <Body>Type</Body>
-            <Choices
-              options={[
-                { value: "", label: "All" },
-                { value: "expense", label: "Expense" },
-                { value: "income", label: "Income" },
-                { value: "transfer", label: "Transfer" },
-              ]}
-              value={type}
-              onChange={setType}
-            />
-          </View>
-        ) : null}
+        {filters ? <TransactionFilterPanel value={filterValues} options={demo ? demoFilterOptions(samples) : filterOptions} onClose={()=>setFilters(false)} onApply={next=>{setFilterValues(next);setFilters(false);}} /> : null}
+        {filters && optionError ? <Notice>Unable to load filter choices. Close and reopen Filters to retry.</Notice> : null}
         {error ? (
           <Notice>{error}</Notice>
         ) : busy && !rows.length ? (
