@@ -16,6 +16,7 @@ export function retainedPlanRows(usage: RetainedUsage, tier: CloverPlanTier, ove
   });
 }
 export type RetentionSnapshot = {
+  linkedBanks?: { used: number; limit: number | null };
   planTier: CloverPlanTier;
   usage: RetainedUsage;
   limits: Partial<Record<RetainedResource, number | null>>;

@@ -4,7 +4,7 @@ import { readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { resolve } from 'node:path';
 import { bankNumbersMatch, matchingBankAccounts } from '../lib/finverse-matching';
-import { bankLinkPeriod, bankLinkAllowance } from '../lib/bank-link-usage';
+import { bankLinkPeriod, bankLinkAllowance, readBankLinkUsage } from '../lib/bank-link-usage';
 async function main() {
  assert(bankNumbersMatch('0012345678901','001******8901'));
  assert(!bankNumbersMatch('0012345678901','0018901'));
@@ -19,6 +19,12 @@ async function main() {
  assert.equal((await bankLinkAllowance(quotaTx,'u',new Date('2026-09-25'))).usedIds.size,2,'active reauthorized IDs retain their original quota identity');active=[];
  assert.equal((await bankLinkAllowance(quotaTx,'u',new Date('2026-09-26'))).remaining,0);
  assert.equal((await bankLinkAllowance(quotaTx,'u',new Date('2026-10-10'))).remaining,2);
+ const beforeRead = usage.length;
+ assert.deepEqual(await readBankLinkUsage(quotaTx, 'u', new Date('2026-09-26')), { used: 2, limit: 2 }, 'Unlinked accounts still consume reserved monthly slots');
+ assert.deepEqual(await readBankLinkUsage(quotaTx, 'u', new Date('2026-10-10')), { used: 0, limit: 2 }, 'New period releases inactive slots');
+ active = [{ externalAccountId: 'rotated-a', normalizedPayload: { quotaIdentity: 'a' } }, { externalAccountId: 'legacy' }];
+ assert.equal((await readBankLinkUsage(quotaTx, 'u', new Date('2026-09-26'))).used, 3, 'Active legacy links count without double-counting a reauthorized identity');
+ assert.equal(usage.length, beforeRead, 'Viewing usage must never create reservations');
  const fixture=`
 let accounts=[],links=[],records=[],transactions=[],used=new Set(),creates=0,tail=Promise.resolve();
 export function reset(){accounts=[{id:'existing',workspaceId:'w',name:'My Metrobank',institution:'Metrobank',accountNumber:'0012345678901',currency:'PHP',type:'bank',source:'manual',balance:'73000',finverseAccountLink:null}];links=[];records=[];transactions=[];used=new Set();creates=0;}

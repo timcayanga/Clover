@@ -1,8 +1,14 @@
+import { selectRecentProfile } from "../../mobile/src/profile-selection";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { hasVisitedClover, rememberCloverVisit, launchDestination, launchHistoryKey, type LaunchStorage } from "../../mobile/src/launch-history";
 
 async function main() {
+  const profiles = [{ id: "personal" }, { id: "family" }];
+  assert.equal(selectRecentProfile(profiles, "", "family"), "family", "Cold launch restores last profile");
+  assert.equal(selectRecentProfile(profiles, "personal", "family"), "personal", "Refresh preserves the active profile");
+  assert.equal(selectRecentProfile(profiles, "deleted", "foreign-user-profile"), "personal", "Removed or unauthorized selections fall back safely");
+  assert.equal(selectRecentProfile([], "family", "family"), "", "No profile still requires setup");
   const values = new Map<string, string>();
   const storage: LaunchStorage = { get: async key => values.get(key) ?? null, set: async (key, value) => { values.set(key, value); } };
   const firstVisit = await hasVisitedClover(storage);

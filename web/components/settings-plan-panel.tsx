@@ -1,5 +1,10 @@
 "use client";
-import { SwitchOfferNotice } from "./switch-campaign";
+import type { RetentionSnapshot } from "../../shared/plan-retention";
+import { PlanDialog } from "./settings-plan-dialog";
+
+import dynamic from "next/dynamic";
+const TermsDocument = dynamic(() => import("./legal-terms-document").then(m => m.TermsOfServiceDocument));
+const PrivacyDocument = dynamic(() => import("./legal-privacy-document").then(m => m.PrivacyPolicyDocument));
 
 import { plannedPremiumPrices } from "@/lib/public-plan-comparison";
 import { PLAN_CATALOG, planName } from "../../shared/plan-catalog";
@@ -94,6 +99,15 @@ export function SettingsPlanPanel({
   const [paddlePortalMessage, setPaddlePortalMessage] = useState<string | null>(null);
   const [offers, setOffers] = useState<BillingOffers | null>(null);
   const [offersLoading, setOffersLoading] = useState(true);
+  const [retention, setRetention] = useState<RetentionSnapshot | null>(null);
+  const [campaignActive, setCampaignActive] = useState(false);
+  const [dialog, setDialog] = useState<"usage" | "terms-of-service" | "privacy-policy" | "free" | "pro" | "premium" | null>(null);
+  useEffect(() => {
+    const controller = new AbortController();
+    void fetch("/api/billing/retention", { signal: controller.signal, cache: "no-store" }).then(r => r.ok ? r.json() : null).then(value => { if (!controller.signal.aborted) setRetention(value); }).catch(() => {});
+    void fetch("/api/referrals", { signal: controller.signal, cache: "no-store" }).then(r => r.ok ? r.json() : null).then(value => { if (!controller.signal.aborted) setCampaignActive(Boolean(value?.campaigns?.length)); }).catch(() => {});
+    return () => controller.abort();
+  }, [billingCustomerId]);
   useEffect(() => {
     const controller = new AbortController();
     setOffersLoading(true);
@@ -178,58 +192,50 @@ export function SettingsPlanPanel({
   const usageRows = [
     {
       label: "Profiles",
-      used: `${profileCount.toLocaleString()} used`,
-      limit: profileLimit === null ? "Unlimited" : `${profileLimit.toLocaleString()} limit`,
+      used: `${profileCount.toLocaleString()}`,
+      limit: profileLimit === null ? "Unlimited" : `${profileLimit.toLocaleString()}`,
       percent: getUsagePercent(profileCount, profileLimit),
       donut: false,
     },
     {
       label: "Accounts",
-      used: `${planUsage.accountCount.toLocaleString()} used`,
-      limit: planLimits.accountLimit === null ? "Unlimited" : `${planLimits.accountLimit.toLocaleString()} limit`,
+      used: `${planUsage.accountCount.toLocaleString()}`,
+      limit: planLimits.accountLimit === null ? "Unlimited" : `${planLimits.accountLimit.toLocaleString()}`,
       percent: getUsagePercent(planUsage.accountCount, planLimits.accountLimit),
       donut: false,
     },
     {
       label: "Clover tokens this month",
-      used: `${(cloverTokenUsage?.monthly.used ?? 0).toLocaleString()} used`,
+      used: `${(cloverTokenUsage?.monthly.used ?? 0).toLocaleString()}`,
       limit: cloverTokenUsage?.monthly.limit === null
         ? "Unlimited"
-        : `${(cloverTokenUsage?.monthly.limit ?? PLAN_CATALOG[planTier].monthlyTokens).toLocaleString()} limit`,
+        : `${(cloverTokenUsage?.monthly.limit ?? PLAN_CATALOG[planTier].monthlyTokens).toLocaleString()}`,
       percent: cloverTokenUsage?.monthly.percent ?? 0,
       donut: true,
     },
     {
       label: "Clover tokens, rolling 24h",
-      used: `${(cloverTokenUsage?.rolling24h.used ?? 0).toLocaleString()} used`,
+      used: `${(cloverTokenUsage?.rolling24h.used ?? 0).toLocaleString()}`,
       limit: cloverTokenUsage?.rolling24h.limit === null
         ? "Unlimited"
-        : `${(cloverTokenUsage?.rolling24h.limit ?? PLAN_CATALOG[planTier].dailyTokens).toLocaleString()} limit`,
+        : `${(cloverTokenUsage?.rolling24h.limit ?? PLAN_CATALOG[planTier].dailyTokens).toLocaleString()}`,
       percent: cloverTokenUsage?.rolling24h.percent ?? 0,
       donut: true,
     },
+    ...(["budgets", "goals", "circles", "linkedBanks"] as const).map(key => {
+      const meter = key === "linkedBanks" ? retention?.linkedBanks : retention ? { used: retention.usage[key], limit: retention.limits[key] === undefined ? PLAN_CATALOG[retention.planTier][key] : retention.limits[key]! } : null;
+      return { label: key === "linkedBanks" ? "Linked Banks" : key[0].toUpperCase() + key.slice(1), used: meter ? meter.used.toLocaleString() : "—", limit: meter ? meter.limit === null ? "Unlimited" : meter.limit.toLocaleString() : "—", percent: meter ? getUsagePercent(meter.used, meter.limit) : 0, donut: false };
+    }),
   ];
 
   return (
     <section className="settings-section settings-section--plan settings-section--swap" role="tabpanel">
       <div className="settings-section__intro settings-section__intro--single">
-        <h4>Plan</h4>
+        <h4>Clover {planName(planTier)}</h4>
       </div>
 
-      <div className="settings-plan-usage settings-plan-usage--with-plan" aria-label="Current plan and usage">
-        <article className="settings-plan-usage__card settings-plan-usage__card--plan">
-          <div className="settings-plan-usage__head">
-            <strong>Current plan</strong>
-            <span className="settings-plan-usage__tier">{planName(planTier)}</span>
-          </div>
-          <span className="settings-plan-usage__legend">
-            <span>Plan status</span>
-            <span>Active</span>
-          </span>
-          <span className="settings-plan-usage__meter" aria-hidden="true">
-            <span style={{ width: "100%" }} />
-          </span>
-        </article>
+      <div className="settings-plan-usage-heading"><h5>Plan usage</h5><button type="button" className="settings-plan-info" aria-label="About plan usage" onClick={() => setDialog("usage")}>i</button></div>
+      <div className="settings-plan-usage" aria-label="Plan usage">
         {usageRows.map((usage) => (
           <article key={usage.label} className="settings-plan-usage__card">
             <div className="settings-plan-usage__head">
@@ -237,7 +243,7 @@ export function SettingsPlanPanel({
             </div>
             <span className="settings-plan-usage__legend">
               <span>{usage.used}</span>
-              <span>{Math.round(usage.percent)}% · {usage.limit}</span>
+              <span>/ {usage.limit}</span>
             </span>
             <span className="settings-plan-usage__meter" aria-hidden="true">
               <span style={{ width: `${usage.percent}%` }} />
@@ -249,7 +255,7 @@ export function SettingsPlanPanel({
         <button type="button" className={billingInterval === "monthly" ? "is-selected" : ""} onClick={() => setBillingInterval("monthly")}>Monthly</button>
         <button type="button" className={billingInterval === "annual" ? "is-selected" : ""} onClick={() => setBillingInterval("annual")}>Annually</button>
       </div>
-      <div className={`settings-plan-grid settings-plan-grid--current-${planTier}`} aria-label="Available plans">
+      <div className={`settings-plan-grid settings-plan-carousel`} aria-label="Available plans">
         {(["premium", "pro", "free"] as const).map(tier => {
           const plan = PLAN_CATALOG[tier];
           const price = tier === "free" ? "₱0 forever" : tier === "premium" ? (offers ? plannedPremiumPrices(offers.market)[billingInterval] : undefined) : offers?.prices[billingInterval];
@@ -269,12 +275,15 @@ export function SettingsPlanPanel({
               {planTier === tier ? <span className="settings-pill">Current plan</span> : null}
             </span></div>
             <div className="settings-plan-card__body"><ul className="settings-plan-card__features">{features.map(feature => <PlanFeatureItem key={feature} label={feature} className="settings-plan-card__feature-row" />)}</ul>
+              {planTier !== tier ? <button type="button" className="settings-plan-switch" onClick={() => setDialog(tier)}>Switch to {plan.name} →</button> : null}
             </div>
           </article>;
         })}
       </div>
-      <SwitchOfferNotice directToApplication />
-      <div className="settings-plan-management" aria-label="Subscription options">
+      {campaignActive ? <section className="settings-plan-referral"><h5>Refer and Earn</h5><p>Invite friends and explore your available rewards.</p><a href="/referrals">View referral offer →</a></section> : null}
+      <footer className="settings-plan-footer"><button type="button" onClick={() => setDialog("terms-of-service")}>Terms</button><button type="button" onClick={() => setDialog("privacy-policy")}>Privacy Policy</button></footer>
+      <PlanDialog open={dialog !== null} title={dialog === "usage" ? "Plan usage" : dialog === "terms-of-service" ? "Terms" : dialog === "privacy-policy" ? "Privacy Policy" : `Switch to ${dialog ? planName(dialog) : ""}`} onClose={() => setDialog(null)}>
+      {dialog === "usage" ? <p>Monthly Clover tokens reset on the first day of each month in Asia/Manila. Unused tokens do not roll over. The 24-hour allowance is a rolling window. Cash accounts do not count toward the account limit. Investments count by institution. Only active budgets and non-archived Circles you own count. Linked bank slots remain reserved after unlinking until the next monthly period. Changing plans preserves your existing records.</p> : dialog === "terms-of-service" || dialog === "privacy-policy" ? <div className="settings-plan-legal-view">{dialog === "privacy-policy" ? <PrivacyDocument /> : <TermsDocument />}</div> : <div className="settings-plan-management" aria-label="Subscription options">
         {hasPaddleSubscription ? <div className="settings-plan-management__actions">
           <button type="button" className="button button-primary" disabled={paddlePortalAction !== null} onClick={() => void openPaddlePortal("plan_change")}>Change plan</button>
           <button type="button" className="button button-secondary" disabled={paddlePortalAction !== null} onClick={() => void openPaddlePortal("payment_method")}>Change payment method</button>
@@ -283,11 +292,13 @@ export function SettingsPlanPanel({
         : !billingDetailsReady ? <p role="status">Loading subscription options…</p>
         : isAwaitingApproval ? <p role="status">Waiting for payment confirmation.</p>
         : <div className="settings-plan-management__actions">
-          {planTier === "free" && (paddleReady ? <div><PaddleCheckoutButton clientToken={paddleClientToken!} environment={paddleEnvironment} priceId={paddlePriceId!} customerId={billingCustomerId ?? ""} customerEmail={customerEmail} interval={billingInterval} onStart={() => capturePostHogClientEvent("upgrade_cta_clicked", {cta_location:"settings_billing",billing_provider:"paddle",plan_tier:planTier,plan_interval:billingInterval})} /></div> : paypalCheckoutReady ? <PayPalSubscribeButton clientId={paypalClientId!} planId={checkoutPlanId!} customId={billingCustomerId ?? ""} buyerCountry={paypalBuyerCountry} fundingSource="card" /> : null)}
-          {planTier !== "premium" && premiumReady ? <div><PaddleCheckoutButton clientToken={paddleClientToken!} environment={paddleEnvironment} priceId={premiumPriceId!} planTier="premium" customerId={billingCustomerId ?? ""} customerEmail={customerEmail} interval={billingInterval} /></div> : null}
+          {dialog === "pro" && planTier === "free" && (paddleReady ? <div><PaddleCheckoutButton clientToken={paddleClientToken!} environment={paddleEnvironment} priceId={paddlePriceId!} customerId={billingCustomerId ?? ""} customerEmail={customerEmail} interval={billingInterval} onStart={() => capturePostHogClientEvent("upgrade_cta_clicked", {cta_location:"settings_billing",billing_provider:"paddle",plan_tier:planTier,plan_interval:billingInterval})} /></div> : paypalCheckoutReady ? <PayPalSubscribeButton clientId={paypalClientId!} planId={checkoutPlanId!} customId={billingCustomerId ?? ""} buyerCountry={paypalBuyerCountry} fundingSource="card" /> : null)}
+          {dialog === "premium" && planTier !== "premium" && premiumReady ? <div><PaddleCheckoutButton clientToken={paddleClientToken!} environment={paddleEnvironment} priceId={premiumPriceId!} planTier="premium" customerId={billingCustomerId ?? ""} customerEmail={customerEmail} interval={billingInterval} /></div> : null}
         </div>}
+        {!hasPaddleSubscription && currentProvider !== "paypal" && billingDetailsReady && !isAwaitingApproval && ((dialog === "premium" && !premiumReady) || (dialog === "pro" && !paddleReady && !paypalCheckoutReady) || dialog === "free") ? <p>Manage this plan with your original billing provider. Available checkout options will appear here when pricing is verified.</p> : null}
         {paddlePortalMessage ? <p role="status">{paddlePortalMessage}</p> : null}
-      </div>
+      </div>}
+      </PlanDialog>
     </section>
   );
 }

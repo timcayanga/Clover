@@ -784,13 +784,13 @@ export function ProfileGate({ children }: { children: ReactNode }) {
   if (!session.ready)
     return (
       <Screen>
-        <Body>Loading your Clover account…</Body>
+        <View accessibilityLabel="Opening Clover" style={{ minHeight: 180 }} />
       </Screen>
     );
   if (!session.profileId)
     return (
       <Screen>
-        <Heading>Choose your Profile</Heading>
+        <Heading>Set up your Profile</Heading>
         <Body>Your finances stay separate between Profiles.</Body>
         {session.data?.profiles.map((profile) => (
           <Button

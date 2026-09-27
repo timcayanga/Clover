@@ -30,3 +30,19 @@ export async function bankLinkAllowance(tx: Prisma.TransactionClient, userId: st
   const limit = hasUnlimitedPlanLimits(user) ? Number.MAX_SAFE_INTEGER : PLAN_CATALOG[user.planTier].linkedBanks;
   return { ...period, usedIds, limit, remaining: Math.max(0, limit - usedIds.size) };
 }
+
+/** Read-only usage includes reserved slots after unlink and active legacy links. */
+export async function readBankLinkUsage(tx: Prisma.TransactionClient, userId: string, now = new Date()) {
+  const [user, subscription, store, active] = await Promise.all([
+    tx.user.findUniqueOrThrow({ where: { id: userId } }),
+    tx.billingSubscription.findUnique({ where: { userId } }),
+    tx.storeAccess.findUnique({ where: { userId } }),
+    tx.finverseAccountLink.findMany({ where: { workspace: { userId }, accountId: { not: null }, unlinkedAt: null, connection: { status: { not: 'disconnected' } } }, select: { externalAccountId: true, normalizedPayload: true } }),
+  ]);
+  const raw = subscription?.rawPayload as { current_billing_period?: { starts_at?: string } } | null;
+  const rawStart = raw?.current_billing_period?.starts_at ? new Date(raw.current_billing_period.starts_at) : null;
+  const anchor = subscription?.approvedAt ?? (rawStart && Number.isFinite(+rawStart) ? rawStart : subscription?.createdAt ?? store?.expiresAt ?? user.createdAt);
+  const { periodStart } = bankLinkPeriod(anchor, now);
+  const reserved = await tx.bankLinkUsage.findMany({ where: { userId, periodStart }, select: { externalAccountId: true } });
+  return { used: new Set([...reserved.map(row => row.externalAccountId), ...active.map(bankLinkUsageIdentity)]).size, limit: hasUnlimitedPlanLimits(user) ? null : PLAN_CATALOG[user.planTier].linkedBanks };
+}

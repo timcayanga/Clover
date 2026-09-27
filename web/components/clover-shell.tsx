@@ -399,9 +399,12 @@ const desktopNavSections = [
 ];
 
 const mobileSettingsSections = [
+  { href: "/settings/account", label: "Account", icon: "profile" as const },
   { href: "/settings", label: "Settings", icon: "settings" as const },
-  { href: "/help", label: "Help", icon: "help" as const },
+  { href: "/notifications", label: "Notifications", icon: "notifications" as const },
   { href: "/settings/plan", label: "Plan", icon: "plan" as const },
+  { href: "/help", label: "Help Center", icon: "help" as const },
+  { href: "/privacy-policy", label: "Privacy Policy", icon: "security" as const },
 ];
 
 const shouldPrefetchNavHref = (_href: string) => true;
@@ -428,6 +431,7 @@ type IconName =
   | "settings"
   | "help"
   | "plan"
+  | "security"
   | "sign-out";
 
 const MENU_ICON_NAMES: Partial<Record<IconName, NavigationIconName>> = {
@@ -449,6 +453,7 @@ const MENU_ICON_NAMES: Partial<Record<IconName, NavigationIconName>> = {
   plan: "plan",
   search: "search",
   profile: "profile",
+  security: "security",
   "sign-out": "signOut",
 };
 
@@ -2236,19 +2241,7 @@ export function CloverShell({
               <MenuIcon name="menu" open />
             </button>
           </div>
-          <div className="shell-profile-drawer__account-card">
-            <span className="shell-profile-drawer__account-avatar" aria-hidden="true">
-              {profileImage ? (
-                <img src={profileImage} alt="" loading="eager" decoding="async" fetchPriority="high" />
-              ) : (
-                <MenuIcon name="profile" />
-              )}
-            </span>
-            <div className="shell-profile-drawer__account-copy">
-              <span>Account</span>
-              <strong>{displayName}</strong>
-            </div>
-          </div>
+          <h2>Account</h2>
         </div>
         <nav className="shell-profile-drawer__nav" aria-label="Account sections">
           {mobileSettingsSections.map((item) => (

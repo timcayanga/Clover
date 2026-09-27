@@ -1,3 +1,4 @@
+import { selectRecentProfile } from "./profile-selection";
 import { useCloudAiConsent } from "./ai-consent";
 import { updateNativePlanAnalytics } from "./analytics";
 import { uploadInParts } from "./offline/resumable-upload";
@@ -12,6 +13,7 @@ import { Alert, Platform } from "react-native";
 import { apiBase, ApiError } from "./api";
 import { OfflineEngine } from "./offline/engine";
 import { openOfflineStore } from "./offline/store";
+import type { CacheEntry } from "./offline/types";
 import type { OfflineStatus } from "./offline/types";
 import {
   createContext,
@@ -76,6 +78,7 @@ export function SessionProvider({
   const [profileId, setProfile] = useState(
     demo ? sampleBootstrap.profiles[0].id : "",
   );
+  const preferredProfile = useRef("");
   const [error, setError] = useState("");
   const [rows, setRows] = useState(sampleTransactions);
   const [revision, setRevision] = useState(0);
@@ -125,6 +128,18 @@ export function SessionProvider({
         const store = await openOfflineStore(`${apiBase()}:${userId}`);
         engine = new OfflineEngine(store, transport, () => Crypto.randomUUID());
         await engine.init();
+        preferredProfile.current = await store.get<string>("selected-profile") ?? "";
+        const cached = await store.get<CacheEntry<Bootstrap>>("cache:bootstrap");
+        if (active && cached) {
+          try {
+            await engine.assertLocalAccess();
+            if (active) {
+              const selected = selectRecentProfile(cached.value.profiles, "", preferredProfile.current);
+              setProfile(selected);
+              setData(cached.value);
+            }
+          } catch { /* Expired access waits for fresh authenticated bootstrap. */ }
+        }
         if (!active) {
           await engine.dispose();
           return null;
@@ -158,10 +173,8 @@ export function SessionProvider({
         queue.subscribe(() => {
           if (active) void queue.list().then(setQueuedFiles);
         });
-        const connection = await NetInfo.fetch();
-        engine.status.online =
-          connection.isConnected !== false &&
-          connection.isInternetReachable !== false;
+        // NetInfo's initial subscription event updates reachability without
+        // delaying authenticated bootstrap on its separate network probe.
         if (!active) {
           await queue.close();
           await engine.dispose();
@@ -234,11 +247,7 @@ export function SessionProvider({
         setData(result);
         if (result.entitlement.analytics) updateNativePlanAnalytics(result.entitlement.analytics);
         setProfile((previous) =>
-          result.profiles.some((p) => p.id === previous)
-            ? previous
-            : result.profiles.length === 1
-              ? result.profiles[0].id
-              : "",
+          selectRecentProfile(result.profiles, previous, preferredProfile.current),
         );
       })
       .catch((e: Error) => {
@@ -287,7 +296,11 @@ export function SessionProvider({
           return apiRequest<string>(token, path, {}, "text");
         },
         setProfileId: (id) => {
-          if (data?.profiles.some((p) => p.id === id)) setProfile(id);
+          if (data?.profiles.some((p) => p.id === id)) {
+            preferredProfile.current = id;
+            setProfile(id);
+            void offlineReady.current.then(engine => engine?.store.set("selected-profile", id)).catch(() => {});
+          }
         },
         refresh: () => setRevision((n) => n + 1),
         rows,

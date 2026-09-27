@@ -39,6 +39,7 @@ export default function Settings() {
       ].includes(params.section ?? "")
     )
       setSection(params.section!);
+    else setSection("menu");
   }, [params.section]);
   const [accountReady, setAccountReady] = useState(session.demo);
   const [regionReady, setRegionReady] = useState(session.demo);
@@ -274,13 +275,6 @@ export default function Settings() {
         </>
       ) : null}
       {section === "categories" ? <SettingsCategories /> : null}
-      {section === "menu" ? (
-        <Button
-          title="Sync & Offline"
-          secondary
-          onPress={() => router.push("/offline")}
-        />
-      ) : null}
       {section === "security" ? <SettingsSecurity /> : null}
       {section === "data" ? (
         <>

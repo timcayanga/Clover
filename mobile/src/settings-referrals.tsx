@@ -34,7 +34,7 @@ export function SettingsReferrals() {
     } catch (e) { setError((e as Error).message); }
     finally { setBusy(false); }
   };
-  if (session.demo) return null;
+  if (session.demo || !data?.campaigns.length) return null;
   return <Card>
     <Heading>Refer and earn</Heading>
     {error ? <><Notice>{error}</Notice><Button title="Retry referrals" secondary onPress={() => { setError(""); setRevision(v => v + 1); }} /></> : null}

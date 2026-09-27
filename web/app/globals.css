@@ -66609,7 +66609,6 @@ html[data-theme="dark"] .content.content--reports .reports-range-menu__summary {
 .clover-checkout-dialog h2 {font-size:20px;margin-bottom:12px}.clover-checkout-dialog p {font-size:13px;line-height:1.6}
 .sidebar-popover.sidebar-popover--profile {background:transparent!important;border:0;box-shadow:none;backdrop-filter:blur(16px)}
 /* The canonical Figma artwork has a white matte; remove it at render time. */
-.settings-hub__menu-icon,.sidebar-popover--profile .menu-icon-3d,.sidebar-profile__avatar-icon,.shell-profile-drawer__account-avatar .menu-icon-3d {filter:url('/assets/icon-transparency.svg?v=2#remove-white')}
 
 .settings-section--plan .settings-plan-card--premium .settings-plan-card__band {background:linear-gradient(135deg,#03a8c0,#26bac4);color:#fff}
 .settings-section--plan .settings-plan-card--pro .settings-plan-card__band {background:linear-gradient(135deg,#6ee7b7,#a2f2d8);color:#17383d}
@@ -66692,3 +66691,24 @@ input.transaction-inline-edit[aria-invalid="true"] { box-shadow: inset 0 -1px va
 .transactions-entry--figma > [role="tabpanel"]:not([hidden]) { animation: transaction-entry-reveal 180ms ease both; }
 @keyframes transaction-entry-reveal { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
 @media (prefers-reduced-motion: reduce) { .transaction-creation-tabs::before, .transaction-creation-tabs > button { transition: none; } .transactions-entry--figma > [role="tabpanel"]:not([hidden]) { animation: none; } }
+
+/* Account settings: transparent artwork and a Pro-first plan carousel. */
+.shell-profile-drawer__nav > a > span:first-child,
+.shell-profile-drawer__sign-out .menu-icon-3d { background: transparent; border: 0; box-shadow: none; }
+.settings-plan-usage-heading { display:flex; align-items:center; justify-content:space-between; }
+.settings-plan-usage-heading h5 { margin:0; font-size:16px; }
+.settings-plan-info { border:1px solid var(--line, #dbe8ed); border-radius:50%; width:20px; height:20px; background:transparent; font-size:12px; cursor:pointer; }
+.settings-plan-switch { border:0; background:transparent; padding:16px 0 0; color:var(--teal, #00a9ba); font:inherit; cursor:pointer; text-align:left; }
+.settings-plan-footer { display:flex; justify-content:center; gap:24px; padding:24px 0; }
+.settings-plan-footer button { border:0; background:transparent; color:var(--teal, #00a9ba); font:inherit; cursor:pointer; }
+.settings-plan-dialog { width:min(620px, calc(100vw - 32px)); max-height:85dvh; border:1px solid #dbe8ed; border-radius:24px; padding:24px; color:var(--ink, #203039); background:var(--surface, white); }
+.settings-plan-dialog::backdrop { background:rgb(20 42 50 / .4); }
+.settings-plan-dialog header { display:flex; align-items:center; justify-content:space-between; gap:16px; margin-bottom:20px; }
+.settings-plan-dialog header h2 { margin:0; font-size:20px; }
+.settings-plan-dialog header button { border:0; background:transparent; font:inherit; cursor:pointer; }
+.settings-plan-legal-view { width:100%; max-height:60dvh; overflow-y:auto; border:0; }
+@media (max-width: 767px) {
+  .settings-plan-grid.settings-plan-carousel { display:flex; overflow-x:auto; scroll-snap-type:x mandatory; gap:16px; padding-bottom:12px; grid-template-columns:none; }
+  .settings-plan-carousel .settings-plan-card { flex:0 0 90%; min-width:0; scroll-snap-align:start; order:0; }
+  .settings-plan-usage { grid-template-columns:repeat(2,minmax(0,1fr)); }
+}

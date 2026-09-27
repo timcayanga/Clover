@@ -1,3 +1,5 @@
+import { readBankLinkUsage } from "./bank-link-usage";
+import { PLAN_CATALOG } from "../../shared/plan-catalog";
 import { prisma } from "./prisma";
 import { getProAccess } from "./pro-access";
 import { countNonCashAccounts } from "./account-limit-count";
@@ -5,7 +7,7 @@ import { getEffectiveProfileLimit, getEffectiveUserLimits, hasUnlimitedPlanLimit
 import type { RetentionSnapshot } from "../../shared/plan-retention";
 
 export async function getPlanRetentionSnapshot(userId: string): Promise<RetentionSnapshot> {
-  const [user, access, accounts, profiles, budgets, goals, circles] = await Promise.all([
+  const [user, access, accounts, profiles, budgets, goals, circles, linkedBanks] = await Promise.all([
     prisma.user.findUniqueOrThrow({ where: { id: userId } }),
     getProAccess(userId),
     prisma.account.findMany({ where: { workspace: { userId } }, select: { type: true, name: true, institution: true } }),
@@ -13,9 +15,11 @@ export async function getPlanRetentionSnapshot(userId: string): Promise<Retentio
     prisma.budget.count({ where: { workspace: { userId }, isActive: true } }),
     prisma.personalGoal.count({ where: { workspace: { userId } } }),
     prisma.circle.count({ where: { ownerUserId: userId, archivedAt: null } }),
+    readBankLinkUsage(prisma, userId),
   ]);
   const effectiveUser = { ...user, planTier: access.planTier };
   return {
+    linkedBanks: { ...linkedBanks, limit: hasUnlimitedPlanLimits(effectiveUser) ? null : PLAN_CATALOG[access.planTier].linkedBanks },
     planTier: access.planTier,
     usage: { accounts: countNonCashAccounts(accounts), profiles, budgets, goals, circles },
     limits: {

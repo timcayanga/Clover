@@ -1,12 +1,13 @@
 import type { ImageSourcePropType } from "react-native";
 
 export const mobileNavigationIcons: Record<string, ImageSourcePropType> = {
+  "log-out-outline": require("../assets/icons/web/signOut.png"),
   "help-circle-outline": require("../assets/icons/web/help.png"),
   "home-outline": require("../assets/icons/web/home.webp"),
   "swap-horizontal-outline": require("../assets/icons/web/transactions.webp"),
   "chatbubble-ellipses-outline": require("../assets/icons/web/adviser.webp"),
   "person-outline": require("../assets/icons/web/profile.png"),
-  "settings-outline": require("../assets/icons/web/settings.webp"),
+  "settings-outline": require("../assets/icons/web/settings.png"),
   "search-outline": require("../assets/icons/web/search.png"),
   "shield-checkmark-outline": require("../assets/icons/web/security.png"),
   "globe-outline": require("../assets/icons/web/region.png"),
