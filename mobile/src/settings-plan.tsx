@@ -167,10 +167,10 @@ export function SettingsPlan() {
         const plan = PLAN_CATALOG[tier];
         const choice = packages.find(item => STORE_PACKAGES.find(p => p.identifier === item.identifier)?.tier === tier);
         return <View key={tier} style={{ width: Math.max(240, width - 64), borderWidth: 1, borderColor: colors.line, borderRadius: 20, overflow: "hidden" }}>
-          <View style={{ padding: 20, backgroundColor: tier === "free" ? colors.line : colors.teal, gap: 8 }}>
-            <Text style={{ fontFamily: "Poppins-SemiBold", fontSize: 24, color: tier === "free" ? colors.ink : "white" }}>{plan.name}</Text>
-            <Text style={{ color: tier === "free" ? colors.ink : "white" }}>{tier === "free" ? "Free forever" : choice ? `${choice.product.priceString} / ${choice.product.subscriptionPeriod === "P1Y" ? "year" : "month"}` : "See store pricing"}</Text>
-            {access?.planTier === tier ? <Text style={{ color: tier === "free" ? colors.ink : "white" }}>Current plan</Text> : null}
+          <View style={{ padding: 20, backgroundColor: tier === "free" ? colors.line : tier === "pro" ? "#6ee7b7" : colors.teal, gap: 8 }}>
+            <Text style={{ fontFamily: "Poppins-SemiBold", fontSize: 24, color: tier === "free" ? colors.ink : tier === "pro" ? "#17383d" : "white" }}>{plan.name}</Text>
+            <Text style={{ color: tier === "free" ? colors.ink : tier === "pro" ? "#17383d" : "white" }}>{tier === "free" ? "Free forever" : choice ? `${choice.product.priceString} / ${choice.product.subscriptionPeriod === "P1Y" ? "year" : "month"}` : "See store pricing"}</Text>
+            {access?.planTier === tier ? <Text style={{ color: tier === "free" ? colors.ink : tier === "pro" ? "#17383d" : "white" }}>Current plan</Text> : null}
           </View>
           <View style={{ padding: 20, gap: 14 }}>
             {[`${plan.profiles} profiles · ${plan.accounts} non-cash accounts`, `${plan.linkedBanks} linked bank accounts`, `${plan.budgets} budgets · ${plan.goals} goals · ${plan.circles} Circles`, `${plan.monthlyTokens.toLocaleString()} Clover tokens monthly`, `${plan.dailyTokens.toLocaleString()} tokens per rolling 24 hours`, tier === "free" ? "Basic Adviser and Reports" : "Advanced Adviser and Reports"].map(feature => <Body key={feature}>{feature}</Body>)}
