@@ -45,7 +45,8 @@ async function main() {
   );
   assert.match(shell, /className="sidebar-nav sidebar-nav--mobile"[\s\S]*desktopNavSections\.map/);
   assert.match(shell, /id="mobile-settings-drawer"[\s\S]{0,300}shell-profile-drawer/);
-  assert.match(shell, /shell-profile-drawer__account-card[\s\S]{0,500}\{displayName\}/, "The settings drawer must lead with a separate account identity card.");
+  assert.doesNotMatch(shell, /className="shell-profile-drawer__account-card"/, "The Account menu uses simple rows without a separate identity card.");
+  for (const label of ["Account", "Settings", "Notifications", "Plan", "Help Center", "Privacy Policy", "Log Out"]) assert(shell.includes(label), `Account menu includes ${label}`);
   assert.match(shell, /shell-bottom-nav__profile-photo[\s\S]{0,250}profileImage/, "The Account tab must show the user's profile photo when available.");
   assert.match(
     shell,
