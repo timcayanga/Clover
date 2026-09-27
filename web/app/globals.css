@@ -66703,9 +66703,9 @@ input.transaction-inline-edit[aria-invalid="true"] { box-shadow: inset 0 -1px va
 .settings-plan-footer button { border:0; background:transparent; color:var(--teal, #00a9ba); font:inherit; cursor:pointer; }
 .settings-plan-dialog { width:min(620px, calc(100vw - 32px)); max-height:85dvh; border:1px solid #dbe8ed; border-radius:24px; padding:24px; color:var(--ink, #203039); background:var(--surface, white); }
 .settings-plan-dialog::backdrop { background:rgb(20 42 50 / .4); }
-.settings-plan-dialog header { display:flex; align-items:center; justify-content:space-between; gap:16px; margin-bottom:20px; }
-.settings-plan-dialog header h2 { margin:0; font-size:20px; }
-.settings-plan-dialog header button { border:0; background:transparent; font:inherit; cursor:pointer; }
+.settings-plan-dialog > header { display:flex; align-items:center; justify-content:space-between; gap:16px; margin-bottom:20px; }
+.settings-plan-dialog > header h2 { margin:0; font-size:20px; }
+.settings-plan-dialog > header button { border:0; background:transparent; font:inherit; cursor:pointer; }
 .settings-plan-legal-view { width:100%; max-height:60dvh; overflow-y:auto; border:0; }
 @media (max-width: 767px) {
   .settings-plan-grid.settings-plan-carousel { display:flex; overflow-x:auto; scroll-snap-type:x mandatory; gap:16px; padding-bottom:12px; grid-template-columns:none; }
@@ -66720,3 +66720,6 @@ input.transaction-inline-edit[aria-invalid="true"] { box-shadow: inset 0 -1px va
   .settings-plan-grid.settings-plan-carousel { display:flex; overflow-x:auto; scroll-snap-type:x mandatory; gap:16px; padding-bottom:12px; }
   .settings-plan-carousel .settings-plan-card { flex:0 0 90%; min-width:0; scroll-snap-align:start; order:0; }
 }
+
+.settings-plan-legal-view { overflow-wrap:anywhere; line-height:1.65; }
+.settings-plan-legal-view h1 { font-size:26px; }
