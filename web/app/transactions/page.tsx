@@ -2263,7 +2263,6 @@ function TransactionsPageContent() {
   const [transactionsPageSize, setTransactionsPageSize] = useState(25);
   const [transactionsPage, setTransactionsPage] = useState(1);
   const transactionPrefetchRef = useRef<Map<string, TransactionPrefetchEntry>>(new Map());
-  const inlineAccountPickerButtonRefs = useRef<Map<string, HTMLButtonElement>>(new Map());
   const inlineCategoryPickerButtonRefs = useRef<Map<string, HTMLButtonElement>>(new Map());
   const [query, setQuery] = useState("");
   const [currencyFilter, setCurrencyFilter] = useState("");
@@ -8021,13 +8020,6 @@ function TransactionsPageContent() {
                       <TransactionAccountPicker
                         accounts={transactionAccountPickerOptions}
                         selectedId={transaction.accountId}
-                        buttonRef={(node) => {
-                          if (node) {
-                            inlineAccountPickerButtonRefs.current.set(transaction.id, node);
-                            return;
-                          }
-                          inlineAccountPickerButtonRefs.current.delete(transaction.id);
-                        }}
                         ariaLabel={`Edit account for ${transaction.merchantRaw}`}
                         className="transaction-inline-relation-picker transaction-inline-relation-picker--account"
                         buttonClassName="transaction-inline-edit transaction-inline-edit--select"

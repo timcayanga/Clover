@@ -71,7 +71,7 @@ assert.match(
   "Mobile Transactions must expose persisted workspace currency choices inside the expandable Filter row."
 );
 assert.match(transactions, /TransactionAccountPicker/, "Transaction account edits must use the icon-rich account picker.");
-assert.match(transactions, /inlineAccountPickerButtonRefs\.current\.get\(transaction\.id\)\?\.click\(\)/, "Clicking a row account mark must open its account editor.");
+assert.match(transactions, /transaction-account-cell">\s*<TransactionAccountPicker/, "The account cell must use a single clickable icon-rich picker without a duplicate mark.");
 assert.match(transactions, /inlineCategoryPickerButtonRefs\.current\.get\(transaction\.id\)\?\.click\(\)/, "Clicking a row category mark must open its category editor.");
 assert.match(categorySettings, /parentCategoryId/, "Custom categories must support user-selected groups.");
 assert.match(categoryRoute, /assertValidParentCategory/, "Category groups must be validated server-side.");
