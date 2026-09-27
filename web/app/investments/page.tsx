@@ -2933,7 +2933,7 @@ export default function InvestmentsPage() {
       mobileSubheader={renderInvestmentTabs(true)}
       mobileLeadingAction={<AdviserHeaderLink />}
       actions={
-        <>
+        <div className="investments-header-actions">
                   <InvestmentPortfolioFilters active={investmentSubtypeFilter !== "all" || investmentSortKey !== "value_desc" || portfolioView !== "all"}>
           <CurrencySelector
             value={portfolioCurrencyFilter}
@@ -2993,7 +2993,7 @@ export default function InvestmentsPage() {
                   </div>
                   </InvestmentPortfolioFilters>
           {renderAddInvestmentButton()}
-        </>
+        </div>
       }
     >
       <div className="accounts-page animate-tab-panel" key={selectedTab}>

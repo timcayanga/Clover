@@ -36,11 +36,12 @@ export class PlanQuotaError extends Error {}
 export const hasUnlimitedPlanLimits=()=>false;
 export const getEffectiveUserLimits=()=>({accountLimit:10});export const countNonCashAccounts=r=>r.length;
 export const requireAuth=async()=>({userId:'u'});export const assertWorkspaceAccess=async(u,w)=>{if(w!=='w')throw Error('WORKSPACE_NOT_FOUND');return {userId:'u',id:'w'};};export const getActiveFinverseToken=async()=>'token';export const getMobileRequestContext=()=>null;
+const matchesWhere=(t,w)=>Object.entries(w).every(([k,v])=>v&&typeof v==='object'&&'startsWith' in v?String(t[k]??'').startsWith(v.startsWith):(t[k]??null)===v);
 const tx={$executeRaw:async()=>0,workspace:{findUniqueOrThrow:async()=>({id:'w',userId:'u',user:{planTier:'pro'}})},finverseConnection:{findUniqueOrThrow:async()=>({status:'ready'}),update:async()=>({})},
 account:{findMany:async()=>accounts.map(a=>({...a,finverseAccountLink:links.find(l=>l.accountId===a.id)||null})),create:async({data})=>{creates++;const a={id:'a'+creates,...data};accounts.push(a);return a;},update:async({where,data})=>Object.assign(accounts.find(a=>a.id===where.id),data)},
 bankLinkUsage:{createMany:async({data})=>data.forEach(d=>used.add(d.externalAccountId))},
 finverseAccountLink:{count:async({where})=>links.filter(l=>l.id!==(where.id?.not??where.NOT?.id)&&!l.unlinkedAt&&l.accountId).length,findFirst:async({where})=>links.find(l=>(!where.connectionId||l.connectionId===where.connectionId)&&(typeof where.accountId!=='string'||l.accountId===where.accountId)&&(!where.externalAccountId||l.externalAccountId===where.externalAccountId)&&(!('unlinkedAt' in where)||l.unlinkedAt===null)),update:async({where,data})=>Object.assign(links.find(l=>l.id===where.id),data),create:async({data})=>{const l={id:'l'+links.length,connection:{id:data.connectionId},...data};links.push(l);return l;}},
-transaction:{findMany:async({where})=>transactions.filter(t=>t.accountId===where.accountId&&t.currency===where.currency&&t.type===where.type&&Number(t.amount)===where.amount&&t.date>=where.date.gte&&t.date<where.date.lt&&!where.id?.notIn?.includes(t.id)&&!records.some(r=>r.transactionId===t.id&&r.connectionId===where.OR?.[1]?.finverseTransactionRecord?.connectionId?.not)).map(t=>({...t,finverseTransactionRecord:records.find(r=>r.transactionId===t.id)||null})),create:async({data})=>{const t={id:'new'+transactions.length,createdAt:new Date(),...data};transactions.push(t);return t;}},
+transaction:{findFirst:async({where})=>transactions.find(t=>matchesWhere(t,where))??null,updateMany:async({where,data})=>{const rows=transactions.filter(t=>matchesWhere(t,where));rows.forEach(t=>Object.assign(t,data));return {count:rows.length};},findMany:async({where})=>transactions.filter(t=>t.accountId===where.accountId&&t.currency===where.currency&&t.type===where.type&&Number(t.amount)===where.amount&&t.date>=where.date.gte&&t.date<where.date.lt&&!where.id?.notIn?.includes(t.id)&&!records.some(r=>r.transactionId===t.id&&r.connectionId===where.OR?.[1]?.finverseTransactionRecord?.connectionId?.not)).map(t=>({...t,finverseTransactionRecord:records.find(r=>r.transactionId===t.id)||null})),create:async({data})=>{const t={id:'new'+transactions.length,createdAt:new Date(),...data};transactions.push(t);return t;}},
 finverseTransactionRecord:{findFirst:async({where})=>records.find(r=>r.externalTransactionId===where.externalTransactionId&&r.externalAccountId===where.externalAccountId),update:async({where,data})=>Object.assign(records.find(r=>r.id===where.id),data),create:async({data})=>{const r={id:'r'+records.length,...data};records.push(r);return r;}}};
 export const prisma={...tx,$transaction:fn=>{const result=tail.then(()=>fn(tx));tail=result.catch(()=>{});return result;}};
 `;
@@ -77,6 +78,20 @@ export const prisma={...tx,$transaction:fn=>{const result=tail.then(()=>fn(tx));
  api.state().links[0].accountId=null;assert.equal(await api.importAccount('c1','w',bank,'Metrobank'),null,'deleted account is not silently recreated');assert.equal(await api.importAccount('c2','w',bank,'Metrobank',true,'existing'),'existing','explicit reconnect can repair a deleted-link tombstone');
  const previousFetch=globalThis.fetch;let revokes=0;globalThis.fetch=(async(url,init)=>{assert.equal(String(url),'https://api.prod.finverse.net/login_identity');assert.equal(init?.method,'DELETE');revokes++;return new Response('{}');}) as typeof fetch;
  try {api.reset();await api.importAccount('c1','w',bank,'Metrobank',true);api.seed();const history=JSON.stringify(api.state().transactions);const request=(workspaceId:string)=>new Request('https://clover.test/unlink',{method:'POST',body:JSON.stringify({workspaceId,accountId:'existing'})});assert.equal((await api.unlink(request('other'))).status,404);assert.equal((await api.unlink(request('w'))).status,200);assert.equal(revokes,1);assert.equal(api.state().accounts.length,1);assert.equal(JSON.stringify(api.state().transactions),history);assert(api.state().used.includes('bank-a'));assert(api.state().links[0].unlinkedAt);assert.equal((await api.unlink(request('w'))).status,200);assert.equal(revokes,1,'unlink retry is idempotent');} finally {globalThis.fetch=previousFetch;}
+
+ api.reset();await api.importAccount('c1','w',bank,'Metrobank',true);
+ await api.importTransaction('c1','w',payment);
+ const saved=api.state().transactions[0];Object.assign(saved,{reviewStatus:'suggested',reviewPriority:'none',categoryId:null,categoryConfidence:0});
+ const rawBefore=JSON.stringify(saved.rawPayload),amountBefore=saved.amount;
+ const categorySuggestion={categoryId:'food',categoryConfidence:95,reviewStatus:'suggested',reviewPriority:'none',reviewReasons:[],learnedRuleIdsApplied:[],enrichment:{categoryName:'Food & Dining',reason:'learned',engineVersion:'v2'}};
+ await api.importTransaction('c1','w',payment,new Set(),categorySuggestion);
+ assert.equal(saved.categoryId,'food');assert.equal(saved.amount,amountBefore);assert.equal(JSON.stringify(saved.rawPayload),rawBefore);
+ for(const status of ['confirmed','edited','pending_review','rejected']){
+   Object.assign(saved,{categoryId:null,categoryConfidence:0,reviewStatus:status});const before=JSON.stringify(saved);
+   await api.importTransaction('c1','w',payment,new Set(),categorySuggestion);assert.equal(JSON.stringify(saved),before,status+' is preserved');
+ }
+ Object.assign(saved,{categoryId:'user-choice',categoryConfidence:0,reviewStatus:'suggested'});
+ await api.importTransaction('c1','w',payment,new Set(),categorySuggestion);assert.equal(saved.categoryId,'user-choice');
  console.log('Finverse preservation: account reuse, snapshots, confirmed edits, duplicate retries, concurrent sync, tombstones, pending entries, repeated same-amount payments, masked numbers, and monthly retention passed.');
 }
 void main().catch(e=>{console.error(e);process.exitCode=1;});

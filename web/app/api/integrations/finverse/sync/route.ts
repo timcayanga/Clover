@@ -1,3 +1,4 @@
+import { enrichFinverseTransactions, finverseUncategorizedBackfillWhere, type BankCategorySuggestion } from "@/lib/finverse-enrichment";
 import { bankInstitutionsMatch } from "@/lib/finverse-matching";
 import { PLAN_CATALOG } from "../../../../../../shared/plan-catalog";
 import { hasUnlimitedPlanLimits } from "@/lib/user-limits";
@@ -79,7 +80,7 @@ const importAccount = async (connectionId: string, workspaceId: string, account:
   });
 };
 
-const importTransaction = async (connectionId: string, workspaceId: string, transaction: FinverseTransaction, claimedTransactionIds = new Set<string>()) => {
+const importTransaction = async (connectionId: string, workspaceId: string, transaction: FinverseTransaction, claimedTransactionIds = new Set<string>(), suggestion?: BankCategorySuggestion) => {
   const normalized = normalizeFinverseTransaction(transaction);
   // Pending entries can change ID or amount when posted. Import only booked movements.
   if (!normalized || normalized.isPending) return "skipped" as const;
@@ -92,6 +93,18 @@ const importTransaction = async (connectionId: string, workspaceId: string, tran
     // Stable provider IDs span authorizations; tombstones intentionally remain deduplicated.
     const existing = await tx.finverseTransactionRecord.findFirst({ where: { externalTransactionId: transaction.transaction_id, externalAccountId: transaction.account_id, connection: { workspaceId } } });
     if (existing) {
+      if (existing.transactionId && suggestion) {
+        const saved = await tx.transaction.findFirst({ where: finverseUncategorizedBackfillWhere(existing.transactionId) });
+        if (saved) {
+          const payload = saved.normalizedPayload && typeof saved.normalizedPayload === "object" && !Array.isArray(saved.normalizedPayload) ? saved.normalizedPayload : {};
+          await tx.transaction.updateMany({ where: finverseUncategorizedBackfillWhere(saved.id), data: {
+            categoryId: suggestion.categoryId, categoryConfidence: suggestion.categoryConfidence,
+            reviewStatus: suggestion.reviewStatus, reviewPriority: suggestion.reviewPriority,
+            reviewReasons: json(suggestion.reviewReasons), learnedRuleIdsApplied: json(suggestion.learnedRuleIdsApplied),
+            normalizedPayload: json({ ...payload, enrichment: suggestion.enrichment }),
+          } });
+        }
+      }
       const reconciledTransactionId = (existing.normalizedPayload as { reconciledTransactionId?: string } | null)?.reconciledTransactionId;
       if (existing.transactionId || reconciledTransactionId) claimedTransactionIds.add(existing.transactionId || reconciledTransactionId!);
       await tx.finverseTransactionRecord.update({ where: { id: existing.id }, data: { rawPayload: json(transaction), normalizedPayload: json({ ...normalizedJson, ...(reconciledTransactionId ? { reconciledTransactionId } : {}) }), lastSeenAt: new Date() } });
@@ -103,11 +116,12 @@ const importTransaction = async (connectionId: string, workspaceId: string, tran
     // Claim one matching occurrence, not every payment with the same amount.
     const match = candidates.find(candidate => bankTransactionMatches(candidate, normalized));
     const created = match ?? await tx.transaction.create({ data: {
-      workspaceId, accountId: link.accountId, reviewStatus: candidates.length ? "pending_review" : "suggested",
+      workspaceId, accountId: link.accountId, reviewStatus: candidates.length ? "pending_review" : suggestion?.reviewStatus ?? "pending_review",
       isExcluded: candidates.length > 0, duplicateConfidence: candidates.length ? 60 : 0,
-      reviewPriority: candidates.length ? "high" : "none", reviewReasons: candidates.length ? json(["finverse_possible_duplicate"]) : undefined,
-      parserConfidence: 100, categoryConfidence: 0, accountMatchConfidence: 100,
-      rawPayload: json(transaction), normalizedPayload: json(normalizedJson), sourceRowKey: `finverse:${transaction.transaction_id}`,
+      reviewPriority: candidates.length ? "high" : suggestion?.reviewPriority ?? "medium", reviewReasons: json([...(candidates.length ? ["finverse_possible_duplicate"] : []), ...(suggestion?.reviewReasons ?? ["category_low_confidence"])]),
+      parserConfidence: 100, categoryConfidence: suggestion?.categoryConfidence ?? 0, categoryId: suggestion?.categoryId, accountMatchConfidence: 100,
+      learnedRuleIdsApplied: json(suggestion?.learnedRuleIdsApplied ?? []),
+      rawPayload: json(transaction), normalizedPayload: json({ ...normalizedJson, enrichment: suggestion?.enrichment ?? null }), sourceRowKey: `finverse:${transaction.transaction_id}`,
       date: normalized.date, amount: normalized.amount, currency: normalized.currency, type: normalized.type as TransactionType,
       merchantRaw: normalized.merchantRaw, merchantClean: normalized.merchantClean, description: normalized.description,
     } });
@@ -226,12 +240,14 @@ export async function POST(request: Request) {
     for (const account of accountsToImport) await importAccount(connection.id, connection.workspaceId, account, resolvedInstitutionName, chosen.some(c => c.account_id === account.account_id), body.accountMappings?.[account.account_id]);
 
     const providerTransactions = await getAllFinverseTransactions(token);
+    const categories = await prisma.category.findMany({ where: { workspaceId: connection.workspaceId, isArchived: false }, select: { id: true, name: true, type: true } });
+    const suggestions = await enrichFinverseTransactions({ workspaceId: connection.workspaceId, transactions: providerTransactions, institution: resolvedInstitutionName, categories });
     let imported = 0;
     let existing = 0;
     let skipped = 0;
     const claimedTransactionIds = new Set<string>();
     for (const transaction of providerTransactions) {
-      const result = await importTransaction(connection.id, connection.workspaceId, transaction, claimedTransactionIds);
+      const result = await importTransaction(connection.id, connection.workspaceId, transaction, claimedTransactionIds, suggestions.get(transaction.transaction_id));
       if (result === "created") imported += 1;
       else if (result === "existing") existing += 1;
       else skipped += 1;

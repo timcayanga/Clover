@@ -290,7 +290,7 @@ export function CirclesPageClient({
           className="button button-primary button-small accounts-toolbar-add circles-topbar-action"
           type="button"
           onClick={() => setCreateRequest((current) => current + 1)}
-          aria-label="Create Circle"
+          aria-label="Add Circle"
         >
           <span className="circles-topbar-action__icon button-icon" aria-hidden="true">
             <svg viewBox="0 0 20 20" fill="none">
@@ -303,7 +303,7 @@ export function CirclesPageClient({
               />
             </svg>
           </span>
-          <span className="circles-topbar-action__label">Create Circle</span>
+          <span className="circles-topbar-action__label">Add Circle</span>
         </button>
       }
     >

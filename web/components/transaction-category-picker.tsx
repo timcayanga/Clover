@@ -21,6 +21,7 @@ type TransactionCategoryPickerProps = {
   menuClassName?: string;
   ariaLabel?: string;
   searchable?: boolean;
+  showSelectedIcon?: boolean;
 };
 
 const normalize = (value: string) => value.trim().toLowerCase();
@@ -40,6 +41,7 @@ export function TransactionCategoryPicker({
   buttonClassName,
   menuClassName,
   searchable = true,
+  showSelectedIcon = true,
   ariaLabel = "Choose category",
 }: TransactionCategoryPickerProps) {
   const rootRef = useRef<HTMLDivElement | null>(null);
@@ -121,7 +123,7 @@ export function TransactionCategoryPicker({
         aria-expanded={open}
         onClick={() => setOpen((current) => !current)}
       >
-        <CategoryBrandMark categoryName={selected?.name ?? "Other"} size={24} radius={6} />
+        {showSelectedIcon ? <CategoryBrandMark categoryName={selected?.name ?? "Other"} size={24} radius={6} /> : null}
         <span className="transactions-manual-picker__text">{selected?.name ?? "Other"}</span>
         <span className="transactions-manual-picker__chevron" aria-hidden="true">▾</span>
       </button>

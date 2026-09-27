@@ -546,6 +546,10 @@ const getHardcodedCategoryOverride = (merchantText: string) => {
     /(?:sydney|melbourne|nsw|harbour|operahouse|greatoceanroad|skybus|airport|tourism|leura|surryhills|georgest|circular|bath|victoria|apollobay)/.test(compact);
   const hasForeignMerchantCurrencyContext =
     /\b(?:aud|hkd|thb|idr)\b/.test(lower) || /(?:aud|hkd|thb|idr)/.test(compact);
+  // Explicit credited-interest labels outrank the broad "interest" fee hint.
+  if (/\b(?:interest\s+earned|base\s+interest|boost\s+interest)\b/.test(lower) && !/\b(?:fee|charge|loan|debit)\b/.test(lower)) {
+    return "Income";
+  }
   const strongHint = getStrongMerchantCategoryHint(merchantText);
 
   if (strongHint) {

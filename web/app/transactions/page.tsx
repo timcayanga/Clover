@@ -814,6 +814,8 @@ function InlineEditableCell({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const triggerRef = useRef<HTMLButtonElement>(null);
+  const savingRef = useRef(false);
+  const cancelBlurRef = useRef(false);
   const [draft, setDraft] = useState(value);
   const fieldRef = useRef<HTMLInputElement | HTMLSelectElement | null>(null);
 
@@ -836,19 +838,21 @@ function InlineEditableCell({
   }, [editing]);
 
   const openEditor = () => {
+    cancelBlurRef.current = false;
     setDraft(kind === "date" ? displayValue : value);
     setError("");
     setEditing(true);
   };
 
   const cancelEditor = () => {
+    cancelBlurRef.current = true;
     setDraft(value);
     setEditing(false);
     requestAnimationFrame(() => triggerRef.current?.focus());
   };
 
   const commit = async (nextValue = draft) => {
-    if (saving) return;
+    if (savingRef.current) return;
     const normalized =
       kind === "text"
         ? nextValue.trim()
@@ -864,6 +868,7 @@ function InlineEditableCell({
       return;
     }
 
+    savingRef.current = true;
     setSaving(true);
     setError("");
     try {
@@ -873,6 +878,7 @@ function InlineEditableCell({
     } catch {
       setError("Could not save. Try again.");
     } finally {
+      savingRef.current = false;
       setSaving(false);
     }
   };
@@ -926,8 +932,7 @@ function InlineEditableCell({
 
   if (editing) {
     return (
-      <div className="transaction-inline-editor"><div className="transaction-inline-editor__panel" role="group" aria-label={ariaLabel}>
-      <span className="transaction-inline-editor__label">{kind === "date" ? "Date" : kind === "number" ? "Amount" : "Name"}</span>
+      <>
       <input
         ref={(node) => {
           fieldRef.current = node;
@@ -939,6 +944,9 @@ function InlineEditableCell({
         placeholder={kind === "date" ? "Jul 24, 2026" : undefined}
         onChange={(event) => setDraft(event.target.value)}
         disabled={saving}
+        aria-invalid={Boolean(error)}
+        title={error || ariaLabel}
+        onBlur={() => { if (!cancelBlurRef.current) void commit(); }}
         onKeyDown={(event) => {
           if (event.key === "Enter") {
             event.preventDefault();
@@ -951,11 +959,8 @@ function InlineEditableCell({
           }
         }}
       />
-      {error ? <p role="alert">{error}</p> : null}
-      <div className="transaction-inline-editor__actions">
-        <button type="button" className="button button-ghost button-small" disabled={saving} onClick={cancelEditor}>Cancel</button>
-        <button type="button" className="button button-primary button-small" disabled={saving} onClick={() => void commit()}>{saving ? "Saving…" : "Save"}</button>
-      </div></div></div>
+      {error ? <span className="sr-only" role="alert">{error}</span> : null}
+      </>
     );
   }
 
@@ -2444,6 +2449,7 @@ function TransactionsPageContent() {
   const manualModalStyle = useMemo<React.CSSProperties>(
     () => ({
       width: isCompactViewport ? "100vw" : tableMode ? "1160px" : "640px",
+      maxWidth: isCompactViewport ? "100vw" : "calc(100vw - 28px)",
       maxHeight: isCompactViewport ? "100dvh" : "calc(100dvh - 24px)",
       overflow: "auto",
     }),
@@ -8012,17 +8018,6 @@ function TransactionsPageContent() {
                       />
                     </div>
                     <div className="transaction-account-cell">
-                      <button
-                        type="button"
-                        className="transaction-relation-icon-trigger transaction-relation-icon-trigger--account"
-                        aria-label={`Edit account for ${transaction.merchantRaw}`}
-                        onClick={(event) => {
-                          event.stopPropagation();
-                          inlineAccountPickerButtonRefs.current.get(transaction.id)?.click();
-                        }}
-                      >
-                        <AccountBrandMark accountBrand={accountBrand} label={accountDisplayName} />
-                      </button>
                       <TransactionAccountPicker
                         accounts={transactionAccountPickerOptions}
                         selectedId={transaction.accountId}
@@ -8621,7 +8616,7 @@ function TransactionsPageContent() {
             </div>
 
             {(
-              <div className="transaction-creation-tabs" role="tablist" aria-label="How to add transactions">
+              <div className="transaction-creation-tabs" style={{ "--entry-tab-index": ["manual", "ask", "upload", "sync"].indexOf(creationTab) } as React.CSSProperties} role="tablist" aria-label="How to add transactions">
                 {([['manual', 'Manual'], ['ask', 'Ask Clover'], ['upload', 'Upload'], ['sync', 'Sync']] as const).map(([tab, label]) => (
                   <button key={tab} type="button" disabled={isSaving || tableLocked} role="tab" id={`creation-tab-${tab}`} aria-selected={creationTab === tab} aria-controls={`creation-panel-${tab}`} tabIndex={creationTab === tab ? 0 : -1} onKeyDown={(event) => {
                     const tabs = ["manual", "ask", "upload", "sync"] as const;
@@ -8832,7 +8827,7 @@ function TransactionsPageContent() {
                   </span>
                   <div className="transactions-manual-field transactions-manual-field--embedded-label transactions-manual-inline-row__field">
                     <span className="transactions-manual-field__label">Category</span>
-                    <TransactionCategoryPicker searchable={false}
+                    <TransactionCategoryPicker searchable={false} showSelectedIcon={false}
                       categories={categories}
                       selectedId={manualSelectedCategoryId}
                       buttonRef={manualCategoryButtonRef}

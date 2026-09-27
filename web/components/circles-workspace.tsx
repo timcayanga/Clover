@@ -614,7 +614,7 @@ export function CirclesWorkspace({
             <div className="split-bill-avatars">{circle.members.filter(m => m.status === "active").slice(0,5).map(member => <span key={member.id} className="circles-avatar" title={member.displayName}>{getInitials(member.displayName)}</span>)}{circle.memberCount > 5 ? <span>+{circle.memberCount - 5}</span> : null}</div>
             <span>{formatMoney(circle.expenseTotalThisMonth,circle.currency)} shared this month</span>
           </CollectionCard>)}
-          <button type="button" className="collection-create-card" onClick={() => openCreate()}><span aria-hidden="true">＋</span><strong>Create Circle</strong><small>Start sharing with a new group</small></button>
+          <button type="button" className="collection-create-card" onClick={() => openCreate()}><span aria-hidden="true">＋</span><strong>Add Circle</strong><small>Start sharing with a new group</small></button>
         </div>
         {data.circles.length === 0 ? (
         <section className="circles-empty panel glass">
