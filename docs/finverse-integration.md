@@ -59,3 +59,10 @@ Provider reference: https://docs.finverse.com/ and the official Finverse Account
 - Account Details keeps the newest bank snapshot through background cache refreshes and metadata edits, and labels disconnected snapshots with their last sync date. Bank-sourced balances are not editable as if they were an opening balance.
 - Admin exposes account counts separately from provider connection counts, pending/failed revocations, retry times, last sync and inactivity deadlines. Provider billing units remain unconfirmed.
 - This work requires the `20260925120000_finverse_lifecycle` migration. No production bank credentials or financial records are changed by local regression tests.
+
+## Mixed-source import safety and refresh cap (27 September 2026)
+
+- Each connection permits four explicit refresh attempts in a rolling 24 hours across all clients. Reservations are durable audit entries serialized by a database advisory lock. Failed refresh attempts consume a slot. The fifth request returns HTTP 429 with a Retry-After header and retryAt timestamp, before contacting Finverse. Status polling, account selection and reading already-retrieved data do not consume refresh slots. Initial authorization is separate from this refresh cap.
+- Statement imports after bank sync match provider-backed transactions one occurrence at a time by account, date, currency, amount, direction and normalized merchant/description evidence. Exact matches retain the original ledger row; uncertain same-value overlaps enter review, excluded from totals. Source parsed rows remain available for audit.
+- Bank sync and statement confirmation share the owner's serialization lock. Re-importing a confirmed or edited transaction does not replace any core fields.
+- Manual entry is an explicit user action on the selected account. It remains possible after sync; it is not automatically merged away. A synced bank balance remains a dated provider snapshot, not a guarantee that later manual entries have reached the bank.

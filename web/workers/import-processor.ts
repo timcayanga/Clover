@@ -13,6 +13,7 @@ import { formatUploadAccountDisplayName } from "@/lib/account-display";
 import { recordDataQaRun, type DataQaParsedRow, type DataQaSource } from "@/lib/data-qa";
 import { deriveReconciledBalance, type BalanceLikeTransaction } from "@/lib/account-balance";
 import { getWorkspaceOwnerLimits, getWorkspaceOwnerPlanUsage } from "@/lib/plan-access";
+import { createBankImportOverlapMatcher } from "@/lib/bank-import-overlap";
 import {
   normalizeInstitutionCurrency,
   parseAmountValue,
@@ -15023,6 +15024,9 @@ export const confirmImportFile = async (
   let confirmationReadSnapshotReadyAt: number | null = null;
   const confirmationResult = await prisma.$transaction(async (tx) => {
     confirmationTransactionCallbackStartedAt = Date.now();
+    const owner = await tx.workspace.findUniqueOrThrow({ where: { id: String(importFile.workspaceId) }, select: { userId: true } });
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`plan-quota:${owner.userId}`}, 0))`;
+
     const confirmationLockKey = [
       "import-confirm",
       String(importFile.workspaceId),
@@ -15632,6 +15636,13 @@ export const confirmImportFile = async (
   }
   const currentDedupeCounts = new Map<string, number>();
   const currentMobileScreenshotOverlapCounts = new Map<string, number>();
+  // Match uploads against provider-backed rows using financial evidence, not a
+  // source-file fingerprint. Read under the same owner lock used by bank sync.
+  const bankRows = await tx.transaction.findMany({
+    where: { accountId: { in: matchingAccountIdsForImport }, deletedAt: null, finverseTransactionRecord: { isNot: null } },
+    select: { id: true, accountId: true, date: true, amount: true, currency: true, type: true, merchantRaw: true, merchantClean: true, description: true },
+  });
+  const matchBankOverlap = createBankImportOverlapMatcher(bankRows);
 
   for (const [index, originalRow] of parsedRows.entries()) {
     const row = normalizeLandbankImportedRow(originalRow as ImportInsightSourceRow, statementInstitution);
@@ -16023,6 +16034,9 @@ export const confirmImportFile = async (
       retainedExistingImportTransactionsCount += 1;
       const canPatchImportedClassification =
         !isProtectedTransactionReviewStatus(existingImportTransaction.reviewStatus);
+      // Re-parsing is not permission to replace a user's confirmed amount,
+      // date, account, exclusion choice, descriptions, or classification.
+      if (!canPatchImportedClassification) continue;
       const rawPayloadForExistingTransaction = (() => {
         if (
           canPatchImportedClassification ||
@@ -16105,6 +16119,18 @@ export const confirmImportFile = async (
       continue;
     }
 
+    const bankOverlap = matchBankOverlap({ ...insertRow, accountId: rowResolvedAccountId } as Parameters<typeof matchBankOverlap>[0]);
+    if (bankOverlap === "matched") {
+      duplicateSkippedTransactionsCount += 1;
+      continue;
+    }
+    if (bankOverlap === "ambiguous") {
+      insertRow.isExcluded = true;
+      insertRow.reviewStatus = "pending_review";
+      insertRow.reviewPriority = "high";
+      insertRow.duplicateConfidence = 60;
+      insertRow.reviewReasons = [...(Array.isArray(insertRow.reviewReasons) ? insertRow.reviewReasons : []), "finverse_possible_duplicate"] as Prisma.InputJsonValue;
+    }
     const currentOccurrence = (currentDedupeCounts.get(dedupeKey) ?? 0) + 1;
     currentDedupeCounts.set(dedupeKey, currentOccurrence);
     if ((existingDedupeCounts.get(dedupeKey) ?? 0) >= currentOccurrence) {

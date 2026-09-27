@@ -21,8 +21,8 @@ const cellValueToText = (value: unknown): string => {
   return String(value);
 };
 
-const spreadsheetSerialDateToText = (value: number) => {
-  const parsedDate = XLSX.SSF.parse_date_code(value);
+const spreadsheetSerialDateToText = (value: number, date1904: boolean) => {
+  const parsedDate = XLSX.SSF.parse_date_code(value, { date1904 });
   if (!parsedDate) return null;
   return [
     String(parsedDate.y).padStart(4, "0"),
@@ -31,15 +31,19 @@ const spreadsheetSerialDateToText = (value: number) => {
   ].join("-");
 };
 
-const worksheetCellToText = (cell: XLSX.CellObject | undefined, forceSerialDate = false) => {
+const worksheetCellToText = (cell: XLSX.CellObject | undefined, forceSerialDate = false, date1904 = false) => {
   if (!cell) return "";
   if (
     cell.t === "n" &&
     typeof cell.v === "number" &&
     (forceSerialDate || Boolean(cell.z && XLSX.SSF.is_date(cell.z)))
   ) {
-    const parsedDate = spreadsheetSerialDateToText(cell.v);
+    const parsedDate = spreadsheetSerialDateToText(cell.v, date1904);
     if (parsedDate) return parsedDate;
+  }
+  // An identifier formatted as 0000000000000 must retain its leading zeros.
+  if (cell.t === "n" && typeof cell.v === "number" && typeof cell.z === "string" && /^0+$/.test(cell.z)) {
+    return XLSX.SSF.format(cell.z!, cell.v);
   }
   return cellValueToText(cell.v).trim();
 };
@@ -67,6 +71,7 @@ export const decodeSpreadsheetWorkbookBytes = async (bytes: Uint8Array) => {
   }
 
   const sheetRows: Array<{ sheetIndex: number; sheetName: string; rows: string[][] }> = [];
+  const date1904 = Boolean(workbook.Workbook?.WBProps?.date1904);
   for (const [sheetIndex, sheetName] of workbook.SheetNames.entries()) {
     const worksheet = workbook.Sheets[sheetName];
     if (!worksheet) continue;
@@ -97,12 +102,14 @@ export const decodeSpreadsheetWorkbookBytes = async (bytes: Uint8Array) => {
 
     const normalizedRows: string[][] = [];
     for (let rowIndex = range.s.r; rowIndex <= range.e.r; rowIndex += 1) {
-      const row = Array.from({ length: columnCount }, (_, offset) =>
-        worksheetCellToText(
-          worksheet[XLSX.utils.encode_cell({ r: rowIndex, c: range.s.c + offset })],
-          dateColumns.has(range.s.c + offset) && rowIndex > range.s.r
-        )
-      );
+      const row = Array.from({ length: columnCount }, (_, offset) => {
+        const address = XLSX.utils.encode_cell({ r: rowIndex, c: range.s.c + offset });
+        const cell = worksheet[address];
+        if (cell?.f && (cell.v === undefined || cell.v === null || cell.t === "e")) {
+          throw new Error(`Worksheet "${sheetName}" has a formula without a usable saved result at ${address}. Recalculate and save it in Excel, or export values, then upload again.`);
+        }
+        return worksheetCellToText(cell, dateColumns.has(range.s.c + offset) && rowIndex > range.s.r, date1904);
+      });
       while (row.length > 0 && row[row.length - 1] === "") row.pop();
       if (row.some(Boolean)) normalizedRows.push(row);
     }

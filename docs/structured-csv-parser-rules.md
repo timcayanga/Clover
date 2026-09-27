@@ -129,3 +129,11 @@ Account Name through normalization; do not replace it with a guessed institution
 - Recognize the Investment / Platform / Contrib/ Month / Units/ Shares / Market Value / Valuation Date layout in Excel workbooks and delimited exports as investment snapshots.
 - Keep platforms and funds separate, preserve units and market values, and never turn recurring contribution amounts or valuation dates into transactions or cost basis.
 - Apply the same ambiguity and provenance rules as screenshot investment summaries in `docs/generic-screenshot-parser-rules.md`.
+
+## Workbook safety checks (27 September 2026)
+
+- Respect the workbook's 1900/1904 date system when decoding serial dates.
+- Preserve numeric identifiers displayed with zero-padding formats, including account numbers.
+- Use saved formula results; do not execute formulas or guess missing/error results. Ask users to recalculate/save or export values when a formula has no usable result.
+- If a financial worksheet is unrecognized while others parse successfully, do not finalize only the recognized portion. Route the full workbook through the existing backup decision path. Backup processing requires current AI permission and remains subject to evidence/quality validation.
+- Backup learning stores parser provenance, format/routing history and candidate merchant/category signals. This is not arbitrary executable parser generation. Confirmed user decisions remain authoritative.

@@ -1,5 +1,6 @@
 import { enrichFinverseTransactions, finverseUncategorizedBackfillWhere, type BankCategorySuggestion } from "@/lib/finverse-enrichment";
 import { bankInstitutionsMatch } from "@/lib/finverse-matching";
+import { reserveBankRefresh, BankRefreshLimitError } from "@/lib/finverse-refresh-limit";
 import { PLAN_CATALOG } from "../../../../../../shared/plan-catalog";
 import { hasUnlimitedPlanLimits } from "@/lib/user-limits";
 import { enforceBankAllowance } from "@/lib/finverse-lifecycle";
@@ -162,6 +163,10 @@ export async function POST(request: Request) {
     await enforceBankAllowance(connection.userId);
     const permitted = await prisma.finverseConnection.findUniqueOrThrow({where:{id:connection.id}});
     if(permitted.disconnectRequestedAt) return NextResponse.json({error:"This connection is being disconnected. Your records are preserved."},{status:409});
+    if (body.refresh === true) {
+      if (!body.connectionId || !connection.loginIdentityId) return NextResponse.json({ error: "Choose a linked bank account." }, { status: 400 });
+      await reserveBankRefresh(connection);
+    }
     await prisma.finverseConnection.update({where:{id:connection.id},data:{lastSyncAttemptAt:new Date()}});
     attemptedConnection=connection.id;
     const token = await getActiveFinverseToken(connection);
@@ -270,6 +275,9 @@ export async function POST(request: Request) {
       transactions: { imported, existing, skipped },
     });
   } catch (error) {
+    if (error instanceof BankRefreshLimitError) return NextResponse.json({ error: error.message, retryAt: error.retryAt.toISOString() }, {
+      status: 429, headers: { "Retry-After": String(Math.max(1, Math.ceil((+error.retryAt - Date.now()) / 1000))) },
+    });
     if (error instanceof PlanQuotaError) return NextResponse.json({error:error.message},{status:403});
     const message = error instanceof Error ? error.message : "";
     if (message === "UNAUTHORIZED") return NextResponse.json({ error: "Please sign in again." }, { status: 401 });

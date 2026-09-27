@@ -2102,8 +2102,15 @@ const parseStructuredWorkbookImport = (
   const worksheets = splitStructuredWorkbookWorksheets(text);
   if (!worksheets) return null;
 
-  return worksheets.flatMap((worksheet) =>
-    parseStructuredWorkbookWorksheet(worksheet, context).map((row) => ({
+  const parsedWorksheets = worksheets.map(worksheet => ({ worksheet, rows: parseStructuredWorkbookWorksheet(worksheet, context) }));
+  // A recognized sheet must not hide an unfamiliar financial sheet from backup
+  // routing. Return no local candidate so the complete workbook is evaluated.
+  const incomplete = parsedWorksheets.some(({ worksheet, rows }) => rows.length === 0 &&
+    /\b(?:balance|amount|debit|credit|payment|transaction|investment|holding|portfolio|shares|units|income|expense|savings)\b/i.test(`${worksheet.sheetName} ${worksheet.rows.flat().join(" ")}`) &&
+    worksheet.rows.some(row => row.some(cell => /\d/.test(cell))));
+  if (incomplete) return [];
+  return parsedWorksheets.flatMap(({ worksheet, rows }) =>
+    rows.map((row) => ({
       ...row,
       rawPayload: {
         ...(row.rawPayload ?? {}),
