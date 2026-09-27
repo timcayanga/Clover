@@ -1,20 +1,20 @@
 import type { ImageSourcePropType } from "react-native";
 
 export const mobileNavigationIcons: Record<string, ImageSourcePropType> = {
-  "log-out-outline": require("../assets/icons/web/signOut.png"),
-  "help-circle-outline": require("../assets/icons/web/help.png"),
+  "log-out-outline": require("../assets/icons/figma-v4/signOut.png"),
+  "help-circle-outline": require("../assets/icons/figma-v4/help.png"),
   "home-outline": require("../assets/icons/web/home.webp"),
   "swap-horizontal-outline": require("../assets/icons/web/transactions.webp"),
   "chatbubble-ellipses-outline": require("../assets/icons/web/adviser.webp"),
-  "person-outline": require("../assets/icons/web/profile.png"),
-  "settings-outline": require("../assets/icons/web/settings.png"),
+  "person-outline": require("../assets/icons/figma-v4/profile.png"),
+  "settings-outline": require("../assets/icons/figma-v4/settings.png"),
   "search-outline": require("../assets/icons/web/search.png"),
-  "shield-checkmark-outline": require("../assets/icons/web/security.png"),
+  "shield-checkmark-outline": require("../assets/icons/figma-v4/security.png"),
   "globe-outline": require("../assets/icons/web/region.png"),
   "desktop-outline": require("../assets/icons/web/display.png"),
   "server-outline": require("../assets/icons/web/data.png"),
   "people-outline": require("../assets/icons/web/profiles.png"),
-  "card-outline": require("../assets/icons/web/plan.png"),
+  "card-outline": require("../assets/icons/figma-v4/plan.png"),
   "grid-outline": require("../assets/icons/web/categories.png"),
   "document-text-outline": require("../assets/icons/web/review.png"),
   "business-outline": require("../assets/icons/web/accounts.webp"),
@@ -25,7 +25,7 @@ export const mobileNavigationIcons: Record<string, ImageSourcePropType> = {
   "wallet-outline": require("../assets/icons/web/budgeting.webp"),
   "flag-outline": require("../assets/icons/web/goals.webp"),
   "trending-up-outline": require("../assets/icons/web/investments.webp"),
-  "notifications-outline": require("../assets/icons/web/notifications.png"),
+  "notifications-outline": require("../assets/icons/figma-v4/notifications.png"),
 };
 export const mobileInterfaceIcons: Record<string, ImageSourcePropType> = {
   "cloud-upload-outline": require("../assets/icons/interface/upload.png"),

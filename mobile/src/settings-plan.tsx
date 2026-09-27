@@ -1,4 +1,5 @@
 import { RETENTION_MESSAGE, DOWNGRADE_MESSAGE, type RetentionSnapshot } from "../../shared/plan-retention";
+import { PlanCardSurface } from "./plan-card-surface";
 import { SettingsReferrals } from "./settings-referrals";
 import { telemetry } from "../../shared/analytics";
 import { PLAN_CATALOG } from "../../shared/plan-catalog";
@@ -145,7 +146,7 @@ export function SettingsPlan() {
     <Card>
       <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
         <Text style={styles.sectionTitle}>Plan usage</Text>
-        <Pressable accessibilityRole="button" accessibilityLabel="About plan usage" onPress={showUsageInfo} style={{ padding: 12 }}><Icon name="information-circle-outline" size={16} color={colors.muted} /></Pressable>
+        <Pressable accessibilityRole="button" accessibilityLabel="About plan usage" onPress={showUsageInfo} style={{ padding: 12 }}><Icon line name="information-circle-outline" size={16} color={colors.muted} /></Pressable>
       </View>
       <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 12 }}>
         {[
@@ -162,21 +163,21 @@ export function SettingsPlan() {
       </View>
       {usageError ? <Notice>Usage could not be loaded. Refresh plan status to try again.</Notice> : null}
     </Card>
-    <ScrollView horizontal showsHorizontalScrollIndicator={false} snapToInterval={Math.max(240, width - 64) + 16} decelerationRate="fast" contentContainerStyle={{ gap: 16 }} accessibilityLabel="Plans: Pro, Plus, Free">
+    <ScrollView horizontal disableIntervalMomentum showsHorizontalScrollIndicator={false} snapToInterval={Math.max(240, width - 64) + 16} decelerationRate="fast" contentContainerStyle={{ gap: 16 }} accessibilityLabel="Plans: Pro, Plus, Free">
       {(["premium", "pro", "free"] as const).map(tier => {
         const plan = PLAN_CATALOG[tier];
         const choice = packages.find(item => STORE_PACKAGES.find(p => p.identifier === item.identifier)?.tier === tier);
-        return <View key={tier} style={{ width: Math.max(240, width - 64), borderWidth: 1, borderColor: colors.line, borderRadius: 20, overflow: "hidden" }}>
-          <View style={{ padding: 20, backgroundColor: tier === "free" ? colors.line : tier === "pro" ? "#6ee7b7" : colors.teal, gap: 8 }}>
-            <Text style={{ fontFamily: "Poppins-SemiBold", fontSize: 24, color: tier === "free" ? colors.ink : tier === "pro" ? "#17383d" : "white" }}>{plan.name}</Text>
-            <Text style={{ color: tier === "free" ? colors.ink : tier === "pro" ? "#17383d" : "white" }}>{tier === "free" ? "Free forever" : choice ? `${choice.product.priceString} / ${choice.product.subscriptionPeriod === "P1Y" ? "year" : "month"}` : "See store pricing"}</Text>
-            {access?.planTier === tier ? <Text style={{ color: tier === "free" ? colors.ink : tier === "pro" ? "#17383d" : "white" }}>Current plan</Text> : null}
+        return <PlanCardSurface key={tier} tier={tier} width={Math.max(240, width - 64)}>
+          <View style={{ padding: 20, gap: 8 }}>
+            <Text style={{ fontFamily: "Poppins-SemiBold", fontSize: 24, color: "#153b42" }}>{plan.name}</Text>
+            <Text style={{ color: "#153b42" }}>{tier === "free" ? "Free forever" : choice ? `${choice.product.priceString} / ${choice.product.subscriptionPeriod === "P1Y" ? "year" : "month"}` : "See store pricing"}</Text>
+            {access?.planTier === tier ? <Text style={{ color: "#153b42" }}>Current plan</Text> : null}
           </View>
           <View style={{ padding: 20, gap: 14 }}>
-            {[`${plan.profiles} profiles · ${plan.accounts} non-cash accounts`, `${plan.linkedBanks} linked bank accounts`, `${plan.budgets} budgets · ${plan.goals} goals · ${plan.circles} Circles`, `${plan.monthlyTokens.toLocaleString()} Clover tokens monthly`, `${plan.dailyTokens.toLocaleString()} tokens per rolling 24 hours`, tier === "free" ? "Basic Adviser and Reports" : "Advanced Adviser and Reports"].map(feature => <Body key={feature}>{feature}</Body>)}
-            {access?.planTier !== tier ? <Text accessibilityRole="button" accessibilityState={{ disabled: busy || loading || verificationPending || session.demo }} disabled={busy || loading || verificationPending || session.demo} onPress={() => switchPlan(tier)} style={{ color: colors.teal, paddingVertical: 8 }}>Switch to {plan.name} →</Text> : null}
+            {[`${plan.profiles} profiles · ${plan.accounts} non-cash accounts`, `${plan.linkedBanks} linked bank accounts`, `${plan.budgets} budgets · ${plan.goals} goals · ${plan.circles} Circles`, `${plan.monthlyTokens.toLocaleString()} Clover tokens monthly`, `${plan.dailyTokens.toLocaleString()} tokens per rolling 24 hours`, tier === "free" ? "Basic Adviser and Reports" : "Advanced Adviser and Reports"].map(feature => <Text key={feature} style={{color: "#153b42", fontSize: 13, lineHeight: 21}}>✓  {feature}</Text>)}
+            {access?.planTier !== tier ? <Text accessibilityRole="button" accessibilityState={{ disabled: busy || loading || verificationPending || session.demo }} disabled={busy || loading || verificationPending || session.demo} onPress={() => switchPlan(tier)} style={{ color: "#153b42", paddingVertical: 8, fontFamily: "Poppins-SemiBold" }}>Switch to {plan.name} →</Text> : null}
           </View>
-        </View>;
+        </PlanCardSurface>;
       })}
     </ScrollView>
     <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 20 }}>

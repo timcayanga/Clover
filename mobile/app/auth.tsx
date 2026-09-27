@@ -1,6 +1,6 @@
 import { beginTelemetry } from "../../shared/analytics";
 import { useState, useRef } from "react";
-import { Image, KeyboardAvoidingView, Linking, Platform, Pressable, Switch, View } from "react-native";
+import { Image, KeyboardAvoidingView, Platform, Pressable, Switch, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { router, useLocalSearchParams } from "expo-router";
 import { useSignIn, useSignUp } from "@clerk/expo";
@@ -13,6 +13,7 @@ import { setRememberSession } from "../src/auth-token-cache";
 import { Body, Button, Card, Field, Heading, Icon, Notice, Screen, useTheme } from "../src/ui";
 import { Text } from "../src/app-text";
 import { GoogleIcon } from "../src/google-icon";
+import * as WebBrowser from "expo-web-browser";
 type Step =
   | "sign-in"
   | "sign-up"
@@ -46,8 +47,6 @@ function AuthForm() {
     params.mode === "sign-up" ? "sign-up" : "sign-in",
   );
   const [email, setEmail] = useState("");
-  const [firstName, setFirstName] = useState("");
-  const [lastName, setLastName] = useState("");
   const [password, setPassword] = useState("");
   const [repeat, setRepeat] = useState("");
   const [code, setCode] = useState("");
@@ -118,8 +117,6 @@ function AuthForm() {
         signUp.password({
           emailAddress: email.trim(),
           password,
-          firstName: firstName.trim(),
-          lastName: lastName.trim(),
           legalAccepted: terms,
         }),
       );
@@ -160,6 +157,10 @@ function AuthForm() {
       await finishSignIn();
     }
   };
+  const openLegal = async (page: "terms-of-service" | "privacy-policy") => {
+    try { await WebBrowser.openBrowserAsync(`https://clover.ph/${page}`); }
+    catch { setError("Unable to open this page. Please try again."); }
+  };
   const initial = step === "sign-in" || step === "sign-up";
   const passwordStep = initial || step === "new-password";
   const title = {
@@ -182,7 +183,7 @@ function AuthForm() {
           : Boolean(
               password &&
               (step === "new-password" || email.includes("@")) &&
-              (step === "sign-in" || password === repeat) &&
+              (step !== "new-password" || password === repeat) &&
               (step !== "sign-up" || terms),
             );
   return (
@@ -216,27 +217,7 @@ function AuthForm() {
               editable={!busy}
             />
           ) : null}
-          {step === "sign-up" ? (
-            <>
-              <View nativeID="clerk-captcha" />
-              <Field
-                label="First name"
-                value={firstName}
-                onChangeText={setFirstName}
-                autoComplete="given-name"
-                editable={!busy}
-                maxLength={80}
-              />
-              <Field
-                label="Last name"
-                value={lastName}
-                onChangeText={setLastName}
-                autoComplete="family-name"
-                editable={!busy}
-                maxLength={80}
-              />
-            </>
-          ) : null}
+          {step === "sign-up" ? <View nativeID="clerk-captcha" /> : null}
           {passwordStep ? (
             <>
               <Field
@@ -255,7 +236,7 @@ function AuthForm() {
                 }
                 editable={!busy}
               />
-              {step !== "sign-in" ? (
+              {step === "new-password" ? (
                 <Field
                   label="Confirm password"
                   value={repeat}
@@ -341,21 +322,11 @@ function AuthForm() {
                   disabled={busy}
                 />
                 <View style={{ flex: 1 }}>
-                  <Body>I agree to the Terms and Privacy Policy.</Body>
+                  <Text style={{ color: colors.ink, fontSize: 14, lineHeight: 22 }}>
+                    I agree to the <Text accessibilityRole="link" style={{ color: colors.teal, textDecorationLine: "underline" }} onPress={() => void openLegal("terms-of-service")}>Terms of Service</Text> and <Text accessibilityRole="link" style={{ color: colors.teal, textDecorationLine: "underline" }} onPress={() => void openLegal("privacy-policy")}>Privacy Policy</Text>.
+                  </Text>
                 </View>
               </View>
-              <Button
-                title="Read Terms"
-                secondary
-                onPress={() => void Linking.openURL("https://clover.ph/terms-of-service")}
-              />
-              <Button
-                title="Read Privacy Policy"
-                secondary
-                onPress={() =>
-                  void Linking.openURL("https://clover.ph/privacy-policy")
-                }
-              />
             </>
           ) : null}
           {step !== "extra-verification" ? (

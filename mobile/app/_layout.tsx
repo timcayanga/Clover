@@ -50,9 +50,9 @@ function PrivacyShield({ children }: { children: ReactNode }) {
           ]}
         >
           <Image
-            source={require("../assets/splash-brand.png")}
+            source={Platform.OS === "android" ? require("../assets/welcome-clover.png") : require("../assets/splash-brand.png")}
             contentFit="contain"
-            style={{ width: 220, height: 70 }}
+            style={Platform.OS === "android" ? { width: 106, height: 106 } : { width: 220, height: 70 }}
             accessibilityLabel="Clover"
           />
         </View>

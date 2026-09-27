@@ -20,6 +20,7 @@ const config: ExpoConfig = {
   android: {
     package: process.env.CLOVER_ANDROID_PACKAGE_ID || "ph.clover.preview",
     allowBackup: false,
+    adaptiveIcon: { foregroundImage: "./assets/android-clover-symbol.png", backgroundColor: "#F7F9FA" },
     predictiveBackGestureEnabled: true,
   },
   plugins: [
@@ -32,6 +33,7 @@ const config: ExpoConfig = {
         image: "./assets/splash-brand.png",
         imageWidth: 220,
         resizeMode: "contain",
+        android: { image: "./assets/android-clover-symbol.png", imageWidth: 160, backgroundColor: "#F7F9FA" },
       },
     ],
     "expo-localization",

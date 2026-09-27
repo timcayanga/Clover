@@ -1,5 +1,6 @@
 "use client";
 import type { RetentionSnapshot } from "../../shared/plan-retention";
+import cardSurface from "./plan-card-surface.module.css";
 import { PlanDialog } from "./settings-plan-dialog";
 
 import dynamic from "next/dynamic";
@@ -268,7 +269,7 @@ export function SettingsPlanPanel({
             `${plan.dailyTokens.toLocaleString()} tokens per rolling 24 hours`,
             ...(tier === "free" ? ["Basic Adviser and investment tracking"] : ["Full Adviser and investment tools"]),
           ];
-          return <article key={tier} className={`settings-plan-card settings-plan-card--${tier === "premium" ? "premium" : tier === "pro" ? "pro" : "free"}${planTier === tier ? " is-current" : ""}`}>
+          return <article key={tier} className={`${cardSurface.surface} ${cardSurface[tier]} settings-plan-card settings-plan-card--${tier === "premium" ? "premium" : tier === "pro" ? "pro" : "free"}${planTier === tier ? " is-current" : ""}`}>
             <div className="settings-plan-card__band"><span className="settings-plan-card__band-text">
               <strong className="settings-plan-card__band-title">{plan.name}</strong>
               <span className="settings-plan-card__band-price">{price ?? (offersLoading ? "Checking pricing…" : "Pricing unavailable")}{tier !== "free" && price ? (billingInterval === "monthly" ? " / month" : " / year") : ""}</span>

@@ -1,0 +1,10 @@
+/* Shared with the public Pricing page; internal keys pro=Plus, premium=Pro. */
+.surface.surface.surface { position:relative; isolation:isolate; overflow:hidden!important; border-radius:24px; color:#153b42!important; }
+.surface.surface.premium { background:radial-gradient(ellipse at 8% 0%,#c4f8fa99,transparent 62%),linear-gradient(135deg,#69dbe2 0%,#25b9cb 55%,#06a8bd 100%)!important; }
+.surface.surface.pro { background:radial-gradient(ellipse at 8% 0%,#ffffffb3,transparent 62%),linear-gradient(135deg,#b6f9de 0%,#78edc1 55%,#50d8b5 100%)!important; }
+.surface.surface.free { background:#fff!important; }
+.surface:is(.premium,.pro) { border:1px solid #ffffff9c; box-shadow:inset 0 1px 0 #ffffffd9,inset 0 -1px 0 #ffffff59,0 12px 30px #164f5914; }
+.surface:is(.premium,.pro)::before { content:""; position:absolute; inset:0; z-index:-1; pointer-events:none; border-radius:inherit; background:linear-gradient(115deg,#ffffff47 0%,#ffffff0a 35%,transparent 49%,#ffffff33 50%,transparent 72%); box-shadow:inset 1px 0 0 #ffffff66,inset -1px 0 0 #ffffff40; }
+.surface:is(.premium,.pro)::after { content:""; position:absolute; right:-72px; bottom:-104px; width:260px; height:260px; z-index:-1; pointer-events:none; border-radius:50%; border:1px solid #ffffff66; background:radial-gradient(ellipse at 30% 25%,#ffffff52,transparent 65%); box-shadow:inset 8px 8px 24px #ffffff40,0 0 30px #ffffff26; transform:rotate(-25deg); }
+.surface.surface.surface :global(.settings-plan-card__band),.surface.surface.surface :global(.settings-plan-card__body) { background:transparent!important; color:inherit!important; }
+.surface.surface.surface :global(.settings-plan-card__band-title),.surface.surface.surface :global(.settings-plan-card__band-price),.surface.surface.surface :global(.settings-plan-switch),.surface.surface.surface :global(.settings-plan-card__feature-row) { color:inherit!important; }

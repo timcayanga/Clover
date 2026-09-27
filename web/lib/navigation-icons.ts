@@ -1,4 +1,4 @@
-export const NAVIGATION_ICON_ASSET_ROOT = "/assets/3d%20icons/navigation/figma-v3";
+export const NAVIGATION_ICON_ASSET_ROOT = "/assets/3d%20icons/navigation/figma-v4";
 
 export const NAVIGATION_ICON_SOURCE_FILES = {
   home: "home.png",
@@ -12,20 +12,20 @@ export const NAVIGATION_ICON_SOURCE_FILES = {
   adviser: "adviser.png",
   budgeting: "budgeting.png",
   goals: "goals.png",
-  plan: "menu/plan.png",
+  plan: "menu-transparent/plan.png",
   more: "more.png",
-  notifications: "menu/notifications.png",
-  settings: "menu/settings.png",
-  help: "menu/help.png",
+  notifications: "menu-transparent/notifications.png",
+  settings: "menu-transparent/settings.png",
+  help: "menu-transparent/help.png",
   search: "search.png",
-  profile: "menu/account.png",
-  signOut: "menu/log-out.png",
+  profile: "menu-transparent/profile.png",
+  signOut: "menu-transparent/signOut.png",
   profiles: "menu/profiles.png",
   display: "menu/display.png",
   data: "menu/data.png",
   review: "menu/review.png",
   categories: "menu/categories.png",
-  security: "menu/security.png",
+  security: "menu-transparent/security.png",
   region: "menu/region.png",
 } as const;
 

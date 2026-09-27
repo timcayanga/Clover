@@ -6,10 +6,10 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAccess } from "../src/access";
 
 const slides = [
-  { title: "See all your money\nin one place.", accent: "all your money", image: require("../assets/tutorial/accounts.png"), description: "Illustrative Accounts screen showing banks, wallets, investments and cash together." },
-  { title: "Upload statements,\nreceipts & screenshots.", accent: "statements,\nreceipts & screenshots.", image: require("../assets/tutorial/upload.png"), description: "Illustrative transaction list with statement, receipt and spreadsheet uploads ready to review." },
-  { title: "See where your\nmoney goes.", accent: "money goes.", image: require("../assets/tutorial/spending.png"), description: "Illustrative spending chart with spending grouped by category." },
-  { title: "Ask Clover.\nUnderstand your money.", accent: "Understand your money.", image: require("../assets/tutorial/adviser.png"), description: "Illustrative Clover conversation explaining a change in food spending." },
+  { title: "Your money, together\nin Clover.", accent: "in Clover.", image: require("../assets/tutorial/accounts-v2.png"), description: "Clover Accounts preview showing balance summaries and bank accounts.", caption: "Banks, wallets, investments and cash in one place." },
+  { title: "Connect, upload,\nor add manually.", accent: "or add manually.", image: require("../assets/tutorial/connect-v2.png"), description: "Clover Add Account preview with Manual, Ask Clover, Upload and Connect selectors.", caption: "Bank connections · Available with Plus and Pro" },
+  { title: "See where your\nmoney goes.", accent: "money goes.", image: require("../assets/tutorial/spending-v2.png"), description: "Clover Reports preview with category spending and comparison tools.", caption: "Explore spending, trends and insights." },
+  { title: "Ask Clover.\nTake your next step.", accent: "Take your next step.", image: require("../assets/tutorial/adviser-v2.png"), description: "Clover Adviser preview with a financial question ready to ask.", caption: "Turn your financial questions into clear next steps." },
 ];
 
 export default function Welcome() {
@@ -23,7 +23,7 @@ export default function Welcome() {
   const [busy, setBusy] = useState(false);
   const compact = height < 750;
   // Fit the complete cropped artwork; larger text can scroll independently of the actions.
-  const artworkHeight = Math.max(180, Math.min(520, height - insets.top - insets.bottom - 280 - Math.max(0, fontScale - 1) * 80));
+  const artworkHeight = Math.max(180, Math.min(520, height - insets.top - insets.bottom - 308 - Math.max(0, fontScale - 1) * 80));
   useEffect(() => { pager.current?.scrollTo({ x: pageWidth * index, animated: false }); }, [pageWidth, index]);
   const authenticate = async (signup: boolean) => {
     if (busy || !access.loaded || !access.configured) return;
@@ -50,6 +50,7 @@ export default function Welcome() {
             <Text accessibilityRole="header" style={[s.title, compact && { fontSize: 23, lineHeight: 29 }]}>
               {slide.title.slice(0, start)}<Text style={{ color: "#00aabe" }}>{slide.accent}</Text>{slide.title.slice(start + slide.accent.length)}
             </Text>
+            <Text style={s.caption}>{slide.caption}</Text>
             <Image source={slide.image} accessibilityLabel={slide.description} resizeMode="contain"
               style={{ width: Math.min(pageWidth - 48, 380), height: artworkHeight, alignSelf: "center" }} />
           </ScrollView>;
@@ -83,6 +84,7 @@ const s = StyleSheet.create({
   wordmark: { color: "#03abc2", fontSize: 22, fontFamily: "Poppins-SemiBold" },
   slide: { flexGrow: 1, alignItems: "center", justifyContent: "center", gap: 14, paddingHorizontal: 16, paddingBottom: 6 },
   title: { color: "#17363d", fontSize: 26, lineHeight: 33, textAlign: "center", fontFamily: "Poppins-SemiBold", maxWidth: 430 },
+  caption: { fontSize: 12, lineHeight: 18, color: "#596e78", textAlign: "center", maxWidth: 340 },
   footer: { paddingHorizontal: 24, gap: 10, flexShrink: 0 },
   pagination: { flexDirection: "row", justifyContent: "center", height: 36 },
   dotTarget: { width: 44, minHeight: 44, alignItems: "center", justifyContent: "center" },
