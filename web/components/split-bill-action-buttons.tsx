@@ -1,8 +1,6 @@
 "use client";
 
-import { InterfaceIcon } from "@/components/interface-icon";
-
-function SplitBillActionIcon({ name }: { name: "plus" | "upload" }) {
+function SplitBillActionIcon() {
   const common = {
     width: 14,
     height: 14,
@@ -15,8 +13,6 @@ function SplitBillActionIcon({ name }: { name: "plus" | "upload" }) {
     "aria-hidden": true,
   };
 
-  if (name === "upload") return <InterfaceIcon name="upload" size={14} />;
-
   return (
     <svg {...common}>
       <path d="M12 5v14" />
@@ -28,29 +24,17 @@ function SplitBillActionIcon({ name }: { name: "plus" | "upload" }) {
 export function SplitBillActionButtons({
   className = "",
   onAddBill,
-  onUploadReceipt,
 }: {
   className?: string;
   onAddBill: () => void;
-  onUploadReceipt: () => void;
 }) {
   return (
     <div className={`split-bill-page-actions ${className}`.trim()}>
-      <button className="button button-secondary button-small transactions-action-button split-bill-action-button split-bill-action-button--add" type="button" aria-label="Add split bill" onClick={onAddBill}>
+      <button className="button button-primary button-small transactions-action-button split-bill-action-button split-bill-action-button--add" type="button" aria-label="Add split bill" onClick={onAddBill}>
         <span className="button-icon" aria-hidden="true">
-          <SplitBillActionIcon name="plus" />
+          <SplitBillActionIcon />
         </span>
         <span>Add Split Bill</span>
-      </button>
-      <button
-        className="button button-primary button-small transactions-action-button transactions-toolbar-upload split-bill-action-button split-bill-action-button--upload"
-        type="button"
-        onClick={onUploadReceipt}
-      >
-        <span className="button-icon" aria-hidden="true">
-          <SplitBillActionIcon name="upload" />
-        </span>
-        <span>Upload Receipt</span>
       </button>
     </div>
   );

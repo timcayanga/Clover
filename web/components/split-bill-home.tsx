@@ -398,13 +398,6 @@ export function SplitBillHome({
                     }),
                   )
                 }
-                onUploadReceipt={() =>
-                  window.dispatchEvent(
-                    new CustomEvent("clover:open-split-bill-add", {
-                      detail: { mode: "import" },
-                    }),
-                  )
-                }
               />
             </section>
           ) : (

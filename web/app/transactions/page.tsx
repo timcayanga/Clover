@@ -7519,46 +7519,9 @@ function TransactionsPageContent() {
       </strong>
       <p>Add a transaction or upload files to build your history.</p>
       <div className="transactions-empty-state__actions">
-        <button
-          className={
-            isCompactViewport
-              ? "button button-secondary button-small accounts-toolbar-add transactions-toolbar-add transactions-toolbar-add--compact"
-              : "button button-secondary button-small transactions-action-button transactions-toolbar-add"
-          }
-          type="button"
-          onClick={() => void openManualAdd()}
-          aria-label="Add transaction"
-          title="Add transaction"
-        >
-          <span className="button-icon" aria-hidden="true">
-            <ActionIcon name="plus" />
-          </span>
+        <button className="button button-primary button-small transactions-action-button transactions-toolbar-add" type="button" onClick={() => void openManualAdd()} aria-label="Add transaction">
+          <span className="button-icon" aria-hidden="true"><ActionIcon name="plus" /></span>
           <span>Add transaction</span>
-        </button>
-        <button
-          className={
-            isCompactViewport
-              ? "button button-primary button-small accounts-toolbar-button accounts-toolbar-button--upload transactions-toolbar-upload transactions-toolbar-upload--compact"
-              : "button button-primary button-small transactions-action-button transactions-toolbar-upload"
-          }
-          type="button"
-          onPointerEnter={() => void loadImportFilesModal()}
-          onFocus={() => void loadImportFilesModal()}
-          onClick={() => {
-            if (isCompactViewport) {
-              openMobileFilePicker();
-              return;
-            }
-
-            openImportFiles();
-          }}
-          aria-label="Upload files"
-          title="Upload files"
-        >
-          <span className="button-icon" aria-hidden="true">
-            <ActionIcon name="upload" />
-          </span>
-          <span>{isCompactViewport ? "Upload file" : "Upload files"}</span>
         </button>
       </div>
     </div>
@@ -7585,7 +7548,7 @@ function TransactionsPageContent() {
   const transactionsShellActions = isCompactViewport ? (
     <div className="transactions-shell-actions transactions-shell-actions--compact" style={transactionsShellActionsStyle}>
       <button
-        className="button button-secondary button-small accounts-toolbar-add transactions-toolbar-add transactions-toolbar-add--compact"
+        className="button button-primary button-small accounts-toolbar-add transactions-toolbar-add transactions-toolbar-add--compact"
         type="button"
         onClick={() => void openManualAdd()}
         aria-label="Add transaction"
@@ -7593,19 +7556,6 @@ function TransactionsPageContent() {
       >
         <ActionIcon name="plus" />
         <span>Add transaction</span>
-      </button>
-
-      <button
-        className="button button-primary button-small accounts-toolbar-button accounts-toolbar-button--upload transactions-toolbar-upload transactions-toolbar-upload--compact"
-        type="button"
-        onPointerEnter={() => void loadImportFilesModal()}
-        onFocus={() => void loadImportFilesModal()}
-        onClick={() => openImportFiles()}
-        aria-label="Upload files"
-        title="Upload files"
-      >
-        <ActionIcon name="upload" />
-        <span>Upload files</span>
       </button>
     </div>
   ) : (
@@ -7616,7 +7566,7 @@ function TransactionsPageContent() {
 
       <div className="transactions-add-menu" id="transactions-add-menu" ref={addMenuRef} style={transactionsMenuStyle}>
         <button
-          className="button button-secondary button-small transactions-action-button transactions-toolbar-add transactions-add-menu__toggle"
+          className="button button-primary button-small transactions-action-button transactions-toolbar-add transactions-add-menu__toggle"
           type="button"
           onClick={() => {
             void openManualAdd();
@@ -7631,18 +7581,6 @@ function TransactionsPageContent() {
           <span>Add transaction</span>
         </button>
       </div>
-      <button
-        className="button button-primary button-small transactions-action-button transactions-toolbar-upload"
-        type="button"
-        onPointerEnter={() => void loadImportFilesModal()}
-        onFocus={() => void loadImportFilesModal()}
-        onClick={() => openImportFiles()}
-      >
-        <span className="button-icon" aria-hidden="true">
-          <ActionIcon name="upload" />
-        </span>
-        <span>Upload files</span>
-      </button>
     </div>
   );
   const transactionCacheVersionAtRender = transactionCacheVersion.expectedVersion;
