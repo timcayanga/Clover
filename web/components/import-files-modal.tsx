@@ -427,6 +427,7 @@ export function ImportFilesModal({
 }: ImportFilesModalProps) {
   const router = useRouter();
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const aiPermissionPending = useRef(false);
   const photoLibraryInputRef = useRef<HTMLInputElement>(null);
   const cameraInputRef = useRef<HTMLInputElement>(null);
   const accountIdByKeyRef = useRef(new Map<string, string>());
@@ -7770,7 +7771,9 @@ export function ImportFilesModal({
 
   const handleStartImport = async () => {
     // Declining or being offline leaves deterministic imports available; the server blocks cloud calls.
-    await requestAiConsent().catch(() => false);
+    if (aiPermissionPending.current) return;
+    aiPermissionPending.current = true;
+    try { await requestAiConsent().catch(() => false); } finally { aiPermissionPending.current = false; }
     primaryVisibilityCompletedRef.current = false;
     uploadCancelRequestedRef.current = false;
     setUploadPaused(false);

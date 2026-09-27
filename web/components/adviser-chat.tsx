@@ -179,6 +179,7 @@ function ScopedAdviserChat({ prompts, storageKey = adviserChatStorageKey, initia
   useEffect(()=>{attachmentActive.current=true;return ()=>{attachmentActive.current=false;};},[]);
   const [input, setInput] = useState("");
   const [isSending, setIsSending] = useState(false);
+  const aiPermissionPending = useRef(false);
   const [error, setError] = useState<string | null>(null);
   const [usage, setUsage] = useState<AdviserUsage | null>(null);
   const [actions, setActions] = useState<AdviserAction[]>([]);
@@ -244,11 +245,19 @@ function ScopedAdviserChat({ prompts, storageKey = adviserChatStorageKey, initia
 
   const sendMessage = async (text: string) => {
     const trimmed = text.trim() || (attachments.length ? "Help me understand the financial information in these attached files. Ask what I want to add before drafting entries." : "");
-    if (!trimmed || isSending || attaching || entryLocked || history.busy) {
+    if (!trimmed || isSending || aiPermissionPending.current || attaching || entryLocked || history.busy) {
       return;
     }
 
-    try { if (!(await requestAiConsent())) return; } catch(e) { setError(e instanceof Error ? e.message : "Unable to check AI permission."); return; }
+    aiPermissionPending.current = true;
+    try {
+      if (!(await requestAiConsent())) return;
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Unable to check AI permission.");
+      return;
+    } finally {
+      aiPermissionPending.current = false;
+    }
     setError(null);
     setIsSending(true);
     setActions([]);
