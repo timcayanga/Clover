@@ -222,7 +222,7 @@ export function SplitBillPageActions({ currentUserName, people, groups, onBillSa
   return (
     <>
       {!isModalOpen ? (
-        <SplitBillActionButtons onAddBill={() => setOpenAddMode("manual")} onUploadReceipt={() => setOpenAddMode("import")} />
+        <SplitBillActionButtons onAddBill={() => setOpenAddMode("manual")} />
       ) : null}
 
       <SplitBillManualModal open={openAddMode === "manual"} currentUserName={currentUserName} people={people} groups={groups} onClose={closeAddModal} onSaved={onBillSaved} />

@@ -66660,3 +66660,17 @@ html[data-theme="dark"] .content.content--reports .reports-range-menu__summary {
     align-items: center;
   }
 }
+
+/* Unified desktop creation actions keep upload inside the entry setup. */
+@media (min-width: 769px) {
+  .content .button-primary:is(.accounts-toolbar-add, .transactions-toolbar-add, .split-bill-action-button--add),
+  html[data-theme="dark"] .content .button-primary:is(.accounts-toolbar-add, .transactions-toolbar-add, .split-bill-action-button--add) {
+    background: var(--brand-gradient) !important;
+    border-color: transparent !important;
+    color: #fff !important;
+  }
+
+  .content .button-primary:is(.accounts-toolbar-add, .transactions-toolbar-add, .split-bill-action-button--add) :is(span, svg) {
+    color: inherit !important;
+  }
+}
