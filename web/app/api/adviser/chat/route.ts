@@ -4042,7 +4042,7 @@ export async function POST(request: Request) {
       if (!deterministicReply) {
         try {
           await assertCloudAiConsent(user.id);
-        upstreamResponse = await fetch("https://api.openai.com/v1/responses", {
+          upstreamResponse = await fetch("https://api.openai.com/v1/responses", {
             method: "POST",
             headers: { Authorization: `Bearer ${env.OPENAI_API_KEY}`, "Content-Type": "application/json" },
             body: JSON.stringify({ model, prompt_cache_key: "clover-adviser-v1", stream: true, temperature: 0.2, max_output_tokens: 900, tools: [], input: modelInput }),
@@ -4164,7 +4164,7 @@ export async function POST(request: Request) {
     let finalResponse: Response;
     try {
       await assertCloudAiConsent(user.id);
-        finalResponse = await fetch("https://api.openai.com/v1/responses", {
+      finalResponse = await fetch("https://api.openai.com/v1/responses", {
         method: "POST",
         headers: { Authorization: `Bearer ${env.OPENAI_API_KEY}`, "Content-Type": "application/json" },
         body: JSON.stringify({ model, prompt_cache_key: "clover-adviser-v1", temperature: 0.2, max_output_tokens: 900, tools: [], input: modelInput }),
