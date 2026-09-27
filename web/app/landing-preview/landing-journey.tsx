@@ -8,7 +8,6 @@ import Image from "next/image";
 import Link from "next/link";
 import { PublicFooter } from "@/components/public-footer";
 import { PlanComparisonTable } from "@/components/plan-comparison-table";
-import { plannedProPrices, plannedPremiumPrices } from "@/lib/public-plan-comparison";
 import { useEffect, useRef, useState, type CSSProperties } from "react";
 import { LandingSignupModal } from "@/components/landing-signup-modal";
 import { FEATURE_LINKS } from "@/lib/public-site";
@@ -16,7 +15,7 @@ import typography from "@/components/landing-type.module.css";
 import styles from "./landing-preview.module.css";
 
 const chapters = [
-  { title: <>Your finances.<br /><em>Together, your way.</em></>, copy: "Connect supported banks, upload records, or add details manually. See your finances together, your way." },
+  { title: <>Months of finances.<br /><em>Organized in minutes.</em></>, copy: "Connect supported banks, upload statements and receipts, or add details manually. Understand your money and take one clearer step at a time." },
   { title: <>Start with <em>what suits you.</em></>, copy: "Connect supported banks. Upload statements, receipts, screenshots, or spreadsheets. Add details manually. Choose what works for you." },
   { title: <>Your financial data stays <em>under your control.</em></>, copy: "Your financial records are private, reviewable, and traceable. You can edit, export, or delete your data through your account." },
   { title: <>Understand your finances.<br /><em>Build better habits.</em></>, copy: "Your financial life in one view. Track accounts, balances, recurring obligations, investments, and trends across your accounts." },
@@ -102,9 +101,8 @@ export function JourneyActions({ authEnabled, final = false }: { authEnabled: bo
   </div>;
 }
 
-export function ProActions({ market }: { market?: LandingMarket }) {
+export function ProActions(_props: { market?: LandingMarket }) {
   return <div className={styles.proActions} data-landing-actions>
-    {market ? <strong className={styles.proPrice}>Plus: {plannedProPrices(market).monthly}/month or {plannedProPrices(market).annual}/year<br />Pro: {plannedPremiumPrices(market).monthly}/month or {plannedPremiumPrices(market).annual}/year</strong> : null}
     <Link className="button button-primary button-pill" href="/sign-up?intent=pro&interval=annual" prefetch={false}>Upgrade to Plus <span aria-hidden="true">→</span></Link>
     <small>You can keep using Clover for free.</small>
   </div>;
@@ -113,7 +111,7 @@ export function ProActions({ market }: { market?: LandingMarket }) {
 export function ProComparison({ market, style, showActions = true, variant = "landing" }: { market: LandingMarket; style: CSSProperties; showActions?: boolean; variant?: "landing" | "feature" }) {
   return <div className={styles.proDetails} style={style}>
     <div className={styles.proComparisonCard}>
-      <PlanComparisonTable variant={variant} className={styles.proTable} />
+      <PlanComparisonTable market={market} variant={variant} className={styles.proTable} />
       <SwitchOfferNotice />
       <Link className={styles.proCompareLink} href="/pricing">Compare all Free, Plus and Pro features <span aria-hidden="true">→</span></Link>
     </div>
@@ -349,6 +347,13 @@ export function LandingJourney({ authEnabled, initialMarket, countryResolved }: 
       <div className={styles.world} aria-hidden="true">
         <StoryBackground prefix="landing" count={chapters.length} active={displayedChapter} position={storyPosition} blurred={chapter === 1 || chapter === 6} reservePhone={[3,4,5].includes(displayedChapter)} />
         <div className={styles.worldWash} />
+      </div>
+
+      <div className={styles.heroStatements} data-active={displayedChapter === 0} aria-hidden="true" style={{ opacity: displayedChapter === 0 ? Math.max(0, 1 - storyPosition) : 0 }}>
+        {marketContent[market].documents.slice(0, 3).map(([name], index) => <div className={styles.heroStatement} key={name}>
+          <small>EXAMPLE</small><strong>{name}</strong>
+          {marketContent[market].documentLines[index].map(([label, amount]) => <span key={label}><span>{label}</span><b>{amount}</b></span>)}
+        </div>)}
       </div>
 
       <section className={styles.story} aria-live="polite">
