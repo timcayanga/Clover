@@ -1,3 +1,4 @@
+import { finverseBalances } from "@/lib/finverse-balances";
 import { getNavigationIconSrc } from "@/lib/navigation-icons";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
@@ -1158,7 +1159,9 @@ async function AdviserPageContent({ searchParams }: { searchParams?: Promise<Adv
     existing.push(transaction as unknown as BalanceLikeTransaction);
     manualTransactionsByAccount.set(transaction.accountId, existing);
   }
+  const bankSnapshots = await finverseBalances(resolvedWorkspace.id);
   const reconcileWorkspaceAccountBalance = (account: AdviserWorkspaceAccountSource) => {
+    if (bankSnapshots.has(account.id)) return Number(bankSnapshots.get(account.id)!.bankBalance);
     const latestCheckpoint = selectLatestAccountCheckpoint(account.statementCheckpoints);
     const fallbackBalance = account.source === "manual"
         ? deriveReconciledBalance({

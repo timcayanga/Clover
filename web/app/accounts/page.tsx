@@ -1222,7 +1222,7 @@ const getLatestCheckpointForAccount = (
   // account in the Accounts API. Its shared document checkpoint represents
   // the whole file, so applying that single ending balance to an individual
   // card can copy another column's value onto it.
-  if (account.publishedImportInventory) {
+  if (account.publishedImportInventory || account.source === "finverse" || account.bankBalance != null) {
     return null;
   }
 
@@ -1679,7 +1679,7 @@ function AccountsPageContent() {
                         const shouldPreserveImportedBalance =
                           account.source === "upload" && checkpointBalance === null;
                         const reconciledBalance =
-                          account.bankBalance ?? checkpointBalance ??
+                          account.bankBalance ?? (account.source === "finverse" ? account.balance : null) ?? checkpointBalance ??
                           (shouldPreserveImportedBalance
                             ? account.balance
                             : deriveReconciledBalance({
