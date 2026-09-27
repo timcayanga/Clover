@@ -685,3 +685,21 @@
 .scrollHint i{animation:scroll-line 2s ease-in-out infinite;transform-origin:left}
 @keyframes scroll-line{50%{transform:scaleX(.65)}}
 @media(prefers-reduced-motion:reduce){.scrollHint i{animation:none}}
+
+/* Sample source records float over the desk, below the people. */
+.heroStatements{position:absolute;z-index:12;right:5vw;bottom:4svh;display:flex;gap:12px;width:40vw;pointer-events:none;transition:opacity 200ms ease-out}
+.heroStatement{flex:1;min-width:0;padding:14px 12px;border:1px solid #dce8e8;border-radius:12px;background:rgba(255,255,255,.96);box-shadow:0 12px 30px #17394320;transform:rotate(-4deg);font-size:clamp(8px,.7vw,11px)}
+.heroStatement:nth-child(2){transform:translateY(12px) rotate(2deg)}
+.heroStatement:nth-child(3){transform:rotate(5deg)}
+.heroStatement>small{display:block;color:#607a86;font-size:8px;letter-spacing:.12em}
+.heroStatement>strong{display:block;margin:6px 0 12px;color:#087e8c;font-size:clamp(9px,.85vw,12px)}
+.heroStatement>span{display:flex;justify-content:space-between;gap:6px;border-top:1px solid #e6eeee;padding:5px 0;white-space:nowrap}
+.heroStatement b{font-weight:500}
+.proTable tfoot td{font-size:10px!important;line-height:1.4;background:#fff;color:#526a74;padding:10px}
+@media(max-width:900px){.heroStatements{display:none}.proTable th:first-child{width:31%}.proTable th,.proTable td{padding:7px 5px}}
+@media(prefers-reduced-motion:reduce){.heroStatements{transition:none}}
+@media(max-width:900px){
+ .proComparisonCard .proTable :is(th,td){font-size:11px!important;padding:8px 4px;overflow-wrap:normal;word-break:normal}
+ .proComparisonCard .proTable th:first-child{width:29%}
+ .proComparisonCard .proTable tfoot td{font-size:10px!important}
+}
