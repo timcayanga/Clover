@@ -132,3 +132,12 @@
 .finverse-connect__sync-card .finverse-connect__unlink { background: none; border: 0; box-shadow: none; color: var(--danger, #c6283d); font: inherit; font-size: 12px; padding: 10px 12px; min-height: 44px; cursor: pointer; }
 .finverse-connect__unlink:disabled { opacity: .5; cursor: default; }
 .add-entry-methods [id$="-ask-panel"]:not([hidden]) { min-height: 240px; }
+
+.finverse-pending-chip { display:inline-flex; align-items:center; max-width:100%; border:1px solid var(--line,#c5e5ec); border-radius:999px; overflow:hidden; color:var(--teal,#00a9bd); }
+.finverse-pending-chip button { appearance:none; background:transparent; border:0; color:inherit; font:inherit; cursor:pointer; min-height:44px; }
+.finverse-pending-chip__resume { display:flex; align-items:center; gap:8px; min-width:0; padding:6px 0 6px 12px; text-align:left; }
+.finverse-pending-chip__resume img { width:24px; height:24px; flex-shrink:0; object-fit:contain; border-radius:6px; }
+.finverse-pending-chip__cancel { width:44px; flex-shrink:0; font-size:22px!important; }
+.finverse-pending-chip button:disabled { opacity:.5; cursor:wait; }
+.finverse-pending-chip button:focus-visible { outline:2px solid currentColor; outline-offset:-3px; border-radius:22px; }
+.finverse-cancel-link { background:none; border:0; color:var(--danger,#c6283d); font:inherit; font-size:13px; min-height:44px; padding:8px 12px; cursor:pointer; }

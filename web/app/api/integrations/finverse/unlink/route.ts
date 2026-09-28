@@ -21,7 +21,7 @@ export async function POST(request: Request) {
       const current = await prisma.finverseConnection.findUniqueOrThrow({ where: { id: attempt.id } });
       if (current.status !== "disconnected" && !current.disconnectRequestedAt) return NextResponse.json({ error: "This bank has linked accounts. Use Unlink from Connected accounts." }, { status: 409 });
       const revoked = await revokeBankConnection(attempt.id);
-      return NextResponse.json({ status: revoked ? "cancelled" : "disconnect_pending", message: "Bank setup cancelled. No new account slots were used." });
+      return NextResponse.json({ status: revoked ? "cancelled" : "disconnect_pending", message: revoked ? "Bank linking cancelled. Your existing accounts and history are unchanged." : "Bank linking stopped. Clover will retry disconnecting it with Finverse. Your existing accounts and history are unchanged." });
     }
     const link=await prisma.finverseAccountLink.findFirst({where:{accountId:body.accountId,workspaceId:body.workspaceId,connection:{userId:workspace.userId}}});
     if(!link) return NextResponse.json({error:'Linked account not found.'},{status:404});

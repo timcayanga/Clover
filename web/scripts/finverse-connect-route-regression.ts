@@ -53,7 +53,7 @@ export const exchangeFinverseCode=async()=>{exchanges++;return {login_identity_i
 export const prisma={user:{findUniqueOrThrow:async()=>({planTier})},$transaction:async f=>f({}),finverseConnection:{
  findUniqueOrThrow:async()=>({status:"ready"}),
  findFirst:async({where})=>{if(where.workspaceId!=='profile'||where.user.clerkUserId!=='owner'||where.status.not!=='disconnected')throw Error('unsafe scope');return {id:'connection',userId:'owner',loginIdentityId:'identity',encryptedAccessToken:'cipher',accessTokenExpiresAt:new Date(Date.now()+3600000)};},
- findMany:async({where,select})=>{if(where.workspaceId!=='profile'||where.user.clerkUserId!=='owner')throw Error('unsafe scope');return [{id:'failed',status:'error',institutionName:'Failed bank',lastSyncedAt:null,accountLinks:[]},{id:'cancelled',status:'cancelled',institutionName:'Cancelled bank',lastSyncedAt:null,accountLinks:[]},{id:'pending',status:'awaiting_selection',institutionName:'Test bank',lastSyncedAt:null,accountLinks:[]},{id:'linked',status:'ready',institutionName:'Test bank',lastSyncedAt:'2026-09-24T00:00:00Z',accountLinks:[{account:{id:'account',name:'Savings',institution:'Test bank',accountNumber:'1234-5678-90',type:'bank'}}]}];},
+ findMany:async({where,select})=>{if(where.workspaceId!=='profile'||where.user.clerkUserId!=='owner')throw Error('unsafe scope');return [{id:'failed',status:'error',institutionName:'Failed bank',lastSyncedAt:null,accountLinks:[]},{id:'cancelled',status:'cancelled',institutionName:'Cancelled bank',lastSyncedAt:null,accountLinks:[]},{id:'pending',status:'awaiting_selection',institutionId:'rcbc',institutionName:'RCBC - Personal',lastSyncedAt:null,accountLinks:[]},{id:'linked',status:'ready',institutionName:'Test bank',lastSyncedAt:'2026-09-24T00:00:00Z',accountLinks:[{account:{id:'account',name:'Savings',institution:'Test bank',accountNumber:'1234-5678-90',type:'bank'}}]}];},
  create:async({data})=>{created++;return{id:'connection'};},
  findUnique:async({where})=>['native.valid','native.refresh.valid'].includes(where.stateHash)?{id:'connection',workspaceId:'profile',stateExpiresAt:new Date(Date.now()+60000),status:claimed?'authorizing':'link_pending'}:null,
  updateMany:async({where,data})=>{if(where.accountLinks || where.status==='retrieving'){discoveryWrites.push({where,data});return {count:1};}if(where.status && typeof where.status === "object"){updates.push(data);return{count:1};}if(claimed)return{count:0};claimed=true;return{count:1};},
@@ -88,7 +88,7 @@ export const prisma={user:{findUniqueOrThrow:async()=>({planTier})},$transaction
   const connections=await api.connections(new Request('https://clover.test/api?workspaceId=profile'));
   assert.equal(connections.headers.get('cache-control'),'private, no-store');
   const linkedData=await connections.json();
-  assert.deepEqual(linkedData.pending,[{id:'pending',name:'Test bank',status:'awaiting_selection'}]);
+  assert.deepEqual(linkedData.pending,[{id:'pending',name:'RCBC',logoUrl:'/assets/banks/philippines/rcbc.png',status:'awaiting_selection'}]);
   assert.equal(linkedData.accounts[0].last4,'7890');
   assert.equal(linkedData.accounts[0].logoUrl,'/assets/banks/philippines/bpi.png','variant-only bank branding must not use the generic icon');
   assert.equal(linkedData.accounts[0].lastSyncedAt,'2026-09-24T00:00:00Z');

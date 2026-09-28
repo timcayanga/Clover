@@ -16,9 +16,9 @@ function CountryFlag({code, fallback}: {code:string;fallback:string}) {
   return countryFlags[code] ? <Image source={countryFlags[code]} style={{width:48,height:36}} contentFit="contain" /> : <Text style={{fontSize:32}}>{fallback}</Text>;
 }
 
-export function BankLogo({path}:{path:string}) {
+export function BankLogo({path,size=48}:{path:string;size?:number}) {
   const [failed,setFailed]=useState(false);
-  return <Image source={failed?require("../assets/account-types/bank.png"):{uri:path.startsWith("/")?apiBase()+path:path}} style={{width:48,height:48,borderRadius:12}} contentFit="contain" onError={()=>setFailed(true)}/>;
+  return <Image source={failed?require("../assets/account-types/bank.png"):{uri:path.startsWith("/")?apiBase()+path:path}} style={{width:size,height:size,borderRadius:size/4}} contentFit="contain" onError={()=>setFailed(true)}/>;
 }
 
 export function FinverseBankPicker({ banks, busy, onConnect }: { banks: FinverseBankOption[]; busy: boolean; onConnect: (bank: FinverseBankOption) => void }) {

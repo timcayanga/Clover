@@ -2,6 +2,8 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { FinverseBankOption } from "../../shared/finverse-bank-options";
+import { CANCEL_BANK_LINK_MESSAGE, type PendingBankConnection } from "../../shared/finverse-pending";
+import { FinversePendingChip } from "./finverse-pending-chip";
 import { FinverseBankPicker } from "./finverse-bank-picker";
 import "./add-entry-methods.css";
 import Link from "next/link";
@@ -52,7 +54,7 @@ export function FinverseConnectButton({
   const [banksLoaded, setBanksLoaded] = useState(false);
   const [banks, setBanks] = useState<FinverseBankOption[]>([]);
   const [linked, setLinked] = useState<{id:string;connectionId:string;name:string;last4:string|null;logoUrl:string;lastSyncedAt:string|null;status:string;syncError:string|null}[]>([]);
-  const [pending, setPending] = useState<{id:string;name:string;status:string}[]>([]);
+  const [pending, setPending] = useState<PendingBankConnection[]>([]);
   const [progressOpen, setProgressOpen] = useState(false);
   const [retry, setRetry] = useState<{id?:string;ids?:string[];refresh:boolean}|null>(null);
   const [reconnect, setReconnect] = useState(false);
@@ -115,7 +117,7 @@ export function FinverseConnectButton({
     setBankRevision(v => v + 1);
   };
   const cancelSetup = async (id: string) => {
-    if (actionRef.current) return;
+    if (actionRef.current || !window.confirm(CANCEL_BANK_LINK_MESSAGE)) return;
     actionRef.current = "unlinking"; setAction("unlinking");
     try {
       const response = await fetch("/api/integrations/finverse/unlink", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ workspaceId, connectionId: id }) });
@@ -239,7 +241,7 @@ export function FinverseConnectButton({
   const selectionPanel = selection ? <fieldset className="finverse-connect__selection"><legend>Select bank accounts</legend><p>Choose which accounts to link. Matching Clover accounts keep their history.</p><p>{selection.remaining} new account slots available. Previously used accounts can be reconnected.</p>{selection.accounts.map(account => {
         const newSelected = selection.accounts.filter(a => selected.includes(a.id) && !a.reserved).length;
         return <label key={account.id}><input type="checkbox" checked={selected.includes(account.id)} disabled={action !== null || (!selected.includes(account.id) && !account.reserved && newSelected >= selection.remaining)} onChange={event => setSelected(current => event.target.checked ? [...current,account.id] : current.filter(id => id !== account.id))}/><span>{account.name}{account.existingAccountName ? <small> · Reuse {account.existingAccountName}; keep all history</small> : null}{account.reserved ? <small> · Already included this period</small> : null}<select aria-label={`Destination for ${account.name}`} disabled={action!==null} value={mappings[account.id]??''} onChange={event=>setMappings(current=>({...current,[account.id]:event.target.value}))}><option value="">{account.suggestedAccountId?'Use matching existing account':'Create a new account card'}</option>{account.candidates?.map(c=><option key={c.id} value={c.id}>Link to {c.name}{c.last4?` •••• ${c.last4}`:''}</option>)}</select></span></label>;
-      })}<button type="button" className="button button-primary" disabled={action !== null || selected.length === 0} onClick={() => void sync(selection.connectionId,selected)}>Link selected accounts</button><button className="button button-secondary" type="button" onClick={()=>{setSelection(null);setProgressOpen(false);setBankRevision(v=>v+1);}}>Choose later</button></fieldset> : null;
+      })}<button type="button" className="button button-primary" disabled={action !== null || selected.length === 0} onClick={() => void sync(selection.connectionId,selected)}>Link selected accounts</button><button className="button button-secondary" type="button" onClick={()=>{setSelection(null);setProgressOpen(false);setBankRevision(v=>v+1);}}>Choose later</button><button type="button" className="finverse-cancel-link" disabled={action!==null} onClick={()=>void cancelSetup(selection.connectionId)}>Cancel linking</button>{message?<p role="status">{message}</p>:null}</fieldset> : null;
   const callbackLoading = callbackStatus === "connected" && connectionId && autoSyncStarted.current !== connectionId && !access && !connectionsError;
   if (progressOpen || callbackLoading) return <section className="finverse-progress" aria-label="Bank connection progress" aria-live="polite">
     {(action === null && !retry && selectionPanel) || <><h4>{action === "syncing" || callbackLoading ? "Bank connection in progress" : retry ? "Bank connection needs attention" : "Bank connection update"}</h4>
@@ -249,7 +251,7 @@ export function FinverseConnectButton({
       {reconnect ? <p>Choose your bank again to start a fresh connection.</p> : null}
       {!retry ? <p>Pending account selections stay under Finish linking in Accounts and Notifications.</p> : null}
       <button type="button" className="button button-secondary" disabled={action === "unlinking"} onClick={backToBanks}>Back to banks</button>
-      {retry?.id && !linked.some(a => a.connectionId === retry.id) ? <button type="button" className="button button-secondary" disabled={action !== null} onClick={() => void cancelSetup(retry.id!)}>Cancel setup</button> : null}
+      {retry?.id && !linked.some(a => a.connectionId === retry.id) ? <button type="button" className="button button-secondary" disabled={action !== null} onClick={() => void cancelSetup(retry.id!)}>Cancel linking</button> : null}
       <button type="button" className="button button-secondary" onClick={()=>{setProgressOpen(false);window.dispatchEvent(new Event("finverse-background"));}}>{action === "syncing" || callbackLoading ? "Continue using Clover" : "Done"}</button></>}
   </section>;
   if (mode === "sync" && accountId && (!connectionsLoaded || !linked.some(a=>a.id===accountId))) return null;
@@ -269,7 +271,7 @@ export function FinverseConnectButton({
     <div className="finverse-connect finverse-connect--picker">
 
 
-      {pending.length ? <section className="finverse-pending" aria-label="Finish linking">{pending.map(c=><button key={c.id} type="button" className="button button-secondary" disabled={action!==null || !allowed} onClick={()=>void sync(c.id)}>Finish linking {c.name} · Select accounts</button>)}</section> : null}
+      {pending.length ? <section className="finverse-pending" aria-label="Finish linking">{pending.map(c=><FinversePendingChip key={c.id} connection={c} busy={action!==null} resumeDisabled={!allowed} onResume={()=>void sync(c.id)} onCancel={()=>void cancelSetup(c.id)}/>)}</section> : null}
       {mode === "connect" ? <>{testMode ? <p role="status">Test mode · Only test banks are shown.</p> : null}{banksLoaded && allowed ? <FinverseBankPicker banks={banks} busy={action!==null} onConnect={id=>void connect(id)}/> : <p role="status">{bankStatus}</p>}</> : null}
       {syncAccounts.length ? <section aria-label="Connected accounts"><h4>Connected accounts</h4><div className="finverse-connect__grid">{syncAccounts.map(account=><div key={account.id} className="finverse-connect__sync-card"><img src={account.logoUrl} alt="" onError={event=>{event.currentTarget.onerror=null;event.currentTarget.src="/assets/account-types/bank.png";}}/><strong>{account.name}</strong><span>{account.last4 ? `•••• ${account.last4}` : "Linked account"}</span><small>{account.status==="disconnect_pending"?"Disconnection pending":account.status==="link_pending"?"Authorization needed":account.syncError || account.status==="error"?"Connection needs attention":account.status==="retrieving"?"Syncing":"Connected"}</small><small>Last Synced · {account.lastSyncedAt ? new Date(account.lastSyncedAt).toLocaleString() : "Not yet synced"}</small><button className="button button-secondary" type="button" disabled={action !== null || !allowed || account.status==="disconnect_pending"} onClick={()=>void sync(account.connectionId,[],true)}>{action === "syncing" ? "Syncing…" : "↻ Sync"}</button><button type="button" className="finverse-connect__unlink" disabled={action !== null||account.status==="disconnect_pending"} onClick={()=>setUnlinkTarget(account)}>Unlink</button></div>)}</div></section> : mode === "sync" ? <>
       {testMode ? <p role="status">Test mode · Only test banks are shown.</p> : null}

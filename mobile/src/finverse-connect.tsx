@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { FinverseBankOption } from "../../shared/finverse-bank-options";
+import { FinversePendingChip, confirmCancelBankLink } from "./finverse-pending-chip";
+import type { PendingBankConnection } from "../../shared/finverse-pending";
 import { BankLogo, FinverseBankPicker } from "./finverse-bank-picker";
 import { ActivityIndicator, Alert, Platform, Pressable, View } from "react-native";
 import { router } from "expo-router";
@@ -19,7 +21,7 @@ export function FinverseConnect({ onSynced, callbackConnection, mode = "connect"
   const [banksLoaded, setBanksLoaded] = useState(false);
   const [banks, setBanks] = useState<FinverseBankOption[]>([]);
   const [linked,setLinked] = useState<{id:string;connectionId:string;name:string;last4:string|null;logoUrl:string;lastSyncedAt:string|null;status:string;syncError:string|null}[]>([]);
-  const [pending,setPending] = useState<{id:string;name:string;status:string}[]>([]);
+  const [pending,setPending] = useState<PendingBankConnection[]>([]);
   const [reconnectRequired,setReconnectRequired] = useState(false);
   const [progressOpen,setProgressOpen] = useState(false);
   const [connectionsLoaded,setConnectionsLoaded] = useState(false);
@@ -138,14 +140,14 @@ export function FinverseConnect({ onSynced, callbackConnection, mode = "connect"
   const selectionPanel = selection ? <View style={{ gap: 12 }}><Heading>Select bank accounts</Heading><Body>{selection.remaining} new account slots available. Previously used accounts can be reconnected.</Body>{selection.accounts.map(account => {
       const checked = selected.includes(account.id), disabled = busy || (!checked && !account.reserved && selection.accounts.filter(a => selected.includes(a.id) && !a.reserved).length >= selection.remaining);
       return <View key={account.id} style={{gap:6}}><Pressable accessibilityRole="checkbox" accessibilityState={{ checked, disabled }} disabled={disabled} onPress={() => setSelected(current => checked ? current.filter(id => id !== account.id) : [...current, account.id])} style={{ padding: 14, borderWidth: 1, borderColor: checked ? colors.teal : colors.line, borderRadius: 12 }}><Text style={{ color: colors.ink }}>{checked ? "✓ " : "○ "}{account.name}{account.existingAccountName ? ` · Reuse ${account.existingAccountName}; keep all history` : ""}{account.reserved ? " · Already included this period" : ""}</Text></Pressable>{checked?<View style={{gap:6}}><Body>Link to an existing account:</Body><Button secondary title={account.suggestedAccountId?'Use matching account':'Create a new account card'} onPress={()=>setMappings(m=>({...m,[account.id]:''}))}/>{account.candidates?.map(c=><Button key={c.id} secondary title={`${mappings[account.id]===c.id?'✓ ':''}${c.name}${c.last4?` •••• ${c.last4}`:''}`} onPress={()=>setMappings(m=>({...m,[account.id]:c.id}))}/>)}</View>:null}</View>;
-    })}<Button title="Link selected accounts" disabled={busy || !selected.length} onPress={() => void sync(selection.connectionId, selected)} /><Button secondary title="Choose later" onPress={()=>{setSelection(null);setProgressOpen(false);setRevision(v=>v+1);}} /></View> : null;
+    })}<Button title="Link selected accounts" disabled={busy || !selected.length} onPress={() => void sync(selection.connectionId, selected)} /><Button secondary title="Choose later" onPress={()=>{setSelection(null);setProgressOpen(false);setRevision(v=>v+1);}} /><Pressable accessibilityRole="button" disabled={busy} onPress={()=>confirmCancelBankLink(()=>void cancelSetup(selection.connectionId))} style={{minHeight:44,alignItems:"center",justifyContent:"center"}}><Text style={{color:colors.danger,fontSize:13}}>Cancel linking</Text></Pressable>{message?<Notice>{message}</Notice>:null}</View> : null;
   if (progressOpen || (callbackConnection && callbackHandled.current !== callbackConnection && !access && !connectionsError)) return <View style={{gap:16,padding:20}} accessibilityLabel="Bank connection progress">
     {(!busy && !retrySync && selectionPanel) || <><Heading>{busy ? "Bank connection in progress" : retrySync ? "Bank connection needs attention" : "Bank connection update"}</Heading>
     {busy || !access ? <ActivityIndicator color={colors.teal}/> : null}<Notice>{message || "Bank authorized. Retrieving your accounts…"}</Notice>
     {retrySync ? <>{!reconnectRequired ? <Button title="Retry" onPress={()=>void sync(retrySync.id,retrySync.accountIds,retrySync.refresh)}/> : <Body>Choose your bank again to start a fresh connection.</Body>}</> : null}
     {!retrySync ? <Body>Pending account selections stay under Finish linking in Accounts and Notifications.</Body> : null}
     <Button secondary title="Back to banks" onPress={backToBanks}/>
-    {retrySync?.id && !linked.some(a => a.connectionId === retrySync.id) ? <Button secondary title="Cancel setup" disabled={busy} onPress={() => void cancelSetup(retrySync.id!)}/> : null}
+    {retrySync?.id && !linked.some(a => a.connectionId === retrySync.id) ? <Button secondary title="Cancel linking" disabled={busy} onPress={() => confirmCancelBankLink(()=>void cancelSetup(retrySync.id!))}/> : null}
     <Button secondary title={busy ? "Continue using Clover" : "Done"} onPress={()=>{setProgressOpen(false);onDismiss?.();}}/></>}
   </View>;
   if (mode === "sync" && accountId && connectionsError) return <View style={{ gap: 12 }}><Body>{connectionsError}</Body><Button title="Retry bank connection status" secondary onPress={() => setRevision(v => v + 1)} /></View>;
@@ -161,7 +163,7 @@ export function FinverseConnect({ onSynced, callbackConnection, mode = "connect"
   const syncAccounts=linked.filter(a=>!accountId||a.id===accountId);
   return <View style={{gap:16}}>
 
-    {pending.map(c=><Button key={c.id} secondary title={`Finish linking ${c.name} · Select accounts`} disabled={busy||!allowed} onPress={()=>void sync(c.id)}/>)}
+    {pending.map(c=><FinversePendingChip key={c.id} connection={c} busy={busy} resumeDisabled={!allowed} onResume={()=>void sync(c.id)} onCancel={()=>void cancelSetup(c.id)}/>)}
     {mode === "connect" ? <>{test ? <Notice>Test mode · Only test banks are shown.</Notice> : null}{banksLoaded&&allowed ? <FinverseBankPicker banks={banks} busy={busy} onConnect={bank=>void connect(bank)}/> : <Notice>{bankMessage}</Notice>}</> : null}
     {syncAccounts.length ? <Heading>Connected accounts</Heading> : null}
     {syncAccounts.length ? syncAccounts.map(account=><View key={account.id} style={{gap:8,padding:12,borderWidth:1,borderColor:colors.line,borderRadius:16}}>
