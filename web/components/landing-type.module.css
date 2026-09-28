@@ -3,7 +3,7 @@
   --landing-body: 16px;
   --landing-action: 13px;
   --landing-table: 14px;
-  --landing-phone-width: calc((100svh - 108px) * .4793333333);
+  --landing-phone-width: min(23vw, calc((100svh - 108px) * .4793333333));
 }
 /* One typography contract overrides the older scene-specific marketing rules. */
 .standard [data-landing-copy] h1 {
@@ -43,4 +43,7 @@
 }
 @media (max-width:900px) and (max-height:680px) {
   .standard { --landing-title:22px; --landing-body:12px; --landing-action:11px; --landing-table:11px; }
+}
+@media(min-width:901px) and (max-aspect-ratio:4/3) {
+ .standard{--landing-phone-width:min(18vw,calc((100svh - 108px) * .4793333333))}
 }

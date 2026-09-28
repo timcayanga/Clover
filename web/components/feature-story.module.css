@@ -99,3 +99,13 @@
  .journey:not([data-pricing=true]) .content { width: 31vw; max-width: 445px; }
  .journey .content h1 em { display: block; }
 }
+
+@media(min-width:901px) {
+ .journey:not([data-pricing=true]) .content{width:27vw}
+}
+@media(min-width:901px) and (max-aspect-ratio:4/3) {
+ .journey:not([data-pricing=true]) .content{top:120px;bottom:auto;translate:0 0;width:25vw}
+}
+@media(min-width:901px) and (max-aspect-ratio:4/3) {
+ .support{top:96px;bottom:auto}
+}

@@ -39,3 +39,10 @@ export const mobileStoryPhotos: Record<string, string> = {
   "pro-mobile-3": "/assets/marketing-photos/e77990430219ee747af0fd41132d9229c496255f.webp",
   "pro-mobile-4": "/assets/marketing-photos/fc7d3ebf468e48f21ab2b289ea20a9a1d8493358.webp"
 };
+
+// Keep people above the reading area; use the same composition throughout each feature story.
+for (const [prefix, asset] of Object.entries({"understand-your-money":"feature-understand", "manage-money-together":"feature-together"})) {
+  for (let index = 0; index < 5; index++) mobileStoryPhotos[`${prefix}-mobile-${index}`] = `/assets/marketing-photos-v4/${asset}-mobile.webp`;
+}
+for (const prefix of ["manage-money", "plan-ahead", "security", "pro"]) mobileStoryPhotos[`${prefix}-mobile-4`] = mobileStoryPhotos[`${prefix}-mobile-0`];
+for (const [index, asset] of Object.entries({3:"understand",4:"adviser",5:"together",6:"together"})) mobileStoryPhotos[`landing-mobile-${index}`] = `/assets/marketing-photos-v4/${asset}-mobile.webp`;

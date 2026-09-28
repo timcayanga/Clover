@@ -712,3 +712,14 @@
 .heroStatement:nth-child(3){animation-delay:-4s}
 @keyframes source-document-float{0%,100%{translate:0 0}50%{translate:0 -6px}}
 @media(prefers-reduced-motion:reduce){.heroStatement{animation:none}}
+
+/* Keep copy in its own column even on taller desktop windows. */
+@media(min-width:901px) {
+ .journey[data-chapter] .chapter:not(.comparisonChapter):not(.proChapter){left:6vw;top:50%;bottom:auto;translate:0 -50%;width:27vw}
+}
+@media(min-width:901px) and (max-aspect-ratio:4/3) {
+ .journey[data-chapter] .chapter:not(.comparisonChapter):not(.proChapter){top:120px;bottom:auto;translate:0 0;width:25vw}
+}
+@media(min-width:901px) and (max-aspect-ratio:4/3) {
+ .iphoneFrame{top:16px;bottom:auto}
+}
