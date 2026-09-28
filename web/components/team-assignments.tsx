@@ -7,6 +7,7 @@ import { AssignmentTransfer } from "./team-assignment-transfer";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import {
+  formatAssignmentTime,
   activeRunStatuses,
   assignmentViewSchema,
   assignmentSummarySchema,
@@ -118,7 +119,7 @@ export function TeamAssignmentBriefs({
                   </Link>
                 </p>
               ) : null}
-              <small>{new Date(brief.at).toLocaleString()}</small>
+              <small>{formatAssignmentTime(brief.at)}</small>
               <div className="assignment-actions">
                 {latest ? (
                   <Link
@@ -439,9 +440,9 @@ export function TeamAssignmentWorkspace({
       <details className="studio-brief">
         <summary>Activity and usage</summary>
         <p>
-          {run.model} · {run.inputTokens.toLocaleString()} input tokens ·{" "}
-          {run.outputTokens.toLocaleString()} output tokens · {run.searchCalls}{" "}
-          searches
+          {run.model} · {run.inputTokens.toLocaleString("en-US")} input tokens ·{" "}
+          {run.outputTokens.toLocaleString("en-US")} output tokens ·{" "}
+          {run.searchCalls} searches
           {run.estimatedCostUsd !== null
             ? ` · estimated $${run.estimatedCostUsd.toFixed(4)} USD`
             : ""}
@@ -452,7 +453,7 @@ export function TeamAssignmentWorkspace({
         </p>
         {run.events.map((event, i) => (
           <p key={i}>
-            <small>{new Date(event.createdAt).toLocaleString()}</small>
+            <small>{formatAssignmentTime(event.createdAt)}</small>
             <br />
             {event.note}
           </p>

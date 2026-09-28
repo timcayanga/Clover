@@ -2,6 +2,7 @@
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import {
+  formatAssignmentTime,
   activeRunStatuses,
   assignmentSummarySchema,
   type AssignmentSummary,
@@ -169,7 +170,7 @@ export function AssignmentInbox({
                   {run.brief.slice(0, 200)}
                   {run.brief.length > 200 ? "…" : ""}
                 </p>
-                <small>{new Date(run.createdAt).toLocaleString()}</small>
+                <small>{formatAssignmentTime(run.createdAt)}</small>
               </div>
               <span className="studio-pill">
                 {run.status === "completed"

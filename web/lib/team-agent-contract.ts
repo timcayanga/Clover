@@ -86,3 +86,14 @@ export const assignmentTransferSchema = z.discriminatedUnion("kind", [
   }),
 ]);
 export type AssignmentTransfer = z.infer<typeof assignmentTransferSchema>;
+
+// A deterministic display avoids server/browser timezone hydration mismatches.
+export function formatAssignmentTime(value: string) {
+  const time = new Date(value).getTime();
+  return Number.isFinite(time)
+    ? new Date(time + 8 * 60 * 60 * 1000)
+        .toISOString()
+        .slice(0, 16)
+        .replace("T", " ") + " PHT"
+    : "Unknown time";
+}

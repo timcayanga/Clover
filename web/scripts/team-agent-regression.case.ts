@@ -1,3 +1,4 @@
+import { formatAssignmentTime } from "../lib/team-agent-contract";
 import { loadTeamStudio, saveTeamStudio } from "../lib/team-studio-store";
 import { canonicalStudioState } from "../lib/team-studio-server-state";
 import { TeamAssignmentResult } from "../components/team-assignment-result";
@@ -98,6 +99,14 @@ async function complete(id: string) {
   return refreshAssignment(owner, id);
 }
 async function main() {
+  const savedTimezone = process.env.TZ;
+  process.env.TZ = "UTC";
+  const utcDisplay = formatAssignmentTime("2026-09-28T13:27:04.000Z");
+  process.env.TZ = "Asia/Manila";
+  assert.equal(formatAssignmentTime("2026-09-28T13:27:04.000Z"), utcDisplay);
+  assert.equal(utcDisplay, "2026-09-28 21:27 PHT");
+  if (savedTimezone === undefined) delete process.env.TZ;
+  else process.env.TZ = savedTimezone;
   process.env.OPENAI_API_KEY = "disposable-test-value";
   process.env.CRON_SECRET = "disposable-cron-test";
   assert.equal((await GET(req())).status, 401);
