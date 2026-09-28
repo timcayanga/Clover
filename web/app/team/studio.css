@@ -1324,3 +1324,65 @@
     transition: none;
   }
 }
+
+.assignment-workspace {
+  display: block;
+  width: min(960px, 100%);
+  margin: 0 auto;
+  padding: 32px 24px 80px;
+  min-height: 100vh;
+}
+.assignment-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 28px;
+  flex-wrap: wrap;
+}
+.assignment-heading h1 {
+  margin: 8px 0;
+  font-size: 36px;
+}
+.assignment-workspace .studio-brief {
+  padding: 24px;
+  margin: 20px 0;
+}
+.assignment-workspace h2 {
+  font-size: 20px;
+  margin: 0 0 16px;
+}
+.assignment-workspace p {
+  line-height: 1.7;
+  overflow-wrap: anywhere;
+}
+.assignment-workspace a {
+  color: #34654a;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.assignment-result {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  line-height: 1.8;
+  font-size: 15px;
+}
+.assignment-actions {
+  margin-top: 16px;
+}
+.assignment-workspace summary {
+  cursor: pointer;
+  font-weight: 600;
+}
+.assignment-workspace .studio-form {
+  display: grid;
+  gap: 16px;
+}
+@media (max-width: 600px) {
+  .assignment-workspace {
+    padding: 24px 16px 64px;
+  }
+  .assignment-workspace .studio-brief {
+    padding: 18px;
+  }
+}

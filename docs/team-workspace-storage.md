@@ -48,7 +48,7 @@ A production build-time check confirmed the owner Clerk account exists and is ve
 
 Hosted owner sign-in, Team state saving, private image upload, reload persistence, and the Admin dashboard were verified on `team.clover.ph`. One draft titled “Launch verification · unpublished” remains as a labeled test record; it is not approved or published. `CLOVER_INTERNAL_ORIGIN=https://team.clover.ph` is being enabled for the final release to redirect the old customer-domain Admin entry point.
 
-Live agent execution, social publishing, and image/video generation remain separate future integrations. Saving a brief does not start an agent run.
+Saved briefs now have explicit agent execution; see `docs/team-agent-execution.md`. Saving a brief alone still does not start work. Social publishing and image/video generation remain separate future integrations.
 
 ## Verification
 

@@ -5,7 +5,9 @@ import { spawnSync } from "node:child_process";
 // Use the bundler already supplied by our declared tsx dependency, including
 // installations that do not hoist transitive packages into node_modules.
 const runnerRequire = createRequire(__filename);
-const { build } = createRequire(runnerRequire.resolve("tsx/package.json"))("esbuild");
+const { build } = createRequire(runnerRequire.resolve("tsx/package.json"))(
+  "esbuild",
+);
 async function main() {
   if (
     !process.env.DATABASE_URL?.startsWith(
@@ -17,15 +19,21 @@ async function main() {
   const directory = path.join(web, ".cache", "team-api-tests");
   await mkdir(directory, { recursive: true });
   const media = process.argv.includes("--media");
-  const outfile = path.join(directory, media ? "media.cjs" : "run.cjs");
+  const agents = process.argv.includes("--agents");
+  const outfile = path.join(
+    directory,
+    agents ? "agents.cjs" : media ? "media.cjs" : "run.cjs",
+  );
   try {
     await build({
       entryPoints: [
         path.join(
           __dirname,
-          media
-            ? "team-media-regression.case.ts"
-            : "team-api-regression.case.ts",
+          agents
+            ? "team-agent-regression.case.ts"
+            : media
+              ? "team-media-regression.case.ts"
+              : "team-api-regression.case.ts",
         ),
       ],
       outfile,

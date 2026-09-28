@@ -1,0 +1,334 @@
+import assert from "node:assert/strict";
+import { randomUUID } from "node:crypto";
+import { fixture } from "./fixtures/team-clerk";
+import { GET, POST } from "../app/api/team/assignments/route";
+import {
+  GET as getRun,
+  POST as updateRun,
+} from "../app/api/team/assignments/[runId]/route";
+import { GET as cron } from "../app/api/cron/team-assignments/route";
+import { initialStudio } from "../lib/team-studio";
+import { prisma } from "../lib/prisma";
+import {
+  startAssignment,
+  refreshAssignment,
+  approveAssignment,
+  cancelAssignment,
+  syncPendingAssignments,
+} from "../lib/team-agent-store";
+import {
+  createAgentResponse,
+  extractAgentResult,
+  defaultTeamModel,
+} from "../lib/team-agent-provider";
+
+const owner = `agent-test-${randomUUID()}`;
+const ids = Array.from({ length: 30 }, () => randomUUID());
+const responses = new Map<string, any>();
+const captured: any[] = [];
+let failure: "network" | "reject" | null = null;
+let creates = 0;
+const originalFetch = global.fetch;
+global.fetch = async (input, init) => {
+  const url = String(input);
+  assert(url.startsWith("https://api.openai.com/v1/responses"));
+  if (url.endsWith("/responses") && init?.method === "POST") {
+    creates++;
+    captured.push(JSON.parse(String(init.body)));
+    if (failure === "network") throw new Error("network interrupted");
+    if (failure === "reject")
+      return new Response("private provider diagnostics", { status: 400 });
+    const id = `resp_${randomUUID()}`;
+    const response = { id, status: "queued", output: [] };
+    responses.set(id, response);
+    return Response.json(response);
+  }
+  const id = url.split("/").at(url.endsWith("/cancel") ? -2 : -1)!;
+  const response = responses.get(id);
+  if (!response) return new Response("not found", { status: 404 });
+  if (url.endsWith("/cancel")) response.status = "cancelled";
+  return Response.json(response);
+};
+const req = (body?: unknown, origin = "https://team.clover.ph") =>
+  new Request(
+    "https://team.clover.ph/api/team/assignments",
+    body
+      ? {
+          method: "POST",
+          headers: { origin, "Content-Type": "application/json" },
+          body: JSON.stringify(body),
+        }
+      : undefined,
+  );
+const context = (id: string) => ({ params: Promise.resolve({ runId: id }) });
+const start = (briefId: string, rest = {}) =>
+  startAssignment(owner, { briefId, action: "start", feedback: "", ...rest });
+async function due(id: string) {
+  await prisma.teamAgentRun.update({
+    where: { id },
+    data: { nextPollAt: new Date(0) },
+  });
+}
+async function complete(id: string) {
+  const row = await prisma.teamAgentRun.findUniqueOrThrow({ where: { id } });
+  responses.set(row.responseId!, {
+    id: row.responseId,
+    status: "completed",
+    output: [
+      {
+        type: "message",
+        content: [
+          {
+            type: "output_text",
+            text: "Unpublished proposal. Confidence: medium.",
+          },
+        ],
+      },
+    ],
+    usage: { input_tokens: 100, output_tokens: 200 },
+  });
+  await due(id);
+  return refreshAssignment(owner, id);
+}
+async function main() {
+  process.env.OPENAI_API_KEY = "disposable-test-value";
+  process.env.CRON_SECRET = "disposable-cron-test";
+  assert.equal((await GET(req())).status, 401);
+  assert.equal((await POST(req({ briefId: ids[0] }))).status, 401);
+  assert.equal((await getRun(req(), context(randomUUID()))).status, 401);
+  fixture.user = {
+    id: owner,
+    emailAddresses: [
+      {
+        emailAddress: "hello@clover.ph",
+        verification: { status: "unverified" },
+      },
+    ],
+  };
+  assert.equal((await GET(req())).status, 403);
+  fixture.user.emailAddresses[0].verification.status = "verified";
+  assert.equal(
+    (await POST(req({ briefId: ids[0] }, "https://evil.test"))).status,
+    403,
+  );
+  assert.equal(
+    (await POST(req({ briefId: ids[0], feedback: "x".repeat(11000) }))).status,
+    413,
+  );
+  assert.equal((await cron(req())).status, 401);
+  const state = {
+    ...initialStudio(),
+    drafts: [],
+    briefs: ids.map((id) => ({
+      id,
+      agent: "lead",
+      text: `Synthetic brief ${id}`,
+      at: new Date().toISOString(),
+    })),
+  };
+  await prisma.teamStudioState.create({
+    data: { ownerId: owner, payload: state, revision: 1 },
+  });
+  const concurrent = await Promise.all(
+    Array.from({ length: 5 }, () => start(ids[0])),
+  );
+  assert.equal(new Set(concurrent.map((r) => r.id)).size, 1);
+  assert.equal(creates, 1);
+  const first = concurrent[0];
+  assert.equal(captured[0].background, true);
+  assert.equal(captured[0].store, true);
+  assert.equal(captured[0].tools, undefined);
+  assert.equal(
+    JSON.parse(captured[0].input).instructions,
+    state.instructions.lead,
+  );
+  const got = await getRun(req(), context(first.id));
+  assert.equal(got.headers.get("cache-control"), "private, no-store");
+  fixture.user.id = "other-owner";
+  assert.equal((await getRun(req(), context(first.id))).status, 404);
+  fixture.user.id = owner;
+  const completed = await complete(first.id);
+  assert.equal(completed.status, "completed");
+  assert.equal(completed.reviewStatus, "pending");
+  assert(completed.estimatedCostUsd! > 0);
+  assert.equal(
+    (await approveAssignment(owner, first.id)).reviewStatus,
+    "approved",
+  );
+  const revision = await start(ids[0], {
+    parentId: first.id,
+    action: "revise",
+    feedback: "Make it shorter",
+  });
+  assert.equal(creates, 2);
+  assert.equal(revision.feedback, "Make it shorter");
+  assert.equal(
+    captured[1] && JSON.parse(captured[1].input).previousResult,
+    completed.result,
+  );
+  assert.equal(
+    (await getRun(req(), context(first.id)).then((r) => r.json())).reviewStatus,
+    "changes_requested",
+  );
+  await assert.rejects(
+    approveAssignment(owner, first.id),
+    /INVALID_ASSIGNMENT/,
+  );
+  const duplicateRevision = await start(ids[0], {
+    parentId: first.id,
+    action: "revise",
+    feedback: "A concurrent different edit",
+  });
+  assert.equal(duplicateRevision.id, revision.id);
+  assert.equal(creates, 2);
+  assert.equal((await cancelAssignment(owner, revision.id)).status, "canceled");
+  assert.equal((await complete(revision.id)).status, "canceled"); // late provider completion cannot replace a terminal state
+  const retry = await start(ids[0], { parentId: revision.id, action: "retry" });
+  assert.equal(creates, 3);
+  assert.equal(retry.feedback, "Make it shorter");
+  assert.equal(JSON.parse(captured[2].input).previousResult, completed.result);
+  await due(retry.id);
+  await complete(retry.id);
+  const history = await GET(
+    new Request(
+      `https://team.clover.ph/api/team/assignments?briefId=${ids[0]}`,
+    ),
+  ).then((r) => r.json());
+  assert.equal(history.runs.length, 3);
+  const summaries = await GET(req()).then((r) => r.json());
+  assert.equal(summaries.runs.length, 1);
+  assert.equal(summaries.runs[0].id, retry.id);
+  failure = "network";
+  const ambiguous = await start(ids[1]);
+  assert.equal(ambiguous.status, "failed");
+  assert(ambiguous.error?.includes("may have incurred"));
+  const before = creates;
+  await start(ids[1]);
+  await refreshAssignment(owner, ambiguous.id);
+  assert.equal(creates, before);
+  failure = "reject";
+  const rejected = await start(ids[2]);
+  assert.equal(rejected.status, "failed");
+  assert(!JSON.stringify(rejected).includes("private provider"));
+  failure = null;
+  const busy = await Promise.all(
+    ids.slice(3, 7).map((id) => start(id).catch((e) => e.message)),
+  );
+  assert.equal(busy.filter((r) => r === "ASSIGNMENT_LIMIT").length, 1);
+  for (const run of busy)
+    if (typeof run !== "string") {
+      await complete(run.id);
+    }
+  // A run left without a provider ID expires safely and is never automatically resubmitted.
+  const stale = await prisma.teamAgentRun.create({
+    data: {
+      id: randomUUID(),
+      ownerId: owner,
+      briefId: ids[7],
+      agent: "lead",
+      triggerKey: randomUUID(),
+      model: defaultTeamModel,
+      prompt: {
+        brief: "test",
+        instructions: "test",
+        role: "lead",
+        feedback: "",
+        previousResult: "",
+      },
+      createdAt: new Date(Date.now() - 180000),
+    },
+  });
+  const beforeSync = creates;
+  await syncPendingAssignments();
+  assert.equal(
+    (await prisma.teamAgentRun.findUniqueOrThrow({ where: { id: stale.id } }))
+      .status,
+    "failed",
+  );
+  assert.equal(creates, beforeSync);
+  // Daily cap includes terminal runs; denied requests never contact the provider.
+  const count = await prisma.teamAgentRun.count({ where: { ownerId: owner } });
+  for (let i = count; i < 20; i++)
+    await prisma.teamAgentRun.create({
+      data: {
+        id: randomUUID(),
+        ownerId: owner,
+        briefId: ids[8],
+        agent: "lead",
+        triggerKey: randomUUID(),
+        model: defaultTeamModel,
+        status: "failed",
+        prompt: {
+          brief: "test",
+          instructions: "test",
+          role: "lead",
+          feedback: "",
+          previousResult: "",
+        },
+      },
+    });
+  await assert.rejects(start(ids[9]), /ASSIGNMENT_LIMIT/);
+  assert.equal(creates, beforeSync);
+  await createAgentResponse(defaultTeamModel, "researcher", {
+    brief: "Research public posting rules",
+    instructions: "Cite sources",
+    role: "Community researcher",
+    feedback: "",
+    previousResult: "",
+  });
+  assert.deepEqual(captured.at(-1).tools, [
+    { type: "web_search", search_context_size: "low" },
+  ]);
+  const result = extractAgentResult(
+    {
+      id: "resp_fixture",
+      status: "completed",
+      output: [
+        {
+          type: "message",
+          content: [
+            {
+              type: "output_text",
+              text: "Source",
+              annotations: [
+                {
+                  type: "url_citation",
+                  url: "javascript:alert(1)",
+                  start_index: 0,
+                  end_index: 6,
+                },
+                {
+                  type: "url_citation",
+                  url: "https://example.com",
+                  title: "Source",
+                  start_index: 0,
+                  end_index: 6,
+                },
+              ],
+            },
+          ],
+        },
+      ],
+    },
+    defaultTeamModel,
+  );
+  assert.equal(result.sources.length, 1);
+  const roles = await prisma.$queryRaw<
+    { relname: string; relrowsecurity: boolean }[]
+  >`SELECT relname,relrowsecurity FROM pg_class WHERE relname IN ('TeamAgentRun','TeamAgentEvent')`;
+  assert(roles.every((r) => r.relrowsecurity));
+  console.log(
+    "PASS: owner-only APIs, origins, payload limits, duplicate/concurrent starts, prompt snapshots, saved results, approvals, immutable revisions, cancellation, ambiguous failure without paid retries, concurrency/daily caps, background recovery, citations, researcher tools, and RLS. Real PostgreSQL; Clerk and OpenAI simulated.",
+  );
+}
+main()
+  .catch((e) => {
+    console.error(e);
+    process.exitCode = 1;
+  })
+  .finally(async () => {
+    global.fetch = originalFetch;
+    await prisma.teamAgentRun.deleteMany({ where: { ownerId: owner } });
+    await prisma.teamStudioState.deleteMany({ where: { ownerId: owner } });
+    await prisma.$disconnect();
+  });
