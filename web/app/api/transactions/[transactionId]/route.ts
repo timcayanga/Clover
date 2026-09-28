@@ -1,3 +1,4 @@
+import { getTransactionReviewReason } from "@/lib/transaction-review-reasons";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { isLocalDevHost, requireAuth } from "@/lib/auth";
@@ -139,8 +140,26 @@ export async function GET(_request: Request, { params }: { params: Promise<{ tra
       }),
     ]);
 
+    // The detail endpoint must retain warnings that were discovered by list
+    // duplicate matching, not only confidence scores recorded by the parser.
+    let duplicateConfidence = transaction.duplicateConfidence;
+    if (!["confirmed", "edited", "rejected", "duplicate_skipped"].includes(transaction.reviewStatus ?? "")) {
+      const day = new Date(transaction.date.toISOString().slice(0, 10) + "T00:00:00Z");
+      const peers = await prisma.transaction.findMany({
+        where: { workspaceId: transaction.workspaceId, deletedAt: null,
+          id: { not: transaction.id }, amount: transaction.amount,
+          date: { gte: day, lt: new Date(day.getTime() + 86400000) } },
+        select: { merchantRaw: true, merchantClean: true },
+      });
+      const merchant = (transaction.merchantClean ?? transaction.merchantRaw).trim().toLowerCase();
+      if (peers.some(peer => (peer.merchantClean ?? peer.merchantRaw).trim().toLowerCase() === merchant)) duplicateConfidence = 70;
+    }
+    const warningReason = getTransactionReviewReason({ ...transaction,
+      categoryName: transaction.category?.name, duplicateConfidence });
+
     return NextResponse.json({
       transaction: {
+        warningReason,
         id: transaction.id,
         createdAt: transaction.createdAt.toISOString(),
         updatedAt: transaction.updatedAt.toISOString(),
@@ -211,13 +230,14 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ tr
           where: { id: resolvedCategoryId },
         })
       : null;
-    const resolvedType = coerceTransactionTypeFromCategoryName(
+    const changesClassification = payload.categoryId !== undefined || payload.type !== undefined || payload.isTransfer !== undefined;
+    const resolvedType = changesClassification ? coerceTransactionTypeFromCategoryName(
       resolvedCategory?.name ?? null,
       payload.type ?? transaction.type,
       payload.amount ?? transaction.amount,
       payload.isTransfer ?? transaction.isTransfer
-    );
-    const resolvedIsTransfer = payload.isTransfer ?? resolvedType === "transfer";
+    ) : transaction.type;
+    const resolvedIsTransfer = changesClassification ? (payload.isTransfer ?? resolvedType === "transfer") : transaction.isTransfer;
 
     const editedFields =
       payload.categoryId !== undefined ||

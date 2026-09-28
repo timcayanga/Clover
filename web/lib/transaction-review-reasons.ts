@@ -1,4 +1,4 @@
-type TransactionReviewReasonInput = {
+export type TransactionReviewReasonInput = {
   warningReason?: string | null;
   reviewStatus?: string | null;
   isExcluded?: boolean;
@@ -117,3 +117,7 @@ export const getTransactionReviewReasons = (transaction: TransactionReviewReason
 
 export const getTransactionReviewReason = (transaction: TransactionReviewReasonInput) =>
   getTransactionReviewReasons(transaction)[0] ?? null;
+
+// Keep list membership, badges, and counts on the same definition of review.
+export const transactionNeedsReview = (transaction: TransactionReviewReasonInput) =>
+  getTransactionReviewReasons(transaction).length > 0;

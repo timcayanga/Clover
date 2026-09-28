@@ -1,8 +1,8 @@
 "use client";
+import { TransactionReviewControls } from "@/components/transaction-review-controls";
 import { usePendingReceiptDetails } from "@/lib/use-pending-receipt-details";
 import { TransactionDetailLabel } from "@/components/transaction-detail-label";
 
-import { getTransactionReviewReasons } from "@/lib/transaction-review-reasons";
 import { getRecordedTransactionConfidence } from "@/lib/transaction-confidence";
 
 import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
@@ -57,6 +57,7 @@ type Transaction = {
   rawPayload?: unknown;
   normalizedPayload?: unknown;
   reviewStatus?: string | null;
+  warningReason?: string | null;
   parserConfidence?: number | null;
   categoryConfidence?: number | null;
   accountMatchConfidence?: number | null;
@@ -296,6 +297,26 @@ export default function TransactionDetailPage() {
     }
   };
 
+  const updateReview = async (patch: { isExcluded?: boolean; reviewStatus?: "confirmed" }) => {
+    if (!transaction || saving || editing) return;
+    setSaving(true);
+    setMessage("");
+    try {
+      const response = await fetch(`/api/transactions/${encodeURIComponent(transaction.id)}`, {
+        method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(patch),
+      });
+      const payload = await response.json() as DetailPayload;
+      if (!response.ok || !payload.transaction) throw new Error(payload.error || "Unable to update transaction.");
+      const updated = payload.transaction;
+      clearJsonRequestCache(`transactions:list:${updated.workspaceId}:`);
+      window.dispatchEvent(new CustomEvent("clover:transactions-changed", { detail: { workspaceId: updated.workspaceId } }));
+      setTransaction(updated);
+      setDraft(current => current ? { ...current, isExcluded: updated.isExcluded } : current);
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Unable to update transaction.");
+    } finally { setSaving(false); }
+  };
+
   const save = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (!transaction || !draft || saving) {
@@ -522,12 +543,15 @@ export default function TransactionDetailPage() {
               </details>
             ) : null}
 
-            {!editing && getTransactionReviewReasons(transaction).length > 0 ? (
-              <section aria-label="Review warnings">
-                <strong>Review warning</strong>
-                <ul>{getTransactionReviewReasons(transaction).map((reason) => <li key={reason}>{reason}</li>)}</ul>
-              </section>
-            ) : null}
+            <TransactionReviewControls
+              transaction={{ ...transaction, isExcluded: editing ? draft.isExcluded : transaction.isExcluded }}
+              busy={saving} editing={editing}
+              onToggle={() => editing
+                ? setDraft({ ...draft, isExcluded: !draft.isExcluded })
+                : void updateReview({ isExcluded: !transaction.isExcluded })}
+              onReview={() => void updateReview({ reviewStatus: "confirmed", isExcluded: transaction.isExcluded })}
+              onEdit={() => beginEditing("category")}
+            />
 
             {!editing ? <TransactionCrossFeatureActions
               workspaceId={transaction.workspaceId}
@@ -559,13 +583,6 @@ export default function TransactionDetailPage() {
               </div>
             ) : null}
 
-            {editing ? (
-              <label>
-                <input type="checkbox" checked={draft.isExcluded}
-                  onChange={(event) => setDraft({ ...draft, isExcluded: event.target.checked })} />
-                Exclude from totals
-              </label>
-            ) : transaction.isExcluded ? <p>Excluded from totals</p> : null}
 
             {message ? <p className="transaction-detail-page__message" role="status">{message}</p> : null}
             <footer className={`transaction-detail-page__actions ${editing ? "is-editing" : confirmingDelete ? "is-confirming-delete" : ""}`}>

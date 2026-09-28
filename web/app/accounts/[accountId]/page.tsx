@@ -5073,10 +5073,9 @@ function AccountDetailPageContent() {
                       type="button"
                       onClick={() => {
                         void updateTransaction(selectedTransaction.id, {
-                          isExcluded: false,
-                          isTransfer: false,
+                          isExcluded: selectedTransaction.isExcluded,
                           reviewStatus: "confirmed",
-                        }).then(() => setMessage("Transaction kept."));
+                        }).then(() => setMessage(""));
                       }}
                     >
                       Keep

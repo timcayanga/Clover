@@ -52,9 +52,13 @@ const pruneResolvedJsonRequestCache = (now = Date.now()) => {
 export const clearJsonRequestCache = (keyPrefix?: string) => {
   if (!keyPrefix) {
     resolvedJsonRequests.clear();
+    inFlightJsonRequests.clear();
     return;
   }
 
+  for (const key of inFlightJsonRequests.keys()) {
+    if (key.startsWith(keyPrefix)) inFlightJsonRequests.delete(key);
+  }
   for (const key of resolvedJsonRequests.keys()) {
     if (key.startsWith(keyPrefix)) resolvedJsonRequests.delete(key);
   }
@@ -101,7 +105,8 @@ export const fetchJsonOnce = async <T>(params: FetchJsonOnceParams): Promise<Fet
     return existing as Promise<FetchJsonOnceResult<T>>;
   }
 
-  const promise = (async (): Promise<FetchJsonOnceResult<T>> => {
+  let promise!: Promise<FetchJsonOnceResult<T>>;
+  promise = (async (): Promise<FetchJsonOnceResult<T>> => {
     pushBreadcrumb({
       route: params.route,
       key: params.key,
@@ -140,7 +145,7 @@ export const fetchJsonOnce = async <T>(params: FetchJsonOnceParams): Promise<Fet
         status: response.status,
         json,
       };
-      if (response.ok && params.cacheTtlMs && params.cacheTtlMs > 0) {
+      if (response.ok && params.cacheTtlMs && params.cacheTtlMs > 0 && inFlightJsonRequests.get(params.key) === promise) {
         pruneResolvedJsonRequestCache();
         resolvedJsonRequests.set(params.key, {
           expiresAt: Date.now() + params.cacheTtlMs,
@@ -163,7 +168,7 @@ export const fetchJsonOnce = async <T>(params: FetchJsonOnceParams): Promise<Fet
       if (timeout) {
         clearTimeout(timeout);
       }
-      inFlightJsonRequests.delete(params.key);
+      if (inFlightJsonRequests.get(params.key) === promise) inFlightJsonRequests.delete(params.key);
     }
   })();
 

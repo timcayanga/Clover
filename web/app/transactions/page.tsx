@@ -1,4 +1,5 @@
 "use client";
+import { TransactionReviewControls } from "@/components/transaction-review-controls";
 import { mostUsedTransactionAccount } from "../../../shared/default-transaction-account";
 import { usePullRefresh } from "@/lib/pull-refresh";
 import { MobileSheetHandle } from "@/components/mobile-sheet-handle";
@@ -92,7 +93,7 @@ import { formatAccountOptionLabel } from "@/lib/account-option-label";
 import { getAccountBrand } from "@/lib/account-brand";
 import { guessCategoryName, inferAccountTypeFromStatement } from "@/lib/financial-classification";
 import { summarizeMerchantText } from "@/lib/merchant-labels";
-import { getTransactionReviewReason, getTransactionReviewReasons } from "@/lib/transaction-review-reasons";
+import { getTransactionReviewReason, getTransactionReviewReasons, transactionNeedsReview } from "@/lib/transaction-review-reasons";
 import { buildTransactionQuerySearchParams } from "@/lib/transaction-query";
 import {
   getKnownMobileTransactionTotal,
@@ -1282,7 +1283,7 @@ const matchesTransactionFilters = (
   );
 
   if (filters.reviewFilter === "confirmed" && transaction.reviewStatus !== "confirmed") return false;
-  if (filters.reviewFilter === "pending" && ["confirmed", "rejected", "duplicate_skipped"].includes(transaction.reviewStatus ?? "")) return false;
+  if (filters.reviewFilter === "pending" && !transactionNeedsReview(transaction)) return false;
   if (filters.sourceFilter === "manual" && transaction.importFileId) return false;
   if (filters.sourceFilter === "upload" && !transaction.importFileId) return false;
   const recordedConfidence = Number(transaction.parserConfidence ?? 0);
@@ -5020,7 +5021,7 @@ function TransactionsPageContent() {
     const startIndex = visibleTransactions.findIndex((transaction) => transaction.id === transactionId);
     const start = startIndex >= 0 ? startIndex + 1 : 0;
     const ordered = [...visibleTransactions.slice(start), ...visibleTransactions.slice(0, start)];
-    return ordered.find((transaction) => isReviewableTransaction(transaction)) ?? null;
+    return ordered.find((transaction) => transaction.id !== transactionId && isReviewableTransaction(transaction)) ?? null;
   };
 
   const focusTransactionRow = (transactionId: string | null | undefined) => {
@@ -5092,7 +5093,7 @@ function TransactionsPageContent() {
       const refreshed = payload?.transaction as Transaction | undefined;
       if (!refreshed?.id || requestId !== transactionDetailRefreshRequestRef.current) return;
       setTransactions((current) => current.map((entry) => (entry.id === refreshed.id ? refreshed : entry)));
-      setSelectedTransaction((current) => (current?.id === refreshed.id ? refreshed : current));
+      setSelectedTransaction((current) => (current?.id === refreshed.id ? { ...refreshed, warningReason: refreshed.warningReason ?? current.warningReason } : current));
       setDetailDraft((current) => {
         if (!current) return current;
         return mergeRefreshedTransactionDetailDraft(current, baseline, createDetailDraft(refreshed, {
@@ -5162,40 +5163,24 @@ function TransactionsPageContent() {
     }
   };
 
-  const openTransactionReview = (transaction: Transaction, transactionIndex?: number | null) => {
-    const revealWarning = () => {
-      setActiveWarningTransactionId(transaction.id);
-      setTransactionDeleteConfirmOpen(false);
-      revealTransactionRow(transaction.id);
-
-      const warningReason = reviewReasonsFor(transaction).join(" · ");
-      if (warningReason) {
-        capturePostHogClientEventOnce(
-          "review_item_opened",
-          {
-            workspace_id: selectedWorkspaceId || null,
-            transaction_id: transaction.id,
-            review_reason: warningReason,
-            review_status: transaction.reviewStatus ?? null,
-          },
-          analyticsOnceKey("review_item_opened", `transaction:${transaction.id}`)
-        );
-      }
-    };
-
-    if (typeof transactionIndex === "number" && transactionIndex >= 0) {
-      setTransactionsPage(Math.max(1, Math.ceil((transactionIndex + 1) / Math.max(transactionsPageSize, 1))));
-    }
-
-    revealWarning();
+  const openTransactionReview = (transaction: Transaction, _transactionIndex?: number | null) => {
+    openTransactionDetail(transaction);
+    capturePostHogClientEventOnce("review_item_opened", {
+      workspace_id: selectedWorkspaceId || null,
+      transaction_id: transaction.id,
+      review_reason: reviewReasonsFor(transaction).join(" · "),
+      review_status: transaction.reviewStatus ?? null,
+    }, analyticsOnceKey("review_item_opened", `transaction:${transaction.id}`));
   };
 
-  const resolveTransactionWarning = (
+  const resolveTransactionWarning = async (
     transaction: Transaction,
     patch: Pick<Transaction, "isExcluded" | "isTransfer" | "reviewStatus">,
     successMessage: string,
     outcome: "accepted" | "rejected"
   ) => {
+    if (isSaving) return;
+    setIsSaving(true);
     const nextReviewTransaction = nextReviewTransactionAfter(transaction.id);
 
     capturePostHogClientEvent(
@@ -5226,25 +5211,27 @@ function TransactionsPageContent() {
       });
     }
 
+    transactionDetailRefreshRequestRef.current += 1;
     applyTransactionPatchLocally(transaction.id, patch);
     setMessage(successMessage);
 
-    void updateTransaction(
-      transaction.id,
-      {
+    try {
+      await updateTransaction(transaction.id, {
         isExcluded: patch.isExcluded,
-        isTransfer: patch.isTransfer,
         reviewStatus: patch.reviewStatus,
-      },
-      { recordHistory: false }
-    ).catch((error) => {
+      }, { recordHistory: false });
+    } catch (error) {
       applyTransactionPatchLocally(transaction.id, {
         isExcluded: transaction.isExcluded,
         isTransfer: transaction.isTransfer,
         reviewStatus: transaction.reviewStatus,
       });
+      refreshTransactionsSummary();
       setMessage(error instanceof Error ? error.message : "Unable to update transaction.");
-    });
+      return;
+    } finally {
+      setIsSaving(false);
+    }
 
     setActiveWarningTransactionId(null);
     if (nextReviewTransaction) {
@@ -6105,6 +6092,8 @@ function TransactionsPageContent() {
 
     const payload = await response.json();
     const updated = payload.transaction as Transaction;
+    clearJsonRequestCache(`transactions:list:${selectedWorkspaceId}:`);
+    transactionPrefetchRef.current.clear();
     clearAccountsWorkspaceCache(selectedWorkspaceId);
     setTransactions((current) => current.map((entry) => (entry.id === updated.id ? updated : entry)));
     setSelectedTransaction((current) => (current?.id === updated.id ? updated : current));
@@ -6132,6 +6121,20 @@ function TransactionsPageContent() {
       refreshTransactionsSummary();
     }
     return updated;
+  };
+
+  const setTransactionTotalsExcluded = async (transaction: Transaction, isExcluded: boolean) => {
+    if (isSaving) return;
+    setIsSaving(true);
+    setMessage("");
+    transactionDetailRefreshRequestRef.current += 1;
+    try {
+      await updateTransaction(transaction.id, { isExcluded });
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Unable to update totals.");
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   const suggestMerchantRenameForSimilarTransactions = (transaction: Transaction, nextMerchantClean: string) => {
@@ -6233,6 +6236,20 @@ function TransactionsPageContent() {
   };
 
   const applyTransactionPatchLocally = (transactionId: string, patch: Partial<Transaction>) => {
+    const before = transactionsRef.current.find(entry => entry.id === transactionId)
+      ?? (selectedTransaction?.id === transactionId ? selectedTransaction : null)
+      ?? (transactionsSummary.firstReviewTransaction?.id === transactionId ? transactionsSummary.firstReviewTransaction : null);
+    if (before) {
+      const after = { ...before, ...patch };
+      const delta = Number(isReviewableTransaction(after)) - Number(isReviewableTransaction(before));
+      setTransactionsSummary(current => ({
+        ...current,
+        review: Math.max(0, current.review + delta),
+        totalCount: reviewFilter === "pending" ? Math.max(0, current.totalCount + delta) : current.totalCount,
+        firstReviewTransaction: current.firstReviewTransaction?.id === transactionId
+          ? (isReviewableTransaction(after) ? after : null) : current.firstReviewTransaction,
+      }));
+    }
     setTransactions((current) =>
       current.map((entry) => (entry.id === transactionId ? { ...entry, ...patch } : entry))
     );
@@ -6363,6 +6380,7 @@ function TransactionsPageContent() {
     }
 
     transactionPrefetchRef.current.clear();
+    clearJsonRequestCache(`transactions:list:${selectedWorkspaceId}:`);
     void loadTransactionsPage(selectedWorkspaceId, {
       background: true,
       pageOverride: transactionsPage,
@@ -8096,9 +8114,9 @@ function TransactionsPageContent() {
                             className="warning-chip"
                             title={warningReason}
                             aria-label={warningReason}
-                            aria-expanded={activeWarningTransactionId === transaction.id}
+                            aria-haspopup="dialog"
                             onClick={() =>
-                              setActiveWarningTransactionId((current) => (current === transaction.id ? null : transaction.id))
+                              openTransactionReview(transaction)
                             }
                           >
                             <span className="warning-mark warning-mark--small" aria-hidden="true" />
@@ -8113,11 +8131,11 @@ function TransactionsPageContent() {
                                   resolveTransactionWarning(
                                     transaction,
                                     {
-                                      isExcluded: false,
-                                      isTransfer: false,
+                                      isExcluded: transaction.isExcluded,
+                                      isTransfer: transaction.isTransfer,
                                       reviewStatus: "confirmed",
                                     },
-                                    "Transaction kept.",
+                                    "",
                                     "accepted"
                                   )
                                 }
@@ -9121,54 +9139,23 @@ function TransactionsPageContent() {
                 </details>
               </div>
 
-            {detailEditing ? (
-              <label>
-                <input type="checkbox" checked={detailDraft?.isExcluded ?? false}
-                  onChange={(event) => setDetailDraft((current) => current ? { ...current, isExcluded: event.target.checked } : current)} />
-                Exclude from totals
-              </label>
-            ) : selectedTransaction.isExcluded ? <p>Excluded from totals</p> : null}
-
-            {selectedTransactionWarningReasonSummary ? (
-              <div className="detail-warning-box detail-warning-box--compact transaction-drawer-warning">
-                <div className="detail-warning-box__header">
-                  <span className="detail-warning-box__icon" aria-hidden="true">
-                    <span className="warning-mark warning-mark--small" aria-hidden="true" />
-                  </span>
-                  <strong>Review warning</strong>
-                  <span className="detail-warning-box__reason">{selectedTransactionWarningReasonSummary}</span>
-                </div>
-                <div className="detail-warning-actions detail-warning-actions--compact">
-                  <button
-                    className="button button-primary button-small"
-                    type="button"
-                    onClick={() => {
-                      resolveTransactionWarning(
-                        selectedTransaction,
-                        {
-                          isExcluded: false,
-                          isTransfer: false,
-                          reviewStatus: "confirmed",
-                        },
-                        "Transaction kept.",
-                        "accepted"
-                      );
-                    }}
-                  >
-                    Keep
-                  </button>
-                  <button
-                    className="button button-danger button-small detail-warning-delete"
-                    type="button"
-                    onClick={() => {
-                      setTransactionDeleteConfirmOpen(true);
-                    }}
-                  >
-                    Delete
-                  </button>
-                </div>
-              </div>
-            ) : null}
+            <TransactionReviewControls
+              transaction={{ ...selectedTransaction, isExcluded: detailDraft?.isExcluded ?? selectedTransaction.isExcluded }}
+              busy={isSaving} editing={detailEditing}
+              onToggle={() => {
+                if (detailEditing) {
+                  setDetailDraft(current => current ? { ...current, isExcluded: !current.isExcluded } : current);
+                } else {
+                  void setTransactionTotalsExcluded(selectedTransaction, !selectedTransaction.isExcluded);
+                }
+              }}
+              onReview={() => resolveTransactionWarning(selectedTransaction, {
+                isExcluded: selectedTransaction.isExcluded,
+                isTransfer: selectedTransaction.isTransfer,
+                reviewStatus: "confirmed",
+              }, "", "accepted")}
+              onEdit={() => beginDrawerEdit("Category")}
+            />
 
             {detailEditing ? (
             <details className="transaction-drawer-more">

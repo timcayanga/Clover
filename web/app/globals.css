@@ -66788,3 +66788,9 @@ input.transaction-inline-edit[aria-invalid="true"] { box-shadow: inset 0 -1px va
     padding-bottom: 96px;
   }
 }
+
+/* Totals membership and review actions remain reachable in every detail view. */
+.transaction-review-controls { display: grid; gap: 12px; justify-items: start; }
+.transaction-review-controls > .detail-warning-box { width: 100%; box-sizing: border-box; }
+.transaction-review-controls ul { margin: 8px 0 12px; padding-left: 20px; }
+.transaction-review-controls .detail-warning-actions { display: flex; gap: 8px; flex-wrap: wrap; }

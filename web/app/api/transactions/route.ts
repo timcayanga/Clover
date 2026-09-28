@@ -15,7 +15,7 @@ import { getEffectiveTransactionCategoryName, getEffectiveTransactionMerchantNam
 import { coerceTransactionTypeFromCategoryName, resolveFinancialTransactionType } from "@/lib/transaction-directions";
 import { normalizeInstitutionCurrency } from "@/lib/import-parser";
 import { normalizeImportedAccountKey } from "@/lib/workspace-cache";
-import { getTransactionReviewReasons } from "@/lib/transaction-review-reasons";
+import { getTransactionReviewReasons, transactionNeedsReview } from "@/lib/transaction-review-reasons";
 import { syncWorkspaceRecurringPatterns } from "@/lib/recurring-detection";
 import { assertTrustedRequestOrigin } from "@/lib/request-security";
 import {
@@ -755,7 +755,9 @@ export async function GET(request: Request) {
     const hasEffectiveCategoryFilters = categoryFilterNames.size > 0;
     const where = buildTransactionQueryWhere(
       workspaceId,
-      hasEffectiveCategoryFilters ? { ...filters, categoryIds: [] } : filters,
+      { ...filters, ...(hasEffectiveCategoryFilters ? { categoryIds: [] } : {}),
+        // Review is evaluated after display mapping, just like the warning icon.
+        ...(filters.reviewFilter === "pending" ? { reviewFilter: "" } : {}) },
       { includeExcluded: true }
     );
     const visibleWhere = {
@@ -803,10 +805,10 @@ export async function GET(request: Request) {
     // Review navigation needs the complete filtered scope, including unloaded rows.
     // Reuse full mapping for unresolved records so heuristic reasons stay consistent.
     const hasReviewCandidates = summaryMode === "light" && await prisma.transaction.findFirst({
-      where: { AND: [visibleWhere, { reviewStatus: { notIn: ["confirmed", "rejected", "duplicate_skipped"] } }] },
+      where: { AND: [visibleWhere, { reviewStatus: { notIn: ["confirmed", "edited", "rejected", "duplicate_skipped"] } }] },
       select: { id: true },
     });
-    if (summaryMode === "light" && !hasEffectiveCategoryFilters && !hasReviewCandidates) {
+    if (summaryMode === "light" && filters.reviewFilter !== "pending" && !hasEffectiveCategoryFilters && !hasReviewCandidates) {
       const pageStart = (requestedPage - 1) * (requestedPageSize ?? 25);
       const shouldBoostRecentImportRows =
         requestedPage === 1 &&
@@ -951,7 +953,7 @@ export async function GET(request: Request) {
           where: {
             ...visibleWhere,
             OR: [
-              { reviewStatus: { notIn: ["confirmed", "rejected", "duplicate_skipped"] } },
+              { reviewStatus: { notIn: ["confirmed", "edited", "rejected", "duplicate_skipped"] } },
               { categoryId: null },
             ],
           },
@@ -1433,6 +1435,7 @@ export async function GET(request: Request) {
       mappedSummaryRows
         .map((entry) => entry.mappedTransaction)
         .filter((transaction) => transactionMatchesEffectiveCategoryFilters(transaction, categoryFilterNames))
+        .filter((transaction) => filters.reviewFilter !== "pending" || transactionNeedsReview(transaction))
     );
     if (filters.sortField === "account") {
       transactions.sort(compareTransactionsByAccount(workspaceAccountRows, filters.sortDirection ?? "desc"));
@@ -1491,7 +1494,7 @@ export async function GET(request: Request) {
     transactions.forEach((mappedTransaction, index) => {
       const source = transactionById.get(mappedTransaction.id);
       const transaction = source?.transaction;
-      const warningReason = source?.warningReason ?? mappedTransaction.warningReason;
+      const warningReason = getTransactionReviewReasons(mappedTransaction)[0] ?? null;
       const amount = Math.abs(Number(mappedTransaction.amount));
       const accountName = mappedTransaction.accountName ?? transaction?.account?.name ?? "";
 
