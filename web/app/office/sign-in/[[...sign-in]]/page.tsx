@@ -1,4 +1,4 @@
-import { SignIn } from "@clerk/nextjs";
+import { ClerkAuthScreen } from "@/components/clerk-auth-screen";
 import Link from "next/link";
 
 export default async function OfficeSignIn({
@@ -21,11 +21,10 @@ export default async function OfficeSignIn({
           Sign in with your authorized Clover account to open Team and Admin.
         </p>
         {configured ? (
-          <SignIn
-            routing="path"
-            path="/office/sign-in"
-            forceRedirectUrl={destination}
-            signUpUrl="/office/access-denied"
+          <ClerkAuthScreen
+            enabled
+            mode="sign-in"
+            completeRedirectUrl={destination}
           />
         ) : (
           <p>Authentication is not configured for this deployment.</p>

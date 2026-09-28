@@ -40,13 +40,13 @@ Add any protected preview origin used for acceptance testing explicitly; do not 
 
 Vercel metadata confirms the production Clerk and R2 variables exist and are marked **sensitive**. Vercel deliberately does not return their values in environment exports. Blank exports do not imply the deployed credentials are missing. The credentials have not been replaced or exposed, and the owner's password has not been changed.
 
-The migration `20260928000000_team_studio` has been applied and tested in a disposable local PostgreSQL database, not production. Before activating hosted persistence:
+The migration `20260928000000_team_studio` was applied to production on 2026-09-28 through the verified session-pooler connection (port 5432). It was the only pending migration. All three new tables have RLS enabled and zero grants to public API roles. Customer financial tables were not modified.
 
-1. Review pending migrations for the intended release; do not apply unrelated unfinished migrations from this shared checkout.
-2. Apply the additive Team migration to the target database, using the normal Prisma migration deployment process for that release.
-3. Deploy the application with the existing Clerk, database, and R2 environment configuration. Verify the R2 bucket remains private and add the studio CORS origin.
-4. Sign in as the verified owner, create a draft, reload from another browser, upload media, and verify approval invalidation. Separately verify non-owner denial.
-5. Complete DNS and the gated Admin move described in `team-workspace-spec.md`. Leave `CLOVER_INTERNAL_ORIGIN` unset until the team domain and authentication work.
+The release is based on the live production commit `6951e6e6`, preserving its Admin role assignments, identity-revocation checks, and environment isolation. DNS now resolves `team.clover.ph` to Vercel and the domain is assigned to the Clover project.
+
+A production build-time check confirmed the owner Clerk account exists and is verified. It also exercised real R2 write/read/delete operations using a temporary launch-check object, confirmed signed reads succeed, and confirmed anonymous S3 reads fail. The configured R2 credential cannot manage bucket CORS: the owner must add the rule above through Cloudflare before browser uploads can be accepted. No secret values are exported by this check.
+
+Hosted browser verification and final Admin redirect activation are still pending. `CLOVER_INTERNAL_ORIGIN` remains unset until sign-in and the Admin entry point have been verified on the team domain.
 
 Live agent execution, social publishing, and image/video generation remain separate future integrations. Saving a brief does not start an agent run.
 
