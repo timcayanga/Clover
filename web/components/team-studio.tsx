@@ -291,7 +291,7 @@ function ReviewDialog({
         <div>
           <DraftVisual draft={edited} ownerId={ownerId} />
           {edited.mediaId && edited.mediaType === "image" ? <div className="studio-brief">
-            <p>Make a silent 6-second square video with a gentle zoom. This uses the image above; it does not generate new scenes. Keep this tab open while rendering.</p>
+            <p>Make a silent 6-second square video with a gentle zoom. This uses the image above; it does not generate new scenes. Exports MP4 when supported, otherwise WebM. Keep this tab open while rendering.</p>
             <button className="studio-button secondary" disabled={uploading || submitting} onClick={async () => {
               setUploading(true); setError("");
               try {

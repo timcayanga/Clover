@@ -227,7 +227,7 @@ export function TeamAssignmentWorkspace({
       clearTimeout(timer);
     };
   }, [active, busy, url]);
-  async function act(action: "approve" | "cancel" | "revise" | "retry") {
+  async function act(action: "approve" | "withdraw" | "cancel" | "revise" | "retry") {
     if (lock.current) return;
     lock.current = true;
     setBusy(true);
@@ -416,6 +416,10 @@ export function TeamAssignmentWorkspace({
               ? "Result approved"
               : "Approve result"}
           </button>
+          {run.reviewStatus === "approved" ? <>
+            <button className="studio-button secondary" disabled={busy} onClick={() => act("withdraw")}>Withdraw approval</button>
+            <p className="studio-fine">Blocks new handoffs and follow-up starts from this result. Existing drafts and running work keep their own review history.</p>
+          </> : null}
           {run.output === "image" ? <p className="studio-fine">A revision generates a new image from your brief and feedback. It does not edit the previous image’s pixels.</p> : null}
           <label>
             Changes for the agent

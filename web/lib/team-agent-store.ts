@@ -93,17 +93,6 @@ async function applyResponse(row: TeamAgentRun, response: AgentResponse) {
   if (row.responseId && row.responseId !== response.id)
     throw new Error("AGENT_PROVIDER_FAILURE");
   const result = extractAgentResult(response, row.model);
-  const prompt = assignmentPromptSchema.parse(row.prompt);
-  if (prompt.output === "image") {
-    result.estimatedCostUsd = null; // Text-token estimates omit image-tool charges.
-    const image = response.output.find((item) => item.type === "image_generation_call" && item.result);
-    if (response.status === "completed" && image?.result) {
-      await saveGeneratedTeamImage(row.ownerId, row.id, image.result);
-      if (!result.result.trim()) result.result = "Generated image for owner review. Check visual accuracy, text, and brand fit before approval. Confidence requires owner review.";
-    } else if (response.status === "completed") {
-      throw new Error("AGENT_IMAGE_MISSING");
-    }
-  }
   let status = (
     {
       queued: "queued",
@@ -115,7 +104,27 @@ async function applyResponse(row: TeamAgentRun, response: AgentResponse) {
     } as const
   )[response.status];
   let error: string | null = null;
-  if (response.status === "completed" && !result.result.trim()) {
+  const prompt = assignmentPromptSchema.parse(row.prompt);
+  if (prompt.output === "image") {
+    result.estimatedCostUsd = null;
+    const image = response.output.find((item) => item.type === "image_generation_call" && item.result);
+    if (response.status === "completed") {
+      if (!image?.result) {
+        status = "failed";
+        error = "The provider returned no image. Review your brief before retrying; usage may have been incurred.";
+      } else {
+        try {
+          await saveGeneratedTeamImage(row.ownerId, row.id, image.result);
+          if (!result.result.trim()) result.result = "Generated image for owner review. Check visual accuracy, text, and brand fit before approval. Confidence requires owner review.";
+        } catch (cause) {
+          if (!(cause instanceof Error) || cause.message !== "INVALID_MEDIA") throw cause;
+          status = "failed";
+          error = "The provider returned an invalid image. Your earlier work is safe. Review the brief before retrying; usage may have been incurred.";
+        }
+      }
+    }
+  }
+  if (status === "completed" && !result.result.trim()) {
     status = "failed";
     error = "The agent returned no usable text. You can retry this assignment.";
   }
@@ -295,6 +304,7 @@ export async function startAssignment(ownerId: string, raw: StartAssignment) {
     return { row, created: true };
   });
   if (reserved.created) {
+    let responseConfirmed = false;
     try {
       const response = await createAgentResponse(
         model,
@@ -304,8 +314,17 @@ export async function startAssignment(ownerId: string, raw: StartAssignment) {
       // Save the provider ID before media persistence so a storage outage can
       // recover the same paid result without issuing another generation.
       await prisma.teamAgentRun.updateMany({ where: { id: reserved.row.id, responseId: null }, data: { responseId: response.id } });
+      responseConfirmed = true;
       await applyResponse(reserved.row, response);
     } catch (error) {
+      if (responseConfirmed) {
+        await prisma.teamAgentEvent.create({ data: {
+          runId: reserved.row.id,
+          action: "result_save_delayed",
+          note: "The provider accepted this run, but its result could not be saved yet. Refresh will retrieve the same result without starting another paid generation.",
+        } });
+        return getAssignment(ownerId, reserved.row.id);
+      }
       // Never automatically repeat a paid POST after an ambiguous timeout.
       const note =
         error instanceof AgentProviderError && error.definitive
@@ -367,9 +386,7 @@ export async function refreshAssignment(ownerId: string, id: string) {
     }
     await applyResponse(row, response);
   } catch (error) {
-    if (error instanceof Error && error.message === "AGENT_IMAGE_MISSING") {
-      await failAssignment(id, "The provider returned no image. Review your brief before retrying; usage may have been incurred.");
-    } else if (error instanceof AgentProviderError && error.status === 404) {
+    if (error instanceof AgentProviderError && error.status === 404) {
       await failAssignment(
         id,
         "The provider result is no longer available. No automatic retry was made.",
@@ -419,6 +436,21 @@ export async function approveAssignment(ownerId: string, id: string) {
         note: "Owner approved this exact result. No publishing or delegation was triggered.",
       },
     });
+  });
+  return getAssignment(ownerId, id);
+}
+export async function withdrawAssignmentApproval(ownerId: string, id: string) {
+  await prisma.$transaction(async (tx) => {
+    await lockOwner(tx, ownerId);
+    const row = await tx.teamAgentRun.findFirst({ where: { id, ownerId } });
+    if (!row) throw new Error("ASSIGNMENT_NOT_FOUND");
+    if (row.status !== "completed" || row.reviewStatus === "changes_requested") throw new Error("INVALID_ASSIGNMENT");
+    if (row.reviewStatus === "pending") return;
+    await tx.teamAgentRun.update({ where: { id }, data: { reviewStatus: "pending" } });
+    await tx.teamAgentEvent.create({ data: {
+      runId: id, action: "approval_withdrawn",
+      note: "Owner withdrew approval. New transfers and follow-up starts using this result are blocked until it is approved again. Existing drafts and running assignments retain their separate review history.",
+    } });
   });
   return getAssignment(ownerId, id);
 }
