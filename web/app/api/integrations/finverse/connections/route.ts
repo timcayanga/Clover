@@ -16,11 +16,11 @@ export async function GET(request: Request) {
     const [details, connections] = await Promise.all([
       picker ? getProAccess(workspace.userId).then(access => ({ upgradeRequired: access.planTier === "free" }))
         : bankLifecycleOverview(workspace.userId).then(lifecycle => ({ lifecycle })),
-      prisma.finverseConnection.findMany({where:{workspaceId,user:{clerkUserId:userId},status:{not:"disconnected"},encryptedRefreshToken:{not:null}},select:{id:true,status:true,institutionName:true,lastSyncedAt:true,accountLinks:{where:{accountId:{not:null},unlinkedAt:null},select:{account:{select:{id:true,name:true,institution:true,accountNumber:true,logoUrl:true,type:true}}}}}}),
+      prisma.finverseConnection.findMany({where:{workspaceId,user:{clerkUserId:userId},status:{not:"disconnected"},encryptedRefreshToken:{not:null}},select:{id:true,status:true,institutionName:true,lastSyncedAt:true,syncError:true,accountLinks:{where:{accountId:{not:null},unlinkedAt:null},select:{account:{select:{id:true,name:true,institution:true,accountNumber:true,logoUrl:true,type:true}}}}}}),
     ]);
     return NextResponse.json({ ...details,
-      pending:connections.filter(c=>c.status==='awaiting_selection'||(!c.accountLinks.length&&!c.lastSyncedAt)).map(c=>({id:c.id,name:c.institutionName||"Linked bank"})),
-      accounts:connections.flatMap(c=>c.accountLinks.flatMap(link=>{const a=link.account;if(!a)return [];const brand=getAccountBrand(a);return [{id:a.id,connectionId:c.id,name:a.name,last4:a.accountNumber?.replace(/\s/g,"").slice(-4)||null,logoUrl:brand.logoSrc||brand.fallbackIconSrc,lastSyncedAt:c.lastSyncedAt}];})),
+      pending:connections.filter(c=>c.status!=='disconnect_pending'&&(c.status==='awaiting_selection'||(!c.accountLinks.length&&!c.lastSyncedAt))).map(c=>({id:c.id,name:c.institutionName||"Linked bank",status:c.status})),
+      accounts:connections.flatMap(c=>c.accountLinks.flatMap(link=>{const a=link.account;if(!a)return [];const brand=getAccountBrand(a);return [{id:a.id,connectionId:c.id,name:a.name,status:c.status,syncError:c.syncError??null,last4:a.accountNumber?.replace(/\s/g,"").slice(-4)||null,logoUrl:brand.logoSrc||brand.fallbackIconSrc,lastSyncedAt:c.lastSyncedAt}];})),
     },{headers:{"Cache-Control":"private, no-store"}});
   } catch(error) {
     const message=error instanceof Error?error.message:"";

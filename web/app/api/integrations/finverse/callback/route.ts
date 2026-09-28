@@ -1,4 +1,5 @@
-import { NextResponse } from "next/server";
+import { observeFinverseDiscovery } from "@/lib/finverse-discovery-progress";
+import { after, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import {
   encryptFinverseToken,
@@ -9,6 +10,7 @@ import {
 } from "@/lib/finverse";
 
 export const dynamic = "force-dynamic";
+export const maxDuration = 60;
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -81,6 +83,8 @@ const handleCallback = async (request: Request) => {
         stateExpiresAt: new Date(0),
       },
     });
+    // Continue discovering accounts after redirect, even if the user closes the sheet.
+    try { after(async () => { await observeFinverseDiscovery(connection.id, token.access_token).catch(() => {}); }); } catch { /* Outside a request lifecycle, the UI can still resume discovery. */ }
     return redirectToAccounts("connected", connection.id, native, connection.workspaceId);
   } catch (error) {
     console.error("Finverse callback failed", error);

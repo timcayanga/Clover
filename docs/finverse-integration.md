@@ -91,3 +91,27 @@ metadata, independently of the institution catalogue. This skips lifecycle histo
 queries; plan and account reads run concurrently after workspace authorization.
 Add Account skips the unused connections request. Per-account Sync skips the
 catalogue entirely. All account responses remain private/no-store.
+
+### Authorization and account-selection experience (28 Sep 2026)
+
+Returning from Finverse opens the existing Add Account modal/sheet directly into
+bank-authorization progress, then account selection. Authorization alone is not
+labelled as an account being linked. Choose later leaves a server-backed Finish
+linking action in Accounts and at the top of Connect/Sync. In-app notifications
+resume the same workspace/connection on web and native; no email is sent for this
+reminder. A bounded post-callback observer can mark initial discovery ready after
+the sheet closes, without importing accounts or transactions. If retrieval takes
+longer or the provider fails, the persistent action resumes the check.
+
+Connect shows existing linked accounts below its country/bank picker; Sync shows
+them first. Both include masked account numbers, connection status, Last Synced,
+Sync and secondary account actions. Unlink confirmation lists the accounts sharing
+that login and explains retained history and monthly slots. Per-account Sync in
+Account Details uses the same controls. Sync completion reports new transactions
+or Already up to date. Temporary errors offer Retry; expired provider authorization
+offers Reconnect bank. Financial reconciliation and quota rules are unchanged.
+
+Figma: bank linking states, section `1802:100376` in file `FNnCmCj90szZAnZ6twMPCy`.
+Validation: Finverse route/discovery and preservation regressions; native notification
+routing; web/native type checks; local browser fixture exercised callback progress,
+choose-later/resume, linking completion, and shared-login unlink confirmation.

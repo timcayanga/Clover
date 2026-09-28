@@ -217,3 +217,7 @@ async function catalogCacheRequests() {
     console.log("Catalogue concurrency, TTL, fresh validation, configuration isolation and retry checks passed.");
   } finally {globalThis.fetch=originalFetch;Date.now=originalNow;for(const key of Object.keys(process.env))if(!(key in originalEnv))delete process.env[key];Object.assign(process.env,originalEnv);}
 }
+
+import { notificationDestination } from "../../mobile/src/notification-destination";
+assert.equal(notificationDestination("/accounts?finverse=connected&finverseConnection=bank_1&finverseWorkspace=profile_1"),"/(tabs)/accounts?finverse=connected&finverseConnection=bank_1&finverseWorkspace=profile_1");
+assert.equal(notificationDestination("/accounts?finverse=connected&finverseConnection=bank_1&finverseWorkspace=profile_1&redirect=https://example.com"),null);

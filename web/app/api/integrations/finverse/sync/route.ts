@@ -284,7 +284,10 @@ export async function POST(request: Request) {
     if (message === "WORKSPACE_NOT_FOUND") return NextResponse.json({ error: "Workspace not found." }, { status: 404 });
     if (message === "FINVERSE_DISABLED") return NextResponse.json({ error: "Bank connections are not available yet." }, { status: 404 });
     if (message === "FINVERSE_NOT_CONFIGURED") return NextResponse.json({ error: "Bank connections are not configured yet." }, { status: 503 });
-    if (message === "FINVERSE_RELINK_REQUIRED") return NextResponse.json({ error: "This bank needs to be connected again." }, { status: 409 });
+    if (message === "FINVERSE_RELINK_REQUIRED" || (error instanceof Error && "status" in error && error.status === 401)) {
+      if (attemptedConnection) await prisma.finverseConnection.updateMany({where:{id:attemptedConnection,disconnectRequestedAt:null},data:{syncError:"Bank authorization expired. Reconnect securely to sync again."}}).catch(()=>{});
+      return NextResponse.json({ error: "Bank authorization expired. Reconnect securely to sync again.", reconnectRequired: true }, { status: 409 });
+    }
     if(attemptedConnection) await prisma.finverseConnection.updateMany({where:{id:attemptedConnection,disconnectRequestedAt:null,syncFailureSince:null},data:{syncFailureSince:new Date(),syncError:'Bank sync failed. Retry or reconnect; saved records are preserved.'}}).catch(()=>{});
     console.error("Finverse sync failed", error);
     return NextResponse.json({ error: "Unable to sync the connected bank right now." }, { status: 502 });

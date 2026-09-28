@@ -5,7 +5,8 @@ import { resolve } from "node:path";
 const requireFixture = createRequire(resolve("package.json"));
 async function main() {
   const fixture = `
-let lifecycleCalls=0;
+let lifecycleCalls=0, discoveryReady=false, discoveryWrites=[];
+export function setDiscoveryReady(value){discoveryReady=value;}
 let claimed=false, exchanges=0, created=0, bankCalls=0, refreshCalls=0, updates=[], planTier='pro';
 export function setPlan(value){planTier=value;}
 export const getAccountBrand=()=>({logoSrc:null,fallbackIconSrc:"/assets/account-types/bank.png"});
@@ -19,7 +20,7 @@ export const hasUnlimitedPlanLimits=()=>false;
 export const getProAccess=async()=>({planTier});
 export const refreshProAccess=async()=>planTier;
 export function reset(){claimed=false;exchanges=0;created=0;bankCalls=0;refreshCalls=0;updates=[];}
-export function stats(){return {lifecycleCalls,exchanges,created,bankCalls,refreshCalls,updates};}
+export function stats(){return {discoveryWrites,lifecycleCalls,exchanges,created,bankCalls,refreshCalls,updates};}
 export const requireAuth=async()=>({userId:'owner'});
 export const requireAdminAuth=async()=>{if(planTier==='free')throw Error('FORBIDDEN');return {userId:'owner'};};
 export const getFinverseInstitutionCatalog=async()=>({mode:'live',institutions:[{id:'bpi',name:'BPI',countries:['PHL'],status:'BETA',products:['ACCOUNTS'],tags:['real'],shownInClover:false,excludedReasons:['Missing Accounts or Transactions support']}]});
@@ -35,8 +36,8 @@ export const getFinverseConfig=()=>({redirectUri:'https://staging.clover.ph/api/
 export const getFinverseBanks=async()=>{bankCalls++;return {banks:[{id:'bank',name:'Test bank',countries:['PHL']}],mode:'test'};};
 export const createFinverseRefresh=async()=>{refreshCalls++;return {link_url:'https://link.finverse.com/refresh'};};
 export const decryptFinverseToken=()=> 'access';
-export const getFinverseLoginIdentity=async()=>({login_identity:{status:'DATA_RETRIEVAL_IN_PROGRESS',refresh:{refresh_allowed:true}}});
-export const isFinverseDataReady=()=>false;
+export const getFinverseLoginIdentity=async()=>({login_identity:{status:discoveryReady?'DATA_RETRIEVAL_COMPLETE':'DATA_RETRIEVAL_IN_PROGRESS',refresh:{refresh_allowed:true}}});
+export const isFinverseDataReady=()=>discoveryReady;
 export const getAllFinverseTransactions=async()=>[];
 export const getFinverseAccounts=async()=>({accounts:[]});
 export const normalizeFinverseAccount=()=>({});
@@ -54,13 +55,17 @@ export const prisma={user:{findUniqueOrThrow:async()=>({planTier})},$transaction
  findMany:async({where,select})=>{if(where.workspaceId!=='profile'||where.user.clerkUserId!=='owner')throw Error('unsafe scope');return [{id:'pending',status:'awaiting_selection',institutionName:'Test bank',lastSyncedAt:null,accountLinks:[]},{id:'linked',status:'ready',institutionName:'Test bank',lastSyncedAt:'2026-09-24T00:00:00Z',accountLinks:[{account:{id:'account',name:'Savings',institution:'Test bank',accountNumber:'1234567890',type:'bank'}}]}];},
  create:async({data})=>{created++;return{id:'connection'};},
  findUnique:async({where})=>['native.valid','native.refresh.valid'].includes(where.stateHash)?{id:'connection',workspaceId:'profile',stateExpiresAt:new Date(Date.now()+60000),status:claimed?'authorizing':'link_pending'}:null,
- updateMany:async({where,data})=>{if(where.status && typeof where.status === "object"){updates.push(data);return{count:1};}if(claimed)return{count:0};claimed=true;return{count:1};},
+ updateMany:async({where,data})=>{if(where.accountLinks){discoveryWrites.push({where,data});return {count:1};}if(where.status && typeof where.status === "object"){updates.push(data);return{count:1};}if(claimed)return{count:0};claimed=true;return{count:1};},
  update:async({data})=>{updates.push(data);return{};}
 }};
 `;
-  const bundled = await build({ stdin: { contents: `export {GET as catalog} from './app/api/admin/finverse/catalog/route'; export {POST as sync} from './app/api/integrations/finverse/sync/route'; export {GET as connections} from './app/api/integrations/finverse/connections/route'; export {GET as institutions} from './app/api/integrations/finverse/institutions/route'; export {POST as link} from './app/api/integrations/finverse/link/route'; export {GET as callback} from './app/api/integrations/finverse/callback/route'; export {reset,stats,setPlan,setRefreshLimit} from 'fixture';`, resolveDir: process.cwd() }, bundle: true, platform: "node", format: "cjs", packages: "external", write: false, plugins: [{ name: "finverse-boundaries", setup(b) { b.onResolve({filter:/^(fixture|@\/lib\/(admin|auth|finverse-refresh-limit|finverse-access-token|bank-link-usage|user-limits|account-limit-count|account-brand|finverse-lifecycle|workspace-access|finverse|prisma|plan-quota|pro-access|mobile-request-context))$/},()=>({path:"fixture",namespace:"test"})); b.onLoad({filter:/.*/,namespace:"test"},()=>({contents:fixture,loader:"ts",resolveDir:process.cwd()})); }}] });
+  const bundled = await build({ stdin: { contents: `export {observeFinverseDiscovery} from './lib/finverse-discovery-progress'; export {GET as catalog} from './app/api/admin/finverse/catalog/route'; export {POST as sync} from './app/api/integrations/finverse/sync/route'; export {GET as connections} from './app/api/integrations/finverse/connections/route'; export {GET as institutions} from './app/api/integrations/finverse/institutions/route'; export {POST as link} from './app/api/integrations/finverse/link/route'; export {GET as callback} from './app/api/integrations/finverse/callback/route'; export {reset,stats,setPlan,setRefreshLimit,setDiscoveryReady} from 'fixture';`, resolveDir: process.cwd() }, bundle: true, platform: "node", format: "cjs", packages: "external", write: false, plugins: [{ name: "finverse-boundaries", setup(b) { b.onResolve({filter:/^(fixture|@\/lib\/(admin|auth|finverse-refresh-limit|finverse-access-token|bank-link-usage|user-limits|account-limit-count|account-brand|finverse-lifecycle|workspace-access|finverse|prisma|plan-quota|pro-access|mobile-request-context))$/},()=>({path:"fixture",namespace:"test"})); b.onLoad({filter:/.*/,namespace:"test"},()=>({contents:fixture,loader:"ts",resolveDir:process.cwd()})); }}] });
   const Module = requireFixture("node:module"), mod = new Module(resolve("finverse-test.cjs")); mod.filename=resolve("finverse-test.cjs");mod.paths=Module._nodeModulePaths(process.cwd());mod._compile(bundled.outputFiles[0].text,mod.filename);
   const api=mod.exports;
+  api.setDiscoveryReady(true);
+  await api.observeFinverseDiscovery('pending-connection','test-token');
+  assert.deepEqual(api.stats().discoveryWrites,[{where:{id:'pending-connection',status:'retrieving',lastSyncedAt:null,disconnectRequestedAt:null,accountLinks:{none:{unlinkedAt:null,accountId:{not:null}}}},data:{status:'awaiting_selection'}}], 'Background discovery must never overwrite linked, synced or disconnecting accounts');
+  api.setDiscoveryReady(false);
   api.setPlan('free');
   assert.equal((await api.catalog(new Request('https://clover.test/catalog'))).status,403);
   api.setPlan('pro');
@@ -77,7 +82,7 @@ export const prisma={user:{findUniqueOrThrow:async()=>({planTier})},$transaction
   const connections=await api.connections(new Request('https://clover.test/api?workspaceId=profile'));
   assert.equal(connections.headers.get('cache-control'),'private, no-store');
   const linkedData=await connections.json();
-  assert.deepEqual(linkedData.pending,[{id:'pending',name:'Test bank'}]);
+  assert.deepEqual(linkedData.pending,[{id:'pending',name:'Test bank',status:'awaiting_selection'}]);
   assert.equal(linkedData.accounts[0].last4,'7890');
   assert.equal(linkedData.accounts[0].lastSyncedAt,'2026-09-24T00:00:00Z');
   assert(!JSON.stringify(linkedData).includes('1234567890'));

@@ -51,7 +51,7 @@ function AccountsContent() {
   useEffect(()=>{
     const controller=new AbortController();
     if(session.demo||adding){setPendingBanks([]);return;}
-    void session.request<{pending:{id:string;name:string}[]}>(`finverse/connections?workspaceId=${encodeURIComponent(session.profileId)}`,{signal:controller.signal}).then(data=>{if(!controller.signal.aborted)setPendingBanks(data.pending);}).catch(()=>{});
+    void session.request<{pending:{id:string;name:string}[]}>(`finverse/connections?view=picker&workspaceId=${encodeURIComponent(session.profileId)}`,{signal:controller.signal}).then(data=>{if(!controller.signal.aborted)setPendingBanks(data.pending);}).catch(()=>{});
     return()=>controller.abort();
   },[session.profileId,session.demo,adding]);
   const { add, accountId, finverseConnection, finverseWorkspace } =
@@ -250,8 +250,10 @@ function AccountsContent() {
       <AccountEditor
         defaultCurrency={session.data?.defaultCurrency ?? "PHP"}
         callbackConnection={finverseConnection}
+        connectInitially={add === "connect"}
         initial={selected}
         onClose={() => {
+          if (adding) setRevision(v => v + 1);
           router.setParams({
             add: undefined,
             finverseConnection: undefined,
@@ -284,7 +286,7 @@ function AccountsContent() {
   return (
     <Screen gap={24}>
       {adding ? <EntryOverlay onClose={() => setAdding(false)}>{accountEditor}</EntryOverlay> : null}
-      {pendingBanks.map(connection=><Button key={connection.id} secondary icon="alert-circle" title={`Select accounts · ${connection.name}`} onPress={()=>router.push({pathname:"/accounts",params:{finverseConnection:connection.id,finverseWorkspace:session.profileId}})}/>)}
+      {pendingBanks.map(connection=><Button key={connection.id} secondary icon="alert-circle" title={`Finish linking ${connection.name} · Select accounts`} onPress={()=>router.push({pathname:"/accounts",params:{finverseConnection:connection.id,finverseWorkspace:session.profileId}})}/>)}
       <Modal visible={currencyOpen} transparent animationType="fade" onRequestClose={() => setCurrencyOpen(false)}>
         <View style={{ flex: 1, justifyContent: "center", padding: 24, backgroundColor: "#0007" }}>
           <Pressable accessibilityLabel="Close currency selector" onPress={() => setCurrencyOpen(false)} style={{ position: "absolute", top: 0, bottom: 0, left: 0, right: 0 }} />

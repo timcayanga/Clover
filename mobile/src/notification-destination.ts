@@ -49,6 +49,11 @@ export function notificationDestination(href: string): string | null {
   const detailQuery:Record<string,[string,string]>={"/budgeting":["budget","/budgeting?budgetId="],"/goals":["goal","/goals?goalId="],"/circles":["circle","/circles?circleId="]};
   const query=detailQuery[path];
   if(query&&url.searchParams.size===1){const id=url.searchParams.get(query[0]);if(id&&/^[a-zA-Z0-9_-]+$/.test(id))return query[1]+encodeURIComponent(id);}
+  if (path === "/accounts" && url.searchParams.get("finverse") === "connected" &&
+      [...url.searchParams.keys()].every(key => ["finverse", "finverseConnection", "finverseWorkspace"].includes(key)) &&
+      ["finverseConnection", "finverseWorkspace"].every(key => /^[a-zA-Z0-9_-]+$/.test(url.searchParams.get(key) ?? ""))) {
+    return `/(tabs)/accounts${url.search}`;
+  }
   if (url.search) return null;
   const nativeDetail=path.match(/^\/(accounts|budgeting|budgets|goals|circles)\/([a-zA-Z0-9_-]+)$/);
   if(nativeDetail){const [,kind,id]=nativeDetail;return kind==="accounts"?`/(tabs)/accounts?accountId=${id}`:kind==="goals"?`/goals?goalId=${id}`:kind==="circles"?`/circles?circleId=${id}`:`/budgeting?budgetId=${id}`;}

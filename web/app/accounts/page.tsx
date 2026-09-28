@@ -1478,6 +1478,11 @@ function AccountsPageContent() {
       setAddOpen(true);
     }
   }, [searchParams]);
+  useEffect(() => {
+    const close = () => { setAddOpen(false); window.history.replaceState(null, "", "/accounts"); };
+    window.addEventListener("finverse-background", close);
+    return () => window.removeEventListener("finverse-background", close);
+  }, []);
   const mobileCreation = useMobileCreationRoute(addOpen, setAddOpen, "/accounts");
   const [importOpen, setImportOpen] = useState(false);
   const [importSessionId, setImportSessionId] = useState(0);

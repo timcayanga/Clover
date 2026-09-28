@@ -549,6 +549,12 @@ export const buildInAppNotificationCandidates = async (
   }
   const bankLifecycle=await bankLifecycleOverview(user.id);
   for(const c of bankLifecycle.connections.filter(c=>c.workspaceId===workspaceId && c.status!=='disconnected')) {
+    if (!options.raw && (c.status === "awaiting_selection" || (c.status === "retrieving" && !c.lastSyncedAt && !c.accounts.some(a => a.accountId && !a.unlinkedAt)))) {
+      items.push({ id: `bank-link:${c.id}`, product: "accounts", productLabel: "Connected banks", productHref: "/accounts",
+        title: `Finish linking ${c.name}`, message: c.status === "awaiting_selection" ? "Your bank accounts are ready. Choose which accounts to link to Clover." : "Bank authorized. Open Clover’s account selection to check retrieval progress and finish linking.",
+        tone: "neutral", priority: "high", createdAt: now.toISOString(),
+        href: `/accounts?finverse=connected&finverseConnection=${encodeURIComponent(c.id)}&finverseWorkspace=${encodeURIComponent(workspaceId)}`, ctaLabel: "Select accounts" });
+    }
     const stage=bankWarningStage(c.inactivityDeadline,now);
     const planEnding=bankLifecycle.accessEndsAt && +bankLifecycle.accessEndsAt-+now<=14*DAY_MS ? bankLifecycle.accessEndsAt : null;
     const deadline=planEnding??c.inactivityDeadline;

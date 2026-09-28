@@ -120,3 +120,10 @@
 .finverse-bank-picker__beta { padding:2px 8px; border-radius:999px; background:var(--surface-2,#ecf4f5); color:var(--text,#22313b); font-size:11px; font-weight:500; }
 .finverse-bank-picker__notice { padding:16px; border:1px solid var(--line,#d4e0e8); border-radius:16px; }
 .finverse-bank-picker button:disabled { opacity:.6; cursor:wait; }
+
+.finverse-progress { display:grid; gap:16px; padding:24px; text-align:center; border-radius:20px; background:var(--surface-2, #f4f8fa); }
+.finverse-progress__spinner { width:32px;height:32px;border:3px solid #d8eef0;border-top-color:var(--teal,#03a8c0);border-radius:50%;justify-self:center;animation:finverse-spin 1s linear infinite; }
+@keyframes finverse-spin { to { transform:rotate(360deg); } }
+@media(prefers-reduced-motion:reduce){.finverse-progress__spinner{animation:none;}}
+.finverse-connect__sync-card details { justify-self:end; }
+.finverse-connect__sync-card summary { cursor:pointer; padding:8px; }
