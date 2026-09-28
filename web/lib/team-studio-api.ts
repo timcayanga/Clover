@@ -38,6 +38,23 @@ export async function readStudioJson(request: Request, maxBytes = 2_000_000) {
 export function studioError(error: unknown) {
   const name = error instanceof Error ? error.message : "";
   const errors: Record<string, [number, string]> = {
+    AGENT_UNAVAILABLE: [
+      503,
+      "Agent execution is not configured or is paused. Your brief is saved.",
+    ],
+    ASSIGNMENT_NOT_FOUND: [404, "This assignment is unavailable."],
+    INVALID_ASSIGNMENT: [
+      409,
+      "This assignment cannot be started or reviewed in its current state. Refresh and check the latest version.",
+    ],
+    ASSIGNMENT_LIMIT: [
+      429,
+      "You can run up to 3 assignments at once and start 20 per UTC day, including retries. Please try later.",
+    ],
+    AGENT_REFRESH_FAILED: [
+      503,
+      "Could not check progress. The saved assignment is safe; try refreshing shortly.",
+    ],
     UNAUTHORIZED: [401, "Please sign in again."],
     FORBIDDEN: [403, "Owner access is required."],
     UNTRUSTED_ORIGIN: [

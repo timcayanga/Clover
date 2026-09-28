@@ -1,6 +1,7 @@
 "use client";
 
 import Image from "next/image";
+import { TeamAssignmentBriefs } from "./team-assignments";
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import {
@@ -143,7 +144,11 @@ function DraftVisual({
           )}
         </strong>
         <span className="studio-visual-ornament" aria-hidden="true">
-          {draft.visual === "sage" ? "✳" : draft.visual === "peach" ? "↗" : "▶"}
+          {draft.visual === "sage"
+            ? "✳"
+            : draft.visual === "peach"
+              ? "↗"
+              : "▶"}
         </span>
       </div>
       <span className="studio-visual-caption">
@@ -690,7 +695,7 @@ export function TeamStudio({
             {localPreview
               ? "Drafts & media are saved in this browser."
               : "Drafts, media, and approval history are saved to your private workspace."}{" "}
-            Agents and publishing are not connected.
+            Start assignments from a saved brief. Publishing is not connected.
           </div>
           <div className="studio-heading">
             <div>
@@ -794,7 +799,7 @@ export function TeamStudio({
                         <span className={`studio-avatar large ${a.color}`}>
                           {a.initials}
                         </span>
-                        <span className="studio-pill">Setup</span>
+                        <span className="studio-pill">Manual start</span>
                       </div>
                       <h3>{a.name}</h3>
                       <p>{a.description}</p>
@@ -852,9 +857,8 @@ export function TeamStudio({
                 <span>✳</span>
                 <h2>Direction before automation.</h2>
                 <p>
-                  Save role instructions and assignment briefs now. Live
-                  conversations and autonomous work need an agent service; saved
-                  briefs do not start a run.
+                  Save a brief, choose Start assignment, then review the result.
+                  Approve it or request changes before taking the next step.
                 </p>
               </section>
             </>
@@ -1099,9 +1103,7 @@ export function TeamStudio({
       {activeAgent ? (
         <Dialog title={activeAgent.name} onClose={() => setAgentId(undefined)}>
           <div className="studio-form">
-            <span className="studio-pill">
-              Role setup · live agent not connected
-            </span>
+            <span className="studio-pill">Manual start · owner review</span>
             <p>{activeAgent.description}</p>
             <label>
               Standing instructions
@@ -1171,15 +1173,11 @@ export function TeamStudio({
             <p role="status" className="studio-fine">
               {notice}
             </p>
-            {state.briefs
-              .filter((b) => b.agent === activeAgent.id)
-              .map((b) => (
-                <article className="studio-brief" key={b.id}>
-                  <span className="studio-eyebrow">SAVED · NOT STARTED</span>
-                  <p>{b.text}</p>
-                  <small>{new Date(b.at).toLocaleString()}</small>
-                </article>
-              ))}
+            <TeamAssignmentBriefs
+              briefs={state.briefs.filter((b) => b.agent === activeAgent.id)}
+              disabled={!ready || storageBlocked || saving}
+              localPreview={localPreview}
+            />
           </div>
         </Dialog>
       ) : null}
