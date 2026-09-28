@@ -38,6 +38,7 @@ async function main() {
       ],
       outfile,
       bundle: true,
+      jsx: "automatic",
       platform: "node",
       format: "cjs",
       packages: "external",

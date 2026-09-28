@@ -1,9 +1,13 @@
 "use client";
 
 import Link from "next/link";
+import { assignmentRequest as request } from "@/lib/team-agent.client";
+import { TeamAssignmentResult } from "./team-assignment-result";
+import { AssignmentTransfer } from "./team-assignment-transfer";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import {
+  formatAssignmentTime,
   activeRunStatuses,
   assignmentViewSchema,
   assignmentSummarySchema,
@@ -13,37 +17,18 @@ import {
 } from "@/lib/team-agent-contract";
 import { agentProfiles, type StudioState } from "@/lib/team-studio";
 
-async function request(url: string, body?: unknown, signal?: AbortSignal) {
-  const response = await fetch(url, {
-    method: body ? "POST" : "GET",
-    cache: "no-store",
-    signal,
-    ...(body
-      ? {
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(body),
-        }
-      : {}),
-  });
-  const data = await response.json();
-  if (!response.ok)
-    throw new Error(
-      typeof data.error === "string"
-        ? data.error
-        : "Unable to load this assignment. Please try again.",
-    );
-  return data;
-}
 const label = (value: string) => value.replaceAll("_", " ");
 
 export function TeamAssignmentBriefs({
   briefs,
   disabled,
   localPreview,
+  latestRuns,
 }: {
   briefs: StudioState["briefs"];
   disabled: boolean;
   localPreview: boolean;
+  latestRuns?: AssignmentSummary[];
 }) {
   const router = useRouter();
   const [runs, setRuns] = useState<AssignmentSummary[]>([]);
@@ -115,14 +100,26 @@ export function TeamAssignmentBriefs({
         .slice()
         .reverse()
         .map((brief) => {
-          const latest = runs.find((run) => run.briefId === brief.id);
+          const latest = (latestRuns ?? runs).find(
+            (run) => run.briefId === brief.id,
+          );
           return (
             <article className="studio-brief" key={brief.id}>
               <span className="studio-eyebrow">
                 {latest ? label(latest.status) : "Saved brief"}
               </span>
+              <small>
+                {agentProfiles.find((a) => a.id === brief.agent)?.name}
+              </small>
               <p>{brief.text}</p>
-              <small>{new Date(brief.at).toLocaleString()}</small>
+              {brief.sourceAssignmentId ? (
+                <p>
+                  <Link href={`/team/assignments/${brief.sourceAssignmentId}`}>
+                    View approved source assignment ↗
+                  </Link>
+                </p>
+              ) : null}
+              <small>{formatAssignmentTime(brief.at)}</small>
               <div className="assignment-actions">
                 {latest ? (
                   <Link
@@ -150,33 +147,6 @@ export function TeamAssignmentBriefs({
   );
 }
 
-function ResultText({ run }: { run: AssignmentView }) {
-  let cursor = 0;
-  const parts: React.ReactNode[] = [];
-  for (const [i, source] of [...run.sources]
-    .sort((a, b) => a.start - b.start)
-    .entries()) {
-    const url = safeSourceUrl(source.url);
-    if (!url || source.start < cursor || source.end > run.result.length)
-      continue;
-    parts.push(run.result.slice(cursor, source.start));
-    parts.push(
-      <a
-        key={i}
-        href={url}
-        target="_blank"
-        rel="noopener noreferrer"
-        title={source.title}
-      >
-        {run.result.slice(source.start, source.end)}
-      </a>,
-    );
-    cursor = source.end;
-  }
-  parts.push(run.result.slice(cursor));
-  return <div className="assignment-result">{parts}</div>;
-}
-
 export function TeamAssignmentWorkspace({
   initial,
 }: {
@@ -187,7 +157,9 @@ export function TeamAssignmentWorkspace({
   const [feedback, setFeedback] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [copyNotice, setCopyNotice] = useState("");
   const [pollError, setPollError] = useState("");
+  const [historyError, setHistoryError] = useState("");
   const [history, setHistory] = useState<AssignmentSummary[]>([]);
   const lock = useRef(false);
   const active = activeRunStatuses.includes(run.status);
@@ -207,7 +179,12 @@ export function TeamAssignmentWorkspace({
             .filter((item) => item.briefId === initial.briefId),
         ),
       )
-      .catch(() => {});
+      .catch(() => {
+        if (!controller.signal.aborted)
+          setHistoryError(
+            "Version history could not load. Reload before reviewing this result.",
+          );
+      });
     return () => controller.abort();
   }, [initial.id, initial.briefId, run.reviewStatus]);
   useEffect(() => {
@@ -263,6 +240,28 @@ export function TeamAssignmentWorkspace({
       setBusy(false);
     }
   }
+  async function refreshView() {
+    if (lock.current) return;
+    lock.current = true;
+    setBusy(true);
+    setError("");
+    try {
+      const [next, versions] = await Promise.all([
+        request(url, { action: "refresh" }),
+        request(
+          `/api/team/assignments?briefId=${encodeURIComponent(run.briefId)}`,
+        ),
+      ]);
+      setRun(assignmentViewSchema.parse(next));
+      setHistory(assignmentSummarySchema.array().parse(versions.runs));
+      setHistoryError("");
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Unable to refresh.");
+    } finally {
+      lock.current = false;
+      setBusy(false);
+    }
+  }
   const agent = agentProfiles.find((item) => item.id === run.agent);
   const hasChild = history.some((item) => item.parentId === run.id);
   return (
@@ -270,6 +269,13 @@ export function TeamAssignmentWorkspace({
       <header className="assignment-heading">
         <Link href="/team">← Team studio</Link>
         <span className="studio-pill">Private · owner review</span>
+        <button
+          className="studio-button secondary"
+          disabled={busy}
+          onClick={refreshView}
+        >
+          Refresh assignment
+        </button>
       </header>
       <div className="assignment-heading">
         <div>
@@ -284,6 +290,13 @@ export function TeamAssignmentWorkspace({
       <section className="studio-brief">
         <h2>Your brief</h2>
         <p>{run.brief}</p>
+        {run.sourceAssignmentId ? (
+          <p>
+            <Link href={`/team/assignments/${run.sourceAssignmentId}`}>
+              Source assignment ↗
+            </Link>
+          </p>
+        ) : null}
         <details>
           <summary>Instructions used for this run</summary>
           <p className="assignment-result">{run.instructions}</p>
@@ -330,7 +343,23 @@ export function TeamAssignmentWorkspace({
               ? "Proposal for review"
               : "Partial result"}
           </p>
-          <ResultText run={run} />
+          <TeamAssignmentResult run={run} />
+          <button
+            className="studio-button secondary"
+            onClick={async () => {
+              try {
+                await navigator.clipboard.writeText(run.result);
+                setCopyNotice("Result copied.");
+              } catch {
+                setCopyNotice(
+                  "Copy unavailable in this browser. Select the result text to copy it.",
+                );
+              }
+            }}
+          >
+            Copy result
+          </button>
+          {copyNotice ? <p role="status">{copyNotice}</p> : null}
           {run.sources.length ? (
             <div>
               <h3>Sources</h3>
@@ -358,7 +387,8 @@ export function TeamAssignmentWorkspace({
       ) : null}
       {run.status === "completed" &&
       run.reviewStatus !== "changes_requested" &&
-      !hasChild ? (
+      !hasChild &&
+      !historyError ? (
         <section className="studio-brief studio-form">
           <h2>Your decision</h2>
           <p>
@@ -402,14 +432,17 @@ export function TeamAssignmentWorkspace({
           Retry assignment
         </button>
       ) : null}
+      {run.reviewStatus === "approved" && !hasChild ? (
+        <AssignmentTransfer run={run} />
+      ) : null}
       {error ? <p role="alert">{error}</p> : null}
       {busy ? <p role="status">Saving your request…</p> : null}
       <details className="studio-brief">
         <summary>Activity and usage</summary>
         <p>
-          {run.model} · {run.inputTokens.toLocaleString()} input tokens ·{" "}
-          {run.outputTokens.toLocaleString()} output tokens · {run.searchCalls}{" "}
-          searches
+          {run.model} · {run.inputTokens.toLocaleString("en-US")} input tokens ·{" "}
+          {run.outputTokens.toLocaleString("en-US")} output tokens ·{" "}
+          {run.searchCalls} searches
           {run.estimatedCostUsd !== null
             ? ` · estimated $${run.estimatedCostUsd.toFixed(4)} USD`
             : ""}
@@ -420,12 +453,13 @@ export function TeamAssignmentWorkspace({
         </p>
         {run.events.map((event, i) => (
           <p key={i}>
-            <small>{new Date(event.createdAt).toLocaleString()}</small>
+            <small>{formatAssignmentTime(event.createdAt)}</small>
             <br />
             {event.note}
           </p>
         ))}
       </details>
+      {historyError ? <p role="alert">{historyError}</p> : null}
       {history.length > 1 ? (
         <nav className="studio-brief" aria-label="Assignment versions">
           <h2>Version history</h2>
@@ -435,8 +469,11 @@ export function TeamAssignmentWorkspace({
                 aria-current={item.id === run.id ? "page" : undefined}
                 href={`/team/assignments/${item.id}`}
               >
-                Version {history.length - i} · {label(item.status)} ·{" "}
-                {label(item.reviewStatus)}
+                Version {history.length - i} ·{" "}
+                {label(item.id === run.id ? run.status : item.status)} ·{" "}
+                {label(
+                  item.id === run.id ? run.reviewStatus : item.reviewStatus,
+                )}
               </Link>
             </p>
           ))}

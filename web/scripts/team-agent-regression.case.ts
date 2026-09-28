@@ -1,3 +1,9 @@
+import { formatAssignmentTime } from "../lib/team-agent-contract";
+import { loadTeamStudio, saveTeamStudio } from "../lib/team-studio-store";
+import { canonicalStudioState } from "../lib/team-studio-server-state";
+import { TeamAssignmentResult } from "../components/team-assignment-result";
+import { createElement } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { fixture } from "./fixtures/team-clerk";
@@ -10,6 +16,8 @@ import { GET as cron } from "../app/api/cron/team-assignments/route";
 import { initialStudio } from "../lib/team-studio";
 import { prisma } from "../lib/prisma";
 import {
+  transferAssignment,
+  refreshOwnerAssignments,
   startAssignment,
   refreshAssignment,
   approveAssignment,
@@ -91,6 +99,14 @@ async function complete(id: string) {
   return refreshAssignment(owner, id);
 }
 async function main() {
+  const savedTimezone = process.env.TZ;
+  process.env.TZ = "UTC";
+  const utcDisplay = formatAssignmentTime("2026-09-28T13:27:04.000Z");
+  process.env.TZ = "Asia/Manila";
+  assert.equal(formatAssignmentTime("2026-09-28T13:27:04.000Z"), utcDisplay);
+  assert.equal(utcDisplay, "2026-09-28 21:27 PHT");
+  if (savedTimezone === undefined) delete process.env.TZ;
+  else process.env.TZ = savedTimezone;
   process.env.OPENAI_API_KEY = "disposable-test-value";
   process.env.CRON_SECRET = "disposable-cron-test";
   assert.equal((await GET(req())).status, 401);
@@ -112,7 +128,7 @@ async function main() {
     403,
   );
   assert.equal(
-    (await POST(req({ briefId: ids[0], feedback: "x".repeat(11000) }))).status,
+    (await POST(req({ briefId: ids[0], feedback: "x".repeat(21000) }))).status,
     413,
   );
   assert.equal((await cron(req())).status, 401);
@@ -174,12 +190,24 @@ async function main() {
     approveAssignment(owner, first.id),
     /INVALID_ASSIGNMENT/,
   );
-  const duplicateRevision = await start(ids[0], {
-    parentId: first.id,
-    action: "revise",
-    feedback: "A concurrent different edit",
-  });
-  assert.equal(duplicateRevision.id, revision.id);
+  await assert.rejects(
+    start(ids[0], {
+      parentId: first.id,
+      action: "revise",
+      feedback: "A concurrent different edit",
+    }),
+    /ASSIGNMENT_SUPERSEDED/,
+  );
+  assert.equal(
+    (
+      await start(ids[0], {
+        parentId: first.id,
+        action: "revise",
+        feedback: "Make it shorter",
+      })
+    ).id,
+    revision.id,
+  );
   assert.equal(creates, 2);
   assert.equal((await cancelAssignment(owner, revision.id)).status, "canceled");
   assert.equal((await complete(revision.id)).status, "canceled"); // late provider completion cannot replace a terminal state
@@ -246,6 +274,108 @@ async function main() {
     "failed",
   );
   assert.equal(creates, beforeSync);
+  // Only approved outputs can produce next steps; appending is idempotent and preserves CAS.
+  const draftInput = {
+    kind: "draft" as const,
+    title: "Approved copy",
+    caption: "A reviewed excerpt",
+    channel: "Instagram" as const,
+    format: "Text" as const,
+  };
+  await assert.rejects(
+    transferAssignment(owner, retry.id, draftInput),
+    /SOURCE_NOT_APPROVED/,
+  );
+  await approveAssignment(owner, retry.id);
+  const oldState = await loadTeamStudio(owner);
+  const exported = await Promise.all([
+    transferAssignment(owner, retry.id, draftInput),
+    transferAssignment(owner, retry.id, draftInput),
+  ]);
+  assert.equal(exported[0].id, exported[1].id);
+  const afterExport = await loadTeamStudio(owner);
+  assert.equal(afterExport.revision, oldState.revision + 1);
+  assert.equal(afterExport.state.drafts.length, 1);
+  assert.equal(afterExport.state.drafts[0].status, "Draft");
+  assert.equal(afterExport.state.drafts[0].sourceAssignmentId, retry.id);
+  await assert.rejects(saveTeamStudio(owner, oldState), /CONFLICT/);
+  await assert.rejects(
+    transferAssignment("foreign-owner", retry.id, draftInput),
+    /SOURCE_NOT_APPROVED/,
+  );
+  const forged = structuredClone(afterExport.state);
+  forged.drafts[0].sourceAssignmentId = first.id;
+  assert.throws(
+    () => canonicalStudioState(afterExport.state, forged),
+    /INVALID_STATE/,
+  );
+  const handoff = await transferAssignment(owner, retry.id, {
+    kind: "brief",
+    agent: "creator",
+    text: "Write a caption from this approved proposal",
+  });
+  const afterHandoff = await loadTeamStudio(owner);
+  assert(
+    afterHandoff.state.briefs.some(
+      (b) => b.id === handoff.id && b.sourceAssignmentId === retry.id,
+    ),
+  );
+  const followup = await start(handoff.id);
+  assert.equal(followup.agent, "creator");
+  assert.equal(followup.sourceAssignmentId, retry.id);
+  assert.equal(
+    JSON.parse(captured.at(-1).input).sourceContext,
+    completed.result,
+  );
+  await complete(followup.id);
+  await prisma.teamAgentRun.update({
+    where: { id: retry.id },
+    data: { reviewStatus: "changes_requested" },
+  });
+  await assert.rejects(
+    start(handoff.id, {
+      action: "revise",
+      parentId: followup.id,
+      feedback: "Change tone",
+    }),
+    /SOURCE_NOT_APPROVED/,
+  );
+  // A cancel request arriving after provider completion returns the completed proposal.
+  const racing = await start(ids[10]);
+  const racingRow = await prisma.teamAgentRun.findUniqueOrThrow({
+    where: { id: racing.id },
+  });
+  responses.set(racingRow.responseId!, {
+    id: racingRow.responseId,
+    status: "completed",
+    output: [
+      {
+        type: "message",
+        content: [
+          { type: "output_text", text: "Completed before cancellation" },
+        ],
+      },
+    ],
+  });
+  assert.equal((await cancelAssignment(owner, racing.id)).status, "completed");
+  assert.equal((await refreshOwnerAssignments(owner)).failures, 0);
+  assert((await refreshOwnerAssignments("foreign-owner")).runs.length === 0);
+  const markup = renderToStaticMarkup(
+    createElement(TeamAssignmentResult, {
+      run: {
+        result:
+          "# Heading\n**Bold**\n- List item\n<script>alert(1)</script>\n[bad](javascript:alert(1))\n[good](https://example.com)",
+        sources: [],
+      },
+    }),
+  );
+  assert(markup.includes("<h3>Heading</h3>"));
+  assert(markup.includes("<strong>Bold</strong>"));
+  assert(markup.includes("<ul>"));
+  assert(!markup.includes("<script>"));
+  assert(!markup.includes('href="javascript:'));
+  assert(markup.includes('href="https://example.com/"'));
+  const createsBeforeCap = creates;
   // Daily cap includes terminal runs; denied requests never contact the provider.
   const count = await prisma.teamAgentRun.count({ where: { ownerId: owner } });
   for (let i = count; i < 20; i++)
@@ -268,7 +398,7 @@ async function main() {
       },
     });
   await assert.rejects(start(ids[9]), /ASSIGNMENT_LIMIT/);
-  assert.equal(creates, beforeSync);
+  assert.equal(creates, createsBeforeCap);
   await createAgentResponse(defaultTeamModel, "researcher", {
     brief: "Research public posting rules",
     instructions: "Cite sources",
@@ -318,7 +448,7 @@ async function main() {
   >`SELECT relname,relrowsecurity FROM pg_class WHERE relname IN ('TeamAgentRun','TeamAgentEvent')`;
   assert(roles.every((r) => r.relrowsecurity));
   console.log(
-    "PASS: owner-only APIs, origins, payload limits, duplicate/concurrent starts, prompt snapshots, saved results, approvals, immutable revisions, cancellation, ambiguous failure without paid retries, concurrency/daily caps, background recovery, citations, researcher tools, and RLS. Real PostgreSQL; Clerk and OpenAI simulated.",
+    "PASS: owner-only APIs, origins, payload limits, duplicate/concurrent starts, prompt snapshots, saved results, approvals, immutable revisions, cancellation, ambiguous failure without paid retries, concurrency/daily caps, background recovery, citations, researcher tools, approved handoffs with context, content-draft creation, provenance, stale studio edits, safe Markdown, cancellation races, and RLS. Real PostgreSQL; Clerk and OpenAI simulated.",
   );
 }
 main()
@@ -329,6 +459,7 @@ main()
   .finally(async () => {
     global.fetch = originalFetch;
     await prisma.teamAgentRun.deleteMany({ where: { ownerId: owner } });
+    await prisma.teamStudioAudit.deleteMany({ where: { ownerId: owner } });
     await prisma.teamStudioState.deleteMany({ where: { ownerId: owner } });
     await prisma.$disconnect();
   });

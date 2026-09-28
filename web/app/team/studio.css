@@ -1386,3 +1386,80 @@
     padding: 18px;
   }
 }
+
+.assignment-inbox {
+  margin: 24px 0 32px;
+}
+.assignment-inbox-filters {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin: 20px 0;
+}
+.assignment-inbox-filters label {
+  display: grid;
+  gap: 8px;
+  flex: 1;
+}
+.assignment-inbox-filters input,
+.assignment-inbox-filters select {
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: white;
+  color: var(--ink);
+}
+.assignment-list {
+  display: grid;
+  gap: 12px;
+  margin: 16px 0;
+}
+.studio .assignment-list-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 18px;
+  padding: 20px;
+  background: white;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+}
+.assignment-list-item p {
+  margin: 8px 0;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+.assignment-list-item small {
+  color: #69796a;
+}
+.assignment-formatted {
+  line-height: 1.8;
+  overflow-wrap: anywhere;
+  margin-top: 16px;
+}
+.assignment-formatted p {
+  margin: 0 0 12px;
+  white-space: pre-wrap;
+}
+.assignment-formatted h3 {
+  margin: 20px 0 10px;
+  font-size: 18px;
+}
+.assignment-formatted ul,
+.assignment-formatted ol {
+  padding-left: 24px;
+  margin: 12px 0;
+}
+.assignment-formatted li {
+  margin: 8px 0;
+}
+.assignment-formatted code {
+  background: #eef2eb;
+  padding: 2px 5px;
+  border-radius: 4px;
+}
+@media (max-width: 600px) {
+  .studio .assignment-list-item {
+    flex-direction: column;
+  }
+}

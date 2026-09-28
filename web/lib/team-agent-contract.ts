@@ -23,6 +23,7 @@ export const assignmentViewSchema = z.object({
   reviewStatus: z.string(),
   model: z.string(),
   brief: z.string(),
+  sourceAssignmentId: z.string().default(""),
   instructions: z.string(),
   feedback: z.string(),
   result: z.string(),
@@ -47,6 +48,7 @@ export type AssignmentSummary = Pick<
   | "status"
   | "reviewStatus"
   | "createdAt"
+  | "brief"
 >;
 export const assignmentSummarySchema = assignmentViewSchema.pick({
   id: true,
@@ -56,6 +58,7 @@ export const assignmentSummarySchema = assignmentViewSchema.pick({
   status: true,
   reviewStatus: true,
   createdAt: true,
+  brief: true,
 });
 export function safeSourceUrl(value: string) {
   try {
@@ -66,4 +69,31 @@ export function safeSourceUrl(value: string) {
   } catch {
     return null;
   }
+}
+
+export const assignmentTransferSchema = z.discriminatedUnion("kind", [
+  z.object({
+    kind: z.literal("brief"),
+    agent: z.enum(["lead", "creator", "researcher"]),
+    text: z.string().trim().min(1).max(6000),
+  }),
+  z.object({
+    kind: z.literal("draft"),
+    title: z.string().trim().min(1).max(120),
+    caption: z.string().trim().min(1).max(6000),
+    channel: z.enum(["Instagram", "Facebook", "TikTok", "YouTube", "LinkedIn"]),
+    format: z.enum(["Image", "Carousel", "Video", "Text"]),
+  }),
+]);
+export type AssignmentTransfer = z.infer<typeof assignmentTransferSchema>;
+
+// A deterministic display avoids server/browser timezone hydration mismatches.
+export function formatAssignmentTime(value: string) {
+  const time = new Date(value).getTime();
+  return Number.isFinite(time)
+    ? new Date(time + 8 * 60 * 60 * 1000)
+        .toISOString()
+        .slice(0, 16)
+        .replace("T", " ") + " PHT"
+    : "Unknown time";
 }

@@ -45,8 +45,17 @@ export function canonicalStudioState(
     )
   )
     throw new Error("INVALID_STATE");
+  for (const brief of proposed.briefs) {
+    if (
+      brief.sourceAssignmentId &&
+      !previous.briefs.some((b) => b.id === brief.id)
+    )
+      throw new Error("INVALID_STATE");
+  }
   const drafts = proposed.drafts.map((candidate) => {
     const old = previous.drafts.find((d) => d.id === candidate.id);
+    if (candidate.sourceAssignmentId !== old?.sourceAssignmentId)
+      throw new Error("INVALID_STATE");
     if (!old)
       return {
         ...candidate,

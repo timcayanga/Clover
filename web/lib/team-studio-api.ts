@@ -38,6 +38,18 @@ export async function readStudioJson(request: Request, maxBytes = 2_000_000) {
 export function studioError(error: unknown) {
   const name = error instanceof Error ? error.message : "";
   const errors: Record<string, [number, string]> = {
+    ASSIGNMENT_SUPERSEDED: [
+      409,
+      "Another revision already exists. Your feedback was not submitted. Open the latest version before requesting changes.",
+    ],
+    SOURCE_NOT_APPROVED: [
+      409,
+      "Approve the latest source result before creating or starting follow-up work.",
+    ],
+    STUDIO_CAPACITY: [
+      409,
+      "This workspace has reached its saved-item limit. Your existing work is safe.",
+    ],
     AGENT_UNAVAILABLE: [
       503,
       "Agent execution is not configured or is paused. Your brief is saved.",
