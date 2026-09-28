@@ -22,10 +22,12 @@ export function TeamAssignmentBriefs({
   briefs,
   disabled,
   localPreview,
+  latestRuns,
 }: {
   briefs: StudioState["briefs"];
   disabled: boolean;
   localPreview: boolean;
+  latestRuns?: AssignmentSummary[];
 }) {
   const router = useRouter();
   const [runs, setRuns] = useState<AssignmentSummary[]>([]);
@@ -97,12 +99,17 @@ export function TeamAssignmentBriefs({
         .slice()
         .reverse()
         .map((brief) => {
-          const latest = runs.find((run) => run.briefId === brief.id);
+          const latest = (latestRuns ?? runs).find(
+            (run) => run.briefId === brief.id,
+          );
           return (
             <article className="studio-brief" key={brief.id}>
               <span className="studio-eyebrow">
                 {latest ? label(latest.status) : "Saved brief"}
               </span>
+              <small>
+                {agentProfiles.find((a) => a.id === brief.agent)?.name}
+              </small>
               <p>{brief.text}</p>
               {brief.sourceAssignmentId ? (
                 <p>

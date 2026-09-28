@@ -793,6 +793,38 @@ export function TeamStudio({
               compact={view === "Overview"}
             />
           ) : null}
+          {view === "Assignments" ? (
+            <section className="studio-section">
+              <div className="studio-section-heading">
+                <h2>Ready to start</h2>
+                <button
+                  className="studio-button secondary"
+                  onClick={() => changeView("Team")}
+                >
+                  Give a new assignment
+                </button>
+              </div>
+              {assignments.loaded ? (
+                <TeamAssignmentBriefs
+                  briefs={state.briefs.filter(
+                    (b) => !assignments.runs.some((r) => r.briefId === b.id),
+                  )}
+                  latestRuns={assignments.runs}
+                  disabled={!ready || storageBlocked || saving}
+                  localPreview={localPreview}
+                />
+              ) : null}
+              {assignments.loaded &&
+              !state.briefs.some(
+                (b) => !assignments.runs.some((r) => r.briefId === b.id),
+              ) ? (
+                <p>
+                  No unstarted briefs. Choose a team member to give a new
+                  assignment.
+                </p>
+              ) : null}
+            </section>
+          ) : null}
           {view === "Overview" ? (
             <>
               <section className="studio-stats" aria-label="Workspace summary">
@@ -1225,6 +1257,7 @@ export function TeamStudio({
             </p>
             <TeamAssignmentBriefs
               briefs={state.briefs.filter((b) => b.agent === activeAgent.id)}
+              latestRuns={assignments.loaded ? assignments.runs : undefined}
               disabled={!ready || storageBlocked || saving}
               localPreview={localPreview}
             />
