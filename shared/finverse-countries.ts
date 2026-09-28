@@ -14,11 +14,8 @@ const allCountries = ISO_COUNTRY_NAMES.map(([code, alpha2, name]) => {
   return { code, alpha2, name: supplied?.name ?? name, flagSrc: supplied?.flagSrc ?? null,
     flag: supplied?.flag ?? [...alpha2].map(c => String.fromCodePoint(127397 + c.charCodeAt(0))).join("") };
 });
-export function connectBankCountries(name: string, codes: string[]) {
-  const southeastAsia = new Set(["IDN", "MYS", "PHL", "SGP", "VNM"]);
-  const isCiti = /\bciti(?:bank|direct)?\b/i.test(name);
-  return allCountries.filter(c => FINVERSE_COUNTRIES.some(s => s.code === c.code) && codes.some(code => [c.code, c.alpha2, c.name.toUpperCase()].includes(code.trim().toUpperCase())) &&
-    (!isCiti || southeastAsia.has(c.code))).map(c => c.code);
+export function connectBankCountries(_name: string, codes: string[]) {
+  return allCountries.filter(c => FINVERSE_COUNTRIES.some(s => s.code === c.code) && codes.some(code => [c.code, c.alpha2, c.name.toUpperCase()].includes(code.trim().toUpperCase()))).map(c => c.code);
 }
 export function finverseCountries(banks: { countries: string[] }[]) {
   const available = new Set(banks.flatMap(bank => bank.countries));

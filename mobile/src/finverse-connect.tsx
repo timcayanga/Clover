@@ -1,28 +1,13 @@
 import { BankLifecyclePanel } from "./finverse-lifecycle-panel";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { finverseCountries } from "../../shared/finverse-countries";
-import { Image } from "expo-image";
-import { apiBase } from "./api-base";
+import type { FinverseBankOption } from "../../shared/finverse-bank-options";
+import { BankLogo, FinverseBankPicker } from "./finverse-bank-picker";
 import { Alert, Platform, Pressable, View } from "react-native";
 import { router } from "expo-router";
 import * as WebBrowser from "expo-web-browser";
 import { Text } from "./app-text";
 import { Body, Button, Field, Heading, Notice, useTheme } from "./ui";
 import { useSession } from "./session";
-
-const countryFlags: Record<string, number> = {
-  HKG: require("../assets/countries/hong kong.png"), IDN: require("../assets/countries/indonesia.png"),
-  MYS: require("../assets/countries/malaysia.png"), PHL: require("../assets/countries/philippines.png"),
-  SGP: require("../assets/countries/singapore.png"), VNM: require("../assets/countries/vietnam.png"),
-};
-function CountryFlag({code, fallback}: {code:string;fallback:string}) {
-  return countryFlags[code] ? <Image source={countryFlags[code]} style={{width:48,height:36}} contentFit="contain" /> : <Text style={{fontSize:32}}>{fallback}</Text>;
-}
-
-function BankLogo({path}:{path:string}) {
-  const [failed,setFailed]=useState(false);
-  return <Image source={failed?require("../assets/account-types/bank.png"):{uri:path.startsWith("/")?apiBase()+path:path}} style={{width:48,height:48}} contentFit="contain" onError={()=>setFailed(true)}/>;
-}
 
 type Bank = { id: string; name: string; reserved?: boolean; existingAccountName?: string | null; suggestedAccountId?:string|null; candidates?:{id:string;name:string;last4:string|null}[] };
 type SyncResult = { status: string; linkUrl?: string; connectionId?: string; remaining?: number; accounts?: Bank[]; transactions?: { imported: number }; error?: string };
@@ -31,8 +16,7 @@ export function FinverseConnect({ onSynced, callbackConnection, mode = "connect"
   const { colors } = useTheme();
   const [access, setAccess] = useState<{ profileId: string; upgradeRequired: boolean } | null>(null);
   const allowed = access?.profileId === session.profileId && !access.upgradeRequired;
-  const [banks, setBanks] = useState<(Bank & {countries:string[];logoUrl:string;accountType?:string;accountTypes?:Record<string,string>;logoUrls?:Record<string,string>})[]>([]);
-  const [country,setCountry] = useState<string|null>(null);
+  const [banks, setBanks] = useState<FinverseBankOption[]>([]);
   const [linked,setLinked] = useState<{id:string;connectionId:string;name:string;last4:string|null;logoUrl:string;lastSyncedAt:string|null}[]>([]);
   const [connectionsLoaded,setConnectionsLoaded] = useState(false);
   const [connectionsError,setConnectionsError] = useState("");
@@ -55,9 +39,9 @@ export function FinverseConnect({ onSynced, callbackConnection, mode = "connect"
   useEffect(() => {
     const controller = new AbortController();
     setAccess(null);
-    setBanks([]); setCountry(null); setBankMessage("Loading banks…");
+    setBanks([]); setBankMessage("Loading banks…");
     if (session.demo) { setBankMessage("Sign in to connect your bank. Demo mode does not access bank accounts."); return; }
-    void requestRef.current<{ banks: (Bank & {countries:string[];logoUrl:string;accountType?:string;accountTypes?:Record<string,string>;logoUrls?:Record<string,string>})[]; mode?: string; message?: string; upgradeRequired?: boolean }>(`finverse/institutions?workspaceId=${encodeURIComponent(session.profileId)}`, { signal: controller.signal })
+    void requestRef.current<{ banks: FinverseBankOption[]; mode?: string; message?: string; upgradeRequired?: boolean }>(`finverse/institutions?workspaceId=${encodeURIComponent(session.profileId)}`, { signal: controller.signal })
       .then(data => { if (!controller.signal.aborted) { setAccess({ profileId: session.profileId, upgradeRequired: data.upgradeRequired === true }); setBanks(data.banks); setTest(data.mode === "test"); setBankMessage(data.message || (data.banks.length ? "" : "No banks are available right now. Use Manual or Upload.")); } })
       .catch(error => { if (!controller.signal.aborted) setBankMessage(error.message || "Unable to load banks."); });
     return () => controller.abort();
@@ -156,11 +140,7 @@ export function FinverseConnect({ onSynced, callbackConnection, mode = "connect"
       <Button secondary title="Unlink" disabled={busy} onPress={() => confirmUnlink(account)} />
     </View>) : <>
       {test?<Notice>Test mode · Only test banks are shown.</Notice>:null}
-      {country?<Button secondary title={`‹ Countries · ${finverseCountries(banks).find(c=>c.code===country)?.name}`} onPress={()=>setCountry(null)}/>:null}
-      <View style={{flexDirection:"row",flexWrap:"wrap",gap:8}}>
-        {!country ? finverseCountries(banks).map(c=><Pressable key={c.code} accessibilityRole="button" accessibilityLabel={c.name} onPress={()=>setCountry(c.code)} style={{width:"31%",padding:12,alignItems:"center",gap:8,borderWidth:1,borderColor:colors.line,borderRadius:16}}><CountryFlag code={c.code} fallback={c.flag} /><Text style={{fontSize:11,color:colors.ink,textAlign:"center"}}>{c.name}</Text></Pressable>) : banks.filter(bank=>bank.countries.includes(country)).map(bank=><Pressable key={bank.id} accessibilityRole="button" accessibilityLabel={[bank.name, bank.accountTypes?.[country] || bank.accountType].filter(Boolean).join(", ")} disabled={busy} onPress={()=>void connect(bank)} style={{width:"31%",padding:8,alignItems:"center",gap:8,borderWidth:1,borderColor:colors.line,borderRadius:16}}><BankLogo path={bank.logoUrls?.[country] || bank.logoUrl}/><Text style={{fontSize:11,color:colors.ink,textAlign:"center"}}>{bank.name}</Text>{(bank.accountTypes?.[country] || bank.accountType) ? <Text style={{fontSize:10,color:colors.muted,textAlign:"center"}}>{bank.accountTypes?.[country] || bank.accountType}</Text> : null}</Pressable>)}
-      </View>
-      {country&&!banks.some(bank=>bank.countries.includes(country))?<Body>No {test?"test ":""}banks are available here yet.</Body>:null}
+      <FinverseBankPicker key={`${session.profileId}:${revision}`} banks={banks} busy={busy} onConnect={bank => void connect(bank)} />
     </>}
     {message?<Notice>{message}</Notice>:null}
     {retrySync ? <Button secondary title="Try again" disabled={busy || !session.offlineStatus.online} onPress={() => void sync(retrySync.id, retrySync.accountIds)} /> : null}

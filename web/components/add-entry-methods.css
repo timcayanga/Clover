@@ -110,3 +110,13 @@
 @media(max-width:767px){
   .transaction-creation-tabs:has(> button:nth-child(4)) > button {font-size:11px !important;white-space:nowrap;}
 }
+
+.finverse-bank-picker, .finverse-bank-picker__options, .finverse-bank-picker__notice { display:grid; gap:14px; min-width:0; }
+.finverse-bank-picker__heading { display:flex; align-items:center; gap:12px; }
+.finverse-bank-picker__heading img { width:48px; height:48px; object-fit:contain; }
+.finverse-bank-picker__option { display:flex; align-items:center; gap:10px; width:100%; min-height:52px; padding:12px 16px; border:1px solid var(--line,#d4e0e8); border-radius:14px; color:var(--text,#22313b); background:var(--surface,#fff); text-align:left; font:inherit; cursor:pointer; }
+.finverse-bank-picker__option > :first-child { flex:1; }
+.finverse-bank-picker__option[data-selected="true"] { border-color:var(--teal,#03a8c0); }
+.finverse-bank-picker__beta { padding:2px 8px; border-radius:999px; background:var(--surface-2,#ecf4f5); color:var(--text,#22313b); font-size:11px; font-weight:500; }
+.finverse-bank-picker__notice { padding:16px; border:1px solid var(--line,#d4e0e8); border-radius:16px; }
+.finverse-bank-picker button:disabled { opacity:.6; cursor:wait; }

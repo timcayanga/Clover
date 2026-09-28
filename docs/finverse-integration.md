@@ -14,7 +14,7 @@ Clover uses Finverse's Bank Data API to connect accounts and import transactions
    - `FINVERSE_CLIENT_SECRET`
    - `FINVERSE_REDIRECT_URI=https://staging.clover.ph/api/integrations/finverse/callback`
    - `FINVERSE_TOKEN_ENCRYPTION_KEY` (a 32-byte base64 value from `openssl rand -base64 32`)
-5. Redeploy staging, open **Accounts → Add account → Connect**. Search the Finverse bank list and choose a bank. In test mode only supported test institutions are shown. After authorization, review and select the returned accounts before adding them.
+5. Redeploy staging, open **Accounts → Add account → Connect**. Choose the country where the account is held, then a bank. In test mode only eligible test institutions are shown. After authorization, review and select the returned accounts before adding them.
 
 ## Data behavior
 
@@ -33,7 +33,7 @@ Finverse uses `https://api.prod.finverse.net` for both test and live credentials
 
 The iOS/Android store-test apps open the provider in the system authentication browser. The existing HTTPS callback verifies one-time state, then redirects native sessions to the fixed `clover://accounts` route. No arbitrary return URL is accepted. The native gateway exposes only authenticated institutions GET and link/sync POST operations; workspace ownership and plan quotas are reused from web.
 
-The Connect tab is visible even when credentials are missing, with a clear unavailable message and Manual/Upload alternatives. Bank discovery is restricted to the existing Philippines rollout and accounts/transactions products. Do not infer live availability from the Figma sample banks.
+The Connect tab is visible even when credentials are missing, with a clear unavailable message and Manual/Upload alternatives. Bank discovery uses Finverse’s current country memberships across Hong Kong, Indonesia, Malaysia, Philippines, Singapore and Vietnam, and requires both Accounts and Transactions products. Do not infer live availability from the Figma sample banks.
 
 Refreshes update raw/normalized provider audit payloads without overwriting existing confirmed Clover account balances. Newly returned accounts require user selection before import; transactions enter review as suggestions.
 
@@ -66,3 +66,14 @@ Provider reference: https://docs.finverse.com/ and the official Finverse Account
 - Statement imports after bank sync match provider-backed transactions one occurrence at a time by account, date, currency, amount, direction and normalized merchant/description evidence. Exact matches retain the original ledger row; uncertain same-value overlaps enter review, excluded from totals. Source parsed rows remain available for audit.
 - Bank sync and statement confirmation share the owner's serialization lock. Re-importing a confirmed or edited transaction does not replace any core fields.
 - Manual entry is an explicit user action on the selected account. It remains possible after sync; it is not automatically merged away. A synced bank balance remains a dated provider snapshot, not a guarantee that later manual entries have reached the bank.
+
+## Country and bank catalogue policy (28 September 2026)
+
+- The authenticated Institutions API is the availability source. The old website/deck brand allowlist and Citibank country exception no longer gate discovery.
+- Show SUPPORTED and BETA connectors only; both must advertise ACCOUNTS and TRANSACTIONS. Hide ALPHA and accounts-only/payment-only connectors. Keep real/test tags isolated by FINVERSE_MODE.
+- Show only countries with at least one eligible connector, alphabetically, with flags and names. Country means where the bank account is held.
+- Known institution IDs map to a bank brand for display only. Group within the selected country. Unknown institution IDs remain separate until their brand identity is reviewed.
+- A bank tile summarizes Personal, Business, or Personal & Business. Multiple connectors open access choices; each retains its exact provider ID. Two business portals (such as UOB and UOB Singapore) retain the provider’s distinct names.
+- A single SUPPORTED connector opens directly. BETA status is attached to the connector; selecting it requires a Continue action after the reliability note. A tile is labelled Beta when all its eligible connectors are Beta.
+- The same picker policy applies to Add Account and the unlinked-account Sync path on desktop/mobile web and iOS/Android. Existing linked accounts, financial data, access limits and synchronization behavior are unchanged.
+- Staging remains test mode. Real-bank visual QA uses a read-only catalogue snapshot; do not switch environments merely to populate a preview.

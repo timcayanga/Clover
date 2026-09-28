@@ -1,4 +1,3 @@
-import { documentedFinverseCountries } from "../../shared/finverse-coverage";
 import { connectBankCountries } from "../../shared/finverse-countries";
 import { createCipheriv, createDecipheriv, createHash, randomBytes } from "node:crypto";
 
@@ -151,6 +150,7 @@ export const createFinverseLink = async (userId: string, state: string, institut
       ui_mode: "auto_redirect",
       link_mode: config.mode === "live" ? "real" : "test",
       institution_id: institutionId,
+      institution_status: "supported beta",
       products_supported: ["ACCOUNTS", "TRANSACTIONS"],
       products_requested: ["ACCOUNTS", "TRANSACTIONS", "ACCOUNT_NUMBERS"],
     }),
@@ -274,7 +274,7 @@ export const normalizeFinverseTransaction = (transaction: FinverseTransaction) =
 };
 
 /** Public display data only; never forward institution login fields or tokens. */
-export type ConnectBank = { id: string; name: string; countries: string[] };
+export type ConnectBank = { id: string; name: string; countries: string[]; status: string };
 export function visibleFinverseBanks(institutions: unknown, mode: "live" | "test"): ConnectBank[] {
   if (!Array.isArray(institutions)) throw new Error("FINVERSE_INVALID_INSTITUTIONS");
   const banks = new Map<string, ConnectBank>();
@@ -283,11 +283,11 @@ export function visibleFinverseBanks(institutions: unknown, mode: "live" | "test
     if (!Array.isArray(item.countries) || !item.countries.some((country: unknown) => typeof country === "string")) continue;
     if (!Array.isArray(item.products_supported) || !["ACCOUNTS", "TRANSACTIONS"].every(p => item.products_supported.includes(p))) continue;
     if (!Array.isArray(item.tags) || !item.tags.includes(mode === "live" ? "real" : "test")) continue;
-    if (!(mode === "live" ? ["SUPPORTED"] : ["SUPPORTED", "BETA"]).includes(item.status)) continue;
+    if (!["SUPPORTED", "BETA"].includes(item.status)) continue;
     const providerCountries = connectBankCountries(item.institution_name, item.countries.filter((country: unknown): country is string => typeof country === "string"));
-    const countries = mode === "test" ? providerCountries : documentedFinverseCountries(item.institution_name, providerCountries);
+    const countries = providerCountries;
     if (!countries.length) continue;
-    banks.set(item.institution_id, { id: item.institution_id, name: item.institution_name, countries });
+    banks.set(item.institution_id, { id: item.institution_id, name: item.institution_name, countries, status: item.status });
   }
   return [...banks.values()].sort((a, b) => a.name.localeCompare(b.name));
 }
@@ -300,11 +300,10 @@ export function summarizeFinverseCatalog(data: unknown, mode: "live" | "test") {
     const status = typeof item.status === "string" ? item.status : "UNKNOWN";
     const reasons = [];
     if (!tags.includes(mode === "live" ? "real" : "test")) reasons.push("Different live/test mode");
-    if (!(mode === "live" ? ["SUPPORTED"] : ["SUPPORTED", "BETA"]).includes(status)) reasons.push(`Provider status: ${status}`);
+    if (!["SUPPORTED", "BETA"].includes(status)) reasons.push(`Provider status: ${status}`);
     if (!["ACCOUNTS", "TRANSACTIONS"].every(p => products.includes(p))) reasons.push("Missing Accounts or Transactions support");
     const eligibleCountries = connectBankCountries(item.institution_name, countries);
     if (!eligibleCountries.length) reasons.push("No eligible Connect countries");
-    else if (mode === "live" && !documentedFinverseCountries(item.institution_name, eligibleCountries).length) reasons.push("Outside documented Clover coverage");
     return { id: item.institution_id as string, name: item.institution_name as string, countries, products, tags, status,
       shownInClover: visible.has(item.institution_id), excludedReasons: reasons };
   });

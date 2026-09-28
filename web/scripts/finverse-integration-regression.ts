@@ -82,11 +82,11 @@ console.log("Finverse integration regression checks passed.");
 const realBank = { institution_id: "bank-one", institution_name: "Standard Chartered", countries: ["PHL"], products_supported: ["ACCOUNTS", "TRANSACTIONS"], tags: ["real"], status: "SUPPORTED", login_actions: ["PRIVATE"] };
 const testBank = { ...realBank, institution_id: "test", institution_name: "Test bank", tags: ["test"], status: "BETA" };
 const bankCases = [realBank, testBank, {...realBank,institution_id:"other-country",countries:["SGP"]}, {...realBank,institution_id:"no-transactions",products_supported:["ACCOUNTS"]}, {...realBank,institution_id:"alpha",status:"ALPHA"}, null];
-assert.deepEqual(visibleFinverseBanks(bankCases,"live"),[{id:"bank-one",name:"Standard Chartered",countries:["PHL"]},{id:"other-country",name:"Standard Chartered",countries:["SGP"]}]);
-assert.deepEqual(visibleFinverseBanks(bankCases,"test"),[{id:"test",name:"Test bank",countries:["PHL"]}]);
+assert.deepEqual(visibleFinverseBanks(bankCases,"live"),[{id:"bank-one",name:"Standard Chartered",countries:["PHL"],status:"SUPPORTED"},{id:"other-country",name:"Standard Chartered",countries:["SGP"],status:"SUPPORTED"}]);
+assert.deepEqual(visibleFinverseBanks(bankCases,"test"),[{id:"test",name:"Test bank",countries:["PHL"],status:"BETA"}]);
 assert.deepEqual(visibleFinverseBanks([],"live"),[]);
 assert.throws(()=>visibleFinverseBanks({error:"bad response"},"live"));
-assert.deepEqual(visibleFinverseBanks([realBank,realBank],"live"),[{id:"bank-one",name:"Standard Chartered",countries:["PHL"]}]);
+assert.deepEqual(visibleFinverseBanks([realBank,realBank],"live"),[{id:"bank-one",name:"Standard Chartered",countries:["PHL"],status:"SUPPORTED"}]);
 import { mobileOperation } from "../lib/mobile-api-policy";
 assert.equal(mobileOperation("GET",["finverse","institutions"]),"finverse-institutions");
 assert.equal(mobileOperation("POST",["finverse","link"]),"finverse-link");
@@ -100,7 +100,7 @@ import { finverseCountries } from "../../shared/finverse-countries";
 assert.deepEqual(finverseCountries([]),[]);
 assert.deepEqual(finverseCountries([{countries:["PHL","SGP"]}]).map(c=>c.name),["Philippines","Singapore"]);
 const citi=visibleFinverseBanks([{...realBank,institution_id:"citi",institution_name:"Citibank",countries:["USA","GBR","HKG","SGP","PHL"]}],"live");
-assert.deepEqual(citi[0].countries,["PHL","SGP"]);
+assert.deepEqual(citi[0].countries,["HKG","PHL","SGP"]);
 assert.deepEqual(visibleFinverseBanks([{...realBank,countries:["USA","THA"]}],"live"),[]);
 assert.deepEqual(finverseCountries([{countries:["GBR","NLD"]}]).map(c=>c.name),[]);
 assert.deepEqual(visibleFinverseBanks([{...realBank,countries:["ZZZ"]}],"live"),[]);
@@ -126,6 +126,7 @@ async function refreshRequests() {
     assert.equal(requests.at(-1)?.body.login_identity_id,"identity","Relink must reuse the existing identity");
     await createFinverseLink("owner","state","sg-bank");
     assert.equal(requests.at(-1)?.body.institution_id,"sg-bank");
+    assert.equal(requests.at(-1)?.body.institution_status,"supported beta");
     assert.deepEqual(requests.at(-1)?.body.products_requested,["ACCOUNTS","TRANSACTIONS","ACCOUNT_NUMBERS"]);
     assert.equal(requests.at(-1)?.body.countries,undefined,"Selected banks outside the Philippines must remain connectable");
     console.log("Finverse refresh, relink and multi-country requests passed.");
@@ -155,14 +156,32 @@ import { summarizeFinverseCatalog } from "../lib/finverse";
 const report = summarizeFinverseCatalog([realBank,{...realBank,institution_id:"beta",status:"BETA"},{...realBank,institution_id:"limited",products_supported:["ACCOUNTS"]}],"live");
 assert.equal(report.length,3,"Catalogue must retain entries hidden by Connect filters");
 assert.equal(report[0].shownInClover,true);
-assert(report[1].excludedReasons.includes("Provider status: BETA"));
+assert.equal(report[1].shownInClover,true,"Beta is available with disclosure");
 assert(report[2].excludedReasons.includes("Missing Accounts or Transactions support"));
 assert(!JSON.stringify(report).includes("PRIVATE"),"Never export institution login fields");
 
-import { documentedFinverseCountries } from "../../shared/finverse-coverage";
-assert.deepEqual(documentedFinverseCountries("BPI", ["PHL", "THA", "SGP"]), ["PHL"]);
-assert.deepEqual(documentedFinverseCountries("VietinBank", ["VNM"]), ["VNM"]);
-assert.deepEqual(documentedFinverseCountries("Citibank", ["THA", "PHL", "VNM"]), ["PHL", "VNM"]);
-
-assert.equal(finverseBankPresentation({name:"Citibank",countries:["PHL","SGP"]}).accountTypes.PHL,"Business accounts only");
-assert.equal(finverseBankPresentation({name:"Citibank",countries:["PHL","SGP"]}).accountTypes.SGP,undefined);
+import { connectBankCountries } from "../../shared/finverse-countries";
+import { groupFinverseBanks, finverseOptionLabel } from "../../shared/finverse-bank-options";
+assert.deepEqual(connectBankCountries("Citibank", ["HKG", "THA", "PHL"]), ["HKG", "PHL"]);
+const catalogue = [
+  {...realBank,institution_id:"bpi",institution_name:"BPI - Personal"},
+  {...realBank,institution_id:"bpi-business",institution_name:"BPI - Business",status:"BETA"},
+  {...realBank,institution_id:"bdoph-business",institution_name:"BDO - Business",status:"ALPHA"},
+  {...realBank,institution_id:"unionbank-ph",institution_name:"UnionBank - Personal",products_supported:["ACCOUNTS"]},
+  {...realBank,institution_id:"citi-hk",institution_name:"Citibank (HK) - Personal",countries:["HKG"],status:"BETA"},
+  {...realBank,institution_id:"uob-business",institution_name:"UOB - Business",countries:["SGP"]},
+  {...realBank,institution_id:"uob-sg-business",institution_name:"UOB (SG) - Business",countries:["SGP"]},
+  {...realBank,institution_id:"uob-sg",institution_name:"UOB (SG) - Personal",countries:["SGP"]},
+];
+const available=visibleFinverseBanks(catalogue,"live").map(bank=>({...bank,...finverseBankPresentation(bank)}));
+assert.equal(available.length,6);
+assert.deepEqual(finverseCountries(available).map(c=>c.name),["Hong Kong","Philippines","Singapore"]);
+const ph=groupFinverseBanks(available,"PHL");assert.equal(ph.length,1);assert.equal(ph[0].name,"BPI");assert.equal(ph[0].accessLabel,"Personal & Business");assert.equal(ph[0].betaOnly,false);
+assert.deepEqual(ph[0].options.map(o=>[o.id,o.status]),[["bpi","SUPPORTED"],["bpi-business","BETA"]]);
+assert.equal(groupFinverseBanks(available,"HKG")[0].betaOnly,true);
+const uob=groupFinverseBanks(available,"SGP")[0];assert.equal(uob.options.length,3);
+assert.equal(new Set(uob.options.map(o=>finverseOptionLabel(o,uob.options))).size,3,"Different business portals must remain identifiable");
+const unknown=[{id:"a",name:"Similar Bank",countries:["PHL"],logoUrl:""},{id:"b",name:"Similar Bank",countries:["PHL"],logoUrl:""}];
+assert.equal(groupFinverseBanks(unknown,"PHL").length,2,"Unknown connectors must not be merged by name");
+assert.equal(visibleFinverseBanks(catalogue,"test").length,0,"Test mode must not expose real banks");
+console.log("API-driven coverage, Beta availability, brand grouping, portal identity and country eligibility passed.");
