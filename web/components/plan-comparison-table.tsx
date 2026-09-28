@@ -1,3 +1,4 @@
+import planSurface from "./plan-card-surface.module.css";
 import type { ReactNode } from "react";
 import { PLAN_COMPARISON_KEYS, PLAN_COMPARISON_ROWS, plannedProPrices, plannedPremiumPrices, type PricingMarket } from "@/lib/public-plan-comparison";
 
@@ -14,10 +15,10 @@ export function PlanComparisonTable({ variant, className, paidFirst = false, foo
     ["Linked Banks", ...PLAN_COMPARISON_ROWS.linkedBanks.slice(1)],
     ["Monthly AI Usage", ...PLAN_COMPARISON_ROWS.ai.slice(1)],
   ] : PLAN_COMPARISON_KEYS[variant].map(key => PLAN_COMPARISON_ROWS[key]);
-  return <table className={className} data-plan-comparison={variant}>
+  return <table className={`${className ?? ""} ${compact ? planSurface.comparison : ""}`} data-plan-comparison={variant}>
     <caption>{paidFirst ? "Clover Pro, Plus and Free features" : "Clover Free, Plus and Pro features"}</caption>
-    <thead><tr><th scope="col">Feature</th>{(paidFirst ? ["Pro", "Plus", "Free"] : ["Free", "Plus", "Pro"]).map(plan => <th scope="col" key={plan}>{plan}</th>)}</tr></thead>
-    <tbody>{rows.map(([label, free, plus, pro]) => <tr key={label}><th scope="row">{label}</th>{(paidFirst ? [pro, plus, free] : [free, plus, pro]).map((value, index) => <td key={index}>{value}</td>)}</tr>)}</tbody>
+    <thead><tr><th scope="col">Feature</th>{(paidFirst ? ["Pro", "Plus", "Free"] : ["Free", "Plus", "Pro"]).map(plan => <th scope="col" key={plan} data-plan={plan}>{plan}</th>)}</tr></thead>
+    <tbody>{rows.map(([label, free, plus, pro]) => <tr key={label}><th scope="row">{label}</th>{(paidFirst ? [pro, plus, free] : [free, plus, pro]).map((value, index) => <td key={index} data-plan={(paidFirst ? ["Pro", "Plus", "Free"] : ["Free", "Plus", "Pro"])[index]}>{value}</td>)}</tr>)}</tbody>
     {footer && <tfoot><tr><td colSpan={4}>{footer}</td></tr></tfoot>}
   </table>;
 }
