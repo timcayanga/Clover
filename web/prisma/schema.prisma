@@ -2498,3 +2498,34 @@ model SwitchEvent {
   @@unique([applicationId,kind])
   @@index([emailStatus,createdAt])
 }
+
+// Internal distribution data is independent of customer financial workspaces.
+model TeamStudioState {
+  ownerId   String   @id
+  revision  Int      @default(0)
+  payload   Json
+  updatedAt DateTime @updatedAt
+}
+
+model TeamStudioAudit {
+  id        String   @id @default(cuid())
+  ownerId   String
+  revision  Int
+  payload   Json
+  createdAt DateTime @default(now())
+
+  @@unique([ownerId, revision])
+}
+
+model TeamStudioMedia {
+  id          String   @id @default(cuid())
+  ownerId     String
+  storageKey  String   @unique
+  stagingKey  String   @unique
+  contentType String
+  size        Int
+  ready       Boolean  @default(false)
+  createdAt   DateTime @default(now())
+
+  @@index([ownerId, createdAt])
+}

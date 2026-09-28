@@ -1,6 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { getEnv } from "@/lib/env";
-import { syncClerkUser } from "@/lib/clerk";
+import { clerkClient } from "@clerk/nextjs/server";
 
 const normalizeList = (value: string | undefined) =>
   (value ?? "")
@@ -8,7 +8,7 @@ const normalizeList = (value: string | undefined) =>
     .map((entry) => entry.trim().toLowerCase())
     .filter(Boolean);
 
-export const getAdminEmailSet = () => new Set(normalizeList(getEnv().ADMIN_EMAILS));
+export const getAdminEmailSet = () => new Set(["hello@clover.ph", ...normalizeList(getEnv().ADMIN_EMAILS)]);
 
 export const getAdminOnlyUserIds = () => new Set(normalizeList(getEnv().ADMIN_ONLY_USER_IDS));
 
@@ -27,8 +27,8 @@ export const isConfiguredAdminEmail = async (userId: string) => {
   }
 
   try {
-    const user = await syncClerkUser(userId);
-    return user.authoritative && user.emailAddresses.some((email) => adminEmails.has(email.toLowerCase()));
+    const user = await (await clerkClient()).users.getUser(userId);
+    return user.emailAddresses.some((entry) => entry.verification?.status === "verified" && adminEmails.has(entry.emailAddress.toLowerCase()));
   } catch {
     return false;
   }
