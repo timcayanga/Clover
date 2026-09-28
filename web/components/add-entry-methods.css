@@ -127,3 +127,8 @@
 @media(prefers-reduced-motion:reduce){.finverse-progress__spinner{animation:none;}}
 .finverse-connect__sync-card details { justify-self:end; }
 .finverse-connect__sync-card summary { cursor:pointer; padding:8px; }
+
+.finverse-bank-logo, .finverse-connect__sync-card img { border-radius: 12px; }
+.finverse-connect__sync-card .finverse-connect__unlink { background: none; border: 0; box-shadow: none; color: var(--danger, #c6283d); font: inherit; font-size: 12px; padding: 10px 12px; min-height: 44px; cursor: pointer; }
+.finverse-connect__unlink:disabled { opacity: .5; cursor: default; }
+.add-entry-methods [id$="-ask-panel"]:not([hidden]) { min-height: 240px; }

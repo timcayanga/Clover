@@ -170,7 +170,7 @@ export function FinverseConnect({ onSynced, callbackConnection, mode = "connect"
       <Body muted>{account.status==="disconnect_pending"?"Disconnection pending":account.status==="link_pending"?"Authorization needed":account.syncError || account.status==="error"?"Connection needs attention":account.status==="retrieving"?"Syncing":"Connected"}</Body>
       <Body muted>Last Synced · {account.lastSyncedAt ? new Date(account.lastSyncedAt).toLocaleString() : "Not yet synced"}</Body>
       <Button title={busy?"Syncing…":"Sync"} icon="sync" disabled={busy || !allowed || account.status==="disconnect_pending"} onPress={()=>void sync(account.connectionId,[],true)} />
-      <Button secondary title="Account actions" icon="ellipsis-horizontal" disabled={busy||account.status==="disconnect_pending"} onPress={()=>Alert.alert(account.name,"Account actions",[{text:"Cancel",style:"cancel"},{text:"Unlink",style:"destructive",onPress:()=>confirmUnlink(account)}])} />
+<Pressable accessibilityRole="button" accessibilityLabel={`Unlink ${account.name}`} disabled={busy||account.status==="disconnect_pending"} onPress={()=>confirmUnlink(account)} style={{minHeight:44,alignItems:"center",justifyContent:"center"}}><Text style={{fontSize:12,color:colors.danger}}>Unlink</Text></Pressable>
     </View>) : mode === "sync" ? <>
       {test?<Notice>Test mode · Only test banks are shown.</Notice>:null}
       {banksLoaded ? <FinverseBankPicker key={`${session.profileId}:${revision}`} banks={banks} busy={busy} onConnect={bank => void connect(bank)} /> : <Notice>{bankMessage}</Notice>}

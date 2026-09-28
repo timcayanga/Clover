@@ -167,3 +167,11 @@ assert(!isEntryDraft({ version: 1, workspaceId: "workspace" }));
 assert(
   !entryDraftSchema.safeParse({ ...draft, confirmedByUser: true }).success,
 );
+
+assert.equal(simpleEntryRows("500 at Mendokoro")?.[0].merchant, "Mendokoro");
+assert.equal(simpleEntryRows("500 at Mendokoro")?.[0].amount, "500");
+assert.equal(simpleEntryRows("500 at Mendokoro")?.[0].accountId, "");
+assert.equal(simpleEntryRows("USD 20.50 at Coffee Bean")?.[0].currency, "USD");
+assert.equal(simpleEntryRows("500 at Mendokoro", {kind:"account",fields:{}}), null);
+assert(isEntryRequest("BPI Savings", {kind:"account",fields:{}}));
+assert.equal(simpleEntryRows("500 at Mendokoro", {kind:"transaction",fields:{accountId:"selected",currency:"PHP"}})?.[0].accountId,"selected");

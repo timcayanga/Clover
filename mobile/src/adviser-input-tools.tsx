@@ -17,7 +17,11 @@ export function AdviserInputTools({
   value,
   onChangeText,
   onSend,
+  placeholder = "Ask Clover",
+  expanded = false,
 }: {
+  placeholder?: string;
+  expanded?: boolean;
   value?: string;
   onChangeText?: (value: string) => void;
   onSend?: () => void;
@@ -103,7 +107,7 @@ export function AdviserInputTools({
             flexDirection: "row",
             alignItems: "center",
             gap: 4,
-            minHeight: 56,
+            minHeight: expanded ? 96 : 56,
             padding: 6,
             borderRadius: 28,
             borderWidth: 1,
@@ -127,18 +131,19 @@ export function AdviserInputTools({
           </Pressable>
           <TextInput
             accessibilityLabel="Ask Clover"
-            placeholder="Ask Clover"
+            placeholder={placeholder}
             placeholderTextColor={colors.muted}
             value={value}
             onChangeText={onChangeText}
             maxLength={4000}
             editable={!disabled}
             multiline
-            numberOfLines={1}
+            numberOfLines={expanded ? 3 : 1}
             style={{
               flex: 1,
               minWidth: 0,
-              height: 44,
+              height: expanded ? 84 : 44,
+              textAlignVertical: "top",
               paddingVertical: 8,
               color: colors.ink,
               fontFamily: "Poppins-Regular",

@@ -1,4 +1,5 @@
 "use client";
+import { entryExample } from "../../shared/entry-examples";
 
 import { requestAiConsent } from "./ai-consent";
 import { parseAddFormDraft, type AddFormDraft } from "../../shared/add-form-draft";
@@ -164,7 +165,7 @@ export function AdviserChat(props: AdviserChatProps) {
     update(); window.addEventListener(selectedWorkspaceEventName,update);
     return () => { controller?.abort(); window.removeEventListener(selectedWorkspaceEventName,update); };
   }, [props.workspaceId]);
-  return scope ? <ScopedAdviserChat key={scope} {...props} workspaceId={scope} storageKey={`${adviserChatStorageKey}:${scope}`} /> : <div className="adviser-chat__loading" role="status" aria-label="Loading Adviser" />;
+  return scope ? <ScopedAdviserChat key={scope} {...props} workspaceId={scope} storageKey={`${adviserChatStorageKey}:${scope}`} /> : <div className="adviser-chat__loading" role="status" aria-label="Loading Adviser">Opening Ask Clover…</div>;
 }
 function ScopedAdviserChat({ prompts, storageKey = adviserChatStorageKey, initialPrompt = "", layout = "embedded", minimal = false, surface = "general", pageLabel, workspaceId, formContext, onReviewForm }: AdviserChatProps & {workspaceId:string}) {
   const [entryDraft,setEntryDraft] = useState<EntryDraft|null>(null);
@@ -562,11 +563,11 @@ function ScopedAdviserChat({ prompts, storageKey = adviserChatStorageKey, initia
         <textarea
           ref={inputRef}
           id="adviser-chat-input"
-          rows={1}
+          rows={minimal || formContext ? 3 : 1}
           value={input}
           onChange={(event) => setInput(event.target.value)}
           onKeyDown={handleComposerKeyDown}
-          placeholder="Ask Clover"
+          placeholder={minimal || formContext ? entryExample(formContext?.kind || surface) : "Ask Clover"}
           disabled={hasReachedLimit || isSending || entryLocked}
         />
         {!input.trim() && !attachments.length ? <AdviserInputTools compact disabled={hasReachedLimit || isSending || attaching || entryLocked} onText={text => setInput(current => `${current}${current ? " " : ""}${text}`)} onPhoto={file => void attachFile(file)} /> : null}
@@ -591,7 +592,7 @@ function ScopedAdviserChat({ prompts, storageKey = adviserChatStorageKey, initia
   const nonPlanningActions = actions.filter((action) => action.id !== planningDraft?.action?.id && action.type !== "create_entries" && action.type !== "prepare_form");
 
   return (
-    <div className={`adviser-experience adviser-experience--${layout}`}>
+    <div className={`adviser-experience adviser-experience--${layout}${minimal || formContext ? " adviser-experience--entry" : ""}`}>
       {!minimal ? <button className="button button-secondary adviser-history-toggle" type="button" aria-expanded={historyOpen} onClick={()=>setHistoryOpen(!historyOpen)}>Your chats</button> : null}
       <aside className={`adviser-history${historyOpen ? " is-open" : ""}`} aria-label="Chat history">
         <h2>Adviser</h2>

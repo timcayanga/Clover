@@ -9,6 +9,10 @@ async function main() {
  assert(bankNumbersMatch('0012345678901','001******8901'));
  assert(!bankNumbersMatch('0012345678901','0018901'));
  assert(!bankNumbersMatch('0012345678901','9912345678901'));
+ const rcbc={institution:'RCBC',accountNumber:'1234567890121014',currency:'PHP',type:'credit_card'};
+ assert.equal(matchingBankAccounts([rcbc],{...rcbc,institution:'RCBC - Personal'}).length,1);
+ assert.equal(matchingBankAccounts([rcbc],{...rcbc,institution:'Rizal Commercial Banking Corporation'}).length,1);
+ assert.equal(matchingBankAccounts([rcbc],{...rcbc,institution:'RCBC - Personal',accountNumber:'1014'}).length,0,'suffix alone must not auto-merge');
  const identity={institution:'Metrobank',accountNumber:'0012345678901',currency:'PHP',type:'bank'};
  assert.equal(matchingBankAccounts([identity],{...identity,institution:'Metropolitan Bank'}).length,1);
  assert.equal(matchingBankAccounts([identity],{...identity,currency:'USD'}).length,0);

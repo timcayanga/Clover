@@ -66769,3 +66769,10 @@ input.transaction-inline-edit[aria-invalid="true"] { box-shadow: inset 0 -1px va
   .app-shell:has(> .content--transactions) { padding-left: 0; padding-right: 0; }
   .app-shell > .content.content--transactions { padding-left: 0 !important; padding-right: 0 !important; gap: 0; }
 }
+
+/* Keep the entry modal present while its code and authorized scope load. */
+.adviser-chat__loading { min-height: 240px; display: grid; place-items: center; color: var(--muted); font-size: 13px; }
+.adviser-experience--entry { min-height: 240px; }
+.adviser-experience--entry .adviser-chat__composer textarea { min-height: 96px; border-radius: 24px; }
+.transactions-entry--figma > [role="tabpanel"]:has(.adviser-experience--entry),
+.transactions-entry--figma > [role="tabpanel"]:has(.adviser-chat__loading) { min-height: 240px; animation: none; }

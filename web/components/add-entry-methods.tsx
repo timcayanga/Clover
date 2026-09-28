@@ -14,6 +14,7 @@ import type { AdviserPlanningSurface } from "@/lib/adviser-planning";
 import "./add-entry-methods.css";
 const AdviserChat = dynamic(() =>
   import("./adviser-chat").then((m) => m.AdviserChat),
+  { loading: () => <div className="adviser-chat__loading" role="status">Opening Ask Clover…</div> },
 );
 const guidance = {
   trade: {
@@ -124,6 +125,8 @@ export function AddEntryMethods({
             aria-selected={tab === method}
             tabIndex={tab === method ? 0 : -1}
             disabled={disabled}
+            onPointerEnter={() => { if (method === "ask") void import("./adviser-chat"); }}
+            onFocus={() => { if (method === "ask") void import("./adviser-chat"); }}
             onClick={() => {
               setTab(method);
               if (method === "ask") setVisited(true);

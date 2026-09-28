@@ -6,7 +6,7 @@ import { TransactionTableEntry } from "@/components/transaction-table-entry";
 import { UploadSourcePicker, UploadSecurityCopy } from "@/components/upload-source-buttons";
 
 import dynamic from "next/dynamic";
-const AdviserChat = dynamic(() => import("@/components/adviser-chat").then(module => module.AdviserChat));
+const AdviserChat = dynamic(() => import("@/components/adviser-chat").then(module => module.AdviserChat), { loading: () => <div className="adviser-chat__loading" role="status">Opening Ask Clover…</div> });
 import { containDialogFocus } from "@/lib/dialog-focus";
 import { InterfaceIcon } from "@/components/interface-icon";
 
@@ -881,7 +881,7 @@ export function DashboardManualTransactionModal({
         </div>
         {askVisited ? <div id="quick-entry-panel-ask" role="tabpanel" aria-labelledby="quick-entry-tab-ask" hidden={entryTab !== "ask"} className="transaction-creation-panel">
 
-          <AdviserChat minimal workspaceId={workspaceId} prompts={[]} isPro={isPro} surface="transactions" pageLabel="Add transactions: prepare editable drafts for review" />
+          <AdviserChat minimal formContext={{kind:"transaction",fields:{currency:form.currency,date:form.date,type:form.type,accountId:initialAccountId || ""}}} workspaceId={workspaceId} prompts={[]} isPro={isPro} surface="transactions" pageLabel="Add transactions: prepare editable drafts for review" />
         </div> : null}
         <div id="quick-entry-panel-upload" role="tabpanel" aria-labelledby="quick-entry-tab-upload" hidden={entryTab !== "upload"} className="transaction-creation-panel">
 

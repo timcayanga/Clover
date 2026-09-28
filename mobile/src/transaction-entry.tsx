@@ -1,3 +1,4 @@
+import { entryExample } from "../../shared/entry-examples";
 import { mostUsedTransactionAccount } from "../../shared/default-transaction-account";
 import { AccountBrandLogo } from "./account-brand-logo";
 import { beginTelemetry } from "../../shared/analytics";
@@ -594,6 +595,8 @@ export function TransactionChat({
   return (
     <View style={{ gap: 16 }}>
       <AdviserInputTools
+        expanded
+        placeholder={entryExample(context?.kind || page)}
         value={input}
         onChangeText={setInput}
         onSend={() => void send()}

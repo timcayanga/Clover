@@ -115,3 +115,9 @@ Figma: bank linking states, section `1802:100376` in file `FNnCmCj90szZAnZ6twMPC
 Validation: Finverse route/discovery and preservation regressions; native notification
 routing; web/native type checks; local browser fixture exercised callback progress,
 choose-later/resume, linking completion, and shared-login unlink confirmation.
+
+### Connect presentation and RCBC matching (29 September 2026)
+
+- RCBC and Rizal Commercial Banking Corporation aliases normalize provider portal names such as `RCBC - Personal` to the existing institution. Matching still requires compatible type/currency and full or length-preserving masked identity; last-four-only identity never silently merges cards.
+- Connected cards resolve logo variants (including BPI), normalize number separators before displaying their last four characters, and expose a small red Unlink text action with the existing shared-login confirmation. Bank images use rounded corners; country flag images remain unchanged.
+- Zero balances and empty transaction histories are not account exclusion criteria. Parent aggregates are excluded. A missing account must be compared against Finverse's `/accounts` response before attributing it to either provider coverage or Clover.

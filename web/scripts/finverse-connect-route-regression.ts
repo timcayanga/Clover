@@ -10,7 +10,7 @@ export function setDiscoveryReady(value){discoveryReady=value;}
 export function setDiscoveryError(value){discoveryError=value;}
 let claimed=false, exchanges=0, created=0, bankCalls=0, refreshCalls=0, updates=[], planTier='pro';
 export function setPlan(value){planTier=value;}
-export const getAccountBrand=()=>({logoSrc:null,fallbackIconSrc:"/assets/account-types/bank.png"});
+export const getAccountBrand=()=>({logoSrc:null,logoSrcs:["/assets/banks/philippines/bpi.png"],fallbackIconSrc:"/assets/account-types/bank.png"});
 export const enforceBankAllowance=async()=>{};
 let refreshLimitReached=false;
 export function setRefreshLimit(value){refreshLimitReached=value;}
@@ -53,7 +53,7 @@ export const exchangeFinverseCode=async()=>{exchanges++;return {login_identity_i
 export const prisma={user:{findUniqueOrThrow:async()=>({planTier})},$transaction:async f=>f({}),finverseConnection:{
  findUniqueOrThrow:async()=>({status:"ready"}),
  findFirst:async({where})=>{if(where.workspaceId!=='profile'||where.user.clerkUserId!=='owner'||where.status.not!=='disconnected')throw Error('unsafe scope');return {id:'connection',userId:'owner',loginIdentityId:'identity',encryptedAccessToken:'cipher',accessTokenExpiresAt:new Date(Date.now()+3600000)};},
- findMany:async({where,select})=>{if(where.workspaceId!=='profile'||where.user.clerkUserId!=='owner')throw Error('unsafe scope');return [{id:'failed',status:'error',institutionName:'Failed bank',lastSyncedAt:null,accountLinks:[]},{id:'cancelled',status:'cancelled',institutionName:'Cancelled bank',lastSyncedAt:null,accountLinks:[]},{id:'pending',status:'awaiting_selection',institutionName:'Test bank',lastSyncedAt:null,accountLinks:[]},{id:'linked',status:'ready',institutionName:'Test bank',lastSyncedAt:'2026-09-24T00:00:00Z',accountLinks:[{account:{id:'account',name:'Savings',institution:'Test bank',accountNumber:'1234567890',type:'bank'}}]}];},
+ findMany:async({where,select})=>{if(where.workspaceId!=='profile'||where.user.clerkUserId!=='owner')throw Error('unsafe scope');return [{id:'failed',status:'error',institutionName:'Failed bank',lastSyncedAt:null,accountLinks:[]},{id:'cancelled',status:'cancelled',institutionName:'Cancelled bank',lastSyncedAt:null,accountLinks:[]},{id:'pending',status:'awaiting_selection',institutionName:'Test bank',lastSyncedAt:null,accountLinks:[]},{id:'linked',status:'ready',institutionName:'Test bank',lastSyncedAt:'2026-09-24T00:00:00Z',accountLinks:[{account:{id:'account',name:'Savings',institution:'Test bank',accountNumber:'1234-5678-90',type:'bank'}}]}];},
  create:async({data})=>{created++;return{id:'connection'};},
  findUnique:async({where})=>['native.valid','native.refresh.valid'].includes(where.stateHash)?{id:'connection',workspaceId:'profile',stateExpiresAt:new Date(Date.now()+60000),status:claimed?'authorizing':'link_pending'}:null,
  updateMany:async({where,data})=>{if(where.accountLinks || where.status==='retrieving'){discoveryWrites.push({where,data});return {count:1};}if(where.status && typeof where.status === "object"){updates.push(data);return{count:1};}if(claimed)return{count:0};claimed=true;return{count:1};},
@@ -90,6 +90,7 @@ export const prisma={user:{findUniqueOrThrow:async()=>({planTier})},$transaction
   const linkedData=await connections.json();
   assert.deepEqual(linkedData.pending,[{id:'pending',name:'Test bank',status:'awaiting_selection'}]);
   assert.equal(linkedData.accounts[0].last4,'7890');
+  assert.equal(linkedData.accounts[0].logoUrl,'/assets/banks/philippines/bpi.png','variant-only bank branding must not use the generic icon');
   assert.equal(linkedData.accounts[0].lastSyncedAt,'2026-09-24T00:00:00Z');
   assert(!JSON.stringify(linkedData).includes('1234567890'));
 

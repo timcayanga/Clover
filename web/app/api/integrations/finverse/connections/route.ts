@@ -1,3 +1,4 @@
+import { cleanBankNumber } from "@/lib/finverse-matching";
 import { isPendingBankSelection } from "../../../../../../shared/finverse-lifecycle";
 import { getProAccess } from "@/lib/pro-access";
 import { bankLifecycleOverview } from "@/lib/finverse-lifecycle";
@@ -21,7 +22,7 @@ export async function GET(request: Request) {
     ]);
     return NextResponse.json({ ...details,
       pending:connections.filter(c=>isPendingBankSelection(c.status, c.accountLinks.length > 0, c.lastSyncedAt)).map(c=>({id:c.id,name:c.institutionName||"Linked bank",status:c.status})),
-      accounts:connections.flatMap(c=>c.accountLinks.flatMap(link=>{const a=link.account;if(!a)return [];const brand=getAccountBrand(a);return [{id:a.id,connectionId:c.id,name:a.name,status:c.status,syncError:c.syncError??null,last4:a.accountNumber?.replace(/\s/g,"").slice(-4)||null,logoUrl:brand.logoSrc||brand.fallbackIconSrc,lastSyncedAt:c.lastSyncedAt}];})),
+      accounts:connections.flatMap(c=>c.accountLinks.flatMap(link=>{const a=link.account;if(!a)return [];const brand=getAccountBrand(a);return [{id:a.id,connectionId:c.id,name:a.name,status:c.status,syncError:c.syncError??null,last4:cleanBankNumber(a.accountNumber).slice(-4)||null,logoUrl:brand.logoSrc||brand.logoSrcs?.[0]||brand.fallbackIconSrc,lastSyncedAt:c.lastSyncedAt}];})),
     },{headers:{"Cache-Control":"private, no-store"}});
   } catch(error) {
     const message=error instanceof Error?error.message:"";

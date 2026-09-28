@@ -114,6 +114,8 @@ const BANK_ALIAS_MAP = new Map<string, string>(
   [
     ["bankofthephilippineislands", "BPI"],
     ["bpi", "BPI"],
+    ["rizal commercial banking corporation", "RCBC"],
+    ["rcbc", "RCBC"],
     ["banco de oro", "BDO"],
     ["bandodeoro", "BDO"],
     ["bdo", "BDO"],

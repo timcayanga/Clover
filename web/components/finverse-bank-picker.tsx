@@ -13,7 +13,7 @@ export function FinverseBankPicker({ banks, busy, onConnect }: { banks: Finverse
   const group = groups.find(g => g.key === groupKey);
   const beta = group?.options.find(o => o.id === betaId && o.status === "BETA");
   const choose = (option: FinverseBankOption) => { if (option.status === "BETA") setBetaId(option.id); else onConnect(option.id); };
-  const logo = (src: string) => <img src={src} alt="" onError={event => { event.currentTarget.onerror = null; event.currentTarget.src = "/assets/account-types/bank.png"; }} />;
+  const logo = (src: string) => <img className="finverse-bank-logo" src={src} alt="" onError={event => { event.currentTarget.onerror = null; event.currentTarget.src = "/assets/account-types/bank.png"; }} />;
   return <div className="finverse-bank-picker">
     {country ? <button type="button" disabled={busy} className="button button-secondary" onClick={() => { if (group) { setGroupKey(null); setBetaId(null); } else setCountry(null); }}>‹ {group ? "Banks" : "Countries"} · {countries.find(c => c.code === country)?.name}</button> : null}
     {!country ? <div className="finverse-connect__grid" aria-label="Countries">{countries.map(c => <button key={c.code} disabled={busy} className="finverse-connect__tile" type="button" onClick={() => setCountry(c.code)}><span className="finverse-connect__flag" aria-hidden="true">{c.flagSrc ? <img src={c.flagSrc} alt="" /> : c.flag}</span><span>{c.name}</span></button>)}</div>

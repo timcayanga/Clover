@@ -23,14 +23,15 @@ export function simpleEntryRows(question: string, context?: EntryFormContext) {
     return null;
   const rows = [];
   for (const [index, line] of lines.entries()) {
-    const match = line.match(
+    const amountFirst = line.match(/^(?:(PHP|USD|EUR|GBP)\s*)?(\d{1,12}(?:\.\d{1,2})?)\s+(?:at|for)\s+([\p{L}][\p{L}\p{N} '&()./-]{0,120}?)$/iu);
+    const match = amountFirst ? [amountFirst[0], amountFirst[3], amountFirst[1]?.toUpperCase(), amountFirst[2], undefined] : line.match(
       /^([\p{L}][\p{L}\p{N} '&()./-]{0,120}?)\s+(?:(PHP|USD|EUR|GBP)\s*)?(\d{1,12}(?:\.\d{1,2})?)(?:\s+(\d{4}-\d{2}-\d{2}))?$/u,
     );
     if (!match) return null;
     rows.push({
       ...entryTransaction(`row-${index + 1}`),
-      merchant: match[1],
-      amount: match[3],
+      merchant: match[1]!,
+      amount: match[3]!,
       date: match[4] || context?.fields.date?.slice(0, 10) || "",
       currency: match[2] || context?.fields.currency || "",
       accountId: context?.fields.accountId || "",
@@ -47,6 +48,7 @@ export function isEntryRequest(
   context?: EntryFormContext,
   draft?: EntryDraft,
 ) {
+  if (context?.kind === "account" || context?.kind === "investment") return true;
   if (context?.kind === "recurring" || context?.kind === "split" || context?.kind === "trade") return true;
   if (
     draft &&
