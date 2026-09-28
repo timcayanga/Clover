@@ -8303,11 +8303,6 @@ function TransactionsPageContent() {
           </div>
           ) : null}
 
-          <button type="button" className="button button-secondary button-small"
-            aria-expanded={summaryOpen} aria-controls="transactions-expanded-summary"
-            onClick={() => setSummaryOpen((current) => !current)}>
-            {summaryOpen ? "Hide summary" : "Show summary"}
-          </button>
           {isCompactViewport && hasSelectedTransactions ? <div className="transactions-mobile-selection-status" role="status"><span>{selectedTransactionCount} selected</span><button className="button button-secondary button-small" type="button" onClick={clearSelection}>Clear selection</button></div> : null}
           {!isCompactViewport ? (
             <div className="transactions-footer" style={{ ...transactionsFooterStyle, marginTop: "auto" }}>
