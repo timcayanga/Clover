@@ -44,9 +44,9 @@ The migration `20260928000000_team_studio` was applied to production on 2026-09-
 
 The release is based on the live production commit `6951e6e6`, preserving its Admin role assignments, identity-revocation checks, and environment isolation. DNS now resolves `team.clover.ph` to Vercel and the domain is assigned to the Clover project.
 
-A production build-time check confirmed the owner Clerk account exists and is verified. It also exercised real R2 write/read/delete operations using a temporary launch-check object, confirmed signed reads succeed, and confirmed anonymous S3 reads fail. The configured R2 credential cannot manage bucket CORS: the owner must add the rule above through Cloudflare before browser uploads can be accepted. No secret values are exported by this check.
+A production build-time check confirmed the owner Clerk account exists and is verified. It also exercised real R2 write/read/delete operations using a temporary launch-check object, confirmed signed reads succeed, and confirmed anonymous S3 reads fail. The configured R2 credential cannot manage bucket CORS: the owner added the rule above through Cloudflare, and a real browser image upload passed. No secret values are exported by this check.
 
-Hosted browser verification and final Admin redirect activation are still pending. `CLOVER_INTERNAL_ORIGIN` remains unset until sign-in and the Admin entry point have been verified on the team domain.
+Hosted owner sign-in, Team state saving, private image upload, reload persistence, and the Admin dashboard were verified on `team.clover.ph`. One draft titled “Launch verification · unpublished” remains as a labeled test record; it is not approved or published. `CLOVER_INTERNAL_ORIGIN=https://team.clover.ph` is being enabled for the final release to redirect the old customer-domain Admin entry point.
 
 Live agent execution, social publishing, and image/video generation remain separate future integrations. Saving a brief does not start an agent run.
 
@@ -60,4 +60,6 @@ Live agent execution, social publishing, and image/video generation remain separ
 
 The storage and API regressions deliberately refuse other database addresses. Initialize a disposable PostgreSQL instance on port 55432 with role `clover_test` and apply only the Team migration before running them. The API runner bundles a test-only Clerk adapter; it verifies authorization behavior but does not establish that production Clerk sign-in works. Browser storage-flow tests likewise use a simulated identity against the real disposable database. No test authentication adapter is included in the application build.
 
-Browser verification confirmed a draft and caption created in one browser session appeared in a separate session, with no draft records in localStorage. A stale edit from the first session was rejected while keeping the unsaved text visible. The production migration-status check did not finish within the bounded timeout against the transaction-pooler address; production migration readiness remains unverified. Use the deployment's direct/session database connection for Prisma migration operations.
+Browser verification confirmed a draft and caption created in one browser session appeared in a separate session, with no draft records in localStorage. A stale edit from the first session was rejected while keeping the unsaved text visible. The initial transaction-pooler migration-status timeout was resolved with the production session pooler on port 5432. Production migration is complete. Use a direct/session connection for future Prisma migration operations.
+
+The full repository pre-push gate passed, including web/mobile regressions, both native bundles, TypeScript, and the production build.
