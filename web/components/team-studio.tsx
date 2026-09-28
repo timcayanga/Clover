@@ -611,6 +611,11 @@ export function TeamStudio({
     setBrief("");
   }
   function changeView(next: View) {
+    const url = new URL(window.location.href);
+    url.searchParams.set("view", next);
+    url.searchParams.delete("agent");
+    url.searchParams.delete("draft");
+    window.history.replaceState(null, "", url);
     setView(next);
     setQuery("");
     setFilter("All content");
@@ -985,7 +990,7 @@ export function TeamStudio({
                   <span>✓</span>
                   <h2>
                     {view === "Approvals"
-                      ? "Nothing waiting for review."
+                      ? "No content drafts waiting for review."
                       : "Room for your next idea."}
                   </h2>
                   <p>
