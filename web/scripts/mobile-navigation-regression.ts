@@ -292,7 +292,7 @@ async function main() {
   assert.doesNotMatch(shell, /shell-bottom-nav__label">Account<\/span>[\s\S]{0,120}NotificationCountBadge/, "The bottom Account tab must not repeat notification badges.");
   assert.match(shell, /active === "dashboard" \? \([\s\S]{0,700}NotificationCountBadge/, "Mobile notifications and their badge belong on Home.");
   const accountMenu = shell.slice(shell.indexOf("const mobileSettingsSections ="), shell.indexOf("const shouldPrefetchNavHref"));
-  assert.deepEqual([...accountMenu.matchAll(/label: "([^"]+)"/g)].map((match) => match[1]), ["Account", "Settings", "Notifications", "Plan", "Help Center", "Privacy Policy"]);
+  assert.deepEqual([...accountMenu.matchAll(/label: "([^"]+)"/g)].map((match) => match[1]), ["Settings", "Notifications", "Plan", "Help Center", "Privacy Policy"]);
   assert.match(styles, /Mobile navigation: Menu or Back[\s\S]*position: static !important/, "The mobile Menu belongs in the left leading group.");
   assert.doesNotMatch(shell, /shell-mobile-more-link--replaced/, "Menu must remain available alongside Back on every mobile page.");
   assert.match(shell, /shell-mobile-relocated-action/, "Contextual actions move to the trailing group to leave Menu on the left.");
@@ -300,8 +300,9 @@ async function main() {
   assert.match(transactionsPage, /transactions-main-panel[\s\S]{0,120}isCompactViewport \? <TransactionSelectionToolbar compact/, "Mobile search and filters belong above the transaction list.");
   assert.match(await readSource("components/transaction-selection-toolbar.tsx"), /type="search" aria-label="Search"/, "Mobile search must remain visible rather than hidden in a header overlay.");
   assert.match(shell, /label: "Plan", icon: "plan"/);
-  assert.match(shell, /active === "adviser" \? null : mobileLeadingAction/, "Home supports a leading currency control; other pages retain contextual Adviser.");
-  assert.match(shell, /active === "dashboard" \? <span className="home-header-adviser"><AdviserHeaderLink/, "Home must expose Adviser with the right-side notification controls.");
+  assert.match(shell, /active === "adviser" \? null : active === "dashboard" \? <AdviserHeaderLink/, "Home puts Adviser immediately after the menu.");
+  assert.match(shell, /active === "dashboard" \? <span className="home-header-currency">\{mobileLeadingAction\}/, "Home puts currency before the right-side Notifications control.");
+  assert.match(shell, /shell-profile-drawer__view-account[\s\S]{0,200}>View Account<\/Link>/, "Account details stay accessible from the profile header.");
   const splitBillManual = await readSource("components/split-bill-manual-modal.tsx");
   assert.match(splitBillManual, /return createPortal\([\s\S]*document.body/, "The Split Bills add form must escape the header's clipping and stacking context.");
   assert.match(styles, /body\.mobile-creation-page \.content-body \{ animation: none !important; transform: none !important;/, "Entry animations must not establish a clipping container for full-page creation.");
