@@ -10,6 +10,7 @@ import {
 import {
   transferAssignment,
   approveAssignment,
+  withdrawAssignmentApproval,
   cancelAssignment,
   getAssignment,
   refreshAssignment,
@@ -49,12 +50,13 @@ export async function POST(request: Request, context: Context) {
         { headers: privateHeaders },
       );
     const { action } = z
-      .object({ action: z.enum(["refresh", "cancel", "approve"]) })
+      .object({ action: z.enum(["refresh", "cancel", "approve", "withdraw"]) })
       .parse(raw);
     const run = await {
       refresh: refreshAssignment,
       cancel: cancelAssignment,
       approve: approveAssignment,
+      withdraw: withdrawAssignmentApproval,
     }[action](userId, id);
     return NextResponse.json(run, { headers: privateHeaders });
   } catch (error) {

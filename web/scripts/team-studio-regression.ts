@@ -1,3 +1,4 @@
+import { selectMotionFormat } from "../lib/team-motion.client";
 import assert from "node:assert/strict";
 import {
   getInternalOrigin,
@@ -106,3 +107,7 @@ assert.equal(studioSchema.safeParse({ ...initial, version: 2 }).success, false);
 console.log(
   "Team studio: owner access, host migration, approval invalidation, and history checks passed.",
 );
+
+assert.equal(selectMotionFormat((mime) => mime.startsWith("video/mp4")).contentType, "video/mp4");
+assert.equal(selectMotionFormat((mime) => mime.startsWith("video/webm")).extension, "webm");
+assert.throws(() => selectMotionFormat(() => false), /cannot export/);

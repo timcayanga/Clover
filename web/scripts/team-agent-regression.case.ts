@@ -23,6 +23,7 @@ import {
   startAssignment,
   refreshAssignment,
   approveAssignment,
+  withdrawAssignmentApproval,
   cancelAssignment,
   syncPendingAssignments,
 } from "../lib/team-agent-store";
@@ -417,9 +418,32 @@ async function main() {
   const savedImageDraft = (await loadTeamStudio(owner)).state.drafts.find((d) => d.id === imageDraft.id)!;
   assert.equal(savedImageDraft.mediaId, imageRun.id);
   assert.equal(savedImageDraft.status, "Draft");
+  // Approval withdrawal is free, idempotent, owner-scoped, and blocks new work.
+  const beforeWithdrawal = creates;
+  const withdrawalFollowup = await transferAssignment(owner, imageRun.id, { kind: "brief", agent: "creator", text: "Follow up after approval" });
+  await assert.rejects(withdrawAssignmentApproval("other", imageRun.id), /ASSIGNMENT_NOT_FOUND/);
+  const withdrawn = await withdrawAssignmentApproval(owner, imageRun.id);
+  assert.equal(withdrawn.reviewStatus, "pending");
+  assert.equal((await withdrawAssignmentApproval(owner, imageRun.id)).events.filter((e) => e.action === "approval_withdrawn").length, 1);
+  await assert.rejects(transferAssignment(owner, imageRun.id, { kind: "brief", agent: "lead", text: "Blocked" }), /SOURCE_NOT_APPROVED/);
+  await assert.rejects(start(withdrawalFollowup.id), /SOURCE_NOT_APPROVED/);
+  assert.equal(creates, beforeWithdrawal, "Withdrawing approval must never generate paid work");
+  await approveAssignment(owner, imageRun.id);
+
+  // Malformed provider images terminate cleanly and preserve usable text/usage.
+  const malformed = await start(ids[23], { action: "revise", parentId: imageRun.id, feedback: "Malformed fixture" });
+  const malformedRow = await prisma.teamAgentRun.findUniqueOrThrow({ where: { id: malformed.id } });
+  responses.set(malformedRow.responseId!, { id: malformedRow.responseId, status: "completed", output: [{ type: "image_generation_call", result: Buffer.from("broken image").toString("base64") }, { type: "message", content: [{ type: "output_text", text: "Partial visual explanation" }] }], usage: { input_tokens: 10, output_tokens: 20 } });
+  await due(malformed.id);
+  const failedImage = await refreshAssignment(owner, malformed.id);
+  assert.equal(failedImage.status, "failed");
+  assert(failedImage.error?.includes("invalid image"));
+  assert.equal(failedImage.result, "Partial visual explanation");
+  assert.equal(failedImage.inputTokens, 10);
+  assert.equal(failedImage.mediaId, null);
   await assert.rejects(saveGeneratedTeamImage(owner, randomUUID(), Buffer.from("not an image").toString("base64")), /INVALID_MEDIA/);
-  for (let i = 0; i < 4; i++) await prisma.teamAgentRun.create({ data: { id: randomUUID(), ownerId: owner, briefId: ids[24], agent: "creator", triggerKey: randomUUID(), model: defaultTeamModel, status: "failed", prompt: { brief: "image cap fixture", role: "creator", instructions: "", previousResult: "", feedback: "", output: "image" } } });
-  await assert.rejects(start(ids[23], { action: "revise", parentId: imageRun.id, feedback: "Try another color" }), /IMAGE_LIMIT/);
+  for (let i = 0; i < 3; i++) await prisma.teamAgentRun.create({ data: { id: randomUUID(), ownerId: owner, briefId: ids[24], agent: "creator", triggerKey: randomUUID(), model: defaultTeamModel, status: "failed", prompt: { brief: "image cap fixture", role: "creator", instructions: "", previousResult: "", feedback: "", output: "image" } } });
+  await assert.rejects(start(ids[23], { action: "retry", parentId: malformed.id }), /IMAGE_LIMIT/);
   console.log("PASS: image mode, bounded tool use, duplicate-mode protection, storage recovery without regeneration, private immutable image, and draft attachment.");
   const createsBeforeCap = creates;
   // Daily cap includes terminal runs; denied requests never contact the provider.
