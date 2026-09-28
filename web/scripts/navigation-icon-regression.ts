@@ -98,12 +98,24 @@ async function main() {
     "The Settings Plan submenu must use the dedicated Plan icon.",
   );
 
-  // Settings selected rows need transparent artwork, without baked-in white squares.
-  for (const name of ["account", "profiles", "display", "data", "review", "categories", "notifications", "security", "region", "plan"]) {
-    const icon = sharp(path.join(publicRoot, "assets/3d icons/menu", `${name}.png`));
-    assert.equal((await icon.metadata()).hasAlpha, true, `${name} must retain transparency.`);
-    const { data, info } = await icon.raw().toBuffer({ resolveWithObject: true });
-    assert.equal(data[info.channels - 1], 0, `${name} must have a transparent corner.`);
+  // Verify the actual menu assets consumed by both clients, not obsolete copies.
+  const nativeSource = await readFile(path.resolve(root, "../mobile/src/icon-assets.ts"), "utf8");
+  for (const name of ["profile", "settings", "help", "signOut", "profiles", "display", "data", "review", "categories", "notifications", "security", "region", "plan"] as NavigationIconName[]) {
+    const publicPath = path.join(publicRoot, decodeURIComponent(getNavigationIconSrc(name)));
+    const nativePath = path.resolve(root, `../mobile/assets/icons/navigation/${name}.png`);
+    assert.ok(nativeSource.includes(`../assets/icons/navigation/${name}.png`), `${name} must use the synchronized native asset.`);
+    for (const file of [publicPath, nativePath]) {
+      const icon = sharp(file);
+      assert.equal((await icon.metadata()).hasAlpha, true, `${file} must retain transparency.`);
+      const { data, info } = await icon.ensureAlpha().raw().toBuffer({ resolveWithObject: true });
+      for (const pixel of [0, info.width - 1, info.width * (info.height - 1), info.width * info.height - 1]) {
+        assert.equal(data[pixel * 4 + 3], 0, `${file} must have transparent corners.`);
+      }
+    }
+    const expected = await sharp(path.join(sourceRoot, NAVIGATION_ICON_SOURCE_FILES[name]), { density: 144 })
+      .resize(96, 96, { fit: "contain", background: { r: 0, g: 0, b: 0, alpha: 0 } }).ensureAlpha().raw().toBuffer();
+    const actual = await sharp(nativePath).ensureAlpha().raw().toBuffer();
+    assert.deepEqual(actual, expected, `${name} native pixels must match the canonical Figma export.`);
   }
 
   console.log(

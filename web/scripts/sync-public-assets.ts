@@ -4,6 +4,7 @@ import sharp from "sharp";
 import path from "node:path";
 import { ADDITIONAL_BANK_LOGOS } from "../lib/bank-logo-catalog";
 import {
+  NAVIGATION_ICON_ASSET_ROOT,
   NAVIGATION_ICON_SOURCE_FILES,
   type NavigationIconName,
 } from "../lib/navigation-icons";
@@ -11,7 +12,7 @@ import {
 const sourceRoot = fileURLToPath(new URL("../../assets/", import.meta.url));
 const destinationRoot = fileURLToPath(new URL("../public/assets/", import.meta.url));
 const navigationSourceRoot = fileURLToPath(new URL("../../assets/3d icons/", import.meta.url));
-const navigationDestinationRoot = fileURLToPath(new URL("../public/assets/3d icons/navigation/figma-v4/", import.meta.url));
+const navigationDestinationRoot = fileURLToPath(new URL(`../public${decodeURIComponent(NAVIGATION_ICON_ASSET_ROOT)}/`, import.meta.url));
 const errorSourcePath = fileURLToPath(new URL("../../assets/3d icons/error.png", import.meta.url));
 const errorDestinationPath = fileURLToPath(new URL("../public/assets/error-clover.webp", import.meta.url));
 
