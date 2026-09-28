@@ -399,7 +399,6 @@ const desktopNavSections = [
 ];
 
 const mobileSettingsSections = [
-  { href: "/settings/account", label: "Account", icon: "profile" as const },
   { href: "/settings", label: "Settings", icon: "settings" as const },
   { href: "/notifications", label: "Notifications", icon: "notifications" as const },
   { href: "/settings/plan", label: "Plan", icon: "plan" as const },
@@ -2241,7 +2240,11 @@ export function CloverShell({
               <MenuIcon name="menu" open />
             </button>
           </div>
-          <h2>Account</h2>
+          <div className="shell-profile-drawer__identity">
+            <img src={profileImage || getNavigationIconSrc("profile")} alt="" className="shell-profile-drawer__photo" />
+            <strong>{displayName}</strong>
+          </div>
+          <Link className="shell-profile-drawer__view-account" href="/settings/account" onClick={(event) => handleNavigationLinkClick(event, "/settings/account")}>View Account</Link>
         </div>
         <nav className="shell-profile-drawer__nav" aria-label="Account sections">
           {mobileSettingsSections.map((item) => (
@@ -2611,7 +2614,7 @@ export function CloverShell({
                   <MenuIcon name="chevron-left" />
                 </button>
               ) : null}
-              <div className="shell-topbar-leading__actions">{active === "adviser" ? null : mobileLeadingAction ?? (active === "dashboard" ? null : <AdviserHeaderLink />)}</div>
+              <div className="shell-topbar-leading__actions">{active === "adviser" ? null : active === "dashboard" ? <AdviserHeaderLink /> : mobileLeadingAction ?? <AdviserHeaderLink />}</div>
             </div>
             <div
               className={`shell-compact-bar__copy ${hideCompactBarCopyOnMobile ? "shell-compact-bar__copy--hide-mobile" : ""} ${
@@ -2628,7 +2631,7 @@ export function CloverShell({
             </div>
             {actions || homeNotificationsAction || mobileTrailingAction || (active !== "dashboard" && active !== "adviser") ? (
               <div className="shell-compact-bar__actions">
-                {active === "dashboard" ? <span className="home-header-adviser"><AdviserHeaderLink /></span> : null}
+                {active === "dashboard" ? <span className="home-header-currency">{mobileLeadingAction}</span> : null}
               {homeNotificationsAction}
               {active !== "dashboard" && active !== "adviser" ? <span className="shell-mobile-relocated-action">{mobileLeadingAction ?? <AdviserHeaderLink />}</span> : null}
               {active === "split-bill" || active === "investments" ? <div className="desktop-header-adviser"><AdviserHeaderLink /></div> : null}
@@ -2661,7 +2664,7 @@ export function CloverShell({
                   <MenuIcon name="chevron-left" />
                 </button>
               ) : null}
-              <div className="shell-topbar-leading__actions">{active === "adviser" ? null : mobileLeadingAction ?? (active === "dashboard" ? null : <AdviserHeaderLink />)}</div>
+              <div className="shell-topbar-leading__actions">{active === "adviser" ? null : active === "dashboard" ? <AdviserHeaderLink /> : mobileLeadingAction ?? <AdviserHeaderLink />}</div>
             </div>
             <div className="topbar__title-wrap">
               {kicker ? <p className="eyebrow">{kicker}</p> : null}
@@ -2673,7 +2676,7 @@ export function CloverShell({
               {subtitle ? <p className="topbar-subtitle">{subtitle}</p> : null}
             </div>
             <div className="topbar-actions">
-              {active === "dashboard" ? <span className="home-header-adviser"><AdviserHeaderLink /></span> : null}
+              {active === "dashboard" ? <span className="home-header-currency">{mobileLeadingAction}</span> : null}
               {homeNotificationsAction}
               {active !== "dashboard" && active !== "adviser" ? <span className="shell-mobile-relocated-action">{mobileLeadingAction ?? <AdviserHeaderLink />}</span> : null}
               {active === "split-bill" || active === "investments" ? <div className="desktop-header-adviser"><AdviserHeaderLink /></div> : null}

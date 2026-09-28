@@ -513,7 +513,7 @@ export function AppHeader({
     "Account Details",
   ].includes(title);
   const canAdd = ["Accounts", "Transactions", "Recurring"].includes(title);
-  const adviserOnLeft = ["Accounts", "Investments"].includes(title) && !(back || onClose);
+  const adviserOnLeft = ["Home", "Accounts", "Investments"].includes(title) && !(back || onClose);
   return (
     <>
       <View style={styles.header}>
@@ -526,7 +526,7 @@ export function AppHeader({
           >
             <Icon name={back || onClose ? "arrow-back-outline" : "menu-outline"} size={22} />
           </Pressable>
-          {leading}
+          {!home ? leading : null}
           {adviserOnLeft ? adviser : null}
         </View>
         <Text
@@ -565,7 +565,7 @@ export function AppHeader({
               </Pressable>
             ) : home ? (
               <>
-                {adviser}
+                {leading}
                 <Pressable
                   accessibilityRole="button"
                   accessibilityLabel="Open notifications"

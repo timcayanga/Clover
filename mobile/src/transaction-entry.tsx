@@ -1,3 +1,4 @@
+import { mostUsedTransactionAccount } from "../../shared/default-transaction-account";
 import { AccountBrandLogo } from "./account-brand-logo";
 import { beginTelemetry } from "../../shared/analytics";
 import { Text } from "./app-text";
@@ -43,7 +44,7 @@ export const emptyTransaction = (): TransactionDraft => ({
   description: "",
 });
 type Options = {
-  accounts: { id: string; name: string; currency: string; institution?: string | null; type?: string; brandLogoUrl?: string | null }[];
+  accounts: { transactionCount?: number; id: string; name: string; currency: string; institution?: string | null; type?: string; brandLogoUrl?: string | null }[];
   categories: { id: string; name: string; type: string }[];
 };
 export function Choices({
@@ -181,6 +182,11 @@ export function ManualTransaction({
       live = false;
     };
   }, [session.demo, session.profileId, session.request, retry]);
+  useEffect(() => {
+    if (draft.accountId || !options) return;
+    const preferred = mostUsedTransactionAccount(options.accounts);
+    if (preferred) onChange({ ...draft, accountId: preferred.id, currency: preferred.currency });
+  }, [options, draft, onChange]);
   const change = (patch: Partial<TransactionDraft>) => {
     if (busy || uncertain) return;
     onChange({ ...draft, ...patch });

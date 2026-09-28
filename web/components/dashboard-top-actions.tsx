@@ -1,4 +1,5 @@
 "use client";
+import { mostUsedTransactionAccount } from "../../shared/default-transaction-account";
 import { MobileSheetHandle } from "@/components/mobile-sheet-handle";
 import { FinverseConnectButton } from "./finverse-connect-button";
 import { TransactionTableEntry } from "@/components/transaction-table-entry";
@@ -37,6 +38,7 @@ type DashboardTopActionsProps = {
     institution: string | null;
     type: string;
     currency: string;
+    transactionCount?: number;
   }>;
 };
 
@@ -102,7 +104,7 @@ export function DashboardManualTransactionModal({
   onClose: () => void;
 }) {
   const router = useRouter();
-  const initialAccount = accounts.find((account) => account.id === initialAccountId) ?? accounts[0] ?? null;
+  const initialAccount = accounts.find((account) => account.id === initialAccountId) ?? mostUsedTransactionAccount(accounts) ?? null;
   const [tableMode, setTableMode] = useState(false);
   const [tableLocked, setTableLocked] = useState(false);
   const [entryTab, setEntryTab] = useState<"manual" | "ask" | "upload" | "sync">("manual");
@@ -165,11 +167,12 @@ export function DashboardManualTransactionModal({
   }, []);
 
   useEffect(() => {
-    if (!form.accountId && accounts[0]) {
+    const preferred = mostUsedTransactionAccount(accounts);
+    if (!form.accountId && preferred) {
       setForm((current) => ({
         ...current,
-        accountId: accounts[0].id,
-        currency: formatCurrencyCode(accounts[0].currency),
+        accountId: current.accountId || preferred.id,
+        currency: current.accountId ? current.currency : formatCurrencyCode(preferred.currency),
       }));
     }
   }, [accounts, form.accountId]);
@@ -261,7 +264,7 @@ export function DashboardManualTransactionModal({
     };
   }, [workspaceId]);
 
-  const defaultAccountId = accounts[0]?.id ?? "";
+  const defaultAccountId = mostUsedTransactionAccount(accounts)?.id ?? "";
   const selectedAccount =
     accounts.find((account) => account.id === form.accountId) ??
     accounts.find((account) => account.id === defaultAccountId) ??
@@ -495,7 +498,7 @@ export function DashboardManualTransactionModal({
 
 
 
-        <div className="transaction-creation-tabs" role="tablist" aria-label="How to add transactions">
+        <div className="transaction-creation-tabs" role="tablist" aria-label="How to add transactions" style={{ "--entry-tab-index": ["manual", "ask", "upload", "sync"].indexOf(entryTab), "--entry-tab-count": 4, gridTemplateColumns: "repeat(4, minmax(0, 1fr))" } as CSSProperties}>
           {(["manual", "ask", "upload", "sync"] as const).map((tab, index) => <button key={tab} type="button" disabled={isSaving || tableLocked} role="tab" id={`quick-entry-tab-${tab}`} aria-controls={`quick-entry-panel-${tab}`} aria-selected={entryTab === tab} tabIndex={entryTab === tab ? 0 : -1} onClick={() => { setEntryTab(tab); if (tab === "ask") setAskVisited(true); }} onKeyDown={event => {
             const tabs = ["manual", "ask", "upload", "sync"] as const;
             const next = event.key === "ArrowRight" ? tabs[(index + 1) % 4] : event.key === "ArrowLeft" ? tabs[(index + 3) % 4] : event.key === "Home" ? tabs[0] : event.key === "End" ? tabs[3] : null;
@@ -983,7 +986,7 @@ export function DashboardTopActions({ workspaceId, accounts }: DashboardTopActio
     <>
       <div className="dashboard-top-actions" hidden={isCompactViewport}>
         <button
-          className="button button-secondary button-small transactions-action-button transactions-toolbar-add dashboard-top-actions__button"
+          className="button button-primary button-small transactions-action-button transactions-toolbar-add dashboard-top-actions__button"
           type="button"
           onClick={openManualAdd}
           aria-label="Add transaction"
@@ -993,18 +996,6 @@ export function DashboardTopActions({ workspaceId, accounts }: DashboardTopActio
             +
           </span>
           <span>Add transaction</span>
-        </button>
-        <button
-          className="button button-primary button-small accounts-toolbar-button accounts-toolbar-button--upload transactions-action-button transactions-toolbar-upload dashboard-top-actions__button"
-          type="button"
-          onClick={openImportFiles}
-          aria-label="Upload files"
-          title="Upload files"
-        >
-          <span className="button-icon dashboard-top-actions__icon" aria-hidden="true">
-            <InterfaceIcon name="upload" size={20} />
-          </span>
-          <span>Upload files</span>
         </button>
       </div>
 

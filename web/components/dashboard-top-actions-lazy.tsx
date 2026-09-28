@@ -1,6 +1,5 @@
 "use client";
 
-import { InterfaceIcon } from "@/components/interface-icon";
 
 import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
@@ -15,6 +14,7 @@ type DashboardTopActionsLazyProps = {
     institution: string | null;
     type: string;
     currency: string;
+    transactionCount?: number;
   }>;
 };
 
@@ -99,7 +99,7 @@ export function DashboardTopActionsLazy({ workspaceId, accounts }: DashboardTopA
     <>
       <div className="dashboard-top-actions" hidden={isCompactViewport}>
         <button
-          className="button button-secondary button-small transactions-action-button transactions-toolbar-add dashboard-top-actions__button"
+          className="button button-primary button-small transactions-action-button transactions-toolbar-add dashboard-top-actions__button"
           type="button"
           onClick={() => {
             setImportOpen(false);
@@ -112,21 +112,6 @@ export function DashboardTopActionsLazy({ workspaceId, accounts }: DashboardTopA
             +
           </span>
           <span>Add transaction</span>
-        </button>
-        <button
-          className="button button-primary button-small accounts-toolbar-button accounts-toolbar-button--upload transactions-action-button transactions-toolbar-upload dashboard-top-actions__button"
-          type="button"
-          onClick={() => {
-            setManualOpen(false);
-            setImportOpen(true);
-          }}
-          aria-label="Upload files"
-          title="Upload files"
-        >
-          <span className="button-icon dashboard-top-actions__icon" aria-hidden="true">
-            <InterfaceIcon name="upload" size={20} />
-          </span>
-          <span>Upload files</span>
         </button>
       </div>
 

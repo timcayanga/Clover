@@ -182,7 +182,7 @@
     "qa:report-net-worth": "tsx scripts/report-net-worth-regression.ts && tsx scripts/report-filter-policy-regression.ts && tsx scripts/report-currency-regression.ts",
     "qa:shared-boundaries": "tsx scripts/shared-boundary-regression.ts",
     "qa:import-timing": "tsx scripts/import-timing-regression.ts",
-    "qa:transaction-table": "tsx scripts/transaction-table-regression.ts",
+    "qa:transaction-table": "tsx scripts/default-transaction-account-regression.ts && tsx scripts/transaction-table-regression.ts",
     "qa:app-font": "tsx scripts/app-font-regression.ts",
     "qa:receipt-detail-refresh": "tsx scripts/transaction-detail-refresh-regression.ts && tsx scripts/review-refresh-state-regression.ts",
     "qa:analytics": "tsx scripts/analytics-coverage-regression.ts",

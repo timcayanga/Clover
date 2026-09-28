@@ -178,6 +178,7 @@ type WorkspaceSummary = {
     type: string;
     currency: string;
     balance: unknown;
+    _count?: { transactions: number };
   }>;
   _count: {
     accounts: number;
@@ -540,6 +541,7 @@ async function resolveDashboardWorkspaceSummary(user: Awaited<ReturnType<typeof 
         type: true,
         currency: true,
         balance: true,
+        _count: { select: { transactions: { where: { deletedAt: null } } } },
       },
     },
     _count: {
@@ -578,28 +580,7 @@ async function resolveDashboardWorkspaceSummary(user: Awaited<ReturnType<typeof 
     const starterWorkspace = await ensureStarterWorkspace(user.clerkUserId, user.email, user.verified);
     workspaceSummary = await prisma.workspace.findUnique({
       where: { id: starterWorkspace.id },
-      select: {
-        id: true,
-        name: true,
-        accounts: {
-          select: {
-            id: true,
-            name: true,
-            institution: true,
-            accountNumber: true,
-            type: true,
-            currency: true,
-            balance: true,
-          },
-        },
-        _count: {
-          select: {
-            accounts: true,
-            importFiles: true,
-            transactions: true,
-          },
-        },
-      },
+      select: workspaceSelect,
     });
   }
 
@@ -1266,6 +1247,7 @@ async function DashboardPageStream(currency?: string) {
             institution: account.institution,
             type: account.type,
             currency: account.currency,
+            transactionCount: account._count?.transactions ?? 0,
           }))}
         /></div>
       )}

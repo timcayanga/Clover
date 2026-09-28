@@ -1,4 +1,5 @@
 "use client";
+import { mostUsedTransactionAccount } from "../../../shared/default-transaction-account";
 import { usePullRefresh } from "@/lib/pull-refresh";
 import { MobileSheetHandle } from "@/components/mobile-sheet-handle";
 import { FinverseConnectButton } from "@/components/finverse-connect-button";
@@ -191,6 +192,7 @@ type Workspace = {
 };
 
 type Account = {
+  transactionCount?: number;
   id: string;
   name: string;
   institution: string | null;
@@ -4236,14 +4238,8 @@ function TransactionsPageContent() {
 
   const ensureDefaultAccount = async (workspaceId: string, preferredCurrency = "PHP") => {
     const normalizedPreferredCurrency = formatCurrencyCode(preferredCurrency || "PHP");
-    const cashAccount = accounts.find(
-      (account) =>
-        (account.type === "cash" || account.name.trim().toLowerCase() === "cash") &&
-        formatCurrencyCode(account.currency || "PHP") === normalizedPreferredCurrency
-    );
-    if (cashAccount) {
-      return cashAccount.id;
-    }
+    const preferred = mostUsedTransactionAccount(accounts.filter(isTransactionAccount));
+    if (preferred) return preferred.id;
 
     const response = await fetch("/api/accounts", {
       method: "POST",
