@@ -16,14 +16,18 @@ async function main() {
   const bucket = process.env.CLOVER_TEAM_MEDIA_BUCKET || process.env.R2_BUCKET_NAME;
   if (!bucket || !process.env.R2_ACCOUNT_ID || !process.env.R2_ACCESS_KEY_ID || !process.env.R2_SECRET_ACCESS_KEY) throw new Error("R2 configuration missing");
   const client = new S3Client({ region: "auto", endpoint: `https://${process.env.R2_ACCOUNT_ID}.r2.cloudflarestorage.com`, credentials: { accessKeyId: process.env.R2_ACCESS_KEY_ID, secretAccessKey: process.env.R2_SECRET_ACCESS_KEY }});
-  let rules;
-  try { rules = (await client.send(new GetBucketCorsCommand({Bucket: bucket}))).CORSRules || []; }
-  catch (error) { if ((error as {name?: string}).name !== "NoSuchCORSConfiguration") throw error; rules = []; }
-  const origin = "https://team.clover.ph";
-  const launchId = "clover-team-studio";
-  const updated = [...rules.filter(r => r.ID !== launchId), {ID: launchId, AllowedOrigins: [origin], AllowedMethods: ["PUT", "GET", "HEAD"], AllowedHeaders: ["Content-Type"], ExposeHeaders: ["ETag"], MaxAgeSeconds: 3600}];
-  await client.send(new PutBucketCorsCommand({Bucket: bucket, CORSConfiguration: {CORSRules: updated}}));
-  console.log("Team launch: studio CORS configured; existing rules preserved.");
+  try {
+    let rules;
+    try { rules = (await client.send(new GetBucketCorsCommand({Bucket: bucket}))).CORSRules || []; }
+    catch (error) { if ((error as {name?: string}).name !== "NoSuchCORSConfiguration") throw error; rules = []; }
+    const launchId = "clover-team-studio";
+    const updated = [...rules.filter(r => r.ID !== launchId), {ID: launchId, AllowedOrigins: ["https://team.clover.ph"], AllowedMethods: ["PUT", "GET", "HEAD"], AllowedHeaders: ["Content-Type"], ExposeHeaders: ["ETag"], MaxAgeSeconds: 3600}];
+    await client.send(new PutBucketCorsCommand({Bucket: bucket, CORSConfiguration: {CORSRules: updated}}));
+    console.log("Team launch: studio CORS configured; existing rules preserved.");
+  } catch (error) {
+    if ((error as {name?: string}).name !== "AccessDenied") throw error;
+    console.log("Team launch: CORS management requires Cloudflare dashboard access. Browser upload verification remains required.");
+  }
   const key = `team-staging/launch-check/${randomUUID()}`;
   try {
     await client.send(new PutObjectCommand({Bucket: bucket, Key: key, Body: "Clover private storage launch check", ContentType: "text/plain"}));
