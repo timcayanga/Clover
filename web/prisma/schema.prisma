@@ -2498,3 +2498,75 @@ model SwitchEvent {
   @@unique([applicationId,kind])
   @@index([emailStatus,createdAt])
 }
+
+// Internal distribution data is independent of customer financial workspaces.
+model TeamStudioState {
+  ownerId   String   @id
+  revision  Int      @default(0)
+  payload   Json
+  updatedAt DateTime @updatedAt
+}
+
+model TeamStudioAudit {
+  id        String   @id @default(cuid())
+  ownerId   String
+  revision  Int
+  payload   Json
+  createdAt DateTime @default(now())
+
+  @@unique([ownerId, revision])
+}
+
+model TeamStudioMedia {
+  id          String   @id @default(cuid())
+  ownerId     String
+  storageKey  String   @unique
+  stagingKey  String   @unique
+  contentType String
+  size        Int
+  ready       Boolean  @default(false)
+  createdAt   DateTime @default(now())
+
+  @@index([ownerId, createdAt])
+}
+
+model TeamAgentRun {
+  id               String   @id
+  ownerId          String
+  briefId          String
+  agent            String
+  parentId         String?
+  triggerKey       String
+  model            String
+  status           String   @default("starting")
+  reviewStatus     String   @default("pending")
+  prompt           Json
+  responseId       String?  @unique
+  result           String   @default("")
+  sources          Json     @default("[]")
+  inputTokens      Int      @default(0)
+  outputTokens     Int      @default(0)
+  searchCalls      Int      @default(0)
+  estimatedCostUsd Float?
+  error            String?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+  finishedAt       DateTime?
+  nextPollAt       DateTime @default(now())
+  events           TeamAgentEvent[]
+
+  @@unique([ownerId, triggerKey])
+  @@index([ownerId, briefId, createdAt])
+  @@index([status, nextPollAt])
+}
+
+model TeamAgentEvent {
+  id        String       @id @default(cuid())
+  runId     String
+  run       TeamAgentRun @relation(fields: [runId], references: [id], onDelete: Cascade)
+  action    String
+  note      String
+  createdAt DateTime     @default(now())
+
+  @@index([runId, createdAt])
+}

@@ -1,7 +1,9 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "ignoreCommand": "if [ \"$VERCEL_ENV\" = \"production\" ] || [ \"$VERCEL_GIT_COMMIT_REF\" = \"staging\" ]; then exit 1; else exit 0; fi",
-  "regions": ["sin1"],
+  "regions": [
+    "sin1"
+  ],
   "crons": [
     {
       "path": "/api/cron/notifications",
@@ -14,6 +16,10 @@
     {
       "path": "/api/cron/import-recovery",
       "schedule": "0 18 * * *"
+    },
+    {
+      "path": "/api/cron/team-assignments",
+      "schedule": "0 3 * * *"
     }
   ]
 }

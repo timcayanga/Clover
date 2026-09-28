@@ -33,6 +33,8 @@ export function AdminOnlyRedirect() {
       !user ||
       !pathname ||
       pathname.startsWith("/admin") ||
+      pathname === "/team" || pathname.startsWith("/team/") ||
+      pathname === "/office" || pathname.startsWith("/office/") ||
       isPublicRoute(pathname)
     ) {
       return;

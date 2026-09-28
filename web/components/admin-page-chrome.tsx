@@ -71,7 +71,7 @@ export function AdminPageChrome({
           <Link
             key={item.key}
             href={item.href}
-            prefetch
+            prefetch={false}
             className={`admin-section-nav__link${item.key === active ? " is-active" : ""}`}
             aria-current={item.key === active ? "page" : undefined}
           >
