@@ -3,6 +3,8 @@ import { Prisma, type TeamAgentRun } from "@prisma/client";
 import { prisma } from "./prisma";
 import { studioSchema, agentProfiles } from "./team-studio";
 import {
+  assignmentTransferSchema,
+  type AssignmentTransfer,
   activeRunStatuses,
   startAssignmentSchema,
   type AssignmentView,
@@ -44,6 +46,7 @@ export async function getAssignment(
     reviewStatus: row.reviewStatus,
     model: row.model,
     brief: prompt.brief,
+    sourceAssignmentId: prompt.sourceAssignmentId,
     instructions: prompt.instructions,
     feedback: prompt.feedback,
     result: row.result,
@@ -62,7 +65,7 @@ export async function getAssignment(
   };
 }
 export async function listAssignments(ownerId: string, briefId?: string) {
-  return prisma.teamAgentRun.findMany({
+  const rows = await prisma.teamAgentRun.findMany({
     where: { ownerId, ...(briefId ? { briefId } : {}) },
     orderBy: { createdAt: "desc" },
     take: briefId ? 100 : 200,
@@ -75,8 +78,13 @@ export async function listAssignments(ownerId: string, briefId?: string) {
       status: true,
       reviewStatus: true,
       createdAt: true,
+      prompt: true,
     },
   });
+  return rows.map(({ prompt, ...row }) => ({
+    ...row,
+    brief: assignmentPromptSchema.parse(prompt).brief,
+  }));
 }
 async function applyResponse(row: TeamAgentRun, response: AgentResponse) {
   if (row.responseId && row.responseId !== response.id)
@@ -190,7 +198,7 @@ export async function startAssignment(ownerId: string, raw: StartAssignment) {
       const child = await tx.teamAgentRun.findFirst({
         where: { ownerId, parentId: parent.id },
       });
-      if (child) return { row: child, created: false };
+      if (child) throw new Error("ASSIGNMENT_SUPERSEDED");
     }
     const running = await tx.teamAgentRun.findFirst({
       where: { ownerId, briefId: brief.id, status: active() },
@@ -203,10 +211,24 @@ export async function startAssignment(ownerId: string, raw: StartAssignment) {
       tx.teamAgentRun.count({ where: { ownerId, status: active() } }),
     ]);
     if (today >= 20 || busy >= 3) throw new Error("ASSIGNMENT_LIMIT");
+    const source = brief.sourceAssignmentId
+      ? await tx.teamAgentRun.findFirst({
+          where: {
+            id: brief.sourceAssignmentId,
+            ownerId,
+            status: "completed",
+            reviewStatus: "approved",
+          },
+        })
+      : null;
+    if (brief.sourceAssignmentId && !source)
+      throw new Error("SOURCE_NOT_APPROVED");
     const prompt =
       input.action === "retry" && parent
         ? assignmentPromptSchema.parse(parent.prompt)
         : {
+            sourceAssignmentId: source?.id || "",
+            sourceContext: source?.result.slice(0, 30000) || "",
             brief: brief.text,
             instructions: payload!.instructions[agent.id] || agent.instructions,
             role: agent.name,
@@ -284,39 +306,43 @@ export async function refreshAssignment(ownerId: string, id: string) {
     return getAssignment(ownerId, id);
   if (!row.responseId) {
     if (Date.now() - row.createdAt.getTime() > 120000)
-      await prisma.teamAgentRun.updateMany({
-        where: { id, status: active(), responseId: null },
-        data: {
-          status: "failed",
-          finishedAt: new Date(),
-          error:
-            "Start confirmation was interrupted. No automatic retry was made. The provider may have incurred usage.",
-        },
-      });
+      await failAssignment(
+        id,
+        "Start confirmation was interrupted. No automatic retry was made. The provider may have incurred usage.",
+        true,
+      );
     return getAssignment(ownerId, id);
   }
   const claim = await prisma.teamAgentRun.updateMany({
     where: { id, status: active(), nextPollAt: { lte: new Date() } },
-    data: { nextPollAt: new Date(Date.now() + 30000) },
+    data: { nextPollAt: new Date(Date.now() + 90000) },
   });
   if (!claim.count) return getAssignment(ownerId, id);
   try {
-    const response =
-      row.status === "canceling"
-        ? await cancelAgentResponse(row.responseId)
-        : await retrieveAgentResponse(row.responseId);
+    // Retrieve first so a completion that won the cancel race is saved normally.
+    let response = await retrieveAgentResponse(row.responseId);
+    if (
+      row.status === "canceling" &&
+      ["queued", "in_progress"].includes(response.status)
+    ) {
+      try {
+        response = await cancelAgentResponse(row.responseId);
+      } catch (error) {
+        if (
+          !(error instanceof AgentProviderError) ||
+          ![400, 409].includes(error.status || 0)
+        )
+          throw error;
+        response = await retrieveAgentResponse(row.responseId);
+      }
+    }
     await applyResponse(row, response);
   } catch (error) {
     if (error instanceof AgentProviderError && error.status === 404) {
-      await prisma.teamAgentRun.updateMany({
-        where: { id, status: active() },
-        data: {
-          status: "failed",
-          finishedAt: new Date(),
-          error:
-            "The provider result is no longer available. No automatic retry was made.",
-        },
-      });
+      await failAssignment(
+        id,
+        "The provider result is no longer available. No automatic retry was made.",
+      );
     } else throw new Error("AGENT_REFRESH_FAILED");
   }
   return getAssignment(ownerId, id);
@@ -373,11 +399,134 @@ export async function syncPendingAssignments() {
     select: { id: true, ownerId: true },
   });
   let failures = 0;
+  let checked = 0;
+  const startedAt = Date.now();
   for (let i = 0; i < rows.length; i += 3) {
+    if (Date.now() - startedAt > 200000) break;
+    const batch = rows.slice(i, i + 3);
     const results = await Promise.allSettled(
-      rows.slice(i, i + 3).map((row) => refreshAssignment(row.ownerId, row.id)),
+      batch.map((row) => refreshAssignment(row.ownerId, row.id)),
     );
+    checked += batch.length;
     failures += results.filter((r) => r.status === "rejected").length;
   }
-  return { checked: rows.length, failures };
+  return { checked, failures };
+}
+
+async function failAssignment(
+  id: string,
+  error: string,
+  withoutResponse = false,
+) {
+  await prisma.$transaction(async (tx) => {
+    const changed = await tx.teamAgentRun.updateMany({
+      where: {
+        id,
+        status: active(),
+        ...(withoutResponse ? { responseId: null } : {}),
+      },
+      data: { status: "failed", finishedAt: new Date(), error },
+    });
+    if (changed.count)
+      await tx.teamAgentEvent.create({
+        data: { runId: id, action: "failed", note: error },
+      });
+  });
+}
+export async function refreshOwnerAssignments(ownerId: string) {
+  const rows = await prisma.teamAgentRun.findMany({
+    where: { ownerId, status: active(), nextPollAt: { lte: new Date() } },
+    take: 3,
+    orderBy: { nextPollAt: "asc" },
+    select: { id: true },
+  });
+  const results = await Promise.allSettled(
+    rows.map((row) => refreshAssignment(ownerId, row.id)),
+  );
+  return {
+    runs: await listAssignments(ownerId),
+    failures: results.filter((r) => r.status === "rejected").length,
+  };
+}
+export async function transferAssignment(
+  ownerId: string,
+  id: string,
+  raw: AssignmentTransfer,
+) {
+  const input = assignmentTransferSchema.parse(raw);
+  const artifactId = createHash("sha256")
+    .update(JSON.stringify([id, input]))
+    .digest("hex")
+    .slice(0, 32);
+  return prisma.$transaction(async (tx) => {
+    await lockOwner(tx, ownerId);
+    const run = await tx.teamAgentRun.findFirst({
+      where: { id, ownerId, status: "completed", reviewStatus: "approved" },
+    });
+    if (
+      !run ||
+      (await tx.teamAgentRun.findFirst({ where: { ownerId, parentId: id } }))
+    )
+      throw new Error("SOURCE_NOT_APPROVED");
+    const old = await tx.teamStudioState.findUnique({ where: { ownerId } });
+    if (!old) throw new Error("INVALID_STATE");
+    const state = studioSchema.parse(old.payload);
+    const existing =
+      input.kind === "brief"
+        ? state.briefs.some((b) => b.id === artifactId)
+        : state.drafts.some((d) => d.id === artifactId);
+    const href =
+      input.kind === "brief"
+        ? `/team?agent=${input.agent}`
+        : `/team?view=Content%20board&draft=${artifactId}`;
+    if (existing) return { id: artifactId, href, kind: input.kind };
+    const at = new Date().toISOString();
+    if (input.kind === "brief") {
+      if (state.briefs.length >= 200) throw new Error("STUDIO_CAPACITY");
+      state.briefs.push({
+        id: artifactId,
+        agent: input.agent,
+        text: input.text,
+        at,
+        sourceAssignmentId: id,
+      });
+    } else {
+      if (state.drafts.length >= 200) throw new Error("STUDIO_CAPACITY");
+      state.drafts.push({
+        id: artifactId,
+        title: input.title,
+        caption: input.caption,
+        channel: input.channel,
+        format: input.format,
+        agent: run.agent as "lead" | "creator" | "researcher",
+        sourceAssignmentId: id,
+        status: "Draft",
+        date: "",
+        sample: false,
+        visual: "sage",
+        revision: 1,
+        history: [],
+      });
+    }
+    const payload = json(studioSchema.parse(state));
+    const updated = await tx.teamStudioState.updateMany({
+      where: { ownerId, revision: old.revision },
+      data: { revision: old.revision + 1, payload },
+    });
+    if (!updated.count) throw new Error("CONFLICT");
+    await tx.teamStudioAudit.create({
+      data: { ownerId, revision: old.revision + 1, payload },
+    });
+    await tx.teamAgentEvent.create({
+      data: {
+        runId: id,
+        action: input.kind === "brief" ? "handoff_created" : "draft_created",
+        note:
+          input.kind === "brief"
+            ? `Owner created follow-up brief ${artifactId} for ${input.agent}. It has not been started.`
+            : `Owner created content draft ${artifactId}. Draft requires its own review; nothing published.`,
+      },
+    });
+    return { id: artifactId, href, kind: input.kind };
+  });
 }

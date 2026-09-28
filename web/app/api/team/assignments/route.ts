@@ -5,10 +5,14 @@ import {
   readStudioJson,
   studioError,
 } from "@/lib/team-studio-api";
-import { listAssignments, startAssignment } from "@/lib/team-agent-store";
+import {
+  listAssignments,
+  startAssignment,
+  refreshOwnerAssignments,
+} from "@/lib/team-agent-store";
 import { startAssignmentSchema } from "@/lib/team-agent-contract";
 export const dynamic = "force-dynamic";
-export const maxDuration = 60;
+export const maxDuration = 90;
 export async function GET(request: Request) {
   try {
     const { userId } = await requireInternalApiAccess();
@@ -31,9 +35,17 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   try {
     const { userId } = await requireInternalApiAccess();
-    const input = startAssignmentSchema.parse(
-      await readStudioJson(request, 10000),
-    );
+    const raw = await readStudioJson(request, 20000);
+    if (
+      typeof raw === "object" &&
+      raw !== null &&
+      "action" in raw &&
+      raw.action === "refresh"
+    )
+      return NextResponse.json(await refreshOwnerAssignments(userId), {
+        headers: privateHeaders,
+      });
+    const input = startAssignmentSchema.parse(raw);
     return NextResponse.json(await startAssignment(userId, input), {
       status: 202,
       headers: privateHeaders,

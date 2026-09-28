@@ -45,6 +45,7 @@ export const statusSchema = z.enum([
 export const draftSchema = z.object({
   id: z.string(),
   title: z.string().min(1).max(120),
+  sourceAssignmentId: z.string().uuid().optional(),
   caption: z.string().max(6000),
   format: z.enum(["Image", "Carousel", "Video", "Text"]),
   channel: z.enum(["Instagram", "Facebook", "TikTok", "YouTube", "LinkedIn"]),
@@ -85,6 +86,7 @@ export const studioSchema = z.object({
       z.object({
         id: z.string(),
         agent: z.string(),
+        sourceAssignmentId: z.string().uuid().optional(),
         text: z.string().max(6000),
         at: z.string(),
       }),

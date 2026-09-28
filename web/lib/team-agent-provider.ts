@@ -8,8 +8,10 @@ export const assignmentPromptSchema = z.object({
   role: z.string(),
   feedback: z.string(),
   previousResult: z.string(),
+  sourceAssignmentId: z.string().default(""),
+  sourceContext: z.string().default(""),
 });
-export type AssignmentPrompt = z.infer<typeof assignmentPromptSchema>;
+export type AssignmentPrompt = z.input<typeof assignmentPromptSchema>;
 const responseSchema = z.object({
   id: z.string().regex(/^resp_[a-zA-Z0-9_-]+$/),
   status: z.enum([

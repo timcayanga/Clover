@@ -1,6 +1,7 @@
 "use client";
 
 import Image from "next/image";
+import { AssignmentInbox, useAssignmentInbox } from "./team-assignment-inbox";
 import { TeamAssignmentBriefs } from "./team-assignments";
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
@@ -16,6 +17,7 @@ import {
 import { readTeamMedia, saveTeamMedia } from "@/lib/team-media.client";
 
 type View =
+  | "Assignments"
   | "Overview"
   | "Team"
   | "Content board"
@@ -25,6 +27,7 @@ type View =
 const views: { name: View; icon: string }[] = [
   { name: "Overview", icon: "◫" },
   { name: "Team", icon: "♧" },
+  { name: "Assignments", icon: "☷" },
   { name: "Content board", icon: "▧" },
   { name: "Approvals", icon: "✓" },
   { name: "Calendar", icon: "▦" },
@@ -275,6 +278,13 @@ function ReviewDialog({
   }
   return (
     <Dialog title="Make it feel like Clover." onClose={onClose}>
+      {draft.sourceAssignmentId ? (
+        <p className="studio-fine">
+          <Link href={`/team/assignments/${draft.sourceAssignmentId}`}>
+            View source assignment ↗
+          </Link>
+        </p>
+      ) : null}
       <div className="studio-review-grid">
         <div>
           <DraftVisual draft={edited} ownerId={ownerId} />
@@ -457,6 +467,7 @@ export function TeamStudio({
   ownerId: string;
   localPreview: boolean;
 }) {
+  const assignments = useAssignmentInbox(localPreview);
   const [view, setView] = useState<View>("Overview");
   const [state, setState] = useState<StudioState>(() =>
     localPreview ? initialStudio() : { ...initialStudio(), drafts: [] },
@@ -477,6 +488,25 @@ export function TeamStudio({
   const [format, setFormat] = useState<StudioDraft["format"]>("Image");
   const [brief, setBrief] = useState("");
   const [instructions, setInstructions] = useState("");
+  const entryApplied = useRef(false);
+  useEffect(() => {
+    if (!ready || entryApplied.current) return;
+    entryApplied.current = true;
+    const params = new URLSearchParams(window.location.search);
+    const requested = params.get("view");
+    if (views.some((v) => v.name === requested)) setView(requested as View);
+    const agent = params.get("agent");
+    if (agentProfiles.some((a) => a.id === agent)) {
+      setAgentId(agent!);
+      setInstructions(state.instructions[agent!] || "");
+      setView("Team");
+    }
+    const draft = params.get("draft");
+    if (state.drafts.some((d) => d.id === draft)) {
+      setView("Content board");
+      setSelected(draft!);
+    }
+  }, [ready, state]);
   const key = `clover.studio.v1:${ownerId}`;
   useEffect(() => {
     let disposed = false;
@@ -554,6 +584,9 @@ export function TeamStudio({
       setSaving(false);
     }
   }
+  const pendingAssignments = assignments.runs.filter(
+    (r) => r.status === "completed" && r.reviewStatus === "pending",
+  );
   const pending = state.drafts.filter((d) => d.status === "In review");
   const selectedDraft = state.drafts.find((d) => d.id === selected);
   const activeAgent = agentProfiles.find((a) => a.id === agentId);
@@ -707,28 +740,32 @@ export function TeamStudio({
               <h1>
                 {view === "Overview"
                   ? "Let’s grow something good."
-                  : view === "Team"
-                    ? "Good work starts with a team."
-                    : view === "Content board"
-                      ? "Ideas taking shape."
-                      : view === "Approvals"
-                        ? "Your eye. Your final say."
-                        : view === "Calendar"
-                          ? "Make room for what’s next."
-                          : "Bring your channels together."}
+                  : view === "Assignments"
+                    ? "Work in motion."
+                    : view === "Team"
+                      ? "Good work starts with a team."
+                      : view === "Content board"
+                        ? "Ideas taking shape."
+                        : view === "Approvals"
+                          ? "Your eye. Your final say."
+                          : view === "Calendar"
+                            ? "Make room for what’s next."
+                            : "Bring your channels together."}
               </h1>
               <p>
                 {view === "Overview"
                   ? "A little strategy, a little creativity. All moving Clover forward."
-                  : view === "Team"
-                    ? "Three focused roles. One shared direction. You’re in charge."
-                    : view === "Content board"
-                      ? "A home for the stories, visuals, and ideas you’re shaping."
-                      : view === "Approvals"
-                        ? "Review every word and every frame before it goes further."
-                        : view === "Calendar"
-                          ? "A planning agenda for your content. Nothing is automatically scheduled."
-                          : "Connect once. Choose what the team can do. Stay in control."}
+                  : view === "Assignments"
+                    ? "Follow progress, review results, and move approved work forward."
+                    : view === "Team"
+                      ? "Three focused roles. One shared direction. You’re in charge."
+                      : view === "Content board"
+                        ? "A home for the stories, visuals, and ideas you’re shaping."
+                        : view === "Approvals"
+                          ? "Review every word and every frame before it goes further."
+                          : view === "Calendar"
+                            ? "A planning agenda for your content. Nothing is automatically scheduled."
+                            : "Connect once. Choose what the team can do. Stay in control."}
               </p>
             </div>
             <button
@@ -745,6 +782,17 @@ export function TeamStudio({
           <p className="studio-notice" role="status" aria-live="polite">
             {notice}
           </p>
+          {view === "Assignments" ||
+          view === "Approvals" ||
+          view === "Overview" ? (
+            <AssignmentInbox
+              key={view}
+              onOpenAll={() => changeView("Assignments")}
+              {...assignments}
+              reviewOnly={view === "Approvals"}
+              compact={view === "Overview"}
+            />
+          ) : null}
           {view === "Overview" ? (
             <>
               <section className="studio-stats" aria-label="Workspace summary">
@@ -769,7 +817,9 @@ export function TeamStudio({
                 <button onClick={() => changeView("Approvals")}>
                   <span>Waiting for your eye</span>
                   <strong>
-                    {String(pending.length).padStart(2, "0")}{" "}
+                    {String(
+                      pending.length + pendingAssignments.length,
+                    ).padStart(2, "0")}{" "}
                     <small>in review</small>
                   </strong>
                   <p>Open approval inbox ↗</p>
