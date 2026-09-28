@@ -23,7 +23,7 @@ const normalizeConfidenceScore = (value: number | null | undefined) => {
 };
 
 const isResolvedReviewStatus = (status: string | null | undefined) =>
-  status === "confirmed" || status === "rejected" || status === "duplicate_skipped";
+  status === "confirmed" || status === "edited" || status === "rejected" || status === "duplicate_skipped";
 
 const isMerchantUnidentified = (merchantClean?: string | null, merchantRaw?: string | null) => {
   const merchantText = (merchantClean ?? merchantRaw ?? "").trim().toLowerCase();

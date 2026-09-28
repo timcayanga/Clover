@@ -1,3 +1,4 @@
+import { getAccountBrand } from "@/lib/account-brand";
 import { planTransactionAccountPage, compareTransactionsByAccount } from "@/lib/transaction-account-sort";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
@@ -66,6 +67,8 @@ type TransactionApiRow = {
   workspaceId: string;
   accountId: string;
   accountName: string;
+  accountType: string;
+  brandLogoUrl: string | null;
   institution: string | null;
   accountNumber: string | null;
   categoryId: string | null;
@@ -121,7 +124,7 @@ type TransactionSummaryRow = {
 };
 
 const isResolvedReviewStatus = (status: string | null) =>
-  status === "confirmed" || status === "rejected" || status === "duplicate_skipped";
+  status === "confirmed" || status === "edited" || status === "rejected" || status === "duplicate_skipped";
 
 const normalizeTransactionKey = (value: string | null | undefined) => value?.trim().toLowerCase() ?? "";
 
@@ -522,7 +525,7 @@ const mapTransactionRow = (transaction: {
   id: string;
   workspaceId: string;
   accountId: string;
-  account: { name: string; institution: string | null };
+  account: { name: string; institution: string | null; type?: string };
   categoryId: string | null;
   rawPayload: Prisma.JsonValue;
   normalizedPayload: Prisma.JsonValue;
@@ -596,6 +599,8 @@ const mapTransactionRow = (transaction: {
     workspaceId: transaction.workspaceId,
     accountId: transaction.accountId,
     accountName: transaction.account.name,
+    accountType: transaction.account.type ?? "bank",
+    brandLogoUrl: getAccountBrand(transaction.account).logoSrc,
     institution: transaction.account.institution,
     accountNumber: transaction.accountNumber ?? null,
     categoryId: transaction.categoryId,

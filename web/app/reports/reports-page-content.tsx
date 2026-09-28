@@ -1,3 +1,4 @@
+import { needsTransactionCategory } from "@/lib/transaction-category-status";
 import { finverseBalances } from "@/lib/finverse-balances";
 import { resolveReportCurrency } from "@/lib/report-currency";
 import { getRollingWeekBuckets } from "@/lib/report-week-buckets";
@@ -855,7 +856,7 @@ export async function ReportsStream({
     }, 0);
     const activeAccountCount = workspaceAccountSummaries.filter((account) => account.balance !== null).length;
     const accountCount = workspaceAccountSummaries.length;
-    const uncategorizedTransactions = reportDisplayTransactions.filter((transaction) => !transaction.category?.name || !transaction.merchantClean);
+    const uncategorizedTransactions = reportDisplayTransactions.filter((transaction) => needsTransactionCategory(transaction.category?.name));
 
     const duplicateGroups = new Map<string, (typeof reportDisplayTransactions)[number][]>();
     reportDisplayTransactions.forEach((transaction) => {

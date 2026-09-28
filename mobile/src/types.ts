@@ -12,6 +12,9 @@ export type Transaction = {
   workspaceId: string;
   accountId: string;
   accountName: string;
+  accountType?: string;
+  institution?: string | null;
+  brandLogoUrl?: string | null;
   lastFour?: string;
   date: string;
   amount: string;

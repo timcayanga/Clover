@@ -1,3 +1,4 @@
+import { AccountBrandLogo } from "../../src/account-brand-logo";
 import { Text } from "../../src/app-text";
 import { SummaryCard } from "../../src/plan-ui";
 import { router, useFocusEffect, useLocalSearchParams } from "expo-router";
@@ -122,20 +123,20 @@ export default function Transactions() {
   );
   return (
     <View style={{ flex: 1, backgroundColor: colors.bg }}>
-      <View style={{ padding: 20, gap: 12 }}>
+      <View style={{ paddingHorizontal: 12, paddingVertical: 8, gap: 8 }}>
         <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
           <View style={{ flex: 1 }}>
             <Field
               accessibilityLabel="Search transactions"
               placeholder="Search"
-              style={{ height: 44, minHeight: 44, borderRadius: 999, paddingVertical: 0, fontSize: 13 }}
+              style={{ height: 38, minHeight: 38, borderRadius: 999, paddingVertical: 0, fontSize: 13 }}
               value={query}
               onChangeText={setQuery}
               returnKeyType="search"
               autoCorrect={false}
             />
           </View>
-          <Pressable accessibilityRole="button" accessibilityLabel="Filter transactions" accessibilityState={{expanded:filters}} onPress={() => setFilters(v=>!v)} style={{width:44,height:44,borderRadius:999,borderWidth:1,borderColor:colors.line,backgroundColor:colors.white,alignItems:"center",justifyContent:"center"}}>
+          <Pressable accessibilityRole="button" accessibilityLabel="Filter transactions" accessibilityState={{expanded:filters}} onPress={() => setFilters(v=>!v)} hitSlop={4} style={{width:38,height:38,borderRadius:999,borderWidth:1,borderColor:colors.line,backgroundColor:colors.white,alignItems:"center",justifyContent:"center"}}>
             <Icon line name="options-outline" size={20} color={colors.teal}/>
           </Pressable>
         </View>
@@ -154,10 +155,9 @@ export default function Transactions() {
         refreshing={busy && page === 1}
         onRefresh={() => void load()}
         contentContainerStyle={{
-          paddingHorizontal: 20,
+          paddingHorizontal: 0,
           paddingBottom: 120,
           width: "100%",
-          maxWidth: 760,
           alignSelf: "center",
         }}
         renderItem={({ item }) => (
@@ -173,7 +173,7 @@ export default function Transactions() {
             style={({ pressed }) => ({
               minHeight: 68,
               paddingVertical: 12,
-              paddingHorizontal: 10,
+              paddingHorizontal: 12,
               flexDirection: "row",
               alignItems: "center",
               gap: 10,
@@ -199,16 +199,15 @@ export default function Transactions() {
               </Text>
               {item.reviewStatus === "pending_review" ? <Icon line name="warning-outline" size={12} color="#D6A226"/> : null}
               </View>
-              <Text
-                numberOfLines={2}
-                style={{ fontSize: 10, color: colors.muted }}
-              >
-                {dateLabel(item.date)} · {item.categoryName ?? "Uncategorized"}{" "}
-                · {item.accountName}
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 5 }}>
+              <AccountBrandLogo size={16} account={{ name: item.accountName, institution: item.institution ?? null, type: item.accountType ?? "bank", brandLogoUrl: item.brandLogoUrl ?? null }} />
+              <Text numberOfLines={1} style={{ flexShrink: 1, fontSize: 10, color: colors.muted }}>
+                {item.accountName}
                 {item.lastFour && !item.accountName.endsWith(item.lastFour)
                   ? ` ${item.lastFour}`
-                  : ""}
+                  : ""} · {dateLabel(item.date)}
               </Text>
+              </View>
             </View>
             <Text
               style={{

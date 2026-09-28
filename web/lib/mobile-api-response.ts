@@ -30,6 +30,8 @@ const transactionFields = [
   "workspaceId",
   "accountId",
   "accountName",
+  "accountType",
+  "brandLogoUrl",
   "categoryName",
   "categoryId",
   "institution",

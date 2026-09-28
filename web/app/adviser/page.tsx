@@ -1,3 +1,4 @@
+import { needsTransactionCategory } from "@/lib/transaction-category-status";
 import { finverseBalances } from "@/lib/finverse-balances";
 import { getNavigationIconSrc } from "@/lib/navigation-icons";
 import { cookies } from "next/headers";
@@ -1412,7 +1413,7 @@ async function AdviserPageContent({ searchParams }: { searchParams?: Promise<Adv
   });
   const weekendExpenseShare = currentSpend > 0 ? weekendExpenses.reduce((sum, transaction) => sum + Math.abs(Number(transaction.amount)), 0) / currentSpend : 0;
 
-  const uncategorizedTransactions = activeTransactions.filter((transaction) => !transaction.category?.name || !transaction.merchantClean);
+  const uncategorizedTransactions = activeTransactions.filter((transaction) => needsTransactionCategory(transaction.category?.name));
 
   const recurringDueSoon = recurringPatterns
     .filter((pattern) => pattern.nextExpectedDate && pattern.nextExpectedDate <= nextFourteenDays)

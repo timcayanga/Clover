@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 const defaults = { date: true, account: true, category: true, tags: false };
 type Columns = typeof defaults;
@@ -38,8 +38,27 @@ export function TransactionColumns({
   columns,
   toggle,
 }: ReturnType<typeof useTransactionColumns>) {
+  const menuRef = useRef<HTMLDetailsElement>(null);
+  useEffect(() => {
+    const dismiss = (event: PointerEvent) => {
+      const menu = menuRef.current;
+      if (menu?.open && event.target instanceof Node && !menu.contains(event.target)) menu.open = false;
+    };
+    const escape = (event: KeyboardEvent) => {
+      if (event.key === "Escape" && menuRef.current?.open) {
+        menuRef.current.open = false;
+        menuRef.current.querySelector("summary")?.focus();
+      }
+    };
+    document.addEventListener("pointerdown", dismiss);
+    document.addEventListener("keydown", escape);
+    return () => {
+      document.removeEventListener("pointerdown", dismiss);
+      document.removeEventListener("keydown", escape);
+    };
+  }, []);
   return (
-    <details className="transaction-columns">
+    <details ref={menuRef} className="transaction-columns">
       <summary aria-label="Customize columns" title="Customize columns">
         ⋮
       </summary>

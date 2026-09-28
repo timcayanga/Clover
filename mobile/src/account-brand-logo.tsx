@@ -8,7 +8,7 @@ export function AccountBrandLogo({
   account,
   size = 32,
 }: {
-  account: AccountRecord;
+  account: Pick<AccountRecord, "brandLogoUrl" | "institution" | "name" | "type"> & Partial<AccountRecord>;
   size?: number;
 }) {
   const [failed, setFailed] = useState<string | null>(null);

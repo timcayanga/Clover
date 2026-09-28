@@ -1,3 +1,4 @@
+import { needsTransactionCategory } from "@/lib/transaction-category-status";
 import { mobileHomePeriods, homeDateKey } from "@/lib/mobile-home-periods";
 import { GoalDeleteButton } from "@/components/goal-delete-button";
 import { mobileGoals, loadGoalActivity } from "@/lib/mobile-goals";
@@ -474,7 +475,7 @@ async function GoalsPageStream({ goalId }: { goalId?: string }) {
     currentSavingsRate !== null && previousSavingsRate !== null ? (currentSavingsRate - previousSavingsRate) * 100 : null;
   const netDelta = currentNet - previousNet;
   const uncategorizedTransactions = currentWindowTransactions.filter(
-    (transaction) => !transaction.category?.name || !transaction.merchantClean
+    (transaction) => needsTransactionCategory(transaction.category?.name)
   );
 
   const duplicateGroups = new Map<string, GoalTransaction[]>();

@@ -1,4 +1,4 @@
-import { enrichFinverseTransactions, finverseUncategorizedBackfillWhere, type BankCategorySuggestion } from "@/lib/finverse-enrichment";
+import { enrichFinverseTransactions, canRefreshFinverseCategory, type BankCategorySuggestion } from "@/lib/finverse-enrichment";
 import { bankInstitutionsMatch } from "@/lib/finverse-matching";
 import { reserveBankRefresh, BankRefreshLimitError } from "@/lib/finverse-refresh-limit";
 import { PLAN_CATALOG } from "../../../../../../shared/plan-catalog";
@@ -95,10 +95,10 @@ const importTransaction = async (connectionId: string, workspaceId: string, tran
     const existing = await tx.finverseTransactionRecord.findFirst({ where: { externalTransactionId: transaction.transaction_id, externalAccountId: transaction.account_id, connection: { workspaceId } } });
     if (existing) {
       if (existing.transactionId && suggestion) {
-        const saved = await tx.transaction.findFirst({ where: finverseUncategorizedBackfillWhere(existing.transactionId) });
-        if (saved) {
+        const saved = await tx.transaction.findFirst({ where: { id: existing.transactionId } });
+        if (saved && canRefreshFinverseCategory(saved) && (!saved.categoryId || saved.categoryId === suggestion.categoryId)) {
           const payload = saved.normalizedPayload && typeof saved.normalizedPayload === "object" && !Array.isArray(saved.normalizedPayload) ? saved.normalizedPayload : {};
-          await tx.transaction.updateMany({ where: finverseUncategorizedBackfillWhere(saved.id), data: {
+          await tx.transaction.updateMany({ where: { id: saved.id, updatedAt: saved.updatedAt, reviewStatus: saved.reviewStatus, categoryId: saved.categoryId, isExcluded: false, deletedAt: null }, data: {
             categoryId: suggestion.categoryId, categoryConfidence: suggestion.categoryConfidence,
             reviewStatus: suggestion.reviewStatus, reviewPriority: suggestion.reviewPriority,
             reviewReasons: json(suggestion.reviewReasons), learnedRuleIdsApplied: json(suggestion.learnedRuleIdsApplied),
