@@ -14,4 +14,8 @@
 
 @media(max-width:900px) and (max-height:680px){.background[data-prefix=landing] .scene:nth-child(-n+2) img{object-position:center 20%}}
 
-@media(min-width:901px){.background[data-phone=true] .scene img{object-position:right center}}
+/* Reserve a real photo gutter for the phone instead of laying it over faces. */
+@media(min-width:901px){
+ .background[data-phone=true] .scene{top:96px;height:calc(100% - 96px);width:calc(100% - var(--landing-phone-width) - 6vw);overflow:hidden}
+ .background[data-phone=true] .scene img{object-position:right center;transform-origin:right center}
+}

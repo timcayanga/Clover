@@ -2946,6 +2946,8 @@ export default function InvestmentsPage() {
             includeAllOption
             allLabel="All Currencies"
             ariaLabel="Select investment currency"
+            portalMenu
+            showCurrencyCode
             className="transactions-currency-filter investments-currency-filter"
             buttonClassName="button button-secondary button-small investments-page__toolbar-button"
             menuClassName="transactions-currency-filter__menu"

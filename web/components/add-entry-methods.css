@@ -12,7 +12,7 @@
   padding: 4px;
   border-radius: 999px;
   background: var(--surface-2, #ecf4f5);
-  gap: 4px;
+  gap: 0;
 }
 .add-entry-methods .transaction-creation-tabs > button {
   flex: 1;

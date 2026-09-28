@@ -17,7 +17,13 @@ export function InvestmentPortfolioFilters({ children, active }: { children: Rea
   useEffect(() => {
     if (!open) return;
     const outside = (event: Event) => {
-      if (event.target instanceof Node && !ref.current?.contains(event.target)) setOpen(false);
+      if (!(event.target instanceof Node) || ref.current?.contains(event.target)) return;
+      // Currency options render outside the clipped filter panel, but still
+      // belong to the selector inside it. Keep the parent open while choosing.
+      const popup = event.target instanceof Element ? event.target.closest('[role="listbox"]') : null;
+      if (popup?.id && Array.from(ref.current?.querySelectorAll('[aria-controls]') ?? [])
+        .some(trigger => trigger.getAttribute('aria-controls') === popup.id)) return;
+      setOpen(false);
     };
     const escape = (event: KeyboardEvent) => {
       if (event.key === "Escape") { setOpen(false); button.current?.focus(); }

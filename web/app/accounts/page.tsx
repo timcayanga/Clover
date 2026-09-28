@@ -4509,7 +4509,7 @@ function AccountsPageContent() {
         options={availableCurrencies}
         includeAllOption={availableCurrencies.length > 1}
         allLabel="All currencies"
-        ariaLabel="Select account currency"
+        ariaLabel="Select account currency" showCurrencyCode
         className="accounts-currency-filter"
         buttonClassName="accounts-currency-filter__button"
         menuClassName="accounts-currency-filter__menu"
@@ -4530,7 +4530,7 @@ function AccountsPageContent() {
       title="Accounts"
       mobileLeadingAction={<ContextualAskClover context="accounts" planTier={planTier} />}
       desktopTitleAction={<ContextualAskClover context="accounts" planTier={planTier} />}
-      mobileTrailingAction={<><CurrencySelector value={selectedCurrency} onChange={next => { const code = next.toLowerCase() === "all" ? "" : formatCurrencyCode(next); setSelectedCurrency(code); persistSelectedCurrency(selectedWorkspaceId, code); }} options={availableCurrencies} includeAllOption={availableCurrencies.length > 1} allLabel="All currencies" ariaLabel="Select account currency" iconOnly showChevron={false} portalMenu menuAlignment="end" buttonClassName="accounts-mobile-currency-button" /><button className="icon-button" type="button" aria-label="Add account" onClick={openAddAccount}><ActionIcon name="plus" /></button></>}
+      mobileTrailingAction={<><CurrencySelector value={selectedCurrency} onChange={next => { const code = next.toLowerCase() === "all" ? "" : formatCurrencyCode(next); setSelectedCurrency(code); persistSelectedCurrency(selectedWorkspaceId, code); }} options={availableCurrencies} includeAllOption={availableCurrencies.length > 1} allLabel="All currencies" ariaLabel="Select account currency" showCurrencyCode showChevron={false} portalMenu menuAlignment="end" buttonClassName="accounts-mobile-currency-button" /><button className="icon-button" type="button" aria-label="Add account" onClick={openAddAccount}><ActionIcon name="plus" /></button></>}
       actions={<div className="accounts-desktop-tools">{accountsShellActions}</div>}
       >
       <div className="accounts-page">

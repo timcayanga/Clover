@@ -3,7 +3,7 @@ import { FinverseConnectButton } from "./finverse-connect-button";
 import type { EntryFormContext } from "@/lib/adviser-entry-types";
 import type { AddFormDraft } from "../../shared/add-form-draft";
 import dynamic from "next/dynamic";
-import { useEffect, useId, useState, type ReactNode } from "react";
+import { useEffect, useId, useState, type CSSProperties, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import {
   UploadSourcePicker,
@@ -110,6 +110,7 @@ export function AddEntryMethods({
     <div className="add-entry-methods">
       <div
         className="transaction-creation-tabs"
+        style={{ "--entry-tab-index": methods.indexOf(tab), "--entry-tab-count": methods.length } as CSSProperties}
         role="tablist"
         aria-label="How to add"
       >

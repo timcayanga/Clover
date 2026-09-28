@@ -351,7 +351,7 @@ export function LandingJourney({ authEnabled, initialMarket, countryResolved }: 
 
       <div className={styles.heroStatements} data-active={displayedChapter === 0} aria-hidden="true" style={{ opacity: displayedChapter === 0 ? Math.max(0, 1 - storyPosition) : 0 }}>
         {marketContent[market].documents.slice(0, 3).map(([name], index) => <div className={styles.heroStatement} key={name}>
-          <small>EXAMPLE</small><strong>{name}</strong>
+          <img className={styles.heroStatementLogo} src={marketContent[market].uploadRows[index][1]} alt="" width="28" height="28" /><strong>{name}</strong>
           {marketContent[market].documentLines[index].map(([label, amount]) => <span key={label}><span>{label}</span><b>{amount}</b></span>)}
         </div>)}
       </div>

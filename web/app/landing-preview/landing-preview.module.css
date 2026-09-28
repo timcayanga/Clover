@@ -703,3 +703,12 @@
  .proComparisonCard .proTable th:first-child{width:29%}
  .proComparisonCard .proTable tfoot td{font-size:10px!important}
 }
+
+/* Source documents move gently without changing their legible rotation. */
+.heroStatementLogo{width:28px;height:28px;object-fit:contain;display:block}
+.heroStatement{animation:source-document-float 6s ease-in-out infinite;animation-play-state:paused}
+.heroStatements[data-active=true] .heroStatement{animation-play-state:running}
+.heroStatement:nth-child(2){animation-delay:-2s}
+.heroStatement:nth-child(3){animation-delay:-4s}
+@keyframes source-document-float{0%,100%{translate:0 0}50%{translate:0 -6px}}
+@media(prefers-reduced-motion:reduce){.heroStatement{animation:none}}
