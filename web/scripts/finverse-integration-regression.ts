@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import {
+  getFinverseInstitutionCatalog,
   createFinverseRefresh,
   createFinverseLink,
   visibleFinverseBanks,
@@ -132,7 +133,7 @@ async function refreshRequests() {
     console.log("Finverse refresh, relink and multi-country requests passed.");
   } finally { globalThis.fetch=originalFetch; for(const key of Object.keys(process.env)) if(!(key in originalEnv)) delete process.env[key];Object.assign(process.env,originalEnv); }
 }
-refreshRequests().catch(error=>{console.error(error);process.exitCode=1;});
+refreshRequests().then(catalogCacheRequests).catch(error=>{console.error(error);process.exitCode=1;});
 
 import { finverseBankPresentation } from "../lib/finverse-bank-presentation";
 import { existsSync } from "node:fs";
@@ -185,3 +186,34 @@ const unknown=[{id:"a",name:"Similar Bank",countries:["PHL"],logoUrl:""},{id:"b"
 assert.equal(groupFinverseBanks(unknown,"PHL").length,2,"Unknown connectors must not be merged by name");
 assert.equal(visibleFinverseBanks(catalogue,"test").length,0,"Test mode must not expose real banks");
 console.log("API-driven coverage, Beta availability, brand grouping, portal identity and country eligibility passed.");
+
+async function catalogCacheRequests() {
+  const originalFetch=globalThis.fetch, originalNow=Date.now, originalEnv={...process.env};
+  let now=originalNow(), calls=0, fail=false;
+  Object.assign(process.env,{FINVERSE_ENABLED:"true",FINVERSE_CLIENT_ID:"cache-test",FINVERSE_CLIENT_SECRET:"secret",FINVERSE_REDIRECT_URI:"https://clover.test/callback",FINVERSE_TOKEN_ENCRYPTION_KEY:encryptionKey,FINVERSE_MODE:"test"});
+  Date.now=()=>now;
+  globalThis.fetch=async url=>{
+    if(String(url).includes("customer/token"))return Response.json({access_token:"customer"});
+    calls++;
+    await new Promise(resolve=>setTimeout(resolve,10));
+    return fail ? Response.json({message:"unavailable"},{status:503}) : Response.json([realBank,testBank]);
+  };
+  try {
+    await Promise.all(Array.from({length:8},()=>getFinverseInstitutionCatalog()));
+    assert.equal(calls,1,"Concurrent pickers share one provider request");
+    await getFinverseInstitutionCatalog(); assert.equal(calls,1,"Warm catalogue is reused");
+    now+=5*60_000+1;
+    await getFinverseInstitutionCatalog(); assert.equal(calls,2,"Expired catalogue is refreshed");
+    await getFinverseInstitutionCatalog({fresh:true}); assert.equal(calls,3,"Link validation and admin export bypass cached data");
+    process.env.FINVERSE_MODE="live";
+    assert.equal((await getFinverseInstitutionCatalog()).mode,"live"); assert.equal(calls,4,"Live and test catalogues are isolated");
+    process.env.FINVERSE_CLIENT_ID="other-client";
+    await getFinverseInstitutionCatalog(); assert.equal(calls,5,"Client configuration changes invalidate the cache");
+    now+=5*60_000+1; fail=true;
+    await assert.rejects(getFinverseInstitutionCatalog());
+    fail=false; await getFinverseInstitutionCatalog(); assert.equal(calls,7,"Failed requests are retryable and never cached");
+    process.env.FINVERSE_ENABLED="false";
+    await assert.rejects(getFinverseInstitutionCatalog(),/FINVERSE_DISABLED/);
+    console.log("Catalogue concurrency, TTL, fresh validation, configuration isolation and retry checks passed.");
+  } finally {globalThis.fetch=originalFetch;Date.now=originalNow;for(const key of Object.keys(process.env))if(!(key in originalEnv))delete process.env[key];Object.assign(process.env,originalEnv);}
+}

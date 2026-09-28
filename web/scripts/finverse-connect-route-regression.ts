@@ -5,6 +5,7 @@ import { resolve } from "node:path";
 const requireFixture = createRequire(resolve("package.json"));
 async function main() {
   const fixture = `
+let lifecycleCalls=0;
 let claimed=false, exchanges=0, created=0, bankCalls=0, refreshCalls=0, updates=[], planTier='pro';
 export function setPlan(value){planTier=value;}
 export const getAccountBrand=()=>({logoSrc:null,fallbackIconSrc:"/assets/account-types/bank.png"});
@@ -13,12 +14,12 @@ let refreshLimitReached=false;
 export function setRefreshLimit(value){refreshLimitReached=value;}
 export class BankRefreshLimitError extends Error { retryAt=new Date(Date.now()+60000); }
 export const reserveBankRefresh=async()=>{if(refreshLimitReached)throw new BankRefreshLimitError('Four refresh attempts used.');};
-export const bankLifecycleOverview=async()=>({limit:2,connections:[]});
+export const bankLifecycleOverview=async()=>{lifecycleCalls++;return {limit:2,connections:[]};};
 export const hasUnlimitedPlanLimits=()=>false;
 export const getProAccess=async()=>({planTier});
 export const refreshProAccess=async()=>planTier;
 export function reset(){claimed=false;exchanges=0;created=0;bankCalls=0;refreshCalls=0;updates=[];}
-export function stats(){return {exchanges,created,bankCalls,refreshCalls,updates};}
+export function stats(){return {lifecycleCalls,exchanges,created,bankCalls,refreshCalls,updates};}
 export const requireAuth=async()=>({userId:'owner'});
 export const requireAdminAuth=async()=>{if(planTier==='free')throw Error('FORBIDDEN');return {userId:'owner'};};
 export const getFinverseInstitutionCatalog=async()=>({mode:'live',institutions:[{id:'bpi',name:'BPI',countries:['PHL'],status:'BETA',products:['ACCOUNTS'],tags:['real'],shownInClover:false,excludedReasons:['Missing Accounts or Transactions support']}]});
@@ -81,6 +82,21 @@ export const prisma={user:{findUniqueOrThrow:async()=>({planTier})},$transaction
   assert.equal(linkedData.accounts[0].lastSyncedAt,'2026-09-24T00:00:00Z');
   assert(!JSON.stringify(linkedData).includes('1234567890'));
 
+  const lifecycleBefore = api.stats().lifecycleCalls;
+  const banksBefore = api.stats().bankCalls;
+  for (const tier of ['free','pro']) {
+    api.setPlan(tier);
+    const picker = await api.connections(new Request('https://clover.test/api?view=picker&workspaceId=profile'));
+    assert.equal(picker.headers.get('cache-control'),'private, no-store');
+    const data = await picker.json();
+    assert.equal(data.upgradeRequired,tier === 'free');
+    assert.deepEqual(data.accounts,linkedData.accounts);
+    assert.equal(data.lifecycle,undefined);
+  }
+  assert.equal(api.stats().lifecycleCalls,lifecycleBefore,'Picker must skip cross-profile lifecycle history');
+  assert.equal(api.stats().bankCalls,banksBefore,'Linked accounts must not wait for Finverse');
+  assert.equal((await api.connections(new Request('https://clover.test/api?view=picker&workspaceId=other'))).status,404);
+  api.setPlan('pro');
   assert.equal((await api.institutions(new Request('https://clover.test/api?workspaceId=other'))).status,404);
   assert.deepEqual(await (await api.institutions(new Request('https://clover.test/api?workspaceId=profile'))).json(),{banks:[{id:'bank',name:'Test bank',countries:['PHL'],brandKey:'bank',accessType:'Bank access',connectorName:'Test bank',accountTypes:{PHL:'Bank access'},logoUrl:'/assets/account-types/bank.png',logoUrls:{PHL:'/assets/account-types/bank.png'}}],mode:'test',available:true});
   const link=(body:object)=>api.link(new Request('https://clover.test/link',{method:'POST',body:JSON.stringify(body)}));

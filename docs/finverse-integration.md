@@ -77,3 +77,17 @@ Provider reference: https://docs.finverse.com/ and the official Finverse Account
 - A single SUPPORTED connector opens directly. BETA status is attached to the connector; selecting it requires a Continue action after the reliability note. A tile is labelled Beta when all its eligible connectors are Beta.
 - The same picker policy applies to Add Account and the unlinked-account Sync path on desktop/mobile web and iOS/Android. Existing linked accounts, financial data, access limits and synchronization behavior are unchanged.
 - Staging remains test mode. Real-bank visual QA uses a read-only catalogue snapshot; do not switch environments merely to populate a preview.
+
+### Discovery loading performance
+
+The country/bank catalogue is cached in server memory for five minutes, scoped to
+Finverse client credentials and live/test mode. Concurrent requests share a single
+provider fetch. Expired/failed loads retry; admin catalogue exports and link-time
+bank validation request fresh provider data. Cold server instances still fetch it.
+No user account data or plan entitlements are included in this cache.
+
+Web and native Sync use `connections?view=picker` for fresh access and linked-account
+metadata, independently of the institution catalogue. This skips lifecycle history
+queries; plan and account reads run concurrently after workspace authorization.
+Add Account skips the unused connections request. Per-account Sync skips the
+catalogue entirely. All account responses remain private/no-store.

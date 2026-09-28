@@ -16,6 +16,7 @@ export function FinverseConnect({ onSynced, callbackConnection, mode = "connect"
   const { colors } = useTheme();
   const [access, setAccess] = useState<{ profileId: string; upgradeRequired: boolean } | null>(null);
   const allowed = access?.profileId === session.profileId && !access.upgradeRequired;
+  const [banksLoaded, setBanksLoaded] = useState(false);
   const [banks, setBanks] = useState<FinverseBankOption[]>([]);
   const [linked,setLinked] = useState<{id:string;connectionId:string;name:string;last4:string|null;logoUrl:string;lastSyncedAt:string|null}[]>([]);
   const [connectionsLoaded,setConnectionsLoaded] = useState(false);
@@ -37,21 +38,25 @@ export function FinverseConnect({ onSynced, callbackConnection, mode = "connect"
   const syncedRef = useRef(onSynced); syncedRef.current = onSynced;
   useEffect(() => { active.current = true; return () => { active.current = false; abortRef.current?.abort(); }; }, []);
   useEffect(() => {
+    if (mode === "sync" && accountId) return;
     const controller = new AbortController();
-    setAccess(null);
+    if (mode === "connect") setAccess(null);
+    setBanksLoaded(false);
     setBanks([]); setBankMessage("Loading banks…");
     if (session.demo) { setBankMessage("Sign in to connect your bank. Demo mode does not access bank accounts."); return; }
     void requestRef.current<{ banks: FinverseBankOption[]; mode?: string; message?: string; upgradeRequired?: boolean }>(`finverse/institutions?workspaceId=${encodeURIComponent(session.profileId)}`, { signal: controller.signal })
-      .then(data => { if (!controller.signal.aborted) { setAccess({ profileId: session.profileId, upgradeRequired: data.upgradeRequired === true }); setBanks(data.banks); setTest(data.mode === "test"); setBankMessage(data.message || (data.banks.length ? "" : "No banks are available right now. Use Manual or Upload.")); } })
+      .then(data => { if (!controller.signal.aborted) { if (mode === "connect") setAccess({ profileId: session.profileId, upgradeRequired: data.upgradeRequired === true }); setBanksLoaded(true); setBanks(data.banks); setTest(data.mode === "test"); setBankMessage(data.message || (data.banks.length ? "" : "No banks are available right now. Use Manual or Upload.")); } })
       .catch(error => { if (!controller.signal.aborted) setBankMessage(error.message || "Unable to load banks."); });
     return () => controller.abort();
-  }, [session.demo, session.profileId, revision]);
+  }, [session.demo, session.profileId, revision, mode, accountId]);
   useEffect(()=>{
+    if (mode !== "sync") return;
+    setAccess(null);
     const controller=new AbortController();setConnectionsLoaded(false);setConnectionsError("");setLinked([]);
     if(session.demo){setConnectionsLoaded(true);return;}
-    void requestRef.current<{accounts:typeof linked}>(`finverse/connections?workspaceId=${encodeURIComponent(session.profileId)}`,{signal:controller.signal}).then(data=>{if(!controller.signal.aborted){setLinked(data.accounts);setConnectionsLoaded(true);}}).catch(error=>{if(!controller.signal.aborted)setConnectionsError(error.message);});
+    void requestRef.current<{accounts:typeof linked;upgradeRequired:boolean}>(`finverse/connections?view=picker&workspaceId=${encodeURIComponent(session.profileId)}`,{signal:controller.signal}).then(data=>{if(!controller.signal.aborted){setLinked(data.accounts);setAccess({ profileId: session.profileId, upgradeRequired: data.upgradeRequired === true });setConnectionsLoaded(true);}}).catch(error=>{if(!controller.signal.aborted)setConnectionsError(error.message);});
     return()=>controller.abort();
-  },[session.demo,session.profileId,revision]);
+  },[session.demo,session.profileId,revision,mode]);
   const sync = useCallback(async (id?: string, accountIds?: string[], refresh = false) => {
     if (!allowed || action.current) return;
     action.current = true; setBusy(true); setRetrySync(null); setMessage("Retrieving your bank accounts…");
@@ -124,8 +129,8 @@ export function FinverseConnect({ onSynced, callbackConnection, mode = "connect"
     <Button title="Upgrade plan" fullWidth onPress={() => router.push("/settings?section=plan")} />
     <Body muted>You can still add accounts with Manual or Upload on Free.</Body>
   </View>;
-  if (!allowed && !(access?.upgradeRequired && mode === "sync" && linked.length)) return <View style={{ gap: 16 }}><Notice>{bankMessage}</Notice>{bankMessage !== "Loading banks…" && !session.demo ? <Button secondary title="Try again" onPress={() => setRevision(v => v + 1)} /> : null}</View>;
-  if(mode==="sync"&&!connectionsLoaded)return <Notice>{connectionsError||"Loading linked accounts…"}</Notice>;
+  if (mode === "sync" && !connectionsLoaded && !session.demo) return <View style={{ gap: 12 }}><Notice>{connectionsError || "Loading linked accounts…"}</Notice>{connectionsError ? <Button secondary title="Try again" onPress={() => setRevision(v => v + 1)} /> : null}</View>;
+  if ((!allowed && !(access?.upgradeRequired && mode === "sync" && linked.length)) || (!banksLoaded && !(mode === "sync" && linked.length))) return <View style={{ gap: 16 }}><Notice>{bankMessage}</Notice>{bankMessage !== "Loading banks…" && !session.demo ? <Button secondary title="Try again" onPress={() => setRevision(v => v + 1)} /> : null}</View>;
   const syncAccounts=linked.filter(a=>!accountId||a.id===accountId);
   return <View style={{gap:16}}><BankLifecyclePanel key={revision}/>
     {selection ? <View style={{ gap: 12 }}><Heading>Select bank accounts</Heading><Body>{selection.remaining} new account slots available. Previously used accounts can be reconnected.</Body>{selection.accounts.map(account => {

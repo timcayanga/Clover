@@ -8,7 +8,7 @@ export async function GET(request: Request) {
   try { await requireAdminAuth(); }
   catch (error) { return NextResponse.json({error:"Admin access required"}, {status: error instanceof Error && error.message === "FORBIDDEN" ? 403 : 401}); }
   try {
-    const result = await getFinverseInstitutionCatalog();
+    const result = await getFinverseInstitutionCatalog({ fresh: true });
     const institutions = result.institutions.map(bank => ({...bank, countryNames: bank.countries.map(code =>
       ISO_COUNTRY_NAMES.find(([alpha3,alpha2]) => alpha3 === code || alpha2 === code)?.[2] ?? code)}));
     const headers = {"Cache-Control":"private, no-store"};

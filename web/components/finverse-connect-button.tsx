@@ -47,6 +47,7 @@ export function FinverseConnectButton({
 }) {
   const [access, setAccess] = useState<{ workspaceId: string; upgradeRequired: boolean } | null>(null);
   const allowed = access?.workspaceId === workspaceId && !access.upgradeRequired;
+  const [banksLoaded, setBanksLoaded] = useState(false);
   const [banks, setBanks] = useState<FinverseBankOption[]>([]);
   const [linked, setLinked] = useState<{id:string;connectionId:string;name:string;last4:string|null;logoUrl:string;lastSyncedAt:string|null}[]>([]);
   const [connectionsLoaded, setConnectionsLoaded] = useState(false);
@@ -74,25 +75,29 @@ export function FinverseConnectButton({
   }, [onSynced]);
 
   useEffect(() => {
+    if (mode === "sync" && accountId) return;
     const controller = new AbortController();
-    setAccess(null);
+    if (mode === "connect") setAccess(null);
+    setBanksLoaded(false);
     setBanks([]); setBankStatus("Loading banks…");
     void fetch(`/api/integrations/finverse/institutions?workspaceId=${encodeURIComponent(workspaceId)}`, { signal: controller.signal, cache: "no-store" })
       .then(async response => { const data = await response.json(); if (!response.ok) throw new Error(data.error || "Unable to load banks."); return data; })
-      .then(data => { if (controller.signal.aborted) return; setAccess({ workspaceId, upgradeRequired: data.upgradeRequired === true }); setBanks(data.banks); setTestMode(data.mode === "test"); setBankStatus(data.message || (data.banks.length ? "" : "No banks are available right now. Use Manual or Upload.")); })
+      .then(data => { if (controller.signal.aborted) return; if (mode === "connect") setAccess({ workspaceId, upgradeRequired: data.upgradeRequired === true }); setBanksLoaded(true); setBanks(data.banks); setTestMode(data.mode === "test"); setBankStatus(data.message || (data.banks.length ? "" : "No banks are available right now. Use Manual or Upload.")); })
       .catch(error => { if (!controller.signal.aborted) setBankStatus(error.message || "Unable to load banks. Try again."); });
     return () => controller.abort();
-  }, [workspaceId, bankRevision]);
+  }, [workspaceId, bankRevision, mode, accountId]);
 
   useEffect(() => {
+    if (mode !== "sync") return;
+    setAccess(null);
     const controller = new AbortController();
     setConnectionsLoaded(false); setConnectionsError(""); setLinked([]);
-    void fetch(`/api/integrations/finverse/connections?workspaceId=${encodeURIComponent(workspaceId)}`,{signal:controller.signal,cache:"no-store"})
+    void fetch(`/api/integrations/finverse/connections?view=picker&workspaceId=${encodeURIComponent(workspaceId)}`,{signal:controller.signal,cache:"no-store"})
       .then(async response => { if(!response.ok) throw new Error("Unable to load linked accounts.");return response.json(); })
-      .then(data => {if(!controller.signal.aborted){setLinked(data.accounts);setConnectionsLoaded(true);}})
+      .then(data => {if(!controller.signal.aborted){setLinked(data.accounts);setAccess({ workspaceId, upgradeRequired: data.upgradeRequired === true });setConnectionsLoaded(true);}})
       .catch(error => {if(!controller.signal.aborted)setConnectionsError(error.message);});
     return () => controller.abort();
-  }, [workspaceId, bankRevision]);
+  }, [workspaceId, bankRevision, mode]);
 
   const sync = useCallback(async (requestedConnectionId?: string, selectedAccountIds?: string[], refresh = false) => {
     if (!allowed || !workspaceId || actionRef.current) return;
@@ -202,9 +207,9 @@ export function FinverseConnectButton({
       <p>You can still add accounts with Manual or Upload on Free.</p>
     </div>
   );
-  if (!allowed && !(access?.upgradeRequired && mode === "sync" && linked.length)) return <div role="status"><p>{bankStatus}</p>{bankStatus !== "Loading banks…" ? <button type="button" className="button button-secondary" onClick={() => setBankRevision(v => v + 1)}>Try again</button> : null}</div>;
-
   if (mode === "sync" && !connectionsLoaded) return <div role="status">{connectionsError || "Loading linked accounts…"}{connectionsError ? <button type="button" className="button button-secondary" onClick={()=>setBankRevision(v=>v+1)}>Try again</button> : null}</div>;
+  if ((!allowed && !(access?.upgradeRequired && mode === "sync" && linked.length)) || (!banksLoaded && !(mode === "sync" && linked.length))) return <div role="status"><p>{bankStatus}</p>{bankStatus !== "Loading banks…" ? <button type="button" className="button button-secondary" onClick={() => setBankRevision(v => v + 1)}>Try again</button> : null}</div>;
+
   const syncAccounts = linked.filter(a=>!accountId || a.id===accountId);
   if (mode === "sync" && accountId && !syncAccounts.length) return null;
   return (

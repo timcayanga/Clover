@@ -114,19 +114,21 @@ const requestFinverse = async <T>(
   return body as T;
 };
 
-let cachedCustomerToken: { token: string; expiresAt: number } | null = null;
+let cachedCustomerToken: { key: string; token: string; expiresAt: number } | null = null;
 
 export const getFinverseCustomerToken = async () => {
-  if (cachedCustomerToken && cachedCustomerToken.expiresAt > Date.now() + 60_000) {
+  const config = getFinverseConfig();
+  const key = createHash("sha256").update(JSON.stringify([config.clientId, config.clientSecret])).digest("hex");
+  if (cachedCustomerToken?.key === key && cachedCustomerToken.expiresAt > Date.now() + 60_000) {
     return cachedCustomerToken.token;
   }
-  const config = getFinverseConfig();
   const result = await requestFinverse<{ access_token: string; expires_in?: number }>("/auth/customer/token", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ client_id: config.clientId, client_secret: config.clientSecret, grant_type: "client_credentials" }),
   });
   cachedCustomerToken = {
+    key,
     token: result.access_token,
     expiresAt: Date.now() + Math.max(60, result.expires_in ?? 3600) * 1000,
   };
@@ -308,14 +310,31 @@ export function summarizeFinverseCatalog(data: unknown, mode: "live" | "test") {
       shownInClover: visible.has(item.institution_id), excludedReasons: reasons };
   });
 }
-export async function getFinverseInstitutionCatalog() {
-  const { mode } = getFinverseConfig();
-  const token = await getFinverseCustomerToken();
-  const data = await requestFinverse<unknown>("/institutions", { method: "GET" }, token);
-  return { institutions: summarizeFinverseCatalog(data, mode), mode };
+// Only provider metadata is cached; no workspace, entitlement or financial data.
+// A single in-flight request serves concurrent pickers on a warm server instance.
+const CATALOG_TTL_MS = 5 * 60_000;
+type Catalog = { institutions: ReturnType<typeof summarizeFinverseCatalog>; mode: "live" | "test" };
+let catalogCache: { key: string; value?: Catalog; expiresAt: number; pending?: Promise<Catalog> } | undefined;
+export async function getFinverseInstitutionCatalog({ fresh = false } = {}) {
+  const { mode, clientId, clientSecret } = getFinverseConfig();
+  const key = createHash("sha256").update(JSON.stringify([mode, clientId, clientSecret])).digest("hex");
+  if (!catalogCache || catalogCache.key !== key) catalogCache = { key, expiresAt: 0 };
+  const entry = catalogCache;
+  if (!fresh && entry.value && entry.expiresAt > Date.now()) return entry.value;
+  if (entry.pending) return entry.pending;
+  entry.pending = (async () => {
+    const token = await getFinverseCustomerToken();
+    const data = await requestFinverse<unknown>("/institutions", { method: "GET" }, token);
+    const value = { institutions: summarizeFinverseCatalog(data, mode), mode };
+    entry.value = value;
+    entry.expiresAt = Date.now() + CATALOG_TTL_MS;
+    return value;
+  })();
+  try { return await entry.pending; }
+  finally { entry.pending = undefined; }
 }
-export async function getFinverseBanks() {
-  const { institutions, mode } = await getFinverseInstitutionCatalog();
+export async function getFinverseBanks(options?: { fresh?: boolean }) {
+  const { institutions, mode } = await getFinverseInstitutionCatalog(options);
   const banks = visibleFinverseBanks(institutions.map(item => ({institution_id:item.id, institution_name:item.name,
     countries:item.countries, products_supported:item.products, tags:item.tags, status:item.status})), mode);
   return { banks, mode };
