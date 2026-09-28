@@ -101,6 +101,7 @@ async function main() {
   // Verify the actual menu assets consumed by both clients, not obsolete copies.
   const nativeSource = await readFile(path.resolve(root, "../mobile/src/icon-assets.ts"), "utf8");
   for (const name of ["profile", "settings", "help", "signOut", "profiles", "display", "data", "review", "categories", "notifications", "security", "region", "plan"] as NavigationIconName[]) {
+    assert.equal(NAVIGATION_ICON_SOURCE_FILES[name], `figma-library-transparent/${name}.png`, `${name} must use the approved icon library, not captured legacy menu artwork.`);
     const publicPath = path.join(publicRoot, decodeURIComponent(getNavigationIconSrc(name)));
     const nativePath = path.resolve(root, `../mobile/assets/icons/navigation/${name}.png`);
     assert.ok(nativeSource.includes(`../assets/icons/navigation/${name}.png`), `${name} must use the synchronized native asset.`);

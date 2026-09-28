@@ -1,4 +1,4 @@
-export const NAVIGATION_ICON_ASSET_ROOT = "/assets/3d%20icons/navigation/figma-v5";
+export const NAVIGATION_ICON_ASSET_ROOT = "/assets/3d%20icons/navigation/figma-v6";
 
 export const NAVIGATION_ICON_SOURCE_FILES = {
   home: "home.png",
@@ -12,21 +12,21 @@ export const NAVIGATION_ICON_SOURCE_FILES = {
   adviser: "adviser.png",
   budgeting: "budgeting.png",
   goals: "goals.png",
-  plan: "menu-transparent/plan.png",
+  plan: "figma-library-transparent/plan.png",
   more: "more.png",
-  notifications: "menu-transparent/notifications.png",
-  settings: "menu-transparent/settings.png",
-  help: "menu-transparent/help.png",
+  notifications: "figma-library-transparent/notifications.png",
+  settings: "figma-library-transparent/settings.png",
+  help: "figma-library-transparent/help.png",
   search: "search.png",
-  profile: "menu-transparent/profile.png",
-  signOut: "menu-transparent/signOut.png",
-  profiles: "menu/profiles.png",
-  display: "menu/display.png",
-  data: "menu/data.png",
-  review: "menu/review.png",
-  categories: "menu/categories.png",
-  security: "menu-transparent/security.png",
-  region: "menu/region.png",
+  profile: "figma-library-transparent/profile.png",
+  signOut: "figma-library-transparent/signOut.png",
+  profiles: "figma-library-transparent/profiles.png",
+  display: "figma-library-transparent/display.png",
+  data: "figma-library-transparent/data.png",
+  review: "figma-library-transparent/review.png",
+  categories: "figma-library-transparent/categories.png",
+  security: "figma-library-transparent/security.png",
+  region: "figma-library-transparent/region.png",
 } as const;
 
 export type NavigationIconName = keyof typeof NAVIGATION_ICON_SOURCE_FILES;
