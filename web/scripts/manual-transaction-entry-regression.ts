@@ -55,8 +55,8 @@ assert.match(transactions, /getDeletedWorkspaceAccountIds\(selectedWorkspaceId\)
 assert.match(transactions, /buildTransactionAccountLabels\(selectableTransactionAccounts\)/, "Cross-currency account families must receive distinct picker labels.");
 assert.match(
   transactions,
-  /ensureDefaultAccount = async \(workspaceId: string, preferredCurrency = "PHP"\)[\s\S]{0,900}formatCurrencyCode\(account\.currency \|\| "PHP"\) === normalizedPreferredCurrency/,
-  "Manual entry must resolve its default Cash account in the selected transaction currency."
+  /ensureDefaultAccount = async [\s\S]{0,400}mostUsedTransactionAccount\(accounts\.filter\(isTransactionAccount\)\)/,
+  "Manual entry must prefer the most-used eligible account."
 );
 assert.match(
   transactions,
