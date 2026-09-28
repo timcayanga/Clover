@@ -7,11 +7,11 @@ import { SWITCH_PATH,SWITCH_TERM_ITEMS } from "../../shared/switch-campaign";
 import { getNavigationIconSrc } from "@/lib/navigation-icons";
 import styles from "./switch-campaign.module.css";
 export type SwitchData={config:{status:string;open:boolean;};eligibilityReason:string|null;terms:string;application:null|{id:string;status:string;claimBy:string|null;expiresAt:string|null;activatedAt:string|null;evidence:{id:string;fileName:string;purgedAt:string|null}[];events:{id:string;message:string;createdAt:string}[]}};
-export function SwitchOfferNotice({directToApplication=false}:{directToApplication?:boolean}){
+export function SwitchOfferNotice({directToApplication=false,compact=false}:{directToApplication?:boolean;compact?:boolean}){
  const [open,setOpen]=useState(false);
  useEffect(()=>{let active=true;void fetch("/api/campaigns/switch-offer",{cache:"no-store"}).then(r=>r.ok?r.json():null).then(d=>{if(active)setOpen(Boolean(d?.open));}).catch(()=>{});return()=>{active=false;};},[]);
  if(!open)return null;
- return <aside className={styles.notice}><strong>Already paid for another budgeting app?</strong><p>Try Clover Plus free for 30 days. Bring your exported records and connect supported banks. No card required.</p><Link href={directToApplication?SWITCH_PATH:"/offers/switch-to-clover"} onClick={()=>capturePostHogClientEvent("campaign_progress",{campaign_stage:"offer_clicked",campaign_id:"switch-to-clover"})}>See offer →</Link></aside>;
+ return <aside className={compact?styles.compactNotice:styles.notice}><strong>Already paid for another budgeting app?</strong>{!compact&&<p>Try Clover Plus free for 30 days. Bring your exported records and connect supported banks. No card required.</p>}<Link href={directToApplication?SWITCH_PATH:"/offers/switch-to-clover"} onClick={()=>capturePostHogClientEvent("campaign_progress",{campaign_stage:"offer_clicked",campaign_id:"switch-to-clover"})}>See offer →</Link></aside>;
 }
 export function SwitchApplication(){
  const router=useRouter();

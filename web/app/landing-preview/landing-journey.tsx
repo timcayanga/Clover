@@ -111,8 +111,7 @@ export function ProActions(_props: { market?: LandingMarket }) {
 export function ProComparison({ market, style, showActions = true, variant = "landing" }: { market: LandingMarket; style: CSSProperties; showActions?: boolean; variant?: "landing" | "feature" }) {
   return <div className={styles.proDetails} style={style}>
     <div className={styles.proComparisonCard}>
-      <PlanComparisonTable market={market} variant={variant} className={styles.proTable} />
-      <SwitchOfferNotice />
+      <PlanComparisonTable market={market} variant={variant} className={styles.proTable} paidFirst footer={<SwitchOfferNotice compact />} />
       <Link className={styles.proCompareLink} href="/pricing">Compare all Free, Plus and Pro features <span aria-hidden="true">→</span></Link>
     </div>
     {showActions ? <ProActions market={market} /> : null}

@@ -488,7 +488,7 @@
 .proTable th,.proTable td{padding:13px 14px;border-bottom:1px solid #e1eeee;font-size:13px;line-height:1.4;vertical-align:middle}
 .proTable thead th{background:#e8f6f5;color:#12606b;font-size:16px}
 .proTable tbody th{font-weight:600;color:#4c6370}
-.proTable td:last-child,.proTable th:last-child{background:#edfbf5}
+.proTable tbody td:nth-child(2),.proTable thead th:nth-child(2){background:#edfbf5}
 .proTable tr:last-child th,.proTable tr:last-child td{border-bottom:0}
 .proTable strong{display:block;color:#008a94;font-size:16px}
 .proActions{display:grid;justify-items:center;gap:10px;margin-top:18px}
@@ -723,3 +723,4 @@
 @media(min-width:901px) and (max-aspect-ratio:4/3) {
  .iphoneFrame{top:16px;bottom:auto}
 }
+.proTable tfoot strong{font-size:12px;font-weight:500;color:#4a6170}
