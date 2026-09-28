@@ -15,7 +15,7 @@ import {
   refreshAssignment,
 } from "@/lib/team-agent-store";
 export const dynamic = "force-dynamic";
-export const maxDuration = 90;
+export const maxDuration = 120;
 type Context = { params: Promise<{ runId: string }> };
 export async function GET(_request: Request, context: Context) {
   try {

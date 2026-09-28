@@ -12,7 +12,7 @@ import {
 } from "@/lib/team-agent-store";
 import { startAssignmentSchema } from "@/lib/team-agent-contract";
 export const dynamic = "force-dynamic";
-export const maxDuration = 90;
+export const maxDuration = 120;
 export async function GET(request: Request) {
   try {
     const { userId } = await requireInternalApiAccess();

@@ -11,8 +11,13 @@ export class CopyObjectCommand extends Command {}
 export class DeleteObjectCommand extends Command {}
 export class S3Client {
   constructor(_config: unknown) {}
-  async send(command: Command): Promise<any> {
+  async send(command: Command, _options?: unknown): Promise<any> {
     const input = command.input;
+    if (command instanceof PutObjectCommand) {
+      assert(!objects.has(input.Key), "Never overwrite generated media");
+      objects.set(input.Key, { bytes: input.Body, contentType: input.ContentType, etag: "generated" });
+      return {};
+    }
     if (command instanceof DeleteObjectCommand) {
       objects.delete(input.Key);
       return {};

@@ -1,3 +1,5 @@
+import { saveGeneratedTeamImage, teamMediaReadUrl } from "../lib/team-media.server";
+import { objects } from "./fixtures/team-s3";
 import { formatAssignmentTime } from "../lib/team-agent-contract";
 import { loadTeamStudio, saveTeamStudio } from "../lib/team-studio-store";
 import { canonicalStudioState } from "../lib/team-studio-server-state";
@@ -375,6 +377,50 @@ async function main() {
   assert(!markup.includes("<script>"));
   assert(!markup.includes('href="javascript:'));
   assert(markup.includes('href="https://example.com/"'));
+  // Image runs use the same owner/approval boundary and survive storage outages.
+  await assert.rejects(start(ids[22], { output: "image" }), /INVALID_ASSIGNMENT/);
+  const imageState = await loadTeamStudio(owner);
+  const imageBrief = { id: ids[23], agent: "creator", text: "Synthetic original Clover image", at: new Date().toISOString() };
+  imageState.state.briefs = imageState.state.briefs.map((b) => b.id === ids[23] ? imageBrief : b);
+  // Fixture setup bypasses append-only UI restrictions in the isolated test DB.
+  await prisma.teamStudioState.update({ where: { ownerId: owner }, data: { payload: imageState.state } });
+  process.env.R2_ACCOUNT_ID = "fixture";
+  process.env.R2_ACCESS_KEY_ID = "fixture";
+  process.env.R2_SECRET_ACCESS_KEY = "fixture";
+  process.env.CLOVER_TEAM_MEDIA_BUCKET = "private-fixture";
+  const imageRun = await start(ids[23], { output: "image" });
+  assert.equal(imageRun.output, "image");
+  assert.equal(captured.at(-1).max_tool_calls, 1);
+  assert.equal(captured.at(-1).tools[0].type, "image_generation");
+  assert.equal(captured.at(-1).tools[0].model, "gpt-image-1.5");
+  assert.equal((await start(ids[23], { output: "text" })).id, imageRun.id, "Changing mode cannot duplicate a paid start");
+  const imageRow = await prisma.teamAgentRun.findUniqueOrThrow({ where: { id: imageRun.id } });
+  const png = Buffer.from([137,80,78,71,13,10,26,10]);
+  responses.set(imageRow.responseId!, { id: imageRow.responseId, status: "completed", output: [{ type: "image_generation_call", result: png.toString("base64") }] });
+  delete process.env.R2_ACCESS_KEY_ID;
+  await due(imageRun.id);
+  await assert.rejects(refreshAssignment(owner, imageRun.id), /AGENT_REFRESH_FAILED/);
+  assert.equal((await prisma.teamAgentRun.findUniqueOrThrow({ where: { id: imageRun.id } })).responseId, imageRow.responseId);
+  process.env.R2_ACCESS_KEY_ID = "fixture";
+  await due(imageRun.id);
+  const finishedImage = await refreshAssignment(owner, imageRun.id);
+  assert.equal(finishedImage.status, "completed");
+  assert.equal(finishedImage.mediaId, imageRun.id);
+  assert.equal(finishedImage.estimatedCostUsd, null, "Do not show text-only pricing for images");
+  assert(!JSON.stringify(finishedImage).includes(png.toString("base64")), "Never send base64 through assignment JSON");
+  await assert.rejects(teamMediaReadUrl("other", imageRun.id), /MEDIA_NOT_FOUND/);
+  const imageMedia = await prisma.teamStudioMedia.findUniqueOrThrow({ where: { id: imageRun.id } });
+  await saveGeneratedTeamImage(owner, imageRun.id, Buffer.concat([png, Buffer.from("changed")]).toString("base64"));
+  assert.deepEqual(objects.get(imageMedia.storageKey)?.bytes, png, "Saved result bytes are immutable");
+  await approveAssignment(owner, imageRun.id);
+  const imageDraft = await transferAssignment(owner, imageRun.id, { kind: "draft", title: "Image fixture", caption: "Unpublished", channel: "Instagram", format: "Image" });
+  const savedImageDraft = (await loadTeamStudio(owner)).state.drafts.find((d) => d.id === imageDraft.id)!;
+  assert.equal(savedImageDraft.mediaId, imageRun.id);
+  assert.equal(savedImageDraft.status, "Draft");
+  await assert.rejects(saveGeneratedTeamImage(owner, randomUUID(), Buffer.from("not an image").toString("base64")), /INVALID_MEDIA/);
+  for (let i = 0; i < 4; i++) await prisma.teamAgentRun.create({ data: { id: randomUUID(), ownerId: owner, briefId: ids[24], agent: "creator", triggerKey: randomUUID(), model: defaultTeamModel, status: "failed", prompt: { brief: "image cap fixture", role: "creator", instructions: "", previousResult: "", feedback: "", output: "image" } } });
+  await assert.rejects(start(ids[23], { action: "revise", parentId: imageRun.id, feedback: "Try another color" }), /IMAGE_LIMIT/);
+  console.log("PASS: image mode, bounded tool use, duplicate-mode protection, storage recovery without regeneration, private immutable image, and draft attachment.");
   const createsBeforeCap = creates;
   // Daily cap includes terminal runs; denied requests never contact the provider.
   const count = await prisma.teamAgentRun.count({ where: { ownerId: owner } });
@@ -459,6 +505,7 @@ main()
   .finally(async () => {
     global.fetch = originalFetch;
     await prisma.teamAgentRun.deleteMany({ where: { ownerId: owner } });
+    await prisma.teamStudioMedia.deleteMany({ where: { ownerId: owner } });
     await prisma.teamStudioAudit.deleteMany({ where: { ownerId: owner } });
     await prisma.teamStudioState.deleteMany({ where: { ownerId: owner } });
     await prisma.$disconnect();

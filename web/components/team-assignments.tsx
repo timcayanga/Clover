@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { AssignmentImage } from "./team-assignment-image";
 import { assignmentRequest as request } from "@/lib/team-agent.client";
 import { TeamAssignmentResult } from "./team-assignment-result";
 import { AssignmentTransfer } from "./team-assignment-transfer";
@@ -31,6 +32,7 @@ export function TeamAssignmentBriefs({
   latestRuns?: AssignmentSummary[];
 }) {
   const router = useRouter();
+  const [outputs, setOutputs] = useState<Record<string, "text" | "image">>({});
   const [runs, setRuns] = useState<AssignmentSummary[]>([]);
   const [loaded, setLoaded] = useState(false);
   const [enabled, setEnabled] = useState(false);
@@ -60,7 +62,7 @@ export function TeamAssignmentBriefs({
     setError("");
     try {
       const run = assignmentViewSchema.parse(
-        await request("/api/team/assignments", { briefId, action: "start" }),
+        await request("/api/team/assignments", { briefId, action: "start", output: outputs[briefId] || "text" }),
       );
       router.push(`/team/assignments/${run.id}`);
     } catch (e) {
@@ -120,6 +122,15 @@ export function TeamAssignmentBriefs({
                 </p>
               ) : null}
               <small>{formatAssignmentTime(brief.at)}</small>
+              {!latest && brief.agent === "creator" ? (
+                <label className="studio-form">Deliverable
+                  <select aria-label={`Deliverable for ${brief.text.slice(0, 60)}`} value={outputs[brief.id] || "text"} disabled={!!busy} onChange={(e) => setOutputs((old) => ({ ...old, [brief.id]: e.target.value as "text" | "image" }))}>
+                    <option value="text">Copy, plan, or video script</option>
+                    <option value="image">Generate one image</option>
+                  </select>
+                  {outputs[brief.id] === "image" ? <small>One 1024 × 1024 image using GPT Image 1.5, medium quality. Billed to your OpenAI account; up to 5 image starts per UTC day. Saved privately for review.</small> : null}
+                </label>
+              ) : null}
               <div className="assignment-actions">
                 {latest ? (
                   <Link
@@ -336,6 +347,7 @@ export function TeamAssignmentWorkspace({
           {run.error}
         </p>
       ) : null}
+      {run.mediaId ? <AssignmentImage mediaId={run.mediaId} /> : null}
       {run.result ? (
         <section className="studio-brief">
           <p className="studio-eyebrow">
@@ -404,6 +416,7 @@ export function TeamAssignmentWorkspace({
               ? "Result approved"
               : "Approve result"}
           </button>
+          {run.output === "image" ? <p className="studio-fine">A revision generates a new image from your brief and feedback. It does not edit the previous image’s pixels.</p> : null}
           <label>
             Changes for the agent
             <textarea
@@ -448,8 +461,7 @@ export function TeamAssignmentWorkspace({
             : ""}
         </p>
         <p className="studio-fine">
-          Estimate uses uncached token and search prices; final provider charges
-          may differ.
+          {run.output === "image" ? "Image generation has additional provider charges. No total cost estimate is shown; check OpenAI usage for final charges." : "Estimate uses uncached token and search prices; final provider charges may differ."}
         </p>
         {run.events.map((event, i) => (
           <p key={i}>

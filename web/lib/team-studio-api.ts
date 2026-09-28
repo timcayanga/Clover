@@ -59,6 +59,7 @@ export function studioError(error: unknown) {
       409,
       "This assignment cannot be started or reviewed in its current state. Refresh and check the latest version.",
     ],
+    IMAGE_LIMIT: [429, "You can start up to 5 image assignments per UTC day, including revisions and retries."],
     ASSIGNMENT_LIMIT: [
       429,
       "You can run up to 3 assignments at once and start 20 per UTC day, including retries. Please try later.",

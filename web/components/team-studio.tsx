@@ -14,6 +14,7 @@ import {
   type StudioDraft,
   type StudioState,
 } from "@/lib/team-studio";
+import { createTeamMotionClip } from "@/lib/team-motion.client";
 import { readTeamMedia, saveTeamMedia } from "@/lib/team-media.client";
 
 type View =
@@ -217,6 +218,7 @@ function ReviewDialog({
   saveNotice: string;
 }) {
   const [edited, setEdited] = useState(draft);
+  const [exportNotice, setExportNotice] = useState("");
   const [feedback, setFeedback] = useState("");
   const [error, setError] = useState("");
   const [uploading, setUploading] = useState(false);
@@ -288,6 +290,22 @@ function ReviewDialog({
       <div className="studio-review-grid">
         <div>
           <DraftVisual draft={edited} ownerId={ownerId} />
+          {edited.mediaId && edited.mediaType === "image" ? <div className="studio-brief">
+            <p>Make a silent 6-second square video with a gentle zoom. This uses the image above; it does not generate new scenes. Keep this tab open while rendering.</p>
+            <button className="studio-button secondary" disabled={uploading || submitting} onClick={async () => {
+              setUploading(true); setError("");
+              try {
+                const source = await readTeamMedia(ownerId, edited.mediaId!);
+                if (!source) throw new Error("The source image is unavailable.");
+                const clip = await createTeamMotionClip(source);
+                const mediaId = await saveTeamMedia(ownerId, clip);
+                setEdited((old) => ({ ...old, mediaId, mediaType: "video", format: "Video" }));
+                setExportNotice("Motion clip created. Save the draft, then review this new version before publishing.");
+              } catch (error) { setError(error instanceof Error ? error.message : "Could not create the motion clip."); }
+              finally { setUploading(false); }
+            }}>{uploading ? "Creating media…" : "Create motion clip"}</button>
+          </div> : null}
+          {exportNotice ? <p role="status">{exportNotice}</p> : null}
           <label className="studio-upload">
             {uploading ? "Saving media…" : "Attach an image or video"}
             <input
@@ -396,6 +414,17 @@ function ReviewDialog({
           <p role="status" className="studio-fine">
             {saveNotice}
           </p>
+          {draft.status === "Approved" && !changed ? (
+            <section className="studio-brief">
+              <h3>Ready for manual publishing</h3>
+              <p>Copy this approved caption and download its media, then publish from your own social account.</p>
+              <button className="studio-button secondary" onClick={async () => {
+                try { await navigator.clipboard.writeText(draft.caption); setExportNotice("Approved caption copied."); }
+                catch { setExportNotice("Copy is unavailable. Select the caption text to copy it."); }
+              }}>Copy approved caption</button>
+              {draft.mediaId && ownerId !== "local-design-preview" ? <a className="studio-button secondary" href={`/api/team/media/${draft.mediaId}/download`}>Download approved media</a> : null}
+            </section>
+          ) : null}
           <div className="studio-actions">
             <button
               className="studio-button secondary"
@@ -1062,12 +1091,10 @@ export function TeamStudio({
                     <h2>{c}</h2>
                     <span className="studio-pill">Not connected</span>
                     <p>
-                      {c === "TikTok"
-                        ? "Plan an approved publishing integration or a manual posting handoff."
-                        : "Account authorization and publishing integration are planned for the next phase."}
+                      Approve a content draft, then copy its caption and download its media for manual posting.
                     </p>
-                    <button className="studio-button secondary" disabled>
-                      Connection coming next
+                    <button className="studio-button secondary" onClick={() => changeView("Content board")}>
+                      Open content board
                     </button>
                   </article>
                 ))}

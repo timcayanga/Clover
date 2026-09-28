@@ -3,6 +3,7 @@ import { z } from "zod";
 export const activeRunStatuses = ["starting", "queued", "running", "canceling"];
 export const startAssignmentSchema = z.object({
   briefId: z.string().min(1).max(100),
+  output: z.enum(["text", "image"]).optional(),
   parentId: z.string().uuid().optional(),
   action: z.enum(["start", "revise", "retry"]).default("start"),
   feedback: z.string().trim().max(4000).default(""),
@@ -27,6 +28,8 @@ export const assignmentViewSchema = z.object({
   instructions: z.string(),
   feedback: z.string(),
   result: z.string(),
+  output: z.enum(["text", "image"]).default("text"),
+  mediaId: z.string().nullable().default(null),
   sources: z.array(sourceSchema),
   error: z.string().nullable(),
   inputTokens: z.number(),

@@ -44,7 +44,7 @@ async function main() {
       packages: "external",
       tsconfig: path.join(web, "tsconfig.json"),
       alias: {
-        ...(media
+        ...(media || agents
           ? {
               "@aws-sdk/client-s3": path.join(__dirname, "fixtures/team-s3.ts"),
               "@aws-sdk/s3-request-presigner": path.join(

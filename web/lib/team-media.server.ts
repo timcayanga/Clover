@@ -168,7 +168,7 @@ export async function completeTeamUpload(ownerId: string, id: string) {
     .catch(() => {});
   return { id };
 }
-export async function teamMediaReadUrl(ownerId: string, id: string) {
+export async function teamMediaReadUrl(ownerId: string, id: string, download = false) {
   const row = await prisma.teamStudioMedia.findFirst({
     where: { id, ownerId, ready: true },
   });
@@ -181,7 +181,30 @@ export async function teamMediaReadUrl(ownerId: string, id: string) {
       Key: row.storageKey,
       ResponseCacheControl: "private, no-store",
       ResponseContentType: row.contentType,
+      ...(download ? { ResponseContentDisposition: `attachment; filename="clover-${id}.${row.contentType === "image/png" ? "png" : row.contentType === "video/mp4" ? "mp4" : row.contentType.split("/")[1]}"` } : {}),
     }),
     { expiresIn: 300 },
   );
+}
+
+// Generation uses a run UUID as its media ID. The first successful write wins;
+// replayed result polls never replace bytes already reviewed by the owner.
+export function assertTeamMediaStorage() { storage(); }
+export async function saveGeneratedTeamImage(ownerId: string, id: string, base64: string) {
+  const existing = await prisma.teamStudioMedia.findFirst({ where: { id, ownerId, ready: true } });
+  if (existing) return id;
+  if (!/^[A-Za-z0-9+/]+={0,2}$/.test(base64) || base64.length > 30_000_000) throw new Error("INVALID_MEDIA");
+  const bytes = Buffer.from(base64, "base64");
+  if (!matchesMediaSignature("image/png", bytes)) throw new Error("INVALID_MEDIA");
+  const { bucket, client } = storage();
+  const key = `team-media/${ownerId}/${randomUUID()}`;
+  await client.send(new PutObjectCommand({ Bucket: bucket, Key: key, Body: bytes, ContentType: "image/png", CacheControl: "private, no-store" }), { abortSignal: AbortSignal.timeout(15000) });
+  try {
+    await prisma.teamStudioMedia.create({ data: { id, ownerId, storageKey: key, stagingKey: `team-generated/${ownerId}/${id}`, contentType: "image/png", size: bytes.length, ready: true } });
+  } catch (error) {
+    // A competing poll may already have saved this run. Preserve that object.
+    await client.send(new DeleteObjectCommand({ Bucket: bucket, Key: key }), { abortSignal: AbortSignal.timeout(5000) }).catch(() => {});
+    if (!await prisma.teamStudioMedia.findFirst({ where: { id, ownerId, ready: true } })) throw error;
+  }
+  return id;
 }

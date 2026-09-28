@@ -13,7 +13,7 @@ export function AssignmentTransfer({ run }: { run: AssignmentView }) {
   const [title, setTitle] = useState("Draft from approved assignment");
   const [caption, setCaption] = useState(run.result.slice(0, 6000));
   const [channel, setChannel] = useState("Instagram");
-  const [format, setFormat] = useState("Text");
+  const [format, setFormat] = useState(run.mediaId ? "Image" : "Text");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   async function submit() {
@@ -83,6 +83,7 @@ export function AssignmentTransfer({ run }: { run: AssignmentView }) {
           <p>
             This creates an editable draft for its own review. You can attach
             images or videos on the content board.
+            {run.mediaId ? " The generated image will be attached automatically." : ""}
           </p>
           <label>
             Draft title

@@ -1,6 +1,7 @@
 import { createHash, randomUUID } from "node:crypto";
 import { Prisma, type TeamAgentRun } from "@prisma/client";
 import { prisma } from "./prisma";
+import { assertTeamMediaStorage, saveGeneratedTeamImage } from "./team-media.server";
 import { studioSchema, agentProfiles } from "./team-studio";
 import {
   assignmentTransferSchema,
@@ -50,6 +51,8 @@ export async function getAssignment(
     instructions: prompt.instructions,
     feedback: prompt.feedback,
     result: row.result,
+    output: prompt.output,
+    mediaId: prompt.output === "image" && await prisma.teamStudioMedia.findFirst({ where: { id: row.id, ownerId, ready: true } }) ? row.id : null,
     sources: row.sources as AssignmentView["sources"],
     error: row.error,
     inputTokens: row.inputTokens,
@@ -90,6 +93,17 @@ async function applyResponse(row: TeamAgentRun, response: AgentResponse) {
   if (row.responseId && row.responseId !== response.id)
     throw new Error("AGENT_PROVIDER_FAILURE");
   const result = extractAgentResult(response, row.model);
+  const prompt = assignmentPromptSchema.parse(row.prompt);
+  if (prompt.output === "image") {
+    result.estimatedCostUsd = null; // Text-token estimates omit image-tool charges.
+    const image = response.output.find((item) => item.type === "image_generation_call" && item.result);
+    if (response.status === "completed" && image?.result) {
+      await saveGeneratedTeamImage(row.ownerId, row.id, image.result);
+      if (!result.result.trim()) result.result = "Generated image for owner review. Check visual accuracy, text, and brand fit before approval. Confidence requires owner review.";
+    } else if (response.status === "completed") {
+      throw new Error("AGENT_IMAGE_MISSING");
+    }
+  }
   let status = (
     {
       queued: "queued",
@@ -165,6 +179,7 @@ export async function startAssignment(ownerId: string, raw: StartAssignment) {
         input.action,
         input.parentId || "",
         input.feedback,
+        ...(input.action === "start" && input.output === "image" ? ["image"] : []),
       ]),
     )
     .digest("hex");
@@ -174,6 +189,10 @@ export async function startAssignment(ownerId: string, raw: StartAssignment) {
       where: { ownerId_triggerKey: { ownerId, triggerKey } },
     });
     if (existing) return { row: existing, created: false };
+    if (input.action === "start") {
+      const first = await tx.teamAgentRun.findFirst({ where: { ownerId, briefId: input.briefId, parentId: null }, orderBy: { createdAt: "asc" } });
+      if (first) return { row: first, created: false };
+    }
     const state = await tx.teamStudioState.findUnique({ where: { ownerId } });
     const payload = state && studioSchema.parse(state.payload);
     const brief = payload?.briefs.find((b) => b.id === input.briefId);
@@ -193,6 +212,11 @@ export async function startAssignment(ownerId: string, raw: StartAssignment) {
           : !["failed", "canceled"].includes(parent.status)))
     )
       throw new Error("INVALID_ASSIGNMENT");
+    const output = parent ? assignmentPromptSchema.parse(parent.prompt).output : input.output || "text";
+    if (output === "image") {
+      if (agent.id !== "creator") throw new Error("INVALID_ASSIGNMENT");
+      assertTeamMediaStorage();
+    }
     // One child per revision: concurrent tabs cannot fork conflicting revisions.
     if (parent) {
       const child = await tx.teamAgentRun.findFirst({
@@ -210,6 +234,7 @@ export async function startAssignment(ownerId: string, raw: StartAssignment) {
       tx.teamAgentRun.count({ where: { ownerId, createdAt: { gte: day } } }),
       tx.teamAgentRun.count({ where: { ownerId, status: active() } }),
     ]);
+    if (output === "image" && await tx.teamAgentRun.count({ where: { ownerId, createdAt: { gte: day }, prompt: { path: ["output"], equals: "image" } } }) >= 5) throw new Error("IMAGE_LIMIT");
     if (today >= 20 || busy >= 3) throw new Error("ASSIGNMENT_LIMIT");
     const source = brief.sourceAssignmentId
       ? await tx.teamAgentRun.findFirst({
@@ -227,6 +252,7 @@ export async function startAssignment(ownerId: string, raw: StartAssignment) {
       input.action === "retry" && parent
         ? assignmentPromptSchema.parse(parent.prompt)
         : {
+            output,
             sourceAssignmentId: source?.id || "",
             sourceContext: source?.result.slice(0, 30000) || "",
             brief: brief.text,
@@ -275,6 +301,9 @@ export async function startAssignment(ownerId: string, raw: StartAssignment) {
         reserved.row.agent,
         assignmentPromptSchema.parse(reserved.row.prompt),
       );
+      // Save the provider ID before media persistence so a storage outage can
+      // recover the same paid result without issuing another generation.
+      await prisma.teamAgentRun.updateMany({ where: { id: reserved.row.id, responseId: null }, data: { responseId: response.id } });
       await applyResponse(reserved.row, response);
     } catch (error) {
       // Never automatically repeat a paid POST after an ambiguous timeout.
@@ -315,7 +344,7 @@ export async function refreshAssignment(ownerId: string, id: string) {
   }
   const claim = await prisma.teamAgentRun.updateMany({
     where: { id, status: active(), nextPollAt: { lte: new Date() } },
-    data: { nextPollAt: new Date(Date.now() + 90000) },
+    data: { nextPollAt: new Date(Date.now() + 150000) },
   });
   if (!claim.count) return getAssignment(ownerId, id);
   try {
@@ -338,7 +367,9 @@ export async function refreshAssignment(ownerId: string, id: string) {
     }
     await applyResponse(row, response);
   } catch (error) {
-    if (error instanceof AgentProviderError && error.status === 404) {
+    if (error instanceof Error && error.message === "AGENT_IMAGE_MISSING") {
+      await failAssignment(id, "The provider returned no image. Review your brief before retrying; usage may have been incurred.");
+    } else if (error instanceof AgentProviderError && error.status === 404) {
       await failAssignment(
         id,
         "The provider result is no longer available. No automatic retry was made.",
@@ -402,7 +433,7 @@ export async function syncPendingAssignments() {
   let checked = 0;
   const startedAt = Date.now();
   for (let i = 0; i < rows.length; i += 3) {
-    if (Date.now() - startedAt > 200000) break;
+    if (Date.now() - startedAt > 150000) break;
     const batch = rows.slice(i, i + 3);
     const results = await Promise.allSettled(
       batch.map((row) => refreshAssignment(row.ownerId, row.id)),
@@ -500,6 +531,7 @@ export async function transferAssignment(
         format: input.format,
         agent: run.agent as "lead" | "creator" | "researcher",
         sourceAssignmentId: id,
+        ...(assignmentPromptSchema.parse(run.prompt).output === "image" ? { mediaId: run.id, mediaType: "image" as const } : {}),
         status: "Draft",
         date: "",
         sample: false,
