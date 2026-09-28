@@ -27,7 +27,7 @@ export const isAdminUserId = (userId: string | null | undefined) => {
 };
 
 export const requireAdminAuth = async (permission: AdminPermission = "read") => {
-  if (process.env.NODE_ENV !== "production" || (await isLocalDevHost())) {
+  if (process.env.NODE_ENV === "development" && (await isLocalDevHost())) {
     return { userId: "local-admin", role: "owner" as AdminRole };
   }
 
