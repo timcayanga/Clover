@@ -66,7 +66,7 @@ assert.equal(credit?.type, "income");
 assert.equal(normalizeFinverseTransaction({ transaction_id: "bad", account_id: "acc_test", posted_date: "bad" }), null);
 
 const finverseSource = readFileSync(new URL("../lib/finverse.ts", import.meta.url), "utf8");
-assert.match(finverseSource, /ui_mode: "auto_redirect"/);
+assert.match(finverseSource, /ui_mode: "redirect"/);
 const callbackSource = readFileSync(new URL("../app/api/integrations/finverse/callback/route.ts", import.meta.url), "utf8");
 assert.match(callbackSource, /export const OPTIONS/);
 const connectButtonSource = readFileSync(new URL("../components/finverse-connect-button.tsx", import.meta.url), "utf8");
@@ -121,7 +121,7 @@ async function refreshRequests() {
     await createFinverseRefresh("existing-access","refresh.state","identity",true);
     assert(requests.at(-1)?.url.endsWith("/login_identity/refresh"));
     assert.equal(requests.at(-1)?.body.user_present,true);
-    assert.deepEqual(requests.at(-1)?.body.link_customizations,{redirect_uri:"https://clover.test/callback",state:"refresh.state",ui_mode:"auto_redirect"});
+    assert.deepEqual(requests.at(-1)?.body.link_customizations,{redirect_uri:"https://clover.test/callback",state:"refresh.state",ui_mode:"redirect"});
     await createFinverseRefresh("existing-access","state","identity",false);
     assert(requests.at(-1)?.url.endsWith("/link/token"));
     assert.equal(requests.at(-1)?.body.login_identity_id,"identity","Relink must reuse the existing identity");

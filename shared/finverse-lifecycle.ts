@@ -16,3 +16,8 @@ export function retainedBankLinks<T extends { id: string; retainOnDowngrade: boo
 export function bankDisconnectDeadline(lastSuccess:Date|null,createdAt:Date,warnedAt:Date|null,failureSince:Date|null){
  return new Date(Math.max(+inactivityDeadline(lastSuccess,createdAt),warnedAt?+warnedAt+14*DAY:0,failureSince?+failureSince+14*DAY:0));
 }
+
+/** Only live discovery or a ready selection can be resumed as unfinished linking. */
+export function isPendingBankSelection(status: string, hasLinkedAccounts: boolean, lastSyncedAt: unknown) {
+  return status === "awaiting_selection" || (status === "retrieving" && !hasLinkedAccounts && !lastSyncedAt);
+}

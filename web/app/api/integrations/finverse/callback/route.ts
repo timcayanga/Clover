@@ -67,8 +67,9 @@ const handleCallback = async (request: Request) => {
       return redirectToAccounts(error ? "error" : "connected", connection.id, native, connection.workspaceId);
     }
     // Claim the one-time callback before exchanging credentials (including concurrent replays).
-    const claimed = await prisma.finverseConnection.updateMany({ where: { id: connection.id, status: "link_pending", stateExpiresAt: { gt: new Date() } }, data: { status: code ? "authorizing" : "cancelled", stateExpiresAt: new Date(0) } });
+    const claimed = await prisma.finverseConnection.updateMany({ where: { id: connection.id, status: "link_pending", stateExpiresAt: { gt: new Date() } }, data: { status: error ? "error" : code ? "authorizing" : "cancelled", stateExpiresAt: new Date(0) } });
     if (claimed.count !== 1) return redirectToAccounts("invalid_callback");
+    if (error) return redirectToAccounts("error", connection.id, native, connection.workspaceId);
     if (!code) return redirectToAccounts("cancelled", undefined, native, connection.workspaceId);
     const token = await exchangeFinverseCode(code);
     const config = getFinverseConfig();

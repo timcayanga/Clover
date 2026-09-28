@@ -12,8 +12,17 @@ export const maxDuration = 60;
 export async function POST(request: Request) {
   try {
     const { userId } = await requireAuth();
-    const body = z.object({ workspaceId: z.string().min(1), accountId: z.string().min(1) }).strict().parse(await request.json());
+    const body = z.object({ workspaceId: z.string().min(1), accountId: z.string().min(1).optional(), connectionId: z.string().min(1).optional() }).strict().refine(body => Boolean(body.accountId) !== Boolean(body.connectionId)).parse(await request.json());
     const workspace = await assertWorkspaceAccess(userId, body.workspaceId);
+    if (body.connectionId) {
+      const attempt = await prisma.finverseConnection.findFirst({ where: { id: body.connectionId, workspaceId: body.workspaceId, userId: workspace.userId } });
+      if (!attempt) return NextResponse.json({ error: "Connection not found." }, { status: 404 });
+      await requestBankDisconnect(attempt.id, "User cancelled bank setup", undefined, true);
+      const current = await prisma.finverseConnection.findUniqueOrThrow({ where: { id: attempt.id } });
+      if (current.status !== "disconnected" && !current.disconnectRequestedAt) return NextResponse.json({ error: "This bank has linked accounts. Use Unlink from Connected accounts." }, { status: 409 });
+      const revoked = await revokeBankConnection(attempt.id);
+      return NextResponse.json({ status: revoked ? "cancelled" : "disconnect_pending", message: "Bank setup cancelled. No new account slots were used." });
+    }
     const link=await prisma.finverseAccountLink.findFirst({where:{accountId:body.accountId,workspaceId:body.workspaceId,connection:{userId:workspace.userId}}});
     if(!link) return NextResponse.json({error:'Linked account not found.'},{status:404});
     await requestBankDisconnect(link.connectionId,'User disconnected bank');

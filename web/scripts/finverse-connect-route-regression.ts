@@ -5,8 +5,9 @@ import { resolve } from "node:path";
 const requireFixture = createRequire(resolve("package.json"));
 async function main() {
   const fixture = `
-let lifecycleCalls=0, discoveryReady=false, discoveryWrites=[];
+let lifecycleCalls=0, discoveryReady=false, discoveryError=false, discoveryWrites=[];
 export function setDiscoveryReady(value){discoveryReady=value;}
+export function setDiscoveryError(value){discoveryError=value;}
 let claimed=false, exchanges=0, created=0, bankCalls=0, refreshCalls=0, updates=[], planTier='pro';
 export function setPlan(value){planTier=value;}
 export const getAccountBrand=()=>({logoSrc:null,fallbackIconSrc:"/assets/account-types/bank.png"});
@@ -36,7 +37,7 @@ export const getFinverseConfig=()=>({redirectUri:'https://staging.clover.ph/api/
 export const getFinverseBanks=async()=>{bankCalls++;return {banks:[{id:'bank',name:'Test bank',countries:['PHL']}],mode:'test'};};
 export const createFinverseRefresh=async()=>{refreshCalls++;return {link_url:'https://link.finverse.com/refresh'};};
 export const decryptFinverseToken=()=> 'access';
-export const getFinverseLoginIdentity=async()=>({login_identity:{status:discoveryReady?'DATA_RETRIEVAL_COMPLETE':'DATA_RETRIEVAL_IN_PROGRESS',refresh:{refresh_allowed:true}}});
+export const getFinverseLoginIdentity=async()=>({login_identity:{status:discoveryError?'ERROR':discoveryReady?'DATA_RETRIEVAL_COMPLETE':'DATA_RETRIEVAL_IN_PROGRESS',refresh:{refresh_allowed:true}}});
 export const isFinverseDataReady=()=>discoveryReady;
 export const getAllFinverseTransactions=async()=>[];
 export const getFinverseAccounts=async()=>({accounts:[]});
@@ -52,20 +53,25 @@ export const exchangeFinverseCode=async()=>{exchanges++;return {login_identity_i
 export const prisma={user:{findUniqueOrThrow:async()=>({planTier})},$transaction:async f=>f({}),finverseConnection:{
  findUniqueOrThrow:async()=>({status:"ready"}),
  findFirst:async({where})=>{if(where.workspaceId!=='profile'||where.user.clerkUserId!=='owner'||where.status.not!=='disconnected')throw Error('unsafe scope');return {id:'connection',userId:'owner',loginIdentityId:'identity',encryptedAccessToken:'cipher',accessTokenExpiresAt:new Date(Date.now()+3600000)};},
- findMany:async({where,select})=>{if(where.workspaceId!=='profile'||where.user.clerkUserId!=='owner')throw Error('unsafe scope');return [{id:'pending',status:'awaiting_selection',institutionName:'Test bank',lastSyncedAt:null,accountLinks:[]},{id:'linked',status:'ready',institutionName:'Test bank',lastSyncedAt:'2026-09-24T00:00:00Z',accountLinks:[{account:{id:'account',name:'Savings',institution:'Test bank',accountNumber:'1234567890',type:'bank'}}]}];},
+ findMany:async({where,select})=>{if(where.workspaceId!=='profile'||where.user.clerkUserId!=='owner')throw Error('unsafe scope');return [{id:'failed',status:'error',institutionName:'Failed bank',lastSyncedAt:null,accountLinks:[]},{id:'cancelled',status:'cancelled',institutionName:'Cancelled bank',lastSyncedAt:null,accountLinks:[]},{id:'pending',status:'awaiting_selection',institutionName:'Test bank',lastSyncedAt:null,accountLinks:[]},{id:'linked',status:'ready',institutionName:'Test bank',lastSyncedAt:'2026-09-24T00:00:00Z',accountLinks:[{account:{id:'account',name:'Savings',institution:'Test bank',accountNumber:'1234567890',type:'bank'}}]}];},
  create:async({data})=>{created++;return{id:'connection'};},
  findUnique:async({where})=>['native.valid','native.refresh.valid'].includes(where.stateHash)?{id:'connection',workspaceId:'profile',stateExpiresAt:new Date(Date.now()+60000),status:claimed?'authorizing':'link_pending'}:null,
- updateMany:async({where,data})=>{if(where.accountLinks){discoveryWrites.push({where,data});return {count:1};}if(where.status && typeof where.status === "object"){updates.push(data);return{count:1};}if(claimed)return{count:0};claimed=true;return{count:1};},
+ updateMany:async({where,data})=>{if(where.accountLinks || where.status==='retrieving'){discoveryWrites.push({where,data});return {count:1};}if(where.status && typeof where.status === "object"){updates.push(data);return{count:1};}if(claimed)return{count:0};claimed=true;return{count:1};},
  update:async({data})=>{updates.push(data);return{};}
 }};
 `;
-  const bundled = await build({ stdin: { contents: `export {observeFinverseDiscovery} from './lib/finverse-discovery-progress'; export {GET as catalog} from './app/api/admin/finverse/catalog/route'; export {POST as sync} from './app/api/integrations/finverse/sync/route'; export {GET as connections} from './app/api/integrations/finverse/connections/route'; export {GET as institutions} from './app/api/integrations/finverse/institutions/route'; export {POST as link} from './app/api/integrations/finverse/link/route'; export {GET as callback} from './app/api/integrations/finverse/callback/route'; export {reset,stats,setPlan,setRefreshLimit,setDiscoveryReady} from 'fixture';`, resolveDir: process.cwd() }, bundle: true, platform: "node", format: "cjs", packages: "external", write: false, plugins: [{ name: "finverse-boundaries", setup(b) { b.onResolve({filter:/^(fixture|@\/lib\/(admin|auth|finverse-refresh-limit|finverse-access-token|bank-link-usage|user-limits|account-limit-count|account-brand|finverse-lifecycle|workspace-access|finverse|prisma|plan-quota|pro-access|mobile-request-context))$/},()=>({path:"fixture",namespace:"test"})); b.onLoad({filter:/.*/,namespace:"test"},()=>({contents:fixture,loader:"ts",resolveDir:process.cwd()})); }}] });
+  const bundled = await build({ stdin: { contents: `export {observeFinverseDiscovery} from './lib/finverse-discovery-progress'; export {GET as catalog} from './app/api/admin/finverse/catalog/route'; export {POST as sync} from './app/api/integrations/finverse/sync/route'; export {GET as connections} from './app/api/integrations/finverse/connections/route'; export {GET as institutions} from './app/api/integrations/finverse/institutions/route'; export {POST as link} from './app/api/integrations/finverse/link/route'; export {GET as callback} from './app/api/integrations/finverse/callback/route'; export {reset,stats,setPlan,setRefreshLimit,setDiscoveryReady,setDiscoveryError} from 'fixture';`, resolveDir: process.cwd() }, bundle: true, platform: "node", format: "cjs", packages: "external", write: false, plugins: [{ name: "finverse-boundaries", setup(b) { b.onResolve({filter:/^(fixture|@\/lib\/(admin|auth|finverse-refresh-limit|finverse-access-token|bank-link-usage|user-limits|account-limit-count|account-brand|finverse-lifecycle|workspace-access|finverse|prisma|plan-quota|pro-access|mobile-request-context))$/},()=>({path:"fixture",namespace:"test"})); b.onLoad({filter:/.*/,namespace:"test"},()=>({contents:fixture,loader:"ts",resolveDir:process.cwd()})); }}] });
   const Module = requireFixture("node:module"), mod = new Module(resolve("finverse-test.cjs")); mod.filename=resolve("finverse-test.cjs");mod.paths=Module._nodeModulePaths(process.cwd());mod._compile(bundled.outputFiles[0].text,mod.filename);
   const api=mod.exports;
   api.setDiscoveryReady(true);
   await api.observeFinverseDiscovery('pending-connection','test-token');
   assert.deepEqual(api.stats().discoveryWrites,[{where:{id:'pending-connection',status:'retrieving',lastSyncedAt:null,disconnectRequestedAt:null,accountLinks:{none:{unlinkedAt:null,accountId:{not:null}}}},data:{status:'awaiting_selection'}}], 'Background discovery must never overwrite linked, synced or disconnecting accounts');
   api.setDiscoveryReady(false);
+  api.setDiscoveryError(true);
+  await api.observeFinverseDiscovery('failed-connection','test-token');
+  assert.equal(api.stats().discoveryWrites.at(-1).data.status,'error');
+  assert.equal(api.stats().discoveryWrites.at(-1).where.status,'retrieving');
+  api.setDiscoveryError(false);
   api.setPlan('free');
   assert.equal((await api.catalog(new Request('https://clover.test/catalog'))).status,403);
   api.setPlan('pro');
@@ -136,6 +142,12 @@ export const prisma={user:{findUniqueOrThrow:async()=>({planTier})},$transaction
   assert.equal((await refreshResponse.json()).status,'authorize');
   assert.equal(api.stats().refreshCalls,1);
   assert(api.stats().updates.every((data:Record<string,unknown>)=>!('lastSyncedAt' in data)),'Starting refresh must not update Last Synced');
+  api.setDiscoveryError(true);
+  const failed = await sync({workspaceId:'profile',connectionId:'connection'});
+  assert.equal(failed.status,422);
+  assert.equal((await failed.json()).reconnectRequired,true);
+  assert.equal(api.stats().created,0,'Failed retrieval must not create accounts or reserve slots');
+  api.setDiscoveryError(false);
   const polling=await sync({workspaceId:'profile',connectionId:'connection'});
   assert.equal((await polling.json()).status,'retrieving');
   assert.equal(api.stats().refreshCalls,1,'Polling must not start another provider refresh');
@@ -154,6 +166,10 @@ export const prisma={user:{findUniqueOrThrow:async()=>({planTier})},$transaction
   const success=responses.find((r:Response)=>r.headers.get('location')?.startsWith('clover://accounts'));
   assert(!success.headers.get('location').includes('secret'));
   assert(success.headers.get('location').includes('finverseWorkspace=profile'));
+  api.reset();
+  const rejected=await api.callback(new Request('https://clover.test/callback?state=native.valid&error=invalid_credentials&code=unused'));
+  assert(rejected.headers.get('location')?.includes('finverse=error'));
+  assert.equal(api.stats().exchanges,0,'Rejected authentication must not exchange even an included code');
   api.reset(); const cancelled=await callback('native.valid',''); assert.equal(api.stats().exchanges,0);assert(cancelled.headers.get('location')?.includes('finverse=cancelled'));
   api.reset();const invalid=await callback('native.invalid');assert.equal(api.stats().exchanges,0);assert(invalid.headers.get('location')?.startsWith('https://staging.clover.ph/accounts'));
   api.reset();

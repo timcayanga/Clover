@@ -104,6 +104,29 @@ export function FinverseConnectButton({
     return () => controller.abort();
   }, [workspaceId, bankRevision, mode]);
 
+  const clearCallback = () => {
+    const url = new URL(window.location.href);
+    for (const key of ["finverse", "finverseConnection", "finverseWorkspace"]) url.searchParams.delete(key);
+    window.history.replaceState(window.history.state, "", url.pathname + url.search + url.hash);
+  };
+  const backToBanks = () => {
+    activeSyncRef.current?.abort(); clearCallback();
+    setProgressOpen(false); setSelection(null); setRetry(null); setReconnect(false); setMessage("");
+    setBankRevision(v => v + 1);
+  };
+  const cancelSetup = async (id: string) => {
+    if (actionRef.current) return;
+    actionRef.current = "unlinking"; setAction("unlinking");
+    try {
+      const response = await fetch("/api/integrations/finverse/unlink", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ workspaceId, connectionId: id }) });
+      const body = await response.json();
+      if (!response.ok) throw new Error(body.error || "Unable to cancel setup.");
+      backToBanks(); setMessage(body.message);
+      window.dispatchEvent(new Event("finverse-updated")); notifyInAppNotificationsChanged();
+    } catch (error) { setMessage(error instanceof Error ? error.message : "Unable to cancel setup."); }
+    finally { actionRef.current = null; setAction(null); }
+  };
+
   const sync = useCallback(async (requestedConnectionId?: string, selectedAccountIds?: string[], refresh = false) => {
     if (!allowed || !workspaceId || actionRef.current) return;
     const controller = new AbortController();
@@ -121,6 +144,7 @@ export function FinverseConnectButton({
           cache: "no-store",
         });
         const body = await response.json() as SyncResponse;
+        if (controller.signal.aborted) return;
         if (!response.ok) { setReconnect(body.reconnectRequired === true); throw new Error(body.error || "Unable to sync your bank."); }
         if (body.status === "authorize" && body.linkUrl) { window.location.assign(body.linkUrl); return; }
         if(body.status === "select_accounts" && body.connectionId && body.accounts){setSelection({connectionId:body.connectionId,remaining:body.remaining ?? 0,accounts:body.accounts});setSelected([]);setMappings({});setMessage("");setPending(current=>current.some(c=>c.id===body.connectionId)?current:[...current,{id:body.connectionId!,name:"your bank",status:"awaiting_selection"}]);window.dispatchEvent(new Event("finverse-updated"));notifyInAppNotificationsChanged();return;}
@@ -147,6 +171,8 @@ export function FinverseConnectButton({
       }
     } catch (error) {
       if (error instanceof DOMException && error.name === "AbortError") return;
+      setSelection(null); setBankRevision(v => v + 1);
+      window.dispatchEvent(new Event("finverse-updated")); notifyInAppNotificationsChanged();
       setRetry({id:requestedConnectionId,ids:selectedAccountIds,refresh});
       setMessage(error instanceof Error ? error.message : "Unable to sync your bank.");
     } finally {
@@ -161,12 +187,16 @@ export function FinverseConnectButton({
   useEffect(() => {
     if (allowed && callbackStatus === "connected" && connectionId && workspaceId && autoSyncStarted.current !== connectionId) {
       autoSyncStarted.current = connectionId;
+      clearCallback();
       void sync(connectionId);
     } else if (callbackStatus === "invalid_callback") {
+      clearCallback();
       setMessage("The bank connection expired. Please start again.");
     } else if (callbackStatus === "cancelled") {
+      clearCallback();
       setMessage("Bank connection cancelled. You can try again when you’re ready.");
     } else if (callbackStatus === "error") {
+      clearCallback();
       setMessage("The bank connection could not be completed. Please try again.");
     }
   }, [allowed, callbackStatus, connectionId, sync, workspaceId]);
@@ -216,8 +246,10 @@ export function FinverseConnectButton({
       {action === "syncing" || callbackLoading ? <span className="finverse-progress__spinner" aria-hidden="true" /> : null}
       <p role="status">{message || "Bank authorized. Retrieving your accounts…"}</p>
       {retry && !reconnect ? <button type="button" className="button button-primary" onClick={()=>void sync(retry.id,retry.ids,retry.refresh)}>Retry</button> : null}
-      {reconnect ? <Link className="button button-secondary" href="/accounts?finverse=reconnect" onClick={()=>setProgressOpen(false)}>Reconnect bank</Link> : null}
-      <p>Pending account selections stay under Finish linking in Accounts and Notifications.</p>
+      {reconnect ? <p>Choose your bank again to start a fresh connection.</p> : null}
+      {!retry ? <p>Pending account selections stay under Finish linking in Accounts and Notifications.</p> : null}
+      <button type="button" className="button button-secondary" disabled={action === "unlinking"} onClick={backToBanks}>Back to banks</button>
+      {retry?.id && !linked.some(a => a.connectionId === retry.id) ? <button type="button" className="button button-secondary" disabled={action !== null} onClick={() => void cancelSetup(retry.id!)}>Cancel setup</button> : null}
       <button type="button" className="button button-secondary" onClick={()=>{setProgressOpen(false);window.dispatchEvent(new Event("finverse-background"));}}>{action === "syncing" || callbackLoading ? "Continue using Clover" : "Done"}</button></>}
   </section>;
   if (mode === "sync" && accountId && (!connectionsLoaded || !linked.some(a=>a.id===accountId))) return null;

@@ -1,3 +1,4 @@
+import { isPendingBankSelection } from "../../../../../../shared/finverse-lifecycle";
 import { getProAccess } from "@/lib/pro-access";
 import { bankLifecycleOverview } from "@/lib/finverse-lifecycle";
 import { NextResponse } from "next/server";
@@ -19,7 +20,7 @@ export async function GET(request: Request) {
       prisma.finverseConnection.findMany({where:{workspaceId,user:{clerkUserId:userId},status:{not:"disconnected"},encryptedRefreshToken:{not:null}},select:{id:true,status:true,institutionName:true,lastSyncedAt:true,syncError:true,accountLinks:{where:{accountId:{not:null},unlinkedAt:null},select:{account:{select:{id:true,name:true,institution:true,accountNumber:true,logoUrl:true,type:true}}}}}}),
     ]);
     return NextResponse.json({ ...details,
-      pending:connections.filter(c=>c.status!=='disconnect_pending'&&(c.status==='awaiting_selection'||(!c.accountLinks.length&&!c.lastSyncedAt))).map(c=>({id:c.id,name:c.institutionName||"Linked bank",status:c.status})),
+      pending:connections.filter(c=>isPendingBankSelection(c.status, c.accountLinks.length > 0, c.lastSyncedAt)).map(c=>({id:c.id,name:c.institutionName||"Linked bank",status:c.status})),
       accounts:connections.flatMap(c=>c.accountLinks.flatMap(link=>{const a=link.account;if(!a)return [];const brand=getAccountBrand(a);return [{id:a.id,connectionId:c.id,name:a.name,status:c.status,syncError:c.syncError??null,last4:a.accountNumber?.replace(/\s/g,"").slice(-4)||null,logoUrl:brand.logoSrc||brand.fallbackIconSrc,lastSyncedAt:c.lastSyncedAt}];})),
     },{headers:{"Cache-Control":"private, no-store"}});
   } catch(error) {

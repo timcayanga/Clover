@@ -149,7 +149,7 @@ export const createFinverseLink = async (userId: string, state: string, institut
       user_id: userId,
       redirect_uri: config.redirectUri,
       state,
-      ui_mode: "auto_redirect",
+      ui_mode: "redirect",
       link_mode: config.mode === "live" ? "real" : "test",
       institution_id: institutionId,
       institution_status: "supported beta",
@@ -162,7 +162,7 @@ export const createFinverseLink = async (userId: string, state: string, institut
 // User-present refresh lets Finverse handle any bank-required 2FA in its secure UI.
 export const createFinverseRefresh = async (accessToken: string, state: string, loginIdentityId: string, refreshAllowed: boolean) => {
   const config = getFinverseConfig();
-  const customizations = { redirect_uri: config.redirectUri, state, ui_mode: "auto_redirect" };
+  const customizations = { redirect_uri: config.redirectUri, state, ui_mode: "redirect" };
   if (refreshAllowed) return requestFinverse<{ link_url: string }>("/login_identity/refresh", {
     method: "POST", headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ user_present: true, link_customizations: customizations }),

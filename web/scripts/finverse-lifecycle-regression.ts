@@ -2,8 +2,12 @@ import assert from 'node:assert/strict';
 import {build} from 'esbuild';
 import {createRequire} from 'node:module';
 import {resolve} from 'node:path';
-import {bankWarningStage,bankDisconnectDeadline,inactivityDeadline,retainedBankLinks} from '../../shared/finverse-lifecycle';
+import {bankWarningStage,bankDisconnectDeadline,inactivityDeadline,retainedBankLinks,isPendingBankSelection} from '../../shared/finverse-lifecycle';
 async function main(){
+ for (const status of ['error','cancelled','disconnected','disconnect_pending','link_pending']) assert.equal(isPendingBankSelection(status,false,null),false);
+ assert.equal(isPendingBankSelection('awaiting_selection',false,null),true);
+ assert.equal(isPendingBankSelection('retrieving',false,null),true);
+ assert.equal(isPendingBankSelection('retrieving',true,null),false);
  const now=new Date('2026-09-25T00:00:00Z');
  assert.equal(inactivityDeadline(now,now).toISOString(),'2026-12-24T00:00:00.000Z');
  assert.equal(bankWarningStage(new Date(+now+15*864e5),now),null);

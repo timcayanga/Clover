@@ -16,7 +16,13 @@ export async function observeFinverseDiscovery(connectionId: string, accessToken
       });
       return;
     }
-    if (status === "ERROR") return;
+    if (status === "ERROR") {
+      await prisma.finverseConnection.updateMany({
+        where: { id: connectionId, status: "retrieving", disconnectRequestedAt: null },
+        data: { status: "error", syncError: "Finverse could not retrieve data from this institution.", syncFailureSince: new Date() },
+      });
+      return;
+    }
     await new Promise(resolve => setTimeout(resolve, 3_000));
   }
 }

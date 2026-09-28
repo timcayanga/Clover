@@ -201,7 +201,7 @@ export async function POST(request: Request) {
       },
     });
     if (!updatedState.count) return NextResponse.json({ error: "This bank was unlinked." }, { status: 409 });
-    if (status === "ERROR") return NextResponse.json({ error: "Finverse could not retrieve data from this institution.", status }, { status: 422 });
+    if (status === "ERROR") return NextResponse.json({ error: "Finverse could not retrieve data from this institution. Try connecting again or choose another bank.", status, reconnectRequired: true }, { status: 422 });
     if (!isFinverseDataReady(status)) {
       console.info("[finverse-sync] retrieving", { connectionId: connection.id, providerStatus: status });
       return NextResponse.json({ status: "retrieving", providerStatus: status });
