@@ -5,7 +5,9 @@ import { sandboxConfig, type ProbeReport } from "@/lib/unionbank-sandbox";
 import { reportCookie, reportKey, sandboxActor, sandboxStore } from "@/lib/unionbank-sandbox-session";
 
 export const dynamic = "force-dynamic";
-export const metadata = { title: "UnionBank sandbox test", robots: { index: false, follow: false }, referrer: "no-referrer" as const };
+// Native form POSTs send Origin: null under no-referrer. Keep same-origin
+// submissions identifiable; the OAuth redirects still use no-referrer.
+export const metadata = { title: "UnionBank sandbox test", robots: { index: false, follow: false }, referrer: "same-origin" as const };
 export default async function UnionBankSandboxPage({ searchParams }: { searchParams: Promise<{ result?: string }> }) {
   let available = false;
   let report: ProbeReport | null = null;
