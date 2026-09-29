@@ -1,5 +1,5 @@
 import { buildBudgetOverview } from "@/lib/budgeting";
-import { adviserCurrency, adviserMonthRange, isSpendingSummaryQuestion, commitmentInstallment } from "@/lib/adviser-analysis";
+import { adviserCurrency, adviserMonthRange, isSpendingSummaryQuestion, commitmentInstallment, upcomingBillsReply } from "@/lib/adviser-analysis";
 import { getStrongMerchantCategoryHint } from "@/lib/merchant-category-hints";
 import { assertCloudAiConsent, maySendToCloudAi } from "@/lib/ai-consent";
 import { parseAddFormDraft } from "../../../../../shared/add-form-draft";
@@ -3088,7 +3088,9 @@ export async function POST(request: Request) {
     if (!hasAttachments && answerRoute.source === "local" && !(nativeRequest && body?.selectedRecord)) {
       const localReply = asksForSuggestedGoal && suggestedGoal
         ? `A practical place to start is ${suggestedGoal.title.toLowerCase()}.\n\n${suggestedGoal.explanation}\n\nUse the button below to create it now. You can adjust it later as Clover learns from more transactions.`
-        : fallbackReply;
+        : answerRoute.intent === "get_cashflow_outlook"
+          ? upcomingBillsReply(calculateSafeToSpend({horizonDays:14}))
+          : fallbackReply;
       await recordLocalResponse(answerRoute.reason, answerRoute);
       return NextResponse.json({
         reply: localReply,

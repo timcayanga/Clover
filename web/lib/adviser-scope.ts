@@ -21,6 +21,7 @@ const isFinancialMessage = (message: string) => {
   if (FINANCIAL_EDUCATION.test(normalized)) return true;
   if (/\b(?:check|show|review|list|explain|understand)\b[\s\S]{0,48}\b(?:upcoming |overdue |monthly )?(?:bills?|payments?|accounts?|expenses?)\b/i.test(normalized)) return true;
   if (!FINANCIAL_TERMS.test(normalized)) return false;
+  if (STRONG_FINANCIAL_TERMS.test(normalized) && /\b(?:routine|checklist|keeping track|organize|organise)\b/i.test(normalized)) return true;
   if (STRONG_FINANCIAL_TERMS.test(normalized) && (PERSONAL_FINANCE_CONTEXT.test(normalized) || ACCOUNT_GROUNDED_QUESTION.test(normalized))) return true;
   // Product-specific nouns are useful even when users omit "my", for example
   // "Why are Transfers up?" or "Open the monthly report".

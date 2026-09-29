@@ -137,7 +137,7 @@ export const selectAdviserToolNames = ({
   if (has(normalized, /\b(?:recurring|subscription|upcoming bills?|bills coming|payment due|loan payment|cash ?flow)\b/)) {
     return ["get_cashflow_outlook"];
   }
-  if (has(normalized, /\b(?:budget|spending limit|within my limit|over my limit)\b/)) {
+  if (has(normalized, /\b(?:budgets?|spending limit|within my limit|over my limit)\b/)) {
     return ["get_budget_status"];
   }
   if (has(normalized, /\b(?:payday|salary date|next income|income timing)\b/)) {

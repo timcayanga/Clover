@@ -1,3 +1,5 @@
+import { formatCurrencyAmount } from "@/lib/currency-format";
+
 /** Keep arithmetic in one currency. Never relabel mixed raw amounts as PHP. */
 export function adviserCurrency(question: string, currencies: string[]) {
   const explicit = question.match(/\b(PHP|USD|EUR|GBP|SGD|HKD|JPY|AUD|CAD|CNY|INR|MYR|IDR|THB|VND|AED)\b/i)?.[1]?.toUpperCase();
@@ -32,4 +34,19 @@ export function commitmentInstallment(commitment: { amount: unknown; kind?: stri
     return Number.isFinite(payment) && payment > 0 ? payment : 0;
   }
   return Math.abs(Number(commitment.amount ?? 0));
+}
+
+export function upcomingBillsReply(input: {
+  currency: string;
+  horizonDays: number;
+  availableCash: number;
+  details: {recurring: {label:string;amount:number;due:string|null}[];commitments: {label:string;amount:number;due:string|null}[];plannedPayments: {label:string;amount:number;due:string|null}[]};
+}) {
+  const entries = [...input.details.recurring, ...input.details.commitments, ...input.details.plannedPayments]
+    .sort((a,b)=>(a.due??"").localeCompare(b.due??""));
+  const lines = entries.map(item => {
+    const date = item.due ? new Date(item.due).toLocaleDateString("en", {month:"short",day:"numeric",timeZone:"UTC"}) : "date not recorded";
+    return `${item.label}: ${item.amount > 0 ? formatCurrencyAmount(item.amount,input.currency) : "installment amount not recorded"} · ${date}`;
+  });
+  return `Recorded ${input.currency} bills and commitments due in the next ${input.horizonDays} days:\n\n${lines.join("\n") || "No upcoming payments with recorded dates were found for this window."}\n\nAvailable cash in ${input.currency} accounts: ${formatCurrencyAmount(input.availableCash,input.currency)}. This is not all free to spend; protect everyday expenses and your cash buffer too. Check Recurring for missing or changed payment dates and amounts.`;
 }

@@ -1,6 +1,6 @@
 import { selectExistingClerkSession } from "../lib/clerk-initial-session";
 import assert from "node:assert/strict";
-import { adviserCurrency, adviserMonthRange, isSpendingSummaryQuestion, commitmentInstallment } from "../lib/adviser-analysis";
+import { adviserCurrency, adviserMonthRange, isSpendingSummaryQuestion, commitmentInstallment, upcomingBillsReply } from "../lib/adviser-analysis";
 import { classifyAdviserScope } from "../lib/adviser-scope";
 import { classifyEverydayQuestion, isEverydayFollowUp } from "../lib/adviser-everyday";
 import { selectAdviserToolNames } from "../lib/adviser-tool-routing";
@@ -16,9 +16,12 @@ async function main() {
   assert.equal(isEverydayFollowUp("PHP 25,000"), true);
   assert.equal(isEverydayFollowUp("Yes"), true);
   const routine = "What is a simple weekly routine for keeping track of several bank accounts, a credit card, and e-wallets?";
+  assert.equal(classifyAdviserScope(routine).allowed,true);
+  assert.equal(classifyAdviserScope("What is a simple workout routine?").allowed,false);
   assert.equal(classifyEverydayQuestion(routine),null);
   assert.deepEqual(selectAdviserToolNames({question:routine}),[]);
   assert.equal(classifyEverydayQuestion("What credit card can I get?"),"credit_card");
+  assert.deepEqual(selectAdviserToolNames({question:"How are my budgets doing?"}),["get_budget_status"]);
   assert(isSpendingSummaryQuestion("Show my PHP spending by category for September 2026. Focus only on expenses, excluding transfers."));
   assert.equal(isSpendingSummaryQuestion("How much did I spend at Starbucks in September?"),false);
   assert.equal(isSpendingSummaryQuestion("Compare food spending this month"),false);
@@ -34,6 +37,10 @@ async function main() {
   const transactions=[{currency:"PHP",amount:100,date:new Date("2026-09-01")},{currency:"USD",amount:500,date:now},{currency:"PHP",amount:700,date:new Date("2026-08-31")}].map(t=>({...t,accountId:"a",categoryId:"food",type:"expense" as const,isExcluded:false}));
   const budgets=buildBudgetOverview({now,budgets:[{id:"b",name:"Food",kind:"spend_limit",scope:"category",cadence:"monthly",targetAmount:200,currency:"PHP",isActive:true,accountId:null,categoryId:"food"}],transactions}).budgets;
   assert.equal(budgets[0].actualAmount,100);assert.equal(budgets[0].remainingAmount,100);
+  const billsReply = upcomingBillsReply({currency:"PHP",horizonDays:14,availableCash:100000,details:{recurring:[],commitments:[{label:"Mortgage installment",amount:15000,due:"2026-10-01"},{label:"Unknown loan",amount:0,due:"2026-10-02"}],plannedPayments:[]}});
+  assert.match(billsReply,/Mortgage installment: ₱15,000.00/);
+  assert.match(billsReply,/Oct 1/);
+  assert.match(billsReply,/Unknown loan: installment amount not recorded/);
   const member={userId:"u",displayName:"Alex Reyes"};
   assert.equal(resolveCircleMemberPhoto(member,[{name:"Alex Reyes",avatarUrl:"shared.jpg"}],new Map([["u","profile.jpg"]])),"profile.jpg");
   assert.equal(resolveCircleMemberPhoto({...member,userId:null},[{name:" Alex Reyes ",avatarUrl:"shared.jpg"}],new Map()),"shared.jpg");
