@@ -19,6 +19,8 @@ const read = (name: string, result: (args: any) => any) => async (args: any) => 
 const categories = [{ id: "food", name: "Food", isArchived: false }];
 let circleRecord: any;
 const fakePrisma = {
+  user: {findMany: read("member-identities", () => [])},
+  splitBillPerson: {findMany: read("member-photos", args => { assert.deepEqual(args.where.userId.in,["owner"]); return [{userId:"owner",name:"Owner",avatarUrl:"https://example.test/owner.jpg"}]; })},
   budget: { findMany: read("budgets", () => budgets) },
   transaction: {
     findMany: read("transactions", (args) => transactions.filter((row) => !args.where.date || row.date >= args.where.date.gte)),
@@ -97,6 +99,7 @@ async function main() {
   const select = calls[0].args.select;
   for (const relation of ["goals", "budgets", "activities", "invitations", "contributions", "investmentShares"]) assert.equal(select[relation], undefined);
   const detail = await loadCirclesWorkspaceData(user, "circle");
+  assert.equal(detail.circles[0].members[0].avatarUrl,"https://example.test/owner.jpg");
   assert.equal(directory.circles[0].expenseTotalThisMonth, 115);
   assert.equal(directory.circles[0].expenseTotalThisMonth, detail.circles[0].expenseTotalThisMonth);
   assert.equal(directory.circles[0].memberCount, detail.circles[0].memberCount);

@@ -102,6 +102,7 @@ export const circleTemplates: CircleTemplate[] = [
 ];
 
 export type CircleMemberSummary = {
+  avatarUrl?: string | null;
   id: string;
   userId: string | null;
   isOwner: boolean;

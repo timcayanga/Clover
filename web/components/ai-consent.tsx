@@ -1,4 +1,5 @@
 "use client";
+import { readAiConsent } from "@/lib/ai-consent-request";
 import { useEffect, useState } from "react";
 import { AI_CONSENT_VERSION, AI_CONSENT_TITLE, AI_CONSENT_DESCRIPTION, AI_CONSENT_ALTERNATIVE } from "../../shared/ai-consent";
 import styles from "./ai-consent.module.css";
@@ -6,9 +7,7 @@ let pending: Promise<boolean> | null = null;
 export async function requestAiConsent(): Promise<boolean> {
   if (pending) return pending;
   pending = (async () => {
-    const response = await fetch("/api/settings/ai-consent", { cache: "no-store" });
-    if (!response.ok) throw new Error("Unable to check AI permission. Please retry.");
-    if ((await response.json()).allowed) return true;
+    if ((await readAiConsent()).allowed) return true;
     return new Promise<boolean>(resolve => {
       const previousFocus = document.activeElement;
       const dialog = document.createElement("dialog"); dialog.className = styles.dialog;

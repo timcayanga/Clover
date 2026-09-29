@@ -92,7 +92,7 @@
     "qa:adviser-everyday": "tsx scripts/adviser-everyday-regression.ts",
     "qa:adviser-model-usage": "tsx scripts/adviser-model-usage-regression.ts",
     "qa:clover-token-usage": "tsx scripts/clover-token-usage-regression.ts",
-    "qa:adviser-local-routing": "tsx scripts/adviser-local-routing-regression.ts && tsx scripts/adviser-planning-regression.ts",
+    "qa:adviser-local-routing": "tsx scripts/adviser-local-routing-regression.ts && tsx scripts/adviser-planning-regression.ts && npm run qa:adviser-reliability",
     "qa:adviser-planning": "tsx scripts/adviser-planning-regression.ts",
     "qa:import-model-usage": "tsx scripts/import-model-usage-regression.ts",
     "qa:financial-scope-gates": "tsx scripts/financial-scope-gates-regression.ts",
@@ -190,7 +190,8 @@
     "qa:store-tiers": "tsx scripts/store-tier-regression.ts",
     "qa:plan-admin": "tsx scripts/plan-admin-analytics-regression.ts && tsx scripts/admin-bank-links-regression.ts",
     "qa:switch-campaign": "tsx scripts/switch-campaign-regression.ts",
-    "qa:ai-consent": "tsx scripts/ai-consent-regression.ts"
+    "qa:ai-consent": "tsx scripts/ai-consent-regression.ts",
+    "qa:adviser-reliability": "tsx scripts/adviser-reliability-regression.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1095.0",

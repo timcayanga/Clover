@@ -132,6 +132,13 @@ const getInitials = (name: string) => {
   const parts = name.trim().split(/\s+/).filter(Boolean);
   return `${parts[0]?.[0] ?? "?"}${parts.length > 1 ? (parts[parts.length - 1]?.[0] ?? "") : ""}`.toUpperCase();
 };
+const MemberPhoto = ({member}: {member: {displayName: string; avatarUrl?: string | null}}) => {
+  const [failedUrl, setFailedUrl] = useState<string | null>(null);
+  return member.avatarUrl && member.avatarUrl !== failedUrl
+    ? <img src={member.avatarUrl} alt="" onError={() => setFailedUrl(member.avatarUrl ?? null)} />
+    : <>{getInitials(member.displayName)}</>;
+};
+
 
 export function CirclesWorkspace({
   initialData,
@@ -611,7 +618,7 @@ export function CirclesWorkspace({
         <div className="collection-directory-heading"><p>Split bills, coordinate shared expenses, track commitments, and work toward budgets and goals together—while keeping personal accounts private.</p></div>
         <div className="collection-card-grid" aria-label="Your Circles">
           {data.circles.map(circle => <CollectionCard key={circle.id} kind="circle" color={circle.type === "household" ? "#63cdbb" : "#b19be8"} name={circle.name} subtitle="" editable={circle.role === "organizer"} icon={<img className="collection-custom-photo" src={getCircleAvatarUrl(circle)} alt="" width={64} height={64}/>} onOpen={() => onSelectedCircleChange(circle.id)} onSave={(name, _emoji, photo) => updateCardIdentity(circle, name, photo)}>
-            <div className="split-bill-avatars">{circle.members.filter(m => m.status === "active").slice(0,5).map(member => <span key={member.id} className="circles-avatar" title={member.displayName}>{getInitials(member.displayName)}</span>)}{circle.memberCount > 5 ? <span>+{circle.memberCount - 5}</span> : null}</div>
+            <div className="split-bill-avatars">{circle.members.filter(m => m.status === "active").slice(0,5).map(member => <span key={member.id} className="circles-avatar" title={member.displayName}><MemberPhoto member={member} /></span>)}{circle.memberCount > 5 ? <span>+{circle.memberCount - 5}</span> : null}</div>
             <span>{formatMoney(circle.expenseTotalThisMonth,circle.currency)} shared this month</span>
           </CollectionCard>)}
           <button type="button" className="collection-create-card" onClick={() => openCreate()}><span aria-hidden="true">＋</span><strong>Add Circle</strong><small>Start sharing with a new group</small></button>
@@ -1689,7 +1696,7 @@ function CircleMembers({
             .map((member) => (
               <article key={member.id}>
                 <span className="circles-avatar circles-member-list__avatar">
-                  {getInitials(member.displayName)}
+                  <MemberPhoto member={member} />
                 </span>
                 <div className="circles-member-list__name">
                   <strong>{member.displayName}</strong>

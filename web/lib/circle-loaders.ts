@@ -1,3 +1,4 @@
+import { loadCircleMemberPhotos } from "@/lib/circle-member-photos";
 import { prisma } from "@/lib/prisma";
 import { getUserDisplayName } from "@/lib/user-display-name";
 import {
@@ -92,6 +93,7 @@ export const loadCirclesWorkspaceData = async (
     },
   });
 
+  const memberPhotos = await loadCircleMemberPhotos(circles);
   const serializedCircles: CircleSummary[] = circles.map((circle) => {
     const currentMembership =
       circle.memberships.find((membership) => membership.userId === user.id) ??
@@ -121,6 +123,7 @@ export const loadCirclesWorkspaceData = async (
         userId: membership.userId,
         isOwner: membership.userId === circle.ownerUserId,
         displayName: membership.displayName,
+        avatarUrl: memberPhotos.get(membership.id) ?? null,
         email:
           role === "organizer" || membership.userId === user.id
             ? membership.email

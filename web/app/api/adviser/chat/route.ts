@@ -1,3 +1,5 @@
+import { buildBudgetOverview } from "@/lib/budgeting";
+import { adviserCurrency, adviserMonthRange, isSpendingSummaryQuestion, commitmentInstallment } from "@/lib/adviser-analysis";
 import { getStrongMerchantCategoryHint } from "@/lib/merchant-category-hints";
 import { assertCloudAiConsent, maySendToCloudAi } from "@/lib/ai-consent";
 import { parseAddFormDraft } from "../../../../../shared/add-form-draft";
@@ -35,6 +37,7 @@ import {
   calculateDailySpendingPlan,
   calculatePurchaseSavingsPlan,
   classifyEverydayQuestion,
+  isEverydayFollowUp,
   extractEverydayMoneyAmount,
   getEverydayRoutingHint,
 } from "@/lib/adviser-everyday";
@@ -1073,12 +1076,14 @@ export async function POST(request: Request) {
       return Number.isFinite(parsed) ? parsed : 0;
     };
 
+    const displayCurrency = adviserCurrency(latestIncomingQuestion, workspace.accounts.map(account => account.currency ?? "PHP"));
+    const requestedMonth = adviserMonthRange(latestIncomingQuestion, now);
     const nextSevenDays = new Date(now);
     nextSevenDays.setDate(nextSevenDays.getDate() + 7);
     const nextFourteenDays = new Date(now);
     nextFourteenDays.setDate(nextFourteenDays.getDate() + 14);
 
-    const [allTransactionsQuery, recurringPatterns, financialCommitments, goalHistoryRows, investmentSnapshots, budgets, splitBillWorkspaceData, plannedPaymentSuggestions] =
+    const [allTransactionsQuery, rawRecurringPatterns, rawFinancialCommitments, goalHistoryRows, rawInvestmentSnapshots, rawBudgets, splitBillWorkspaceData, rawPlannedPaymentSuggestions] =
       await Promise.all([
         prisma.transaction.findMany({
           where: {
@@ -1089,6 +1094,7 @@ export async function POST(request: Request) {
           select: {
             id: true,
             accountId: true,
+            categoryId: true,
             currency: true,
             date: true,
             createdAt: true,
@@ -1174,6 +1180,8 @@ export async function POST(request: Request) {
             name: true,
             kind: true,
             scope: true,
+            accountId: true,
+            isActive: true,
             cadence: true,
             targetAmount: true,
             currency: true,
@@ -1188,6 +1196,13 @@ export async function POST(request: Request) {
         loadSplitBillWorkspaceData(user.id),
         getPlannedPaymentSuggestions(workspace.id),
       ]);
+
+    const sameCurrency = (record: {currency: string | null}) => formatCurrencyCode(record.currency) === displayCurrency;
+    const recurringPatterns = rawRecurringPatterns.filter(sameCurrency);
+    const financialCommitments = rawFinancialCommitments.filter(sameCurrency);
+    const investmentSnapshots = rawInvestmentSnapshots.filter(sameCurrency);
+    const budgets = rawBudgets.filter(sameCurrency);
+    const plannedPaymentSuggestions = rawPlannedPaymentSuggestions.filter(sameCurrency);
 
     const adviserInteractions = await prisma.auditLog.findMany({
       where: {
@@ -1301,6 +1316,7 @@ export async function POST(request: Request) {
     const allTransactions = allTransactionsQuery as Array<{
       id: string;
       accountId: string;
+      categoryId: string | null;
       currency: string;
       date: Date;
       createdAt: Date;
@@ -1350,7 +1366,7 @@ export async function POST(request: Request) {
       investmentCostBasis: Number(account.investmentCostBasis ?? account.investmentPrincipal ?? 0),
       investmentMaturityDate: account.investmentMaturityDate,
     }));
-    const normalizedAllTransactions = allTransactions.map((transaction) => ({
+    const normalizedAllTransactions = allTransactions.filter(transaction => formatCurrencyCode(transaction.currency) === displayCurrency).map((transaction) => ({
       ...transaction,
       type: resolveFinancialTransactionType({
         type: transaction.type,
@@ -1364,8 +1380,8 @@ export async function POST(request: Request) {
       }),
     }));
 
-    const analysisAnchorDate = normalizedAllTransactions[0]?.date ?? now;
-    const dataFreshnessLabel = getDataFreshnessCopy(analysisAnchorDate, now);
+    const analysisAnchorDate = requestedMonth ? new Date(requestedMonth.end.getTime() - 1) : normalizedAllTransactions[0]?.date ?? now;
+    const dataFreshnessLabel = requestedMonth?.label ?? getDataFreshnessCopy(analysisAnchorDate, now);
     const incomeHistory = normalizedAllTransactions
       .filter((transaction) => transaction.type === "income" && Math.abs(Number(transaction.amount ?? 0)) > 0)
       .sort((left, right) => left.date.getTime() - right.date.getTime());
@@ -1386,10 +1402,10 @@ export async function POST(request: Request) {
       ? new Date((recentIncomeHistory[recentIncomeHistory.length - 1]?.date ?? now).getTime() + medianIncomeInterval * 24 * 60 * 60 * 1000)
       : null;
     const incomeTimingConfidence = recentIncomeHistory.length >= 6 && incomeCadence !== "irregular" ? "medium" : recentIncomeHistory.length >= 3 ? "low" : "insufficient";
-    const currentWindowStart = new Date(analysisAnchorDate);
-    currentWindowStart.setDate(currentWindowStart.getDate() - 30);
-    const previousWindowStart = new Date(analysisAnchorDate);
-    previousWindowStart.setDate(previousWindowStart.getDate() - 60);
+    const currentWindowStart = requestedMonth ? new Date(requestedMonth.start.getTime() - 1) : new Date(analysisAnchorDate);
+    if (!requestedMonth) currentWindowStart.setDate(currentWindowStart.getDate() - 30);
+    const previousWindowStart = requestedMonth ? new Date(requestedMonth.previousStart.getTime() - 1) : new Date(analysisAnchorDate);
+    if (!requestedMonth) previousWindowStart.setDate(previousWindowStart.getDate() - 60);
 
     const currentWindowTransactions = normalizedAllTransactions.filter(
       (transaction) => transaction.date > currentWindowStart && transaction.date <= analysisAnchorDate
@@ -1397,9 +1413,9 @@ export async function POST(request: Request) {
     const previousWindowTransactions = normalizedAllTransactions.filter(
       (transaction) => transaction.date > previousWindowStart && transaction.date <= currentWindowStart
     );
-    const activeTransactions = currentWindowTransactions.length > 0 ? currentWindowTransactions : normalizedAllTransactions;
+    const activeTransactions = requestedMonth || currentWindowTransactions.length > 0 ? currentWindowTransactions : normalizedAllTransactions;
     const comparisonWindowTransactions =
-      previousWindowTransactions.length > 0
+      requestedMonth || previousWindowTransactions.length > 0
         ? previousWindowTransactions
         : normalizedAllTransactions.filter((transaction) => transaction.date <= currentWindowStart);
 
@@ -1437,13 +1453,6 @@ export async function POST(request: Request) {
     const spendDelta = baselineSpend > 0 ? ((currentSpend - baselineSpend) / baselineSpend) * 100 : null;
     const incomeDelta = baselineIncome > 0 ? ((currentSummary.income - baselineIncome) / baselineIncome) * 100 : null;
     const currencyCandidates = new Set(chatAccounts.map((account) => formatCurrencyCode(account.currency)).filter((currency) => currency.length > 0));
-    const displayCurrency = (() => {
-      const currencies = Array.from(currencyCandidates).sort((left, right) => left.localeCompare(right));
-      if (currencies.includes("PHP")) {
-        return "PHP";
-      }
-      return currencies[0] ?? "PHP";
-    })();
     const accountAnalysisAccounts = chatAccounts.filter((account) => formatCurrencyCode(account.currency) === displayCurrency);
     const goalValue = user.primaryGoal?.trim() ?? null;
     const goalTargetAmount = user.goalTargetAmount ? Number(user.goalTargetAmount) : null;
@@ -1579,10 +1588,11 @@ export async function POST(request: Request) {
       .map((commitment) => ({
         title: commitment.title,
         due: commitment.nextDueDate ? toMonthLabel(commitment.nextDueDate) : null,
-        amount: Number(commitment.amount ?? 0),
+        amount: commitmentInstallment(commitment),
       }));
 
     const openSplitBills = splitBillWorkspaceData.bills
+      .filter(sameCurrency)
       .map((bill) => ({
         title: bill.title,
         outstanding: bill.settlement.transfers.reduce((sum, transfer) => sum + Number(transfer.amount), 0),
@@ -1964,7 +1974,7 @@ export async function POST(request: Request) {
           if (due >= now) {
             occurrences.push({
               label: commitment.title,
-              amount: Math.abs(Number(commitment.amount ?? 0)),
+              amount: commitmentInstallment(commitment),
               due,
             });
           }
@@ -2084,6 +2094,7 @@ export async function POST(request: Request) {
           expectedIncomeIncluded > 0 ? "The result includes the income amount supplied in the question." : "Expected income is not included because Clover does not have a confirmed payday amount.",
           "The buffer is based on the user's historical spending baseline and active goal target when available.",
           plannedPayments.length > 0 ? "Planned statement payments and installments are included when Clover has a due date." : null,
+          financialCommitments.some(c => c.kind === "debt" && commitmentInstallment(c) === 0) ? "Some debts have no recorded installment amount. Their outstanding balances are not treated as upcoming payments; confirm those installments before relying on the available spending estimate." : null,
           baselineSpend <= 0 ? "Clover does not have enough spending history to estimate an everyday spending buffer." : null,
           additionalBuffer > 0
             ? options?.additionalBuffer === undefined || options.additionalBuffer === null
@@ -2255,6 +2266,7 @@ export async function POST(request: Request) {
 
     const summaryLines = [
       `Workspace: ${workspace.name}`,
+      `Calculation currency: ${displayCurrency}. Totals exclude every other currency; no FX conversion was performed.`,
       `Data grounding: ${groundingMode}; accounts ${workspace.accounts.length}; coverage ${Math.round(accountCoverageScore)}/100; liquid ${formatCurrency(liquidBalance, displayCurrency)}; available cash ${formatCurrency(spendableAccountBalance, displayCurrency)}; balances owed ${formatCurrency(liabilityAccountBalance, displayCurrency)}; top balance share ${formatPercent(largestAccountShare * 100)}`,
       `Accounts available for manual actions: ${chatAccounts.map((account) => `${account.id} ${account.name} (${account.type}, ${formatCurrency(account.balance, account.currency)})`).join(" | ") || "none"}`,
       `${currentWindowLabel}: income ${formatCurrency(currentSummary.income)}, spend ${formatCurrency(currentSpend)}, net ${formatSignedCurrency(currentNet)}`,
@@ -2289,7 +2301,7 @@ export async function POST(request: Request) {
       `Goal: ${goalValue ?? "none"} (${goalProgress.bandLabel})`,
       `Suggested goal when none is active: ${suggestedGoal ? `${suggestedGoal.title}; ${suggestedGoal.explanation}` : "not needed"}`,
       `Active budgets: ${budgets.map((budget) => `${budget.name} ${formatCurrency(Number(budget.targetAmount), budget.currency)}${budget.category?.name ? ` for ${budget.category.name}` : ""}`).join("; ") || "none"}`,
-      `Recent transaction references: ${allTransactions.slice(0, 20).map((transaction) => `${transaction.id} ${transaction.merchantClean ?? transaction.merchantRaw} ${formatCurrency(Math.abs(Number(transaction.amount)), displayCurrency)} ${toShortDateLabel(transaction.date)}`).join(" | ") || "none"}`,
+      `Recent transaction references: ${allTransactions.slice(0, 20).map((transaction) => `${transaction.id} ${transaction.merchantClean ?? transaction.merchantRaw} ${formatCurrency(Math.abs(Number(transaction.amount)), transaction.currency)} ${toShortDateLabel(transaction.date)}`).join(" | ") || "none"}`,
     ].join("\n");
     const activePlanningDraftContext = body?.activeDraft && typeof body.activeDraft === "object"
       ? JSON.stringify(body.activeDraft).slice(0, 3_000)
@@ -2392,7 +2404,7 @@ export async function POST(request: Request) {
       .slice(-2, -1)[0]?.content ?? "";
     const everydayIntent =
       latestEverydayIntent ??
-      (latestQuestion.length <= 80 ? classifyEverydayQuestion(priorUserQuestion) : null);
+      (isEverydayFollowUp(latestQuestion) ? classifyEverydayQuestion(priorUserQuestion) : null);
     const everydayRoutingHint = getEverydayRoutingHint(everydayIntent);
     const recentUserContext = incomingMessages
       .filter((message) => message.role === "user")
@@ -3055,6 +3067,15 @@ export async function POST(request: Request) {
         grounding,
         requiresInput: "purchase_price",
       });
+    }
+    if (!hasAttachments && isSpendingSummaryQuestion(latestQuestion)) {
+      const categories = [...currentSummary.expenseCategories.entries()].sort((a, b) => b[1] - a[1]);
+      const lines = categories.map(([name, amount]) => `${name}: ${formatCurrency(amount, displayCurrency)}`);
+      const comparison = /\b(?:compared?|changed|last month|previous month)\b/i.test(latestQuestion)
+        ? `\n\nPrevious period: ${formatCurrency(previousSpend, displayCurrency)}. Change: ${formatSignedCurrency(currentSpend - previousSpend, displayCurrency)}.` : "";
+      const reply = `${dataFreshnessLabel}: ${formatCurrency(currentSpend, displayCurrency)} in recorded expenses. Transfers are excluded.\n\n${lines.join("\n") || "No matching expenses are recorded for this period."}${comparison}\n\nOnly ${displayCurrency} transactions are included.`;
+      await recordLocalResponse("calculated_spending_summary");
+      return NextResponse.json({reply, actions: [{id:"spending-report",kind:"navigate",type:"open_report",label:"Review spending",href:"/reports"}], suggestions: suggestedQuestions, usage: usageForResponse(), grounding, visualization, answerSource:"local"});
     }
     const answerRoute = decideAdviserAnswerRoute({
       question: latestQuestion,
@@ -3815,6 +3836,7 @@ export async function POST(request: Request) {
               id: transaction.id,
               merchant: transaction.merchantClean ?? transaction.merchantRaw,
               amount: Number(transaction.amount),
+              currency: transaction.currency,
               type: transaction.type,
               date: transaction.date.toISOString(),
               account: transaction.account.name,
@@ -3854,24 +3876,12 @@ export async function POST(request: Request) {
           };
           actions.push({ id: `investments-${actions.length + 1}`, kind: "navigate", type: "open_investments", label: "Review portfolio mix", description: "See the holdings and concentration behind this answer.", href: "/investments" });
         } else if (call.name === "get_budget_status") {
-          const budgetStatuses = budgets.map((budget) => {
-            const categoryName = budget.category?.name ?? null;
-            const spent = categoryName
-              ? currentSummary.expenseCategories.get(categoryName) ?? 0
-              : currentSummary.expense;
-            const target = Number(budget.targetAmount);
-            return {
-              name: budget.name,
-              category: categoryName,
-              cadence: budget.cadence,
-              target,
-              spent,
-              remaining: target - spent,
-              percentUsed: target > 0 ? (spent / target) * 100 : null,
-              status: target > 0 && spent > target ? "over_limit" : "within_limit",
-            };
-          });
-          result = { period: currentWindowLabel, budgets: budgetStatuses, href: "/budgeting" };
+          const budgetStatuses = buildBudgetOverview({
+            budgets,
+            transactions: normalizedAllTransactions.map(t => ({...t,isExcluded:false})),
+            now: requestedMonth ? new Date(requestedMonth.end.getTime() - 1) : now,
+          }).budgets;
+          result = {currency: displayCurrency, budgets: budgetStatuses, href: "/budgeting"};
           actions.push({ id: `budget-${actions.length + 1}`, kind: "navigate", type: "open_budgeting", label: "Review budgets", description: "Open Budgeting to adjust limits or review spending.", href: "/budgeting" });
         } else if (call.name === "estimate_investment_contribution") {
           const monthlySurplus = Math.max(0, longTermAverageNet);

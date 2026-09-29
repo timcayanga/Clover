@@ -14,10 +14,16 @@ export type AdviserDataCoverage = "grounded" | "partial" | "missing";
 
 const MONEY_AMOUNT_PATTERN = /(?:₱|php|usd|\$|€|£)\s*([\d,.]+(?:\.\d{1,2})?)|\b(\d[\d,]*(?:\.\d{1,2})?)\s*([km])?\b/i;
 
+export const isFinancialDefinitionQuestion = (question: string): boolean =>
+  /^(?:what (?:is|are)|explain|define|how does)\s+(?:(?:a|an|the)\s+)?(?:emergency fund|compound interest|net worth|credit score|credit limit|interest rate|diversification|inflation)\b/i.test(question.trim());
+
+export const isEverydayFollowUp = (question: string): boolean =>
+  /^(?:(?:yes|no|okay|ok|please|go ahead|tell me more|continue)[.!?]?|(?:₱|php|usd|\$)?\s*[\d,.]+(?:\s*(?:k|m|pesos|dollars|per month|months?|years?))?[.!?]?)$/i.test(question.trim());
+
 export const classifyEverydayQuestion = (question: string): AdviserEverydayIntent | null => {
   const normalized = question.trim().toLowerCase();
 
-  if (!normalized) {
+  if (!normalized || isFinancialDefinitionQuestion(question)) {
     return null;
   }
   if (/\b(?:food|meal|eat|lunch|dinner|breakfast|groceries?)\b/.test(normalized) && /\b(?:what|which|buy|eat|afford|budget|spend)\b/.test(normalized)) {
@@ -26,10 +32,10 @@ export const classifyEverydayQuestion = (question: string): AdviserEverydayInten
   if (/\b(?:stop|sell|exit|drop|get rid of|cut)\b.*\b(?:invest|investment|holding|fund|stock|crypto|portfolio)\b|\b(?:invest|investment|holding|fund|stock|crypto)\b.*\b(?:stop|sell|exit|drop|get rid of|cut)\b/.test(normalized)) {
     return "investment_review";
   }
-  if (/\b(?:credit card|card should i get|card can i get|best card|apply for a card)\b/.test(normalized)) {
+  if (/\b(?:which|what|best)\s+(?:(?:kind|type) of |new )?credit cards?\b|\b(?:recommend|choose|choosing|apply for|get)\b.{0,24}\bcredit cards?\b|\bcredit cards?\b.{0,24}\b(?:should i get|can i get|recommend|choose|apply)\b|\b(?:card should i get|card can i get|best card|apply for a card)\b/.test(normalized)) {
     return "credit_card";
   }
-  if (/\b(?:bank account|which bank|what bank|open an account|savings account|checking account)\b/.test(normalized)) {
+  if (/\b(?:which bank|what bank|open an account|best (?:bank|savings|checking)|recommend|choose|choosing)\b/.test(normalized) && /\b(?:bank|account)\b/.test(normalized)) {
     return "bank_account";
   }
   if (/\b(?:save|saving|set aside)\b.*\b(?:buy|purchase|get)\b|\b(?:save|saving|set aside)\b.*\bfor\b.*\b(?:phone|car|laptop|computer|travel|trip|holiday|home|house|appliance|gadget)\b|\bhow much\b.*\b(?:phone|car|laptop|travel|trip|purchase)\b/.test(normalized)) {

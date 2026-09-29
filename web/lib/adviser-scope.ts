@@ -3,6 +3,7 @@ export type AdviserScopeDecision = {
   reason: "financial" | "clover" | "financial_follow_up" | "out_of_scope";
 };
 
+const FINANCIAL_EDUCATION = /\b(?:emergency fund|compound interest|net worth|credit score|credit limit|interest rate|diversification|inflation|financial literacy)\b/i;
 const FINANCIAL_TERMS = /\b(?:account|accounts|balance|bank|banking|bill|bills|budget|budgets|cash|cashflow|cash flow|category|categories|credit card|currency|debt|debts|dividend|expense|expenses|fee|fees|goal|goals|income|installment|installments|insurance|interest|invest|investment|investments|loan|loans|merchant|money|mortgage|net worth|payment|payments|payday|portfolio|receipt|recurring|report|reports|save|saving|savings|spend|spending|statement|statements|stock|stocks|subscription|subscriptions|tax|transaction|transactions|transfer|transfers|wallet|wealth|withdrawal)\b/i;
 const STRONG_FINANCIAL_TERMS = /\b(?:account|accounts|afford|balance|bank|banking|bill|bills|budget|budgets|cash|cashflow|cash flow|cost|credit card|currency|debt|debts|dividend|expense|expenses|fee|fees|income|installment|installments|insurance|interest|invest|investment|investments|loan|loans|merchant|money|mortgage|net worth|payment|payments|payday|portfolio|price|purchase|receipt|recurring|save|saving|savings|spend|spending|stock|stocks|subscription|subscriptions|tax|transaction|transactions|transfer|transfers|wallet|wealth|withdrawal)\b/i;
 const CLOVER_ACTION_TERMS = /\b(?:add|change|create|delete|edit|find|open|record|remove|review|set|show|split|track|update|upload)\b[\s\S]{0,48}\b(?:account|bill|budget|category|goal|investment|payment|receipt|report|statement|transaction|transfer)\b/i;
@@ -17,6 +18,8 @@ const isFinancialMessage = (message: string) => {
   if (!normalized) return false;
   if (/\bclover\b/i.test(normalized) && /\b(?:account|adviser|app|import|page|report|transaction|upload)\b/i.test(normalized)) return true;
   if (CLOVER_ACTION_TERMS.test(normalized)) return true;
+  if (FINANCIAL_EDUCATION.test(normalized)) return true;
+  if (/\b(?:check|show|review|list|explain|understand)\b[\s\S]{0,48}\b(?:upcoming |overdue |monthly )?(?:bills?|payments?|accounts?|expenses?)\b/i.test(normalized)) return true;
   if (!FINANCIAL_TERMS.test(normalized)) return false;
   if (STRONG_FINANCIAL_TERMS.test(normalized) && (PERSONAL_FINANCE_CONTEXT.test(normalized) || ACCOUNT_GROUNDED_QUESTION.test(normalized))) return true;
   // Product-specific nouns are useful even when users omit "my", for example

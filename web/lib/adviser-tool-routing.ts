@@ -1,4 +1,4 @@
-import type { AdviserEverydayIntent } from "@/lib/adviser-everyday";
+import { isFinancialDefinitionQuestion, type AdviserEverydayIntent } from "@/lib/adviser-everyday";
 
 export const ADVISER_TOOL_NAMES = [
   "open_report",
@@ -70,7 +70,9 @@ export const selectAdviserToolNames = ({
   includesPurchaseAmount = false,
 }: AdviserToolRoutingInput): AdviserToolName[] => {
   const normalized = question.trim().toLowerCase();
-  if (!normalized) return [];
+  if (!normalized || isFinancialDefinitionQuestion(question)) return [];
+  // Asking how to organize money is not a request to select a financial product.
+  if (/\b(?:routine|checklist)\b/.test(normalized) && !/\b(?:my spending|my balance|my transaction)\b/.test(normalized)) return [];
 
   const isExplicitWrite = has(
     normalized,
@@ -132,7 +134,7 @@ export const selectAdviserToolNames = ({
   if (has(normalized, /\b(?:split bill|shared expense|who owes|owe me|settlement)\b/)) {
     return ["get_split_bill_status"];
   }
-  if (has(normalized, /\b(?:recurring|subscription|upcoming bill|bills coming|payment due|loan payment|cash ?flow)\b/)) {
+  if (has(normalized, /\b(?:recurring|subscription|upcoming bills?|bills coming|payment due|loan payment|cash ?flow)\b/)) {
     return ["get_cashflow_outlook"];
   }
   if (has(normalized, /\b(?:budget|spending limit|within my limit|over my limit)\b/)) {

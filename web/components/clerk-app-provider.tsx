@@ -1,6 +1,7 @@
 "use client";
 
 import { ClerkProvider } from "@clerk/nextjs";
+import { selectExistingClerkSession } from "@/lib/clerk-initial-session";
 import type { SignedInSessionResource } from "@clerk/types";
 import type { PropsWithChildren } from "react";
 import { readRememberedSessionId, readStaySignedInPreference } from "@/lib/clerk-session-persistence";
@@ -23,28 +24,10 @@ export function ClerkAppProvider({ publishableKey, localization, children }: Cle
       afterSignOutUrl="/"
       afterMultiSessionSingleSignOutUrl="/"
       selectInitialSession={(client) => {
-        if (!readStaySignedInPreference()) {
-          return null;
-        }
-
-        const rememberedSessionId = readRememberedSessionId();
-        if (rememberedSessionId) {
-          const rememberedSession = client.sessions.find((session) => session.id === rememberedSessionId) as
-            | SignedInSessionResource
-            | undefined;
-
-          if (rememberedSession) {
-            return rememberedSession;
-          }
-        }
-
-        return (
-          (client.sessions.find((session) => session.id === client.lastActiveSessionId) as
-            | SignedInSessionResource
-            | undefined) ??
-          (client.sessions[0] as SignedInSessionResource | undefined) ??
-          null
-        );
+        // Opting out of a remembered login must not deselect this browser's
+        // currently active Clerk session or stop its token refresh.
+        const rememberedSessionId = readStaySignedInPreference() ? readRememberedSessionId() : "";
+        return selectExistingClerkSession({sessions: client.sessions as SignedInSessionResource[], lastActiveSessionId:client.lastActiveSessionId}, rememberedSessionId);
       }}
     >
       {children}

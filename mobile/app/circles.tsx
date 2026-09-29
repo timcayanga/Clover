@@ -71,6 +71,7 @@ type Circle = {
   members?: {
     id: string;
     displayName: string;
+    avatarUrl?: string | null;
     role: string;
     status: string;
     isOwner?: boolean;
@@ -548,7 +549,7 @@ export default function Circles() {
               ) : null}
               {selected.members?.map((member) => (
                 <Card key={member.id}>
-                  <Body muted={false}>{member.displayName}</Body>
+                  <View style={{flexDirection:"row",alignItems:"center",gap:10}}><CircleMemberPhoto member={member} /><Body muted={false}>{member.displayName}</Body></View>
                   {selected.role === "organizer" ? (
                     <PlanAction
                       title="Edit person"
@@ -632,30 +633,7 @@ export default function Circles() {
                 </View>
                 <View style={{ flexDirection: "row", gap: 6 }}>
                   {(circle.members ?? []).slice(0, 5).map((member) => (
-                    <LinearGradient
-                      key={member.id}
-                      colors={["#03a8c0", "#5ed3d0"]}
-                      start={{ x: 0, y: 0 }}
-                      end={{ x: 1, y: 1 }}
-                      style={{
-                        width: 36,
-                        height: 36,
-                        borderRadius: 18,
-                        alignItems: "center",
-                        justifyContent: "center",
-                      }}
-                    >
-                      <Text
-                        accessibilityLabel={member.displayName}
-                        style={{ color: "#fff", fontFamily: "Poppins-Medium" }}
-                      >
-                        {member.displayName
-                          .split(" ")
-                          .map((n) => n[0])
-                          .slice(0, 2)
-                          .join("")}
-                      </Text>
-                    </LinearGradient>
+                    <CircleMemberPhoto key={member.id} member={member} />
                   ))}
                   {circle.memberCount > 5 ? (
                     <Body>+{circle.memberCount - 5}</Body>
@@ -829,4 +807,12 @@ function CircleEditor({
       />
     </Screen>
   );
+}
+
+function CircleMemberPhoto({member}: {member:{displayName:string;avatarUrl?:string|null}}) {
+  const [failedUrl,setFailedUrl] = useState<string|null>(null);
+  const photo = member.avatarUrl && member.avatarUrl !== failedUrl && /^(https:|data:image\/)/.test(member.avatarUrl);
+  return <LinearGradient colors={["#03a8c0", "#5ed3d0"]} style={{width:36,height:36,borderRadius:18,alignItems:"center",justifyContent:"center",overflow:"hidden"}}>
+    {photo ? <Image source={{uri:member.avatarUrl!}} accessibilityLabel={member.displayName} onError={()=>setFailedUrl(member.avatarUrl??null)} style={{width:36,height:36}} /> : <Text accessibilityLabel={member.displayName} style={{color:"#fff"}}>{member.displayName.trim().split(/\s+/).slice(0,2).map(n=>n[0]).join("")}</Text>}
+  </LinearGradient>;
 }
