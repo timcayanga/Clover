@@ -8,6 +8,25 @@ have not been independently verified.
 
 ## Run the test
 
+For testing while the bank login page is unavailable, use **Create test account
+and check balance** on the same page. This calls POST /sandbox/v1/accounts and
+GET /accounts/v2/balances/{accountNumber} with application credentials only.
+Use subscriptions Sandbox Bank Account and Sandbox Account Balance. Sandbox
+Account Information still requires a customer token, so it is not part of this
+direct test. This is a separate check from the OAuth test below.
+
+The direct test generates dummy credentials and encrypts its result in Redis
+with AES-256-GCM, with a key derived from the server-only client secret and an
+actor-specific context. It retains successful or uncertain creation for 24 hours
+to reuse the same account across repeat clicks. Definite creation rejections are
+cached for one minute before allowing a new explicit attempt. The record is
+reserved before the bank call, so concurrent clicks cannot create duplicates.
+If the worker stops mid-request, the preserved pending record and credentials
+remain available; it will not silently retry account creation. Users should save
+the dummy login details before expiry. Credentials are never logged or included
+in Clover's finance data. Changing the application secret makes cached results
+unreadable until they expire. Balance lookup failures do not repeat creation.
+
 Deploy the connector code to the deployment serving staging.clover.ph. Set these
 server-only variables there (never NEXT_PUBLIC_):
 
@@ -58,5 +77,6 @@ production through an environment variable.
 ## Verification
 
 From web/: npx tsx scripts/unionbank-sandbox-regression.ts.
+Also run: npx tsx scripts/unionbank-sandbox-account-regression.ts.
 This uses mocked HTTP responses; a real sandbox login remains necessary.
 Do not log callback query strings, token request bodies, credentials or responses.

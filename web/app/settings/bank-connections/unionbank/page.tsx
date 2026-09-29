@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { cookies, headers } from "next/headers";
 import { CloverShell } from "@/components/clover-shell";
+import { UnionBankSandboxAccountTest } from "@/components/unionbank-sandbox-account-test";
 import { sandboxConfig, type ProbeReport } from "@/lib/unionbank-sandbox";
 import { reportCookie, reportKey, sandboxActor, sandboxStore } from "@/lib/unionbank-sandbox-session";
 
@@ -35,6 +36,9 @@ export default async function UnionBankSandboxPage({ searchParams }: { searchPar
       <h1 className="text-2xl font-semibold">Test UnionBank access</h1>
       <p>Use a UnionBank sandbox test account. This checks login and read access; it does not create a lasting bank connection or import transactions.</p>
       {!available && <p role="status">{notice}</p>}
+      <UnionBankSandboxAccountTest available={available} />
+      <h2 className="text-xl font-semibold">Test customer login</h2>
+      <p>This separate test opens UnionBank’s login page. If that page is unavailable, use the direct sandbox test above.</p>
       {failed && <p role="alert">The login was canceled, expired, or could not be verified. Sign in to Clover and start a new test.</p>}
       <form action="/api/bank-connections/unionbank/start" method="post">
         <button disabled={!available} className="rounded-xl bg-emerald-800 px-5 py-3 font-medium text-white disabled:opacity-40">Start sandbox test</button>
