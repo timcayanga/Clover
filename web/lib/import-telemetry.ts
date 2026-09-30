@@ -1,3 +1,5 @@
+import { RECEIPT_REVIEW_PHASE } from "./receipt-review";
+
 export type ImportTelemetryPhase =
   | "queued"
   | "uploading"
@@ -101,6 +103,11 @@ const GENERIC_PROGRESS_MESSAGES = new Set([
 ]);
 
 export const buildImportTelemetrySnapshot = (params: ImportTelemetryParams): ImportTelemetrySnapshot => {
+  if (params.processingPhase === RECEIPT_REVIEW_PHASE && Number(params.confirmedTransactionsCount ?? 0) === 0) {
+    return { phase: "repair_needed", phaseLabel: "Review needed",
+      message: params.processingMessage?.trim() || "This receipt needs more details before a transaction can be added.",
+      canResume: false, resumeReason: "incomplete_source_details" };
+  }
   const parsedRowsCount = Number(params.parsedRowsCount ?? 0);
   const confirmedTransactionsCount = Number(params.confirmedTransactionsCount ?? 0);
   const status = (params.status ?? "").trim();

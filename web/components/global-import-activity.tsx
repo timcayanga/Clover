@@ -218,7 +218,7 @@ export function GlobalImportActivity() {
           parsedRowsCount: payload.parsedRowsCount,
           confirmedTransactionsCount: payload.confirmedTransactionsCount,
           visibleImportComplete: payload.visibleImportComplete,
-          hasStructuredReceiptVisibility: Boolean(payload.receiptTransaction || payload.receiptDocument),
+          hasStructuredReceiptVisibility: Boolean(payload.receiptTransaction),
           processingAttempt: importFile?.processingAttempt,
           progressFloor: current.progress,
         });

@@ -163,6 +163,17 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
         qaSource: "import_processing",
         pdfJsBaseUrl: getConfiguredPdfJsBaseUrl(),
       });
+      if (result.requiresInput) {
+        const saved = await fetchImportFileCompat(importId);
+        const review = buildImportTelemetrySnapshot({
+          status: saved?.status, processingPhase: saved?.processingPhase,
+          processingMessage: saved?.processingMessage, confirmedTransactionsCount: 0,
+        });
+        return NextResponse.json({ ok: true, queued: false, importFileId: importId,
+          importedRows: 0, confirmedTransactionsCount: 0, visibleImportComplete: false,
+          telemetryPhase: review.phase, telemetryLabel: review.phaseLabel,
+          telemetryMessage: review.message, canResume: false, resumeReason: review.resumeReason });
+      }
       const visibleRows =
         result.status === "done"
           ? Number(result.confirmedTransactionsCount ?? result.imported ?? 0)

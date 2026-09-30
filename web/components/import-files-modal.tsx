@@ -4750,6 +4750,7 @@ export function ImportFilesModal({
       const telemetryMessage = typeof payload.telemetryMessage === "string" ? payload.telemetryMessage : null;
       const resumeReason = typeof payload.resumeReason === "string" ? payload.resumeReason : null;
       const visualRepairGraceActive =
+        processingPhase !== "receipt_review_required" &&
         isRecoverableVisualUploadFileName(fileName) &&
         parsedRowsCount === 0 &&
         confirmedTransactionsCount === 0 &&

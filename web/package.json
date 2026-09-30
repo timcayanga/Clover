@@ -18,7 +18,7 @@
     "worker:imports": "tsx workers/imports-worker.ts",
     "db:seed": "tsx prisma/seed.ts",
     "qa:parsers": "tsx scripts/parser-regression.ts",
-    "qa:receipt-camera": "tsx scripts/receipt-camera-import-regression.ts",
+    "qa:receipt-camera": "tsx scripts/receipt-camera-import-regression.ts && tsx scripts/receipt-review-regression.ts",
     "qa:imports": "tsx scripts/import-smoke-regression.ts",
     "qa:import-status-stream": "tsx scripts/import-status-stream-regression.ts && tsx scripts/import-readiness-regression.ts",
     "qa:origin-transfer": "tsx scripts/origin-transfer-regression.ts",

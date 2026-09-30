@@ -4,6 +4,7 @@ import { ensureImportProcessingWorker } from "@/lib/import-worker-runtime";
 import { prisma } from "@/lib/prisma";
 import { updateImportFileCompat } from "@/lib/data-engine";
 import { getConfiguredPdfJsBaseUrl } from "@/lib/import-file-text.server";
+import { RECEIPT_REVIEW_PHASE } from "@/lib/receipt-review";
 
 const FAILED_IMPORT_RECOVERY_DELAY_MS = 10_000;
 const STALLED_IMPORT_RECOVERY_DELAY_MS = 2 * 60 * 1000;
@@ -19,6 +20,7 @@ const recoverImportFiles = async (limit: number) => {
   const stalledThreshold = new Date(Date.now() - STALLED_IMPORT_RECOVERY_DELAY_MS);
   const importFiles = await prisma.importFile.findMany({
     where: {
+      AND: [{ OR: [{ processingPhase: null }, { processingPhase: { not: RECEIPT_REVIEW_PHASE } }] }],
       dataQaRuns: {
         none: {},
       },

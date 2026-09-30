@@ -1715,6 +1715,7 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
           });
           const savedTransactionsCount = await countTransactionsByImportFileCompat(importId).catch(() => 0);
           const needsReceiptConfirmation =
+            !result.requiresInput &&
             savedTransactionsCount === 0 &&
             Number(result.confirmedTransactionsCount ?? 0) === 0 &&
             !result.duplicate;

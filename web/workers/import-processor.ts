@@ -1,6 +1,7 @@
 import { finalizePortfolioImport, isHoldingsOnlyPortfolio, portfolioConfidence } from "@/lib/portfolio-import";
 import { assessImportEvidenceSafety, assertSafeImportEvidence } from "@/lib/import-evidence-safety";
 import { startImportTiming, measureImportTiming } from "@/lib/import-timing";
+import { incompleteReceiptFields, receiptReviewMessage, RECEIPT_REVIEW_PHASE } from "@/lib/receipt-review";
 import { shouldRefineReceiptCore } from "@/lib/receipt-detail-refinement";
 import { Prisma } from "@prisma/client";
 import type { AccountType, ReviewStatus, TransactionType } from "@prisma/client";
@@ -1739,6 +1740,7 @@ const sourceFilesLookLikeAdjacentScreenshots = (leftFileName: unknown, rightFile
 
 type ProcessImportResult = {
   imported: number;
+  requiresInput?: boolean;
   duplicate: boolean;
   metadata: ReturnType<typeof detectStatementMetadataFromText>;
   resolvedImportMode?: ImportImageMode;
@@ -12473,6 +12475,42 @@ export const processImportFileText = async (
       insightSummary: result.insightSummary ?? undefined, status: "done" };
   }
 
+  // Public/redacted receipts can have a readable total but no date or merchant.
+  // Keep the source and partial ReceiptDocument, and stop before confirmation,
+  // template promotion, or a retry that cannot restore missing source details.
+  const missingReceiptFields = effectiveImportMode === "receipt" && receiptDetails && rows.length === 0
+    ? incompleteReceiptFields(receiptDetails) : [];
+  if (missingReceiptFields.length > 0 && documentImportRecord && await countTransactionsByImportFileCompat(importFileId) === 0) {
+    const message = receiptReviewMessage(missingReceiptFields);
+    const review = { required: true, missingFields: missingReceiptFields, reason: "incomplete_source_details" };
+    await prisma.receiptDocument.updateMany({
+      where: { documentImportId: documentImportRecord.id, transactionId: null },
+      data: { confidence: Math.min(50, normalizeImportConfidenceScore(receiptDetails?.confidence_score ?? 0)) },
+    });
+    if (await hasCompatibleTable("AccountStatementCheckpoint")) {
+      await prisma.accountStatementCheckpoint.updateMany({
+        where: { importFileId },
+        data: { status: "pending", rowCount: 0, sourceMetadata: mergeCheckpointSourceMetadata(statementCheckpoint?.sourceMetadata, {
+          ...resolvedMetadata, importMode: "receipt", documentType: "receipt",
+          workflowStage: RECEIPT_REVIEW_PHASE, receiptReview: review,
+          backupParserModel: useOpenAiParse ? openAiParsed?.model ?? null : null,
+          routedThroughBackupParser: Boolean(useOpenAiParse),
+          backupParserDecisionDurationMs: parserRoutingMetadata.backupParserDecisionDurationMs,
+        }) as Prisma.InputJsonValue },
+      });
+    }
+    await updateImportFileCompat(importFileId, {
+      status: "failed", processingPhase: RECEIPT_REVIEW_PHASE, processingMessage: message,
+      parsedRowsCount: 0, confirmedTransactionsCount: 0,
+    });
+    emitImportProcessingEvent("import_processing_stalled", {
+      processing_status: "failed", processing_phase: RECEIPT_REVIEW_PHASE,
+      reason: "incomplete_source_details", missing_fields: missingReceiptFields,
+    });
+    return { imported: 0, duplicate: false, requiresInput: true, metadata: resolvedMetadata,
+      resolvedImportMode: "receipt", confirmedTransactionsCount: 0, status: "error" };
+  }
+
   const runTemplateLearning = async () => {
     const template = await upsertStatementTemplate({
       workspaceId: importFile.workspaceId,
@@ -13647,6 +13685,10 @@ export const confirmImportFile = async (
 
   if (!importFile) {
     throw new Error("Import file not found");
+  }
+
+  if (importFile.processingPhase === RECEIPT_REVIEW_PHASE && await countTransactionsByImportFileCompat(importFileId) === 0) {
+    throw new Error(String(importFile.processingMessage ?? receiptReviewMessage(["required details"])));
   }
 
   const documentCheckpointPromise = (async () =>
