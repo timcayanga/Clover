@@ -1,3 +1,4 @@
+import { getRegionalMerchantCategoryHint } from "@/lib/korea-indonesia-corpus";
 import { getIndonesianMerchantCategoryHint, getIndonesianIncomeCategoryHint, needsIndonesianPaymentCategoryReview } from "@/lib/indonesian-merchant-context";
 import { Prisma } from "@prisma/client";
 import type { AccountType, TransactionType } from "@prisma/client";
@@ -31,7 +32,7 @@ import { deriveTravelEpisodes, resolveTransactionContext } from "@/lib/context-c
 import { coerceTransactionTypeFromCategoryName, toInternalTransactionType } from "@/lib/transaction-directions";
 
 export const DATA_ENGINE_VERSION = "v2";
-export const IMPORT_FILE_EXTRACTION_CACHE_VERSION = "v24";
+export const IMPORT_FILE_EXTRACTION_CACHE_VERSION = "v25";
 export const resolveImportFileExtractionCacheVersion = (fileName?: string | null) => {
   const normalizedFileName = String(fileName ?? "");
   if (/^BE\d{8}\.pdf$/i.test(normalizedFileName.trim())) {
@@ -540,7 +541,7 @@ export const extractLastFourDigits = (value?: string | null) => {
 };
 
 const getHardcodedCategoryOverride = (merchantText: string) => {
-  if (needsIndonesianPaymentCategoryReview(merchantText)) return null;
+  if (needsIndonesianPaymentCategoryReview(merchantText) || getRegionalMerchantCategoryHint(merchantText) === "Other") return null;
   const lower = merchantText.toLowerCase();
   const compact = normalizeWhitespace(merchantText).replace(/\s+/g, "").toLowerCase();
   const hasTravelContext =
@@ -731,7 +732,7 @@ const getHardcodedCategoryOverride = (merchantText: string) => {
 };
 
 const isContextualCategoryOverride = (merchantText: string, categoryName: string) => {
-  if (getIndonesianMerchantCategoryHint(merchantText) === categoryName) return true;
+  if (getIndonesianMerchantCategoryHint(merchantText) === categoryName || getRegionalMerchantCategoryHint(merchantText) === categoryName) return true;
   const lower = merchantText.toLowerCase();
   const compact = normalizeWhitespace(merchantText).replace(/\s+/g, "").toLowerCase();
   const hasTravelContext =
@@ -1651,7 +1652,7 @@ const rescueHeuristicCategory = (params: {
 }) => {
   // Removing a rail/top-up word from a candidate must not manufacture a merchant
   // identity or turn an explicitly uncertain payment into a high-confidence row.
-  if (params.heuristicCategory === "Other" && needsIndonesianPaymentCategoryReview(params.merchantText)) return null;
+  if (params.heuristicCategory === "Other" && (needsIndonesianPaymentCategoryReview(params.merchantText) || getRegionalMerchantCategoryHint(params.merchantText) === "Other")) return null;
   const baseText = [params.categoryText, params.merchantText, ...params.merchantCandidates]
     .filter((value): value is string => typeof value === "string" && value.trim().length > 0)
     .join(" ");

@@ -191,3 +191,13 @@ Prefer a narrow alias and an explicit semantic meaning. Include a negative examp
 ## Indonesian semantic corrections, 1 October 2026
 
 Corpus `2026.10.01.2` separates mixed Indonesian alias groups by actual purpose: GoFood/ShopeeFood food delivery, Ruangguru/university education, Pertamina fuel, Indomaret/Alfamart/Superindo groceries, Blibli ecommerce and MRT Jakarta transport. SeaBank and blu by BCA use bank context. Gojek/Grab parent apps remain service-neutral. Original aliases remain searchable, and no direction or own-account transfer is inferred from these corrections. Bounded merchant hints and the import enrichment regression exercise the operational category path as well as corpus lookup; explicit source currency and user-confirmed merchant rules remain authoritative.
+
+## Korea and Indonesia reviewed expansion, 1 October 2026
+
+Corpus `2026.10.01.3` adds a shared source-backed pack of 37 specific providers/services (19 Korean, 18 Indonesian), with 100 regional/category aliases. Canonical Korean coverage grows from 21 groups / 97 aliases to 40 / 132; Indonesian coverage grows from 30 / 87 to 48 / 109. Counts exclude generated descriptor suffix variants and category-only aliases. Some old aliases move into corrected semantic groups instead of being counted twice.
+
+See [the source register](korea-indonesia-corpus-sources.md) for each official URL and reviewed identity. The same pack supplies operational merchant-category hints and country context. Country-qualified Latin names establish regional context; unqualified globally used brands supply category suggestions only. New entries do not supply settlement currency or transaction direction. Korean branch suffixes ending in 점 are accepted with bounded Unicode-aware matching; arbitrary substrings are rejected. Conflicting merchant categories stay Other with a review reason, and deterministic rescue must not select one partial merchant.
+
+The [evaluation fixtures](../web/scripts/fixtures/korea-indonesia/README.md) add 12 original synthetic documents, including actual XLSX files. They cover Korean and Indonesian ledgers, foreign-currency categories, receipts, fractional investment holdings and rejected ambiguous rows. They are not harvested production statements, OCR benchmarks or model training claims. Existing user-confirmed records and merchant learning remain authoritative. The extraction cache advances to `v25` so new uploads do not reuse stale extraction results.
+
+`qa:regional-corpus` and `qa:context-corpus` run inside `qa:release`, and therefore the identical local/CI pre-push gate. Existing Korean and Indonesian language/layout suites remain required.

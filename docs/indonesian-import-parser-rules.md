@@ -94,3 +94,9 @@ A subsequent synthetic PDF with blank debit/credit cells, a wrapped description 
 - Watsons Indonesia health and beauty retail: https://www.watsons.co.id/id/
 - MRT Jakarta public transport: https://www.jakartamrt.co.id/
 - Traveloka travel services: https://www.traveloka.com/en-ph/about-us
+
+## Reviewed merchant corpus and reusable evaluation files
+
+Use `web/lib/korea-indonesia-corpus.ts` for reviewed provider context and `docs/korea-indonesia-corpus-sources.md` for official sources. Category-only aliases must not establish country or currency. Preserve branch/submerchant text, explicit transaction direction and currency, and user-confirmed categories. A row naming incompatible merchant categories remains Other and requires review rather than selecting the first match.
+
+`web/scripts/fixtures/korea-indonesia/` contains original synthetic CSV, receipt-text and actual XLSX examples, a provenance manifest and documented limitations. `qa:regional-corpus` exercises all new aliases through the production category and context paths, and evaluates the files through the parser/workbook reader. These fixtures add repeatable checks, not a claim of coverage for all local institutions or photographed documents.

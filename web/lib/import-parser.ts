@@ -1,3 +1,4 @@
+import { getRegionalMerchantCategoryHint } from "@/lib/korea-indonesia-corpus";
 import { getIndonesianMerchantCategoryHint, getIndonesianIncomeCategoryHint, needsIndonesianPaymentCategoryReview } from "@/lib/indonesian-merchant-context";
 import { isKoreanInvestmentHeader, parseKoreanInvestmentTable, isIndonesianInvestmentHeader, parseIndonesianInvestmentTable } from "@/lib/korean-investment-table";
 import { buildKoreanBankTable } from "@/lib/korean-bank-table";
@@ -1488,7 +1489,9 @@ export const parseStructuredTransactionCsv = (
     const categoryName = candidate.categoryRaw ||
       guessCategoryName(`${candidate.merchantRaw} ${candidate.description}`, direction.type);
     const finalReviewReason = localizedReviewReason ?? (
-      indonesianTable && !candidate.categoryRaw && categoryName === "Other" &&
+      !candidate.categoryRaw && getRegionalMerchantCategoryHint(`${candidate.merchantRaw} ${candidate.description}`) === "Other"
+        ? "Multiple merchants suggest different categories. Confirm the merchant and category before importing."
+        : indonesianTable && !candidate.categoryRaw && categoryName === "Other" &&
       needsIndonesianPaymentCategoryReview(`${candidate.merchantRaw} ${candidate.description}`)
         ? "Confirm the category and whether this payment is a purchase or movement between your own accounts. A payment rail or wallet name alone cannot decide this."
         : null

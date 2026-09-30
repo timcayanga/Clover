@@ -20,7 +20,9 @@ import { WORLD_FISCAL_CONTEXT_ENTRIES } from "@/lib/world-context-corpus-fiscal"
 import { WORLD_FISCAL_CONTEXT_ENTRIES_2 } from "@/lib/world-context-corpus-fiscal-2";
 import { WORLD_FISCAL_CONTEXT_ENTRIES_3 } from "@/lib/world-context-corpus-fiscal-3";
 
-export const CONTEXT_CORPUS_VERSION = "2026.10.01.2";
+import { KOREA_INDONESIA_CORPUS, matchesRegionalContextAlias } from "@/lib/korea-indonesia-corpus";
+
+export const CONTEXT_CORPUS_VERSION = "2026.10.01.3";
 
 export type ContextSignal = {
   id: string;
@@ -220,7 +222,7 @@ const baseEntries: ContextEntry[] = [
   { id: "kr-banks", aliases: ["신한은행", "국민은행", "하나은행", "우리은행", "농협은행", "카카오뱅크", "토스뱅크", "shinhan bank", "kb kookmin", "hana bank korea", "woori bank", "nh bank korea", "kakao bank", "toss bank"], signalKind: "institution", countryCode: "KR", regionCode: "EAS", institutionType: "bank", currency: "KRW", confidence: 88 },
   { id: "kr-wallets", aliases: ["kakao pay", "카카오페이", "naver pay", "네이버페이", "toss pay", "토스페이", "samsung pay korea", "payco korea", "ssg pay"], signalKind: "payment_rail", countryCode: "KR", regionCode: "EAS", paymentRail: "korea_wallet", currency: "KRW", institutionType: "wallet", confidence: 88 },
   { id: "kr-transit", aliases: ["코레일", "서울교통공사", "t money", "tmoney", "티머니", "cashbee", "캐시비", "korea subway", "korail", "kakao t", "seoul metro"], negativeAliases: ["togocom", "t money togo"], signalKind: "travel", countryCode: "KR", regionCode: "EAS", paymentRail: "korea_transit", currency: "KRW", categoryHint: "Transport", counterpartyType: "transport_provider", purposeHint: "transport", travelLikely: true, confidence: 88 },
-  { id: "kr-commerce", aliases: ["쿠팡", "올리브영", "이마트", "유니클로", "coupang", "gmarket korea", "olive young", "emart korea", "lotte korea", "cu korea", "gs25 korea", "daiso korea"], signalKind: "merchant", countryCode: "KR", regionCode: "EAS", currency: "KRW", categoryHint: "Shopping", counterpartyType: "merchant", purposeHint: "retail", confidence: 84 },
+  { id: "kr-commerce", aliases: ["쿠팡", "올리브영", "유니클로", "coupang", "gmarket korea", "olive young", "lotte korea"], signalKind: "merchant", countryCode: "KR", regionCode: "EAS", currency: "KRW", categoryHint: "Shopping", counterpartyType: "merchant", purposeHint: "retail", confidence: 84 },
   { id: "hk-banks", aliases: ["hsbc hong kong", "hang seng bank", "bank of china hong kong", "bochk", "standard chartered hong kong", "za bank hong kong"], signalKind: "institution", countryCode: "HK", regionCode: "EAS", institutionType: "bank", currency: "HKD", confidence: 88 },
   { id: "hk-wallets", aliases: ["octopus wallet", "payme hong kong", "alipayhk", "wechat pay hk", "tap and go hong kong"], signalKind: "payment_rail", countryCode: "HK", regionCode: "EAS", paymentRail: "hong_kong_wallet", currency: "HKD", institutionType: "wallet", confidence: 88 },
   { id: "hk-transit", aliases: ["mtr hong kong", "kmb hong kong", "citybus hong kong", "tramways hong kong", "octopus card"], signalKind: "travel", countryCode: "HK", regionCode: "EAS", paymentRail: "hong_kong_transit", currency: "HKD", categoryHint: "Transport", counterpartyType: "transport_provider", purposeHint: "transport", travelLikely: true, confidence: 88 },
@@ -327,7 +329,7 @@ const baseEntries: ContextEntry[] = [
   { id: "vn-travel-expanded", aliases: ["vietnam airlines", "vietjet air", "bamboo airways", "vinbus", "hanoi bus", "danang airport"], signalKind: "travel", countryCode: "VN", regionCode: "SEA", currency: "VND", categoryHint: "Travel & Lifestyle", counterpartyType: "travel_provider", purposeHint: "travel", travelLikely: true, confidence: 80 },
   { id: "kr-banks-expanded", aliases: ["ibk industrial bank korea", "sc bank korea", "k bank korea", "suhyup bank", "busan bank", "daegu bank"], signalKind: "institution", countryCode: "KR", regionCode: "EAS", institutionType: "bank", currency: "KRW", confidence: 82 },
   { id: "kr-commerce-expanded", aliases: ["11st korea", "ssg.com", "lotte department store korea", "starfield korea", "costco korea", "olive young global"], signalKind: "merchant", countryCode: "KR", regionCode: "EAS", currency: "KRW", categoryHint: "Shopping", purposeHint: "retail", confidence: 78 },
-  { id: "kr-travel-expanded", aliases: ["korean air", "asiana airlines", "jeju air", "tway air", "incheon airport", "busan metro"], signalKind: "travel", countryCode: "KR", regionCode: "EAS", currency: "KRW", categoryHint: "Travel & Lifestyle", counterpartyType: "travel_provider", purposeHint: "travel", travelLikely: true, confidence: 82 },
+  { id: "kr-travel-expanded", aliases: ["korean air", "asiana airlines", "jeju air", "tway air", "incheon airport"], signalKind: "travel", countryCode: "KR", regionCode: "EAS", currency: "KRW", categoryHint: "Travel & Lifestyle", counterpartyType: "travel_provider", purposeHint: "travel", travelLikely: true, confidence: 82 },
   { id: "hk-commerce-expanded", aliases: ["citysuper hong kong", "sogo hong kong", "jasons ichiba", "ikea hong kong", "log on hong kong", "yue hwa"], signalKind: "merchant", countryCode: "HK", regionCode: "EAS", currency: "HKD", categoryHint: "Shopping", purposeHint: "retail", confidence: 78 },
   { id: "hk-travel-expanded", aliases: ["cathay pacific", "hong kong express", "hong kong airport", "airport express hong kong", "star ferry hong kong"], signalKind: "travel", countryCode: "HK", regionCode: "EAS", currency: "HKD", categoryHint: "Travel & Lifestyle", counterpartyType: "travel_provider", purposeHint: "travel", travelLikely: true, confidence: 82 },
   { id: "tw-commerce-expanded", aliases: ["momo shopping taiwan", "pchome taiwan", "shopee taiwan", "watsons taiwan", "cosmed taiwan", "don don donki taiwan"], signalKind: "merchant", countryCode: "TW", regionCode: "EAS", currency: "TWD", categoryHint: "Shopping", purposeHint: "ecommerce", confidence: 78 },
@@ -482,7 +484,7 @@ const baseEntries: ContextEntry[] = [
   { id: "bn-services-commerce", aliases: ["des brunei", "dst brunei", "imagine brunei", "hua ho brunei", "supa save brunei"], signalKind: "merchant", countryCode: "BN", regionCode: "SEA", currency: "BND", categoryHint: "Bills & Utilities", counterpartyType: "utility_provider", purposeHint: "utilities", confidence: 62 },
   { id: "la-services-commerce", aliases: ["edl laos", "unitel laos", "lao telecom", "minimart laos", "talat sao laos"], signalKind: "merchant", countryCode: "LA", regionCode: "SEA", currency: "LAK", categoryHint: "Bills & Utilities", counterpartyType: "utility_provider", purposeHint: "utilities", confidence: 60 },
   { id: "cn-services-commerce", aliases: ["china mobile", "china telecom", "china southern power grid", "hualian supermarket china", "pinduoduo"], signalKind: "merchant", countryCode: "CN", regionCode: "EAS", currency: "CNY", categoryHint: "Bills & Utilities", counterpartyType: "utility_provider", purposeHint: "utilities", confidence: 70 },
-  { id: "kr-services-commerce", aliases: ["kt korea", "sk telecom korea", "korea electric power", "hyundai department store korea", "gs the fresh korea"], signalKind: "merchant", countryCode: "KR", regionCode: "EAS", currency: "KRW", categoryHint: "Bills & Utilities", counterpartyType: "utility_provider", purposeHint: "utilities", confidence: 72 },
+  { id: "kr-services-commerce", aliases: ["kt korea", "sk telecom korea", "korea electric power"], signalKind: "merchant", countryCode: "KR", regionCode: "EAS", currency: "KRW", categoryHint: "Bills & Utilities", counterpartyType: "utility_provider", purposeHint: "utilities", confidence: 72 },
   { id: "tw-services-commerce", aliases: ["taiwan power company", "taiwan water corporation", "yahoo taiwan shopping", "carrefour taiwan store", "px mart taiwan"], signalKind: "merchant", countryCode: "TW", regionCode: "EAS", currency: "TWD", categoryHint: "Bills & Utilities", counterpartyType: "utility_provider", purposeHint: "utilities", confidence: 70 },
   { id: "mo-services-commerce", aliases: ["ctm macau", "macau water supply", "new yaohan macau", "park n shop macau", "macau telecom"], signalKind: "merchant", countryCode: "MO", regionCode: "EAS", currency: "MOP", categoryHint: "Bills & Utilities", counterpartyType: "utility_provider", purposeHint: "utilities", confidence: 62 },
   { id: "in-wallets-commerce-expanded", aliases: ["phonepe india", "paytm india", "bharat pay india", "airtel payments bank", "bigbasket india", "blinkit india"], signalKind: "payment_rail", countryCode: "IN", regionCode: "SAS", paymentRail: "india_wallet", currency: "INR", institutionType: "wallet", categoryHint: "Transfers", transactionTypeHint: "transfer", confidence: 78 },
@@ -498,7 +500,7 @@ const baseEntries: ContextEntry[] = [
   { id: "sg-housing-education", aliases: ["nus tuition singapore", "ntu tuition singapore", "condo management singapore", "propertyguru singapore", "singapore polytechnic fees"], signalKind: "merchant", countryCode: "SG", regionCode: "SEA", currency: "SGD", categoryHint: "Education", counterpartyType: "education_provider", purposeHint: "education", confidence: 72 },
   { id: "my-insurance-investment", aliases: ["etiqa malaysia", "takaful malaysia", "kenanga investors malaysia", "stashaway malaysia", "propertyguru malaysia"], signalKind: "merchant", countryCode: "MY", regionCode: "SEA", currency: "MYR", categoryHint: "Insurance", counterpartyType: "insurer", purposeHint: "insurance", confidence: 70 },
   { id: "jp-subscriptions-services", aliases: ["softbank hikari japan", "au hikari japan", "japan netflix", "line music japan", "nintendo switch online japan"], signalKind: "merchant", countryCode: "JP", regionCode: "EAS", currency: "JPY", categoryHint: "Subscriptions", counterpartyType: "merchant", purposeHint: "subscription", confidence: 70 },
-  { id: "kr-healthcare-education", aliases: ["samsung medical center", "asiana medical korea", "yonsei university fees", "korea university tuition", "olive young clinic korea"], signalKind: "merchant", countryCode: "KR", regionCode: "EAS", currency: "KRW", categoryHint: "Health & Wellness", counterpartyType: "healthcare_provider", purposeHint: "healthcare", confidence: 70 },
+  { id: "kr-healthcare-education", aliases: ["samsung medical center"], signalKind: "merchant", countryCode: "KR", regionCode: "EAS", currency: "KRW", categoryHint: "Health & Wellness", counterpartyType: "healthcare_provider", purposeHint: "healthcare", confidence: 70 },
   { id: "tw-healthcare-education", aliases: ["taipei veterans general hospital", "chang gung memorial hospital", "康是美 taiwan"], signalKind: "merchant", countryCode: "TW", regionCode: "EAS", currency: "TWD", categoryHint: "Health & Wellness", counterpartyType: "healthcare_provider", purposeHint: "healthcare", confidence: 68 },
   { id: "hk-healthcare-education", aliases: ["hong kong sanatorium hospital", "queen mary hospital hong kong", "hong kong university fees", "city university hong kong fees", "mannings pharmacy hong kong"], signalKind: "merchant", countryCode: "HK", regionCode: "EAS", currency: "HKD", categoryHint: "Health & Wellness", counterpartyType: "healthcare_provider", purposeHint: "healthcare", confidence: 68 },
   { id: "us-investment-insurance", aliases: ["fidelity investments", "vanguard brokerage", "charles schwab", "state farm insurance", "geico insurance"], signalKind: "merchant", countryCode: "US", regionCode: "NAM", currency: "USD", categoryHint: "Investments", counterpartyType: "investment_platform", purposeHint: "investment", confidence: 74 },
@@ -654,7 +656,7 @@ const DESCRIPTOR_SUFFIXES = [
 
 const normalizeCanonicalAlias = (value: string) => value.normalize("NFKC").toLowerCase().replace(/[^\p{L}\p{N}]+/gu, " ").trim().replace(/\s+/g, " ");
 const usedCanonicalAliases = new Set(baseEntries.flatMap((entry) => entry.aliases.map(normalizeCanonicalAlias)));
-const deduplicatedAdditionalCanonicalEntries = additionalCanonicalEntries
+const deduplicatedAdditionalCanonicalEntries = [...additionalCanonicalEntries, ...KOREA_INDONESIA_CORPUS]
   .map((entry) => ({
     ...entry,
     aliases: entry.aliases.filter((alias) => {
@@ -691,6 +693,8 @@ type IndexedAlias = {
   compactAlias: string;
 };
 
+const regionalEntryIds = new Set(KOREA_INDONESIA_CORPUS.map(entry => entry.id));
+const regionalAliasCandidates: IndexedAlias[] = [];
 const aliasCandidatesByFirstToken = new Map<string, IndexedAlias[]>();
 const compactCandidatesByPrefix = new Map<string, IndexedAlias[]>();
 for (const entry of entries) {
@@ -698,6 +702,7 @@ for (const entry of entries) {
     const normalizedAlias = normalizeCanonicalAlias(alias);
     if (!normalizedAlias) continue;
     const candidate = { entry, alias, normalizedAlias, compactAlias: normalizedAlias.replace(/\s+/g, "") };
+    if (regionalEntryIds.has(entry.id)) regionalAliasCandidates.push(candidate);
     const firstToken = normalizedAlias.split(" ")[0];
     if (firstToken) aliasCandidatesByFirstToken.set(firstToken, [...(aliasCandidatesByFirstToken.get(firstToken) ?? []), candidate]);
     if (candidate.compactAlias.length >= 6) {
@@ -831,11 +836,16 @@ const findIndexedMatches = (text: string) => {
     }
   }
 
+  for (const candidate of regionalAliasCandidates) {
+    if (matchesRegionalContextAlias(candidate.entry.id, candidate.alias, text)) candidates.add(candidate);
+  }
   const paddedText = ` ${text} `;
   const strongestByEntry = new Map<string, { entry: ContextEntry; aliasMatch: { alias: string; mode: AliasMatchMode } }>();
   for (const candidate of candidates) {
-    const boundaryMatch = paddedText.includes(` ${candidate.normalizedAlias} `);
-    const compactMatch = !boundaryMatch && !/\s/.test(text) && text.includes(candidate.compactAlias);
+    const regional = regionalEntryIds.has(candidate.entry.id);
+    const boundaryMatch = paddedText.includes(` ${candidate.normalizedAlias} `) ||
+      (regional && matchesRegionalContextAlias(candidate.entry.id, candidate.alias, text));
+    const compactMatch = !regional && !boundaryMatch && !/\s/.test(text) && text.includes(candidate.compactAlias);
     if (!boundaryMatch && !compactMatch) continue;
     if ((candidate.entry.negativeAliases ?? []).some((alias) => matchesAlias(text, alias))) continue;
     const descriptorSuffix = boundaryMatch && candidate.normalizedAlias.includes(" ")

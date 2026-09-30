@@ -1,3 +1,5 @@
+import { getRegionalMerchantCategoryHint } from "@/lib/korea-indonesia-corpus";
+
 // Advisory suggestions for new imports only. Language never supplies currency,
 // account ownership, or direction. Keep original descriptions in source evidence.
 const normalize = (value: string) => value.normalize("NFKC").replace(/\s+/g, " ").trim();
@@ -23,6 +25,9 @@ export const getIndonesianMerchantCategoryHint = (value: string): string | null 
   // A wallet top-up is not evidence of the later purchase or account ownership.
   if (walletFunding.test(text)) return "Other";
   if (/\btarik\s+tunai\b/i.test(text)) return "Cash & ATM";
+  if (getRegionalMerchantCategoryHint(text) === "Other") return "Other";
+  const regionalHint = getRegionalMerchantCategoryHint(text, "ID");
+  if (regionalHint) return regionalHint;
   return merchantHints.find(([pattern]) => pattern.test(text))?.[1] ?? null;
 };
 

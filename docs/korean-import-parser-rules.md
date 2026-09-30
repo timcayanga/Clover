@@ -93,3 +93,9 @@ Public sample source: https://huggingface.co/datasets/HumynLabs/Korean_Receipts_
 - Evidence checks recognize Korean holdings summaries and Korean/dotted/compact date tokens. Block holdings-as-spending, dates-as-amounts and generic Korean bank rows without column evidence, even if a heuristic reports high confidence.
 - `korean-layout-regression.ts` covers these behaviors and actual XLSX byte routing. An original synthetic Korean PDF was also rendered and visually checked, then read through the normal file reader: four transactions, dates, balances and the leading-zero account identifier survived native extraction. This does not establish accuracy for all Korean bank PDFs, scans or backup-model outputs.
 - Bump extraction cache and backup prompt versions when deploying these changes. No customer records are rewritten.
+
+## Reviewed merchant corpus and reusable evaluation files
+
+Use `web/lib/korea-indonesia-corpus.ts` for reviewed provider context and `docs/korea-indonesia-corpus-sources.md` for official sources. Category-only aliases must not establish country or currency. Preserve branch/submerchant text, explicit transaction direction and currency, and user-confirmed categories. A row naming incompatible merchant categories remains Other and requires review rather than selecting the first match.
+
+`web/scripts/fixtures/korea-indonesia/` contains original synthetic CSV, receipt-text and actual XLSX examples, a provenance manifest and documented limitations. `qa:regional-corpus` exercises all new aliases through the production category and context paths, and evaluates the files through the parser/workbook reader. These fixtures add repeatable checks, not a claim of coverage for all local institutions or photographed documents.
