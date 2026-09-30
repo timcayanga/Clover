@@ -15,7 +15,7 @@ import {
 import { summarizeMerchantText } from "@/lib/merchant-labels";
 import { assessStatementExtractionQuality } from "@/lib/import-quality";
 
-const OPENAI_PROMPT_VERSION = "clover_bank_statement_extraction_v9";
+const OPENAI_PROMPT_VERSION = "clover_bank_statement_extraction_v10";
 const OPENAI_IMAGE_TRANSCRIPTION_PROMPT_VERSION = "clover_bank_statement_transcription_v3";
 const OPENAI_IMPORT_FAST_MODEL_FALLBACK = "gpt-5.4-mini";
 const OPENAI_IMPORT_STRONG_MODEL_FALLBACK = "gpt-5.5";
@@ -2458,6 +2458,7 @@ const buildOpenAIInputPayload = (params: {
     "Indonesian receipts: distinguish Total Bayar/Jumlah Bayar from Tunai/Uang Diterima and Kembali/Kembalian. Preserve printed PPN/Pajak, Diskon/Potongan, Biaya Layanan and Pembulatan; never assume a tax rate or add included tax twice. No Struk is an identifier, not an item. Gagal, Batal, Dibatalkan and pending statuses are not completed purchases. Expiry/reprint timestamps are not purchase dates. QRIS, BI-FAST, GoPay, OVO and DANA identify payment methods, not by themselves the merchant, category or proof of an internal transfer.",
     "Indonesian labeled payment proofs (Bukti Pembayaran/Detail Transaksi) describe one movement, not a transaction per number. Require final payment/refund status, date, explicit currency and a paid/refunded total; reconcile principal, admin fee and discount without double-counting them. Keep Saldo Akhir only as reported balance evidence, never as spending or an instruction to replace an account balance. Keep transaction IDs as strings. Belum Dibayar, Belum Lunas, Menunggu Pembayaran, Kadaluarsa and Gagal are not posted spending. Selesai/Completed may be a history bucket containing expired or refunded records; do not assume payment success. Explicit Pengembalian Dana Berhasil/Refund Berhasil is incoming, not spending. Conflicting direction/status, multiple proofs or unreconciled totals need review, not guessed rows.",
     "Indonesian investment tables: Nama Produk/Reksa Dana/Saham plus Nilai Pasar/Nilai Investasi and Tanggal Valuasi are labeled holdings snapshots, never expenses. Preserve Sekuritas/Manajer Investasi, Jumlah Unit/Unit Penyertaan, security codes and original evidence. Missing worksheets, valuation dates, provider identities or currency must be flagged for review. A monthly contribution is not a completed transaction or cost basis.",
+    "Indonesian table fidelity: follow the printed column headers even when reordered. Cabang/CBG/Kode Cabang is a branch identifier, never an amount or account number. Keep blank debit, credit and balance cells blank. Join a wrapped description only when its position clearly belongs to the preceding description column; never turn that line into another transaction or guess collapsed money columns. A negative amount labeled Pemasukan, a negative Kredit, or differing populated Nominal and Debet/Kredit values is contradictory evidence and requires review. Do not silently choose one value. Printed Periode can resolve short DD/MM dates in CSV and Excel as well as PDFs, scoped to the applicable worksheet/section; out-of-period dates and conflicting period metadata require review.",
     "Generic few-shot examples:",
     GENERIC_FEW_SHOT_EXAMPLES,
     "For credit card statements, capture payment due date and total amount due whenever the statement shows them.",

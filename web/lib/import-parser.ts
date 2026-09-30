@@ -4,6 +4,7 @@ import { buildIndonesianBankTable } from "@/lib/indonesian-bank-table";
 import { hasRupiahMarker, hasIndonesianMonth, hasIndonesianFinancialHeaders, indonesianFinancialHeader, indonesianInvestmentHeader, indonesianMoneyUnitScale, parseIndonesianAmount, parseIndonesianDate } from "@/lib/indonesian-financial-text";
 import { readIndonesianMoney } from "@/lib/indonesian-money";
 import { parseIndonesianPaymentProof } from "@/lib/indonesian-payment-proof";
+import { readIndonesianStatementPeriod, resolveIndonesianStatementDate } from "@/lib/indonesian-statement-period";
 import { hasHangul, koreanFinancialHeader, koreanInvestmentHeader, normalizeKoreanFinancialText, parseKoreanDate, hasKoreanAmountMarker, parseKoreanAmount, koreanMoneyUnitScale } from "@/lib/korean-financial-text";
 import type { TransactionType } from "@prisma/client";
 import { humanizeMerchantText, summarizeMerchantText } from "@/lib/merchant-labels";
@@ -809,6 +810,7 @@ const canonicalStructuredHeader = (value: string) => {
 };
 
 const canonicalStructuredMetadataKey = (value: string) => {
+  if (/^(?:periode(?: laporan| transaksi| mutasi)?|bulan laporan|statement_period)$/i.test(value.trim())) return "statement_period";
   if (/^(?:satuan|satuan nilai)$/i.test(value.trim())) return "money_unit";
   const indonesianInvestment = indonesianInvestmentHeader(value);
   if (indonesianInvestment === "provider") return "institution";
@@ -833,7 +835,7 @@ const canonicalStructuredMetadataKey = (value: string) => {
 
 const extractStructuredPreambleMetadata = (rows: string[][]) => {
   const metadata: Record<string, string> = {};
-  const indonesian = rows.some(row => row.some(cell => /\b(?:mata uang|rekening|sekuritas|tanggal|satuan|manajer investasi)\b/i.test(cell)));
+  const indonesian = rows.some(row => row.some(cell => /\b(?:mata uang|rekening|sekuritas|tanggal|satuan|manajer investasi|periode|bulan laporan)\b/i.test(cell)));
   rows.forEach((row) => {
     const nonEmpty = row.map((cell) => normalizeWhitespace(cell)).filter(Boolean);
     if (nonEmpty.length === 0) return;
@@ -1157,6 +1159,10 @@ export const parseStructuredTransactionCsv = (
   }
 
   const indonesianTable = hasIndonesianFinancialHeaders(table.headers);
+  if (indonesianTable) {
+    const financialKeys = table.canonicalHeaders.filter(key => ["date", "posted_date", "amount", "debit", "credit", "balance", "currency", "type", "fee", "original_amount", "original_currency"].includes(key));
+    if (new Set(financialKeys).size !== financialKeys.length) throw new Error("Clover found duplicate Indonesian financial columns. Confirm which column contains each value before importing. Nothing was added.");
+  }
   const documentLanguage = indonesianTable ? "Indonesian" : "Korean";
   const metadata = table.preambleMetadata;
   const metadataInstitution = metadata.institution || context.institution || "";
@@ -1204,6 +1210,10 @@ export const parseStructuredTransactionCsv = (
     originalAmount: number | null;
     originalCurrency: string | null;
     optionalCurrencyConflict: boolean;
+    directionConflict: boolean;
+    sourceDateText: string;
+    dateFromPeriod: boolean;
+    statementPeriod: ReturnType<typeof readIndonesianStatementPeriod>["period"];
     rowMetadata: Record<string, string>;
     balanceDelta: number | null;
     continuationSourceRows: string[][];
@@ -1223,7 +1233,10 @@ export const parseStructuredTransactionCsv = (
     const rowInstitution = activeMetadata.institution || metadataInstitution;
     const rowAccountName = activeMetadata.account_name || metadataAccountName;
     const rowContext = resolveRowContext(rowInstitution, rowAccountName);
-    const parsedDate = parseStructuredDate(rawDate, indonesianTable ? "ID" : rowContext.countryCode || contextCorpus.countryCode, dateOrder);
+    const periodEvidence = indonesianTable ? readIndonesianStatementPeriod(activeMetadata.statement_period ? [`Periode: ${activeMetadata.statement_period}`] : []) : { period: null, invalid: false };
+    if (periodEvidence.invalid) throw new Error("Clover could not safely read the Indonesian statement period. Check the printed range before importing. Nothing was added.");
+    const resolvedDate = indonesianTable ? resolveIndonesianStatementDate(rawDate, periodEvidence.period) : null;
+    const parsedDate = indonesianTable ? (resolvedDate ? parseIndonesianDate(resolvedDate.date) : null) : parseStructuredDate(rawDate, rowContext.countryCode || contextCorpus.countryCode, dateOrder);
     const description = normalizeWhitespace(
       readStructuredCell(table, sourceRow, "description") ||
       readStructuredCell(table, sourceRow, "merchant") ||
@@ -1233,14 +1246,14 @@ export const parseStructuredTransactionCsv = (
       const hasContinuationAmount = ["amount", "debit", "credit", "balance", "fee"].some(
         (key) => Boolean(readStructuredCell(table, sourceRow, key).trim())
       );
-      if (localizedTable && description && hasContinuationAmount &&
+      if (localizedTable && description && (hasContinuationAmount || (indonesianTable && rawDate)) &&
           !/^(?:합계|총계|소계|기초잔액|기말잔액|saldo awal|saldo akhir|total mutasi|jumlah mutasi)$/i.test(description)) {
         throw new Error(`Clover could not safely read a date in this ${documentLanguage} transaction table. Check the source row and upload again. Nothing was added.`);
       }
       const previous = candidates.at(-1);
       if (
         previous &&
-        previous.sourceRowIndex === sourceRowIndex - 1 &&
+        previous.sourceRowIndex + (indonesianTable ? previous.continuationSourceRowIndexes.length : 0) === sourceRowIndex - 1 &&
         description &&
         !hasContinuationAmount
       ) {
@@ -1304,6 +1317,14 @@ export const parseStructuredTransactionCsv = (
 
     const rawType = hasDebit ? "debit" : hasCredit ? "credit" :
       readStructuredCell(table, sourceRow, "type") || (/^(?:환불완료|환급완료)$/.test(compactStatus) ? "환불" : /^(?:refund|pengembalian dana) (?:selesai|berhasil)$/i.test(status) ? "pengembalian dana" : "");
+    const columnDirection = hasDebit ? "expense" : hasCredit ? "income" : null;
+    const typeDirection = structuredDirectionType(readStructuredCell(table, sourceRow, "type"), "", "", 1, null, null, false, false);
+    const amountDirection = structuredDirectionType("", "", amountText, signedAmount ?? amountValue, null, null, false, false);
+    const directions = [columnDirection,
+      typeDirection.evidence === "explicit_type" && typeDirection.type !== "transfer" ? typeDirection.type : null,
+      amountDirection.evidence === "amount_sign" ? amountDirection.type : null].filter(Boolean);
+    const directionConflict = indonesianTable && (new Set(directions).size > 1 || (hasCredit && credit! < 0) ||
+      Boolean(columnDirection && signedAmount !== null && Math.abs(Math.abs(signedAmount) - amountValue) > 0.01));
     const merchantRaw = normalizeWhitespace(readStructuredCell(table, sourceRow, "merchant") || description);
     const currencyText = normalizeWhitespace(
       readStructuredCell(table, sourceRow, "currency") ||
@@ -1367,6 +1388,10 @@ export const parseStructuredTransactionCsv = (
       originalAmount,
       originalCurrency,
       optionalCurrencyConflict,
+      directionConflict,
+      sourceDateText: rawDate,
+      dateFromPeriod: resolvedDate?.fromPeriod ?? false,
+      statementPeriod: periodEvidence.period,
       rowMetadata: { ...activeMetadata },
       balanceDelta: null,
       continuationSourceRows: [],
@@ -1447,6 +1472,7 @@ export const parseStructuredTransactionCsv = (
     const amountCurrency = amountEvidence?.currency;
     const localizedReviewReason = localizedHeaders
       ? /^(?:환불완료|환급완료|(?:refund|pengembaliandana)(?:selesai|berhasil))$/i.test(candidate.status.replace(/\s/g, "")) && direction.type !== "income" ? "Refund status conflicts with the transaction direction. Confirm whether money was returned."
+        : candidate.directionConflict ? "The amount, sign, debit/credit columns or transaction type disagree. Confirm the movement before importing."
         : balanceReconciliation === "mismatch" ? "The running balance does not reconcile with this amount. Confirm the amount and direction."
         : !candidate.currency ? "Confirm the document currency."
         : candidate.optionalCurrencyConflict ? "The balance, fee or original amount has a conflicting currency. Confirm its currency before importing."
@@ -1475,6 +1501,7 @@ export const parseStructuredTransactionCsv = (
         source: "structured_transaction_csv",
         ...(localizedReviewReason ? { reviewRequired: true, reviewReason: localizedReviewReason, reviewReasons: [localizedReviewReason] } : {}),
         ...(localizedHeaders ? { sourceCells: candidate.sourceRow } : {}),
+        ...(indonesianTable ? { sourceDateText: candidate.sourceDateText, dateFromPeriod: candidate.dateFromPeriod, statementPeriod: candidate.statementPeriod, directionConflict: candidate.directionConflict } : {}),
         sourceRowIndex: table.headerIndex + candidate.sourceRowIndex + 2,
         continuationSourceRowIndexes: candidate.continuationSourceRowIndexes.map(
           (sourceRowIndex) => table.headerIndex + sourceRowIndex + 2
@@ -24478,6 +24505,7 @@ const parseIndonesianBankDocument = (text: string, context: ImportParseContext):
           sourceText: source?.text ?? text, sourceLineNumber: source?.lineNumber ?? null,
           sourceDateText: source?.sourceDateText ?? null, dateFromPeriod: source?.dateFromPeriod ?? false,
           statementPeriod: source?.statementPeriod ?? null,
+          originalHeaders: table.headers, continuationLines: source?.continuationLines ?? [],
           parserEvidence: { source_text: source?.text ?? text, reason: "Explicit Indonesian bank columns" },
           reviewRequired: true, reviewReasons: [...(Array.isArray(row.rawPayload?.reviewReasons) ? row.rawPayload.reviewReasons : []),
             "Confirm the account, Rupiah amounts and transaction columns against the Indonesian statement."],

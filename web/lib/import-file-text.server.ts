@@ -4,6 +4,7 @@ import { buildKoreanBankTable, koreanBankTableHeader } from "@/lib/korean-bank-t
 import { buildIndonesianBankTable, indonesianBankTableHeader } from "@/lib/indonesian-bank-table";
 import { hasIndonesianFinancialText, parseIndonesianAmount } from "@/lib/indonesian-financial-text";
 import { looksLikeIndonesianPaymentProof, parseIndonesianPaymentProof } from "@/lib/indonesian-payment-proof";
+import { formatIndonesianBankPdfRows } from "@/lib/indonesian-pdf-columns";
 import { createRequire } from "node:module";
 import { createHash } from "node:crypto";
 import { dirname, join, sep } from "node:path";
@@ -2305,8 +2306,9 @@ export const buildLayoutAwarePdfTextFromContentItems = (items: PdfTextContentIte
     return hasKoreanBankColumns ? line.trim() : line.replace(/\s+/g, " ").trim();
   };
 
+  const indonesianRows = formatIndonesianBankPdfRows(rows);
   return rows
-    .map((row) => buildRowText(row))
+    .map((row, index) => indonesianRows[index] ?? buildRowText(row))
     .filter((line) => line.length > 0)
     .join("\n");
 };
@@ -2410,7 +2412,7 @@ const buildSimplePdfTextFromContentItems = (items: PdfTextContentItemLike[]) => 
 
 const pickBetterPdfTextLayerCandidate = (simpleText: string, layoutAwareText: string) => {
   const simple = simpleText.trim();
-  const layout = layoutAwareText.trim();
+  const layout = layoutAwareText.replace(/^[\r\n]+|[\r\n]+$/g, "");
 
   if (!simple && !layout) {
     return "";

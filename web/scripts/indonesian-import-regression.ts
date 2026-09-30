@@ -84,7 +84,7 @@ assert.doesNotThrow(()=>assertSafeImportEvidence([{amount:"2026",rawPayload:{sou
 const cellRows = [...documentPreamble.map(text=>[text]), docHeader.split(/ {2,}/), ...docRows.map(line=>line.split(/ {2,}/))];
 const xs=[10,160,340,450,570];
 const layout = buildLayoutAwarePdfTextFromContentItems(cellRows.flatMap((cells,row)=>cells.map((str,col)=>({str,transform:[1,0,0,1,xs[col]!,700-row*20],width:col===0?100:70,height:10}))));
-assert.match(layout,/Warung Contoh\t125\.000,50/);
+assert.match(layout,/Warung Contoh(?:\t|\|)125\.000,50/);
 assert.equal(pdfTextLayerLooksSufficientForParsing(layout),true);
 assert.equal(parseImportText(layout,"mutasi.pdf","application/pdf").length,2);
 assert.equal(pdfTextLayerLooksSufficientForParsing(layout.replace("Warung", "\uFFFD")),false);

@@ -194,7 +194,7 @@
     "qa:switch-campaign": "tsx scripts/switch-campaign-regression.ts",
     "qa:ai-consent": "tsx scripts/ai-consent-regression.ts",
     "qa:adviser-reliability": "tsx scripts/adviser-reliability-regression.ts",
-    "qa:indonesian-import": "tsx scripts/indonesian-import-regression.ts && tsx scripts/indonesian-import-extended-regression.ts"
+    "qa:indonesian-import": "tsx scripts/indonesian-import-regression.ts && tsx scripts/indonesian-import-extended-regression.ts && tsx scripts/indonesian-layout-regression.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1095.0",
