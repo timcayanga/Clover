@@ -27,7 +27,7 @@ import {
 import { isTrustedMetadataOnlyWiseStatement } from "@/lib/metadata-only-statement";
 import { applyStatementFilenameCoverage } from "@/lib/statement-filename-coverage";
 import { summarizeMerchantText } from "@/lib/merchant-labels";
-import { applyDeterministicMerchantRescue } from "@/lib/merchant-enrichment";
+import { applyDeterministicMerchantRescue, hasConfirmedMerchantCategoryRule } from "@/lib/merchant-enrichment";
 import {
   isLikelyScreenshotDateFragment,
   isLikelyScreenshotUiArtifactText,
@@ -7544,7 +7544,7 @@ const applyMerchantRescueToEnrichedRow = (
     merchantClean: row.merchantClean ?? parsedRow?.merchantClean ?? null,
     description: row.description ?? parsedRow?.description ?? null,
     categoryName: preserveParserCategory ? parsedRow.categoryName : row.categoryName ?? parsedRow?.categoryName ?? null,
-    preserveCategory: preserveParserCategory,
+    preserveCategory: preserveParserCategory || hasConfirmedMerchantCategoryRule(row.rawPayload),
     type: row.type === "income" || row.type === "expense" || row.type === "transfer" ? row.type : parsedRow?.type,
     institution: row.institution ?? parsedRow?.institution ?? null,
   });

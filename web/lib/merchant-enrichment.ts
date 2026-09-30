@@ -1,5 +1,6 @@
 import { getStrongMerchantCategoryHint } from "@/lib/merchant-category-hints";
 import { summarizeMerchantText } from "@/lib/merchant-labels";
+import { getIndonesianIncomeCategoryHint } from "@/lib/indonesian-merchant-context";
 
 export type MerchantEnrichmentInput = {
   merchantRaw?: string | null;
@@ -23,6 +24,16 @@ const nonEmpty = (value: string | null | undefined) => (typeof value === "string
 
 const isAllCapsMerchant = (value: string) => /[A-Z]{4,}/.test(value) && value === value.toUpperCase();
 
+export const hasConfirmedMerchantCategoryRule = (rawPayload: unknown): boolean => {
+  if (!rawPayload || typeof rawPayload !== "object" || !("classification" in rawPayload)) return false;
+  const classification = rawPayload.classification;
+  if (!classification || typeof classification !== "object") return false;
+  const { categorySource, categoryReason } = classification as Record<string, unknown>;
+  return typeof categorySource === "string" &&
+    (categorySource === "manual" || categorySource.startsWith("manual_") || categorySource === "import_confirmation") &&
+    (categoryReason === "rule-exact" || categoryReason === "learned-exact");
+};
+
 export const applyDeterministicMerchantRescue = (input: MerchantEnrichmentInput): MerchantEnrichmentResult => {
   const raw = nonEmpty(input.merchantRaw);
   const clean = nonEmpty(input.merchantClean);
@@ -37,6 +48,7 @@ export const applyDeterministicMerchantRescue = (input: MerchantEnrichmentInput)
     (value): value is string => Boolean(value)
   );
   const hint =
+    getIndonesianIncomeCategoryHint(raw || description || clean || "", input.type ?? "expense") ??
     hintCandidates.map((value) => getStrongMerchantCategoryHint(value)).find(Boolean) ??
     (hintCandidates.length > 0 ? getStrongMerchantCategoryHint(hintCandidates.join(" ")) : null);
   const currentCategory = nonEmpty(input.categoryName);

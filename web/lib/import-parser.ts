@@ -1,3 +1,4 @@
+import { getIndonesianMerchantCategoryHint, getIndonesianIncomeCategoryHint, needsIndonesianPaymentCategoryReview } from "@/lib/indonesian-merchant-context";
 import { isKoreanInvestmentHeader, parseKoreanInvestmentTable, isIndonesianInvestmentHeader, parseIndonesianInvestmentTable } from "@/lib/korean-investment-table";
 import { buildKoreanBankTable } from "@/lib/korean-bank-table";
 import { buildIndonesianBankTable } from "@/lib/indonesian-bank-table";
@@ -193,6 +194,8 @@ const isLikelyPersonToPersonMerchant = (value?: string | null) => {
 };
 
 export const guessCategoryName = (text: string, type: TransactionType) => {
+  const indonesianHint = getIndonesianIncomeCategoryHint(text, type) ?? getIndonesianMerchantCategoryHint(text);
+  if (indonesianHint) return indonesianHint;
   const lower = text.toLowerCase();
   const compact = compactWhitespace(text).toLowerCase();
   if (isStatementPaymentSettlementDescription(text)) return "Transfers";
@@ -1484,6 +1487,12 @@ export const parseStructuredTransactionCsv = (
       : null;
     const categoryName = candidate.categoryRaw ||
       guessCategoryName(`${candidate.merchantRaw} ${candidate.description}`, direction.type);
+    const finalReviewReason = localizedReviewReason ?? (
+      indonesianTable && !candidate.categoryRaw && categoryName === "Other" &&
+      needsIndonesianPaymentCategoryReview(`${candidate.merchantRaw} ${candidate.description}`)
+        ? "Confirm the category and whether this payment is a purchase or movement between your own accounts. A payment rail or wallet name alone cannot decide this."
+        : null
+    );
     rows.push({
       date: candidate.parsedDate.toISOString().slice(0, 10),
       amount: candidate.amountValue.toFixed(2),
@@ -1496,12 +1505,12 @@ export const parseStructuredTransactionCsv = (
       accountNumber: candidate.accountNumber || undefined,
       institution: candidate.institution ?? undefined,
       type: direction.type,
-      confidence: localizedReviewReason ? 55 : candidate.currency ? 96 : 92,
-      parserConfidence: localizedReviewReason ? 55 : 98,
-      categoryConfidence: candidate.categoryRaw ? 100 : 72,
+      confidence: finalReviewReason ? 55 : candidate.currency ? 96 : 92,
+      parserConfidence: finalReviewReason ? 55 : 98,
+      categoryConfidence: candidate.categoryRaw ? 100 : categoryName === "Other" ? 35 : 72,
       rawPayload: {
         source: "structured_transaction_csv",
-        ...(localizedReviewReason ? { reviewRequired: true, reviewReason: localizedReviewReason, reviewReasons: [localizedReviewReason] } : {}),
+        ...(finalReviewReason ? { reviewRequired: true, reviewReason: finalReviewReason, reviewReasons: [finalReviewReason] } : {}),
         ...(localizedHeaders ? { sourceCells: candidate.sourceRow } : {}),
         ...(indonesianTable ? { sourceDateText: candidate.sourceDateText, dateFromPeriod: candidate.dateFromPeriod, statementPeriod: candidate.statementPeriod, directionConflict: candidate.directionConflict } : {}),
         sourceRowIndex: table.headerIndex + candidate.sourceRowIndex + 2,

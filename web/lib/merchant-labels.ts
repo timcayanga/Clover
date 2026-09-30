@@ -1,3 +1,4 @@
+import { normalizeIndonesianServiceLabel } from "@/lib/indonesian-merchant-context";
 import { getEuropeMerchantLabel } from "@/lib/europe-merchant-corpus";
 import { getUkMerchantLabel } from "@/lib/uk-merchant-corpus";
 
@@ -2708,6 +2709,8 @@ export const simplifyMerchantText = (value: string, institution?: string | null)
 };
 
 export const summarizeMerchantText = (value: string, institution?: string | null) => {
+  const indonesianService = normalizeIndonesianServiceLabel(humanizeMerchantText(value));
+  if (indonesianService) return indonesianService;
   const simplified = simplifyMerchantText(value, institution);
   const compact = simplified.replace(/[^a-z0-9]+/gi, "").toLowerCase();
   const rawLower = normalizeWhitespace(value).toLowerCase();

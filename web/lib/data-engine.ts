@@ -1,3 +1,4 @@
+import { getIndonesianMerchantCategoryHint, getIndonesianIncomeCategoryHint, needsIndonesianPaymentCategoryReview } from "@/lib/indonesian-merchant-context";
 import { Prisma } from "@prisma/client";
 import type { AccountType, TransactionType } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
@@ -30,7 +31,7 @@ import { deriveTravelEpisodes, resolveTransactionContext } from "@/lib/context-c
 import { coerceTransactionTypeFromCategoryName, toInternalTransactionType } from "@/lib/transaction-directions";
 
 export const DATA_ENGINE_VERSION = "v2";
-export const IMPORT_FILE_EXTRACTION_CACHE_VERSION = "v23";
+export const IMPORT_FILE_EXTRACTION_CACHE_VERSION = "v24";
 export const resolveImportFileExtractionCacheVersion = (fileName?: string | null) => {
   const normalizedFileName = String(fileName ?? "");
   if (/^BE\d{8}\.pdf$/i.test(normalizedFileName.trim())) {
@@ -539,6 +540,7 @@ export const extractLastFourDigits = (value?: string | null) => {
 };
 
 const getHardcodedCategoryOverride = (merchantText: string) => {
+  if (needsIndonesianPaymentCategoryReview(merchantText)) return null;
   const lower = merchantText.toLowerCase();
   const compact = normalizeWhitespace(merchantText).replace(/\s+/g, "").toLowerCase();
   const hasTravelContext =
@@ -729,6 +731,7 @@ const getHardcodedCategoryOverride = (merchantText: string) => {
 };
 
 const isContextualCategoryOverride = (merchantText: string, categoryName: string) => {
+  if (getIndonesianMerchantCategoryHint(merchantText) === categoryName) return true;
   const lower = merchantText.toLowerCase();
   const compact = normalizeWhitespace(merchantText).replace(/\s+/g, "").toLowerCase();
   const hasTravelContext =
@@ -1518,6 +1521,8 @@ export const buildTrainingSignalDedupeKey = (params: {
   ].join("|");
 
 export const guessCategoryFallback = (description: string, type: TransactionType) => {
+  const indonesianHint = getIndonesianIncomeCategoryHint(description, type) ?? getIndonesianMerchantCategoryHint(description);
+  if (indonesianHint) return indonesianHint;
   const lower = description.toLowerCase();
   const compact = normalizeWhitespace(description).replace(/\s+/g, "").toLowerCase();
   if (isStatementPaymentSettlementDescription(description)) return "Transfers";
@@ -1644,6 +1649,9 @@ const rescueHeuristicCategory = (params: {
   heuristicCategory: string;
   merchantCandidates: string[];
 }) => {
+  // Removing a rail/top-up word from a candidate must not manufacture a merchant
+  // identity or turn an explicitly uncertain payment into a high-confidence row.
+  if (params.heuristicCategory === "Other" && needsIndonesianPaymentCategoryReview(params.merchantText)) return null;
   const baseText = [params.categoryText, params.merchantText, ...params.merchantCandidates]
     .filter((value): value is string => typeof value === "string" && value.trim().length > 0)
     .join(" ");
@@ -4330,10 +4338,11 @@ export const classifyMerchant = (params: {
   const categoryText = [params.categoryText, ...merchantCandidates].filter((value) => typeof value === "string" && value.trim()).join(" ");
   const tokens = tokenizeMerchant(categoryText || params.merchantText);
   const providedCategory = params.categoryName?.trim();
-  const hardcodedOverride = isRcbcPaymentCredit(providedCategory)
+  const hardcodedOverride = isRcbcPaymentCredit(providedCategory) || getIndonesianIncomeCategoryHint(params.merchantText, params.type)
     ? null
     : getHardcodedCategoryOverride(categoryText || params.merchantText);
-  const strongMerchantCategory = getStrongMerchantCategoryHint(categoryText || params.merchantText);
+  const strongMerchantCategory = getIndonesianIncomeCategoryHint(params.merchantText, params.type) ??
+    getStrongMerchantCategoryHint(categoryText || params.merchantText);
   const parsedTransferContradictedByMerchant =
     !isRcbcPaymentCredit(providedCategory) &&
     providedCategory?.toLowerCase() === "transfers" &&

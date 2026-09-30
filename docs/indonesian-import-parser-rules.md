@@ -52,9 +52,20 @@ These rules cover Bahasa Indonesia financial text and Rupiah (IDR) on new import
 - Support labeled XLSX, XLS, XLSB and ODS tables through the existing workbook reader. Preserve worksheet names, real date serials and padded IDs; fail on unreadable financial sheets instead of claiming partial success. Existing XLSM handling remains in the shared reader.
 - Keep confidence/review reasons with extracted values. Backup outputs are suggestions; durable merchant learning still requires user confirmation. No migrations, new environment variables or confirmed-record rewrites are part of this change.
 
+## Merchant enrichment and category review
+
+- Recognize specific Indonesian service and merchant evidence before person-name heuristics. Short descriptors such as `GoFood Indonesia`, `Ruangguru Indonesia` and `Gaji September` must not become transfers just because they resemble names.
+- Suggest food delivery, groceries, transport/fuel, education, healthcare, utilities and shopping using bounded provider names and explicit Bahasa phrases. Keep these suggestions below confirmed confidence. Vocabulary does not infer currency, country or account ownership.
+- Preserve GoFood/ShopeeFood, GoRide/GoCar and GoPay/ShopeePay as different services. Keep named submerchants and branches in the label and preserve original source descriptions separately. Do not collapse all wallet merchants to a single learned identity.
+- A standalone `Biaya Admin`/`Biaya Adm`, `Biaya Transfer`, `Biaya Tarik Tunai` or `Pajak Bunga` row suggests Financial. A fee mentioned inside a purchase description must not recategorize the entire purchase. `Gaji` and `Bunga Tabungan` suggest Income only when printed money-in evidence agrees.
+- QRIS, BI-FAST, Xendit and wallet funding alone do not establish a purchase category or own-account transfer. Keep ambiguous categories as Other, at low confidence, with a review reason; do not turn that uncertainty into a 99-confidence override during enrichment. Printed debit/credit direction remains intact.
+- Respect explicit spreadsheet categories and exact user-confirmed merchant rules, including categories such as Transfers that differ from the general merchant suggestion. Backup extraction follows the same semantics; its outputs remain suggestions rather than shared learned rules.
+- Corrected corpus groups distinguish food delivery from subscriptions, schools from healthcare, fuel from utilities, groceries from ecommerce and urban transit from travel booking. SeaBank and blu by BCA are bank context, not wallets. Generic Gojek/Grab app names do not specify which service was used.
+- Extraction cache version `v24` and backup prompt version `clover_bank_statement_extraction_v11` prevent older extraction suggestions from masking these changes on new processing. Existing confirmed transactions are not rewritten.
+
 ## Verification and limits
 
-`npm --prefix web run qa:indonesian-import` covers amounts, dates, currency conflicts, CSV ledgers, balances, PDF column extraction, statement-period dates, receipts, payment/refund proofs, unpaid/ambiguous statuses, QRIS, investment metadata and actual XLSX/XLS/XLSB/ODS bytes. The layout suite adds reordered/empty columns, description continuations, branch identifiers, contradictory movement evidence, duplicate columns and worksheet-scoped periods. All three suites run in the standard release/pre-push gate and CI. Existing Korean, structured-import, financial-identity, arbitration and confirmed-data checks remain required.
+`npm --prefix web run qa:indonesian-import` covers amounts, dates, currency conflicts, CSV ledgers, balances, PDF column extraction, statement-period dates, receipts, payment/refund proofs, unpaid/ambiguous statuses, QRIS, investment metadata and actual XLSX/XLS/XLSB/ODS bytes. The layout suite adds reordered/empty columns, description continuations, branch identifiers, contradictory movement evidence, duplicate columns and worksheet-scoped periods. The enrichment suite additionally covers local classification, raw evidence, backup-result rescue, category confidence, foreign-currency controls and exact confirmed-rule precedence. All four suites run in the standard release/pre-push gate and CI. Existing Korean, structured-import, financial-identity, arbitration and confirmed-data checks remain required.
 
 On 1 October 2026, original synthetic bank/receipt PDFs were rendered and visually inspected. The normal file reader preserved all three bank rows, their IDR amounts and account `00001234`; local OCR of the receipt PNG recovered total 60000 IDR, two items, receipt `000123` and date 2026-09-30. These samples contain no customer data and were not sent to external AI. They do not establish coverage of every Indonesian bank, e-wallet, handwritten receipt or brokerage format.
 
@@ -71,3 +82,15 @@ A subsequent synthetic PDF with blank debit/credit cells, a wrapped description 
 - GoPay transaction-history and payment-proof fields: https://gopay.co.id/bantuan/tentang-gopay/bagaimana-cara-melihat-riwayat-transaksi-gopay
 - DANA history status definitions (Completed includes paid, expired or refunded): https://www.dana.id/help-center/article/how-can-i-check-dana-transaction-history
 - BCA foreign-currency accounts and e-statements: https://www.bca.co.id/id/Individu/layanan/e-banking/mybca/poket-valas
+
+- Gojek service distinctions: https://www.gojek.com/blog/gojek/cara-pesan
+- ShopeeFood food-delivery service: https://www.shopeefood.co.id/
+- Ruangguru education: https://www.ruangguru.com/about-us
+- Pertamina Dex fuel: https://onesolution.pertamina.com/Insight/Page/ini-dia-jenis-bahan-bakar-mesin-diesel-pertamina
+- Indomaret retail: https://www.indomaret.co.id/tentang-kami/tentang-indomaret/
+- SeaBank institution: https://www.seabank.co.id/perusahaan/info/seabank
+- blu by BCA Digital banking: https://bcadigital.co.id/documents/press/20210630.pdf
+- Guardian health and beauty retail: https://guardianindonesia.co.id/
+- Watsons Indonesia health and beauty retail: https://www.watsons.co.id/id/
+- MRT Jakarta public transport: https://www.jakartamrt.co.id/
+- Traveloka travel services: https://www.traveloka.com/en-ph/about-us

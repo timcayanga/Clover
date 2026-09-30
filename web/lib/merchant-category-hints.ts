@@ -1,3 +1,4 @@
+import { getIndonesianMerchantCategoryHint, hasIndonesianNeutralPaymentContext } from "@/lib/indonesian-merchant-context";
 import { getEuropeMerchantCategoryHint } from "@/lib/europe-merchant-corpus";
 import { getUkMerchantCategoryHint } from "@/lib/uk-merchant-corpus";
 
@@ -122,6 +123,8 @@ const getSpecificMerchantCategoryHint = (value: string) => {
 };
 
 export const getStrongMerchantCategoryHint = (value: string): string | null => {
+  const indonesianHint = getIndonesianMerchantCategoryHint(value);
+  if (indonesianHint) return indonesianHint;
   const europeMerchantHint = getEuropeMerchantCategoryHint(value);
   if (europeMerchantHint) {
     return europeMerchantHint;
@@ -271,6 +274,7 @@ export const getStrongMerchantCategoryHint = (value: string): string | null => {
 };
 
 export const isLikelyPersonTransferName = (value: string) => {
+  if (hasIndonesianNeutralPaymentContext(value) || getIndonesianMerchantCategoryHint(value)) return false;
   const normalized = normalizeWhitespace(value);
   if (!normalized) {
     return false;
@@ -306,6 +310,7 @@ export const isLikelyPersonTransferName = (value: string) => {
 };
 
 export const shouldTreatAsTransferDescription = (value: string) => {
+  if (hasIndonesianNeutralPaymentContext(value)) return false;
   if (getStrongMerchantCategoryHint(value)) {
     return false;
   }
@@ -314,6 +319,9 @@ export const shouldTreatAsTransferDescription = (value: string) => {
 };
 
 export const getSharedMerchantCategoryHint = (value: string): string | null => {
+  const indonesianHint = getIndonesianMerchantCategoryHint(value);
+  if (indonesianHint) return indonesianHint;
+  if (hasIndonesianNeutralPaymentContext(value)) return "Other";
   const normalized = normalizeWhitespace(value);
   if (!normalized) {
     return null;

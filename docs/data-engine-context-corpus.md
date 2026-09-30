@@ -187,3 +187,7 @@ Workspace-scoped manual merchant or category corrections are persisted before th
 ## Adding an entry
 
 Prefer a narrow alias and an explicit semantic meaning. Include a negative example when an alias is commonly ambiguous. Do not add a merchant to a shared corpus solely because one user confirmed it; that belongs in workspace-scoped learning rules.
+
+## Indonesian semantic corrections, 1 October 2026
+
+Corpus `2026.10.01.2` separates mixed Indonesian alias groups by actual purpose: GoFood/ShopeeFood food delivery, Ruangguru/university education, Pertamina fuel, Indomaret/Alfamart/Superindo groceries, Blibli ecommerce and MRT Jakarta transport. SeaBank and blu by BCA use bank context. Gojek/Grab parent apps remain service-neutral. Original aliases remain searchable, and no direction or own-account transfer is inferred from these corrections. Bounded merchant hints and the import enrichment regression exercise the operational category path as well as corpus lookup; explicit source currency and user-confirmed merchant rules remain authoritative.
