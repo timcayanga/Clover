@@ -1,5 +1,7 @@
 # Korean financial imports
 
+Structured JSON exports also follow `docs/financial-exchange-parser-rules.md`. The regional adapter preserves local calendar dates, leading-zero account identities, source records and separate normalized labels. Unreadable populated records reject the entire export; conflicting directions/currencies require review. `qa:bank-export-corpus` adds original synthetic Korean/Indonesian export and encoded-file cases. This does not add a KFTC bank connector or native API-response import.
+
 ## Scope
 
 Korean (Hangul) text and KRW are independent signals. Never assign currency solely from language, merchant country or the user's home currency. These rules apply to new imports; they do not rewrite confirmed transactions, accounts or historical balances.

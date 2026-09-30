@@ -51,3 +51,9 @@ Corrections move GS THE FRESH, GS25, CU and E-mart into grocery context, Hyundai
 `web/scripts/fixtures/korea-indonesia-public/` adds 33 licensed post-OCR examples: seven visually transcribed Korean receipt images from HumynLabs and 26 CORD v2 Indonesian annotation excerpts. The README contains CC BY 4.0 attribution and transformation details; the manifest retains source revisions, hashes, expected financial fields and review requirements. This corpus is independent of the earlier synthetic fixtures and merchant aliases.
 
 Use `qa:public-receipt-corpus` for the regression. It checks exact or explicitly unresolved totals, no invented currency/merchant/date, raw text retention and exclusion from the fast path. Current result: 31 correct printed totals, two unresolved, all 33 requiring review. This is development-set text parsing, not image OCR accuracy or production success rate. Same-purchase receipt views share a family to prevent future split leakage.
+
+## Bank exports, October 1 expansion
+
+`web/scripts/fixtures/korea-indonesia-bank-exports/` adds 89 original synthetic cases (44 Korean, 45 Indonesian) for generic financial JSON exports, localized ledgers and encoded files. Public [KFTC transaction-list](https://developers.kftc.or.kr/dev/openapi/open-banking/transaction) and [BRI SNAP statement](https://developers.bri.co.id/id/snap-bi/api-bank-statement-snap-bi-v1.0) specifications inform the date, direction, balance and pagination scenarios. No private statements or copied provider example payloads are included.
+
+The manifest records sources, hashes, independently authored expected fields, rejection cases and related-template families. `qa:bank-export-corpus` checks the complete deterministic parsing path and review/provenance behavior. Native API envelopes are negative cases, not newly supported bank integrations. See the fixture README for coverage and limitations; this is a development regression set, not measured production accuracy.

@@ -1,5 +1,7 @@
 # Indonesian financial imports
 
+Structured JSON exports also follow `docs/financial-exchange-parser-rules.md`. The regional adapter distinguishes JSON numbers from localized Rupiah strings, preserves printed dates and source account identities, and reuses ledger direction/status/review checks. Unreadable populated records reject the entire export. `qa:bank-export-corpus` adds original synthetic Indonesian/Korean export and encoded-file cases. Native SNAP envelopes remain unsupported; this does not add bank connections.
+
 ## Scope and evidence
 
 These rules cover Bahasa Indonesia financial text and Rupiah (IDR) on new imports. Language, institution country and a user's default currency do not prove the document's currency. Preserve confirmed data and keep original files, source cells/lines, headers, row indexes and report metadata separate from normalized values.

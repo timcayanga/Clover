@@ -1,4 +1,5 @@
 import { getRegionalMerchantCategoryHint } from "@/lib/korea-indonesia-corpus";
+import { parseRegionalJsonFinancialExport } from "@/lib/regional-json-financial-export";
 import { getIndonesianMerchantCategoryHint, getIndonesianIncomeCategoryHint, needsIndonesianPaymentCategoryReview } from "@/lib/indonesian-merchant-context";
 import { isKoreanInvestmentHeader, parseKoreanInvestmentTable, isIndonesianInvestmentHeader, parseIndonesianInvestmentTable } from "@/lib/korean-investment-table";
 import { buildKoreanBankTable } from "@/lib/korean-bank-table";
@@ -1329,7 +1330,7 @@ export const parseStructuredTransactionCsv = (
       typeDirection.evidence === "explicit_type" && typeDirection.type !== "transfer" ? typeDirection.type : null,
       amountDirection.evidence === "amount_sign" ? amountDirection.type : null].filter(Boolean);
     const debitCreditMarker = hasDebit && /\s+(?:CR|K)$/i.test(debitText.trim());
-    const directionConflict = indonesianTable && (new Set(directions).size > 1 || debitCreditMarker || (hasCredit && credit! < 0) ||
+    const directionConflict = localizedTable && (new Set(directions).size > 1 || debitCreditMarker || (hasCredit && credit! < 0) ||
       Boolean(columnDirection && signedAmount !== null && Math.abs(Math.abs(signedAmount) - amountValue) > 0.01));
     const merchantRaw = normalizeWhitespace(readStructuredCell(table, sourceRow, "merchant") || description);
     const currencyText = normalizeWhitespace(
@@ -1356,11 +1357,11 @@ export const parseStructuredTransactionCsv = (
       normalizeCurrencyCode(readStructuredCell(table, sourceRow, "original_currency")) ??
       (indonesianTable ? readIndonesianMoney(readStructuredCell(table, sourceRow, "original_amount")).currency : null) ??
       normalizeCurrencyCode(detectCurrencyFromText(`${readStructuredCell(table, sourceRow, "original_amount")} ${table.headers[table.canonicalHeaders.indexOf("original_amount")] ?? ""}`));
-    const optionalCurrencyConflict = indonesianTable && ["balance", "fee", "original_amount"].some(key => {
+    const optionalCurrencyConflict = localizedTable && ["balance", "fee", "original_amount"].some(key => {
       const text = readStructuredCell(table,sourceRow,key);
       if (!text) return false;
       const evidence = detectCurrencyEvidence(`${text} ${table.headers[table.canonicalHeaders.indexOf(key)] ?? ""}`);
-      const explicit = readIndonesianMoney(text).currency ?? evidence.currency;
+      const explicit = (indonesianTable ? readIndonesianMoney(text).currency : null) ?? evidence.currency;
       const expected = key === "original_amount" ? originalCurrency : currency;
       return evidence.ambiguous || Boolean(explicit && expected && explicit !== expected);
     });
@@ -1467,6 +1468,7 @@ export const parseStructuredTransactionCsv = (
         candidate.institution ?? "",
         candidate.accountName,
         candidate.accountNumber,
+        candidate.currency ?? "",
       ].join("|").toLowerCase();
       if (seenReferences.has(dedupeKey)) return;
       seenReferences.add(dedupeKey);
@@ -1515,7 +1517,8 @@ export const parseStructuredTransactionCsv = (
         source: "structured_transaction_csv",
         ...(finalReviewReason ? { reviewRequired: true, reviewReason: finalReviewReason, reviewReasons: [finalReviewReason] } : {}),
         ...(localizedHeaders ? { sourceCells: candidate.sourceRow } : {}),
-        ...(indonesianTable ? { sourceDateText: candidate.sourceDateText, dateFromPeriod: candidate.dateFromPeriod, statementPeriod: candidate.statementPeriod, directionConflict: candidate.directionConflict } : {}),
+        ...(localizedHeaders ? { directionConflict: candidate.directionConflict } : {}),
+        ...(indonesianTable ? { sourceDateText: candidate.sourceDateText, dateFromPeriod: candidate.dateFromPeriod, statementPeriod: candidate.statementPeriod } : {}),
         sourceRowIndex: table.headerIndex + candidate.sourceRowIndex + 2,
         continuationSourceRowIndexes: candidate.continuationSourceRowIndexes.map(
           (sourceRowIndex) => table.headerIndex + sourceRowIndex + 2
@@ -26687,6 +26690,8 @@ const parseJsonFinancialExport = (text: string, context: ImportParseContext): Pa
   } catch {
     return null;
   }
+  const regionalRows = parseRegionalJsonFinancialExport(payload, context, parseStructuredTransactionCsv);
+  if (regionalRows !== null) return regionalRows;
   const root = payload && typeof payload === "object" && !Array.isArray(payload) ? payload as Record<string, unknown> : null;
   const nestedData = root?.data && typeof root.data === "object" && !Array.isArray(root.data)
     ? root.data as Record<string, unknown>
