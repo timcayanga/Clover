@@ -438,8 +438,8 @@ assert.match(
 );
 assert.match(
   openAIParserSource,
-  /OPENAI_RECEIPT_CORE_VISION_MAX_LONGEST_EDGE = 1120/,
-  "The core-first server request should compact easy receipt images more aggressively than its detail pass."
+  /OPENAI_RECEIPT_CORE_VISION_MAX_LONGEST_EDGE = 1440/,
+  "The core pass must retain enough image resolution for small grand-total, tender and currency labels."
 );
 assert.match(
   openAIParserSource,

@@ -1,5 +1,6 @@
 import { maySendToCloudAi } from "./ai-consent";
 import { RECEIPT_MONEY_GUIDANCE } from "./receipt-money-guidance";
+import { enforceRegionalReceiptCurrencyEvidence } from "./receipt-currency-evidence";
 import { z } from "zod";
 import { getEnv } from "@/lib/env";
 import { assessFinancialUploadScope } from "@/lib/financial-upload-scope";
@@ -16,7 +17,7 @@ import {
 import { summarizeMerchantText } from "@/lib/merchant-labels";
 import { assessStatementExtractionQuality } from "@/lib/import-quality";
 
-const OPENAI_PROMPT_VERSION = "clover_bank_statement_extraction_v12";
+const OPENAI_PROMPT_VERSION = "clover_bank_statement_extraction_v13";
 const OPENAI_IMAGE_TRANSCRIPTION_PROMPT_VERSION = "clover_bank_statement_transcription_v3";
 const OPENAI_IMPORT_FAST_MODEL_FALLBACK = "gpt-5.4-mini";
 const OPENAI_IMPORT_STRONG_MODEL_FALLBACK = "gpt-5.5";
@@ -747,6 +748,7 @@ const importedStatementSchema = z.object({
       transaction_date: z.string().nullable().optional().default(null),
       transaction_time: z.string().nullable().optional().default(null),
       currency: z.string().nullable().optional().default(null),
+      currency_source_text: z.string().nullable().optional().default(null),
       subtotal: z.number().nullable().optional().default(null),
       tax: z.number().nullable().optional().default(null),
       service_charge: z.number().nullable().optional().default(null),
@@ -955,6 +957,7 @@ const openAIJsonSchema = {
             transaction_date: { type: ["string", "null"] },
             transaction_time: { type: ["string", "null"] },
             currency: { type: ["string", "null"] },
+            currency_source_text: { type: ["string", "null"] },
             subtotal: { type: ["number", "null"] },
             tax: { type: ["number", "null"] },
             service_charge: { type: ["number", "null"] },
@@ -1054,6 +1057,7 @@ const openAIJsonSchema = {
             "transaction_date",
             "transaction_time",
             "currency",
+            "currency_source_text",
             "subtotal",
             "tax",
             "service_charge",
@@ -1314,6 +1318,7 @@ const openAIReceiptCoreJsonSchema = {
             transaction_date: { type: ["string", "null"] },
             transaction_time: { type: ["string", "null"] },
             currency: { type: ["string", "null"] },
+            currency_source_text: { type: ["string", "null"] },
             total: { type: ["number", "null"] },
             payment_method: { type: ["string", "null"] },
             line_items: {
@@ -1342,6 +1347,7 @@ const openAIReceiptCoreJsonSchema = {
             "transaction_date",
             "transaction_time",
             "currency",
+            "currency_source_text",
             "total",
             "payment_method",
             "line_items",
@@ -1540,8 +1546,8 @@ const OPENAI_VISION_MAX_LONGEST_EDGE = 1600;
 const OPENAI_VISION_JPEG_QUALITY = 72;
 const OPENAI_RECEIPT_VISION_MAX_LONGEST_EDGE = 1440;
 const OPENAI_RECEIPT_VISION_JPEG_QUALITY = 70;
-const OPENAI_RECEIPT_CORE_VISION_MAX_LONGEST_EDGE = 1120;
-const OPENAI_RECEIPT_CORE_VISION_JPEG_QUALITY = 68;
+const OPENAI_RECEIPT_CORE_VISION_MAX_LONGEST_EDGE = 1440;
+const OPENAI_RECEIPT_CORE_VISION_JPEG_QUALITY = 75;
 
 const selectRepresentativeVisionPages = <T>(pages: T[], limit: number) => {
   if (pages.length <= limit) {
@@ -2169,6 +2175,7 @@ const buildOpenAIReceiptCoreSystemPrompt = () =>
     RECEIPT_MONEY_GUIDANCE,
     "Return transaction_date as ISO YYYY-MM-DD when a complete date is visible, using visible locale, language, currency, and upload-date proximity to resolve numeric date order.",
     "The merchant must be the actual business name, never Receipt, Test Receipt, Sales Receipt, Official Receipt, Invoice, Proof of Purchase, or another generic heading.",
+    "A menu item or product is not the merchant. Use the business header or logo; if it is blurred/redacted and no business name is legible, merchant_raw and merchant_clean must both be null.",
     "A coupon, menu, advertisement, product image, or offer without evidence of a completed purchase is not a financial transaction; return receipt_details null.",
     "Do not extract itemization, tax, discounts, tips, split allocations, categories, or transaction rows in this pass.",
     "Return line_items and transactions as empty arrays.",
@@ -2864,8 +2871,8 @@ export const parseImportTextWithOpenAIFallback = async (params: {
     inferredDifficulty !== "hard"
   );
   // Phone photos are usually far larger than the text resolution needed for
-  // receipt extraction. The compact core pass uses 1120px; difficult and
-  // detail-recovery receipt reads retain 1440px. Bank statements keep the
+  // receipt extraction. The compact core pass retains 1440px so small total,
+  // change and currency labels survive. Bank statements keep the
   // larger budget because their tables are denser.
   const pageImagesToSend = await compactVisionPageImages(
     selectedVisionPages,
@@ -3417,7 +3424,7 @@ export const parseImportTextWithOpenAIFallback = async (params: {
       initialPageImages,
       primaryTimeoutMs,
       fallbackDeadlineMs,
-      params.forceReceiptHighDetail ? "high" : useLowDetailReceiptFastPath ? "low" : "auto"
+      params.forceReceiptHighDetail || useReceiptCoreOnly ? "high" : useLowDetailReceiptFastPath ? "low" : "auto"
     );
     const attemptedResult =
       attempted ??
@@ -3427,7 +3434,7 @@ export const parseImportTextWithOpenAIFallback = async (params: {
             pageImagesToSend,
             retryTimeoutMs,
             fallbackDeadlineMs,
-            params.forceReceiptHighDetail ? "high" : useLowDetailReceiptFastPath ? "low" : "auto"
+            params.forceReceiptHighDetail || useReceiptCoreOnly ? "high" : useLowDetailReceiptFastPath ? "low" : "auto"
           )
         : pageImagesToSend.length > 0 && model !== textModel
         ? await callOpenAIWithFallbackModels(
@@ -3435,7 +3442,7 @@ export const parseImportTextWithOpenAIFallback = async (params: {
             pageImagesToSend.slice(0, 1),
             retryTimeoutMs,
             fallbackDeadlineMs,
-            params.forceReceiptHighDetail ? "high" : useLowDetailReceiptFastPath ? "low" : "auto"
+            params.forceReceiptHighDetail || useReceiptCoreOnly ? "high" : useLowDetailReceiptFastPath ? "low" : "auto"
           )
         : null);
     if (!attemptedResult) {
@@ -3486,6 +3493,7 @@ export const parseImportTextWithOpenAIFallback = async (params: {
     );
     if (
       useLowDetailReceiptFastPath &&
+      !useReceiptCoreOnly &&
       (!validation.success || receiptExtractionCandidateNeedsHighDetailRetry(validation.data))
     ) {
       const initialCandidateScore = validation.success
@@ -3662,7 +3670,9 @@ export const parseImportTextWithOpenAIFallback = async (params: {
     const value = validation.data;
     const documentType = value.document_type ?? "statement";
     const receiptAccountMatch: ReceiptAccountMatch | null = value.receipt_account_match ?? null;
-    const receiptDetails: OpenAIParsedReceiptDetails | null = value.receipt_details ?? null;
+    const receiptDetails: OpenAIParsedReceiptDetails | null = value.receipt_details
+      ? useReceiptCoreOnly ? enforceRegionalReceiptCurrencyEvidence(value.receipt_details) : value.receipt_details
+      : null;
     const holdings = Array.isArray((value as { holdings?: OpenAIParsedHolding[] }).holdings)
       ? ((value as { holdings?: OpenAIParsedHolding[] }).holdings ?? [])
       : [];

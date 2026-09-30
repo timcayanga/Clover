@@ -4,6 +4,7 @@ import { incompleteReceiptFields, receiptCurrencyForPersistence, receiptReviewMe
 import { buildImportTelemetrySnapshot } from "../lib/import-telemetry";
 import { resolveImportModalStatusDecision } from "../lib/import-modal-status";
 import { mobileApiResponse } from "../lib/mobile-api-response";
+import { enforceRegionalReceiptCurrencyEvidence, hasRegionalReceiptCurrencyEvidence } from "../lib/receipt-currency-evidence";
 
 const complete = { merchant_raw: "상점", merchant_clean: null, transaction_date: "2026-09-30", currency: "KRW", total: 60000 };
 assert.deepEqual(incompleteReceiptFields(complete), []);
@@ -15,6 +16,16 @@ assert.equal(receiptCurrencyForPersistence(null), "MIXED", "Do not assign PHP to
 assert.equal(receiptCurrencyForPersistence("TL"), "MIXED", "A total label is not an ISO currency");
 assert.equal(receiptCurrencyForPersistence("IDR"), "IDR");
 assert.equal(receiptCurrencyForPersistence("KRW"), "KRW");
+assert.equal(hasRegionalReceiptCurrencyEvidence("KRW", "회원 직원 합계 60,000"), false);
+assert.equal(hasRegionalReceiptCurrencyEvidence("KRW", "정상과세판매가(3,120원)"), true);
+assert.equal(hasRegionalReceiptCurrencyEvidence("KRW", "총 합계 157,600 원"), true);
+assert.equal(hasRegionalReceiptCurrencyEvidence("IDR", "GRAND TOTAL 61,799 TUNAI 62,000"), false);
+assert.equal(hasRegionalReceiptCurrencyEvidence("IDR", "Total Rp125.000"), true);
+const inferred = { currency: "KRW", confidence_score: .98, parser_evidence: { reason: "Korean merchant", source_text: "합계 60,000" } };
+assert.equal(enforceRegionalReceiptCurrencyEvidence(inferred).currency, null);
+assert.equal(enforceRegionalReceiptCurrencyEvidence(inferred).confidence_score, .5);
+assert.equal(inferred.currency, "KRW", "Keep original AI evidence unchanged for audit");
+assert.equal(enforceRegionalReceiptCurrencyEvidence({ ...inferred, currency_source_text: "60,000원" }).currency, "KRW");
 assert.deepEqual(incompleteReceiptFields({ ...complete, merchant_raw: " ", merchant_clean: "Toko", currency: "IDR" }), []);
 const message = receiptReviewMessage(["date"]);
 const snapshot = { status: "failed", processingPhase: RECEIPT_REVIEW_PHASE, processingMessage: message, workflowStage: "identifying_transactions", parsedRowsCount: 0, confirmedTransactionsCount: 0 };
