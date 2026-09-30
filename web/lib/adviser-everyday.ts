@@ -20,6 +20,11 @@ export const isFinancialDefinitionQuestion = (question: string): boolean =>
 export const isEverydayFollowUp = (question: string): boolean =>
   /^(?:(?:yes|no|okay|ok|please|go ahead|tell me more|continue)[.!?]?|(?:₱|php|usd|\$)?\s*[\d,.]+(?:\s*(?:k|m|pesos|dollars|per month|months?|years?))?[.!?]?)$/i.test(question.trim());
 
+// A spending ceiling is different from a target price to save toward. Keep this
+// distinction before purchase keywords such as trip, travel, laptop or phone.
+export const isSpendingRoomQuestion = (question: string): boolean =>
+  /\b(?:how much can (?:i|we) (?:safely |actually )?spend|safe to spend|spending room|spendable|how much room|spend until payday|spend before payday|left until payday)\b/i.test(question);
+
 export const classifyEverydayQuestion = (question: string): AdviserEverydayIntent | null => {
   const normalized = question.trim().toLowerCase();
 
@@ -38,11 +43,12 @@ export const classifyEverydayQuestion = (question: string): AdviserEverydayInten
   if (/\b(?:which bank|what bank|open an account|best (?:bank|savings|checking)|recommend|choose|choosing)\b/.test(normalized) && /\b(?:bank|account)\b/.test(normalized)) {
     return "bank_account";
   }
-  if (/\b(?:save|saving|set aside)\b.*\b(?:buy|purchase|get)\b|\b(?:save|saving|set aside)\b.*\bfor\b.*\b(?:phone|car|laptop|computer|travel|trip|holiday|home|house|appliance|gadget)\b|\bhow much\b.*\b(?:phone|car|laptop|travel|trip|purchase)\b/.test(normalized)) {
-    return "purchase_savings";
-  }
   if (/\b(?:budget|spend|allowance|room)\b.*\b(?:today|tonight|this day)\b|\b(?:today|tonight)\b.*\b(?:budget|spend|allowance)\b/.test(normalized)) {
     return "daily_spending";
+  }
+  if (isSpendingRoomQuestion(normalized)) return null;
+  if (/\b(?:save|saving|set aside)\b.*\b(?:buy|purchase|get)\b|\b(?:save|saving|set aside)\b.*\bfor\b.*\b(?:phone|car|laptop|computer|travel|trip|holiday|home|house|appliance|gadget)\b|\bhow much\b.*\b(?:phone|car|laptop|travel|trip|purchase)\b/.test(normalized)) {
+    return "purchase_savings";
   }
   if (/\b(?:what|where|which)\b.*\b(?:invest|investment|fund|asset|portfolio)\b|\bwhat should i invest in\b/.test(normalized)) {
     return "investment_selection";

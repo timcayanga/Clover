@@ -1,4 +1,4 @@
-import { isFinancialDefinitionQuestion, type AdviserEverydayIntent } from "@/lib/adviser-everyday";
+import { isFinancialDefinitionQuestion, isSpendingRoomQuestion, type AdviserEverydayIntent } from "@/lib/adviser-everyday";
 
 export const ADVISER_TOOL_NAMES = [
   "open_report",
@@ -110,7 +110,7 @@ export const selectAdviserToolNames = ({
   if (has(normalized, /\b(?:previous|prior|last|earlier)\b[\s\S]*\b(?:scenario|comparison)\b|\b(?:scenario|comparison)\b[\s\S]*\b(?:history|again)\b/)) {
     return ["get_adviser_scenario_history"];
   }
-  if (has(normalized, /\b(?:safe to spend|how much can i spend|how much room|spend until payday|spend before payday|left until payday)\b/)) {
+  if (isSpendingRoomQuestion(normalized)) {
     return ["calculate_safe_to_spend"];
   }
   if (has(normalized, /\b(?:how much|amount|contribute|set aside)\b[\s\S]*\b(?:invest|investment|portfolio)\b|\b(?:invest|investment)\b[\s\S]*\b(?:how much|amount|contribute|set aside)\b/)) {

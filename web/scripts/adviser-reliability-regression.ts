@@ -60,3 +60,19 @@ async function main() {
   console.log("Adviser reliability and Circle photos passed: scope, intent, month/currency boundaries, installments, budget arithmetic, identity matching and fail-closed consent retries.");
 }
 void main().catch(e=>{console.error(e);process.exitCode=1;});
+import { spendingRoomOptions, spendingRoomReply } from "../lib/adviser-spending-room";
+
+assert.deepEqual(spendingRoomOptions("How much can I spend on a trip over the next 30 days in PHP, after bills, everyday spending and savings? Keep an extra PHP 5,000 buffer."), {horizonDays:30, additionalBuffer:5000});
+assert.deepEqual(spendingRoomOptions("How much can we spend over 2 weeks? Keep an additional ₱5k reserve."), {horizonDays:14, additionalBuffer:5000});
+for (const question of [
+  "How much can I spend for 100 days?",
+  "How much can I spend until October 26?",
+  "How much can I spend? I have PHP 50,000 available.",
+  "How much can I spend? Include expected income of PHP 40,000.",
+  "How much can I spend? Keep an extra USD 5,000 buffer.",
+  "How much can I spend? Don't keep an extra PHP 5,000 buffer.",
+]) assert.equal(spendingRoomOptions(question), null, question);
+const room = {currency:"PHP",horizonDays:30,availableCash:50000,expectedIncome:0,knownObligations:10000,everydaySpendingBuffer:5000,goalContribution:5000,additionalBuffer:5000,safeToSpend:25000,roomAfterProtection:25000,confidence:{label:"medium",score:65},caveats:["Some debt installments are missing."]};
+assert.match(spendingRoomReply(room), /Estimated spending room: ₱25,000.00/);
+assert.match(spendingRoomReply(room), /Some debt installments are missing/);
+assert.match(spendingRoomReply({...room,safeToSpend:0,roomAfterProtection:-1000}), /No spending room.*exceed available cash by ₱1,000.00/);

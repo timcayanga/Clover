@@ -34,6 +34,20 @@ assert.equal(extractEverydayMoneyAmount("I need 30k for a laptop"), 30_000);
 assert.equal(extractEverydayMoneyAmount("Save for an iPhone 16"), null);
 assert.equal(extractEverydayMoneyAmount("Save for a phone in 6 months"), null);
 
+for (const question of [
+  "How much can I spend on a trip over the next 30 days in PHP, after bills, everyday spending and savings? Keep an extra PHP 5,000 buffer.",
+  "How much can I safely spend on travel?",
+  "How much can we actually spend on a laptop after bills?",
+  "What is my spending room for a holiday?",
+]) {
+  const everydayIntent = classifyEverydayQuestion(question);
+  assert.equal(everydayIntent, null, question);
+  assert.deepEqual(selectAdviserToolNames({ question, everydayIntent }), ["calculate_safe_to_spend"], question);
+}
+assert.equal(classifyEverydayQuestion("How much should I save for a trip?"), "purchase_savings");
+assert.equal(classifyEverydayQuestion("How much can I spend today?"), "daily_spending");
+assert.equal(classifyEverydayQuestion("How much can I save each month?"), "saving");
+
 const groundedDailyPlan = calculateDailySpendingPlan({
   safeToSpend: 14_000,
   horizonDays: 14,

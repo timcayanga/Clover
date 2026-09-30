@@ -1,4 +1,5 @@
 import { buildBudgetOverview } from "@/lib/budgeting";
+import { spendingRoomOptions, spendingRoomReply } from "@/lib/adviser-spending-room";
 import { adviserCurrency, adviserMonthRange, isSpendingSummaryQuestion, commitmentInstallment, upcomingBillsReply } from "@/lib/adviser-analysis";
 import { getStrongMerchantCategoryHint } from "@/lib/merchant-category-hints";
 import { assertCloudAiConsent, maySendToCloudAi } from "@/lib/ai-consent";
@@ -3067,6 +3068,13 @@ export async function POST(request: Request) {
         grounding,
         requiresInput: "purchase_price",
       });
+    }
+    if (!hasAttachments && selectedAdviserToolNames.length === 1 && selectedAdviserToolNames[0] === "calculate_safe_to_spend") {
+      const options = spendingRoomOptions(latestQuestion, displayCurrency);
+      const estimate = options ? calculateSafeToSpend(options) : null;
+      const reply = estimate ? spendingRoomReply(estimate) : "I need to clarify the planning inputs before giving a spending estimate. How many days should your cash cover (1–90), and how much extra buffer should I protect? For example: ‘How much can I spend over the next 30 days in PHP? Keep an extra PHP 5,000 buffer.’ Include only recorded cash for this check; review any expected income separately.";
+      await recordLocalResponse("calculated_spending_room");
+      return NextResponse.json({ reply, actions: [{id:"spending-accounts",kind:"navigate",type:"open_accounts",label:"Check account balances",href:"/accounts"}], suggestions: ["How much can I save each month?", "Check upcoming bills"], usage: usageForResponse(), grounding, answerSource:"local", ...(estimate ? {} : {requiresInput:"spending_window_and_buffer"}) });
     }
     if (!hasAttachments && isSpendingSummaryQuestion(latestQuestion)) {
       const categories = [...currentSummary.expenseCategories.entries()].sort((a, b) => b[1] - a[1]);
