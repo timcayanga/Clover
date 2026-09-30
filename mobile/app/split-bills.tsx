@@ -205,6 +205,7 @@ export default function SplitBills() {
         onSaved={(bill) => {
           setAdding(false);
           setSourceTransaction(null);
+          setSelected(bill);
           if (session.demo)
             setData((current) => ({
               ...sample,
@@ -735,6 +736,7 @@ function BillEditor({
   const [date, setDate] = useState(
     sourceTransaction?.date.slice(0, 10) || new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Manila" }),
   );
+  const [reviewedItems, setReviewedItems] = useState<{ description: string; amount: string }[]>([]);
   const [receipt, setReceipt] = useState<{
     fileName: string;
     mimeType: string;
@@ -810,6 +812,7 @@ function BillEditor({
           amount: i.amount,
         })),
       });
+      setReviewedItems(p.items.map(item => ({ description: item.description, amount: item.amount })));
       setTitle(p.merchantName ?? "");
       setTotal(p.total ?? "");
       setCurrency(p.currency);
@@ -853,6 +856,10 @@ function BillEditor({
       );
       return;
     }
+    if (receipt && (!reviewedItems.length || reviewedItems.some(item => !item.description.trim() || !/^\d+(\.\d{1,2})?$/.test(item.amount) || Number(item.amount) <= 0) || reviewedItems.reduce((sum, item) => sum + Math.round(Number(item.amount) * 100), 0) !== Math.round(Number(total) * 100))) {
+      setError("Review each item and include extra charges so the items match the bill total.");
+      return;
+    }
     inFlight.current = true;
     setBusy(true);
     setError("");
@@ -866,7 +873,7 @@ function BillEditor({
         total,
         participants,
         paidByIndex: payer,
-        ...(receipt ? { receipt } : {}),
+        ...(receipt ? { receipt, reviewedItems } : {}),
       };
       const result = session.demo
         ? {
@@ -925,15 +932,16 @@ function BillEditor({
               {receipt.fileName} · {receipt.confidence}% extraction confidence
             </Body>
             <Notice>
-              Review the title, total, currency and date before creating the
-              bill. The confirmed total is split equally; the original receipt
-              and extracted items are retained separately.
+              Check the extracted items and include any extra charges. Items must match the total. After creating the bill, choose who shares each item and save before requesting payment.
             </Notice>
-            {receipt.items.map((item, index) => (
-              <Body key={index}>
-                {item.description} · {item.amount}
-              </Body>
+            {reviewedItems.map((item, index) => (
+              <View key={index}>
+                <Field label={`Item ${index + 1}`} value={item.description} onChangeText={description => setReviewedItems(current => current.map((entry, i) => i === index ? { ...entry, description } : entry))} />
+                <Field label={`Item ${index + 1} amount`} value={item.amount} keyboardType="decimal-pad" onChangeText={amount => setReviewedItems(current => current.map((entry, i) => i === index ? { ...entry, amount } : entry))} />
+                <PlanAction title={`Remove item ${index + 1}`} onPress={() => setReviewedItems(current => current.filter((_, i) => i !== index))} />
+              </View>
             ))}
+            <PlanAction title="Add item or charge" onPress={() => setReviewedItems(current => [...current, { description: "", amount: "" }])} />
           </Card>
         ) : null}
         <Field

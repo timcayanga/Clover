@@ -1628,7 +1628,6 @@ export function SplitBillWorkspace({
                   </>
                 )}
                 {!selectedBill.resolved ? <button className="button button-secondary" onClick={async()=>{if(!window.confirm("Resolve this bill and stop payment reminders? This will not record a payment."))return;const response=await fetch(`/api/split-bills/${selectedBill.id}/resolution`,{method:"POST"});const payload=await response.json();if(response.ok&&payload.bill){setBills(current=>current.map(b=>b.id===payload.bill.id?payload.bill:b));setSelectedBillDraft(buildBillEditorDraft(payload.bill));}else setBillEditError(payload.error??"Unable to resolve bill.");}}>Mark as resolved</button>:<p>Resolved · no payment recorded</p>}
-                {isEditingBill ? <SplitBillPaymentTools bill={selectedBill} onBillUpdated={updatedBill => {setBills(current=>current.map(b=>b.id===updatedBill.id?updatedBill:b));setSelectedBillDraft(buildBillEditorDraft(updatedBill));}}/> : null}
                 <div className="split-bill-detail-modal__actions">
                   <button className="button button-secondary button-small" type="button" onClick={() => window.print()}>
                     Print summary

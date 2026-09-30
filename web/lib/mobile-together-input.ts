@@ -38,6 +38,10 @@ export const mobileSplitBillInput = z
       .min(2)
       .max(30),
     paidByIndex: z.number().int().min(0).nullable(),
+    reviewedItems: z.array(z.object({
+      description: z.string().trim().min(1).max(500),
+      amount: z.string().regex(/^\d+(\.\d{1,2})?$/).refine(value => Number(value) > 0 && Number(value) <= 1_000_000_000),
+    }).strict()).min(1).max(500).optional(),
     receipt: z
       .object({
         fileName: z.string().max(240),
@@ -70,6 +74,9 @@ export const mobileSplitBillInput = z
         message: "Choose a listed payer.",
         path: ["paidByIndex"],
       });
+    if (value.reviewedItems && Math.round(Number(value.total) * 100) !== value.reviewedItems.reduce((sum, item) => sum + Math.round(Number(item.amount) * 100), 0)) {
+      ctx.addIssue({ code: "custom", message: "Reviewed items must add up to the confirmed bill total. Include any extra charges before saving.", path: ["reviewedItems"] });
+    }
     const names = value.participants.map((person) =>
       person.name.toLocaleLowerCase(),
     );
@@ -84,8 +91,8 @@ export const mobileSplitBillInput = z
 export function mobileSplitBillPayload(
   input: z.infer<typeof mobileSplitBillInput>,
 ) {
-  // IDs and provenance are server-owned; this endpoint creates a new manual
-  // equal split only. Receipt evidence remains separate from the confirmed allocation.
+  // Receipt evidence stays untouched. Only explicitly reviewed, reconciled items
+  // become editable allocations; older clients retain their equal-total behavior.
   const participants = input.participants.map((person) => ({
     id: randomUUID(),
     name: person.name,
@@ -113,17 +120,15 @@ export function mobileSplitBillPayload(
               items: input.receipt.items,
               confidence: input.receipt.confidence,
             },
-            allocationMethod: "user-confirmed-equal-total",
+            allocationMethod: input.reviewedItems ? "user-reviewed-items" : "user-confirmed-equal-total",
           },
         }
       : {}),
-    items: [
-      {
-        description: input.title,
-        amount: input.total,
-        participantIds: participants.map((person) => person.id),
-      },
-    ],
+    items: (input.reviewedItems ?? [{ description: input.title, amount: input.total }]).map(item => ({
+      description: item.description,
+      amount: item.amount,
+      participantIds: participants.map(person => person.id),
+    })),
     payments:
       input.paidByIndex === null
         ? []
