@@ -99,3 +99,7 @@ Public sample source: https://huggingface.co/datasets/HumynLabs/Korean_Receipts_
 Use `web/lib/korea-indonesia-corpus.ts` for reviewed provider context and `docs/korea-indonesia-corpus-sources.md` for official sources. Category-only aliases must not establish country or currency. Preserve branch/submerchant text, explicit transaction direction and currency, and user-confirmed categories. A row naming incompatible merchant categories remains Other and requires review rather than selecting the first match.
 
 `web/scripts/fixtures/korea-indonesia/` contains original synthetic CSV, receipt-text and actual XLSX examples, a provenance manifest and documented limitations. `qa:regional-corpus` exercises all new aliases through the production category and context paths, and evaluates the files through the parser/workbook reader. These fixtures add repeatable checks, not a claim of coverage for all local institutions or photographed documents.
+
+## Public receipt corpus
+
+`web/scripts/fixtures/korea-indonesia-public/` contains seven licensed financial excerpts manually checked against public Korean receipt images. Treat `결제액` as a payment-total label. A pre-discount `총합계액` must not replace a printed payment amount. Negative discount rows, tax-column layouts, split payment components, missing currency, two-digit years and unknown item headers still require review. Two views of the same purchase share a corpus family; a reissued receipt is not proof of another purchase. See the corpus README for provenance, attribution and evaluation limits.

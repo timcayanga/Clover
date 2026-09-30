@@ -1,6 +1,7 @@
 import { hasHangul } from "@/lib/korean-financial-text";
 import { parseKoreanReceiptText } from "@/lib/korean-receipt";
 import { parseIndonesianReceiptText } from "@/lib/indonesian-receipt";
+import { parseUnlocalizedReceiptText } from "@/lib/unlocalized-receipt";
 import { isSplitBillResolved } from "./split-bill-resolution";
 import type { Prisma } from "@prisma/client";
 
@@ -2488,6 +2489,8 @@ export const parseReceiptText = (receiptText: string): ReceiptPreviewResult => {
   if (indonesian) return indonesian;
   const korean = parseKoreanReceiptText(receiptText);
   if (korean) return korean;
+  const unlocalized = parseUnlocalizedReceiptText(receiptText);
+  if (unlocalized) return unlocalized;
   const normalized = receiptText.replace(/\u00a0/g, " ");
   const { lines, fragmentJoins } = mergeFragmentLines(
     normalized

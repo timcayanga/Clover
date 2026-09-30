@@ -100,3 +100,11 @@ A subsequent synthetic PDF with blank debit/credit cells, a wrapped description 
 Use `web/lib/korea-indonesia-corpus.ts` for reviewed provider context and `docs/korea-indonesia-corpus-sources.md` for official sources. Category-only aliases must not establish country or currency. Preserve branch/submerchant text, explicit transaction direction and currency, and user-confirmed categories. A row naming incompatible merchant categories remains Other and requires review rather than selecting the first match.
 
 `web/scripts/fixtures/korea-indonesia/` contains original synthetic CSV, receipt-text and actual XLSX examples, a provenance manifest and documented limitations. `qa:regional-corpus` exercises all new aliases through the production category and context paths, and evaluates the files through the parser/workbook reader. These fixtures add repeatable checks, not a claim of coverage for all local institutions or photographed documents.
+
+## Public receipt corpus and unlocalized summary guard
+
+`web/scripts/fixtures/korea-indonesia-public/` contains 26 CORD v2 financial annotation excerpts under CC BY 4.0, with original ground truth separated from parser input. Missing source currency must stay MIXED even when the dataset's country is known. Menu names do not become merchant names; source labels do not fill absent dates or table headers.
+
+After established regional parsing, `unlocalized-receipt.ts` protects integer-formatted receipts from generic cent-repair and PHP defaults. It only returns a low-confidence summary preview, preserves source text, validates whole numeric remainders and duplicate totals, prioritizes explicit grand/due totals over pre-tax totals, and forces review. It never invents item tables or silently learns rules. Full dates do not establish currency. Explicit other currencies keep their existing parser path. The global `parseIndonesianAmount` still rejects bare comma grouping; this guarded receipt preview does not relax bank/ledger parsing.
+
+The corpus deliberately retains two unresolved cases (pre-tax TOTAL versus GRAND TOTAL and mixed separators/value-first fields). `qa:public-receipt-corpus` checks these alongside successful total extraction and adversarial cases; see its README for the exact scope, licenses and limitations.

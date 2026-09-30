@@ -45,3 +45,9 @@ Country context uses the regional aliases only. Category-only aliases can be use
 | id-reviewed-whoosh | Transport | whoosh indonesia; kcic whoosh | None | [Official source](https://ticket.kcic.co.id/product/) |
 
 Corrections move GS THE FRESH, GS25, CU and E-mart into grocery context, Hyundai Department Store into shopping, university tuition into education and Busan Metro into transport. Unsupported legacy aliases `asiana medical korea` and `olive young clinic korea` were removed. This changes suggestions for new imports only.
+
+## Public receipt excerpts, October 1 expansion
+
+`web/scripts/fixtures/korea-indonesia-public/` adds 33 licensed post-OCR examples: seven visually transcribed Korean receipt images from HumynLabs and 26 CORD v2 Indonesian annotation excerpts. The README contains CC BY 4.0 attribution and transformation details; the manifest retains source revisions, hashes, expected financial fields and review requirements. This corpus is independent of the earlier synthetic fixtures and merchant aliases.
+
+Use `qa:public-receipt-corpus` for the regression. It checks exact or explicitly unresolved totals, no invented currency/merchant/date, raw text retention and exclusion from the fast path. Current result: 31 correct printed totals, two unresolved, all 33 requiring review. This is development-set text parsing, not image OCR accuracy or production success rate. Same-purchase receipt views share a family to prevent future split leakage.

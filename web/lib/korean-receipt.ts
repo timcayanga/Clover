@@ -3,7 +3,7 @@ import { detectCurrencyEvidence } from "@/lib/financial-identity-detection";
 import { hasHangul, normalizeKoreanFinancialText, parseKoreanAmount, parseKoreanDate } from "@/lib/korean-financial-text";
 
 const compact = (value: string) => value.replace(/\s+/g, "");
-const totals = /^(?:총결제금액|실결제금액|결제금액|총합계|합계금액|합계|총액|받을금액|청구금액)[:：]?/;
+const totals = /^(?:총결제금액|실결제금액|결제금액|결제액|총합계(?!액)|합계금액|합계|총액|받을금액|청구금액)[:：]?/;
 const summary = /^(?:합계|총합계|총액|소계|결제금액|총결제금액|실결제금액|받을금액|청구금액|과세물품가액|과세금액|공급가액|면세물품가액|면세금액|부가세|부가가치세|할인|현금|카드|신용|거스름|받은금액|봉사료|승인|거래번호|사업자|TEL|전화)/i;
 const money = "[+-]?(?:₩\\s*)?(?:\\d{1,3}(?:,\\d{3})+|\\d+)(?:\\.\\d+)?(?:\\s*원)?";
 const merchantLabel = /^(?:상호명?|매장명?|가맹점명)\s*(?:[:：]\s*|\s+|$)/;
