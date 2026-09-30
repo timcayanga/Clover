@@ -3074,7 +3074,7 @@ export async function POST(request: Request) {
       const estimate = options ? calculateSafeToSpend(options) : null;
       const reply = estimate ? spendingRoomReply(estimate) : "I need to clarify the planning inputs before giving a spending estimate. How many days should your cash cover (1–90), and how much extra buffer should I protect? For example: ‘How much can I spend over the next 30 days in PHP? Keep an extra PHP 5,000 buffer.’ Include only recorded cash for this check; review any expected income separately.";
       await recordLocalResponse("calculated_spending_room");
-      return NextResponse.json({ reply, actions: [{id:"spending-accounts",kind:"navigate",type:"open_accounts",label:"Check account balances",href:"/accounts"}], suggestions: ["How much can I save each month?", "Check upcoming bills"], usage: usageForResponse(), grounding, answerSource:"local", ...(estimate ? {} : {requiresInput:"spending_window_and_buffer"}) });
+      return NextResponse.json({ reply, actions: [{id:"spending-accounts",kind:"navigate",type:"open_accounts",label:"Check account balances",href:"/accounts"}], suggestions: [{ id: "spending-save", group: "goals", label: "How much can I save each month?", prompt: "How much can I save each month?" }, { id: "spending-bills", group: "cashflow", label: "Check upcoming bills", prompt: "What bills do I have coming up?" }] satisfies AdviserSuggestedQuestion[], usage: usageForResponse(), grounding, answerSource:"local", ...(estimate ? {} : {requiresInput:"spending_window_and_buffer"}) });
     }
     if (!hasAttachments && isSpendingSummaryQuestion(latestQuestion)) {
       const categories = [...currentSummary.expenseCategories.entries()].sort((a, b) => b[1] - a[1]);
