@@ -1,8 +1,9 @@
 const normalizeKey = (value: string) =>
   value
+    .normalize("NFKC")
     .trim()
     .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "");
+    .replace(/[^\p{L}\p{N}]+/gu, "");
 
 const DATE_LIKE_STAMP_PATTERN =
   /(?:\b\d{4}[-/]\d{2}[-/]\d{2}\b|\b\d{1,2}[-/]\d{1,2}[-/]\d{2,4}\b|\b\d{1,2}[.]\d{1,2}[.]\d{2,4}\b|\b\d{1,2}[:.]\d{2}[:.]\d{2}\b)/i;
@@ -159,7 +160,7 @@ export const getBankSlug = (bankName: string) =>
   bankName
     .trim()
     .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/[^\p{L}\p{N}]+/gu, "-")
     .replace(/-+/g, "-")
     .replace(/^-|-$/g, "") || "bank";
 

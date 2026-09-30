@@ -9,19 +9,22 @@ const normalizeCurrencyCode = (value?: string | null) => {
 
 // Formatters contain no financial data. Bound the cache for caller-supplied locales.
 const amountFormatters = new Map<string, Intl.NumberFormat>();
-const getAmountFormatter = (locale: string) => {
-  let formatter = amountFormatters.get(locale);
+const getAmountFormatter = (locale: string, currency?: string) => {
+  const key = `${locale}:${currency ?? "MIXED"}`;
+  let formatter = amountFormatters.get(key);
   if (!formatter) {
-    formatter = new Intl.NumberFormat(locale, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    // Keep nonzero fractional Won visible (for example converted valuations).
+    // This changes presentation only; stored amounts are never rounded here.
+    formatter = new Intl.NumberFormat(locale, { minimumFractionDigits: currency === "KRW" ? 0 : 2, maximumFractionDigits: 2 });
     if (amountFormatters.size >= 16) amountFormatters.delete(amountFormatters.keys().next().value!);
-    amountFormatters.set(locale, formatter);
+    amountFormatters.set(key, formatter);
   }
   return formatter;
 };
 
 // Intl preserves decimal strings without first rounding them through a Number.
-const formatPlainAmount = (value: number | string, locale = DEFAULT_LOCALE) =>
-  getAmountFormatter(locale).format(value as number);
+const formatPlainAmount = (value: number | string, locale = DEFAULT_LOCALE, currency?: string) =>
+  getAmountFormatter(locale, currency).format(value as number);
 
 const shouldUseSpacing = (symbol: string) => symbol.length > 2 && !symbol.endsWith("$");
 
@@ -38,7 +41,7 @@ export const makeCurrencyFormatter = (currency?: string | null, locale = DEFAULT
   const spacer = shouldUseSpacing(symbol) ? " " : "";
 
   return {
-    format: (value: number | string) => `${symbol}${spacer}${formatPlainAmount(value, locale)}`,
+    format: (value: number | string) => `${symbol}${spacer}${formatPlainAmount(value, locale, normalized)}`,
   };
 };
 

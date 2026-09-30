@@ -17,6 +17,10 @@ const SPECIFIC_MERCHANT_CATEGORY_HINTS: Array<{
   lower: RegExp;
   compact?: RegExp;
 }> = [
+  { category: "Food & Dining", lower: /(?:^|\s)(?:스타벅스|투썸플레이스|메가커피|빽다방|맥도날드|김밥천국)(?:\s|$|[가-힣]+점)/u },
+  { category: "Shopping", lower: /(?:^|\s)(?:유니클로|올리브영|쿠팡|다이소)(?:\s|$|[가-힣]+점)/u },
+  { category: "Groceries", lower: /(?:^|\s)(?:이마트|홈플러스|롯데마트)(?:\s|$|[가-힣]+점)/u },
+  { category: "Transport", lower: /(?:^|\s)(?:코레일|서울교통공사|티머니)(?:\s|$)/u },
   {
     category: "Food & Dining",
     lower: /velveteen\s+house|kineya\s+don\s+don\s+tei|don\s+don\s+tei|soi\s+chicken|tartufo\s+ristorante|single\s+origin|kaokee|pickup\s+coffee|cha\s+tuk\s+chak|chatukchak|wasabi(?:_|\s)|jack(?:'?s|\s+s)\s+gelato|flat\s+iron|grain\s*&?\s*hop|damascena|sumup\s*\*?al\s+chile|pancake\s+house|naixue/,

@@ -15,8 +15,8 @@ import {
 import { summarizeMerchantText } from "@/lib/merchant-labels";
 import { assessStatementExtractionQuality } from "@/lib/import-quality";
 
-const OPENAI_PROMPT_VERSION = "clover_bank_statement_extraction_v4";
-const OPENAI_IMAGE_TRANSCRIPTION_PROMPT_VERSION = "clover_bank_statement_transcription_v2";
+const OPENAI_PROMPT_VERSION = "clover_bank_statement_extraction_v5";
+const OPENAI_IMAGE_TRANSCRIPTION_PROMPT_VERSION = "clover_bank_statement_transcription_v3";
 const OPENAI_IMPORT_FAST_MODEL_FALLBACK = "gpt-5.4-mini";
 const OPENAI_IMPORT_STRONG_MODEL_FALLBACK = "gpt-5.5";
 const OPENAI_IMPORT_PDF_MODEL_FALLBACK = "gpt-5.5";
@@ -2443,6 +2443,11 @@ const buildOpenAIInputPayload = (params: {
     `Document-family guidance: ${buildOpenAIDocumentFamilyGuidance(documentFamily)}`,
     GENERIC_PARSER_GUIDANCE,
     GENERIC_NORMALIZATION_GUIDANCE,
+    "Korean documents: preserve Hangul merchant names, descriptions and item names verbatim in raw fields. Language alone does not identify currency or country. Explicit account/settlement currency takes precedence over merchant location.",
+    "Recognize KRW, ₩, ￦ and numeric 원 amounts. Won amounts are commonly whole numbers: 12,000원 means 12000, never 120. Expand explicit 천/만/억 units (1000/10000/100000000) only when unambiguous. Do not infer money from dates, phone numbers, business registration numbers or authorization codes.",
+    "Read Korean 년 월 일 dates as year-month-day; preserve the printed calendar date. 합계/총결제금액 is the total, 소계 is subtotal, 부가세 is VAT, 할인 is discount, 받은금액 is tendered cash and 거스름돈 is change. Never add VAT again when included in the total, or turn tax/change/item rows into extra transactions.",
+    "For Korean ledgers use 입금/수입 as incoming, 출금/지출 as outgoing; distinguish a cancelled authorization from a posted 환불 refund. A cancelled receipt must not become an ordinary purchase. A holdings balance or 평가금액 is not spending. Keep holdings separate from transactions.",
+    "Keep original KRW purchase values separate from foreign-card settled currency and amount. Do not convert or create both as expenses. Payment rails such as 카카오페이/네이버페이 are not the merchant or proof of a particular account. Missing or conflicting amount, date, currency, account or merchant evidence needs null fields, lower confidence and review, not a PHP default.",
     "Generic few-shot examples:",
     GENERIC_FEW_SHOT_EXAMPLES,
     "For credit card statements, capture payment due date and total amount due whenever the statement shows them.",

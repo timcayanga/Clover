@@ -1,3 +1,4 @@
+import { hasHangul } from "@/lib/korean-financial-text";
 import { createRequire } from "node:module";
 import { createHash } from "node:crypto";
 import { dirname, join, sep } from "node:path";
@@ -487,7 +488,7 @@ const getOcrWorker = async (pageSegMode = "6") => {
   const workerPromise = (async () => {
     try {
       const { createWorker } = await import("tesseract.js");
-      const worker = (await createWorker("eng", 1, {
+      const worker = (await createWorker("eng+kor", 1, {
         logger: () => {
           // Keep OCR logs quiet during imports.
         },
@@ -685,6 +686,9 @@ export const shouldRetryImageOcrBestEffort = (params: {
         ? "wallet_screenshot"
         : "generic";
 
+  if (profile === "generic" && hasHangul(firstPassText)) {
+    return !assessReceiptPreviewQuality(parseReceiptText(firstPassText)).reliableForFastPath;
+  }
   if (profile === "generic") {
     return false;
   }

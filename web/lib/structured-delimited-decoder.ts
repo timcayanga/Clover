@@ -1,3 +1,5 @@
+import { hasKoreanFinancialHeaders } from "@/lib/korean-financial-text";
+
 const decodeWith = (bytes: Uint8Array, encoding: string, fatal = false) =>
   new TextDecoder(encoding, { fatal }).decode(bytes);
 
@@ -29,6 +31,12 @@ export const decodeStructuredDelimitedBytes = (bytes: Uint8Array) => {
   try {
     return decodeWith(bytes, "utf-8", true);
   } catch {
+    // WHATWG euc-kr includes Windows-949 extensions. Require recognizable
+    // financial headers so Western legacy exports are not misdecoded as Hangul.
+    try {
+      const korean = decodeWith(bytes, "euc-kr", true);
+      if (hasKoreanFinancialHeaders(korean)) return korean;
+    } catch { /* Not a valid Korean export; preserve the existing legacy fallback. */ }
     return decodeWith(bytes, "windows-1252");
   }
 };

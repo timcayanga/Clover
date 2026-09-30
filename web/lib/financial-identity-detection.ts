@@ -91,9 +91,10 @@ export const normalizeGlobalCurrencyCode = (value?: string | null) => {
     "US$": "USD", "U.S.$": "USD", "A$": "AUD", "AU$": "AUD", "C$": "CAD", "CA$": "CAD",
     "S$": "SGD", "HK$": "HKD", "NZ$": "NZD", "R$": "BRL", "CN¥": "CNY", "JP¥": "JPY",
   };
-  const raw = normalizeSpace(value).toUpperCase();
+  const raw = normalizeSpace(value.normalize("NFKC")).toUpperCase();
+  if (["₩", "원", "원화", "대한민국 원", "한국 원"].includes(raw)) return "KRW";
   if (symbolAlias[raw]) return symbolAlias[raw];
-  const normalized = normalizeAliasKey(value);
+  const normalized = normalizeAliasKey(raw);
   if (normalized === "U S DOLLAR" || normalized === "U S DOLLARS") return "USD";
   return CURRENCY_ALIASES[normalized] ?? COMPACT_CURRENCY_ALIASES.get(normalized.replace(/[^A-Z0-9]/g, "")) ?? (ISO_CODES.has(normalized) ? normalized : null);
 };
@@ -144,11 +145,17 @@ const SYMBOL_PATTERNS: Array<{ code: string; pattern: RegExp; label: string }> =
 ];
 
 export const detectCurrencyEvidence = (text: string): CurrencyDetectionResult => {
-  const normalized = text.replace(/\u00a0/g, " ");
+  const normalized = text.normalize("NFKC").replace(/\u00a0/g, " ");
   const lines = normalized.split(/\r?\n/).map(normalizeSpace).filter(Boolean);
   const scores = new Map<string, CurrencyScore>();
 
   for (const [index, line] of lines.entries()) {
+    const koreanLabel = line.match(/(?:통화(?:코드)?|화폐|단위)\s*[:(]?\s*([A-Z]{3}|원화|원)(?:[)\s]|$)/i);
+    const koreanLabelCode = normalizeGlobalCurrencyCode(koreanLabel?.[1]);
+    if (koreanLabel && koreanLabelCode) addCurrencyEvidence(scores, koreanLabelCode, 150, `explicit currency label: ${koreanLabel[1]}`);
+    if (/(?:\d[\d,.]*\s*원)(?![가-힣])|(?:금액|잔액|입금|출금)\s*[([]\s*(?:백만|천만|천|만|억)?원\s*[)\]]/u.test(line)) {
+      addCurrencyEvidence(scores, "KRW", 65, "Korean won amount or column unit");
+    }
     const labeled = line.match(/\b(?:(?:account|statement|base|wallet|card|settlement|reporting)\s+)?currency(?:\s+code)?\s*[:\-]?\s*([A-Za-z][A-Za-z .]{1,28}|[A-Z]{3,4})\b/i);
     const labeledCode = normalizeGlobalCurrencyCode(labeled?.[1] ?? null);
     if (labeledCode) addCurrencyEvidence(scores, labeledCode, 150, `explicit currency label: ${labeled![1].trim()}`);
@@ -175,7 +182,10 @@ export const detectCurrencyEvidence = (text: string): CurrencyDetectionResult =>
 
   const ranked = [...scores.entries()]
     .map(([currency, value]) => ({ currency, score: value.score, evidence: [...value.evidence] }))
-    .sort((left, right) => right.score - left.score);
+    .sort((left, right) =>
+      Number(right.evidence.some((item) => item.startsWith("explicit currency label"))) -
+      Number(left.evidence.some((item) => item.startsWith("explicit currency label"))) || right.score - left.score
+    );
   const winner = ranked[0];
   if (!winner) {
     const ambiguousSymbol = /(?:^|[^A-Z])\$|¥/.test(normalized);
@@ -205,7 +215,7 @@ export type InstitutionDetectionResult = {
   evidence: string[];
 };
 
-const INSTITUTION_WORD = /\b(?:bank|banco|banque|banca|banka|bankasi|bankası|credit\s+union|building\s+society|savings\s+(?:bank|and\s+loan)|sparkasse|volksbank|raiffeisen|caisse|caja|microfinance\s+bank|digital\s+bank)\b/i;
+const INSTITUTION_WORD = /은행|\b(?:bank|banco|banque|banca|banka|bankasi|bankası|credit\s+union|building\s+society|savings\s+(?:bank|and\s+loan)|sparkasse|volksbank|raiffeisen|caisse|caja|microfinance\s+bank|digital\s+bank)\b/i;
 const REJECT_INSTITUTION_LINE = /\b(?:beneficiary|recipient|intermediary|correspondent|destination|receiving|payee|merchant|transfer(?:red)?\s+to|payment\s+to|bank\s+statement|bank\s+account|bank\s+details|bank\s+reference|banking\s+date|sort\s+code|swift|bic|iban|transaction)\b/i;
 
 const cleanInstitutionCandidate = (value: string) =>
@@ -221,7 +231,7 @@ const cleanInstitutionCandidate = (value: string) =>
 const isUsableInstitutionCandidate = (candidate: string, requireInstitutionWord: boolean) =>
   candidate.length >= 3 &&
   candidate.length <= 90 &&
-  /[A-Za-zÀ-ÖØ-öø-ÿ]/.test(candidate) &&
+  /\p{L}/u.test(candidate) &&
   !REJECT_INSTITUTION_LINE.test(candidate) &&
   !/\b(?:statement|summary|customer|account\s+holder|opening\s+balance|closing\s+balance|available\s+balance)\b/i.test(candidate) &&
   (!requireInstitutionWord || INSTITUTION_WORD.test(candidate));
@@ -234,12 +244,12 @@ export const detectUnknownInstitutionEvidence = (
     .map(normalizeSpace)
     .filter(Boolean)
     .slice(0, 28);
-  const statementShell = /\b(?:statement|account\s+(?:number|no\.?|summary)|opening\s+balance|closing\s+balance|transaction\s+(?:date|details)|available\s+balance)\b/i.test(
+  const statementShell = /거래내역|계좌번호|기초잔액|기말잔액|\b(?:statement|account\s+(?:number|no\.?|summary)|opening\s+balance|closing\s+balance|transaction\s+(?:date|details)|available\s+balance)\b/i.test(
     `${lines.join(" ")} ${options.fileName ?? ""}`
   );
 
   for (const line of lines) {
-    const match = line.match(/^\s*(?:bank\s+name|financial\s+institution|account\s+provider|issued\s+by|institution)\s*[:\-]\s*(.+)$/i);
+    const match = line.match(/^\s*(?:은행명|금융기관|bank\s+name|financial\s+institution|account\s+provider|issued\s+by|institution)\s*[:\-]\s*(.+)$/i);
     const candidate = cleanInstitutionCandidate(match?.[1] ?? "");
     if (match && isUsableInstitutionCandidate(candidate, false)) {
       return { institution: candidate, confidence: 100, evidence: [`explicit institution label: ${match[1].trim()}`] };

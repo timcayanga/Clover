@@ -1,3 +1,4 @@
+import { hasHangul, koreanFinancialHeader, normalizeKoreanFinancialText, parseKoreanDate, hasKoreanAmountMarker, parseKoreanAmount } from "@/lib/korean-financial-text";
 import type { TransactionType } from "@prisma/client";
 import { humanizeMerchantText, summarizeMerchantText } from "@/lib/merchant-labels";
 import { getSharedMerchantCategoryHint, getStrongMerchantCategoryHint } from "@/lib/merchant-category-hints";
@@ -750,14 +751,16 @@ const detectStructuredDelimiter = (text: string, fileName = "") => {
 };
 
 const normalizeStructuredHeader = (value: string) =>
-  normalizeWhitespace(value)
+  normalizeWhitespace(normalizeKoreanFinancialText(value))
     .replace(/^\uFEFF/, "")
     .replace(/\([^)]*\)/g, " ")
-    .replace(/[^a-zA-Z0-9]+/g, "_")
+    .replace(/[^\p{L}\p{N}]+/gu, "_")
     .replace(/^_+|_+$/g, "")
     .toLowerCase();
 
 const canonicalStructuredHeader = (value: string) => {
+  const korean = koreanFinancialHeader(value);
+  if (korean) return korean;
   const rawHeader = normalizeWhitespace(value).toLowerCase();
   const header = normalizeStructuredHeader(value);
   if (!header) return "";
@@ -790,6 +793,8 @@ const canonicalStructuredHeader = (value: string) => {
 };
 
 const canonicalStructuredMetadataKey = (value: string) => {
+  const korean = koreanFinancialHeader(value);
+  if (korean && ["institution", "account_name", "account_number", "account_type", "currency", "snapshot_date"].includes(korean)) return korean;
   const header = normalizeStructuredHeader(value);
   if (/^(?:institution|bank|bank_name|provider|financial_institution)$/.test(header)) return "institution";
   if (/^(?:account|account_name|account_label|wallet|portfolio|product)$/.test(header)) return "account_name";
@@ -885,6 +890,17 @@ const readStructuredCell = (table: StructuredDelimitedTable, row: string[], key:
   return "";
 };
 
+const readStructuredMoney = (table: StructuredDelimitedTable, row: string[], key: string) => {
+  const index = table.canonicalHeaders.findIndex((header, i) => header === key && normalizeWhitespace(row[i] ?? ""));
+  if (index < 0) return null;
+  const cell = row[index] ?? "";
+  const amount = parseMoney(cell);
+  if (amount === null || hasKoreanAmountMarker(cell)) return amount;
+  const unit = normalizeKoreanFinancialText(table.headers[index] ?? "").match(/[([]\s*(백만|천만|천|만|억)원\s*[)\]]/);
+  const scale = unit ? ({ 백만: 1_000_000, 천만: 10_000_000, 천: 1_000, 만: 10_000, 억: 100_000_000 }[unit[1]] ?? 1) : 1;
+  return amount * scale;
+};
+
 type StructuredDateOrder = "day_first" | "month_first" | null;
 
 const inferStructuredDateOrder = (table: StructuredDelimitedTable, dateKey: "date" | "posted_date" | "snapshot_date") => {
@@ -914,8 +930,9 @@ const parseStructuredDate = (
   countryCode?: string | null,
   dateOrder: StructuredDateOrder = null
 ) => {
-  const normalized = normalizeWhitespace(String(value ?? ""));
+  const normalized = normalizeWhitespace(normalizeKoreanFinancialText(String(value ?? "")));
   if (!normalized) return null;
+  if (!normalized.includes("T") && /^\d{4}(?:\s*년|[./-]|\d{4}$)/.test(normalized)) return parseKoreanDate(normalized);
   if (/^\d{5}(?:\.\d+)?$/.test(normalized)) {
     const serial = Number(normalized);
     if (serial >= 20_000 && serial <= 80_000) {
@@ -975,6 +992,10 @@ const normalizeStructuredAccountType = (value?: string | null): ImportedAccountT
     "other",
   ]);
   if (supported.has(normalized as ImportedAccountType)) return normalized as ImportedAccountType;
+  if (normalized === "신용카드") return "credit_card";
+  if (normalized === "체크카드") return "bank";
+  if (/^(?:예금|적금|입출금|은행)$/.test(normalized)) return "bank";
+  if (/^(?:증권|투자|주식|펀드)$/.test(normalized)) return "investment";
   if (/credit.*card|card/.test(normalized)) return "credit_card";
   if (/broker|portfolio|stock|crypto|fund|investment/.test(normalized)) return "investment";
   if (/e_?wallet|wallet/.test(normalized)) return "wallet";
@@ -1011,6 +1032,10 @@ const structuredDirectionType = (
   if (hasCredit) return { type: "income", evidence: "credit_column" };
 
   const normalizedType = normalizeWhitespace(rawType).toLowerCase();
+  if (/^(?:입금|수입|환급|환불)$/.test(normalizedType)) return { type: "income", evidence: "explicit_type" };
+  if (/^(?:출금|지출|결제|출금이체|이체출금)$/.test(normalizedType)) return { type: "expense", evidence: "explicit_type" };
+  if (/^(?:이체|대체)$/.test(normalizedType)) return { type: "transfer", evidence: "explicit_type" };
+  if (/^(?:입금이체|이체입금)$/.test(normalizedType)) return { type: "income", evidence: "explicit_type" };
   if (/\b(?:credit|cr|income|deposit|inflow|money in|paid in|received)\b/.test(normalizedType)) {
     return { type: "income", evidence: "explicit_type" };
   }
@@ -1158,16 +1183,17 @@ export const parseStructuredTransactionCsv = (
       }
       return;
     }
-    if (!description || /^(?:total|subtotal|opening balance|closing balance|ending balance)$/i.test(description)) return;
+    if (!description || /^(?:합계|총계|소계|기초잔액|기말잔액|total|subtotal|opening balance|closing balance|ending balance)$/i.test(description)) return;
     const status = normalizeWhitespace(readStructuredCell(table, sourceRow, "status"));
+    if (/^(?:대기|처리중|승인대기|예약|실패|거절|취소|승인취소|결제취소)$/.test(status)) return;
     if (/\b(?:pending|processing|authorized|authorization|scheduled|upcoming|on hold|held|failed|declined|rejected|cancelled|canceled|void|voided|expired|reversed)\b/i.test(status)) return;
 
     const debitText = readStructuredCell(table, sourceRow, "debit");
     const creditText = readStructuredCell(table, sourceRow, "credit");
     const amountText = readStructuredCell(table, sourceRow, "amount");
-    const debit = parseMoney(debitText);
-    const credit = parseMoney(creditText);
-    const signedAmount = parseMoney(amountText);
+    const debit = readStructuredMoney(table, sourceRow, "debit");
+    const credit = readStructuredMoney(table, sourceRow, "credit");
+    const signedAmount = readStructuredMoney(table, sourceRow, "amount");
     const hasDebit = debit !== null && debit !== 0;
     const hasCredit = credit !== null && credit !== 0;
     if ((hasDebit && hasCredit) || (!hasDebit && !hasCredit && signedAmount === null)) return;
@@ -1207,7 +1233,7 @@ export const parseStructuredTransactionCsv = (
         institution,
         currencyText || detectCurrencyFromText(`${amountText} ${debitText} ${creditText} ${table.headers.join(" ")}`)
       ) ?? null;
-    const runningBalance = parseMoney(readStructuredCell(table, sourceRow, "balance"));
+    const runningBalance = readStructuredMoney(table, sourceRow, "balance");
     const originalCurrency =
       normalizeCurrencyCode(readStructuredCell(table, sourceRow, "original_currency")) ??
       normalizeCurrencyCode(detectCurrencyFromText(readStructuredCell(table, sourceRow, "original_amount")));
@@ -1237,8 +1263,8 @@ export const parseStructuredTransactionCsv = (
       categoryRaw: normalizeWhitespace(readStructuredCell(table, sourceRow, "category")),
       reference: normalizeWhitespace(readStructuredCell(table, sourceRow, "reference")),
       status,
-      fee: parseMoney(readStructuredCell(table, sourceRow, "fee")),
-      originalAmount: parseMoney(readStructuredCell(table, sourceRow, "original_amount")),
+      fee: readStructuredMoney(table, sourceRow, "fee"),
+      originalAmount: readStructuredMoney(table, sourceRow, "original_amount"),
       originalCurrency,
       rowMetadata: { ...activeMetadata },
       balanceDelta: null,
@@ -1274,6 +1300,7 @@ export const parseStructuredTransactionCsv = (
 
   const rows: ParsedImportRow[] = [];
   const seenReferences = new Set<string>();
+  const koreanHeaders = hasHangul(table.headers.join(" "));
   candidates.forEach((candidate) => {
     const direction = structuredDirectionType(
       candidate.rawType,
@@ -1313,6 +1340,12 @@ export const parseStructuredTransactionCsv = (
       seenReferences.add(dedupeKey);
     }
 
+    const amountCurrency = koreanHeaders ? detectCurrencyEvidence(`${candidate.amountText} ${candidate.debitText} ${candidate.creditText}`).currency : null;
+    const koreanReviewReason = koreanHeaders
+      ? !candidate.currency ? "Confirm the document currency."
+        : amountCurrency && amountCurrency !== candidate.currency ? "The amount currency conflicts with the currency column. Confirm the settlement currency."
+          : direction.evidence === "conservative_default" ? "Confirm whether this is money in or money out." : null
+      : null;
     const categoryName = candidate.categoryRaw ||
       guessCategoryName(`${candidate.merchantRaw} ${candidate.description}`, direction.type);
     rows.push({
@@ -1332,6 +1365,7 @@ export const parseStructuredTransactionCsv = (
       categoryConfidence: candidate.categoryRaw ? 100 : 72,
       rawPayload: {
         source: "structured_transaction_csv",
+        ...(koreanReviewReason ? { reviewRequired: true, reviewReason: koreanReviewReason } : {}),
         sourceRowIndex: table.headerIndex + candidate.sourceRowIndex + 2,
         continuationSourceRowIndexes: candidate.continuationSourceRowIndexes.map(
           (sourceRowIndex) => table.headerIndex + sourceRowIndex + 2
@@ -1392,11 +1426,11 @@ export const parseGenericAccountSnapshotCsv = (
   const candidates = table.rows.flatMap((sourceRow, sourceRowIndex) => {
     if (isRepeatedStructuredHeaderRow(table, sourceRow)) return [];
     const accountName = normalizeWhitespace(readStructuredCell(table, sourceRow, "account_name"));
-    const balance = parseMoney(readStructuredCell(table, sourceRow, "balance"));
+    const balance = readStructuredMoney(table, sourceRow, "balance");
     if (
       !accountName ||
       balance === null ||
-      /^(?:grand\s+)?(?:total|subtotal|net worth|total assets|total liabilities)$/i.test(accountName)
+      /^(?:합계|총계|소계|(?:grand\s+)?(?:total|subtotal|net worth|total assets|total liabilities))$/i.test(accountName)
     ) {
       return [];
     }
@@ -1415,8 +1449,9 @@ export const parseGenericAccountSnapshotCsv = (
         institution,
         readStructuredCell(table, sourceRow, "currency") ||
           table.preambleMetadata.currency ||
-          detectCurrencyFromText(`${readStructuredCell(table, sourceRow, "balance")} ${table.headers.join(" ")}`)
-      ) ?? "PHP";
+          detectCurrencyFromText(`${readStructuredCell(table, sourceRow, "balance")} ${table.headers.join(" ")}`) || context.currency
+      ) ?? (hasHangul(table.headers.join(" ")) ? null : "PHP");
+    if (!currency) throw new Error("Clover could not identify the currency of this Korean balance table. Add a currency column (for example KRW) and upload again. Nothing was added.");
     const snapshotDate =
       parseStructuredDate(
         readStructuredCell(table, sourceRow, "snapshot_date") || readStructuredCell(table, sourceRow, "date"),
@@ -1841,7 +1876,7 @@ const structuredWorkbookHeaderProbePatterns = {
 };
 
 const couldBeStructuredWorkbookHeaderRow = (row: string[]) => {
-  const normalizedHeaders = row.map(normalizeStructuredHeader).filter(Boolean);
+  const normalizedHeaders = row.map(canonicalStructuredHeader).filter(Boolean);
   if (normalizedHeaders.length < 2) return false;
   const has = (pattern: RegExp) => normalizedHeaders.some((header) => pattern.test(header));
   return (
@@ -2038,9 +2073,14 @@ const parseStructuredWorkbookWorksheet = (
       regionRows.slice(1).forEach((row) => row.push(region.direction === "income" ? "Credit" : "Debit"));
     }
 
-    const regionText = serializeStructuredDelimitedRows(regionRows, ",");
     const regionHeaders = new Set((regionRows[0] ?? []).map(canonicalStructuredHeader));
+    const preamble = extractStructuredPreambleMetadata(
+      worksheet.rows.slice(0, region.headerIndex).filter((row) =>
+        row.filter((cell) => normalizeWhitespace(cell)).length <= 2 && !couldBeStructuredWorkbookHeaderRow(row)
+      )
+    );
     const hasExplicitAccountColumn =
+      Boolean(preamble.account_name || preamble.account_number || preamble.institution) ||
       regionHeaders.has("account") ||
       regionHeaders.has("account_name") ||
       regionHeaders.has("account_number") ||
@@ -2050,13 +2090,14 @@ const parseStructuredWorkbookWorksheet = (
       regionHeaders.has("currency") ||
       regionHeaders.has("currency_code") ||
       regionHeaders.has("original_currency");
-    return (parseSingleStructuredDelimitedImport(regionText, worksheetFileName, "text/csv", context) ?? []).map(
+    const tableWithPreamble = serializeStructuredDelimitedRows([...Object.entries(preamble), ...regionRows], ",");
+    return (parseSingleStructuredDelimitedImport(tableWithPreamble, worksheetFileName, "text/csv", context) ?? []).map(
       (row) => {
         const rawPayload = row.rawPayload ?? {};
         const isTransaction = rawPayload.source === "structured_transaction_csv";
         const sourceRowIndex =
           typeof rawPayload.sourceRowIndex === "number"
-            ? rawPayload.sourceRowIndex + region.headerIndex
+            ? rawPayload.sourceRowIndex + region.headerIndex - Object.keys(preamble).length
             : null;
         return {
           ...row,
@@ -2065,7 +2106,7 @@ const parseStructuredWorkbookWorksheet = (
                 accountName: "Cash",
                 accountNumber: undefined,
                 institution: "Cash",
-                ...(!hasExplicitCurrencyColumn ? { currency: "PHP" } : {}),
+                ...(!hasExplicitCurrencyColumn ? { currency: row.currency ?? (hasHangul(worksheetText) ? null : "PHP") } : {}),
               }
             : {}),
           rawPayload: {
@@ -2076,7 +2117,7 @@ const parseStructuredWorkbookWorksheet = (
                   accountNumber: null,
                   institutionRaw: "Cash",
                   accountType: "cash",
-                  accountCurrency: hasExplicitCurrencyColumn ? row.currency ?? "PHP" : "PHP",
+                  accountCurrency: row.currency ?? (hasHangul(worksheetText) ? null : "PHP"),
                 }
               : {}),
             ...(sourceRowIndex === null ? {} : { sourceRowIndex }),
@@ -3650,7 +3691,8 @@ const createGenericMoneyTokenPattern = () => new RegExp(genericMoneyTokenPattern
 
 const parseMoney = (value?: string | null) => {
   if (!value) return null;
-  const rawValue = String(value);
+  const rawValue = normalizeKoreanFinancialText(String(value));
+  if (hasKoreanAmountMarker(rawValue)) return parseKoreanAmount(rawValue);
   const isParenthesizedNegative = /^\s*\([^)]*[0-9][^)]*\)\s*$/.test(rawValue);
   let cleaned = rawValue.replace(/\u00a0/g, " ").replace(/[^0-9,.\-\s]/g, "").replace(/\s+/g, "");
   if (!cleaned || cleaned === "-" || cleaned === "." || cleaned === "-.") {
@@ -26843,7 +26885,8 @@ export const parseImportText = (
 
 export const parseDateValue = (value?: string | null) => {
   if (!value) return null;
-  const normalized = value.trim();
+  const normalized = normalizeKoreanFinancialText(value).trim();
+  if (!normalized.includes("T") && /^\d{4}(?:\s*년|[./-]|\d{4}$)/.test(normalized)) return parseKoreanDate(normalized);
   const iso = normalized.match(/^(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})$/);
   if (iso) {
     return new Date(Date.UTC(Number(iso[1]), Number(iso[2]) - 1, Number(iso[3]), 12, 0, 0));

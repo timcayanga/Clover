@@ -1,3 +1,5 @@
+import { hasHangul } from "@/lib/korean-financial-text";
+import { parseKoreanReceiptText } from "@/lib/korean-receipt";
 import { isSplitBillResolved } from "./split-bill-resolution";
 import type { Prisma } from "@prisma/client";
 
@@ -1996,10 +1998,14 @@ export const isSuspiciousReceiptMerchantName = (value: string | null | undefined
     return true;
   }
 
-  if ((normalized.match(/[~_=|]{2,}|[^\w\s:.,'&()/+-]{3,}/g) ?? []).length > 0) {
+  if ((normalized.match(/[~_=|]{2,}|[^\p{L}\p{N}\s:.,'&()/+-]{3,}/gu) ?? []).length > 0) {
     return true;
   }
 
+  if (hasHangul(normalized)) {
+    if (/^(?:영수증|합계|소계|부가세|사업자번호|승인번호|카드결제|현금결제|카카오페이|네이버페이)$/.test(normalized.replace(/\s+/g, ""))) return true;
+    return (normalized.match(/\p{L}/gu)?.length ?? 0) < 2 || (normalized.match(/\p{L}/gu)?.length ?? 0) / normalized.replace(/\s+/g, "").length < 0.55;
+  }
   const alphaCount = (normalized.match(/[A-Za-z]/g) ?? []).length;
   const compactLength = normalized.replace(/\s+/g, "").length;
   if (alphaCount < 4 || compactLength === 0) {
@@ -2058,6 +2064,10 @@ const isSuspiciousReceiptItemDescription = (description: string) => {
     return true;
   }
 
+  if (hasHangul(normalized)) {
+    if (/^(?:합계|소계|부가세|과세금액|승인번호|거스름돈|할인금액)/.test(normalized.replace(/\s+/g, ""))) return true;
+    return (normalized.match(/\p{L}/gu)?.length ?? 0) < 2 || (normalized.match(/\p{L}/gu)?.length ?? 0) / normalized.replace(/\s+/g, "").length < 0.45;
+  }
   const tokens = normalized.split(/\s+/).filter(Boolean);
   const alphaTokens = tokens.map((token) => token.replace(/[^A-Za-z]/g, "")).filter(Boolean);
   const alphaCount = (normalized.match(/[A-Za-z]/g) ?? []).length;
@@ -2223,7 +2233,7 @@ export const assessReceiptPreviewQuality = (preview: ReceiptPreviewResult): Rece
   const receiptText = String(preview.receiptText ?? "");
   const declaredItemCount = extractDeclaredReceiptItemCount(receiptText);
   const hasExplicitSummaryLine = receiptText.split(/\r?\n/).some((line) =>
-    /^\s*(?:sub\s*-?\s*total|amount due|grand total|bill total|total)\b/i.test(line)
+    /^\s*(?:sub\s*-?\s*total|amount due|grand total|bill total|total)\b/i.test(line) || /^(?:합계|총합계|총액|결제금액|총결제금액)/.test(line.replace(/\s+/g, ""))
   );
 
   if (total !== null) {
@@ -2285,13 +2295,13 @@ export const assessReceiptPreviewQuality = (preview: ReceiptPreviewResult): Rece
     severeIssue = true;
   }
 
-  if (subtotal !== null && subtotal >= 100_000 && cleanItemCount <= 25) {
+  if (subtotal !== null && subtotal >= (preview.currency === "KRW" ? 100_000_000 : 100_000) && cleanItemCount <= 25) {
     issues.push("subtotal looks implausibly large");
     score -= 6;
     severeIssue = true;
   }
 
-  if (total !== null && total >= 100_000 && cleanItemCount <= 25) {
+  if (total !== null && total >= (preview.currency === "KRW" ? 100_000_000 : 100_000) && cleanItemCount <= 25) {
     issues.push("total looks implausibly large");
     score -= 6;
     severeIssue = true;
@@ -2473,6 +2483,8 @@ export const parseAirlineTicketReceiptText = (receiptText: string): ReceiptPrevi
 };
 
 export const parseReceiptText = (receiptText: string): ReceiptPreviewResult => {
+  const korean = parseKoreanReceiptText(receiptText);
+  if (korean) return korean;
   const normalized = receiptText.replace(/\u00a0/g, " ");
   const { lines, fragmentJoins } = mergeFragmentLines(
     normalized

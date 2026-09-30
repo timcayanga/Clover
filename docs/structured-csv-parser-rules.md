@@ -6,7 +6,7 @@ Use these rules for structured financial exports (`.csv`, `.tsv`, `.xlsx`, `.xls
 
 - Prefer schema-based parsing before institution-specific text or AI fallback.
 - Recognize comma, tab, semicolon, and pipe delimiters, including Excel `sep=` directives.
-- Accept `.csv` and `.tsv` uploads and decode UTF-8, UTF-16 LE/BE, BOM-prefixed, and Windows-1252 exports before parsing.
+- Accept `.csv` and `.tsv` uploads and decode UTF-8, UTF-16 LE/BE, BOM-prefixed, and Windows-1252 exports before parsing. Korean financial tables can also use EUC-KR/CP949 after strict decoding and recognizable-header checks. See `docs/korean-import-parser-rules.md`.
 - Decode Excel and OpenDocument workbooks on the server, preserve cached formula results, and route each readable worksheet through the same deterministic schema parser. Never attempt to interpret the binary, ZIP/XML, or OLE payload as plain text.
 - Preserve worksheet boundaries, names, indexes, source rows, and source columns in the audit payload. A successful account-inventory sheet must not prevent transaction or receivable sheets in the same workbook from being parsed.
 - Detect independent tables arranged side-by-side on a worksheet. Parse each table in its own column range instead of combining duplicate `Date`, `Type`, `Name`, or `Amount` headers.

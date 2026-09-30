@@ -10566,7 +10566,7 @@ export const processImportFileText = async (
       dateCoverage: Number(parsedDateCoverage.toFixed(3)),
     });
   }
-  const receiptPreview = imageImport && !isTransactionHistoryImage() ? parseReceiptText(textForParse) : null;
+  const receiptPreview = (imageImport || importMode === "receipt") && !isTransactionHistoryImage() ? parseReceiptText(textForParse) : null;
   if (!cachedReceiptExtraction && perceptualReceiptCacheCandidate && receiptPreview) {
     const cachedDetails = perceptualReceiptCacheCandidate.extraction.receiptDetails;
     const previewTotal = Number(receiptPreview.total);
