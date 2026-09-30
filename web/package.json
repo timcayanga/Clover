@@ -39,7 +39,7 @@
     "qa:bpi-import-worker-enrichment": "tsx scripts/bpi-import-worker-enrichment-regression.ts",
     "qa:cimb-multi-account": "tsx scripts/cimb-multi-account-import-regression.ts",
     "qa:net-worth-csv": "tsx scripts/net-worth-snapshot-csv-regression.ts",
-    "qa:korean-import": "tsx scripts/korean-import-regression.ts && tsx scripts/korean-import-extended-regression.ts && NODE_OPTIONS=--conditions=react-server tsx scripts/korean-merchant-learning-regression.ts",
+    "qa:korean-import": "tsx scripts/korean-import-regression.ts && tsx scripts/korean-import-extended-regression.ts && tsx scripts/korean-document-regression.ts && NODE_OPTIONS=--conditions=react-server tsx scripts/korean-merchant-learning-regression.ts",
     "qa:structured-csv": "tsx scripts/structured-csv-parser-regression.ts",
     "qa:financial-exchange": "tsx scripts/financial-exchange-parser-regression.ts",
     "qa:image-formats": "tsx scripts/image-format-regression.ts",

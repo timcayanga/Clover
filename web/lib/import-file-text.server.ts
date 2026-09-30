@@ -1,4 +1,5 @@
-import { hasHangul } from "@/lib/korean-financial-text";
+import { hasHangul, hasKoreanFinancialHeaders } from "@/lib/korean-financial-text";
+import { koreanStatementLineEvidence } from "@/lib/korean-statement-evidence";
 import { createRequire } from "node:module";
 import { createHash } from "node:crypto";
 import { dirname, join, sep } from "node:path";
@@ -1049,10 +1050,11 @@ const scoreStatementTextCandidate = (text: string) => {
       noiseCount += 1;
     }
 
-    const dateLike = datePattern.test(line);
-    const amountLike = amountPattern.test(line);
-    const balanceLike = balancePattern.test(line);
-    const transactionLike = transactionPattern.test(line);
+    const korean = koreanStatementLineEvidence(line);
+    const dateLike = datePattern.test(line) || korean.date;
+    const amountLike = amountPattern.test(line) || korean.amount;
+    const balanceLike = balancePattern.test(line) || korean.balance;
+    const transactionLike = transactionPattern.test(line) || korean.transaction;
 
     if (dateLike) {
       dateLikeCount += 1;
@@ -1115,6 +1117,15 @@ export const pdfTextLayerLooksSufficientForParsing = (text: string, fileName?: s
   }
 
   const lines = normalized.split(/\r?\n/).filter((line) => line.trim().length > 0);
+  const koreanTable = hasKoreanFinancialHeaders(lines.map(line => line.trim().replace(/\s+/g, "\t")).join("\n"));
+  if (koreanTable) {
+    // Missing/replacement glyphs are not a healthy digital text layer even if
+    // dates and amounts survive. Retain rendered OCR and the backup decision.
+    if (/[\uFFFD\uE000-\uF8FF]/u.test(normalized)) return false;
+    const evidence = lines.map(koreanStatementLineEvidence);
+    return evidence.filter(line => line.date && line.amount).length >= 2 &&
+      evidence.filter(line => line.amount).length >= 3 && scoreStatementTextCandidate(normalized) >= 25;
+  }
   const datePattern = /(?:\b(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\.?\s+\d{1,2}|\b\d{1,2}\s+(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)(?:[a-z]+)?\.?\s+\d{4}\b|\b\d{1,2}[/-]\d{1,2}(?:[/-]\d{2,4})?\b|\b\d{4}-\d{2}-\d{2}\b)/i;
   const amountPattern = /(?:[₱$€£¥]\s*)?\b\d{1,3}(?:,\d{3})*(?:\.\d{2})\b|\b\d+(?:\.\d{2})\b/;
   const transactionPattern = /\b(?:card transaction|transaction:|transfer|payment|purchase|refund|withdraw|deposit|debit|credit)\b/i;
@@ -1188,16 +1199,17 @@ const scoreStatementTextLineCandidate = (line: string) => {
   const transactionPattern = /\b(?:debit|credit|withdraw|deposit|transfer|payment|purchase|refund|charge|fee|interest|cash|atm|branch|merchant|reference|pos|card)\b/i;
 
   let score = Math.min(1.25, normalized.length / 50);
-  if (datePattern.test(normalized)) {
+  const korean = koreanStatementLineEvidence(normalized);
+  if (datePattern.test(normalized) || korean.date) {
     score += 1.75;
   }
-  if (amountPattern.test(normalized)) {
+  if (amountPattern.test(normalized) || korean.amount) {
     score += 1.5;
   }
-  if (balancePattern.test(normalized)) {
+  if (balancePattern.test(normalized) || korean.balance) {
     score += 1;
   }
-  if (transactionPattern.test(normalized)) {
+  if (transactionPattern.test(normalized) || korean.transaction) {
     score += 1;
   }
   if (/[A-Za-z]{4,}/.test(normalized) && /[0-9]/.test(normalized)) {

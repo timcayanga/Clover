@@ -892,7 +892,7 @@ const readStructuredCell = (table: StructuredDelimitedTable, row: string[], key:
   return "";
 };
 
-const readStructuredMoney = (table: StructuredDelimitedTable, row: string[], key: string) => {
+const readStructuredMoney = (table: StructuredDelimitedTable, row: string[], key: string, metadata = table.preambleMetadata) => {
   const index = table.canonicalHeaders.findIndex((header, i) => header === key && normalizeWhitespace(row[i] ?? ""));
   if (index < 0) return null;
   const cell = row[index] ?? "";
@@ -902,10 +902,10 @@ const readStructuredMoney = (table: StructuredDelimitedTable, row: string[], key
   if (amount === null || hasKoreanAmountMarker(cell)) return amount;
   const header = table.headers[index] ?? "";
   const headerCurrency = koreanTable && /[A-Za-z]/.test(header) ? detectCurrencyEvidence(header).currency : null;
-  const rowCurrency = normalizeGlobalCurrencyCode(readStructuredCell(table, row, "currency") || table.preambleMetadata.currency);
+  const rowCurrency = normalizeGlobalCurrencyCode(readStructuredCell(table, row, "currency") || metadata.currency);
   const currency = foreignCurrency ?? headerCurrency ?? rowCurrency;
   const scale = koreanMoneyUnitScale(header) ??
-    (key !== "original_amount" && (!currency || currency === "KRW") ? koreanMoneyUnitScale(table.preambleMetadata.money_unit ?? "") : null) ?? 1;
+    (key !== "original_amount" && (!currency || currency === "KRW") ? koreanMoneyUnitScale(metadata.money_unit ?? "") : null) ?? 1;
   const scaled = amount * scale;
   return Number.isFinite(scaled) && Number.isSafeInteger(Math.round(scaled * 100)) ? scaled : null;
 };
@@ -1179,7 +1179,7 @@ export const parseStructuredTransactionCsv = (
       const hasContinuationAmount = ["amount", "debit", "credit", "balance", "fee"].some(
         (key) => parseMoney(readStructuredCell(table, sourceRow, key)) !== null
       );
-      if (koreanTable && rawDate && description && hasContinuationAmount &&
+      if (koreanTable && description && hasContinuationAmount &&
           !/^(?:합계|총계|소계|기초잔액|기말잔액)$/.test(description)) {
         throw new Error("Clover could not safely read a date in this Korean transaction table. Check the source row and upload again. Nothing was added.");
       }
@@ -1197,6 +1197,9 @@ export const parseStructuredTransactionCsv = (
       }
       return;
     }
+    if (!description && koreanTable && ["amount", "debit", "credit"].some(key => readStructuredCell(table, sourceRow, key).trim())) {
+      throw new Error("Clover could not safely identify a dated Korean transaction. Add its description or reference before importing. Nothing was added.");
+    }
     if (!description || /^(?:합계|총계|소계|기초잔액|기말잔액|total|subtotal|opening balance|closing balance|ending balance)$/i.test(description)) return;
     const status = normalizeWhitespace(readStructuredCell(table, sourceRow, "status"));
     const compactStatus = status.replace(/\s/g, "");
@@ -1206,9 +1209,13 @@ export const parseStructuredTransactionCsv = (
     const debitText = readStructuredCell(table, sourceRow, "debit");
     const creditText = readStructuredCell(table, sourceRow, "credit");
     const amountText = readStructuredCell(table, sourceRow, "amount");
-    const debit = readStructuredMoney(table, sourceRow, "debit");
-    const credit = readStructuredMoney(table, sourceRow, "credit");
-    const signedAmount = readStructuredMoney(table, sourceRow, "amount");
+    const debit = readStructuredMoney(table, sourceRow, "debit", activeMetadata);
+    const credit = readStructuredMoney(table, sourceRow, "credit", activeMetadata);
+    const signedAmount = readStructuredMoney(table, sourceRow, "amount", activeMetadata);
+    if (koreanTable && [[debitText, debit], [creditText, credit], [amountText, signedAmount]].some(([text, value]) =>
+      typeof text === "string" && text.trim() && !/^[—–-]$/.test(text.trim()) && value === null)) {
+      throw new Error("Clover could not safely read an amount in this Korean transaction table. Check every populated money column and upload again. Nothing was added.");
+    }
     const hasDebit = debit !== null && debit !== 0;
     const hasCredit = credit !== null && credit !== 0;
     if ((hasDebit && hasCredit) || (!hasDebit && !hasCredit && signedAmount === null)) {
@@ -1253,9 +1260,9 @@ export const parseStructuredTransactionCsv = (
       normalizeInstitutionCurrency(
         institution,
         currencyText || detectCurrencyFromText(`${amountText} ${debitText} ${creditText} ${table.headers.filter((_, index) =>
-          ["amount", "debit", "credit"].includes(table.canonicalHeaders[index] ?? "")).join(" ")} ${metadata.money_unit ? `단위: ${metadata.money_unit}` : ""}`)
+          ["amount", "debit", "credit"].includes(table.canonicalHeaders[index] ?? "")).join(" ")} ${activeMetadata.money_unit ? `단위: ${activeMetadata.money_unit}` : ""}`)
       ) ?? null;
-    const runningBalance = readStructuredMoney(table, sourceRow, "balance");
+    const runningBalance = readStructuredMoney(table, sourceRow, "balance", activeMetadata);
     const originalCurrency =
       normalizeCurrencyCode(readStructuredCell(table, sourceRow, "original_currency")) ??
       normalizeCurrencyCode(detectCurrencyFromText(`${readStructuredCell(table, sourceRow, "original_amount")} ${table.headers[table.canonicalHeaders.indexOf("original_amount")] ?? ""}`));
@@ -1285,8 +1292,8 @@ export const parseStructuredTransactionCsv = (
       categoryRaw: normalizeWhitespace(readStructuredCell(table, sourceRow, "category")),
       reference: normalizeWhitespace(readStructuredCell(table, sourceRow, "reference")),
       status,
-      fee: readStructuredMoney(table, sourceRow, "fee"),
-      originalAmount: readStructuredMoney(table, sourceRow, "original_amount"),
+      fee: readStructuredMoney(table, sourceRow, "fee", activeMetadata),
+      originalAmount: readStructuredMoney(table, sourceRow, "original_amount", activeMetadata),
       originalCurrency,
       rowMetadata: { ...activeMetadata },
       balanceDelta: null,
@@ -1448,6 +1455,7 @@ export const parseGenericAccountSnapshotCsv = (
   }
 
   const today = new Date().toISOString().slice(0, 10);
+  const koreanSnapshot = hasHangul(table.headers.join(" "));
   const snapshotDateKey = table.canonicalHeaders.includes("snapshot_date") ? "snapshot_date" : "date";
   const snapshotDateOrder = inferStructuredDateOrder(table, snapshotDateKey);
   const candidates = table.rows.flatMap((sourceRow, sourceRowIndex) => {
@@ -1475,20 +1483,31 @@ export const parseGenericAccountSnapshotCsv = (
         readStructuredCell(table, sourceRow, "account_type") || table.preambleMetadata.account_type
       ) ??
       inferAccountTypeFromStatement(institution, accountName, "bank");
+    const balanceEvidence = detectCurrencyEvidence(`${readStructuredCell(table, sourceRow, "balance")} ${table.headers[table.canonicalHeaders.indexOf("balance")] ?? ""}`);
     const currency =
       normalizeInstitutionCurrency(
         institution,
         readStructuredCell(table, sourceRow, "currency") ||
           table.preambleMetadata.currency ||
-          detectCurrencyFromText(`${readStructuredCell(table, sourceRow, "balance")} ${table.headers.join(" ")}`) || context.currency
-      ) ?? (hasHangul(table.headers.join(" ")) ? null : "PHP");
+          (koreanSnapshot ? balanceEvidence.currency : detectCurrencyFromText(`${readStructuredCell(table, sourceRow, "balance")} ${table.headers.join(" ")}`)) ||
+          (koreanMoneyUnitScale(table.preambleMetadata.money_unit ?? "") !== null ? "KRW" : null) || context.currency
+      ) ?? (koreanSnapshot ? null : "PHP");
     if (!currency) throw new Error("Clover could not identify the currency of this Korean balance table. Add a currency column (for example KRW) and upload again. Nothing was added.");
-    const snapshotDate =
-      parseStructuredDate(
-        readStructuredCell(table, sourceRow, "snapshot_date") || readStructuredCell(table, sourceRow, "date"),
+    if (koreanSnapshot && (balanceEvidence.ambiguous || (balanceEvidence.currency && balanceEvidence.currency !== currency))) {
+      throw new Error("Clover found conflicting currencies in this Korean balance table. Check the balance and currency columns before importing. Nothing was added.");
+    }
+    const dateText = readStructuredCell(table, sourceRow, "snapshot_date") || readStructuredCell(table, sourceRow, "date") || table.preambleMetadata.snapshot_date;
+    const parsedSnapshotDate = parseStructuredDate(
+        dateText,
         resolveTransactionContext({ institution, accountName }).countryCode,
         snapshotDateOrder
-      )?.toISOString().slice(0, 10) ?? today;
+      );
+    if (koreanSnapshot && dateText && !parsedSnapshotDate) {
+      throw new Error("Clover could not safely read a date in this Korean balance table. Check the valuation date and upload again. Nothing was added.");
+    }
+    const snapshotDate = parsedSnapshotDate?.toISOString().slice(0, 10) ?? today;
+    const reviewReasons = koreanSnapshot && !parsedSnapshotDate
+      ? ["The source has no balance date. The upload date is shown; confirm the actual valuation date."] : [];
     const accountNumber = normalizeWhitespace(readStructuredCell(table, sourceRow, "account_number"));
 
     return [{
@@ -1499,14 +1518,27 @@ export const parseGenericAccountSnapshotCsv = (
       accountType,
       currency,
       snapshotDate,
+      reviewReasons,
+      sourceCells: sourceRow,
       accountNumber,
       sourceRowIndex: table.headerIndex + sourceRowIndex + 2,
     }];
   });
 
   const accountGroups = new Map<string, typeof candidates>();
+  const accountCurrencies = new Map<string, string>();
   candidates.forEach((candidate) => {
     const institutionIdentity = normalizeStructuredHeader(candidate.institution ?? "");
+    // Confirmation currently resolves account numbers/names before currency.
+    // Stop ambiguous multi-currency identities here rather than letting their
+    // otherwise distinct parsed snapshots collapse later in that pipeline.
+    const currencyIdentity = candidate.accountNumber ? `number:${candidate.accountNumber}` :
+      `name:${institutionIdentity}:${normalizeStructuredHeader(candidate.accountName)}`;
+    const priorCurrency = accountCurrencies.get(currencyIdentity);
+    if (koreanSnapshot && priorCurrency && priorCurrency !== candidate.currency) {
+      throw new Error("Clover found multiple currencies for the same Korean account identity. Give each currency account a distinct identity before importing. Nothing was added.");
+    }
+    accountCurrencies.set(currencyIdentity, candidate.currency);
     const identity = candidate.accountNumber
       ? `number:${institutionIdentity || normalizeStructuredHeader(candidate.accountName)}:${normalizeStructuredHeader(candidate.accountNumber)}`
       : [
@@ -1532,6 +1564,10 @@ export const parseGenericAccountSnapshotCsv = (
     const latest = ordered.at(-1)!;
     const balanceHistoryByDate = new Map<string, { date: string; balance: number; sourceRowIndex: number }>();
     ordered.forEach((candidate) => {
+      const previous = balanceHistoryByDate.get(candidate.snapshotDate);
+      if (koreanSnapshot && previous && previous.balance !== candidate.balance) {
+        throw new Error("Clover found different balances for the same Korean account and valuation date. Confirm which balance is correct before importing. Nothing was added.");
+      }
       balanceHistoryByDate.set(candidate.snapshotDate, {
         date: candidate.snapshotDate,
         balance: candidate.balance,
@@ -1553,8 +1589,8 @@ export const parseGenericAccountSnapshotCsv = (
       accountNumber: latest.accountNumber || undefined,
       institution: latest.institution ?? undefined,
       type: "income" as const,
-      confidence: 98,
-      parserConfidence: 100,
+      confidence: latest.reviewReasons.length ? 65 : 98,
+      parserConfidence: latest.reviewReasons.length ? 65 : 100,
       categoryConfidence: 100,
       rawPayload: {
         kind: "account_snapshot_marker",
@@ -1562,6 +1598,9 @@ export const parseGenericAccountSnapshotCsv = (
         documentType: accountInventory ? "account_inventory" : "account_detail",
         sourceRowIndex: latest.sourceRowIndex,
         sourceRowIndexes: ordered.map((candidate) => candidate.sourceRowIndex),
+        sourceCells: latest.sourceCells,
+        originalHeaders: table.headers,
+        ...(latest.reviewReasons.length ? { reviewRequired: true, reviewReasons: latest.reviewReasons } : {}),
         preambleMetadata: table.preambleMetadata,
         balance: latest.balance,
         balanceHistory,

@@ -1,4 +1,5 @@
 import * as XLSX from "xlsx";
+import { koreanFinancialHeader, koreanInvestmentHeader } from "@/lib/korean-financial-text";
 
 const MAX_WORKBOOK_SHEETS = 32;
 const MAX_WORKSHEET_ROWS = 25_000;
@@ -51,6 +52,41 @@ const worksheetCellToText = (cell: XLSX.CellObject | undefined, forceSerialDate 
 const escapeCsvCell = (value: string) =>
   /[",\r\n]/.test(value) ? `"${value.replace(/"/g, '""')}"` : value;
 
+const dateHeaderKeys = new Set(["date", "posted_date", "snapshot_date", "valuation_date"]);
+const workbookHeaderKey = (value: string) => {
+  const korean = koreanInvestmentHeader(value) ?? koreanFinancialHeader(value);
+  if (korean) return korean;
+  const header = value.trim().toLowerCase().replace(/[_-]/g, " ").replace(/\s+/g, " ");
+  if (/^(?:date|posted date|transaction date|snapshot date|balance date|valuation date|as of|as of date)$/.test(header)) return "date";
+  if (/^(?:description|merchant|amount|debit|credit|balance|account(?: name| number| type)?|currency|direction|type|category|investment|platform|market value|units\/ shares|quantity)$/.test(header)) return "field";
+  return null;
+};
+
+const updateDateColumns = (cells: Array<XLSX.CellObject | undefined>, dateColumns: Set<number>) => {
+  if (cells.every(cell => !cellValueToText(cell?.v).trim())) {
+    return;
+  }
+  // Independently scoped headers support stacked and side-by-side tables. A
+  // later Quantity/Account Number header must stop an earlier Date conversion.
+  let start = 0;
+  while (start < cells.length) {
+    while (start < cells.length && !cellValueToText(cells[start]?.v).trim()) start += 1;
+    let end = start;
+    while (end < cells.length && cellValueToText(cells[end]?.v).trim()) end += 1;
+    const group = cells.slice(start, end);
+    const keys = group.map(cell => workbookHeaderKey(cellValueToText(cell?.v)));
+    const looksLikeHeader = group.every(cell => typeof cell?.v === "string" && !/^\s*[+-]?\d/.test(cell.v)) &&
+      (keys.filter(Boolean).length >= 2 || (group.length >= 2 && keys.some(key => dateHeaderKeys.has(key ?? ""))));
+    if (looksLikeHeader) {
+      for (let index = start; index < end; index += 1) {
+        if (dateHeaderKeys.has(keys[index - start] ?? "")) dateColumns.add(index);
+        else dateColumns.delete(index);
+      }
+    }
+    start = end + 1;
+  }
+};
+
 /**
  * Converts workbook sheets to CSV-compatible text so spreadsheet files use
  * the same deterministic schema parser and audit trail as CSV imports.
@@ -89,26 +125,19 @@ export const decodeSpreadsheetWorkbookBytes = async (bytes: Uint8Array) => {
     // ODS exports may drop the source date number format. Header semantics are
     // authoritative enough to decode numeric spreadsheet serials in date columns.
     const dateColumns = new Set<number>();
-    for (let rowIndex = range.s.r; rowIndex <= Math.min(range.e.r, range.s.r + 11); rowIndex += 1) {
-      for (let columnIndex = range.s.c; columnIndex <= range.e.c; columnIndex += 1) {
-        const header = cellValueToText(worksheet[XLSX.utils.encode_cell({ r: rowIndex, c: columnIndex })]?.v)
-          .trim()
-          .toLowerCase();
-        if (/^(?:date|posted date|transaction date|snapshot date|balance date|as of|as-of date)$/.test(header)) {
-          dateColumns.add(columnIndex);
-        }
-      }
-    }
 
     const normalizedRows: string[][] = [];
     for (let rowIndex = range.s.r; rowIndex <= range.e.r; rowIndex += 1) {
+      const cells = Array.from({ length: columnCount }, (_, offset) =>
+        worksheet[XLSX.utils.encode_cell({ r: rowIndex, c: range.s.c + offset })] as XLSX.CellObject | undefined);
+      updateDateColumns(cells, dateColumns);
       const row = Array.from({ length: columnCount }, (_, offset) => {
         const address = XLSX.utils.encode_cell({ r: rowIndex, c: range.s.c + offset });
         const cell = worksheet[address];
         if (cell?.f && (cell.v === undefined || cell.v === null || cell.t === "e")) {
           throw new Error(`Worksheet "${sheetName}" has a formula without a usable saved result at ${address}. Recalculate and save it in Excel, or export values, then upload again.`);
         }
-        return worksheetCellToText(cell, dateColumns.has(range.s.c + offset) && rowIndex > range.s.r, date1904);
+        return worksheetCellToText(cell, dateColumns.has(offset), date1904);
       });
       while (row.length > 0 && row[row.length - 1] === "") row.pop();
       if (row.some(Boolean)) normalizedRows.push(row);

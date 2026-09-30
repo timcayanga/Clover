@@ -31,11 +31,31 @@ export const koreanFinancialHeader = (value: string): string | null => {
   return headerAliases[normalized] ?? null;
 };
 
+const investmentHeaderAliases: Record<string, string> = {
+  종목명: "asset", 투자상품명: "asset", 펀드명: "asset", 투자명: "asset",
+  증권사: "provider", 운용사: "provider", 플랫폼: "provider", 금융기관: "provider",
+  평가금액: "market_value", 평가액: "market_value", 현재평가액: "market_value",
+  평가일: "valuation_date", 평가일자: "valuation_date", 기준일: "valuation_date", 조회일: "valuation_date",
+  보유수량: "quantity", 보유주수: "quantity", 보유좌수: "quantity", 수량: "quantity",
+  종목코드: "symbol", 월납입액: "monthly_contribution", 월적립액: "monthly_contribution",
+};
+
+export const koreanInvestmentHeader = (value: string): string | null => {
+  const key = normalizeKoreanFinancialText(value).replace(/\([^)]*\)|\[[^\]]*\]/g, "").replace(/\s/g, "");
+  return investmentHeaderAliases[key] ?? null;
+};
+
 /** A legacy byte sequence is only accepted as Korean when it contains a financial table. */
 export const hasKoreanFinancialHeaders = (value: string) => {
-  const fields = new Set(value.split(/[,;|\t\r\n]/).map((cell) => koreanFinancialHeader(cell.replace(/^"|"$/g, ""))).filter(Boolean));
-  return fields.size >= 3 && (fields.has("date") || fields.has("snapshot_date")) &&
-    ["amount", "debit", "credit", "balance"].some((key) => fields.has(key));
+  // Evidence must occur together on a header row, not in unrelated prose.
+  return value.split(/\r?\n/).some(line => {
+    const cells = line.split(/[,;|\t]/).map(cell => cell.trim().replace(/^"|"$/g, ""));
+    const fields = new Set(cells.map(koreanFinancialHeader).filter(Boolean));
+    const holdings = new Set(cells.map(koreanInvestmentHeader).filter(Boolean));
+    return (fields.size >= 3 && (fields.has("date") || fields.has("snapshot_date")) &&
+      ["amount", "debit", "credit", "balance"].some(key => fields.has(key))) ||
+      ["asset", "provider", "market_value", "valuation_date"].every(key => holdings.has(key));
+  });
 };
 
 export const hasKoreanAmountMarker = (value: string) => /[₩￦원만억천백십조]|\bKRW\b/iu.test(value);

@@ -25,7 +25,7 @@ Korean (Hangul) text and KRW are independent signals. Never assign currency sole
 ## Structured files
 
 - Use the existing ledger/inventory parsers with Korean header aliases and the existing audit trail.
-- Decode UTF-8/UTF-16 normally. Consider EUC-KR/CP949 only after strict UTF-8 fails, strict Korean decoding succeeds, and at least three financial headers (including date and money) are recognized. Retain Windows-1252 compatibility.
+- Decode UTF-8/UTF-16 normally. Consider EUC-KR/CP949 only after strict UTF-8 fails, strict Korean decoding succeeds, and a single row contains either at least three financial headers (including date and money) or the complete asset/provider/value/valuation-date investment header. Unrelated labels scattered through prose are insufficient. Retain Windows-1252 compatibility.
 - Preserve workbook preamble account metadata and currency. Missing account columns must not replace detected KRW with PHP.
 - 입금/수입 are incoming; 출금/지출 are outgoing. Explicit columns take precedence. Ambiguous unsigned movements require review.
 - Ignore cancelled/pending/failed rows and aggregate total rows. Balance tables create snapshots, never spending. Unknown-currency Korean balance tables fail before persistence.
@@ -71,3 +71,14 @@ Public sample source: https://huggingface.co/datasets/HumynLabs/Korean_Receipts_
 - OCR statement comparison keys preserve Hangul rather than dropping it as non-Latin noise.
 - Backup instructions now explicitly cover Korean column order, unit examples, original versus billed currency, leading-zero security codes, and missing worksheet coverage. Existing AI consent and validation gates still apply.
 - `qa:korean-import` includes extended synthetic fixtures and actual XLSX byte decoding. Local OCR checks on a clean synthetic image and public sample 1 recovered merchant/date evidence, but missing item/total evidence still required review. No external AI accuracy claim is made from those OCR checks.
+
+## Document fidelity and incomplete-row safeguards
+
+- Scope unformatted spreadsheet date serial conversion to the current table headers, including Korean transaction and valuation dates. Support both Excel date systems, late headers, shifted columns and side-by-side tables. A subsequent quantity or account-number header stops prior date conversion; blank separators alone do not discard the current date system. Explicit cell date formats remain authoritative.
+- Keep leading-zero security/account identifiers and fractional quantities intact. Regression fixtures round-trip actual XLSX, XLS, XLSB and ODS bytes in both date systems.
+- Carry explicit section-level money units forward for transaction amounts, fees and balances. A switch from `천원` to `원` must stop multiplying later values by 1,000. Foreign/original amounts retain their existing independent currency treatment.
+- A populated, unreadable debit/credit/amount field cannot be ignored just because another column is readable. A transaction with missing date or description cannot disappear alongside valid rows. Stop the local parse for correction/backup evaluation; do not invent values.
+- Balance snapshots honor explicit preamble valuation dates. Invalid supplied dates fail closed; only genuinely absent dates use upload day, with lower confidence and an explicit review reason. Preserve original snapshot cells and headers.
+- Reject contradictory currency evidence or different balances for the same account/currency/date. Stop snapshots sharing an account identity across currencies, because the existing confirmation resolver groups through account numbers/names and could otherwise collapse those balances. Ask for distinct currency-account identities. These rules govern new parsing only and do not modify persisted customer records.
+- PDF text quality recognizes Korean dates and whole-Won amounts. Only a Korean financial table with multiple dated monetary rows can skip redundant OCR; sparse text, missing pages and replacement/private-use glyphs retain fallback. Dates and bare identifiers alone are not money evidence. This is text-quality routing, not a new institution-specific PDF parser.
+- `qa:korean-import` includes `korean-document-regression.ts` for legacy holdings, workbook semantics, section units, incomplete rows, snapshot safety and PDF OCR decisions. These synthetic checks do not establish accuracy for every photographed receipt or bank layout.

@@ -30,7 +30,7 @@ import { deriveTravelEpisodes, resolveTransactionContext } from "@/lib/context-c
 import { coerceTransactionTypeFromCategoryName, toInternalTransactionType } from "@/lib/transaction-directions";
 
 export const DATA_ENGINE_VERSION = "v2";
-export const IMPORT_FILE_EXTRACTION_CACHE_VERSION = "v17";
+export const IMPORT_FILE_EXTRACTION_CACHE_VERSION = "v18";
 export const resolveImportFileExtractionCacheVersion = (fileName?: string | null) => {
   const normalizedFileName = String(fileName ?? "");
   if (/^BE\d{8}\.pdf$/i.test(normalizedFileName.trim())) {

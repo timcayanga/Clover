@@ -1,18 +1,10 @@
 import type { ParsedImportRow } from "@/lib/import-parser";
 import { detectCurrencyEvidence, normalizeGlobalCurrencyCode } from "@/lib/financial-identity-detection";
-import { koreanFinancialHeader, koreanMoneyUnitScale, normalizeKoreanFinancialText, parseKoreanAmount, parseKoreanDate } from "@/lib/korean-financial-text";
+import { koreanFinancialHeader, koreanInvestmentHeader, koreanMoneyUnitScale, normalizeKoreanFinancialText, parseKoreanAmount, parseKoreanDate } from "@/lib/korean-financial-text";
 
-const aliases: Record<string, string> = {
-  종목명: "asset", 투자상품명: "asset", 펀드명: "asset", 투자명: "asset",
-  증권사: "provider", 운용사: "provider", 플랫폼: "provider", 금융기관: "provider",
-  평가금액: "market_value", 평가액: "market_value", 현재평가액: "market_value",
-  평가일: "valuation_date", 평가일자: "valuation_date", 기준일: "valuation_date", 조회일: "valuation_date",
-  보유수량: "quantity", 보유주수: "quantity", 보유좌수: "quantity", 수량: "quantity",
-  종목코드: "symbol", 월납입액: "monthly_contribution", 월적립액: "monthly_contribution",
-};
 const headerKey = (value: string) => {
   const key = normalizeKoreanFinancialText(value).replace(/\([^)]*\)|\[[^\]]*\]/g, "").replace(/\s/g, "");
-  return aliases[key] ?? koreanFinancialHeader(value) ?? key;
+  return koreanInvestmentHeader(value) ?? koreanFinancialHeader(value) ?? key;
 };
 export function isKoreanInvestmentHeader(headers: string[]) {
   if (!headers.some(header => /종목명|투자상품명|펀드명|투자명/.test(header.replace(/\s/g, "")))) return false;
