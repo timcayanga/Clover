@@ -846,11 +846,13 @@ const extractTextFromImageBufferWithReceiptAwareFallback = async (params: {
     return firstPassText;
   }
 
-  const profile = resolveImageNormalizationProfile({
+  const originalProfile = resolveImageNormalizationProfile({
     fileType: params.fileType,
     fileName: params.fileName,
     importMode: params.importMode,
   });
+  const koreanReceipt = hasHangul(firstPassText) && /영수증|부\s*가\s*세|가맹점명|상호\s*[:：]/.test(firstPassText);
+  const profile = koreanReceipt && originalProfile === "generic" ? "receipt" : originalProfile;
   const family = detectReceiptOcrFamilyFromText(firstPassText, profile);
   const candidates = await buildReceiptAwareOcrCandidates(params.normalizedBuffer, profile, family);
   const candidatePageSegMode =
@@ -876,8 +878,16 @@ const extractTextFromImageBufferWithReceiptAwareFallback = async (params: {
     }))
   );
 
+  // Previously, a requested retry could select the same first pass without
+  // trying a new segmentation. Keep full-frame Korean retries bounded to two.
+  const secondaryTexts = hasHangul(firstPassText)
+    ? await Promise.all(["4", "11"].map(async mode => ({
+        label: `ocr-full-psm-${mode}`, text: await extractTextFromImageBufferWithOcr(params.normalizedDataUrl, mode),
+      })))
+    : [];
   const allCandidates = [
     { text: firstPassText, label: "ocr-psm-6" },
+    ...secondaryTexts,
     ...candidateTexts,
   ];
   const bestText =
@@ -1164,7 +1174,7 @@ export const pdfTextLayerLooksSufficientForParsing = (text: string, fileName?: s
 const normalizeStatementTextLine = (line: string) =>
   line.replace(/\u00a0/g, " ").replace(/[|¦]/g, " ").replace(/\s+/g, " ").trim();
 
-const compactStatementTextLine = (line: string) => normalizeStatementTextLine(line).toLowerCase().replace(/[^a-z0-9]+/g, "");
+const compactStatementTextLine = (line: string) => normalizeStatementTextLine(line).normalize("NFKC").toLowerCase().replace(/[^\p{L}\p{N}]+/gu, "");
 
 const scoreStatementTextLineCandidate = (line: string) => {
   const normalized = normalizeStatementTextLine(line);

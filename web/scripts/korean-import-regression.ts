@@ -16,7 +16,7 @@ for (const amount of ["₩12,000", "12,000원", "KRW 12000", "￦１２，００
 assert.equal(parseAmountValue("(12,000원)"), -12000);
 assert.equal(parseAmountValue("₩-12,000"), -12000);
 assert.equal(parseAmountValue("2억원"), 200000000);
-assert.equal(parseAmountValue("2억 3천만원"), null, "Do not silently collapse unsupported compound units");
+assert.equal(parseAmountValue("2억 3천만원"), 230000000);
 assert.equal(parseAmountValue("카드 1234 12,000원"), null, "Identifiers are not amounts");
 for (const date of ["2026년 9월 30일", "2026. 09. 30. 오후 1:45", "2026-09-30 01:45:00", "20260930", "2026년 9월 30일 (수)"]) {
   assert.equal(parseDateValue(date)?.toISOString().slice(0, 10), "2026-09-30", date);
@@ -32,7 +32,7 @@ for (const text of ["합계 12,000원", "금액(원)", "통화: KRW", "￦１２
   assert.equal(detectCurrencyEvidence(text).currency, "KRW", text);
 }
 assert.equal(detectCurrencyEvidence("상호: 서울식당").currency, null, "Hangul alone does not imply KRW");
-assert.equal(detectCurrencyEvidence("통화: USD\n원거래통화: KRW").ambiguous, true);
+assert.equal(detectCurrencyEvidence("통화: USD\n원거래통화: KRW").currency, "USD", "Original currency is separate from settlement currency");
 assert.equal(formatCurrencyAmount("12000.00", "KRW"), "₩12,000");
 assert.equal(formatCurrencyAmount("12000.25", "KRW"), "₩12,000.25", "Preserve nonzero fractions in valuations");
 assert.equal(formatCurrencyAmount(12000, "PHP"), "₱12,000.00");

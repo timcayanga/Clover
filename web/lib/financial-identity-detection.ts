@@ -145,15 +145,17 @@ const SYMBOL_PATTERNS: Array<{ code: string; pattern: RegExp; label: string }> =
 ];
 
 export const detectCurrencyEvidence = (text: string): CurrencyDetectionResult => {
-  const normalized = text.normalize("NFKC").replace(/\u00a0/g, " ");
+  // An explicitly labeled original/foreign currency is not the settlement currency.
+  const normalized = text.normalize("NFKC").replace(/\u00a0/g, " ").split(/\r?\n/)
+    .filter(line => !/^\s*(?:원거래통화|현지통화|해외이용통화|원거래금액|현지금액|해외이용금액|외화금액)\s*[:：]/.test(line)).join("\n");
   const lines = normalized.split(/\r?\n/).map(normalizeSpace).filter(Boolean);
   const scores = new Map<string, CurrencyScore>();
 
   for (const [index, line] of lines.entries()) {
-    const koreanLabel = line.match(/(?:통화(?:코드)?|화폐|단위)\s*[:(]?\s*([A-Z]{3}|원화|원)(?:[)\s]|$)/i);
+    const koreanLabel = line.match(/(?:^|[\s[(])(?:청구통화|결제통화|정산통화|통화(?:코드)?|화폐|단위)\s*[:：(]?\s*(?:백만|천만|천|만|억)?([A-Z]{3}|원화|원)(?:[)\s]|$)/i);
     const koreanLabelCode = normalizeGlobalCurrencyCode(koreanLabel?.[1]);
     if (koreanLabel && koreanLabelCode) addCurrencyEvidence(scores, koreanLabelCode, 150, `explicit currency label: ${koreanLabel[1]}`);
-    if (/(?:\d[\d,.]*\s*원)(?![가-힣])|(?:금액|잔액|입금|출금)\s*[([]\s*(?:백만|천만|천|만|억)?원\s*[)\]]/u.test(line)) {
+    if (/원화(?:청구|결제|정산)?금액|(?:\d[\d,.]*\s*원)(?![가-힣])|(?:금액|잔액|입금|출금)\s*[([]\s*(?:백만|천만|천|만|억)?원\s*[)\]]/u.test(line)) {
       addCurrencyEvidence(scores, "KRW", 65, "Korean won amount or column unit");
     }
     const labeled = line.match(/\b(?:(?:account|statement|base|wallet|card|settlement|reporting)\s+)?currency(?:\s+code)?\s*[:\-]?\s*([A-Za-z][A-Za-z .]{1,28}|[A-Z]{3,4})\b/i);

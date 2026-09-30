@@ -1,0 +1,89 @@
+import type { ParsedImportRow } from "@/lib/import-parser";
+import { detectCurrencyEvidence, normalizeGlobalCurrencyCode } from "@/lib/financial-identity-detection";
+import { koreanFinancialHeader, koreanMoneyUnitScale, normalizeKoreanFinancialText, parseKoreanAmount, parseKoreanDate } from "@/lib/korean-financial-text";
+
+const aliases: Record<string, string> = {
+  종목명: "asset", 투자상품명: "asset", 펀드명: "asset", 투자명: "asset",
+  증권사: "provider", 운용사: "provider", 플랫폼: "provider", 금융기관: "provider",
+  평가금액: "market_value", 평가액: "market_value", 현재평가액: "market_value",
+  평가일: "valuation_date", 평가일자: "valuation_date", 기준일: "valuation_date", 조회일: "valuation_date",
+  보유수량: "quantity", 보유주수: "quantity", 보유좌수: "quantity", 수량: "quantity",
+  종목코드: "symbol", 월납입액: "monthly_contribution", 월적립액: "monthly_contribution",
+};
+const headerKey = (value: string) => {
+  const key = normalizeKoreanFinancialText(value).replace(/\([^)]*\)|\[[^\]]*\]/g, "").replace(/\s/g, "");
+  return aliases[key] ?? koreanFinancialHeader(value) ?? key;
+};
+export function isKoreanInvestmentHeader(headers: string[]) {
+  if (!headers.some(header => /종목명|투자상품명|펀드명|투자명/.test(header.replace(/\s/g, "")))) return false;
+  const keys = headers.map(headerKey);
+  return ["asset", "provider", "market_value", "valuation_date"].every(key => keys.includes(key));
+}
+
+/** Labeled inventories only. No guessed OCR columns, cost basis or trade transactions. */
+export function parseKoreanInvestmentTable(params: {
+  headers: string[]; rows: string[][]; headerIndex: number; metadata: Record<string, string>;
+}): ParsedImportRow[] {
+  const { headers, rows, headerIndex, metadata } = params;
+  const keys = headers.map(headerKey);
+  if (new Set(keys.filter(Boolean)).size !== keys.filter(Boolean).length) {
+    throw new Error("Clover found duplicate Korean investment columns. Give each column a distinct label and upload again. Nothing was added.");
+  }
+  const read = (row: string[], key: string) => row[keys.indexOf(key)]?.trim() ?? "";
+  const parseMonetaryCell = (row: string[], key: string) => {
+    const cell = read(row, key);
+    const parsed = parseKoreanAmount(cell);
+    if (parsed === null) return null;
+    const header = headers[keys.indexOf(key)] ?? "";
+    const currency = detectCurrencyEvidence(header).currency ?? normalizeGlobalCurrencyCode(read(row, "currency") || metadata.currency);
+    const scale = /[₩￦원만억천백십조]|KRW/i.test(cell) ? 1 :
+      koreanMoneyUnitScale(header) ?? ((!currency || currency === "KRW") ? koreanMoneyUnitScale(metadata.money_unit ?? "") : null) ?? 1;
+    const scaled = parsed * scale;
+    return Number.isSafeInteger(Math.round(scaled * 100)) ? scaled : null;
+  };
+  const investmentIdentities = new Set<string>();
+  return rows.flatMap((cells, index) => {
+    if (!cells.some(cell => cell.trim()) || isKoreanInvestmentHeader(cells)) return [];
+    const name = read(cells, "asset");
+    if (/^(?:합계|총계|소계|총합계)$/.test(name)) return [];
+    const provider = read(cells, "provider");
+    const value = parseMonetaryCell(cells, "market_value");
+    const date = parseKoreanDate(read(cells, "valuation_date"));
+    const quantityText = read(cells, "quantity");
+    const quantity = quantityText && quantityText !== "-" ? parseKoreanAmount(quantityText.replace(/\s*(?:주|좌)$/, "")) : null;
+    const currencyText = read(cells, "currency") || metadata.currency;
+    const amountEvidence = detectCurrencyEvidence(`${read(cells, "market_value")} ${headers[keys.indexOf("market_value")]}`);
+    const unitCurrency = koreanMoneyUnitScale(metadata.money_unit ?? "") !== null ? "KRW" : null;
+    const currency = currencyText ? normalizeGlobalCurrencyCode(currencyText) : amountEvidence.currency ?? unitCurrency;
+    if (!name || !provider || value === null || value < 0 || !date || !currency || amountEvidence.ambiguous ||
+        (amountEvidence.currency && amountEvidence.currency !== currency) ||
+        (quantityText && quantityText !== "-" && (quantity === null || quantity < 0))) {
+      throw new Error("Clover could not safely read a Korean investment value, currency, quantity or date. Check the original table and upload again. Nothing was added.");
+    }
+    const identity = [provider, name, currency].map(value => normalizeKoreanFinancialText(value).toLowerCase()).join("|");
+    if (investmentIdentities.has(identity)) {
+      throw new Error("Clover found repeated Korean investment identities. Confirm the separate accounts or valuation dates before importing. Nothing was added.");
+    }
+    investmentIdentities.add(identity);
+    const accountNumber = read(cells, "account_number") || metadata.account_number;
+    // Preserve the existing investment-summary identity: one named investment per provider.
+    return [{
+      date: date.toISOString().slice(0, 10), amount: "0.00", currency,
+      accountName: name, institution: provider,
+      merchantRaw: name, merchantClean: name, description: `${name} investment snapshot`,
+      type: "transfer" as const, categoryName: "Investments", confidence: 65, parserConfidence: 95, categoryConfidence: 65,
+      rawPayload: {
+        kind: "account_snapshot_marker", source: "investment_summary", documentType: "account_detail",
+        accountType: "investment", accountName: name, institution: provider,
+        assetName: name, investmentName: name, statementAccountNumber: accountNumber || null, assetSymbol: read(cells, "symbol") || null,
+        investmentSubtype: /펀드/.test(name) ? "mutual_fund" : "other",
+        balance: value, statementEndingBalance: value, marketValue: value,
+        ...(quantity !== null ? { quantity } : {}), monthlyContribution: parseMonetaryCell(cells, "monthly_contribution"),
+        sourceText: cells.join("\t"), sourceCells: cells, originalHeaders: headers,
+        sourceRowIndex: headerIndex + index + 2, preambleMetadata: metadata,
+        reviewRequired: true,
+        reviewReasons: ["Confirm the investment name, currency, quantity and valuation. Contributions and holdings are not spending or cost basis."],
+      },
+    }];
+  });
+}

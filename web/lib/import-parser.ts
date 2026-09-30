@@ -1,4 +1,5 @@
-import { hasHangul, koreanFinancialHeader, normalizeKoreanFinancialText, parseKoreanDate, hasKoreanAmountMarker, parseKoreanAmount } from "@/lib/korean-financial-text";
+import { isKoreanInvestmentHeader, parseKoreanInvestmentTable } from "@/lib/korean-investment-table";
+import { hasHangul, koreanFinancialHeader, normalizeKoreanFinancialText, parseKoreanDate, hasKoreanAmountMarker, parseKoreanAmount, koreanMoneyUnitScale } from "@/lib/korean-financial-text";
 import type { TransactionType } from "@prisma/client";
 import { humanizeMerchantText, summarizeMerchantText } from "@/lib/merchant-labels";
 import { getSharedMerchantCategoryHint, getStrongMerchantCategoryHint } from "@/lib/merchant-category-hints";
@@ -793,6 +794,7 @@ const canonicalStructuredHeader = (value: string) => {
 };
 
 const canonicalStructuredMetadataKey = (value: string) => {
+  if (/^(?:단위|금액단위|money_unit)$/.test(normalizeKoreanFinancialText(value).replace(/\s/g, ""))) return "money_unit";
   const korean = koreanFinancialHeader(value);
   if (korean && ["institution", "account_name", "account_number", "account_type", "currency", "snapshot_date"].includes(korean)) return korean;
   const header = normalizeStructuredHeader(value);
@@ -894,11 +896,18 @@ const readStructuredMoney = (table: StructuredDelimitedTable, row: string[], key
   const index = table.canonicalHeaders.findIndex((header, i) => header === key && normalizeWhitespace(row[i] ?? ""));
   if (index < 0) return null;
   const cell = row[index] ?? "";
-  const amount = parseMoney(cell);
+  const koreanTable = hasHangul(table.headers.join(" "));
+  const foreignCurrency = koreanTable && /[A-Za-z$€£¥]/.test(cell) ? detectCurrencyEvidence(cell).currency : null;
+  const amount = koreanTable && (!foreignCurrency || foreignCurrency === "KRW") ? parseKoreanAmount(cell) : parseMoney(cell);
   if (amount === null || hasKoreanAmountMarker(cell)) return amount;
-  const unit = normalizeKoreanFinancialText(table.headers[index] ?? "").match(/[([]\s*(백만|천만|천|만|억)원\s*[)\]]/);
-  const scale = unit ? ({ 백만: 1_000_000, 천만: 10_000_000, 천: 1_000, 만: 10_000, 억: 100_000_000 }[unit[1]] ?? 1) : 1;
-  return amount * scale;
+  const header = table.headers[index] ?? "";
+  const headerCurrency = koreanTable && /[A-Za-z]/.test(header) ? detectCurrencyEvidence(header).currency : null;
+  const rowCurrency = normalizeGlobalCurrencyCode(readStructuredCell(table, row, "currency") || table.preambleMetadata.currency);
+  const currency = foreignCurrency ?? headerCurrency ?? rowCurrency;
+  const scale = koreanMoneyUnitScale(header) ??
+    (key !== "original_amount" && (!currency || currency === "KRW") ? koreanMoneyUnitScale(table.preambleMetadata.money_unit ?? "") : null) ?? 1;
+  const scaled = amount * scale;
+  return Number.isFinite(scaled) && Number.isSafeInteger(Math.round(scaled * 100)) ? scaled : null;
 };
 
 type StructuredDateOrder = "day_first" | "month_first" | null;
@@ -1148,6 +1157,7 @@ export const parseStructuredTransactionCsv = (
   }> = [];
 
   table.rows.forEach((sourceRow, sourceRowIndex) => {
+    const koreanTable = hasHangul(table.headers.join(" "));
     if (isRepeatedStructuredHeaderRow(table, sourceRow)) return;
     const sectionMetadata = extractStructuredSectionMetadata(sourceRow);
     if (sectionMetadata) {
@@ -1169,6 +1179,10 @@ export const parseStructuredTransactionCsv = (
       const hasContinuationAmount = ["amount", "debit", "credit", "balance", "fee"].some(
         (key) => parseMoney(readStructuredCell(table, sourceRow, key)) !== null
       );
+      if (koreanTable && rawDate && description && hasContinuationAmount &&
+          !/^(?:합계|총계|소계|기초잔액|기말잔액)$/.test(description)) {
+        throw new Error("Clover could not safely read a date in this Korean transaction table. Check the source row and upload again. Nothing was added.");
+      }
       const previous = candidates.at(-1);
       if (
         previous &&
@@ -1185,7 +1199,8 @@ export const parseStructuredTransactionCsv = (
     }
     if (!description || /^(?:합계|총계|소계|기초잔액|기말잔액|total|subtotal|opening balance|closing balance|ending balance)$/i.test(description)) return;
     const status = normalizeWhitespace(readStructuredCell(table, sourceRow, "status"));
-    if (/^(?:대기|처리중|승인대기|예약|실패|거절|취소|승인취소|결제취소)$/.test(status)) return;
+    const compactStatus = status.replace(/\s/g, "");
+    if (/^(?:대기|처리중|승인대기|예약|실패|거절|취소|승인취소|결제취소|취소완료|미매입|매입대기|환불예정|환불대기)$/.test(compactStatus)) return;
     if (/\b(?:pending|processing|authorized|authorization|scheduled|upcoming|on hold|held|failed|declined|rejected|cancelled|canceled|void|voided|expired|reversed)\b/i.test(status)) return;
 
     const debitText = readStructuredCell(table, sourceRow, "debit");
@@ -1196,7 +1211,12 @@ export const parseStructuredTransactionCsv = (
     const signedAmount = readStructuredMoney(table, sourceRow, "amount");
     const hasDebit = debit !== null && debit !== 0;
     const hasCredit = credit !== null && credit !== 0;
-    if ((hasDebit && hasCredit) || (!hasDebit && !hasCredit && signedAmount === null)) return;
+    if ((hasDebit && hasCredit) || (!hasDebit && !hasCredit && signedAmount === null)) {
+      if (koreanTable && [amountText, debitText, creditText].some(value => /\d/.test(value))) {
+        throw new Error("Clover could not safely read an amount or direction in this Korean transaction table. Check the source row and upload again. Nothing was added.");
+      }
+      return;
+    }
 
     const accountName = normalizeWhitespace(readStructuredCell(table, sourceRow, "account_name") || rowAccountName);
     const accountNumber = normalizeWhitespace(
@@ -1220,7 +1240,8 @@ export const parseStructuredTransactionCsv = (
     const amountValue = hasDebit ? Math.abs(debit) : hasCredit ? Math.abs(credit) : Math.abs(signedAmount ?? 0);
     if (!Number.isFinite(amountValue) || amountValue <= 0) return;
 
-    const rawType = hasDebit ? "debit" : hasCredit ? "credit" : readStructuredCell(table, sourceRow, "type");
+    const rawType = hasDebit ? "debit" : hasCredit ? "credit" :
+      readStructuredCell(table, sourceRow, "type") || (/^(?:환불완료|환급완료)$/.test(compactStatus) ? "환불" : "");
     const merchantRaw = normalizeWhitespace(readStructuredCell(table, sourceRow, "merchant") || description);
     const currencyText = normalizeWhitespace(
       readStructuredCell(table, sourceRow, "currency") ||
@@ -1231,12 +1252,13 @@ export const parseStructuredTransactionCsv = (
     const currency =
       normalizeInstitutionCurrency(
         institution,
-        currencyText || detectCurrencyFromText(`${amountText} ${debitText} ${creditText} ${table.headers.join(" ")}`)
+        currencyText || detectCurrencyFromText(`${amountText} ${debitText} ${creditText} ${table.headers.filter((_, index) =>
+          ["amount", "debit", "credit"].includes(table.canonicalHeaders[index] ?? "")).join(" ")} ${metadata.money_unit ? `단위: ${metadata.money_unit}` : ""}`)
       ) ?? null;
     const runningBalance = readStructuredMoney(table, sourceRow, "balance");
     const originalCurrency =
       normalizeCurrencyCode(readStructuredCell(table, sourceRow, "original_currency")) ??
-      normalizeCurrencyCode(detectCurrencyFromText(readStructuredCell(table, sourceRow, "original_amount")));
+      normalizeCurrencyCode(detectCurrencyFromText(`${readStructuredCell(table, sourceRow, "original_amount")} ${table.headers[table.canonicalHeaders.indexOf("original_amount")] ?? ""}`));
     candidates.push({
       sourceRow,
       sourceRowIndex,
@@ -1318,14 +1340,14 @@ export const parseStructuredTransactionCsv = (
         : direction.type === "expense"
           ? -candidate.amountValue
           : null;
-    const balanceTolerance = Math.max(0.02, candidate.amountValue * 0.0001);
+    const balanceTolerance = candidate.currency === "KRW" ? 0.02 : Math.max(0.02, candidate.amountValue * 0.0001);
     const balanceReconciliation =
       candidate.balanceDelta === null || expectedBalanceDelta === null
         ? "unavailable"
         : Math.abs(candidate.balanceDelta - expectedBalanceDelta) <= balanceTolerance
           ? "matched"
           : "mismatch";
-    const dedupeReference = candidate.reference.replace(/[^a-zA-Z0-9]/g, "").toLowerCase();
+    const dedupeReference = candidate.reference.normalize("NFKC").replace(/[^\p{L}\p{N}]/gu, "").toLowerCase();
     if (dedupeReference.length >= 3) {
       const dedupeKey = [
         dedupeReference,
@@ -1340,10 +1362,14 @@ export const parseStructuredTransactionCsv = (
       seenReferences.add(dedupeKey);
     }
 
-    const amountCurrency = koreanHeaders ? detectCurrencyEvidence(`${candidate.amountText} ${candidate.debitText} ${candidate.creditText}`).currency : null;
+    const moneyHeaders = table.headers.filter((_, index) => ["amount", "debit", "credit"].includes(table.canonicalHeaders[index] ?? "") && candidate.sourceRow[index]?.trim());
+    const amountEvidence = koreanHeaders ? detectCurrencyEvidence(`${candidate.amountText} ${candidate.debitText} ${candidate.creditText} ${moneyHeaders.join(" ")}`) : null;
+    const amountCurrency = amountEvidence?.currency;
     const koreanReviewReason = koreanHeaders
-      ? !candidate.currency ? "Confirm the document currency."
-        : amountCurrency && amountCurrency !== candidate.currency ? "The amount currency conflicts with the currency column. Confirm the settlement currency."
+      ? /^(?:환불완료|환급완료)$/.test(candidate.status.replace(/\s/g, "")) && direction.type !== "income" ? "Refund status conflicts with the transaction direction. Confirm whether money was returned."
+        : balanceReconciliation === "mismatch" ? "The running balance does not reconcile with this amount. Confirm the amount and direction."
+        : !candidate.currency ? "Confirm the document currency."
+        : amountEvidence?.ambiguous || (amountCurrency && amountCurrency !== candidate.currency) ? "The amount currency conflicts with the currency column. Confirm the settlement currency."
           : direction.evidence === "conservative_default" ? "Confirm whether this is money in or money out." : null
       : null;
     const categoryName = candidate.categoryRaw ||
@@ -1360,12 +1386,13 @@ export const parseStructuredTransactionCsv = (
       accountNumber: candidate.accountNumber || undefined,
       institution: candidate.institution ?? undefined,
       type: direction.type,
-      confidence: candidate.currency ? 96 : 92,
-      parserConfidence: 98,
+      confidence: koreanReviewReason ? 55 : candidate.currency ? 96 : 92,
+      parserConfidence: koreanReviewReason ? 55 : 98,
       categoryConfidence: candidate.categoryRaw ? 100 : 72,
       rawPayload: {
         source: "structured_transaction_csv",
-        ...(koreanReviewReason ? { reviewRequired: true, reviewReason: koreanReviewReason } : {}),
+        ...(koreanReviewReason ? { reviewRequired: true, reviewReason: koreanReviewReason, reviewReasons: [koreanReviewReason] } : {}),
+        ...(koreanHeaders ? { sourceCells: candidate.sourceRow } : {}),
         sourceRowIndex: table.headerIndex + candidate.sourceRowIndex + 2,
         continuationSourceRowIndexes: candidate.continuationSourceRowIndexes.map(
           (sourceRowIndex) => table.headerIndex + sourceRowIndex + 2
@@ -1427,6 +1454,10 @@ export const parseGenericAccountSnapshotCsv = (
     if (isRepeatedStructuredHeaderRow(table, sourceRow)) return [];
     const accountName = normalizeWhitespace(readStructuredCell(table, sourceRow, "account_name"));
     const balance = readStructuredMoney(table, sourceRow, "balance");
+    if (hasHangul(table.headers.join(" ")) && accountName && balance === null &&
+        readStructuredCell(table, sourceRow, "balance").trim() && !/^(?:합계|총계|소계)$/.test(accountName)) {
+      throw new Error("Clover could not safely read a balance in this Korean account table. Check the source row and upload again. Nothing was added.");
+    }
     if (
       !accountName ||
       balance === null ||
@@ -1721,7 +1752,7 @@ const findStructuredTableSections = (text: string, fileName: string) => {
   const rows = parseDelimitedRows(withoutDirective, delimiter);
   const candidates: Array<{
     headerIndex: number;
-    kind: "transactions" | "accounts";
+    kind: "transactions" | "accounts" | "investments";
     signature: string;
   }> = [];
   rows.forEach((headers, headerIndex) => {
@@ -1729,6 +1760,10 @@ const findStructuredTableSections = (text: string, fileName: string) => {
     const canonicalHeaders = headers.map(canonicalStructuredHeader);
     const canonical = new Set(canonicalHeaders);
     const signature = canonicalHeaders.join("|");
+    if (isKoreanInvestmentHeader(headers)) {
+      candidates.push({ headerIndex, kind: "investments", signature });
+      return;
+    }
     if (score.hasDate && score.hasTransactionAmount && score.hasDescription && score.transactionScore >= 13) {
       candidates.push({ headerIndex, kind: "transactions", signature });
       return;
@@ -1783,6 +1818,15 @@ const parseSingleStructuredDelimitedImport = (
   context: ImportParseContext
 ) => {
   if (!isStructuredDelimitedFile(fileName, fileType)) return null;
+  if (/종목명|투자상품명|펀드명|투자명/.test(text)) {
+    const delimiter = detectStructuredDelimiter(text, fileName);
+    const sourceRows = parseDelimitedRows(text.replace(/^\uFEFF?\s*sep=.\s*\r?\n/i, ""), delimiter);
+    const koreanHeaderIndex = sourceRows.findIndex(isKoreanInvestmentHeader);
+    if (koreanHeaderIndex >= 0) return parseKoreanInvestmentTable({
+      headers: sourceRows[koreanHeaderIndex]!, rows: sourceRows.slice(koreanHeaderIndex + 1), headerIndex: koreanHeaderIndex,
+      metadata: extractStructuredPreambleMetadata(sourceRows.slice(0, koreanHeaderIndex)),
+    });
+  }
   const table = readStructuredDelimitedTable(text, fileName, fileType);
   if (!table) return [];
   const transactionRows = parseStructuredTransactionCsv(text, fileName, fileType, context);
@@ -1863,7 +1907,7 @@ type StructuredWorkbookTableRegion = {
   headerIndex: number;
   startColumn: number;
   endColumn: number;
-  kind: "transactions" | "accounts";
+  kind: "transactions" | "accounts" | "investments";
   direction: "income" | "expense" | null;
 };
 
@@ -1876,6 +1920,7 @@ const structuredWorkbookHeaderProbePatterns = {
 };
 
 const couldBeStructuredWorkbookHeaderRow = (row: string[]) => {
+  if (isKoreanInvestmentHeader(row)) return true;
   const normalizedHeaders = row.map(canonicalStructuredHeader).filter(Boolean);
   if (normalizedHeaders.length < 2) return false;
   const has = (pattern: RegExp) => normalizedHeaders.some((header) => pattern.test(header));
@@ -1911,6 +1956,10 @@ const findStructuredWorkbookTableRegions = (rows: string[][]): StructuredWorkboo
 
     nonEmptyRanges.forEach(({ start: startColumn, end: endColumn }) => {
       const headers = row.slice(startColumn, endColumn + 1);
+      if (isKoreanInvestmentHeader(headers)) {
+        candidates.push({ headerIndex, startColumn, endColumn, kind: "investments", direction: null });
+        return;
+      }
       const score = scoreStructuredHeaderRow(headers);
       const canonical = new Set(headers.map(canonicalStructuredHeader));
       const sectionContext = rows
@@ -2147,7 +2196,7 @@ const parseStructuredWorkbookImport = (
   // A recognized sheet must not hide an unfamiliar financial sheet from backup
   // routing. Return no local candidate so the complete workbook is evaluated.
   const incomplete = parsedWorksheets.some(({ worksheet, rows }) => rows.length === 0 &&
-    /\b(?:balance|amount|debit|credit|payment|transaction|investment|holding|portfolio|shares|units|income|expense|savings)\b/i.test(`${worksheet.sheetName} ${worksheet.rows.flat().join(" ")}`) &&
+    /잔액|금액|거래|투자|평가|보유|주식|입금|출금|예금|\b(?:balance|amount|debit|credit|payment|transaction|investment|holding|portfolio|shares|units|income|expense|savings)\b/i.test(`${worksheet.sheetName} ${worksheet.rows.flat().join(" ")}`) &&
     worksheet.rows.some(row => row.some(cell => /\d/.test(cell))));
   if (incomplete) return [];
   return parsedWorksheets.flatMap(({ worksheet, rows }) =>

@@ -10,7 +10,7 @@ Korean (Hangul) text and KRW are independent signals. Never assign currency sole
 - Preserve original images/files, original Korean text, source cells, headers, worksheet metadata and row indexes. Normalize NFKC/full-width characters only in a working copy.
 - Read Korean year-month-day dates, including year/month/day suffixes, dot-separated dates, compact YYYYMMDD and local time suffixes. Reject invalid calendar dates. Do not shift a printed date because of timezone conversion.
 - Interpret ₩, ￦, KRW and numeric 원 suffixes as currency evidence. Explicit currency columns and metadata take precedence over an inferred country.
-- Won can be integer-valued. Never divide 12,000원 by 100. Support explicit simple 천/만/억 amount multipliers and supported monetary column units; reject unsupported compound forms rather than dropping the multiplier.
+- Won can be integer-valued. Never divide 12,000원 by 100. Support explicit descending Arabic-number 천/만/억 amount expressions and monetary column units; reject ambiguous expressions rather than dropping a multiplier.
 
 ## Receipts
 
@@ -44,3 +44,30 @@ Korean (Hangul) text and KRW are independent signals. Never assign currency sole
 `npm --prefix web run qa:korean-import` covers synthetic receipts, Korean ledgers/workbook routing, CP949 headers, currency units, calendar dates, foreign currency, cancellations, ambiguous fields and display. Existing import and confirmed-data suites must continue passing.
 
 Public sample source: https://huggingface.co/datasets/HumynLabs/Korean_Receipts_Dataset (publisher-declared CC BY 4.0; mixed collected/simulated provenance). Keep downloaded images outside Git. Local OCR checks of samples 1, 10 and 20 produced incomplete/low-confidence text, correctly retained on the backup/review path. Those checks are not evidence of complete extraction accuracy, and no sample was sent to external AI or imported into a customer account.
+
+## Expanded layouts and validation (30 September 2026)
+
+- Receipt item parsing follows the printed column order: quantity/amount, unit price/quantity/amount, or quantity/unit price/amount. Wrapped item names and Latin item names in a Korean receipt are allowed; missing numeric columns are never invented.
+- Explicit merchant labels can use a colon, a space, or a separate value line. Conflicting merchant labels require review. Compact YYYYMMDD dates are accepted with explicit transaction labels.
+- Validate item arithmetic separately from VAT reconciliation. Conflicting or negative tax/discount/service amounts, unexplained rows, or inconsistent tax components block the fast path. Service charges and discounts are applied only when explicitly labeled and reconciled.
+- Parse descending Arabic-number unit expressions such as `2억 3천만원` and `1만 2천 500원`. Repeated/increasing units, malformed comma grouping, multiple signs, arbitrary text, and unsafe numeric magnitudes are rejected. This does not support fully written-out Korean numerals.
+- A `단위: 천원` table preamble applies to monetary columns, never account numbers, dates, quantities, or an unlabeled foreign amount. A column-specific unit takes precedence. Original currency and amount columns remain separate from settled billing amounts.
+- Korean references retain their letters for exact-repeat detection. Distinct references that happen to share digits are distinct transactions.
+- Completed refund statuses can supply incoming direction when there is no explicit direction; pending refunds and unposted/cancelled rows remain excluded. A conflicting refund direction requires review. KRW running balances use cent-level comparison rather than a percentage tolerance that would hide whole-Won discrepancies.
+- Unreadable dated Korean ledger rows stop the local parse instead of silently dropping a financial row. Low-confidence direction/currency/balance results carry matching confidence and review reasons.
+- Korean financial worksheets participate in the existing complete-workbook coverage check. An unreadable financial sheet requests backup evaluation of the complete workbook.
+
+### Korean investment inventories
+
+- Support explicitly delimited CSV/TSV and workbook tables with `종목명`/`펀드명`, `증권사`/`플랫폼`, `평가금액`, and `평가일`/`기준일` columns. Optional quantity, security code and monthly contribution values remain separate.
+- Reuse Clover's investment-summary snapshots, one named investment per provider. Do not create spending, trades, cost basis, or an aggregate total card. A shared statement account number is retained as provenance rather than merging distinct investments through that number.
+- Preserve fractional holdings quantities and security codes. Require an explicit readable valuation date and currency. Ambiguous currency, duplicate columns, repeated investment identities or an unreadable investment row stop the local parse.
+- Investment and transaction tables can coexist on a worksheet; keep both with worksheet, section and source-cell evidence. Source row indexes follow the existing decoded worksheet representation, which omits blank rows.
+- This is labeled inventory support, not a verified institution-specific Korean brokerage integration. Unfamiliar brokerage statements and screenshots still use backup/review.
+
+### OCR and backup coverage
+
+- A weak local Korean image result now receives up to two additional full-frame segmentation passes. Receipt labels select receipt scoring even when the image filename is generic. Keep the best complete candidate instead of concatenating contradictory OCR amounts.
+- OCR statement comparison keys preserve Hangul rather than dropping it as non-Latin noise.
+- Backup instructions now explicitly cover Korean column order, unit examples, original versus billed currency, leading-zero security codes, and missing worksheet coverage. Existing AI consent and validation gates still apply.
+- `qa:korean-import` includes extended synthetic fixtures and actual XLSX byte decoding. Local OCR checks on a clean synthetic image and public sample 1 recovered merchant/date evidence, but missing item/total evidence still required review. No external AI accuracy claim is made from those OCR checks.
