@@ -28,6 +28,8 @@ const conflicting = [
   "Tanggal;Keterangan;Kredit\n30/09/2026;Koreksi;-25000",
   "Tanggal;Keterangan;Debet;Jenis transaksi\n30/09/2026;Warung;25000;Pemasukan",
   "Tanggal;Keterangan;Nominal;Jenis transaksi\n30/09/2026;Warung;25000 CR;Pembayaran",
+  "Tanggal;Keterangan;Debet\n30/09/2026;Warung;25000 CR",
+  "Tanggal;Keterangan;Nominal;Jenis transaksi\n30/09/2026;Warung;Rp+25000;Pembayaran",
 ];
 for (const text of conflicting) {
   const row=csv("Mata uang;IDR\n"+text)[0]!;

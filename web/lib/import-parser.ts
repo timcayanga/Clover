@@ -1319,11 +1319,13 @@ export const parseStructuredTransactionCsv = (
       readStructuredCell(table, sourceRow, "type") || (/^(?:환불완료|환급완료)$/.test(compactStatus) ? "환불" : /^(?:refund|pengembalian dana) (?:selesai|berhasil)$/i.test(status) ? "pengembalian dana" : "");
     const columnDirection = hasDebit ? "expense" : hasCredit ? "income" : null;
     const typeDirection = structuredDirectionType(readStructuredCell(table, sourceRow, "type"), "", "", 1, null, null, false, false);
-    const amountDirection = structuredDirectionType("", "", amountText, signedAmount ?? amountValue, null, null, false, false);
+    const directionAmountText = indonesianTable ? amountText.replace(/^(?:Rp\.?|rupiah|[A-Z]{3})\s*/i, "") : amountText;
+    const amountDirection = structuredDirectionType("", "", directionAmountText, signedAmount ?? amountValue, null, null, false, false);
     const directions = [columnDirection,
       typeDirection.evidence === "explicit_type" && typeDirection.type !== "transfer" ? typeDirection.type : null,
       amountDirection.evidence === "amount_sign" ? amountDirection.type : null].filter(Boolean);
-    const directionConflict = indonesianTable && (new Set(directions).size > 1 || (hasCredit && credit! < 0) ||
+    const debitCreditMarker = hasDebit && /\s+(?:CR|K)$/i.test(debitText.trim());
+    const directionConflict = indonesianTable && (new Set(directions).size > 1 || debitCreditMarker || (hasCredit && credit! < 0) ||
       Boolean(columnDirection && signedAmount !== null && Math.abs(Math.abs(signedAmount) - amountValue) > 0.01));
     const merchantRaw = normalizeWhitespace(readStructuredCell(table, sourceRow, "merchant") || description);
     const currencyText = normalizeWhitespace(
