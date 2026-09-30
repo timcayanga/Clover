@@ -708,7 +708,7 @@ assert.match(
 );
 assert.match(
   workerSource,
-  /const receiptAccountCurrency =[\s\S]{0,180}?receiptDetails\?\.currency \?\? resolvedMetadata\.currency[\s\S]{0,500}?resolveWorkspaceCashAccountId/,
+  /const receiptAccountCurrency =[\s\S]{0,180}?receiptCurrencyForPersistence\(receiptDetails \? receiptDetails\.currency : resolvedMetadata\.currency\)[\s\S]{0,500}?resolveWorkspaceCashAccountId/,
   "foreign-currency receipts must resolve their Cash account from the receipt currency, not fallback metadata"
 );
 assert.match(

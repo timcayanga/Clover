@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { incompleteReceiptFields, receiptReviewMessage, RECEIPT_REVIEW_PHASE } from "../lib/receipt-review";
+import { incompleteReceiptFields, receiptCurrencyForPersistence, receiptReviewMessage, RECEIPT_REVIEW_PHASE } from "../lib/receipt-review";
 import { buildImportTelemetrySnapshot } from "../lib/import-telemetry";
 import { resolveImportModalStatusDecision } from "../lib/import-modal-status";
 import { mobileApiResponse } from "../lib/mobile-api-response";
@@ -11,6 +11,10 @@ assert.deepEqual(incompleteReceiptFields({ ...complete, merchant_raw: null, tran
 assert.deepEqual(incompleteReceiptFields({ ...complete, transaction_date: "2026-02-30" }), ["date"]);
 assert.deepEqual(incompleteReceiptFields({ ...complete, total: NaN, currency: "MIXED" }), ["currency", "total"]);
 assert.deepEqual(incompleteReceiptFields({ ...complete, total: 0 }), ["total"]);
+assert.equal(receiptCurrencyForPersistence(null), "MIXED", "Do not assign PHP to an unknown receipt currency");
+assert.equal(receiptCurrencyForPersistence("TL"), "MIXED", "A total label is not an ISO currency");
+assert.equal(receiptCurrencyForPersistence("IDR"), "IDR");
+assert.equal(receiptCurrencyForPersistence("KRW"), "KRW");
 assert.deepEqual(incompleteReceiptFields({ ...complete, merchant_raw: " ", merchant_clean: "Toko", currency: "IDR" }), []);
 const message = receiptReviewMessage(["date"]);
 const snapshot = { status: "failed", processingPhase: RECEIPT_REVIEW_PHASE, processingMessage: message, workflowStage: "identifying_transactions", parsedRowsCount: 0, confirmedTransactionsCount: 0 };
@@ -32,4 +36,7 @@ const route = readFileSync("app/api/imports/[importId]/process/route.ts", "utf8"
 assert.match(route, /const needsReceiptConfirmation =\s*!result\.requiresInput &&/);
 assert.match(readFileSync("components/import-files-modal.tsx", "utf8"), /const visualRepairGraceActive =\s*processingPhase !== "receipt_review_required"/);
 assert.match(readFileSync("components/global-import-activity.tsx", "utf8"), /hasStructuredReceiptVisibility: Boolean\(payload\.receiptTransaction\)/);
+const modelParser = readFileSync("lib/openai-import-parser.ts", "utf8");
+assert.match(modelParser.slice(modelParser.indexOf("const buildOpenAIReceiptCoreSystemPrompt"), modelParser.indexOf("export const inferOpenAIDocumentFamily")), /RECEIPT_MONEY_GUIDANCE/);
+assert.match(modelParser.slice(modelParser.indexOf("export const buildOpenAIBackupSystemPrompt"), modelParser.indexOf("const buildOpenAIReceiptCoreSystemPrompt")), /RECEIPT_MONEY_GUIDANCE/);
 console.log("Incomplete receipt review: missing core fields, stopped retries, mobile/web messages and confirmed-data visibility passed.");

@@ -1,0 +1,8 @@
+// Shared by the fast core pass and the detailed receipt reader. Keep monetary
+// evidence rules on both paths, even when itemization is deferred.
+export const RECEIPT_MONEY_GUIDANCE = [
+  "Read the printed FINAL purchase total, not the largest number or cash handed over. GRAND TOTAL/Total Bayar/Jumlah Bayar/결제금액/합계 take precedence over subtotal, tax, TUNAI/CASH/받은금액 (tendered) and KEMBALI/CG/거스름돈 (change). Follow each label's row even on tilted receipts. Check total + change = tendered when all three are printed; do not replace the printed total with a rounded tendered amount.",
+  "TL in a receipt summary beside CASH and CG means TOTAL, not Turkish lira. Read comma or dot groups of three as thousands when the receipt's item and payment columns consistently use that grouping. Do not turn a five-digit integer into a two-digit decimal. Preserve ambiguous separators as uncertainty instead of silently rescaling.",
+  "Currency must be an ISO code supported by visible currency evidence (for example KRW/₩/원 or IDR/Rp/rupiah). A merchant address, language, guessed country, or TL total label alone does not establish currency. Keep currency null when it is not printed; do not default to PHP, IDR or KRW.",
+  "In parser_evidence.source_text, copy the final-total label and amount and any tender/change and currency evidence verbatim, with separate lines. Include the printed date wording. Never reconstruct blurred or redacted dates or merchant names, and never use the upload date as the purchase date.",
+].join(" ");

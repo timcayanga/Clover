@@ -1,4 +1,5 @@
 import { maySendToCloudAi } from "./ai-consent";
+import { RECEIPT_MONEY_GUIDANCE } from "./receipt-money-guidance";
 import { z } from "zod";
 import { getEnv } from "@/lib/env";
 import { assessFinancialUploadScope } from "@/lib/financial-upload-scope";
@@ -15,7 +16,7 @@ import {
 import { summarizeMerchantText } from "@/lib/merchant-labels";
 import { assessStatementExtractionQuality } from "@/lib/import-quality";
 
-const OPENAI_PROMPT_VERSION = "clover_bank_statement_extraction_v11";
+const OPENAI_PROMPT_VERSION = "clover_bank_statement_extraction_v12";
 const OPENAI_IMAGE_TRANSCRIPTION_PROMPT_VERSION = "clover_bank_statement_transcription_v3";
 const OPENAI_IMPORT_FAST_MODEL_FALLBACK = "gpt-5.4-mini";
 const OPENAI_IMPORT_STRONG_MODEL_FALLBACK = "gpt-5.5";
@@ -2102,6 +2103,7 @@ export const buildOpenAIBackupSystemPrompt = (importMode: ImportMode | null | un
     "Keep rows in source order.",
     "Prefer conservative parsing over guessing.",
     "Reconcile balances when possible and report mismatches clearly.",
+    "For receipts: " + RECEIPT_MONEY_GUIDANCE,
   ];
 
   const familyGuidance =
@@ -2164,6 +2166,7 @@ const buildOpenAIReceiptCoreSystemPrompt = () =>
     "Read the supplied image directly and return JSON matching the supplied schema.",
     "Extract only the actual merchant, transaction date and time, currency, paid total, payment method, visible account/card hint, confidence, and concise verbatim source evidence.",
     "Do not invent data; use null when a value is not visible.",
+    RECEIPT_MONEY_GUIDANCE,
     "Return transaction_date as ISO YYYY-MM-DD when a complete date is visible, using visible locale, language, currency, and upload-date proximity to resolve numeric date order.",
     "The merchant must be the actual business name, never Receipt, Test Receipt, Sales Receipt, Official Receipt, Invoice, Proof of Purchase, or another generic heading.",
     "A coupon, menu, advertisement, product image, or offer without evidence of a completed purchase is not a financial transaction; return receipt_details null.",

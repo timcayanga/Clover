@@ -1,7 +1,7 @@
 import { finalizePortfolioImport, isHoldingsOnlyPortfolio, portfolioConfidence } from "@/lib/portfolio-import";
 import { assessImportEvidenceSafety, assertSafeImportEvidence } from "@/lib/import-evidence-safety";
 import { startImportTiming, measureImportTiming } from "@/lib/import-timing";
-import { incompleteReceiptFields, receiptReviewMessage, RECEIPT_REVIEW_PHASE } from "@/lib/receipt-review";
+import { incompleteReceiptFields, receiptCurrencyForPersistence, receiptReviewMessage, RECEIPT_REVIEW_PHASE } from "@/lib/receipt-review";
 import { shouldRefineReceiptCore } from "@/lib/receipt-detail-refinement";
 import { Prisma } from "@prisma/client";
 import type { AccountType, ReviewStatus, TransactionType } from "@prisma/client";
@@ -12158,9 +12158,9 @@ export const processImportFileText = async (
   } as Prisma.InputJsonValue;
   const resolvedReceiptAccountId = receiptAccountResolution?.accountId ?? null;
   const receiptAccountCurrency =
-    String(receiptDetails?.currency ?? resolvedMetadata.currency ?? "PHP").trim().toUpperCase() || "PHP";
+    receiptCurrencyForPersistence(receiptDetails ? receiptDetails.currency : resolvedMetadata.currency);
   const documentCashAccountId =
-    effectiveImportMode === "receipt" || effectiveImportMode === "notes"
+    (effectiveImportMode === "receipt" && receiptAccountCurrency !== "MIXED") || effectiveImportMode === "notes"
       ? await resolveWorkspaceCashAccountId(
           String(importFile.workspaceId),
           effectiveImportMode === "receipt" ? receiptAccountCurrency : resolvedMetadata.currency ?? "PHP"
@@ -12295,7 +12295,7 @@ export const processImportFileText = async (
       merchantClean: receiptDetailsPayload?.merchant_clean ?? null,
       transactionDate: parseDateValue(receiptDetailsPayload?.transaction_date ?? resolvedMetadata.endDate ?? null),
       transactionTime: receiptDetailsPayload?.transaction_time ?? null,
-      currency: receiptDetailsPayload?.currency ?? receiptAccountCurrency,
+      currency: receiptAccountCurrency,
       subtotal: receiptDetailsPayload?.subtotal ?? null,
       tax: receiptDetailsPayload?.tax ?? null,
       total: receiptDetailsPayload?.total ?? resolvedMetadata.endingBalance ?? resolvedMetadata.totalAmountDue ?? null,
