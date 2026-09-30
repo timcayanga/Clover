@@ -1,5 +1,6 @@
 import { detectCurrencyEvidence } from "@/lib/financial-identity-detection";
-import { indonesianFinancialHeader, normalizeIndonesianText, parseIndonesianDate } from "@/lib/indonesian-financial-text";
+import { indonesianFinancialHeader, normalizeIndonesianText } from "@/lib/indonesian-financial-text";
+import { isIndonesianStatementPeriodLine, readIndonesianStatementPeriod, resolveIndonesianStatementDate } from "@/lib/indonesian-statement-period";
 
 const fields = (line: string) => {
   const explicit = line.trim().split(/\t|\s{2,}|\|/).map(cell => cell.trim());
@@ -30,10 +31,12 @@ export function buildIndonesianBankTable(text: string) {
   const unsafe = { csv: null, sourceLines: [] };
   const headers = indonesianBankTableHeader(lines[start]!);
   const currency = detectCurrencyEvidence(text);
-  if (!headers || !currency.currency || currency.ambiguous) return unsafe;
-  const rows: string[][] = [], sourceLines: Array<{text:string;lineNumber:number} | null> = [];
+  const {period,invalid} = readIndonesianStatementPeriod(lines);
+  if (!headers || !currency.currency || currency.ambiguous || invalid) return unsafe;
+  type SourceLine = {text:string;lineNumber:number;sourceDateText?:string;dateFromPeriod?:boolean;statementPeriod?:typeof period};
+  const rows: string[][] = [], sourceLines: Array<SourceLine | null> = [];
   const seen = new Map<string, string>();
-  const add = (cells: string[], index?: number) => { rows.push(cells); sourceLines.push(index === undefined ? null : {text: originals[index]!, lineNumber: index + 1}); };
+  const add = (cells: string[], index?: number, dateContext?: Partial<SourceLine>) => { rows.push(cells); sourceLines.push(index === undefined ? null : {text: originals[index]!, lineNumber: index + 1,...dateContext}); };
   const addMetadata = (line: string, inTable: boolean) => {
     const match = metadataLine(line);
     if (!match) return null;
@@ -51,6 +54,7 @@ export function buildIndonesianBankTable(text: string) {
   for (let index = start + 1; index < lines.length; index += 1) {
     const line = lines[index]!;
     if (!line || /^[-=_\s]+$/.test(line) || /^(?:halaman\s*)?\d+\s*(?:\/|dari)\s*\d+$/i.test(line)) continue;
+    if (isIndonesianStatementPeriodLine(line)) continue;
     const repeated = indonesianBankTableHeader(line);
     if (repeated) { if (repeated.join("|").toLowerCase() !== headers.join("|").toLowerCase()) return unsafe; continue; }
     const metadata = addMetadata(line, true);
@@ -59,8 +63,9 @@ export function buildIndonesianBankTable(text: string) {
     if (/^(?:saldo awal|saldo akhir|total (?:mutasi|debet|debit|kredit)|jumlah mutasi|tanggal cetak|dicetak pada)\s*[:=]/i.test(line)) continue;
     const cells = line.includes("\t") ? line.split("\t") : line.includes("|") ? line.split("|") : line.split(/ {2,}/);
     const values = cells.map(cell => cell.trim());
-    if (values.length !== headers.length || !parseIndonesianDate(values[0] ?? "") || !values[1]) return unsafe;
-    add(values, index); count += 1;
+    const date = resolveIndonesianStatementDate(values[0] ?? "",period);
+    if (values.length !== headers.length || !date || !values[1]) return unsafe;
+    add([date.date,...values.slice(1)], index, {sourceDateText:values[0],dateFromPeriod:date.fromPeriod,statementPeriod:period}); count += 1;
   }
   return count ? {csv: rows.map(row => row.map(escape).join(",")).join("\n"), sourceLines} : unsafe;
 }

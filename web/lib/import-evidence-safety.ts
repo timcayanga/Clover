@@ -2,6 +2,7 @@ import { normalizeKoreanFinancialText, parseKoreanDate } from "@/lib/korean-fina
 import { looksLikeKoreanBankTableHeader } from "@/lib/korean-bank-table";
 import { looksLikeIndonesianBankTableHeader } from "@/lib/indonesian-bank-table";
 import { hasIndonesianFinancialText, parseIndonesianAmount } from "@/lib/indonesian-financial-text";
+import { looksLikeIndonesianPaymentProof } from "@/lib/indonesian-payment-proof";
 
 type EvidenceRow = { amount?: unknown; date?: unknown; confidence?: unknown; rawPayload?: unknown };
 const record = (value: unknown): Record<string, unknown> =>
@@ -12,6 +13,7 @@ export function assessImportEvidenceSafety(rows: EvidenceRow[], sourceText = '')
   const reasons = new Set<string>();
   const koreanBankColumns = sourceText.split(/\r?\n/).some(looksLikeKoreanBankTableHeader);
   const indonesianBankColumns = sourceText.split(/\r?\n/).some(looksLikeIndonesianBankTableHeader);
+  const indonesianPaymentProof = looksLikeIndonesianPaymentProof(sourceText);
   const ledger = rows.filter(row => !['account_snapshot_marker', 'opening_balance', 'receivable_commitment_marker'].includes(String(record(row.rawPayload).kind)));
   // A workbook can legitimately have a separate transaction worksheet.
   const documentLedger = ledger.filter(row => !record(row.rawPayload).worksheetName);
@@ -52,8 +54,9 @@ export function assessImportEvidenceSafety(rows: EvidenceRow[], sourceText = '')
       reasons.add('korean_table_without_column_evidence');
     }
     if (typeof raw.line === 'string' && !raw.parserEvidence && !raw.source && indonesianBankColumns) reasons.add('indonesian_table_without_column_evidence');
+    if (typeof raw.line === 'string' && !raw.parserEvidence && !raw.source && indonesianPaymentProof) reasons.add('indonesian_payment_without_field_evidence');
   }
-  return { reasons: [...reasons], critical: reasons.has('amount_from_date') || reasons.has('holdings_summary_as_transactions') || reasons.has('korean_table_without_column_evidence') || reasons.has('indonesian_table_without_column_evidence') };
+  return { reasons: [...reasons], critical: reasons.has('amount_from_date') || reasons.has('holdings_summary_as_transactions') || reasons.has('korean_table_without_column_evidence') || reasons.has('indonesian_table_without_column_evidence') || reasons.has('indonesian_payment_without_field_evidence') };
 }
 
 export function assertSafeImportEvidence(rows: EvidenceRow[], sourceText = '') {

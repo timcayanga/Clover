@@ -2,6 +2,8 @@ import { isKoreanInvestmentHeader, parseKoreanInvestmentTable, isIndonesianInves
 import { buildKoreanBankTable } from "@/lib/korean-bank-table";
 import { buildIndonesianBankTable } from "@/lib/indonesian-bank-table";
 import { hasRupiahMarker, hasIndonesianMonth, hasIndonesianFinancialHeaders, indonesianFinancialHeader, indonesianInvestmentHeader, indonesianMoneyUnitScale, parseIndonesianAmount, parseIndonesianDate } from "@/lib/indonesian-financial-text";
+import { readIndonesianMoney } from "@/lib/indonesian-money";
+import { parseIndonesianPaymentProof } from "@/lib/indonesian-payment-proof";
 import { hasHangul, koreanFinancialHeader, koreanInvestmentHeader, normalizeKoreanFinancialText, parseKoreanDate, hasKoreanAmountMarker, parseKoreanAmount, koreanMoneyUnitScale } from "@/lib/korean-financial-text";
 import type { TransactionType } from "@prisma/client";
 import { humanizeMerchantText, summarizeMerchantText } from "@/lib/merchant-labels";
@@ -926,11 +928,12 @@ const readStructuredMoney = (table: StructuredDelimitedTable, row: string[], key
   const cell = row[index] ?? "";
   if (hasIndonesianFinancialHeaders(table.headers) || hasRupiahMarker(cell) || hasRupiahMarker(table.headers[index] ?? "") ||
     (key !== "original_amount" && normalizeGlobalCurrencyCode(readStructuredCell(table, row, "currency") || metadata.currency) === "IDR")) {
-    const amount = parseIndonesianAmount(cell);
+    const money = readIndonesianMoney(cell);
+    const amount = money.amount;
     if (amount === null) return null;
     const explicitUnit = /\b(?:ribu|rb|juta|jt|miliar|triliun)\b/i.test(cell);
-    const currency = normalizeGlobalCurrencyCode(readStructuredCell(table, row, "currency") || metadata.currency);
-    const scale = hasRupiahMarker(cell) || explicitUnit ? 1 : indonesianMoneyUnitScale(table.headers[index] ?? "") ??
+    const currency = money.currency ?? normalizeGlobalCurrencyCode(readStructuredCell(table, row, key === "original_amount" ? "original_currency" : "currency") || (key !== "original_amount" ? metadata.currency : ""));
+    const scale = money.currency || explicitUnit ? 1 : indonesianMoneyUnitScale(table.headers[index] ?? "") ??
       (key !== "original_amount" && (!currency || currency === "IDR") ? indonesianMoneyUnitScale(metadata.money_unit ?? "") : null) ?? 1;
     const result = amount * scale;
     return Number.isSafeInteger(Math.round(result * 100)) ? result : null;
@@ -1200,6 +1203,7 @@ export const parseStructuredTransactionCsv = (
     fee: number | null;
     originalAmount: number | null;
     originalCurrency: string | null;
+    optionalCurrencyConflict: boolean;
     rowMetadata: Record<string, string>;
     balanceDelta: number | null;
     continuationSourceRows: string[][];
@@ -1253,7 +1257,7 @@ export const parseStructuredTransactionCsv = (
     if (!description || /^(?:합계|총계|소계|기초잔액|기말잔액|saldo awal|saldo akhir|total mutasi|jumlah mutasi|total|subtotal|opening balance|closing balance|ending balance)$/i.test(description)) return;
     const status = normalizeWhitespace(readStructuredCell(table, sourceRow, "status"));
     const compactStatus = status.replace(/\s/g, "");
-    if (indonesianTable && /^(?:tertunda|menunggu|diproses|dijadwalkan|gagal|ditolak|batal|dibatalkan|kedaluwarsa|kadaluarsa|refund tertunda|pengembalian dana tertunda)$/i.test(status)) return;
+    if (indonesianTable && /^(?:tertunda|menunggu(?: pembayaran)?|belum dibayar|belum lunas|diproses|dijadwalkan|gagal|ditolak|batal|dibatalkan|kedaluwarsa|kadaluarsa|refund tertunda|pengembalian dana tertunda)$/i.test(status)) return;
     if (/^(?:대기|처리중|승인대기|예약|실패|거절|취소|승인취소|결제취소|취소완료|미매입|매입대기|환불예정|환불대기)$/.test(compactStatus)) return;
     if (/\b(?:pending|processing|authorized|authorization|scheduled|upcoming|on hold|held|failed|declined|rejected|cancelled|canceled|void|voided|expired|reversed)\b/i.test(status)) return;
 
@@ -1299,7 +1303,7 @@ export const parseStructuredTransactionCsv = (
     if (!Number.isFinite(amountValue) || amountValue <= 0) return;
 
     const rawType = hasDebit ? "debit" : hasCredit ? "credit" :
-      readStructuredCell(table, sourceRow, "type") || (/^(?:환불완료|환급완료)$/.test(compactStatus) ? "환불" : /^(?:refund selesai|pengembalian dana selesai)$/i.test(status) ? "pengembalian dana" : "");
+      readStructuredCell(table, sourceRow, "type") || (/^(?:환불완료|환급완료)$/.test(compactStatus) ? "환불" : /^(?:refund|pengembalian dana) (?:selesai|berhasil)$/i.test(status) ? "pengembalian dana" : "");
     const merchantRaw = normalizeWhitespace(readStructuredCell(table, sourceRow, "merchant") || description);
     const currencyText = normalizeWhitespace(
       readStructuredCell(table, sourceRow, "currency") ||
@@ -1307,16 +1311,32 @@ export const parseStructuredTransactionCsv = (
         metadata.currency ||
         ""
     );
+    const printedMoneyCodes = indonesianTable ? [amountText, debitText, creditText].map(text => readIndonesianMoney(text).currency).filter(Boolean).join(" ") : "";
     const currency =
       normalizeInstitutionCurrency(
         institution,
-        currencyText || detectCurrencyFromText(`${amountText} ${debitText} ${creditText} ${table.headers.filter((_, index) =>
+        currencyText || detectCurrencyFromText(`${printedMoneyCodes} ${amountText} ${debitText} ${creditText} ${table.headers.filter((_, index) =>
           ["amount", "debit", "credit"].includes(table.canonicalHeaders[index] ?? "")).join(" ")} ${activeMetadata.money_unit ? `단위: ${activeMetadata.money_unit}` : ""}`)
       ) ?? null;
     const runningBalance = readStructuredMoney(table, sourceRow, "balance", activeMetadata);
+    const originalAmount = readStructuredMoney(table, sourceRow, "original_amount", activeMetadata);
+    const fee = readStructuredMoney(table, sourceRow, "fee", activeMetadata);
+    if (indonesianTable && [["balance", runningBalance], ["original_amount", originalAmount], ["fee", fee]].some(([key, value]) =>
+      readStructuredCell(table, sourceRow, String(key)).trim() && !/^[—–-]$/.test(readStructuredCell(table, sourceRow, String(key)).trim()) && value === null)) {
+      throw new Error("Clover could not safely read an Indonesian balance, fee or original-currency amount. Check the populated columns before importing. Nothing was added.");
+    }
     const originalCurrency =
       normalizeCurrencyCode(readStructuredCell(table, sourceRow, "original_currency")) ??
+      (indonesianTable ? readIndonesianMoney(readStructuredCell(table, sourceRow, "original_amount")).currency : null) ??
       normalizeCurrencyCode(detectCurrencyFromText(`${readStructuredCell(table, sourceRow, "original_amount")} ${table.headers[table.canonicalHeaders.indexOf("original_amount")] ?? ""}`));
+    const optionalCurrencyConflict = indonesianTable && ["balance", "fee", "original_amount"].some(key => {
+      const text = readStructuredCell(table,sourceRow,key);
+      if (!text) return false;
+      const evidence = detectCurrencyEvidence(`${text} ${table.headers[table.canonicalHeaders.indexOf(key)] ?? ""}`);
+      const explicit = readIndonesianMoney(text).currency ?? evidence.currency;
+      const expected = key === "original_amount" ? originalCurrency : currency;
+      return evidence.ambiguous || Boolean(explicit && expected && explicit !== expected);
+    });
     candidates.push({
       sourceRow,
       sourceRowIndex,
@@ -1343,9 +1363,10 @@ export const parseStructuredTransactionCsv = (
       categoryRaw: normalizeWhitespace(readStructuredCell(table, sourceRow, "category")),
       reference: normalizeWhitespace(readStructuredCell(table, sourceRow, "reference")),
       status,
-      fee: readStructuredMoney(table, sourceRow, "fee", activeMetadata),
-      originalAmount: readStructuredMoney(table, sourceRow, "original_amount", activeMetadata),
+      fee,
+      originalAmount,
       originalCurrency,
+      optionalCurrencyConflict,
       rowMetadata: { ...activeMetadata },
       balanceDelta: null,
       continuationSourceRows: [],
@@ -1421,12 +1442,15 @@ export const parseStructuredTransactionCsv = (
     }
 
     const moneyHeaders = table.headers.filter((_, index) => ["amount", "debit", "credit"].includes(table.canonicalHeaders[index] ?? "") && candidate.sourceRow[index]?.trim());
-    const amountEvidence = localizedHeaders ? detectCurrencyEvidence(`${candidate.amountText} ${candidate.debitText} ${candidate.creditText} ${moneyHeaders.join(" ")}`) : null;
+    const printedMoneyCodes = indonesianTable ? [candidate.amountText, candidate.debitText, candidate.creditText].map(text => readIndonesianMoney(text).currency).filter(Boolean).join(" ") : "";
+    const amountEvidence = localizedHeaders ? detectCurrencyEvidence(`${printedMoneyCodes} ${candidate.amountText} ${candidate.debitText} ${candidate.creditText} ${moneyHeaders.join(" ")}`) : null;
     const amountCurrency = amountEvidence?.currency;
     const localizedReviewReason = localizedHeaders
-      ? /^(?:환불완료|환급완료|refundselesai|pengembaliandanaselesai)$/i.test(candidate.status.replace(/\s/g, "")) && direction.type !== "income" ? "Refund status conflicts with the transaction direction. Confirm whether money was returned."
+      ? /^(?:환불완료|환급완료|(?:refund|pengembaliandana)(?:selesai|berhasil))$/i.test(candidate.status.replace(/\s/g, "")) && direction.type !== "income" ? "Refund status conflicts with the transaction direction. Confirm whether money was returned."
         : balanceReconciliation === "mismatch" ? "The running balance does not reconcile with this amount. Confirm the amount and direction."
         : !candidate.currency ? "Confirm the document currency."
+        : candidate.optionalCurrencyConflict ? "The balance, fee or original amount has a conflicting currency. Confirm its currency before importing."
+        : indonesianTable && candidate.status && !/^(?:berhasil|pembayaran berhasil|sukses|lunas|refund selesai|refund berhasil|pengembalian dana (?:selesai|berhasil)|posted|settled|paid)$/i.test(candidate.status) ? "Confirm this transaction's final status. A completed history section can also contain expired or refunded records."
         : amountEvidence?.ambiguous || (amountCurrency && amountCurrency !== candidate.currency) ? "The amount currency conflicts with the currency column. Confirm the settlement currency."
           : direction.evidence === "conservative_default" ? "Confirm whether this is money in or money out." : null
       : null;
@@ -24452,6 +24476,8 @@ const parseIndonesianBankDocument = (text: string, context: ImportParseContext):
       return { ...row, confidence: Math.min(row.confidence ?? 75, 75), parserConfidence: Math.min(row.parserConfidence ?? 85, 85),
         rawPayload: { ...row.rawPayload, kind: "indonesian_bank_table_transaction", source: "indonesian_bank_table",
           sourceText: source?.text ?? text, sourceLineNumber: source?.lineNumber ?? null,
+          sourceDateText: source?.sourceDateText ?? null, dateFromPeriod: source?.dateFromPeriod ?? false,
+          statementPeriod: source?.statementPeriod ?? null,
           parserEvidence: { source_text: source?.text ?? text, reason: "Explicit Indonesian bank columns" },
           reviewRequired: true, reviewReasons: [...(Array.isArray(row.rawPayload?.reviewReasons) ? row.rawPayload.reviewReasons : []),
             "Confirm the account, Rupiah amounts and transaction columns against the Indonesian statement."],
@@ -24486,6 +24512,8 @@ export const parseImportTextGenericOnly = (
   if (koreanBankRows) return koreanBankRows;
   const indonesianBankRows = parseIndonesianBankDocument(text, context);
   if (indonesianBankRows) return indonesianBankRows;
+  const indonesianPaymentRows = parseIndonesianPaymentProof(text);
+  if (indonesianPaymentRows) return indonesianPaymentRows;
 
   const hsbcParsed = parseHsbcScreenshotImportText(text, fileName);
   if (hsbcParsed && hsbcParsed.rows.length > 0) {
@@ -26742,6 +26770,8 @@ export const parseImportText = (
   if (koreanBankRows) return koreanBankRows;
   const indonesianBankRows = parseIndonesianBankDocument(text, context);
   if (indonesianBankRows) return indonesianBankRows;
+  const indonesianPaymentRows = parseIndonesianPaymentProof(text);
+  if (indonesianPaymentRows) return indonesianPaymentRows;
 
   const wisePdfStatement = parseWisePdfStatement(text);
   if (wisePdfStatement) {

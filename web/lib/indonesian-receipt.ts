@@ -1,6 +1,7 @@
 import type { ReceiptPreviewItem, ReceiptPreviewResult } from "@/lib/split-bill";
 import { detectCurrencyEvidence } from "@/lib/financial-identity-detection";
 import { hasIndonesianFinancialText, normalizeIndonesianText, parseIndonesianAmount, parseIndonesianDate } from "@/lib/indonesian-financial-text";
+import { looksLikeIndonesianPaymentProof } from "@/lib/indonesian-payment-proof";
 
 const money = "[+-]?(?:(?:Rp\\.?|IDR)\\s*)?(?:\\d[\\d.,]*)(?:,-)?";
 const summary = /^(?:sub\s*total|grand total|total(?: bayar| pembayaran| belanja)?|jumlah bayar|ppn|pajak|diskon|potongan|biaya layanan|service charge|tunai|kembali(?:an)?|pembulatan|metode pembayaran|no\.? struk|tanggal|terima kasih)\b/i;
@@ -17,7 +18,8 @@ function columns(line: string): Column[] | null {
 }
 
 export function parseIndonesianReceiptText(source: string): ReceiptPreviewResult | null {
-  if (!hasIndonesianFinancialText(source) || !/\b(?:struk|kuitansi|kwitansi|nota pembelian|nama toko|tunai|kembali(?:an)?|total bayar)\b/i.test(source)) return null;
+  const paymentProof = looksLikeIndonesianPaymentProof(source);
+  if (!paymentProof && (!hasIndonesianFinancialText(source) || !/\b(?:struk|kuitansi|kwitansi|nota pembelian|nama toko|tunai|kembali(?:an)?|total bayar)\b/i.test(source))) return null;
   const lines = normalizeIndonesianText(source).split(/\r?\n/).map(line => line.trim()).filter(Boolean);
   const labeled = (pattern: RegExp) => lines.flatMap((line, index) => {
     const match = line.match(pattern);
@@ -87,7 +89,7 @@ export function parseIndonesianReceiptText(source: string): ReceiptPreviewResult
     (total !== null && cashEvidence.value >= total && Math.abs(cashEvidence.value - total - changeEvidence.value) <= 0.01);
   const conflict = [totalEvidence, subtotalEvidence, taxEvidence, serviceEvidence, discountEvidence, roundingEvidence, cashEvidence, changeEvidence].some(evidence => evidence.conflict) ||
     [tax, service, discount, cashEvidence.value, changeEvidence.value].some(value => value !== null && value < 0);
-  const requiresReview = cancelled || conflict || !reconciles || !cashReconciles || currencyWarning !== null || !merchantName || !billDate || ids.length > 1;
+  const requiresReview = paymentProof || cancelled || conflict || !reconciles || !cashReconciles || currencyWarning !== null || !merchantName || !billDate || ids.length > 1;
   return {
     receiptText: source, receiptType: "generic_receipt", merchantName, billDate, documentNumber, invoiceNumber: null, bookingReference: null,
     currency, currencyMentions: currency === "MIXED" ? [] : [currency], currencyWarning,
@@ -97,7 +99,8 @@ export function parseIndonesianReceiptText(source: string): ReceiptPreviewResult
     subtotal: includedTax ? null : subtotalEvidence.value?.toFixed(2) ?? null,
     tax: taxEvidence.value?.toFixed(2) ?? null, serviceCharge: serviceEvidence.value?.toFixed(2) ?? null,
     discount: discountEvidence.value?.toFixed(2) ?? null, rounding: roundingEvidence.value?.toFixed(2) ?? null, tip: null,
-    total: !cancelled && total !== null && total > 0 ? total.toFixed(2) : null,
+    // Payment proofs use their own direction-aware parser, never an itemized purchase shortcut.
+    total: !paymentProof && !cancelled && total !== null && total > 0 ? total.toFixed(2) : null,
     items, participants: [], splitAllocations: [], receiptAccountMatch: null,
     confidence: requiresReview ? 45 : 92, requiresReview,
   };

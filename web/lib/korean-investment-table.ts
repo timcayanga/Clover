@@ -2,6 +2,7 @@ import type { ParsedImportRow } from "@/lib/import-parser";
 import { detectCurrencyEvidence, normalizeGlobalCurrencyCode } from "@/lib/financial-identity-detection";
 import { koreanFinancialHeader, koreanInvestmentHeader, koreanMoneyUnitScale, normalizeKoreanFinancialText, parseKoreanAmount, parseKoreanDate } from "@/lib/korean-financial-text";
 import { indonesianFinancialHeader, indonesianInvestmentHeader, indonesianMoneyUnitScale, parseIndonesianAmount, parseIndonesianDate } from "@/lib/indonesian-financial-text";
+import { readIndonesianMoney } from "@/lib/indonesian-money";
 
 const headerKey = (value: string) => {
   const key = normalizeKoreanFinancialText(value).replace(/\([^)]*\)|\[[^\]]*\]/g, "").replace(/\s/g, "");
@@ -58,11 +59,12 @@ export function parseKoreanInvestmentTable(params: {
   const read = (row: string[], key: string) => row[keys.indexOf(key)]?.trim() ?? "";
   const parseMonetaryCell = (row: string[], key: string) => {
     const cell = read(row, key);
-    const parsed = parseAmount(cell);
+    const localMoney = locale === "id" ? readIndonesianMoney(cell) : null;
+    const parsed = localMoney ? localMoney.amount : parseAmount(cell);
     if (parsed === null) return null;
     const header = headers[keys.indexOf(key)] ?? "";
-    const currency = detectCurrencyEvidence(header).currency ?? normalizeGlobalCurrencyCode(read(row, "currency") || metadata.currency);
-    const hasUnit = locale === "id" ? /\b(?:Rp\.?|IDR|rupiah|ribu|rb|juta|jt|miliar|triliun)/i.test(cell) : /[₩￦원만억천백십조]|KRW/i.test(cell);
+    const currency = localMoney?.currency ?? detectCurrencyEvidence(header).currency ?? normalizeGlobalCurrencyCode(read(row, "currency") || metadata.currency);
+    const hasUnit = locale === "id" ? Boolean(localMoney?.currency) || /\b(?:ribu|rb|juta|jt|miliar|triliun)/i.test(cell) : /[₩￦원만억천백십조]|KRW/i.test(cell);
     const scale = hasUnit ? 1 : unitScale(header) ?? ((!currency || currency === domesticCurrency) ? unitScale(metadata.money_unit ?? "") : null) ?? 1;
     const scaled = parsed * scale;
     return Number.isSafeInteger(Math.round(scaled * 100)) ? scaled : null;
@@ -78,7 +80,8 @@ export function parseKoreanInvestmentTable(params: {
     const quantityText = read(cells, "quantity");
     const quantity = quantityText && quantityText !== "-" ? (locale === "id" ? parseIndonesianAmount(quantityText.replace(/\s*(?:unit|lembar)$/i, ""), true) : parseKoreanAmount(quantityText.replace(/\s*(?:주|좌)$/, ""))) : null;
     const currencyText = read(cells, "currency") || metadata.currency;
-    const amountEvidence = detectCurrencyEvidence(`${read(cells, "market_value")} ${headers[keys.indexOf("market_value")]}`);
+    const printedCurrency = locale === "id" ? readIndonesianMoney(read(cells, "market_value")).currency : null;
+    const amountEvidence = detectCurrencyEvidence(`${printedCurrency ?? ""} ${read(cells, "market_value")} ${headers[keys.indexOf("market_value")]}`);
     const unitCurrency = unitScale(metadata.money_unit ?? "") !== null ? domesticCurrency : null;
     const currency = currencyText ? normalizeGlobalCurrencyCode(currencyText) : amountEvidence.currency ?? unitCurrency;
     if (!name || !provider || value === null || value < 0 || !date || !currency || amountEvidence.ambiguous ||
@@ -88,7 +91,8 @@ export function parseKoreanInvestmentTable(params: {
     }
     const contributionText = read(cells, "monthly_contribution");
     const monthlyContribution = parseMonetaryCell(cells, "monthly_contribution");
-    if (contributionText && contributionText !== "-" && (monthlyContribution === null || monthlyContribution < 0)) {
+    const contributionCurrency = locale === "id" ? readIndonesianMoney(contributionText).currency : null;
+    if (contributionText && contributionText !== "-" && (monthlyContribution === null || monthlyContribution < 0 || (contributionCurrency && contributionCurrency !== currency))) {
       throw new Error("Clover could not safely read a Korean contribution value. Check the contribution column before importing. Nothing was added.");
     }
     // Confirmation groups named investments by provider/name before currency.

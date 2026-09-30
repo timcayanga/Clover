@@ -3,6 +3,7 @@ import { koreanStatementLineEvidence } from "@/lib/korean-statement-evidence";
 import { buildKoreanBankTable, koreanBankTableHeader } from "@/lib/korean-bank-table";
 import { buildIndonesianBankTable, indonesianBankTableHeader } from "@/lib/indonesian-bank-table";
 import { hasIndonesianFinancialText, parseIndonesianAmount } from "@/lib/indonesian-financial-text";
+import { looksLikeIndonesianPaymentProof, parseIndonesianPaymentProof } from "@/lib/indonesian-payment-proof";
 import { createRequire } from "node:module";
 import { createHash } from "node:crypto";
 import { dirname, join, sep } from "node:path";
@@ -1120,6 +1121,9 @@ const scoreStatementTextCandidate = (text: string) => {
 
 export const pdfTextLayerLooksSufficientForParsing = (text: string, fileName?: string | null) => {
   const normalized = text.trim();
+  // A complete labeled proof is one payment, not a multi-row bank statement.
+  // Keep its native field boundaries instead of re-OCRing and stitching labels.
+  if (!/[\uFFFD\uE000-\uF8FF]/u.test(normalized) && parseIndonesianPaymentProof(normalized)?.length === 1) return true;
   const indonesian = buildIndonesianBankTable(normalized);
   if (indonesian?.csv && !/[\uFFFD\uE000-\uF8FF]/u.test(normalized) &&
     indonesian.sourceLines.filter(line => line && line.text.split(/\t| {2,}|\|/).slice(2).some(cell => parseIndonesianAmount(cell.trim()) !== null)).length >= 2) return true;
@@ -1500,6 +1504,7 @@ type StatementTextLineEntry = {
 
 export const mergeCompatibleStatementTextCandidateConsensus = (candidates: StatementTextCandidate[]) => {
   const usefulCandidates = candidates.filter((candidate) => candidate.text.trim().length > 0);
+  if (usefulCandidates.some(candidate => looksLikeIndonesianPaymentProof(candidate.text))) return null;
   if (usefulCandidates.length < 2) {
     return null;
   }
@@ -1717,6 +1722,7 @@ export const mergeCompatibleStatementTextCandidates = (
   left: { text: string; label: string; score: number },
   right: { text: string; label: string; score: number }
 ) => {
+  if (looksLikeIndonesianPaymentProof(left.text) || looksLikeIndonesianPaymentProof(right.text)) return null;
   if (Math.abs(left.score - right.score) > 4) {
     return null;
   }
