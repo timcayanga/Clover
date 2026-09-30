@@ -15,7 +15,7 @@ import {
 import { summarizeMerchantText } from "@/lib/merchant-labels";
 import { assessStatementExtractionQuality } from "@/lib/import-quality";
 
-const OPENAI_PROMPT_VERSION = "clover_bank_statement_extraction_v7";
+const OPENAI_PROMPT_VERSION = "clover_bank_statement_extraction_v8";
 const OPENAI_IMAGE_TRANSCRIPTION_PROMPT_VERSION = "clover_bank_statement_transcription_v3";
 const OPENAI_IMPORT_FAST_MODEL_FALLBACK = "gpt-5.4-mini";
 const OPENAI_IMPORT_STRONG_MODEL_FALLBACK = "gpt-5.5";
@@ -2453,6 +2453,10 @@ const buildOpenAIInputPayload = (params: {
     "Keep 종목명, 보유수량, 평가금액 and 평가일 as named investment holdings/valuations. Preserve six-digit Korean security codes as strings, including leading zeros. 월납입액 is a scheduled contribution, not proof of a completed trade or its cost basis. If any financial sheet or table is unreadable, flag the missing coverage instead of silently returning only the readable portion.",
     "Korean bank tables: use the actual 출금/입금/금액 column as the movement. 잔액 is a checkpoint, never the transaction amount, and 계좌번호 is an identifier. Missing or collapsed columns require explicit uncertainty; do not select the final number on each line. Preserve evidence for the original row and column assignment.",
     "For Korean holdings, an explicitly labeled 증권사/운용사 and 평가일/기준일 above the table may apply to its rows; preserve that provenance and never guess a missing provider or valuation date. Conflicting report metadata requires review. On receipts, prefer explicit 거래일자/결제일자/승인일시 over coupon expiry, return deadlines or reprint timestamps. An item with a printed amount but no quantity keeps quantity unset, never assumed to be one.",
+    "Indonesian/Bahasa documents: read Rp, Rp., IDR and rupiah as Rupiah evidence, but language alone does not establish currency. Indonesian thousands use dots and decimals use commas: Rp125.000 is 125000 IDR, Rp1.250.000,50 is 1250000.50 IDR. Do not divide by 100 or collapse separators. Preserve fractional unit penyertaan separately from money and never scale account numbers or security codes.",
+    "Indonesian bank exports: Tanggal/Tgl is a printed calendar date, usually day/month/year; support Januari, Februari, Maret, Mei, Juni, Juli, Agustus, Oktober and Desember. Preserve WIB/WITA/WIT calendar dates without shifting them to another day. Never guess a missing year. Keterangan/Uraian is description, Debet/DB is outgoing, Kredit/CR incoming, Saldo is a balance, Nomor Rekening an identifier. Missing/collapsed columns or conflicting formats require review; never use the ending balance as spending.",
+    "Indonesian receipts: distinguish Total Bayar/Jumlah Bayar from Tunai/Uang Diterima and Kembali/Kembalian. Preserve printed PPN/Pajak, Diskon/Potongan, Biaya Layanan and Pembulatan; never assume a tax rate or add included tax twice. No Struk is an identifier, not an item. Gagal, Batal, Dibatalkan and pending statuses are not completed purchases. Expiry/reprint timestamps are not purchase dates. QRIS, BI-FAST, GoPay, OVO and DANA identify payment methods, not by themselves the merchant, category or proof of an internal transfer.",
+    "Indonesian investment tables: Nama Produk/Reksa Dana/Saham plus Nilai Pasar/Nilai Investasi and Tanggal Valuasi are labeled holdings snapshots, never expenses. Preserve Sekuritas/Manajer Investasi, Jumlah Unit/Unit Penyertaan, security codes and original evidence. Missing worksheets, valuation dates, provider identities or currency must be flagged for review. A monthly contribution is not a completed transaction or cost basis.",
     "Generic few-shot examples:",
     GENERIC_FEW_SHOT_EXAMPLES,
     "For credit card statements, capture payment due date and total amount due whenever the statement shows them.",

@@ -1,4 +1,5 @@
 import { hasKoreanFinancialHeaders, normalizeKoreanFinancialText } from "@/lib/korean-financial-text";
+import { hasIndonesianFinancialHeaders, hasIndonesianFinancialText, hasRupiahMarker } from "@/lib/indonesian-financial-text";
 export type FinancialUploadScopeDecision = {
   decision: "financial" | "ambiguous" | "non_financial";
   confidence: number;
@@ -35,9 +36,9 @@ export const assessFinancialUploadScope = (params: {
   const reasons: string[] = [];
   const hasAmount = AMOUNT_SIGNAL.test(text) || /(?:₩\s*\d[\d,]*|\d[\d,]*\s*원|(?:합계|결제금액|입금|출금|잔액|평가금액|매입금액|현재가)\s*[:：]?\s*\d[\d,]*)/.test(text);
   const hasDate = DATE_SIGNAL.test(text) || /\d{4}\s*(?:년|\.)\s*\d{1,2}\s*(?:월|\.)\s*\d{1,2}/.test(text);
-  const hasCurrency = CURRENCY_SIGNAL.test(text);
-  const looksPromotional = PROMOTIONAL_WORDS.test(text) || /쿠폰|할인코드|프로모션|메뉴판/.test(text);
-  const hasCompletedPurchaseEvidence = COMPLETED_PURCHASE_WORDS.test(text) || /영수증|결제금액|승인번호|거래번호/.test(text);
+  const hasCurrency = CURRENCY_SIGNAL.test(text) || hasRupiahMarker(text);
+  const looksPromotional = PROMOTIONAL_WORDS.test(text) || /쿠폰|할인코드|프로모션|메뉴판/.test(text) || /\b(?:kupon|kode promo|daftar harga|diskon hingga)\b/i.test(text);
+  const hasCompletedPurchaseEvidence = COMPLETED_PURCHASE_WORDS.test(text) || /영수증|결제금액|승인번호|거래번호/.test(text) || /\b(?:struk|kuitansi|kwitansi|no\.? struk|sudah dibayar|pembayaran berhasil|kembalian)\b/i.test(text);
   const financialWordCount = countMatches(
     text.toLowerCase(),
     /\b(?:account|amount|balance|bank|billing|cash|credit|currency|debit|deposit|due|fee|invoice|merchant|paid|payment|purchase|receipt|statement|subtotal|tax|total|transaction|transfer|withdrawal)\b/g
@@ -53,6 +54,8 @@ export const assessFinancialUploadScope = (params: {
     reasons.push("financial institution with document evidence");
   }
   if (FINANCIAL_HEADERS.test(text) || hasKoreanFinancialHeaders(params.text ?? "")) reasons.push("financial table headers");
+  if ((params.text ?? "").split(/\r?\n/).some(line => hasIndonesianFinancialHeaders(line.split(/[;,|\t]/)))) reasons.push("Indonesian financial table headers");
+  if (hasIndonesianFinancialText(text) && /\d/.test(text) && (hasAmount || hasCurrency || hasDate)) reasons.push("Indonesian financial labels and values");
   if (hasAmount && /영수증|합\s*계|부가세|거래내역|계좌|입금|출금|잔액|평가금액|보유수량/.test(text)) reasons.push("Korean financial labels and values");
   if (hasCurrency && (hasAmount || hasDate)) reasons.push("currency and amount/date evidence");
   if (financialWordCount >= 2 && (hasAmount || hasDate)) reasons.push("financial vocabulary with values");

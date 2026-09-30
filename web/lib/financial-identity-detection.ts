@@ -30,7 +30,7 @@ const CURRENCY_ALIASES: Record<string, string> = {
   GHS: "GHS", CEDI: "GHS",
   HKD: "HKD", "HONG KONG DOLLAR": "HKD", "HONG KONG DOLLARS": "HKD",
   HUF: "HUF", FORINT: "HUF",
-  IDR: "IDR", RUPIAH: "IDR",
+  IDR: "IDR", RUPIAH: "IDR", RP: "IDR",
   ILS: "ILS", SHEKEL: "ILS", SHEKELS: "ILS", "NEW ISRAELI SHEKEL": "ILS",
   INR: "INR", "INDIAN RUPEE": "INR", "INDIAN RUPEES": "INR",
   ISK: "ISK", "ICELANDIC KRONA": "ISK",
@@ -121,6 +121,7 @@ const addCurrencyEvidence = (scores: Map<string, CurrencyScore>, code: string, s
 };
 
 const SYMBOL_PATTERNS: Array<{ code: string; pattern: RegExp; label: string }> = [
+  { code: "IDR", pattern: /\bRp\.?\s*(?=[+-]?\s*\d)/gi, label: "Rupiah amount prefix" },
   { code: "PHP", pattern: /₱/g, label: "₱ symbol" },
   { code: "EUR", pattern: /€/g, label: "€ symbol" },
   { code: "GBP", pattern: /£/g, label: "£ symbol" },
@@ -147,11 +148,17 @@ const SYMBOL_PATTERNS: Array<{ code: string; pattern: RegExp; label: string }> =
 export const detectCurrencyEvidence = (text: string): CurrencyDetectionResult => {
   // An explicitly labeled original/foreign currency is not the settlement currency.
   const normalized = text.normalize("NFKC").replace(/\u00a0/g, " ").split(/\r?\n/)
-    .filter(line => !/^\s*(?:원거래통화|현지통화|해외이용통화|원거래금액|현지금액|해외이용금액|외화금액)\s*[:：]/.test(line)).join("\n");
+    .filter(line => !/^\s*(?:원거래통화|현지통화|해외이용통화|원거래금액|현지금액|해외이용금액|외화금액|mata uang (?:asli|asal)|nominal asli|jumlah valuta asing)\s*[:：]/i.test(line)).join("\n");
   const lines = normalized.split(/\r?\n/).map(normalizeSpace).filter(Boolean);
   const scores = new Map<string, CurrencyScore>();
 
   for (const [index, line] of lines.entries()) {
+    const indonesianLabel = line.match(/\b(?:mata uang(?: tagihan| pembayaran)?|kode mata uang)\s*[:=-]?\s*(IDR|Rp\.?|rupiah|[A-Z]{3})\b/i);
+    const indonesianCode = normalizeGlobalCurrencyCode(indonesianLabel?.[1]);
+    if (indonesianCode) addCurrencyEvidence(scores, indonesianCode, 150, `explicit currency label: ${indonesianLabel![1]}`);
+    if (/\b(?:nominal|mutasi|jumlah|debet|debit|kredit|saldo|nilai (?:pasar|investasi))\s*\(\s*(?:ribu |juta |miliar |triliun )?(?:Rp|IDR|rupiah)\s*\)/i.test(line) || /\bsatuan\s*[:：]\s*(?:ribu |juta |miliar |triliun )?(?:rupiah|Rp|IDR)\b/i.test(line)) {
+      addCurrencyEvidence(scores, "IDR", 65, "Rupiah column or report unit");
+    }
     const koreanLabel = line.match(/(?:^|[\s[(])(?:청구통화|결제통화|정산통화|통화(?:코드)?|화폐|단위)\s*[:：(]?\s*(?:백만|천만|천|만|억)?([A-Z]{3}|원화|원)(?:[)\s]|$)/i);
     const koreanLabelCode = normalizeGlobalCurrencyCode(koreanLabel?.[1]);
     if (koreanLabel && koreanLabelCode) addCurrencyEvidence(scores, koreanLabelCode, 150, `explicit currency label: ${koreanLabel[1]}`);

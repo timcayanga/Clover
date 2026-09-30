@@ -1,5 +1,6 @@
 import { hasHangul } from "@/lib/korean-financial-text";
 import { parseKoreanReceiptText } from "@/lib/korean-receipt";
+import { parseIndonesianReceiptText } from "@/lib/indonesian-receipt";
 import { isSplitBillResolved } from "./split-bill-resolution";
 import type { Prisma } from "@prisma/client";
 
@@ -2163,7 +2164,7 @@ const looksLikeSplitAllocationWorksheet = (text: string) => {
     .split(/\r?\n+/)
     .map((line) => normalizeWhitespace(line))
     .filter(Boolean);
-  const rowsWithManyAmounts = lines.filter((line) => (line.match(/\b\d+(?:\.\d{2})?\b/g) ?? []).length >= 5).length;
+  const rowsWithManyAmounts = lines.filter((line) => (line.match(/\b\d[\d.,]*\b/g) ?? []).length >= 5).length;
   if (rowsWithManyAmounts >= 2) {
     return true;
   }
@@ -2295,13 +2296,13 @@ export const assessReceiptPreviewQuality = (preview: ReceiptPreviewResult): Rece
     severeIssue = true;
   }
 
-  if (subtotal !== null && subtotal >= (preview.currency === "KRW" ? 100_000_000 : 100_000) && cleanItemCount <= 25) {
+  if (subtotal !== null && subtotal >= (["KRW", "IDR"].includes(preview.currency) ? 100_000_000 : 100_000) && cleanItemCount <= 25) {
     issues.push("subtotal looks implausibly large");
     score -= 6;
     severeIssue = true;
   }
 
-  if (total !== null && total >= (preview.currency === "KRW" ? 100_000_000 : 100_000) && cleanItemCount <= 25) {
+  if (total !== null && total >= (["KRW", "IDR"].includes(preview.currency) ? 100_000_000 : 100_000) && cleanItemCount <= 25) {
     issues.push("total looks implausibly large");
     score -= 6;
     severeIssue = true;
@@ -2483,6 +2484,8 @@ export const parseAirlineTicketReceiptText = (receiptText: string): ReceiptPrevi
 };
 
 export const parseReceiptText = (receiptText: string): ReceiptPreviewResult => {
+  const indonesian = parseIndonesianReceiptText(receiptText);
+  if (indonesian) return indonesian;
   const korean = parseKoreanReceiptText(receiptText);
   if (korean) return korean;
   const normalized = receiptText.replace(/\u00a0/g, " ");

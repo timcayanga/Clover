@@ -93,3 +93,7 @@ Unsigned activity amounts with explicit direction labels (for example Expense pa
 - Finalize holdings into per-asset investment account links and derived snapshots in one transaction. Create no expense, income or transfer transactions. Keep holdings pending review.
 - Preserve all existing account fields and reviewed holdings. Reject ambiguous matches, unresolved currency/provider, duplicate assets, and deleted-account recreation with actionable errors. Enforce the account allowance across Profiles; any failure rolls back the whole portfolio.
 - Retry completed imports without recreating assets or duplicating snapshots. Refresh Investments when the active Profile’s import completes.
+
+## Indonesian documents
+
+Follow [Indonesian import rules](indonesian-import-parser-rules.md) for Bahasa Indonesia headers, Rupiah separators, statement columns, receipt reconciliation and investment valuations. Preserve source evidence and route unsupported layouts to backup/review.

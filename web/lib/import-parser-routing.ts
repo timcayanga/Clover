@@ -228,9 +228,9 @@ export const fingerprintImportSurface = (params: {
     );
   const imageStatementWithBankSignal = imageImport && importMode === "statement" && (knownInstitution || bankNameInFile);
   const receiptLexicon =
-    /\b(?:official receipt|sales invoice|tax invoice|receipt no|subtotal|vat|amount due|change due|cashier)\b/.test(sample);
+    /\b(?:official receipt|sales invoice|tax invoice|receipt no|subtotal|vat|amount due|change due|cashier|struk pembelian|no\.? struk|kuitansi|kwitansi|total bayar|kembalian)\b/.test(sample);
   const statementLexicon =
-    /\b(?:statement period|opening balance|ending balance|account number|available balance|transaction history)\b/.test(sample);
+    /\b(?:statement period|opening balance|ending balance|account number|available balance|transaction history|mutasi rekening|saldo awal|saldo akhir|nomor rekening|riwayat transaksi)\b/.test(sample);
 
   if (walletInstitution || walletTransferLexicon || (looksLikePhoneScreenshot && walletChrome)) {
     return {

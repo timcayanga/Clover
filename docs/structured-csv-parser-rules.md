@@ -137,3 +137,7 @@ Account Name through normalization; do not replace it with a guessed institution
 - Use saved formula results; do not execute formulas or guess missing/error results. Ask users to recalculate/save or export values when a formula has no usable result.
 - If a financial worksheet is unrecognized while others parse successfully, do not finalize only the recognized portion. Route the full workbook through the existing backup decision path. Backup processing requires current AI permission and remains subject to evidence/quality validation.
 - Backup learning stores parser provenance, format/routing history and candidate merchant/category signals. This is not arbitrary executable parser generation. Confirmed user decisions remain authoritative.
+
+## Indonesian documents
+
+Follow [Indonesian import rules](indonesian-import-parser-rules.md) for Bahasa Indonesia headers, Rupiah separators, statement columns, receipt reconciliation and investment valuations. Preserve source evidence and route unsupported layouts to backup/review.

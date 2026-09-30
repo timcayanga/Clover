@@ -1,6 +1,8 @@
 import { hasHangul, hasKoreanFinancialHeaders } from "@/lib/korean-financial-text";
 import { koreanStatementLineEvidence } from "@/lib/korean-statement-evidence";
 import { buildKoreanBankTable, koreanBankTableHeader } from "@/lib/korean-bank-table";
+import { buildIndonesianBankTable, indonesianBankTableHeader } from "@/lib/indonesian-bank-table";
+import { hasIndonesianFinancialText, parseIndonesianAmount } from "@/lib/indonesian-financial-text";
 import { createRequire } from "node:module";
 import { createHash } from "node:crypto";
 import { dirname, join, sep } from "node:path";
@@ -475,8 +477,8 @@ export const shutdownImportOcrWorkers = async () => {
   await Promise.all(workers.filter((worker): worker is OcrWorker => Boolean(worker)).map((worker) => worker.terminate()));
 };
 
-const getOcrWorker = async (pageSegMode = "6") => {
-  const workerKey = String(pageSegMode);
+const getOcrWorker = async (pageSegMode = "6", language = "eng+kor") => {
+  const workerKey = `${language}:${pageSegMode}`;
   const cachedWorker = ocrWorkerPromises.get(workerKey);
   if (cachedWorker) {
     return cachedWorker;
@@ -490,7 +492,7 @@ const getOcrWorker = async (pageSegMode = "6") => {
   const workerPromise = (async () => {
     try {
       const { createWorker } = await import("tesseract.js");
-      const worker = (await createWorker("eng+kor", 1, {
+      const worker = (await createWorker(language, 1, {
         logger: () => {
           // Keep OCR logs quiet during imports.
         },
@@ -498,7 +500,7 @@ const getOcrWorker = async (pageSegMode = "6") => {
       try {
         await worker.setParameters({
           preserve_interword_spaces: "1",
-          tessedit_pageseg_mode: workerKey,
+          tessedit_pageseg_mode: String(pageSegMode),
         } as any);
       } catch {
         // If OCR parameter setup fails, continue with the default worker config.
@@ -516,10 +518,11 @@ const getOcrWorker = async (pageSegMode = "6") => {
 
 const extractTextFromImageBufferWithOcr = async (
   imageSource: Buffer | Uint8Array | string,
-  pageSegMode = "6"
+  pageSegMode = "6",
+  language = "eng+kor"
 ) => {
   try {
-    const worker = await getOcrWorker(pageSegMode);
+    const worker = await getOcrWorker(pageSegMode, language);
     if (!worker) {
       return "";
     }
@@ -688,7 +691,7 @@ export const shouldRetryImageOcrBestEffort = (params: {
         ? "wallet_screenshot"
         : "generic";
 
-  if (profile === "generic" && hasHangul(firstPassText)) {
+  if (profile === "generic" && (hasHangul(firstPassText) || hasIndonesianFinancialText(firstPassText))) {
     return !assessReceiptPreviewQuality(parseReceiptText(firstPassText)).reliableForFastPath;
   }
   if (profile === "generic") {
@@ -698,6 +701,7 @@ export const shouldRetryImageOcrBestEffort = (params: {
   if (profile === "receipt") {
     const firstPassPreview = parseReceiptText(firstPassText);
     const firstPassQuality = assessReceiptPreviewQuality(firstPassPreview);
+    if (hasIndonesianFinancialText(firstPassText) && !firstPassQuality.reliableForFastPath) return true;
     const needsReceiptRecovery = firstPassQuality.issues.some((issue) =>
       /merchant looks noisy|total missing|total inferred from line items|suspicious line items|summary does not reconcile|total is smaller than subtotal|line item exceeds total/i.test(
         issue
@@ -854,7 +858,9 @@ const extractTextFromImageBufferWithReceiptAwareFallback = async (params: {
     importMode: params.importMode,
   });
   const koreanReceipt = hasHangul(firstPassText) && /영수증|부\s*가\s*세|가맹점명|상호\s*[:：]/.test(firstPassText);
-  const profile = koreanReceipt && originalProfile === "generic" ? "receipt" : originalProfile;
+  const indonesian = hasIndonesianFinancialText(firstPassText);
+  const indonesianReceipt = indonesian && /\b(?:struk|tunai|kembalian|nama toko|kuitansi|kwitansi)\b/i.test(firstPassText);
+  const profile = (koreanReceipt || indonesianReceipt) && originalProfile === "generic" ? "receipt" : originalProfile;
   const family = detectReceiptOcrFamilyFromText(firstPassText, profile);
   const candidates = await buildReceiptAwareOcrCandidates(params.normalizedBuffer, profile, family);
   const candidatePageSegMode =
@@ -875,16 +881,17 @@ const extractTextFromImageBufferWithReceiptAwareFallback = async (params: {
       label: candidate.label,
       text: await extractTextFromImageBufferWithOcr(
         candidate.dataUrl,
-        candidatePageSegMode
+        candidatePageSegMode,
+        indonesian ? "eng+ind" : "eng+kor"
       ),
     }))
   );
 
   // Previously, a requested retry could select the same first pass without
-  // trying a new segmentation. Keep full-frame Korean retries bounded to two.
-  const secondaryTexts = hasHangul(firstPassText)
+  // trying a new segmentation. Keep full-frame language retries bounded to two.
+  const secondaryTexts = hasHangul(firstPassText) || indonesian
     ? await Promise.all(["4", "11"].map(async mode => ({
-        label: `ocr-full-psm-${mode}`, text: await extractTextFromImageBufferWithOcr(params.normalizedDataUrl, mode),
+        label: `ocr-full-psm-${mode}`, text: await extractTextFromImageBufferWithOcr(params.normalizedDataUrl, mode, indonesian ? "eng+ind" : "eng+kor"),
       })))
     : [];
   const allCandidates = [
@@ -1113,6 +1120,9 @@ const scoreStatementTextCandidate = (text: string) => {
 
 export const pdfTextLayerLooksSufficientForParsing = (text: string, fileName?: string | null) => {
   const normalized = text.trim();
+  const indonesian = buildIndonesianBankTable(normalized);
+  if (indonesian?.csv && !/[\uFFFD\uE000-\uF8FF]/u.test(normalized) &&
+    indonesian.sourceLines.filter(line => line && line.text.split(/\t| {2,}|\|/).slice(2).some(cell => parseIndonesianAmount(cell.trim()) !== null)).length >= 2) return true;
   // Hangul carries more information per character than English. A short table
   // with intact cell boundaries should not lose that evidence to redundant OCR.
   // The adapter requires explicit currency, valid dates and complete columns.
@@ -2263,8 +2273,10 @@ export const buildLayoutAwarePdfTextFromContentItems = (items: PdfTextContentIte
     });
   }
 
-  const hasKoreanBankColumns = rows.some(row => koreanBankTableHeader(
-    row.items.slice().sort((a, b) => a.x - b.x).map(item => item.text).join(" ")));
+  const hasKoreanBankColumns = rows.some(row => {
+    const line = row.items.slice().sort((a, b) => a.x - b.x).map(item => item.text).join("  ");
+    return koreanBankTableHeader(line) || indonesianBankTableHeader(line);
+  });
   const buildRowText = (row: RowCluster) => {
     const sortedItems = row.items.slice().sort((a, b) => a.x - b.x || a.text.localeCompare(b.text));
     let previous: (typeof sortedItems)[number] | null = null;
@@ -2409,7 +2421,7 @@ const pickBetterPdfTextLayerCandidate = (simpleText: string, layoutAwareText: st
   const simpleScore = scoreStatementTextCandidate(simple);
   const layoutScore = scoreStatementTextCandidate(layout);
 
-  if (layout.includes("\t") && layout.split(/\r?\n/).some(line => koreanBankTableHeader(line))) return layout;
+  if (layout.includes("\t") && layout.split(/\r?\n/).some(line => koreanBankTableHeader(line) || indonesianBankTableHeader(line))) return layout;
 
   if (simpleScore >= 25) {
     return simple;

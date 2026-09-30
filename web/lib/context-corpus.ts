@@ -20,7 +20,7 @@ import { WORLD_FISCAL_CONTEXT_ENTRIES } from "@/lib/world-context-corpus-fiscal"
 import { WORLD_FISCAL_CONTEXT_ENTRIES_2 } from "@/lib/world-context-corpus-fiscal-2";
 import { WORLD_FISCAL_CONTEXT_ENTRIES_3 } from "@/lib/world-context-corpus-fiscal-3";
 
-export const CONTEXT_CORPUS_VERSION = "2026.08.01.10";
+export const CONTEXT_CORPUS_VERSION = "2026.10.01.1";
 
 export type ContextSignal = {
   id: string;
@@ -167,7 +167,8 @@ const baseEntries: ContextEntry[] = [
   // Southeast Asia expansion packs.
   { id: "sg-paynow", aliases: ["paynow", "fast transfer", "fast payments"], signalKind: "payment_rail", countryCode: "SG", regionCode: "SEA", paymentRail: "paynow_fast", currency: "SGD", categoryHint: "Transfers", transactionTypeHint: "transfer", confidence: 96 },
   { id: "my-duitnow", aliases: ["duitnow", "instant transfer malaysia"], signalKind: "payment_rail", countryCode: "MY", regionCode: "SEA", paymentRail: "duitnow", currency: "MYR", categoryHint: "Transfers", transactionTypeHint: "transfer", confidence: 96 },
-  { id: "id-qris", aliases: ["qris", "bi-fast", "bifast"], signalKind: "payment_rail", countryCode: "ID", regionCode: "SEA", paymentRail: "qris_bi_fast", currency: "IDR", categoryHint: "Transfers", transactionTypeHint: "transfer", confidence: 94 },
+  { id: "id-qris", aliases: ["qris"], signalKind: "payment_rail", countryCode: "ID", regionCode: "SEA", paymentRail: "qris_bi_fast", currency: "IDR", confidence: 94 },
+  { id: "id-bi-fast", aliases: ["bi-fast", "bifast"], signalKind: "payment_rail", countryCode: "ID", regionCode: "SEA", paymentRail: "qris_bi_fast", currency: "IDR", confidence: 94 },
   { id: "th-promptpay", aliases: ["promptpay", "พร้อมเพย์", "พร้อมเพย์โอนเงิน"], signalKind: "payment_rail", countryCode: "TH", regionCode: "SEA", paymentRail: "promptpay", currency: "THB", categoryHint: "Transfers", transactionTypeHint: "transfer", confidence: 96 },
   { id: "vn-napas", aliases: ["napas", "vietqr", "viet qr"], signalKind: "payment_rail", countryCode: "VN", regionCode: "SEA", paymentRail: "napas_vietqr", currency: "VND", categoryHint: "Transfers", transactionTypeHint: "transfer", confidence: 92 },
   { id: "sg-banks", aliases: ["dbs singapore", "posb", "ocbc singapore", "uob singapore", "standard chartered singapore", "trust bank singapore", "gxs bank"], signalKind: "institution", countryCode: "SG", regionCode: "SEA", institutionType: "bank", currency: "SGD", confidence: 90 },

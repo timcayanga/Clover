@@ -93,7 +93,7 @@ assert.match(
 );
 assert.match(
   workerSource,
-  /receiptIsSplitBill[\s\S]*parseDateValue\(String\(importFile\.fileName[\s\S]*\?\?\s*importFile\.uploadedAt/,
+  /const receiptDate =\s*explicitReceiptDate\s*\?\?\s*receiptFileNameDate\s*\?\?\s*\(receiptIsSplitBill\s*\? importFile\.uploadedAt\s*: null\)/,
   "A date-less split-note must use its upload date so receipt confirmation can publish a visible transaction."
 );
 assert.match(

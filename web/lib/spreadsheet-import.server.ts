@@ -1,5 +1,6 @@
 import * as XLSX from "xlsx";
 import { koreanFinancialHeader, koreanInvestmentHeader } from "@/lib/korean-financial-text";
+import { hasIndonesianFinancialHeaders, indonesianFinancialHeader, indonesianInvestmentHeader } from "@/lib/indonesian-financial-text";
 
 const MAX_WORKBOOK_SHEETS = 32;
 const MAX_WORKSHEET_ROWS = 25_000;
@@ -32,7 +33,7 @@ const spreadsheetSerialDateToText = (value: number, date1904: boolean) => {
   ].join("-");
 };
 
-const worksheetCellToText = (cell: XLSX.CellObject | undefined, forceSerialDate = false, date1904 = false) => {
+const worksheetCellToText = (cell: XLSX.CellObject | undefined, forceSerialDate = false, date1904 = false, indonesianNumber = false) => {
   if (!cell) return "";
   if (
     cell.t === "n" &&
@@ -46,6 +47,11 @@ const worksheetCellToText = (cell: XLSX.CellObject | undefined, forceSerialDate 
   if (cell.t === "n" && typeof cell.v === "number" && typeof cell.z === "string" && /^0+$/.test(cell.z)) {
     return XLSX.SSF.format(cell.z!, cell.v);
   }
+  // Native Excel numbers are locale-neutral. Express them in the table's
+  // notation before CSV serialization so 42.123 units cannot become 42,123 units.
+  if (indonesianNumber && cell.t === "n" && typeof cell.v === "number") {
+    return cell.v.toLocaleString("id-ID", { useGrouping: false, maximumFractionDigits: 20 });
+  }
   return cellValueToText(cell.v).trim();
 };
 
@@ -54,6 +60,8 @@ const escapeCsvCell = (value: string) =>
 
 const dateHeaderKeys = new Set(["date", "posted_date", "snapshot_date", "valuation_date"]);
 const workbookHeaderKey = (value: string) => {
+  const indonesian = indonesianInvestmentHeader(value) ?? indonesianFinancialHeader(value);
+  if (indonesian) return indonesian;
   const korean = koreanInvestmentHeader(value) ?? koreanFinancialHeader(value);
   if (korean) return korean;
   const header = value.trim().toLowerCase().replace(/[_-]/g, " ").replace(/\s+/g, " ");
@@ -62,7 +70,7 @@ const workbookHeaderKey = (value: string) => {
   return null;
 };
 
-const updateDateColumns = (cells: Array<XLSX.CellObject | undefined>, dateColumns: Set<number>) => {
+const updateDateColumns = (cells: Array<XLSX.CellObject | undefined>, dateColumns: Set<number>, indonesianNumbers: Set<number>) => {
   if (cells.every(cell => !cellValueToText(cell?.v).trim())) {
     return;
   }
@@ -78,9 +86,14 @@ const updateDateColumns = (cells: Array<XLSX.CellObject | undefined>, dateColumn
     const looksLikeHeader = group.every(cell => typeof cell?.v === "string" && !/^\s*[+-]?\d/.test(cell.v)) &&
       (keys.filter(Boolean).length >= 2 || (group.length >= 2 && keys.some(key => dateHeaderKeys.has(key ?? ""))));
     if (looksLikeHeader) {
+      const indonesian = hasIndonesianFinancialHeaders(group.map(cell => cellValueToText(cell?.v)));
       for (let index = start; index < end; index += 1) {
         if (dateHeaderKeys.has(keys[index - start] ?? "")) dateColumns.add(index);
         else dateColumns.delete(index);
+        const numberKey = keys[index - start] ?? "";
+        if (indonesian && (["amount", "debit", "credit", "balance", "fee", "original_amount", "market_value", "quantity", "monthly_contribution"].includes(numberKey) ||
+          /^(?:amount|debit|credit|balance|fee|quantity|market value)$/i.test(cellValueToText(cells[index]?.v)))) indonesianNumbers.add(index);
+        else indonesianNumbers.delete(index);
       }
     }
     start = end + 1;
@@ -125,19 +138,20 @@ export const decodeSpreadsheetWorkbookBytes = async (bytes: Uint8Array) => {
     // ODS exports may drop the source date number format. Header semantics are
     // authoritative enough to decode numeric spreadsheet serials in date columns.
     const dateColumns = new Set<number>();
+    const indonesianNumbers = new Set<number>();
 
     const normalizedRows: string[][] = [];
     for (let rowIndex = range.s.r; rowIndex <= range.e.r; rowIndex += 1) {
       const cells = Array.from({ length: columnCount }, (_, offset) =>
         worksheet[XLSX.utils.encode_cell({ r: rowIndex, c: range.s.c + offset })] as XLSX.CellObject | undefined);
-      updateDateColumns(cells, dateColumns);
+      updateDateColumns(cells, dateColumns, indonesianNumbers);
       const row = Array.from({ length: columnCount }, (_, offset) => {
         const address = XLSX.utils.encode_cell({ r: rowIndex, c: range.s.c + offset });
         const cell = worksheet[address];
         if (cell?.f && (cell.v === undefined || cell.v === null || cell.t === "e")) {
           throw new Error(`Worksheet "${sheetName}" has a formula without a usable saved result at ${address}. Recalculate and save it in Excel, or export values, then upload again.`);
         }
-        return worksheetCellToText(cell, dateColumns.has(offset), date1904);
+        return worksheetCellToText(cell, dateColumns.has(offset), date1904, indonesianNumbers.has(offset));
       });
       while (row.length > 0 && row[row.length - 1] === "") row.pop();
       if (row.some(Boolean)) normalizedRows.push(row);
