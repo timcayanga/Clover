@@ -54,7 +54,7 @@ export const hasKoreanFinancialHeaders = (value: string) => {
     const holdings = new Set(cells.map(koreanInvestmentHeader).filter(Boolean));
     return (fields.size >= 3 && (fields.has("date") || fields.has("snapshot_date")) &&
       ["amount", "debit", "credit", "balance"].some(key => fields.has(key))) ||
-      ["asset", "provider", "market_value", "valuation_date"].every(key => holdings.has(key));
+      ["asset", "market_value"].every(key => holdings.has(key));
   });
 };
 
@@ -106,7 +106,7 @@ export const parseKoreanAmount = (value: string): number | null => {
 export const parseKoreanDate = (value: string): Date | null => {
   const text = normalizeKoreanFinancialText(value).trim();
   const match = text.match(/^(\d{4})(?:\s*년\s*|[./-]\s*)(\d{1,2})(?:\s*월\s*|[./-]\s*)(\d{1,2})(?:\s*일|\.)?(?:\s*\([월화수목금토일](?:요일)?\))?(?:\s*(?:(?:오전|오후)\s*)?\d{1,2}:\d{2}(?::\d{2})?)?$/)
-    ?? text.match(/^(\d{4})(\d{2})(\d{2})$/);
+    ?? text.match(/^(\d{4})(\d{2})(\d{2})(?:\s+(?:(?:오전|오후)\s*)?\d{1,2}:\d{2}(?::\d{2})?)?$/);
   if (!match) return null;
   const time = text.match(/(?:(오전|오후)\s*)?(\d{1,2}):(\d{2})(?::(\d{2}))?$/);
   if (time && (Number(time[3]) > 59 || Number(time[4] ?? 0) > 59 ||

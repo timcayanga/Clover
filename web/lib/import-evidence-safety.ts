@@ -1,3 +1,6 @@
+import { normalizeKoreanFinancialText, parseKoreanDate } from "@/lib/korean-financial-text";
+import { looksLikeKoreanBankTableHeader } from "@/lib/korean-bank-table";
+
 type EvidenceRow = { amount?: unknown; date?: unknown; confidence?: unknown; rawPayload?: unknown };
 const record = (value: unknown): Record<string, unknown> =>
   value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : {};
@@ -5,20 +8,31 @@ const record = (value: unknown): Record<string, unknown> =>
 /** These checks precede trust in institution names, cached parses and templates. */
 export function assessImportEvidenceSafety(rows: EvidenceRow[], sourceText = '') {
   const reasons = new Set<string>();
+  const koreanBankColumns = sourceText.split(/\r?\n/).some(looksLikeKoreanBankTableHeader);
   const ledger = rows.filter(row => !['account_snapshot_marker', 'opening_balance', 'receivable_commitment_marker'].includes(String(record(row.rawPayload).kind)));
   // A workbook can legitimately have a separate transaction worksheet.
   const documentLedger = ledger.filter(row => !record(row.rawPayload).worksheetName);
-  if (documentLedger.length && /\bmarket\s+value\b/i.test(sourceText) && /\bvaluation\s+date\b/i.test(sourceText) && /\b(?:investment|holdings?|portfolio)\b/i.test(sourceText)) {
+  const koreanHoldings = /종목명|펀드명|투자상품명/.test(sourceText) && /평가금액|평가액/.test(sourceText) && /평가일|기준일|조회일/.test(sourceText);
+  if (documentLedger.length && (koreanHoldings || (/\bmarket\s+value\b/i.test(sourceText) && /\bvaluation\s+date\b/i.test(sourceText) && /\b(?:investment|holdings?|portfolio)\b/i.test(sourceText)))) {
     reasons.add('holdings_summary_as_transactions');
   }
   for (const row of ledger) {
     const raw = record(row.rawPayload);
     const evidence = record(raw.parserEvidence);
-    const line = [raw.line, raw.sourceText, evidence.source_text].find(value => typeof value === 'string') as string | undefined ?? '';
-    const dates = /\b(?:\d{4}-\d{2}-\d{2}|\d{1,2}[/-]\d{1,2}[/-]\d{4})\b/g;
-    const dateTokens = [...line.matchAll(dates)].flatMap(match => match[0].split(/[/-]/).map(Number));
+    const line = normalizeKoreanFinancialText([raw.line, raw.sourceText, evidence.source_text].find(value => typeof value === 'string') as string | undefined ?? '');
+    const dates = /(?<!\d)(?:\d{4}\s*년\s*\d{1,2}\s*월\s*\d{1,2}\s*일|\d{4}[./-]\s*\d{1,2}[./-]\s*\d{1,2}\.?|\d{1,2}[/-]\d{1,2}[/-]\d{4})(?!\d)/g;
+    const dateTokens = [...line.matchAll(dates)].flatMap(match => (match[0].match(/\d+/g) ?? []).map(Number));
+    // Compact dates need a date position/label. A printed 20260930원 is a
+    // possible amount and must not be erased just because it resembles a date.
+    const compactDates = /(?:^|(?:거래|결제|승인|평가|기준|조회)일(?:자|시)?\s*[:：]?\s*)(\d{8})(?=\s|$)(?!\s*(?:KRW|원))/g;
+    const withoutDates = line.replace(dates, ' ').replace(compactDates, (match, value: string) => {
+      const date = parseKoreanDate(value);
+      if (!date) return match;
+      dateTokens.push(Number(value), date.getUTCFullYear(), date.getUTCMonth() + 1, date.getUTCDate());
+      return ' ';
+    });
     const amount = Math.abs(Number(String(row.amount ?? '').replace(/,/g, '')));
-    const remainingNumbers = [...line.replace(dates, ' ').matchAll(/[-+]?\d[\d,]*(?:\.\d+)?/g)].map(match => Math.abs(Number(match[0].replace(/,/g, ''))));
+    const remainingNumbers = [...withoutDates.matchAll(/[-+]?\d[\d,]*(?:\.\d+)?/g)].map(match => Math.abs(Number(match[0].replace(/,/g, ''))));
     if (Number.isFinite(amount) && dateTokens.includes(amount) && !remainingNumbers.includes(amount)) {
       reasons.add('amount_from_date');
     }
@@ -27,8 +41,11 @@ export function assessImportEvidenceSafety(rows: EvidenceRow[], sourceText = '')
     if (typeof raw.line === 'string' && !raw.kind && !raw.parserEvidence && !(Number(row.confidence) > 0)) {
       reasons.add('unverified_heuristic_rows');
     }
+    if (typeof raw.line === 'string' && !raw.parserEvidence && !raw.source && koreanBankColumns) {
+      reasons.add('korean_table_without_column_evidence');
+    }
   }
-  return { reasons: [...reasons], critical: reasons.has('amount_from_date') || reasons.has('holdings_summary_as_transactions') };
+  return { reasons: [...reasons], critical: reasons.has('amount_from_date') || reasons.has('holdings_summary_as_transactions') || reasons.has('korean_table_without_column_evidence') };
 }
 
 export function assertSafeImportEvidence(rows: EvidenceRow[], sourceText = '') {

@@ -15,7 +15,7 @@ import {
 import { summarizeMerchantText } from "@/lib/merchant-labels";
 import { assessStatementExtractionQuality } from "@/lib/import-quality";
 
-const OPENAI_PROMPT_VERSION = "clover_bank_statement_extraction_v6";
+const OPENAI_PROMPT_VERSION = "clover_bank_statement_extraction_v7";
 const OPENAI_IMAGE_TRANSCRIPTION_PROMPT_VERSION = "clover_bank_statement_transcription_v3";
 const OPENAI_IMPORT_FAST_MODEL_FALLBACK = "gpt-5.4-mini";
 const OPENAI_IMPORT_STRONG_MODEL_FALLBACK = "gpt-5.5";
@@ -2451,6 +2451,8 @@ const buildOpenAIInputPayload = (params: {
     "Korean receipts may put 단가 (unit price) before 수량 (quantity), or wrap the item name above its numbers. Follow the printed columns and verify quantity × unit price against the line amount. Never invent a missing quantity. Refund/exchange policy text is not itself evidence of a cancelled purchase.",
     "In Korean tables, 단위: 천원 means money columns are in thousands of Won; do not scale quantities, account numbers or dates. For example 12 under 출금액(천원) is 12000 KRW, and 2억 3천만원 is 230000000 KRW. 청구통화/결제통화 identify billing currency; 해외이용금액/현지통화 describe the separate original purchase. A USD 10 purchase billed as KRW 13500 produces one expense of KRW 13500, not two expenses.",
     "Keep 종목명, 보유수량, 평가금액 and 평가일 as named investment holdings/valuations. Preserve six-digit Korean security codes as strings, including leading zeros. 월납입액 is a scheduled contribution, not proof of a completed trade or its cost basis. If any financial sheet or table is unreadable, flag the missing coverage instead of silently returning only the readable portion.",
+    "Korean bank tables: use the actual 출금/입금/금액 column as the movement. 잔액 is a checkpoint, never the transaction amount, and 계좌번호 is an identifier. Missing or collapsed columns require explicit uncertainty; do not select the final number on each line. Preserve evidence for the original row and column assignment.",
+    "For Korean holdings, an explicitly labeled 증권사/운용사 and 평가일/기준일 above the table may apply to its rows; preserve that provenance and never guess a missing provider or valuation date. Conflicting report metadata requires review. On receipts, prefer explicit 거래일자/결제일자/승인일시 over coupon expiry, return deadlines or reprint timestamps. An item with a printed amount but no quantity keeps quantity unset, never assumed to be one.",
     "Generic few-shot examples:",
     GENERIC_FEW_SHOT_EXAMPLES,
     "For credit card statements, capture payment due date and total amount due whenever the statement shows them.",

@@ -17,7 +17,7 @@ function receiptColumns(line: string): ReceiptColumn[] | null {
   const headerRemainder = line.replace(/상품명|메뉴명|품명|판매금액|수량|단가|금액/g, "").replace(/[\s|:/(),원₩-]/g, "");
   if (headerRemainder) return null;
   const columns = [...line.matchAll(/상품명|메뉴명|품명|판매금액|수량|단가|금액/g)].map(match => columnLabels[match[0]]!);
-  if (columns[0] !== "description" || !columns.includes("quantity") || !columns.includes("amount") ||
+  if (columns[0] !== "description" || !columns.includes("amount") || (columns.includes("unitPrice") && !columns.includes("quantity")) ||
       new Set(columns).size !== columns.length) return null;
   return columns;
 }
@@ -48,17 +48,38 @@ function parseItems(lines: string[], total: number | null) {
     }
     pendingName = "";
     const values = Object.fromEntries(columns.slice(1).map((column, index) => [column, parseKoreanAmount(cells[index]!)]));
-    const quantity = values.quantity;
+    const quantity = values.quantity ?? null;
     const amount = values.amount;
     const unitPrice = values.unitPrice ?? null;
-    if (!name || !/[\p{L}]/u.test(name) || quantity === null || quantity <= 0 || amount === null || amount <= 0 ||
-        (total !== null && amount > total) || (unitPrice !== null && Math.abs(unitPrice * quantity - amount) > 0.01)) {
+    if (!name || !/[\p{L}]/u.test(name) || (columns.includes("quantity") && (quantity === null || quantity <= 0)) || amount === null || amount <= 0 ||
+        (total !== null && amount > total) || (unitPrice !== null && quantity !== null && Math.abs(unitPrice * quantity - amount) > 0.01)) {
       incomplete = true;
       continue;
     }
     items.push({ description: name, quantity, unitPrice: unitPrice?.toFixed(2) ?? null, amount: amount.toFixed(2) });
   }
   return { items, complete: !incomplete && !pendingName };
+}
+
+function receiptDate(lines: string[]) {
+  const primary: Array<string | null> = [], other: Array<string | null> = [];
+  for (let index = 0; index < lines.length; index += 1) {
+    const line = lines[index]!;
+    if (/^(?:쿠폰|유효기간|만료|교환기한|반품기한|생년월일|제조일|유통기한)/.test(line)) continue;
+    const label = line.match(/^(?:(?:거래|결제|승인|구매)일(?:자|시)?|날짜)\s*(?:[:：]\s*|\s+|$)/);
+    const content = label ? line.slice(label[0].length).trim() || lines[index + 1] || "" : line;
+    const matches = [...content.matchAll(/\d{4}(?:\s*년\s*|[./-]\s*)\d{1,2}(?:\s*월\s*|[./-]\s*)\d{1,2}(?:\s*일|\.)?(?:\s*\([월화수목금토일](?:요일)?\))?(?:\s*(?:(?:오전|오후)\s*)?\d{1,2}:\d{2}(?::\d{2})?)?/g)].map(match => match[0]);
+    if (matches.length === 0 && (label || /^\d{8}$/.test(content))) {
+      const compactDate = content.match(/^\d{8}(?:\s+(?:(?:오전|오후)\s*)?\d{1,2}:\d{2}(?::\d{2})?)?(?=\s|$)/)?.[0];
+      if (compactDate) matches.push(compactDate);
+    }
+    const parsed = matches.map(date => parseKoreanDate(date)?.toISOString().slice(0, 10) ?? null);
+    if (label) primary.push(...(parsed.length ? parsed : [null]));
+    else other.push(...parsed);
+  }
+  const candidates = primary.length ? primary : other;
+  const unique = [...new Set(candidates)];
+  return unique.length === 1 ? unique[0]! : null;
 }
 
 /** Strict, evidence-backed core extraction. Unfamiliar layouts stay on the backup/review path. */
@@ -102,14 +123,13 @@ export function parseKoreanReceiptText(source: string): ReceiptPreviewResult | n
   const currencyConflict = currencyEvidence.ambiguous || (currency !== "KRW" && currency !== "MIXED" && /₩|￦|\d[\d,]*\s*원/.test(source));
   const currencyWarning = currencyConflict ? "Multiple currencies: confirm the amount and settlement currency."
     : !currencyEvidence.currency ? (hasDomesticEvidence ? "KRW inferred from Korean receipt details. Confirm the currency." : "Currency is not shown. Select the receipt currency.") : null;
-  const dates = lines.flatMap(line => {
-    const match = line.match(/\d{4}(?:\s*년\s*|[./-]\s*)\d{1,2}(?:\s*월\s*|[./-]\s*)\d{1,2}(?:\s*일)?/)
-      ?? line.match(/(?:^|(?:거래|결제|승인)일(?:시|자)?\s*[:：]?\s*)(\d{8})(?:\s|$)/);
-    const date = match ? parseKoreanDate(match[1] ?? match[0]) : null;
-    return date ? [date.toISOString().slice(0, 10)] : [];
-  });
-  const uniqueDates = [...new Set(dates)];
-  const billDate = uniqueDates.length === 1 ? uniqueDates[0]! : null;
+  const billDate = receiptDate(lines);
+  const documentNumbers = [...new Set(lines.flatMap((line, index) => {
+    const label = line.match(/^(?:영수증|전표)\s*번호\s*(?:[:：]\s*|\s+|$)/);
+    if (!label) return [];
+    const value = line.slice(label[0].length).trim() || lines[index + 1] || "";
+    return /^[\p{L}\p{N}/-]{1,64}$/u.test(value) ? [value] : [];
+  }))];
   const merchants = lines.flatMap((line, index) => {
     if (!merchantLabel.test(line)) return [];
     const name = line.replace(merchantLabel, "").trim() || lines[index + 1] || "";
@@ -124,10 +144,10 @@ export function parseKoreanReceiptText(source: string): ReceiptPreviewResult | n
   // Unit-price and VAT checks stay independent. Never invent or add VAT twice.
   const reconciles = total !== null && items.length > 0 && complete &&
     Math.abs(itemSum - (discount ?? 0) + (serviceCharge ?? 0) - total) < 0.01;
-  const requiresReview = cancelled || conflictingSummary || currencyWarning !== null || !merchantName || !billDate || total === null || !reconciles;
+  const requiresReview = cancelled || conflictingSummary || documentNumbers.length > 1 || currencyWarning !== null || !merchantName || !billDate || total === null || !reconciles;
   return {
     receiptText: source, receiptType: "generic_receipt", merchantName, billDate,
-    documentNumber: null, invoiceNumber: null, bookingReference: null,
+    documentNumber: documentNumbers.length === 1 ? documentNumbers[0]! : null, invoiceNumber: null, bookingReference: null,
     currency, currencyMentions: currency === "MIXED" ? [] : [currency], currencyWarning,
     paymentMethod: /카드\s*결제|신용\s*카드/.test(source) ? "Card" : /현금\s*(?:결제|영수증)/.test(source) ? "Cash" : null,
     receiptPayerName: null, subtotal: subtotal?.toFixed(2) ?? null, tax: tax?.toFixed(2) ?? null,

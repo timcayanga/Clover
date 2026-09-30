@@ -1,5 +1,6 @@
 import { isKoreanInvestmentHeader, parseKoreanInvestmentTable } from "@/lib/korean-investment-table";
-import { hasHangul, koreanFinancialHeader, normalizeKoreanFinancialText, parseKoreanDate, hasKoreanAmountMarker, parseKoreanAmount, koreanMoneyUnitScale } from "@/lib/korean-financial-text";
+import { buildKoreanBankTable } from "@/lib/korean-bank-table";
+import { hasHangul, koreanFinancialHeader, koreanInvestmentHeader, normalizeKoreanFinancialText, parseKoreanDate, hasKoreanAmountMarker, parseKoreanAmount, koreanMoneyUnitScale } from "@/lib/korean-financial-text";
 import type { TransactionType } from "@prisma/client";
 import { humanizeMerchantText, summarizeMerchantText } from "@/lib/merchant-labels";
 import { getSharedMerchantCategoryHint, getStrongMerchantCategoryHint } from "@/lib/merchant-category-hints";
@@ -795,6 +796,9 @@ const canonicalStructuredHeader = (value: string) => {
 
 const canonicalStructuredMetadataKey = (value: string) => {
   if (/^(?:단위|금액단위|money_unit)$/.test(normalizeKoreanFinancialText(value).replace(/\s/g, ""))) return "money_unit";
+  const investment = koreanInvestmentHeader(value);
+  if (investment === "provider") return "institution";
+  if (investment === "valuation_date") return "snapshot_date";
   const korean = koreanFinancialHeader(value);
   if (korean && ["institution", "account_name", "account_number", "account_type", "currency", "snapshot_date"].includes(korean)) return korean;
   const header = normalizeStructuredHeader(value);
@@ -1864,6 +1868,7 @@ const parseSingleStructuredDelimitedImport = (
     if (koreanHeaderIndex >= 0) return parseKoreanInvestmentTable({
       headers: sourceRows[koreanHeaderIndex]!, rows: sourceRows.slice(koreanHeaderIndex + 1), headerIndex: koreanHeaderIndex,
       metadata: extractStructuredPreambleMetadata(sourceRows.slice(0, koreanHeaderIndex)),
+      preambleRows: sourceRows.slice(0, koreanHeaderIndex),
     });
   }
   const table = readStructuredDelimitedTable(text, fileName, fileType);
@@ -24359,6 +24364,28 @@ export const parseGenericBankStatementText = (
   };
 };
 
+const parseKoreanBankDocument = (text: string, context: ImportParseContext): ParsedImportRow[] | null => {
+  const table = buildKoreanBankTable(text);
+  if (!table) return null;
+  if (!table.csv) return [];
+  try {
+    const rows = parseStructuredTransactionCsv(table.csv, "korean-table.csv", "text/csv", context) ?? [];
+    return rows.map(row => {
+      const source = table.sourceLines[Number(row.rawPayload?.sourceRowIndex) - 1];
+      return { ...row, confidence: Math.min(row.confidence ?? 75, 75), parserConfidence: Math.min(row.parserConfidence ?? 85, 85),
+        rawPayload: { ...row.rawPayload, kind: "korean_bank_table_transaction", source: "korean_bank_table",
+          sourceText: source?.text ?? text, sourceLineNumber: source?.lineNumber ?? null,
+          reviewRequired: true, reviewReasons: [...(Array.isArray(row.rawPayload?.reviewReasons) ? row.rawPayload.reviewReasons : []),
+            "Confirm the account and printed transaction columns against the Korean statement."],
+        },
+      };
+    });
+  } catch {
+    // Incomplete OCR/table structure must reach backup, not generic last-number parsing.
+    return [];
+  }
+};
+
 export const parseImportTextGenericOnly = (
   text: string,
   fileName: string,
@@ -24379,6 +24406,9 @@ export const parseImportTextGenericOnly = (
   if (structuredDelimitedRows) {
     return structuredDelimitedRows;
   }
+
+  const koreanBankRows = parseKoreanBankDocument(text, context);
+  if (koreanBankRows) return koreanBankRows;
 
   const hsbcParsed = parseHsbcScreenshotImportText(text, fileName);
   if (hsbcParsed && hsbcParsed.rows.length > 0) {
@@ -26630,6 +26660,9 @@ export const parseImportText = (
   if (structuredDelimitedRows) {
     return structuredDelimitedRows;
   }
+
+  const koreanBankRows = parseKoreanBankDocument(text, context);
+  if (koreanBankRows) return koreanBankRows;
 
   const wisePdfStatement = parseWisePdfStatement(text);
   if (wisePdfStatement) {

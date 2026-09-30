@@ -17,7 +17,7 @@ Korean (Hangul) text and KRW are independent signals. Never assign currency sole
 - Recognize explicit merchant labels, total, tax, discount and item-table labels. Preserve Hangul names and descriptions. Do not treat a payment rail as the merchant.
 - Distinguish 합계/결제금액 (total), 소계 (subtotal), 부가세 (VAT), 할인 (discount), 받은금액 (cash tendered) and 거스름돈 (change).
 - Do not add VAT twice. Use a net subtotal only when the tax components reconcile with the printed total.
-- Parse item rows only under an explicit item/quantity/amount header. Never create separate transactions for the item table, tax, payment amount or change.
+- Parse item rows only under an explicit item/amount header, optionally including quantity and unit price. Never create separate transactions for the item table, tax, payment amount or change.
 - Conflicting totals, missing currency/date/merchant, unreconciled items and cancellation/refund evidence block the deterministic fast path. No guessed PHP currency or purchase total.
 - Business-registration and VAT evidence may suggest KRW for review; it is not explicit currency confirmation.
 - Cancellation receipts must not become positive purchase transactions. The backup parser distinguishes void authorization from a posted refund.
@@ -25,7 +25,7 @@ Korean (Hangul) text and KRW are independent signals. Never assign currency sole
 ## Structured files
 
 - Use the existing ledger/inventory parsers with Korean header aliases and the existing audit trail.
-- Decode UTF-8/UTF-16 normally. Consider EUC-KR/CP949 only after strict UTF-8 fails, strict Korean decoding succeeds, and a single row contains either at least three financial headers (including date and money) or the complete asset/provider/value/valuation-date investment header. Unrelated labels scattered through prose are insufficient. Retain Windows-1252 compatibility.
+- Decode UTF-8/UTF-16 normally. Consider EUC-KR/CP949 only after strict UTF-8 fails, strict Korean decoding succeeds, and a single row contains either at least three financial headers (including date and money) or the asset/value investment headers. Investment parsing still requires explicit provider and valuation-date evidence in columns or report metadata. Unrelated labels scattered through prose are insufficient. Retain Windows-1252 compatibility.
 - Preserve workbook preamble account metadata and currency. Missing account columns must not replace detected KRW with PHP.
 - 입금/수입 are incoming; 출금/지출 are outgoing. Explicit columns take precedence. Ambiguous unsigned movements require review.
 - Ignore cancelled/pending/failed rows and aggregate total rows. Balance tables create snapshots, never spending. Unknown-currency Korean balance tables fail before persistence.
@@ -59,7 +59,7 @@ Public sample source: https://huggingface.co/datasets/HumynLabs/Korean_Receipts_
 
 ### Korean investment inventories
 
-- Support explicitly delimited CSV/TSV and workbook tables with `종목명`/`펀드명`, `증권사`/`플랫폼`, `평가금액`, and `평가일`/`기준일` columns. Optional quantity, security code and monthly contribution values remain separate.
+- Support explicitly delimited CSV/TSV and workbook tables with `종목명`/`펀드명` and `평가금액` columns. Require `증권사`/`플랫폼` and `평가일`/`기준일` in columns or the table's preamble. Optional quantity, security code and monthly contribution values remain separate.
 - Reuse Clover's investment-summary snapshots, one named investment per provider. Do not create spending, trades, cost basis, or an aggregate total card. A shared statement account number is retained as provenance rather than merging distinct investments through that number.
 - Preserve fractional holdings quantities and security codes. Require an explicit readable valuation date and currency. Ambiguous currency, duplicate columns, repeated investment identities or an unreadable investment row stop the local parse.
 - Investment and transaction tables can coexist on a worksheet; keep both with worksheet, section and source-cell evidence. Source row indexes follow the existing decoded worksheet representation, which omits blank rows.
@@ -80,5 +80,16 @@ Public sample source: https://huggingface.co/datasets/HumynLabs/Korean_Receipts_
 - A populated, unreadable debit/credit/amount field cannot be ignored just because another column is readable. A transaction with missing date or description cannot disappear alongside valid rows. Stop the local parse for correction/backup evaluation; do not invent values.
 - Balance snapshots honor explicit preamble valuation dates. Invalid supplied dates fail closed; only genuinely absent dates use upload day, with lower confidence and an explicit review reason. Preserve original snapshot cells and headers.
 - Reject contradictory currency evidence or different balances for the same account/currency/date. Stop snapshots sharing an account identity across currencies, because the existing confirmation resolver groups through account numbers/names and could otherwise collapse those balances. Ask for distinct currency-account identities. These rules govern new parsing only and do not modify persisted customer records.
-- PDF text quality recognizes Korean dates and whole-Won amounts. Only a Korean financial table with multiple dated monetary rows can skip redundant OCR; sparse text, missing pages and replacement/private-use glyphs retain fallback. Dates and bare identifiers alone are not money evidence. This is text-quality routing, not a new institution-specific PDF parser.
+- PDF text quality recognizes Korean dates and whole-Won amounts. Only a Korean financial table with multiple dated monetary rows can skip redundant OCR; sparse text, missing pages and replacement/private-use glyphs retain fallback. Dates and bare identifiers alone are not money evidence. No institution-specific coverage is implied.
 - `qa:korean-import` includes `korean-document-regression.ts` for legacy holdings, workbook semantics, section units, incomplete rows, snapshot safety and PDF OCR decisions. These synthetic checks do not establish accuracy for every photographed receipt or bank layout.
+
+## Clear bank columns, report metadata and receipt dates
+
+- Support Korean bank document tables with date, description and explicitly separated amount/debit/credit/balance columns. Reuse the structured ledger parser for money, direction, account metadata and reconciliation. Require explicit currency. Preserve the original line, line number, source cells and column headers; all resulting rows require review.
+- Preserve horizontal PDF column gaps for these tables. Short Hangul text layers can bypass redundant OCR only when the adapter recognizes complete columns, explicit currency and multiple dated monetary rows. Flattened, reordered, extra or unreadable columns go to backup/review. Never use the last number on a line as spending or turn a printed account number into an expense.
+- Reject conflicting account identities across the bank document. Explicit section money-unit changes remain supported. Repeated identical page headers are allowed; unfamiliar layouts are not guessed.
+- Investment report preambles can supply the provider and valuation date. Preserve both the preamble and whether each value came from the row or report. Reject conflicting report details, unreadable optional contribution values and repeated provider/name identities, including different currencies that the current account resolver would otherwise combine.
+- Receipts may have item/amount tables without a quantity; keep quantity and unit price null when not printed. Explicit purchase/payment/approval dates take precedence over reprint dates and coupon expiry. Conflicting or invalid primary dates still require review. Preserve explicitly labeled receipt/slip numbers, including leading zeros; conflicting identifiers require review.
+- Evidence checks recognize Korean holdings summaries and Korean/dotted/compact date tokens. Block holdings-as-spending, dates-as-amounts and generic Korean bank rows without column evidence, even if a heuristic reports high confidence.
+- `korean-layout-regression.ts` covers these behaviors and actual XLSX byte routing. An original synthetic Korean PDF was also rendered and visually checked, then read through the normal file reader: four transactions, dates, balances and the leading-zero account identifier survived native extraction. This does not establish accuracy for all Korean bank PDFs, scans or backup-model outputs.
+- Bump extraction cache and backup prompt versions when deploying these changes. No customer records are rewritten.

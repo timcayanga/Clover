@@ -1,5 +1,6 @@
 import { hasHangul, hasKoreanFinancialHeaders } from "@/lib/korean-financial-text";
 import { koreanStatementLineEvidence } from "@/lib/korean-statement-evidence";
+import { buildKoreanBankTable, koreanBankTableHeader } from "@/lib/korean-bank-table";
 import { createRequire } from "node:module";
 import { createHash } from "node:crypto";
 import { dirname, join, sep } from "node:path";
@@ -1112,6 +1113,17 @@ const scoreStatementTextCandidate = (text: string) => {
 
 export const pdfTextLayerLooksSufficientForParsing = (text: string, fileName?: string | null) => {
   const normalized = text.trim();
+  // Hangul carries more information per character than English. A short table
+  // with intact cell boundaries should not lose that evidence to redundant OCR.
+  // The adapter requires explicit currency, valid dates and complete columns.
+  if (normalized.length < 250 && !/[\uFFFD\uE000-\uF8FF]/u.test(normalized)) {
+    const table = buildKoreanBankTable(normalized);
+    if (table?.csv && table.sourceLines.filter(Boolean).length >= 2 &&
+      normalized.split(/\r?\n/).filter(line => {
+        const evidence = koreanStatementLineEvidence(line);
+        return evidence.date && evidence.amount;
+      }).length >= 2 && scoreStatementTextCandidate(normalized) >= 25) return true;
+  }
   if (normalized.length < 250) {
     return false;
   }
@@ -2251,6 +2263,8 @@ export const buildLayoutAwarePdfTextFromContentItems = (items: PdfTextContentIte
     });
   }
 
+  const hasKoreanBankColumns = rows.some(row => koreanBankTableHeader(
+    row.items.slice().sort((a, b) => a.x - b.x).map(item => item.text).join(" ")));
   const buildRowText = (row: RowCluster) => {
     const sortedItems = row.items.slice().sort((a, b) => a.x - b.x || a.text.localeCompare(b.text));
     let previous: (typeof sortedItems)[number] | null = null;
@@ -2265,12 +2279,12 @@ export const buildLayoutAwarePdfTextFromContentItems = (items: PdfTextContentIte
 
       const estimatedPreviousEnd = previous.x + Math.max(previous.text.length * 3.2, previous.width || 0, 8);
       const gap = item.x - estimatedPreviousEnd;
-      const spacer = gap > 36 ? "    " : gap > 22 ? "  " : " ";
+      const spacer = hasKoreanBankColumns && gap > 22 ? "\t" : gap > 36 ? "    " : gap > 22 ? "  " : " ";
       line += `${spacer}${item.text}`;
       previous = item;
     }
 
-    return line.replace(/\s+/g, " ").trim();
+    return hasKoreanBankColumns ? line.trim() : line.replace(/\s+/g, " ").trim();
   };
 
   return rows
@@ -2394,6 +2408,8 @@ const pickBetterPdfTextLayerCandidate = (simpleText: string, layoutAwareText: st
 
   const simpleScore = scoreStatementTextCandidate(simple);
   const layoutScore = scoreStatementTextCandidate(layout);
+
+  if (layout.includes("\t") && layout.split(/\r?\n/).some(line => koreanBankTableHeader(line))) return layout;
 
   if (simpleScore >= 25) {
     return simple;
