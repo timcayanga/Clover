@@ -50,7 +50,7 @@ Corrections move GS THE FRESH, GS25, CU and E-mart into grocery context, Hyundai
 
 `web/scripts/fixtures/korea-indonesia-public/` adds 33 licensed post-OCR examples: seven visually transcribed Korean receipt images from HumynLabs and 26 CORD v2 Indonesian annotation excerpts. The README contains CC BY 4.0 attribution and transformation details; the manifest retains source revisions, hashes, expected financial fields and review requirements. This corpus is independent of the earlier synthetic fixtures and merchant aliases.
 
-Use `qa:public-receipt-corpus` for the regression. It checks exact or explicitly unresolved totals, no invented currency/merchant/date, raw text retention and exclusion from the fast path. Current result: 31 correct printed totals, two unresolved, all 33 requiring review. This is development-set text parsing, not image OCR accuracy or production success rate. Same-purchase receipt views share a family to prevent future split leakage.
+Use `qa:public-receipt-corpus` for the regression. It checks exact or explicitly unresolved totals, no invented currency/merchant/date, raw text retention and exclusion from the fast path. After the benchmark fixes: 33 correct printed totals, none unresolved, all 33 requiring review. The baseline was 31/33; original inputs and printed ground truth are unchanged. This is development-set text parsing, not image OCR accuracy or production success rate. Same-purchase receipt views share a family to prevent future split leakage.
 
 ## Bank exports, October 1 expansion
 

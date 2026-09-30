@@ -1,0 +1,1510 @@
+{
+  "evaluatedAt": "2026-09-30T19:14:53.341Z",
+  "baseCommit": "1e38095fda6b9def192197889541b743a3984618",
+  "finalRuntimeDiffSha256": "68cbe01f91c110a771de04ebbbd9922ebf8e265f855a488b11161e530e69b5f0",
+  "status": "Text/file gates pass; photo OCR accuracy fails. Cloud backup and end-to-end imports not yet tested.",
+  "scope": "Development fixtures, not held-out production accuracy. 89 synthetic bank export/negative fixtures, 12 synthetic regional files including 2 XLSX workbooks, 33 public financial text excerpts, four large CSV stress fixtures. Eight public original images separately.",
+  "textBaseline": {
+    "timestamp": "2026-09-30T18:50:12.499Z",
+    "commit": "1e38095fda6b9def192197889541b743a3984618",
+    "environment": {
+      "node": "v25.9.0",
+      "platform": "darwin",
+      "arch": "arm64",
+      "cpu": "Apple M1",
+      "logicalCpus": 8,
+      "maxRssKiB": 401152
+    },
+    "targets": {
+      "deterministicP95Ms": 250,
+      "workbookP95Ms": 500,
+      "publicTotalCoverage": 0.95,
+      "returnedPublicTotalPrecision": 1,
+      "safetyPassRate": 1,
+      "fixtureAccuracy": 1,
+      "stress1000P95Ms": 1000,
+      "stress10000P95Ms": 10000
+    },
+    "iterations": 5,
+    "stressIterations": 3,
+    "method": "Sequential, disk inputs preloaded; one first invocation followed by repeated warm calls; correctness assertions excluded from timing. Workbook and legacy-byte decoding included. No network, OCR, model, queue, persistence or end-to-end upload timing. Development corpus, not independent holdout.",
+    "accuracyPassed": false,
+    "speedPassed": true,
+    "receiptAccuracy": [
+      {
+        "country": "KR",
+        "total": 7,
+        "exact": 7,
+        "unresolved": 0,
+        "wrong": 0,
+        "coverage": 1,
+        "precision": 1,
+        "safe": 7
+      },
+      {
+        "country": "ID",
+        "total": 26,
+        "exact": 24,
+        "unresolved": 2,
+        "wrong": 0,
+        "coverage": 0.9230769230769231,
+        "precision": 1,
+        "safe": 26
+      }
+    ],
+    "groups": [
+      {
+        "key": "ID/bank-export",
+        "documents": 45,
+        "passed": 45,
+        "timing": {
+          "samples": 225,
+          "medianMs": 0.527,
+          "p95Ms": 1.667,
+          "maxMs": 3.782
+        },
+        "worstDocumentP95Ms": 3.782,
+        "limitMs": 250,
+        "speedPassed": true
+      },
+      {
+        "key": "KR/bank-export",
+        "documents": 44,
+        "passed": 44,
+        "timing": {
+          "samples": 220,
+          "medianMs": 0.502,
+          "p95Ms": 1.624,
+          "maxMs": 1.898
+        },
+        "worstDocumentP95Ms": 1.898,
+        "limitMs": 250,
+        "speedPassed": true
+      },
+      {
+        "key": "KR/public-receipt",
+        "documents": 7,
+        "passed": 7,
+        "timing": {
+          "samples": 35,
+          "medianMs": 1.016,
+          "p95Ms": 1.582,
+          "maxMs": 1.648
+        },
+        "worstDocumentP95Ms": 1.648,
+        "limitMs": 250,
+        "speedPassed": true
+      },
+      {
+        "key": "ID/public-receipt",
+        "documents": 26,
+        "passed": 26,
+        "timing": {
+          "samples": 130,
+          "medianMs": 0.575,
+          "p95Ms": 1.566,
+          "maxMs": 2.053
+        },
+        "worstDocumentP95Ms": 2.053,
+        "limitMs": 250,
+        "speedPassed": true
+      },
+      {
+        "key": "ID/synthetic-file",
+        "documents": 5,
+        "passed": 5,
+        "timing": {
+          "samples": 25,
+          "medianMs": 0.734,
+          "p95Ms": 3.698,
+          "maxMs": 3.832
+        },
+        "worstDocumentP95Ms": 3.832,
+        "limitMs": 250,
+        "speedPassed": true
+      },
+      {
+        "key": "ID/workbook",
+        "documents": 1,
+        "passed": 1,
+        "timing": {
+          "samples": 5,
+          "medianMs": 6.213,
+          "p95Ms": 6.833,
+          "maxMs": 6.833
+        },
+        "worstDocumentP95Ms": 6.833,
+        "limitMs": 500,
+        "speedPassed": true
+      },
+      {
+        "key": "KR/synthetic-file",
+        "documents": 5,
+        "passed": 5,
+        "timing": {
+          "samples": 25,
+          "medianMs": 0.739,
+          "p95Ms": 4.108,
+          "maxMs": 4.186
+        },
+        "worstDocumentP95Ms": 4.186,
+        "limitMs": 250,
+        "speedPassed": true
+      },
+      {
+        "key": "KR/workbook",
+        "documents": 1,
+        "passed": 1,
+        "timing": {
+          "samples": 5,
+          "medianMs": 5.458,
+          "p95Ms": 5.636,
+          "maxMs": 5.636
+        },
+        "worstDocumentP95Ms": 5.636,
+        "limitMs": 500,
+        "speedPassed": true
+      },
+      {
+        "key": "KR/stress-1000",
+        "documents": 1,
+        "passed": 1,
+        "timing": {
+          "samples": 3,
+          "medianMs": 241.099,
+          "p95Ms": 256.561,
+          "maxMs": 256.561
+        },
+        "worstDocumentP95Ms": 256.561,
+        "limitMs": 1000,
+        "speedPassed": true
+      },
+      {
+        "key": "KR/stress-10000",
+        "documents": 1,
+        "passed": 1,
+        "timing": {
+          "samples": 3,
+          "medianMs": 2288.643,
+          "p95Ms": 2302.11,
+          "maxMs": 2302.11
+        },
+        "worstDocumentP95Ms": 2302.11,
+        "limitMs": 10000,
+        "speedPassed": true
+      },
+      {
+        "key": "ID/stress-1000",
+        "documents": 1,
+        "passed": 1,
+        "timing": {
+          "samples": 3,
+          "medianMs": 214.938,
+          "p95Ms": 217.495,
+          "maxMs": 217.495
+        },
+        "worstDocumentP95Ms": 217.495,
+        "limitMs": 1000,
+        "speedPassed": true
+      },
+      {
+        "key": "ID/stress-10000",
+        "documents": 1,
+        "passed": 1,
+        "timing": {
+          "samples": 3,
+          "medianMs": 2092.176,
+          "p95Ms": 2100.885,
+          "maxMs": 2100.885
+        },
+        "worstDocumentP95Ms": 2100.885,
+        "limitMs": 10000,
+        "speedPassed": true
+      }
+    ]
+  },
+  "textFinalRuns": [
+    {
+      "timestamp": "2026-09-30T19:13:51.246Z",
+      "commit": "1e38095fda6b9def192197889541b743a3984618",
+      "environment": {
+        "node": "v25.9.0",
+        "platform": "darwin",
+        "arch": "arm64",
+        "cpu": "Apple M1",
+        "logicalCpus": 8,
+        "maxRssKiB": 511632
+      },
+      "targets": {
+        "deterministicP95Ms": 250,
+        "workbookP95Ms": 500,
+        "publicTotalCoverage": 0.95,
+        "returnedPublicTotalPrecision": 1,
+        "safetyPassRate": 1,
+        "fixtureAccuracy": 1,
+        "stress1000P95Ms": 1000,
+        "stress10000P95Ms": 10000
+      },
+      "iterations": 15,
+      "stressIterations": 5,
+      "method": "Sequential, disk inputs preloaded; one first invocation followed by repeated warm calls; correctness assertions excluded from timing. Workbook and legacy-byte decoding included. No network, OCR, model, queue, persistence or end-to-end upload timing. Development corpus, not independent holdout.",
+      "accuracyPassed": true,
+      "speedPassed": true,
+      "receiptAccuracy": [
+        {
+          "country": "KR",
+          "total": 7,
+          "exact": 7,
+          "unresolved": 0,
+          "wrong": 0,
+          "coverage": 1,
+          "precision": 1,
+          "safe": 7
+        },
+        {
+          "country": "ID",
+          "total": 26,
+          "exact": 26,
+          "unresolved": 0,
+          "wrong": 0,
+          "coverage": 1,
+          "precision": 1,
+          "safe": 26
+        }
+      ],
+      "groups": [
+        {
+          "key": "ID/bank-export",
+          "documents": 45,
+          "passed": 45,
+          "timing": {
+            "samples": 675,
+            "medianMs": 0.481,
+            "p95Ms": 1.598,
+            "maxMs": 3.807
+          },
+          "worstDocumentP95Ms": 3.807,
+          "limitMs": 250,
+          "speedPassed": true
+        },
+        {
+          "key": "KR/bank-export",
+          "documents": 44,
+          "passed": 44,
+          "timing": {
+            "samples": 660,
+            "medianMs": 0.489,
+            "p95Ms": 1.605,
+            "maxMs": 2.132
+          },
+          "worstDocumentP95Ms": 2.132,
+          "limitMs": 250,
+          "speedPassed": true
+        },
+        {
+          "key": "KR/public-receipt",
+          "documents": 7,
+          "passed": 7,
+          "timing": {
+            "samples": 105,
+            "medianMs": 1.029,
+            "p95Ms": 1.515,
+            "maxMs": 1.678
+          },
+          "worstDocumentP95Ms": 1.678,
+          "limitMs": 250,
+          "speedPassed": true
+        },
+        {
+          "key": "ID/public-receipt",
+          "documents": 26,
+          "passed": 26,
+          "timing": {
+            "samples": 390,
+            "medianMs": 0.53,
+            "p95Ms": 1.328,
+            "maxMs": 1.916
+          },
+          "worstDocumentP95Ms": 1.916,
+          "limitMs": 250,
+          "speedPassed": true
+        },
+        {
+          "key": "ID/synthetic-file",
+          "documents": 5,
+          "passed": 5,
+          "timing": {
+            "samples": 75,
+            "medianMs": 0.696,
+            "p95Ms": 3.55,
+            "maxMs": 4.38
+          },
+          "worstDocumentP95Ms": 4.38,
+          "limitMs": 250,
+          "speedPassed": true
+        },
+        {
+          "key": "ID/workbook",
+          "documents": 1,
+          "passed": 1,
+          "timing": {
+            "samples": 15,
+            "medianMs": 4.931,
+            "p95Ms": 6.356,
+            "maxMs": 6.356
+          },
+          "worstDocumentP95Ms": 6.356,
+          "limitMs": 500,
+          "speedPassed": true
+        },
+        {
+          "key": "KR/synthetic-file",
+          "documents": 5,
+          "passed": 5,
+          "timing": {
+            "samples": 75,
+            "medianMs": 0.66,
+            "p95Ms": 3.691,
+            "maxMs": 3.915
+          },
+          "worstDocumentP95Ms": 3.915,
+          "limitMs": 250,
+          "speedPassed": true
+        },
+        {
+          "key": "KR/workbook",
+          "documents": 1,
+          "passed": 1,
+          "timing": {
+            "samples": 15,
+            "medianMs": 5.102,
+            "p95Ms": 5.539,
+            "maxMs": 5.539
+          },
+          "worstDocumentP95Ms": 5.539,
+          "limitMs": 500,
+          "speedPassed": true
+        },
+        {
+          "key": "KR/stress-1000",
+          "documents": 1,
+          "passed": 1,
+          "timing": {
+            "samples": 5,
+            "medianMs": 237.233,
+            "p95Ms": 248.54,
+            "maxMs": 248.54
+          },
+          "worstDocumentP95Ms": 248.54,
+          "limitMs": 1000,
+          "speedPassed": true
+        },
+        {
+          "key": "KR/stress-10000",
+          "documents": 1,
+          "passed": 1,
+          "timing": {
+            "samples": 5,
+            "medianMs": 2279.627,
+            "p95Ms": 2390.399,
+            "maxMs": 2390.399
+          },
+          "worstDocumentP95Ms": 2390.399,
+          "limitMs": 10000,
+          "speedPassed": true
+        },
+        {
+          "key": "ID/stress-1000",
+          "documents": 1,
+          "passed": 1,
+          "timing": {
+            "samples": 5,
+            "medianMs": 216.644,
+            "p95Ms": 220.574,
+            "maxMs": 220.574
+          },
+          "worstDocumentP95Ms": 220.574,
+          "limitMs": 1000,
+          "speedPassed": true
+        },
+        {
+          "key": "ID/stress-10000",
+          "documents": 1,
+          "passed": 1,
+          "timing": {
+            "samples": 5,
+            "medianMs": 2128.584,
+            "p95Ms": 2147.839,
+            "maxMs": 2147.839
+          },
+          "worstDocumentP95Ms": 2147.839,
+          "limitMs": 10000,
+          "speedPassed": true
+        }
+      ]
+    },
+    {
+      "timestamp": "2026-09-30T19:14:22.316Z",
+      "commit": "1e38095fda6b9def192197889541b743a3984618",
+      "environment": {
+        "node": "v25.9.0",
+        "platform": "darwin",
+        "arch": "arm64",
+        "cpu": "Apple M1",
+        "logicalCpus": 8,
+        "maxRssKiB": 402800
+      },
+      "targets": {
+        "deterministicP95Ms": 250,
+        "workbookP95Ms": 500,
+        "publicTotalCoverage": 0.95,
+        "returnedPublicTotalPrecision": 1,
+        "safetyPassRate": 1,
+        "fixtureAccuracy": 1,
+        "stress1000P95Ms": 1000,
+        "stress10000P95Ms": 10000
+      },
+      "iterations": 15,
+      "stressIterations": 5,
+      "method": "Sequential, disk inputs preloaded; one first invocation followed by repeated warm calls; correctness assertions excluded from timing. Workbook and legacy-byte decoding included. No network, OCR, model, queue, persistence or end-to-end upload timing. Development corpus, not independent holdout.",
+      "accuracyPassed": true,
+      "speedPassed": true,
+      "receiptAccuracy": [
+        {
+          "country": "KR",
+          "total": 7,
+          "exact": 7,
+          "unresolved": 0,
+          "wrong": 0,
+          "coverage": 1,
+          "precision": 1,
+          "safe": 7
+        },
+        {
+          "country": "ID",
+          "total": 26,
+          "exact": 26,
+          "unresolved": 0,
+          "wrong": 0,
+          "coverage": 1,
+          "precision": 1,
+          "safe": 26
+        }
+      ],
+      "groups": [
+        {
+          "key": "ID/bank-export",
+          "documents": 45,
+          "passed": 45,
+          "timing": {
+            "samples": 675,
+            "medianMs": 0.472,
+            "p95Ms": 1.548,
+            "maxMs": 3.901
+          },
+          "worstDocumentP95Ms": 3.901,
+          "limitMs": 250,
+          "speedPassed": true
+        },
+        {
+          "key": "KR/bank-export",
+          "documents": 44,
+          "passed": 44,
+          "timing": {
+            "samples": 660,
+            "medianMs": 0.478,
+            "p95Ms": 1.597,
+            "maxMs": 2.329
+          },
+          "worstDocumentP95Ms": 2.329,
+          "limitMs": 250,
+          "speedPassed": true
+        },
+        {
+          "key": "KR/public-receipt",
+          "documents": 7,
+          "passed": 7,
+          "timing": {
+            "samples": 105,
+            "medianMs": 1.006,
+            "p95Ms": 1.479,
+            "maxMs": 1.679
+          },
+          "worstDocumentP95Ms": 1.679,
+          "limitMs": 250,
+          "speedPassed": true
+        },
+        {
+          "key": "ID/public-receipt",
+          "documents": 26,
+          "passed": 26,
+          "timing": {
+            "samples": 390,
+            "medianMs": 0.527,
+            "p95Ms": 1.278,
+            "maxMs": 1.864
+          },
+          "worstDocumentP95Ms": 1.864,
+          "limitMs": 250,
+          "speedPassed": true
+        },
+        {
+          "key": "ID/synthetic-file",
+          "documents": 5,
+          "passed": 5,
+          "timing": {
+            "samples": 75,
+            "medianMs": 0.69,
+            "p95Ms": 3.871,
+            "maxMs": 4.009
+          },
+          "worstDocumentP95Ms": 4.009,
+          "limitMs": 250,
+          "speedPassed": true
+        },
+        {
+          "key": "ID/workbook",
+          "documents": 1,
+          "passed": 1,
+          "timing": {
+            "samples": 15,
+            "medianMs": 5.328,
+            "p95Ms": 6.565,
+            "maxMs": 6.565
+          },
+          "worstDocumentP95Ms": 6.565,
+          "limitMs": 500,
+          "speedPassed": true
+        },
+        {
+          "key": "KR/synthetic-file",
+          "documents": 5,
+          "passed": 5,
+          "timing": {
+            "samples": 75,
+            "medianMs": 0.665,
+            "p95Ms": 4.089,
+            "maxMs": 4.481
+          },
+          "worstDocumentP95Ms": 4.481,
+          "limitMs": 250,
+          "speedPassed": true
+        },
+        {
+          "key": "KR/workbook",
+          "documents": 1,
+          "passed": 1,
+          "timing": {
+            "samples": 15,
+            "medianMs": 4.967,
+            "p95Ms": 5.76,
+            "maxMs": 5.76
+          },
+          "worstDocumentP95Ms": 5.76,
+          "limitMs": 500,
+          "speedPassed": true
+        },
+        {
+          "key": "KR/stress-1000",
+          "documents": 1,
+          "passed": 1,
+          "timing": {
+            "samples": 5,
+            "medianMs": 234.755,
+            "p95Ms": 242.454,
+            "maxMs": 242.454
+          },
+          "worstDocumentP95Ms": 242.454,
+          "limitMs": 1000,
+          "speedPassed": true
+        },
+        {
+          "key": "KR/stress-10000",
+          "documents": 1,
+          "passed": 1,
+          "timing": {
+            "samples": 5,
+            "medianMs": 2236.656,
+            "p95Ms": 2291.937,
+            "maxMs": 2291.937
+          },
+          "worstDocumentP95Ms": 2291.937,
+          "limitMs": 10000,
+          "speedPassed": true
+        },
+        {
+          "key": "ID/stress-1000",
+          "documents": 1,
+          "passed": 1,
+          "timing": {
+            "samples": 5,
+            "medianMs": 212.241,
+            "p95Ms": 215.63,
+            "maxMs": 215.63
+          },
+          "worstDocumentP95Ms": 215.63,
+          "limitMs": 1000,
+          "speedPassed": true
+        },
+        {
+          "key": "ID/stress-10000",
+          "documents": 1,
+          "passed": 1,
+          "timing": {
+            "samples": 5,
+            "medianMs": 2117.585,
+            "p95Ms": 2242.415,
+            "maxMs": 2242.415
+          },
+          "worstDocumentP95Ms": 2242.415,
+          "limitMs": 10000,
+          "speedPassed": true
+        }
+      ]
+    },
+    {
+      "timestamp": "2026-09-30T19:14:53.341Z",
+      "commit": "1e38095fda6b9def192197889541b743a3984618",
+      "environment": {
+        "node": "v25.9.0",
+        "platform": "darwin",
+        "arch": "arm64",
+        "cpu": "Apple M1",
+        "logicalCpus": 8,
+        "maxRssKiB": 420576
+      },
+      "targets": {
+        "deterministicP95Ms": 250,
+        "workbookP95Ms": 500,
+        "publicTotalCoverage": 0.95,
+        "returnedPublicTotalPrecision": 1,
+        "safetyPassRate": 1,
+        "fixtureAccuracy": 1,
+        "stress1000P95Ms": 1000,
+        "stress10000P95Ms": 10000
+      },
+      "iterations": 15,
+      "stressIterations": 5,
+      "method": "Sequential, disk inputs preloaded; one first invocation followed by repeated warm calls; correctness assertions excluded from timing. Workbook and legacy-byte decoding included. No network, OCR, model, queue, persistence or end-to-end upload timing. Development corpus, not independent holdout.",
+      "accuracyPassed": true,
+      "speedPassed": true,
+      "receiptAccuracy": [
+        {
+          "country": "KR",
+          "total": 7,
+          "exact": 7,
+          "unresolved": 0,
+          "wrong": 0,
+          "coverage": 1,
+          "precision": 1,
+          "safe": 7
+        },
+        {
+          "country": "ID",
+          "total": 26,
+          "exact": 26,
+          "unresolved": 0,
+          "wrong": 0,
+          "coverage": 1,
+          "precision": 1,
+          "safe": 26
+        }
+      ],
+      "groups": [
+        {
+          "key": "ID/bank-export",
+          "documents": 45,
+          "passed": 45,
+          "timing": {
+            "samples": 675,
+            "medianMs": 0.468,
+            "p95Ms": 1.569,
+            "maxMs": 3.807
+          },
+          "worstDocumentP95Ms": 3.807,
+          "limitMs": 250,
+          "speedPassed": true
+        },
+        {
+          "key": "KR/bank-export",
+          "documents": 44,
+          "passed": 44,
+          "timing": {
+            "samples": 660,
+            "medianMs": 0.482,
+            "p95Ms": 1.593,
+            "maxMs": 2.195
+          },
+          "worstDocumentP95Ms": 2.195,
+          "limitMs": 250,
+          "speedPassed": true
+        },
+        {
+          "key": "KR/public-receipt",
+          "documents": 7,
+          "passed": 7,
+          "timing": {
+            "samples": 105,
+            "medianMs": 1.001,
+            "p95Ms": 1.494,
+            "maxMs": 1.619
+          },
+          "worstDocumentP95Ms": 1.619,
+          "limitMs": 250,
+          "speedPassed": true
+        },
+        {
+          "key": "ID/public-receipt",
+          "documents": 26,
+          "passed": 26,
+          "timing": {
+            "samples": 390,
+            "medianMs": 0.529,
+            "p95Ms": 1.279,
+            "maxMs": 1.869
+          },
+          "worstDocumentP95Ms": 1.869,
+          "limitMs": 250,
+          "speedPassed": true
+        },
+        {
+          "key": "ID/synthetic-file",
+          "documents": 5,
+          "passed": 5,
+          "timing": {
+            "samples": 75,
+            "medianMs": 0.688,
+            "p95Ms": 3.646,
+            "maxMs": 3.899
+          },
+          "worstDocumentP95Ms": 3.899,
+          "limitMs": 250,
+          "speedPassed": true
+        },
+        {
+          "key": "ID/workbook",
+          "documents": 1,
+          "passed": 1,
+          "timing": {
+            "samples": 15,
+            "medianMs": 5.114,
+            "p95Ms": 6.136,
+            "maxMs": 6.136
+          },
+          "worstDocumentP95Ms": 6.136,
+          "limitMs": 500,
+          "speedPassed": true
+        },
+        {
+          "key": "KR/synthetic-file",
+          "documents": 5,
+          "passed": 5,
+          "timing": {
+            "samples": 75,
+            "medianMs": 0.648,
+            "p95Ms": 3.654,
+            "maxMs": 3.905
+          },
+          "worstDocumentP95Ms": 3.905,
+          "limitMs": 250,
+          "speedPassed": true
+        },
+        {
+          "key": "KR/workbook",
+          "documents": 1,
+          "passed": 1,
+          "timing": {
+            "samples": 15,
+            "medianMs": 5.103,
+            "p95Ms": 5.523,
+            "maxMs": 5.523
+          },
+          "worstDocumentP95Ms": 5.523,
+          "limitMs": 500,
+          "speedPassed": true
+        },
+        {
+          "key": "KR/stress-1000",
+          "documents": 1,
+          "passed": 1,
+          "timing": {
+            "samples": 5,
+            "medianMs": 235.985,
+            "p95Ms": 245.426,
+            "maxMs": 245.426
+          },
+          "worstDocumentP95Ms": 245.426,
+          "limitMs": 1000,
+          "speedPassed": true
+        },
+        {
+          "key": "KR/stress-10000",
+          "documents": 1,
+          "passed": 1,
+          "timing": {
+            "samples": 5,
+            "medianMs": 2248.996,
+            "p95Ms": 2310.288,
+            "maxMs": 2310.288
+          },
+          "worstDocumentP95Ms": 2310.288,
+          "limitMs": 10000,
+          "speedPassed": true
+        },
+        {
+          "key": "ID/stress-1000",
+          "documents": 1,
+          "passed": 1,
+          "timing": {
+            "samples": 5,
+            "medianMs": 213.409,
+            "p95Ms": 217.143,
+            "maxMs": 217.143
+          },
+          "worstDocumentP95Ms": 217.143,
+          "limitMs": 1000,
+          "speedPassed": true
+        },
+        {
+          "key": "ID/stress-10000",
+          "documents": 1,
+          "passed": 1,
+          "timing": {
+            "samples": 5,
+            "medianMs": 2100.177,
+            "p95Ms": 2118.097,
+            "maxMs": 2118.097
+          },
+          "worstDocumentP95Ms": 2118.097,
+          "limitMs": 10000,
+          "speedPassed": true
+        }
+      ]
+    }
+  ],
+  "imageBaseline": {
+    "targets": {
+      "warmP95Ms": 30000,
+      "exactTotalCoverage": 0.95,
+      "unsafeFastAcceptance": 0
+    },
+    "documents": 8,
+    "runs": 16,
+    "consistentlyExact": 1,
+    "safeAllRuns": 7,
+    "warmP95Ms": 24014.8,
+    "cases": [
+      {
+        "id": "id-cord-train-0000",
+        "exactAllRuns": false,
+        "safeAllRuns": true
+      },
+      {
+        "id": "id-cord-train-0004",
+        "exactAllRuns": false,
+        "safeAllRuns": false
+      },
+      {
+        "id": "id-cord-train-0006",
+        "exactAllRuns": false,
+        "safeAllRuns": true
+      },
+      {
+        "id": "id-cord-train-0025",
+        "exactAllRuns": false,
+        "safeAllRuns": true
+      },
+      {
+        "id": "kr-humyn-01",
+        "exactAllRuns": true,
+        "safeAllRuns": true
+      },
+      {
+        "id": "kr-humyn-03",
+        "exactAllRuns": false,
+        "safeAllRuns": true
+      },
+      {
+        "id": "kr-humyn-10",
+        "exactAllRuns": false,
+        "safeAllRuns": true
+      },
+      {
+        "id": "kr-humyn-19",
+        "exactAllRuns": false,
+        "safeAllRuns": true
+      }
+    ],
+    "results": [
+      {
+        "id": "kr-humyn-01",
+        "country": "KR",
+        "round": 0,
+        "expected": "60000.00",
+        "actual": "60000.00",
+        "exact": true,
+        "safe": true,
+        "requiresReview": true,
+        "fastPath": false,
+        "currency": "MIXED",
+        "ocrMs": 14748.2,
+        "totalMs": 14757.6,
+        "transcriptSha256": "6a027ea8eeec817e8993832e6dddcf90d19e3d62a64110b331fbee8a36b0595e",
+        "sourceSha256": "164b8db862c88d020db6f3d0d2a456297d45cca20c3247022b0e88f3387ed19f"
+      },
+      {
+        "id": "kr-humyn-03",
+        "country": "KR",
+        "round": 0,
+        "expected": "157600.00",
+        "actual": null,
+        "exact": false,
+        "safe": true,
+        "requiresReview": true,
+        "fastPath": false,
+        "currency": "MIXED",
+        "ocrMs": 13572.4,
+        "totalMs": 13575.1,
+        "transcriptSha256": "e258f01695053bf9d114d51cca2ebc03c8bd3ee7cd24c3daaccd80a003a90839",
+        "sourceSha256": "0332377203d38d975187cb32cef0ca8cd8cfd06f933d608994d08ce0c3075361"
+      },
+      {
+        "id": "kr-humyn-10",
+        "country": "KR",
+        "round": 0,
+        "expected": "3120.00",
+        "actual": null,
+        "exact": false,
+        "safe": true,
+        "requiresReview": true,
+        "fastPath": false,
+        "currency": "KRW",
+        "ocrMs": 6327.7,
+        "totalMs": 6331.6,
+        "transcriptSha256": "a07278de8ab027d282a6334765e7dfd66b17c00063b2e4c2fbe5e2029bb1172b",
+        "sourceSha256": "142fe592f8e276492d7a745deaadf455dbdd3bcf68f5b89040562a90c12afad6"
+      },
+      {
+        "id": "kr-humyn-19",
+        "country": "KR",
+        "round": 0,
+        "expected": "7500.00",
+        "actual": "6818.00",
+        "exact": false,
+        "safe": true,
+        "requiresReview": true,
+        "fastPath": false,
+        "currency": "MIXED",
+        "ocrMs": 24381.4,
+        "totalMs": 24393,
+        "transcriptSha256": "6ceefd9eaf8bf3ea46d4f653b0720f35d55fe6cacb317e0e1799ab71057acf64",
+        "sourceSha256": "473e1f9bd2a01c68fe6b7d0419de377339513d0679f5cf5557b22d102ee01314"
+      },
+      {
+        "id": "id-cord-train-0000",
+        "country": "ID",
+        "round": 0,
+        "expected": "1591600.00",
+        "actual": null,
+        "exact": false,
+        "safe": true,
+        "requiresReview": true,
+        "fastPath": false,
+        "currency": "GBP",
+        "ocrMs": 6027.1,
+        "totalMs": 6029.1,
+        "transcriptSha256": "3054645804d64d1c67549f9cfa577cf2dfa85f39f17b5d1b2e914ea3b0e628eb",
+        "sourceSha256": "a7efa7596757d7916c5e454e8bd98e3371cdf476ac737a269693804484cfc193"
+      },
+      {
+        "id": "id-cord-train-0004",
+        "country": "ID",
+        "round": 0,
+        "expected": "48000.00",
+        "actual": "25.63",
+        "exact": false,
+        "safe": false,
+        "fastPath": true,
+        "currency": "PHP",
+        "ocrMs": 4089.8,
+        "totalMs": 4093,
+        "transcriptSha256": "3e1fffe6378eee297fa12104a0e0a7a42715aadf51bfc2658927b4c36610208c",
+        "sourceSha256": "ea4eff3bf2abdb31b936c10c5363801799b5b602a344cd8b6fcecdea7b4fe3fd"
+      },
+      {
+        "id": "id-cord-train-0006",
+        "country": "ID",
+        "round": 0,
+        "expected": "61799.00",
+        "actual": null,
+        "exact": false,
+        "safe": true,
+        "requiresReview": true,
+        "fastPath": false,
+        "currency": "MIXED",
+        "ocrMs": 1919.5,
+        "totalMs": 1920.8,
+        "transcriptSha256": "0c584b6af4805ccfc3b916752d22ba51757d4b1bcf726eeb6f409b3f487386c2",
+        "sourceSha256": "23c3d688178a7b4d458ac0d101019b29bbb63af9e97f847485e7b01db6463127"
+      },
+      {
+        "id": "id-cord-train-0025",
+        "country": "ID",
+        "round": 0,
+        "expected": "14000.00",
+        "actual": null,
+        "exact": false,
+        "safe": true,
+        "fastPath": false,
+        "currency": "PHP",
+        "ocrMs": 3006.3,
+        "totalMs": 3007,
+        "transcriptSha256": "20744d50ffd9a40f694d3e9a1396bb75503d4131209e8dd227b8bf624cb0a08d",
+        "sourceSha256": "4b39d69e1f5914d87648a8fe173eb07d6bc65fd4c6ee4ff66ce098ab1815dbea"
+      },
+      {
+        "id": "kr-humyn-01",
+        "country": "KR",
+        "round": 1,
+        "expected": "60000.00",
+        "actual": "60000.00",
+        "exact": true,
+        "safe": true,
+        "requiresReview": true,
+        "fastPath": false,
+        "currency": "MIXED",
+        "ocrMs": 14273.5,
+        "totalMs": 14279.9,
+        "transcriptSha256": "6a027ea8eeec817e8993832e6dddcf90d19e3d62a64110b331fbee8a36b0595e",
+        "sourceSha256": "164b8db862c88d020db6f3d0d2a456297d45cca20c3247022b0e88f3387ed19f"
+      },
+      {
+        "id": "kr-humyn-03",
+        "country": "KR",
+        "round": 1,
+        "expected": "157600.00",
+        "actual": null,
+        "exact": false,
+        "safe": true,
+        "requiresReview": true,
+        "fastPath": false,
+        "currency": "MIXED",
+        "ocrMs": 13654.9,
+        "totalMs": 13657.6,
+        "transcriptSha256": "e258f01695053bf9d114d51cca2ebc03c8bd3ee7cd24c3daaccd80a003a90839",
+        "sourceSha256": "0332377203d38d975187cb32cef0ca8cd8cfd06f933d608994d08ce0c3075361"
+      },
+      {
+        "id": "kr-humyn-10",
+        "country": "KR",
+        "round": 1,
+        "expected": "3120.00",
+        "actual": null,
+        "exact": false,
+        "safe": true,
+        "requiresReview": true,
+        "fastPath": false,
+        "currency": "KRW",
+        "ocrMs": 6385.7,
+        "totalMs": 6389.8,
+        "transcriptSha256": "a07278de8ab027d282a6334765e7dfd66b17c00063b2e4c2fbe5e2029bb1172b",
+        "sourceSha256": "142fe592f8e276492d7a745deaadf455dbdd3bcf68f5b89040562a90c12afad6"
+      },
+      {
+        "id": "kr-humyn-19",
+        "country": "KR",
+        "round": 1,
+        "expected": "7500.00",
+        "actual": "6818.00",
+        "exact": false,
+        "safe": true,
+        "requiresReview": true,
+        "fastPath": false,
+        "currency": "MIXED",
+        "ocrMs": 24005.9,
+        "totalMs": 24014.8,
+        "transcriptSha256": "6ceefd9eaf8bf3ea46d4f653b0720f35d55fe6cacb317e0e1799ab71057acf64",
+        "sourceSha256": "473e1f9bd2a01c68fe6b7d0419de377339513d0679f5cf5557b22d102ee01314"
+      },
+      {
+        "id": "id-cord-train-0000",
+        "country": "ID",
+        "round": 1,
+        "expected": "1591600.00",
+        "actual": null,
+        "exact": false,
+        "safe": true,
+        "requiresReview": true,
+        "fastPath": false,
+        "currency": "GBP",
+        "ocrMs": 6018.4,
+        "totalMs": 6020.5,
+        "transcriptSha256": "3054645804d64d1c67549f9cfa577cf2dfa85f39f17b5d1b2e914ea3b0e628eb",
+        "sourceSha256": "a7efa7596757d7916c5e454e8bd98e3371cdf476ac737a269693804484cfc193"
+      },
+      {
+        "id": "id-cord-train-0004",
+        "country": "ID",
+        "round": 1,
+        "expected": "48000.00",
+        "actual": "25.63",
+        "exact": false,
+        "safe": false,
+        "fastPath": true,
+        "currency": "PHP",
+        "ocrMs": 3944,
+        "totalMs": 3946.7,
+        "transcriptSha256": "3e1fffe6378eee297fa12104a0e0a7a42715aadf51bfc2658927b4c36610208c",
+        "sourceSha256": "ea4eff3bf2abdb31b936c10c5363801799b5b602a344cd8b6fcecdea7b4fe3fd"
+      },
+      {
+        "id": "id-cord-train-0006",
+        "country": "ID",
+        "round": 1,
+        "expected": "61799.00",
+        "actual": null,
+        "exact": false,
+        "safe": true,
+        "requiresReview": true,
+        "fastPath": false,
+        "currency": "MIXED",
+        "ocrMs": 1912.3,
+        "totalMs": 1913.6,
+        "transcriptSha256": "0c584b6af4805ccfc3b916752d22ba51757d4b1bcf726eeb6f409b3f487386c2",
+        "sourceSha256": "23c3d688178a7b4d458ac0d101019b29bbb63af9e97f847485e7b01db6463127"
+      },
+      {
+        "id": "id-cord-train-0025",
+        "country": "ID",
+        "round": 1,
+        "expected": "14000.00",
+        "actual": null,
+        "exact": false,
+        "safe": true,
+        "fastPath": false,
+        "currency": "PHP",
+        "ocrMs": 3007.7,
+        "totalMs": 3008.4,
+        "transcriptSha256": "20744d50ffd9a40f694d3e9a1396bb75503d4131209e8dd227b8bf624cb0a08d",
+        "sourceSha256": "4b39d69e1f5914d87648a8fe173eb07d6bc65fd4c6ee4ff66ce098ab1815dbea"
+      }
+    ]
+  },
+  "imageFinal": {
+    "targets": {
+      "warmP95Ms": 30000,
+      "exactTotalCoverage": 0.95,
+      "unsafeFastAcceptance": 0
+    },
+    "documents": 8,
+    "runs": 16,
+    "consistentlyExact": 1,
+    "safeAllRuns": 8,
+    "warmP95Ms": 24236.4,
+    "cases": [
+      {
+        "id": "id-cord-train-0000",
+        "exactAllRuns": false,
+        "safeAllRuns": true
+      },
+      {
+        "id": "id-cord-train-0004",
+        "exactAllRuns": false,
+        "safeAllRuns": true
+      },
+      {
+        "id": "id-cord-train-0006",
+        "exactAllRuns": false,
+        "safeAllRuns": true
+      },
+      {
+        "id": "id-cord-train-0025",
+        "exactAllRuns": false,
+        "safeAllRuns": true
+      },
+      {
+        "id": "kr-humyn-01",
+        "exactAllRuns": true,
+        "safeAllRuns": true
+      },
+      {
+        "id": "kr-humyn-03",
+        "exactAllRuns": false,
+        "safeAllRuns": true
+      },
+      {
+        "id": "kr-humyn-10",
+        "exactAllRuns": false,
+        "safeAllRuns": true
+      },
+      {
+        "id": "kr-humyn-19",
+        "exactAllRuns": false,
+        "safeAllRuns": true
+      }
+    ],
+    "results": [
+      {
+        "id": "kr-humyn-01",
+        "country": "KR",
+        "round": 0,
+        "expected": "60000.00",
+        "actual": "60000.00",
+        "exact": true,
+        "safe": true,
+        "requiresReview": true,
+        "fastPath": false,
+        "currency": "MIXED",
+        "ocrMs": 14850.4,
+        "totalMs": 14856.2,
+        "transcriptSha256": "6a027ea8eeec817e8993832e6dddcf90d19e3d62a64110b331fbee8a36b0595e",
+        "sourceSha256": "164b8db862c88d020db6f3d0d2a456297d45cca20c3247022b0e88f3387ed19f"
+      },
+      {
+        "id": "kr-humyn-03",
+        "country": "KR",
+        "round": 0,
+        "expected": "157600.00",
+        "actual": null,
+        "exact": false,
+        "safe": true,
+        "requiresReview": true,
+        "fastPath": false,
+        "currency": "MIXED",
+        "ocrMs": 13707.7,
+        "totalMs": 13711.6,
+        "transcriptSha256": "e258f01695053bf9d114d51cca2ebc03c8bd3ee7cd24c3daaccd80a003a90839",
+        "sourceSha256": "0332377203d38d975187cb32cef0ca8cd8cfd06f933d608994d08ce0c3075361"
+      },
+      {
+        "id": "kr-humyn-10",
+        "country": "KR",
+        "round": 0,
+        "expected": "3120.00",
+        "actual": null,
+        "exact": false,
+        "safe": true,
+        "requiresReview": true,
+        "fastPath": false,
+        "currency": "KRW",
+        "ocrMs": 6389.8,
+        "totalMs": 6395.7,
+        "transcriptSha256": "a07278de8ab027d282a6334765e7dfd66b17c00063b2e4c2fbe5e2029bb1172b",
+        "sourceSha256": "142fe592f8e276492d7a745deaadf455dbdd3bcf68f5b89040562a90c12afad6"
+      },
+      {
+        "id": "kr-humyn-19",
+        "country": "KR",
+        "round": 0,
+        "expected": "7500.00",
+        "actual": "6818.00",
+        "exact": false,
+        "safe": true,
+        "requiresReview": true,
+        "fastPath": false,
+        "currency": "MIXED",
+        "ocrMs": 24181.9,
+        "totalMs": 24192.3,
+        "transcriptSha256": "6ceefd9eaf8bf3ea46d4f653b0720f35d55fe6cacb317e0e1799ab71057acf64",
+        "sourceSha256": "473e1f9bd2a01c68fe6b7d0419de377339513d0679f5cf5557b22d102ee01314"
+      },
+      {
+        "id": "id-cord-train-0000",
+        "country": "ID",
+        "round": 0,
+        "expected": "1591600.00",
+        "actual": null,
+        "exact": false,
+        "safe": true,
+        "requiresReview": true,
+        "fastPath": false,
+        "currency": "GBP",
+        "ocrMs": 6044.2,
+        "totalMs": 6047.5,
+        "transcriptSha256": "3054645804d64d1c67549f9cfa577cf2dfa85f39f17b5d1b2e914ea3b0e628eb",
+        "sourceSha256": "a7efa7596757d7916c5e454e8bd98e3371cdf476ac737a269693804484cfc193"
+      },
+      {
+        "id": "id-cord-train-0004",
+        "country": "ID",
+        "round": 0,
+        "expected": "48000.00",
+        "actual": "25.63",
+        "exact": false,
+        "safe": true,
+        "requiresReview": true,
+        "fastPath": false,
+        "currency": "MIXED",
+        "ocrMs": 3971.1,
+        "totalMs": 3972,
+        "transcriptSha256": "3e1fffe6378eee297fa12104a0e0a7a42715aadf51bfc2658927b4c36610208c",
+        "sourceSha256": "ea4eff3bf2abdb31b936c10c5363801799b5b602a344cd8b6fcecdea7b4fe3fd"
+      },
+      {
+        "id": "id-cord-train-0006",
+        "country": "ID",
+        "round": 0,
+        "expected": "61799.00",
+        "actual": null,
+        "exact": false,
+        "safe": true,
+        "requiresReview": true,
+        "fastPath": false,
+        "currency": "MIXED",
+        "ocrMs": 1936.5,
+        "totalMs": 1937.8,
+        "transcriptSha256": "0c584b6af4805ccfc3b916752d22ba51757d4b1bcf726eeb6f409b3f487386c2",
+        "sourceSha256": "23c3d688178a7b4d458ac0d101019b29bbb63af9e97f847485e7b01db6463127"
+      },
+      {
+        "id": "id-cord-train-0025",
+        "country": "ID",
+        "round": 0,
+        "expected": "14000.00",
+        "actual": null,
+        "exact": false,
+        "safe": true,
+        "requiresReview": true,
+        "fastPath": false,
+        "currency": "MIXED",
+        "ocrMs": 3016.7,
+        "totalMs": 3017.3,
+        "transcriptSha256": "20744d50ffd9a40f694d3e9a1396bb75503d4131209e8dd227b8bf624cb0a08d",
+        "sourceSha256": "4b39d69e1f5914d87648a8fe173eb07d6bc65fd4c6ee4ff66ce098ab1815dbea"
+      },
+      {
+        "id": "kr-humyn-01",
+        "country": "KR",
+        "round": 1,
+        "expected": "60000.00",
+        "actual": "60000.00",
+        "exact": true,
+        "safe": true,
+        "requiresReview": true,
+        "fastPath": false,
+        "currency": "MIXED",
+        "ocrMs": 14318.4,
+        "totalMs": 14323.8,
+        "transcriptSha256": "6a027ea8eeec817e8993832e6dddcf90d19e3d62a64110b331fbee8a36b0595e",
+        "sourceSha256": "164b8db862c88d020db6f3d0d2a456297d45cca20c3247022b0e88f3387ed19f"
+      },
+      {
+        "id": "kr-humyn-03",
+        "country": "KR",
+        "round": 1,
+        "expected": "157600.00",
+        "actual": null,
+        "exact": false,
+        "safe": true,
+        "requiresReview": true,
+        "fastPath": false,
+        "currency": "MIXED",
+        "ocrMs": 13714.2,
+        "totalMs": 13719.6,
+        "transcriptSha256": "e258f01695053bf9d114d51cca2ebc03c8bd3ee7cd24c3daaccd80a003a90839",
+        "sourceSha256": "0332377203d38d975187cb32cef0ca8cd8cfd06f933d608994d08ce0c3075361"
+      },
+      {
+        "id": "kr-humyn-10",
+        "country": "KR",
+        "round": 1,
+        "expected": "3120.00",
+        "actual": null,
+        "exact": false,
+        "safe": true,
+        "requiresReview": true,
+        "fastPath": false,
+        "currency": "KRW",
+        "ocrMs": 6563.2,
+        "totalMs": 6567.5,
+        "transcriptSha256": "a07278de8ab027d282a6334765e7dfd66b17c00063b2e4c2fbe5e2029bb1172b",
+        "sourceSha256": "142fe592f8e276492d7a745deaadf455dbdd3bcf68f5b89040562a90c12afad6"
+      },
+      {
+        "id": "kr-humyn-19",
+        "country": "KR",
+        "round": 1,
+        "expected": "7500.00",
+        "actual": "6818.00",
+        "exact": false,
+        "safe": true,
+        "requiresReview": true,
+        "fastPath": false,
+        "currency": "MIXED",
+        "ocrMs": 24225.1,
+        "totalMs": 24236.4,
+        "transcriptSha256": "6ceefd9eaf8bf3ea46d4f653b0720f35d55fe6cacb317e0e1799ab71057acf64",
+        "sourceSha256": "473e1f9bd2a01c68fe6b7d0419de377339513d0679f5cf5557b22d102ee01314"
+      },
+      {
+        "id": "id-cord-train-0000",
+        "country": "ID",
+        "round": 1,
+        "expected": "1591600.00",
+        "actual": null,
+        "exact": false,
+        "safe": true,
+        "requiresReview": true,
+        "fastPath": false,
+        "currency": "GBP",
+        "ocrMs": 6035.6,
+        "totalMs": 6037.8,
+        "transcriptSha256": "3054645804d64d1c67549f9cfa577cf2dfa85f39f17b5d1b2e914ea3b0e628eb",
+        "sourceSha256": "a7efa7596757d7916c5e454e8bd98e3371cdf476ac737a269693804484cfc193"
+      },
+      {
+        "id": "id-cord-train-0004",
+        "country": "ID",
+        "round": 1,
+        "expected": "48000.00",
+        "actual": "25.63",
+        "exact": false,
+        "safe": true,
+        "requiresReview": true,
+        "fastPath": false,
+        "currency": "MIXED",
+        "ocrMs": 3952.6,
+        "totalMs": 3953.6,
+        "transcriptSha256": "3e1fffe6378eee297fa12104a0e0a7a42715aadf51bfc2658927b4c36610208c",
+        "sourceSha256": "ea4eff3bf2abdb31b936c10c5363801799b5b602a344cd8b6fcecdea7b4fe3fd"
+      },
+      {
+        "id": "id-cord-train-0006",
+        "country": "ID",
+        "round": 1,
+        "expected": "61799.00",
+        "actual": null,
+        "exact": false,
+        "safe": true,
+        "requiresReview": true,
+        "fastPath": false,
+        "currency": "MIXED",
+        "ocrMs": 1941.8,
+        "totalMs": 1943.1,
+        "transcriptSha256": "0c584b6af4805ccfc3b916752d22ba51757d4b1bcf726eeb6f409b3f487386c2",
+        "sourceSha256": "23c3d688178a7b4d458ac0d101019b29bbb63af9e97f847485e7b01db6463127"
+      },
+      {
+        "id": "id-cord-train-0025",
+        "country": "ID",
+        "round": 1,
+        "expected": "14000.00",
+        "actual": null,
+        "exact": false,
+        "safe": true,
+        "requiresReview": true,
+        "fastPath": false,
+        "currency": "MIXED",
+        "ocrMs": 3015.6,
+        "totalMs": 3016.1,
+        "transcriptSha256": "20744d50ffd9a40f694d3e9a1396bb75503d4131209e8dd227b8bf624cb0a08d",
+        "sourceSha256": "4b39d69e1f5914d87648a8fe173eb07d6bc65fd4c6ee4ff66ce098ab1815dbea"
+      }
+    ]
+  },
+  "imageExperiments": "Two original-image/deskew/language retry experiments did not improve whole-image accuracy enough to retain; removed due added latency. Summary selection and missing-currency safety fixes retained.",
+  "cloudBackup": {
+    "tested": false,
+    "reason": "Needs a staging test account with existing AI-processing consent. No consent state was modified or bypassed."
+  }
+}

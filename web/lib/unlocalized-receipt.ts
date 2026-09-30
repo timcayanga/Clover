@@ -37,7 +37,8 @@ export function parseUnlocalizedReceiptText(source: string): ReceiptPreviewResul
   const strong = candidates(finalLabel), ordinary = candidates(totalLabel);
   if (!strong.length && !ordinary.length) return null;
   const values = [...new Set(strong.length ? strong : ordinary)];
-  const total = values.length === 1 ? values[0]! : null;
+  const blockedStatus = /^\s*(?:status(?: transaksi| pembayaran)?\s*[:=]?\s*)?(?:batal|dibatalkan|gagal|tertunda|menunggu|belum dibayar|pengembalian dana|refund|cancelled|canceled|voided|pending)(?:\s|$)/im.test(source);
+  const total = !blockedStatus && values.length === 1 ? values[0]! : null;
   const currency = evidence.currency ?? "MIXED";
   return {
     receiptText: source, receiptType: "generic_receipt", merchantName: null, billDate: null,

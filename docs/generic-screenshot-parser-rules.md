@@ -97,3 +97,9 @@ Unsigned activity amounts with explicit direction labels (for example Expense pa
 ## Indonesian documents
 
 Follow [Indonesian import rules](indonesian-import-parser-rules.md) for Bahasa Indonesia headers, Rupiah separators, statement columns, receipt reconciliation and investment valuations. Preserve source evidence and route unsupported layouts to backup/review.
+
+### Receipt benchmark safeguards
+
+- Missing currency remains MIXED, with low confidence and required review; it must not default to PHP without Philippine currency/context evidence.
+- Retry weak receipt OCR when currency remains unknown. Among OCR candidates, a printed settlement total takes precedence over a total inferred only by summing surviving menu lines. Keep the selected source transcript intact; do not splice digits from different passes.
+- Regional text-parser benchmarks and original-image OCR benchmarks are separate gates. A passing post-OCR corpus does not establish image, cloud fallback, or end-to-end import accuracy.

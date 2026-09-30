@@ -105,3 +105,7 @@ Use `web/lib/korea-indonesia-corpus.ts` for reviewed provider context and `docs/
 ## Public receipt corpus
 
 `web/scripts/fixtures/korea-indonesia-public/` contains seven licensed financial excerpts manually checked against public Korean receipt images. Treat `결제액` as a payment-total label. A pre-discount `총합계액` must not replace a printed payment amount. Negative discount rows, tax-column layouts, split payment components, missing currency, two-digit years and unknown item headers still require review. Two views of the same purchase share a corpus family; a reissued receipt is not proof of another purchase. See the corpus README for provenance, attribution and evaluation limits.
+
+## Benchmark safety controls
+
+Unreadable labeled totals remain evidence rather than being discarded when another total parses. Conflicting or malformed duplicate totals must stay unresolved. A recognized horizontal taxable-amount/VAT/final-total table is accepted only when its three amounts parse and reconcile; headers themselves are not amounts. Unknown currency remains MIXED and cannot qualify for the receipt fast path. See the public corpus README for measured speed, accuracy, and the separate local-photo OCR limitation.

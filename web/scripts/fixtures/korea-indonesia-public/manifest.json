@@ -533,7 +533,7 @@
         "printedTotal": "48000.00",
         "requiresReview": true,
         "currency": "MIXED",
-        "extractedTotal": null
+        "extractedTotal": "48000.00"
       },
       "groundTruth": {
         "menu": {
@@ -554,7 +554,7 @@
       },
       "limits": [
         "Public release omits store/payment identity fields. Source annotation may have errors; labels are not proof of complete arithmetic.",
-        "Known unresolved total: bare TOTAL is pre-tax while GRAND TOTAL is final; the Indonesian parser flags disagreement instead of choosing."
+        "Previously unresolved, now covered by final-total precedence and review-only summary parsing: bare TOTAL is pre-tax while GRAND TOTAL is final; the Indonesian parser flags disagreement instead of choosing."
       ],
       "evaluationRole": "development-regression"
     },
@@ -636,7 +636,7 @@
         "printedTotal": "61799.00",
         "requiresReview": true,
         "currency": "MIXED",
-        "extractedTotal": null
+        "extractedTotal": "61799.00"
       },
       "groundTruth": {
         "menu": [
@@ -665,7 +665,7 @@
       },
       "limits": [
         "Public release omits store/payment identity fields. Source annotation may have errors; labels are not proof of complete arithmetic.",
-        "Known unresolved total: mixed dot/comma grouping and value-before-label summaries need further evidence; do not relax the global amount parser."
+        "Previously unresolved, now covered by final-total precedence and review-only summary parsing: mixed dot/comma grouping and value-before-label summaries need further evidence; do not relax the global amount parser."
       ],
       "evaluationRole": "development-regression"
     },

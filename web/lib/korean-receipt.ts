@@ -86,17 +86,27 @@ function receiptDate(lines: string[]) {
 export function parseKoreanReceiptText(source: string): ReceiptPreviewResult | null {
   if (!hasHangul(source)) return null;
   const lines = normalizeKoreanFinancialText(source).split(/\r?\n/).map(line => line.trim()).filter(Boolean);
+  const taxTableHeader = /^(?:과세물품가액|과세금액|공급가액)부가세(?:\(VAT\))?(?:합계금액|합계)$/i;
   const labeledValues = (pattern: RegExp) => lines.flatMap((line, index) => {
+    if (taxTableHeader.test(compact(line))) return [];
     const normalizedLabel = line.replace(/([가-힣])\s+(?=[가-힣])/g, "$1").replace(/\s*[:：]\s*/g, ":");
     const label = normalizedLabel.match(pattern);
     if (!label) return [];
     const inline = normalizedLabel.slice(label[0].length).trim();
+    if (taxTableHeader.test(compact(lines[index - 1] ?? ""))) {
+      const cells = inline.match(new RegExp(`^(${money})\\s+(${money})\\s+(${money})$`));
+      const amounts = cells?.slice(1).map(parseKoreanAmount);
+      return amounts?.every((amount): amount is number => amount !== null && amount >= 0) &&
+        Math.abs(amounts[0]! + amounts[1]! - amounts[2]!) < 0.01 ? [amounts[2]!] : [null];
+    }
     const value = parseKoreanAmount(inline || lines[index + 1] || "");
-    return value !== null ? [value] : [];
+    // Retain unreadable labeled values as evidence. Dropping one could let a
+    // second, different total look uniquely reliable after a damaged OCR pass.
+    return [value];
   });
   const oneValue = (pattern: RegExp) => {
     const candidates = [...new Set(labeledValues(pattern))];
-    return { value: candidates.length === 1 ? candidates[0]! : null, conflict: candidates.length > 1 };
+    return { value: candidates.length === 1 ? candidates[0]! : null, conflict: candidates.length > 1 || candidates.includes(null) };
   };
   const totalEvidence = oneValue(totals);
   const total = totalEvidence.value !== null && totalEvidence.value > 0 ? totalEvidence.value : null;

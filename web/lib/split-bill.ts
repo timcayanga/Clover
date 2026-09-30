@@ -439,7 +439,7 @@ const detectCurrencyFromText = (text: string) => {
     return "JPY";
   }
 
-  return "PHP";
+  return "MIXED";
 };
 
 const detectCurrencyMentionsFromText = (text: string) => {
@@ -2197,7 +2197,7 @@ export const assessReceiptPreviewQuality = (preview: ReceiptPreviewResult): Rece
   const issues: string[] = [];
   let score = 0;
   let severeIssue = false;
-  if (preview.requiresReview) {
+  if (preview.requiresReview || preview.currency === "MIXED") {
     issues.push("backup parser result requires review");
     score -= 2;
     severeIssue = true;
@@ -2502,7 +2502,8 @@ export const parseReceiptText = (receiptText: string): ReceiptPreviewResult => {
   const currency = detectCurrencyFromText(normalized);
   const currencyMentions = detectCurrencyMentionsFromText(normalized);
   const currencyWarning =
-    currencyMentions.length > 1 ? `Mixed currencies detected: ${currencyMentions.join(", ")}` : null;
+    currencyMentions.length > 1 ? `Mixed currencies detected: ${currencyMentions.join(", ")}` :
+      currency === "MIXED" ? "Currency is not shown. Confirm it against the original receipt." : null;
   const walletCounterparty = detectWalletTransferCounterpartyFromText(lines);
   const isMainBarReceipt = /\b(?:rice\s+is\s+nice|dirty\s+sorbetes?|dounua|total\s+amount\s+2004\.29)\b/i.test(normalized);
   const billDate = isMainBarReceipt ? "2024-12-23T00:00:00.000Z" : parseBillDateFromText(normalized);
@@ -2684,6 +2685,7 @@ export const parseReceiptText = (receiptText: string): ReceiptPreviewResult => {
     splitAllocations: allocations,
     receiptAccountMatch,
     confidence: 0,
+    ...(currency === "MIXED" ? { requiresReview: true } : {}),
   } satisfies ReceiptPreviewResult;
   const qualityAssessment = assessReceiptPreviewQuality(provisionalPreview);
   const rawConfidence = Math.max(
@@ -2737,7 +2739,7 @@ export const parseReceiptText = (receiptText: string): ReceiptPreviewResult => {
 
   return {
     ...provisionalPreview,
-    confidence,
+    confidence: currency === "MIXED" ? Math.min(confidence, 45) : confidence,
   };
 };
 

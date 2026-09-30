@@ -2,6 +2,7 @@ import type { ReceiptPreviewItem, ReceiptPreviewResult } from "@/lib/split-bill"
 import { detectCurrencyEvidence } from "@/lib/financial-identity-detection";
 import { hasIndonesianFinancialText, normalizeIndonesianText, parseIndonesianAmount, parseIndonesianDate } from "@/lib/indonesian-financial-text";
 import { looksLikeIndonesianPaymentProof } from "@/lib/indonesian-payment-proof";
+import { parseUnlocalizedReceiptText } from "@/lib/unlocalized-receipt";
 
 const money = "[+-]?(?:(?:Rp\\.?|IDR)\\s*)?(?:\\d[\\d.,]*)(?:,-)?";
 const summary = /^(?:sub\s*total|grand total|total(?: bayar| pembayaran| belanja)?|jumlah bayar|ppn|pajak|diskon|potongan|biaya layanan|service charge|tunai|kembali(?:an)?|pembulatan|metode pembayaran|no\.? struk|tanggal|terima kasih)\b/i;
@@ -30,7 +31,11 @@ export function parseIndonesianReceiptText(source: string): ReceiptPreviewResult
     const unique = [...new Set(values)];
     return { value: unique.length === 1 ? unique[0]! : null, conflict: unique.length > 1 || (raw.length > 0 && values.includes(null)) };
   };
-  const totalEvidence = value(/^(?:grand total|total(?: bayar| pembayaran| belanja)?|jumlah bayar)\s*(?:[:=]\s*|\s+|$)/i);
+  const finalTotalLabel = /^(?:grand total|total (?:bayar|pembayaran)|jumlah bayar)\s*(?:[:=]\s*|\s+|$)/i;
+  const ordinaryTotalEvidence = value(/^total(?!\s+(?:bayar|pembayaran)\b)(?: belanja)?\s*(?:[:=]\s*|\s+|$)/i);
+  // A printed GRAND TOTAL can include tax on an earlier TOTAL. Conflicting
+  // final totals still stay unresolved, including an unreadable duplicate.
+  const totalEvidence = labeled(finalTotalLabel).length ? value(finalTotalLabel) : ordinaryTotalEvidence;
   const subtotalEvidence = value(/^sub\s*total\s*(?:[:=]\s*|\s+|$)/i);
   const taxEvidence = value(/^(?:ppn|pajak)(?:\s*\d+(?:,\d+)?\s*%)?\s*(?:[:=]\s*|\s+|$)/i);
   const serviceEvidence = value(/^(?:biaya layanan|service charge)(?:\s*\d+(?:,\d+)?\s*%)?\s*(?:[:=]\s*|\s+|$)/i);
@@ -87,9 +92,17 @@ export function parseIndonesianReceiptText(source: string): ReceiptPreviewResult
   const reconciles = complete && total !== null && total > 0 && Math.abs(itemSum - base) <= 0.01 && Math.abs(base + additions - total) <= 0.01;
   const cashReconciles = cashEvidence.value === null || changeEvidence.value === null ||
     (total !== null && cashEvidence.value >= total && Math.abs(cashEvidence.value - total - changeEvidence.value) <= 0.01);
-  const conflict = [totalEvidence, subtotalEvidence, taxEvidence, serviceEvidence, discountEvidence, roundingEvidence, cashEvidence, changeEvidence].some(evidence => evidence.conflict) ||
+  const conflict = [totalEvidence, ordinaryTotalEvidence, subtotalEvidence, taxEvidence, serviceEvidence, discountEvidence, roundingEvidence, cashEvidence, changeEvidence].some(evidence => evidence.conflict) ||
     [tax, service, discount, cashEvidence.value, changeEvidence.value].some(value => value !== null && value < 0);
   const requiresReview = paymentProof || cancelled || conflict || !reconciles || !cashReconciles || currencyWarning !== null || !merchantName || !billDate || ids.length > 1;
+  if (total === null && currency === "MIXED" && !currencyEvidence.ambiguous && !paymentProof && !cancelled &&
+      start < 0 && !merchantName && !billDate && ids.length === 0) {
+    // An incomplete excerpt may use comma grouping or value-before-label
+    // summaries. Use the existing integer-only, review-required summary guard;
+    // never relax Rupiah ledger parsing or promote this result to a fast path.
+    const summaryPreview = parseUnlocalizedReceiptText(source);
+    if (summaryPreview && summaryPreview.total !== null) return summaryPreview;
+  }
   return {
     receiptText: source, receiptType: "generic_receipt", merchantName, billDate, documentNumber, invoiceNumber: null, bookingReference: null,
     currency, currencyMentions: currency === "MIXED" ? [] : [currency], currencyWarning,

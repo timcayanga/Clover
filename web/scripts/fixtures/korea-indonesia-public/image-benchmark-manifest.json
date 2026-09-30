@@ -1,0 +1,74 @@
+{
+  "schemaVersion": 1,
+  "scope": "Eight diagnostic original images; not an independent holdout. Originals are fetched to temporary storage, never committed. Sources and CC BY 4.0 attribution are in README.md.",
+  "samples": [
+    {
+      "id": "kr-humyn-01",
+      "country": "KR",
+      "expectedTotal": "60000.00",
+      "sha256": "164b8db862c88d020db6f3d0d2a456297d45cca20c3247022b0e88f3387ed19f",
+      "sourceUrl": "https://huggingface.co/datasets/HumynLabs/Korean_Receipts_Dataset/resolve/656cef561f4b8ff22e46d6785bc2807e78af99a1/Kgen_Korean%20Receipts_1005_1.JPEG",
+      "fileName": "kr-1.jpg"
+    },
+    {
+      "id": "kr-humyn-03",
+      "country": "KR",
+      "expectedTotal": "157600.00",
+      "sha256": "0332377203d38d975187cb32cef0ca8cd8cfd06f933d608994d08ce0c3075361",
+      "sourceUrl": "https://huggingface.co/datasets/HumynLabs/Korean_Receipts_Dataset/resolve/656cef561f4b8ff22e46d6785bc2807e78af99a1/Kgen_Korean%20Receipts_1005_3.JPEG",
+      "fileName": "kr-3.jpg"
+    },
+    {
+      "id": "kr-humyn-10",
+      "country": "KR",
+      "expectedTotal": "3120.00",
+      "sha256": "142fe592f8e276492d7a745deaadf455dbdd3bcf68f5b89040562a90c12afad6",
+      "sourceUrl": "https://huggingface.co/datasets/HumynLabs/Korean_Receipts_Dataset/resolve/656cef561f4b8ff22e46d6785bc2807e78af99a1/Kgen_Korean%20Receipts_1005_10.JPEG",
+      "fileName": "kr-10.jpg"
+    },
+    {
+      "id": "kr-humyn-19",
+      "country": "KR",
+      "expectedTotal": "7500.00",
+      "sha256": "473e1f9bd2a01c68fe6b7d0419de377339513d0679f5cf5557b22d102ee01314",
+      "sourceUrl": "https://huggingface.co/datasets/HumynLabs/Korean_Receipts_Dataset/resolve/656cef561f4b8ff22e46d6785bc2807e78af99a1/Kgen_Korean%20Receipts_1005_19.JPEG",
+      "fileName": "kr-19.jpg"
+    },
+    {
+      "id": "id-cord-train-0000",
+      "country": "ID",
+      "expectedTotal": "1591600.00",
+      "sha256": "a7efa7596757d7916c5e454e8bd98e3371cdf476ac737a269693804484cfc193",
+      "sourceUrl": "https://huggingface.co/datasets/naver-clova-ix/cord-v2/viewer/default/train?row=0",
+      "fileName": "id-0.jpg",
+      "datasetRow": 0
+    },
+    {
+      "id": "id-cord-train-0004",
+      "country": "ID",
+      "expectedTotal": "48000.00",
+      "sha256": "ea4eff3bf2abdb31b936c10c5363801799b5b602a344cd8b6fcecdea7b4fe3fd",
+      "sourceUrl": "https://huggingface.co/datasets/naver-clova-ix/cord-v2/viewer/default/train?row=4",
+      "fileName": "id-4.jpg",
+      "datasetRow": 4
+    },
+    {
+      "id": "id-cord-train-0006",
+      "country": "ID",
+      "expectedTotal": "61799.00",
+      "sha256": "23c3d688178a7b4d458ac0d101019b29bbb63af9e97f847485e7b01db6463127",
+      "sourceUrl": "https://huggingface.co/datasets/naver-clova-ix/cord-v2/viewer/default/train?row=6",
+      "fileName": "id-6.jpg",
+      "datasetRow": 6
+    },
+    {
+      "id": "id-cord-train-0025",
+      "country": "ID",
+      "expectedTotal": "14000.00",
+      "sha256": "4b39d69e1f5914d87648a8fe173eb07d6bc65fd4c6ee4ff66ce098ab1815dbea",
+      "sourceUrl": "https://huggingface.co/datasets/naver-clova-ix/cord-v2/viewer/default/train?row=25",
+      "fileName": "id-25.jpg",
+      "datasetRow": 25
+    }
+  ]
+}

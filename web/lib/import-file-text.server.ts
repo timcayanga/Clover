@@ -646,7 +646,7 @@ const scoreReceiptTextCandidate = (text: string, profile: ImageNormalizationProf
   return score;
 };
 
-const pickBestReceiptTextCandidate = (
+export const pickBestReceiptTextCandidate = (
   candidates: Array<{ text: string; label: string }>,
   profile: ImageNormalizationProfile
 ) => {
@@ -656,15 +656,19 @@ const pickBestReceiptTextCandidate = (
       if (!text) {
         return null;
       }
-
+      const preview = parseReceiptText(text);
+      const quality = assessReceiptPreviewQuality(preview);
       return {
         ...candidate,
         text,
         score: scoreReceiptTextCandidate(text, profile),
+        hasPrintedTotal: Boolean(preview.total) && !quality.issues.includes("total inferred from line items"),
       };
     })
-    .filter((candidate): candidate is { text: string; label: string; score: number } => Boolean(candidate))
-    .sort((a, b) => b.score - a.score || b.text.length - a.text.length);
+    .filter((candidate): candidate is { text: string; label: string; score: number; hasPrintedTotal: boolean } => Boolean(candidate))
+    // A crop with many menu prices must not outrank a printed settlement total
+    // merely because the generic parser can add up its remaining line items.
+    .sort((a, b) => Number(b.hasPrintedTotal) - Number(a.hasPrintedTotal) || b.score - a.score || b.text.length - a.text.length);
 
   return scoredCandidates[0]?.text ?? "";
 };
@@ -703,6 +707,7 @@ export const shouldRetryImageOcrBestEffort = (params: {
   if (profile === "receipt") {
     const firstPassPreview = parseReceiptText(firstPassText);
     const firstPassQuality = assessReceiptPreviewQuality(firstPassPreview);
+    if (firstPassPreview.currency === "MIXED") return true;
     if (hasIndonesianFinancialText(firstPassText) && !firstPassQuality.reliableForFastPath) return true;
     const needsReceiptRecovery = firstPassQuality.issues.some((issue) =>
       /merchant looks noisy|total missing|total inferred from line items|suspicious line items|summary does not reconcile|total is smaller than subtotal|line item exceeds total/i.test(
@@ -896,6 +901,7 @@ const extractTextFromImageBufferWithReceiptAwareFallback = async (params: {
         label: `ocr-full-psm-${mode}`, text: await extractTextFromImageBufferWithOcr(params.normalizedDataUrl, mode, indonesian ? "eng+ind" : "eng+kor"),
       })))
     : [];
+
   const allCandidates = [
     { text: firstPassText, label: "ocr-psm-6" },
     ...secondaryTexts,
