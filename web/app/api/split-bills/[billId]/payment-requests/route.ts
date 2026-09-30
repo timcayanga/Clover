@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { NextResponse } from "next/server";
-import { z } from "zod";
+import { paymentRequestSchema } from "@/lib/split-bill-payment-request-schema";
 import { prisma } from "@/lib/prisma";
 import { getSplitBillCurrentUser } from "@/lib/split-bill-access";
 import { loadSplitBillBill } from "@/lib/split-bill-loaders";
@@ -9,15 +9,7 @@ import { loadSplitBillTransferSettlementsForBill } from "@/lib/split-bill-transf
 
 export const dynamic = "force-dynamic";
 
-const requestSchema = z.object({
-  recipientParticipantId: z.string().min(1),
-  payeeParticipantId: z.string().min(1),
-  paymentProfileId: z.string().nullable().optional(),
-  recipientEmail: z.string().email().nullable().optional(),
-  amount: z.union([z.string(), z.number()]),
-  dueDate: z.string().nullable().optional(),
-  note: z.string().trim().max(240).nullable().optional(),
-});
+
 
 const serializeRequest = (entry: {
   id: string;
@@ -66,7 +58,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ bil
   try {
     const user = await getSplitBillCurrentUser();
     const { billId } = await params;
-    const body = requestSchema.parse(await request.json());
+    const body = paymentRequestSchema.parse(await request.json());
     const amount = Number(body.amount);
     if (!Number.isFinite(amount) || amount <= 0) {
       throw new Error("Enter an amount greater than zero.");

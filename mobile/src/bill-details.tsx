@@ -45,8 +45,12 @@ export function BillDetails({
   bill,
   onSaved,
   onDeleted,
+  paymentProfiles,
+  onManagePaymentOptions,
 }: {
   bill: EditableBill;
+  paymentProfiles: { id: string; label: string; provider: string; currency: string; isDefault: boolean }[];
+  onManagePaymentOptions: () => void;
   onSaved: (bill: EditableBill) => void;
   onDeleted: () => void;
 }) {
@@ -62,6 +66,9 @@ export function BillDetails({
   const [editingItem, setEditingItem] = useState<string | null>(null);
   const [showSplit, setShowSplit] = useState(false);
   const [shareUrl, setShareUrl] = useState("");
+  const [shareMessage, setShareMessage] = useState("");
+  const [paymentProfileId, setPaymentProfileId] = useState("");
+  const availableProfiles = paymentProfiles.filter((profile) => profile.currency === bill.currency);
   const [title, setTitle] = useState(bill.title);
   const [items, setItems] = useState(() =>
     (bill.items ?? []).map((i) => ({
@@ -154,6 +161,7 @@ export function BillDetails({
       else {
         setMessage("Payment request created.");
         setShareUrl(result.request?.shareUrl ?? "");
+        setShareMessage(`Please send ${bill.currency} ${requestAmount} for ${bill.title}.${note ? `\n\n${note}` : ""}`);
         setRequest(null);
       }
       setConfirm(null);
@@ -377,7 +385,7 @@ export function BillDetails({
         <PlanAction
           title="Share payment request"
           onPress={() =>
-            void Share.share({ message: `${apiBase()}${shareUrl}` })
+            void Share.share({ message: `${shareMessage}\n\nPayment details: ${apiBase()}${shareUrl}` }).catch(() => setError("Unable to open sharing. Please try again."))
           }
         />
       ) : null}
@@ -427,6 +435,7 @@ export function BillDetails({
                 title="Request payment"
                 tone="primary"
                 onPress={() => {
+                  setPaymentProfileId((availableProfiles.find((profile) => profile.isDefault) ?? availableProfiles[0])?.id ?? "");
                   setRequest(t);
                   setRequestAmount(String(t.amount));
                   setNote("");
@@ -451,6 +460,20 @@ export function BillDetails({
             keyboardType="decimal-pad"
             onChangeText={setRequestAmount}
           />
+          <Body muted={false}>Payment option</Body>
+          {availableProfiles.map((profile) => (
+            <Pressable
+              key={profile.id}
+              accessibilityRole="radio"
+              accessibilityState={{ checked: paymentProfileId === profile.id }}
+              onPress={() => setPaymentProfileId(profile.id)}
+              style={{ padding: 14, borderWidth: 1, borderRadius: 12, borderColor: paymentProfileId === profile.id ? colors.teal : colors.line }}
+            >
+              <Body muted={false}>{paymentProfileId === profile.id ? "✓ " : ""}{profile.label} · {profile.provider}</Body>
+            </Pressable>
+          ))}
+          {!availableProfiles.length ? <Body>Save bank details or a QR image in Payments so they appear with your request.</Body> : null}
+          <PlanAction title="Manage payment options" onPress={onManagePaymentOptions} />
           <Field label="Note" value={note} onChangeText={setNote} />
           <PlanAction
             title="Cancel request"
@@ -460,12 +483,13 @@ export function BillDetails({
           <PlanAction
             title="Create payment request"
             tone="primary"
-            disabled={busy}
+            disabled={busy || !availableProfiles.some((profile) => profile.id === paymentProfileId)}
             onPress={() =>
               action(`split-bills/${bill.id}/payment-requests`, "POST", {
                 recipientParticipantId: request.fromParticipantId,
                 payeeParticipantId: request.toParticipantId,
                 amount: requestAmount,
+                paymentProfileId,
                 note,
               })
             }

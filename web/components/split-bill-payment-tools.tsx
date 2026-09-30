@@ -137,8 +137,8 @@ export function SplitBillPaymentTools({ bill, onBillUpdated }: SplitBillPaymentT
     }
 
     try {
-      await navigator.clipboard.writeText(shareUrl);
-      setShareNotice("Payment link copied. You can paste it into any message.");
+      await navigator.clipboard.writeText(`${shareData.text}${entry.note ? `\n\n${entry.note}` : ""}\n\nPayment details: ${shareUrl}`);
+      setShareNotice("Payment request copied. Paste it into a message to send it.");
     } catch {
       setShareNotice(`Share this link: ${shareUrl}`);
     }
@@ -158,7 +158,7 @@ export function SplitBillPaymentTools({ bill, onBillUpdated }: SplitBillPaymentT
       if (!response.ok) throw new Error(payload.error ?? "Unable to create payment request.");
       const request = payload.request as PaymentRequest;
       setRequests((current) => [request, ...current]);
-      await shareRequest(request);
+      setShareNotice("Request ready. Tap Share to choose where to send it.");
     } catch (requestError) {
       setError(requestError instanceof Error ? requestError.message : "Unable to create payment request.");
     } finally {
@@ -188,18 +188,18 @@ export function SplitBillPaymentTools({ bill, onBillUpdated }: SplitBillPaymentT
         <div className="split-bill-payment-tools__request-form">
           <label>
             <span>Request from</span>
-            <select className="settings-input" value={requestDraft.recipientParticipantId} onChange={(event) => {
-              const transfer = transferOptions.find((entry) => entry.fromParticipantId === event.target.value);
+            <select className="settings-input" value={`${requestDraft.recipientParticipantId}:${requestDraft.payeeParticipantId}`} onChange={(event) => {
+              const transfer = transferOptions.find((entry) => `${entry.fromParticipantId}:${entry.toParticipantId}` === event.target.value);
               setRequestDraft((current) => ({
                 ...current,
-                recipientParticipantId: event.target.value,
+                recipientParticipantId: transfer?.fromParticipantId ?? current.recipientParticipantId,
                 payeeParticipantId: transfer?.toParticipantId ?? current.payeeParticipantId,
                 amount: transfer?.amount.toFixed(2) ?? current.amount,
               }));
             }}>
               {transferOptions.map((transfer) => (
-                <option key={`${transfer.fromParticipantId}-${transfer.toParticipantId}`} value={transfer.fromParticipantId}>
-                  {transfer.fromParticipantName}
+                <option key={`${transfer.fromParticipantId}-${transfer.toParticipantId}`} value={`${transfer.fromParticipantId}:${transfer.toParticipantId}`}>
+                  {transfer.fromParticipantName} → {transfer.toParticipantName}
                 </option>
               ))}
             </select>
@@ -228,7 +228,7 @@ export function SplitBillPaymentTools({ bill, onBillUpdated }: SplitBillPaymentT
             <input className="settings-input" value={requestDraft.note} onChange={(event) => setRequestDraft((current) => ({ ...current, note: event.target.value }))} />
           </label>
           <button className="button button-primary button-small" type="button" onClick={() => void createRequest()} disabled={isCreating || !requestDraft.amount}>
-            {isCreating ? "Preparing…" : "Request and share"}
+            {isCreating ? "Preparing…" : "Create payment request"}
           </button>
         </div>
       ) : <span className="split-bill-subtle-empty">No open amount to request yet.</span>}

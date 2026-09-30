@@ -301,6 +301,8 @@ export default function SplitBills() {
             <BillDetails
               key={`${selected.id}-${JSON.stringify(selected.items)}`}
               bill={selected}
+              paymentProfiles={options.data?.profiles ?? []}
+              onManagePaymentOptions={() => { setSelected(null); setTab("Payments"); }}
               onSaved={(bill) => {
                 setSelected(bill as Bill);
                 reload();
