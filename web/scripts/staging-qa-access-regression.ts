@@ -11,7 +11,9 @@ try {
   assert.equal(getEffectiveProfileLimit(qa), null);
   assert.equal(getEffectiveUserLimits(qa).accountLimit, null);
   const access = { ...qa, planTierLocked: false, subscription: null, grants: [] };
-  assert.equal(calculateProAccess({ ...access, stagingQaAccess: hasStagingQaAccess(qa) }).planTier, "pro");
+  const dedicatedQaAccess = () => calculateProAccess({ ...access, stagingQaAccess: hasStagingProAccess(qa), stagingQaPlanTier: hasStagingQaAccess(qa) ? "premium" : undefined });
+  assert.equal(dedicatedQaAccess().planTier, "premium", "Dedicated staging QA must receive customer-facing Pro, not legacy pro/Plus");
+  assert.equal(calculateProAccess({ ...access, stagingQaAccess: false, stagingQaPlanTier: "premium" }).planTier, "free", "A tier hint without the staging guard must grant nothing");
   assert.equal(calculateProAccess({ ...access, stagingQaAccess: true }).source, "staging QA override");
   const other = { ...qa, clerkUserId: "user_other_staging" };
   const owner = { ...other, email: "timcayanga@gmail.com" };
@@ -34,6 +36,7 @@ try {
     assert.equal(hasStagingProAccess(owner), false, `${key} must disable owner staging Pro access`);
     assert.equal(calculateProAccess({ ...access, stagingQaAccess: hasStagingProAccess(owner) }).planTier, "free");
     assert.equal(hasUnlimitedPlanLimits(qa), false, `${key} must disable QA override`);
+    assert.equal(dedicatedQaAccess().planTier, "free", `${key} must disable dedicated Pro access`);
     assert.equal(getEffectiveUserLimits(qa).accountLimit, 10);
     assert.equal(getEffectiveProfileLimit(qa), 3);
     assert.equal(calculateProAccess({ ...access, stagingQaAccess: hasStagingQaAccess(qa) }).planTier, "free");

@@ -13,6 +13,7 @@ export function addCalendarMonths(date: Date, months: number) {
 
 export type AccessInput = {
   stagingQaAccess?: boolean;
+  stagingQaPlanTier?: "pro" | "premium";
   planTier: "free" | "pro" | "premium";
   planTierLocked: boolean;
   subscription: {
@@ -37,7 +38,7 @@ export function calculateProAccess(input: AccessInput, now = new Date()) {
   const paid = storePaid || subscriptionPaid;
   const premiumPaid = (subscriptionPaid && input.subscription?.planTier === "premium") ||
     (storePaid && (input.storeAccess?.planTier ?? storeProductTier(input.storeAccess?.productId)) === "premium");
-  const planTier: AccessInput["planTier"] = input.stagingQaAccess ? "pro"
+  const planTier: AccessInput["planTier"] = input.stagingQaAccess ? input.stagingQaPlanTier ?? "pro"
     : input.planTierLocked ? input.planTier
     : premiumPaid || activeGrants.some(g => g.planTier === "premium") ? "premium"
     : paid || activeGrants.length > 0 ? "pro" : "free";

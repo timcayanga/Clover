@@ -1,7 +1,7 @@
 import { after } from "next/server";
 import { planContext } from "../../shared/plan-analytics";
 import { capturePostHogServerEvent } from "./analytics-server";
-import { hasStagingProAccess } from "@/lib/user-limits";
+import { hasStagingProAccess, hasStagingQaAccess } from "@/lib/user-limits";
 import { prisma } from "@/lib/prisma";
 import { calculateProAccess } from "@/lib/pro-access-rules";
 
@@ -17,6 +17,7 @@ export async function getProAccess(userId: string) {
   const access = calculateProAccess({
       ...user,
       stagingQaAccess: hasStagingProAccess(user),
+      stagingQaPlanTier: hasStagingQaAccess(user) ? "premium" : undefined,
       subscription: user.billingSubscription,
       grants: user.proGrants,
     });
@@ -62,6 +63,7 @@ export async function refreshProAccess(userId: string) {
   const access = calculateProAccess({
     ...user,
     stagingQaAccess: hasStagingProAccess(user),
+    stagingQaPlanTier: hasStagingQaAccess(user) ? "premium" : undefined,
     subscription: user.billingSubscription,
     grants: user.proGrants,
   });

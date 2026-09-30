@@ -8,4 +8,6 @@ Entitlement refresh returns Pro and keeps the existing user plan projection curr
 
 Remove the exact fixture entry in `web/lib/user-limits.ts` when testing ends; the next entitlement refresh resumes ordinary billing/grant-derived access. The isolation regression is included in `qa:auth-access` and the pre-push gate.
 
+October 1, 2026: the user authorized using this fixture for Korean/Indonesian cloud import benchmarks and making it Pro. Its entitlement override now explicitly uses `premium`, the internal key for customer-facing Pro after the three-tier launch. Legacy `pro` means Plus. Both entitlement reads and refreshes apply the exact dedicated fixture and staging guards; other staging overrides retain their existing tier. No payment or subscription is created.
+
 On September 20, 2026, the owner also authorized Pro for `timcayanga@gmail.com` on staging so the existing browser session can verify Planner. `hasStagingProAccess` applies the same three deployment guards to this exact email. This additional account receives ordinary Pro entitlements, not the dedicated fixture's unlimited usage. No billing subscription or Admin role is created. Remove the email entry to resume normal entitlement calculation for this account.
