@@ -8,7 +8,7 @@ import { POST } from "../app/api/billing/revenuecat/webhook/route";
 async function main() {
   const now = new Date();
   const future = new Date(+now + 86400000).toISOString();
-  const config = { ...storeBillingConfig(), appUserId: "user_tier_regression", sandbox: true };
+  const config = { ...storeBillingConfig(), appUserId: "user_tier_regression", sandbox: true, sandboxAppUserIds: [] as string[] };
   const sample = (entitlement: string, product: string, store = "app_store") => ({
     request_date_ms: +now,
     subscriber: {
@@ -30,8 +30,19 @@ async function main() {
       assert.ok(!matchesStorePackage({ ...choice, identifier: "wrong_package" }, platform));
       assert.ok(!matchesStorePackage({ ...choice, product: { ...choice.product, subscriptionPeriod: "P1W" } }, platform));
       assert.equal(verifiedStoreAccess(data, { ...config, sandbox: false }, now).expiresAt, null);
+      const productionTester = { ...config, sandbox: false, sandboxAppUserIds: [config.appUserId] };
+      const testAccess = verifiedStoreAccess(data, productionTester, now);
+      assert.equal(testAccess.expiresAt?.toISOString(), future);
+      assert.equal(testAccess.sandbox, true, "Production tester access retains the store's sandbox marker");
+      assert.equal(verifiedStoreAccess(data, { ...productionTester, sandboxAppUserIds: ["user_other", `${config.appUserId}_suffix`, "*"] }, now).expiresAt, null);
+      const live = structuredClone(data);
+      live.subscriber.subscriptions[item[platform]].is_sandbox = false;
+      assert.equal(verifiedStoreAccess(live, config, now).expiresAt, null, "Staging still rejects live purchases");
+      assert.equal(verifiedStoreAccess(live, productionTester, now).sandbox, false);
+      assert.equal(verifiedStoreAccess(live, { ...config, sandbox: false }, now).expiresAt?.toISOString(), future);
       data.subscriber.subscriptions[item[platform]].refunded_at = now.toISOString();
       assert.equal(verifiedStoreAccess(data, config, now).expiresAt, null);
+      assert.equal(verifiedStoreAccess(data, productionTester, now).expiresAt, null);
     }
   }
   for (const store of ["paddle", "test_store", "stripe"]) {
@@ -44,6 +55,18 @@ async function main() {
   Object.assign(both.subscriber.entitlements, plus.subscriber.entitlements);
   Object.assign(both.subscriber.subscriptions, plus.subscriber.subscriptions);
   assert.equal(storeProductTier(verifiedStoreAccess(both, config, now).productId), "premium");
+  const mixed = structuredClone(both);
+  mixed.subscriber.subscriptions["clover.plus.annual"].is_sandbox = false;
+  const productionTester = { ...config, sandbox: false, sandboxAppUserIds: [config.appUserId] };
+  assert.equal(storeProductTier(verifiedStoreAccess(mixed, productionTester, now).productId), "pro", "Live Plus takes precedence over sandbox Pro");
+  assert.equal(verifiedStoreAccess(mixed, productionTester, now).sandbox, false);
+  assert.throws(() => verifiedStoreAccess(mixed, { ...productionTester, appUserId: "user_other", sandboxAppUserIds: ["user_other"] }, now), /ownership/);
+  for (const store of ["paddle", "test_store", "stripe"]) {
+    assert.equal(verifiedStoreAccess(sample("clover_pro", "clover.pro.monthly", store), productionTester, now).expiresAt, null);
+  }
+  const expiredSandbox = sample("clover_pro", "clover.pro.monthly");
+  expiredSandbox.subscriber.entitlements.clover_pro.expires_date = new Date(+now - 1000).toISOString();
+  assert.equal(verifiedStoreAccess(expiredSandbox, productionTester, now).expiresAt, null);
   both.subscriber.subscriptions["clover.pro.monthly"].refunded_at = now.toISOString();
   assert.equal(storeProductTier(verifiedStoreAccess(both, config, now).productId), "pro");
   assert.throws(() => verifiedStoreAccess(both, { ...config, appUserId: "user_someone_else" }, now), /ownership/);
@@ -75,7 +98,12 @@ async function main() {
   }
   const oldSecret = process.env.REVENUECAT_WEBHOOK_SECRET;
   const oldFlag = process.env.CLOVER_NATIVE_PURCHASES_ENABLED;
+  const oldTesters = process.env.REVENUECAT_SANDBOX_APP_USER_IDS;
   try {
+    process.env.REVENUECAT_SANDBOX_APP_USER_IDS = " user_one,\nuser_two \t * user_three ";
+    assert.deepEqual(storeBillingConfig().sandboxAppUserIds, ["user_one", "user_two", "user_three"]);
+    delete process.env.REVENUECAT_SANDBOX_APP_USER_IDS;
+    assert.deepEqual(storeBillingConfig().sandboxAppUserIds, []);
     process.env.REVENUECAT_WEBHOOK_SECRET = "regression-only-not-a-real-secret";
     process.env.CLOVER_NATIVE_PURCHASES_ENABLED = "false";
     const event = (type: string, auth = true) => new Request("https://fixture.invalid/api/billing/revenuecat/webhook?source=ios", {
@@ -88,7 +116,8 @@ async function main() {
   } finally {
     if (oldSecret === undefined) delete process.env.REVENUECAT_WEBHOOK_SECRET; else process.env.REVENUECAT_WEBHOOK_SECRET = oldSecret;
     if (oldFlag === undefined) delete process.env.CLOVER_NATIVE_PURCHASES_ENABLED; else process.env.CLOVER_NATIVE_PURCHASES_ENABLED = oldFlag;
+    if (oldTesters === undefined) delete process.env.REVENUECAT_SANDBOX_APP_USER_IDS; else process.env.REVENUECAT_SANDBOX_APP_USER_IDS = oldTesters;
   }
-  console.log("Store tier regression passed: all 8 native products, tier limits, package/period/platform checks, sandbox isolation, refunds, overlapping tiers, ownership, freshness, and disabled-integration webhook authentication. No external requests or purchases.");
+  console.log("Store tier regression passed: all 8 native products, tier limits, package/period/platform checks, sandbox isolation and exact production tester allowlist, live purchase precedence, refunds, overlapping tiers, ownership, freshness, and disabled-integration webhook authentication. No external requests or purchases.");
 }
 void main().catch((error) => { console.error(error); process.exitCode = 1; });

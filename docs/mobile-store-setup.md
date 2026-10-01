@@ -1,6 +1,6 @@
 # Clover iOS and Android store setup
 
-Updated September 24, 2026. Setup status below is based on the user's confirmations; live purchase tests are still pending.
+Updated October 1, 2026. Provider setup history below includes the user's September confirmations; installed purchase tests are still pending.
 
 ## Apps and build environments
 
@@ -14,7 +14,7 @@ Updated September 24, 2026. Setup status below is based on the user's confirmati
 
 ## Configured RevenueCat catalog
 
-The user uses one RevenueCat **Clover** project with Apple, Google, Paddle Sandbox and Paddle Live apps. Native verification accepts only Apple/Google subscriptions whose sandbox flag matches Clover's deployment and whose owner matches the signed-in Clerk ID. Paddle billing remains handled separately.
+The user uses one RevenueCat **Clover** project with Apple, Google, Paddle Sandbox and Paddle Live apps. Native verification accepts only Apple/Google subscriptions whose owner matches the signed-in Clerk ID. Staging accepts sandbox purchases only. Production accepts live purchases and allows verified sandbox subscriptions only for exact Clerk IDs in its server-side `REVENUECAT_SANDBOX_APP_USER_IDS` allowlist. Paddle billing remains handled separately.
 
 | Tier | Entitlement | Custom package | Apple product | Google product/base plan |
 |---|---|---|---|---|
@@ -43,6 +43,7 @@ Vercel Preview, scoped to staging:
 CLOVER_NATIVE_PURCHASES_ENABLED=false
 REVENUECAT_SECRET_API_KEY=<RevenueCat V1 server secret>
 REVENUECAT_WEBHOOK_SECRET=<shared random secret, without Bearer prefix>
+REVENUECAT_SANDBOX_APP_USER_IDS=
 ```
 
 The catalog is explicit in code. Old `REVENUECAT_ENTITLEMENT_ID` and `CLOVER_STORE_PRODUCT_IDS` values no longer determine tier mappings.
@@ -62,6 +63,19 @@ EXPO_PUBLIC_REVENUECAT_ANDROID_KEY=<goog_...>
 ```
 
 The Clerk publishable key and API URL must match staging. Never place private API keys, P8 files or service-account JSON in the native bundle or repository.
+
+## Testing the production binaries
+
+TestFlight purchases use Apple's sandbox even when the installed binary points at production. Google Play license testers also make sandbox purchases. These are distinct from an EAS staging build: no new native binary is needed to change server-side purchase availability or the tester allowlist.
+
+- Set `CLOVER_NATIVE_PURCHASES_ENABLED=true` in the relevant Vercel environment after its RevenueCat server credentials are configured. Redeploy using that environment; existing deployments retain their old values.
+- For production test accounts, set `REVENUECAT_SANDBOX_APP_USER_IDS` to exact Clerk user IDs separated by commas or whitespace. Obtain the ID from the authorized Clover account, not from a client request. Keep ordinary customers out of this list. Reviewers who use a supplied review account need that account included while testing purchases.
+- The allowlist does not grant a plan. RevenueCat must still verify the exact owner, Apple/Google store, product, entitlement, expiry and refund status. Test Store, Paddle and client-supplied subscription claims remain rejected. Active live subscriptions take precedence over sandbox subscriptions, and sandbox access retains its sandbox marker for billing events.
+- Ensure production RevenueCat webhook destinations receive sandbox **and** production events when testing the production binary, and any RevenueCat Sandbox Testing Access restriction also permits the designated Clerk IDs. Otherwise foreground refresh may work while renewal/refund notifications do not arrive.
+- In Google Play, the purchasing Google account must be a **license tester**, not only an internal-track tester. Verify the purchase sheet offers a test payment method before confirming. TestFlight purchases use the sandbox automatically.
+- Use an ordinary, unlocked Free account without a complimentary grant for first-purchase tests. One Clover login shares entitlements across both devices; a purchase on one platform means that account is no longer Free on the other.
+
+October 1 investigation: both production apps returned "Store plans are not available yet" because the live server's purchase flag was `false`. Both platform SDK keys returned `clover_membership` with the four expected packages. Server support for the scoped production tester allowlist was added with regression coverage. Actual store checkout, restoration and lifecycle tests still require the installed apps.
 
 ## Remaining before purchase tests and production
 

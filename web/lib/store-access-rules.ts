@@ -32,6 +32,7 @@ export function verifiedStoreAccess(
     appUserId: string;
     tiers: { entitlementId: string; products: readonly string[] }[];
     sandbox: boolean;
+    sandboxAppUserIds?: readonly string[];
   },
   now = new Date(),
 ) {
@@ -55,7 +56,8 @@ export function verifiedStoreAccess(
       plan &&
       tier.products.includes(entitlement.product_identifier) &&
       ["app_store", "play_store"].includes(plan.store) &&
-      plan.is_sandbox === config.sandbox;
+      (plan.is_sandbox === config.sandbox ||
+        (plan.is_sandbox && config.sandboxAppUserIds?.includes(config.appUserId)));
     const expiration =
       matches && entitlement.expires_date && plan.expires_date
         ? new Date(
@@ -78,10 +80,12 @@ export function verifiedStoreAccess(
         active &&
         !plan?.unsubscribe_detected_at &&
         !plan?.billing_issues_detected_at,
-      sandbox: config.sandbox,
+      sandbox: matches ? plan.is_sandbox : config.sandbox,
     };
   });
-  return states.find((state) => state.expiresAt) ?? {
+  // A test entitlement must never replace an active real purchase. Within
+  // each environment, the catalog still selects the highest active tier.
+  return states.find((state) => state.expiresAt && !state.sandbox) ?? states.find((state) => state.expiresAt) ?? {
     refunded: states.some(state => state.refunded),
     verifiedAt: new Date(data.request_date_ms), expiresAt: null,
     store: null, productId: null, renewing: false, sandbox: config.sandbox,

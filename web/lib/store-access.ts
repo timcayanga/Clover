@@ -25,6 +25,10 @@ export function storeBillingConfig() {
     tiers,
     products,
     sandbox: getDeploymentEnvironment() !== "production",
+    // Exact Clerk IDs, configured server-side for TestFlight/Play testers and
+    // review accounts. Never accept a client-provided environment or allowlist.
+    sandboxAppUserIds: (process.env.REVENUECAT_SANDBOX_APP_USER_IDS ?? "")
+      .split(/[\s,]+/).filter((id) => id.startsWith("user_")),
   };
 }
 export async function syncStoreAccess(userId: string) {
@@ -67,8 +71,8 @@ export async function syncStoreAccess(userId: string) {
       : previouslyActive && !state.expiresAt ? (refunded ? "billing_refunded" : "billing_expired")
       : current?.renewing && !state.renewing && state.expiresAt ? "billing_cancelled"
       : current?.productId === state.productId && current?.expiresAt && state.expiresAt && state.expiresAt > current.expiresAt ? "billing_renewed" : null;
-    return event ? { event, provider: state.store ?? current?.store, tier: storeProductTier(state.productId ?? current?.productId) } : null;
+    return event ? { event, provider: state.store ?? current?.store, tier: storeProductTier(state.productId ?? current?.productId), sandbox: state.productId ? state.sandbox : current?.sandbox ?? state.sandbox } : null;
   });
-  if (lifecycle) void capturePostHogServerEvent(lifecycle.event, user.clerkUserId, { billing_provider: lifecycle.provider, plan_tier: lifecycle.tier, sandbox: config.sandbox }).catch(() => {});
+  if (lifecycle) void capturePostHogServerEvent(lifecycle.event, user.clerkUserId, { billing_provider: lifecycle.provider, plan_tier: lifecycle.tier, sandbox: lifecycle.sandbox }).catch(() => {});
   await refreshProAccess(userId);
 }
