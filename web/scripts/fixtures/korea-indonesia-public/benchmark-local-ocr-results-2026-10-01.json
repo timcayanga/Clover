@@ -4,7 +4,7 @@
   "runtimeSha256": {
     "web/lib/receipt-ocr-worker.cjs": "7d47d48fdb639f6669e77629dbee4abcd26aa32fb2cfdf1c183b7f53b9e2a2da",
     "web/lib/local-receipt-ocr.server.ts": "7374b27ccb4086e36b1da615ac785473525eb77407d8461218a05249849d52d6",
-    "web/lib/local-receipt-ocr-envelope.ts": "120bc9e748a43ce1058bbd94c3d5954617c781ab463eacffb9c5f37a82cbdad8",
+    "web/lib/local-receipt-ocr-envelope.ts": "0577a0ac91772b0b30918e52c5a52f167eacb4f2b4a8e0101b459dc3bd470882",
     "web/lib/local-receipt-ocr-normalization.ts": "328f202f8a429c7921421facf67438e9b2eecc5e9dc3f57322e610c97f196b5f",
     "web/lib/import-file-text.server.ts": "f23aac3db36bad56d6d7256a597bc1ed5c085a5286e1cdc20f5e49e4e890bad4",
     "web/lib/split-bill.ts": "611c17066f099158f8565a8fc99eaa5572a587a60027bd81209c2f1880c1a636",
@@ -466,5 +466,6 @@
     "engineAvailable": true,
     "total": "61799.00",
     "requiresReview": true
-  }
+  },
+  "presentationFollowUp": "Source views display only the reading text; edits preserve the optical audit envelope. This additive helper does not change OCR or parsing outputs."
 }

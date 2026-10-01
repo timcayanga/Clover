@@ -1,3 +1,4 @@
+import { readLocalReceiptOcrText } from "@/lib/local-receipt-ocr-envelope";
 import { notFound, redirect } from "next/navigation";
 import { CloverShell } from "@/components/clover-shell";
 import { SplitBillDeleteButton } from "@/components/split-bill-delete-button";
@@ -353,7 +354,7 @@ export default async function SplitBillDetailPage({ params, searchParams }: { pa
             {splitBill.receiptText ? (
               <div className="split-bill-detail__receipt-text">
                 <h3>Receipt text</h3>
-                <pre>{splitBill.receiptText}</pre>
+                <pre>{readLocalReceiptOcrText(splitBill.receiptText) ?? splitBill.receiptText}</pre>
               </div>
             ) : null}
           </section>

@@ -1,5 +1,7 @@
 "use client";
 
+import { readLocalReceiptOcrText, replaceLocalReceiptOcrText } from "@/lib/local-receipt-ocr-envelope";
+
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
@@ -990,8 +992,8 @@ export function SplitBillEditor({ mode, initialBill, groups }: SplitBillEditorPr
               <span>Receipt text</span>
               <textarea
                 className="settings-input split-bill-editor__textarea split-bill-editor__textarea--tall"
-                value={draft.receiptText ?? ""}
-                onChange={(event) => setDraft((current) => ({ ...current, receiptText: event.target.value }))}
+                value={readLocalReceiptOcrText(draft.receiptText ?? "") ?? draft.receiptText ?? ""}
+                onChange={(event) => setDraft((current) => ({ ...current, receiptText: replaceLocalReceiptOcrText(current.receiptText ?? "", event.target.value) }))}
                 placeholder="OCR output or manual notes"
               />
             </label>

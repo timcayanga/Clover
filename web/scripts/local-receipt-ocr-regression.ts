@@ -3,6 +3,7 @@ import { createRequire } from "node:module";
 import {
   encodeLocalReceiptOcr,
   readLocalReceiptOcrText,
+  replaceLocalReceiptOcrText,
 } from "../lib/local-receipt-ocr-envelope";
 import { normalizeLocalReceiptOcrText } from "../lib/local-receipt-ocr-normalization";
 import {
@@ -110,3 +111,9 @@ assert.throws(() => modelDictionary(Buffer.from([114, 99, 1])), /Invalid/);
 console.log(
   "Local receipt OCR: geometry, alphabet integrity, exact amount preservation, conflict/refund handling, raw audit and mandatory review passed.",
 );
+
+const original = wrap("TL 18,000");
+const edited = replaceLocalReceiptOcrText(original, "TL 19,000");
+assert.equal(readLocalReceiptOcrText(edited), "TL 19,000");
+assert.equal(edited.slice(0, edited.indexOf("[[OCR_TEXT]]")), original.slice(0, original.indexOf("[[OCR_TEXT]]")), "editing displayed text preserves raw OCR evidence");
+assert.equal(replaceLocalReceiptOcrText("manual text", "new notes"), "new notes");

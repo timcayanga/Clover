@@ -14,3 +14,10 @@ export function readLocalReceiptOcrText(source: string): string | null {
   const index = source.indexOf(SEPARATOR, PREFIX.length);
   return index < 0 ? "" : source.slice(index + SEPARATOR.length);
 }
+
+/** Edit the reading text without replacing the original optical evidence. */
+export function replaceLocalReceiptOcrText(source: string, text: string) {
+  if (!source.startsWith(PREFIX)) return text;
+  const index = source.indexOf(SEPARATOR, PREFIX.length);
+  return index < 0 ? text : source.slice(0, index + SEPARATOR.length) + text;
+}
