@@ -38,7 +38,7 @@ function AuthForm() {
   const { welcomeAllowed } = useAccess();
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
-  const params = useLocalSearchParams<{ mode?: string }>();
+  const params = useLocalSearchParams<{ mode?: string; restartSSO?: string }>();
   const { signIn } = useSignIn();
   const { signUp } = useSignUp();
   const { startSSOFlow } = useSSO();
@@ -55,7 +55,9 @@ function AuthForm() {
   const [visible, setVisible] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
-  const [message, setMessage] = useState("");
+  const [message, setMessage] = useState(
+    params.restartSSO === "1" ? "Sign-in was interrupted. Please try again." : "",
+  );
   const pending = useRef(false);
   const check = async (result: Promise<{ error: unknown }>) => {
     const { error } = await result;

@@ -20,7 +20,7 @@ const config: ExpoConfig = {
   android: {
     package: process.env.CLOVER_ANDROID_PACKAGE_ID || "ph.clover.preview",
     allowBackup: false,
-    adaptiveIcon: { foregroundImage: "./assets/android-clover-symbol.png", backgroundColor: "#F7F9FA" },
+    adaptiveIcon: { foregroundImage: "./assets/android-clover-symbol.png", backgroundColor: "#18343A" },
     predictiveBackGestureEnabled: true,
   },
   plugins: [
@@ -41,6 +41,7 @@ const config: ExpoConfig = {
     ["expo-sqlite", { useSQLCipher: true }],
     "./plugins/with-unique-pod-uuids.cjs",
     "./plugins/with-quoted-ios-paths.cjs",
+    "./plugins/with-clover-adaptive-icon.cjs",
     "expo-secure-store",
     "expo-web-browser",
     "expo-sharing",
