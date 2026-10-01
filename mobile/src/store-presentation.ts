@@ -30,6 +30,7 @@ export function planManagement(status: { hasPaidSubscription?: boolean; billingP
   return {
     title: `Manage your ${store} subscription`,
     message: `${action} ${sameStore ? `Continue to ${store} subscriptions.` : `This subscription was purchased through ${store}. Manage it ${apple ? 'on your Apple device' : 'in Google Play using the Google account that purchased it'}. Your Clover access works on both platforms.`}`,
-    url: sameStore ? apple ? 'https://apps.apple.com/account/subscriptions' : 'https://play.google.com/store/account/subscriptions' : null,
+    nativeSheet: sameStore && apple,
+    url: sameStore && google ? 'https://play.google.com/store/account/subscriptions' : null,
   };
 }

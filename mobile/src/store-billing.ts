@@ -80,6 +80,17 @@ export function restoreStorePurchases(status: StoreStatus) {
     await trackOperation("store_restore", () => Purchases.restorePurchases(), { phase: "store_confirmation" });
   });
 }
+/** Present StoreKit in the current app environment, including TestFlight's sandbox. */
+export function manageAppleStoreSubscription(status: StoreStatus) {
+  return exclusive(async () => {
+    if (Platform.OS !== "ios" || status.billingProvider !== "app_store" || status.hasPaidSubscription === false)
+      throw new Error("Manage this subscription in its original store.");
+    await identify(status);
+    await Purchases.showManageSubscriptions();
+    // Dismissal alone does not establish a plan change. The caller re-verifies with Clover's server.
+    await Purchases.invalidateCustomerInfoCache();
+  });
+}
 export function disconnectStoreAccount() {
   return exclusive(async () => {
     if (account && (await Purchases.isConfigured())) await Purchases.logOut();

@@ -47,7 +47,9 @@ console.log('PASS store currency/annual labels and silent return vs explicit res
 
 const { planManagement } = await import('../src/store-presentation.ts');
 const apple = { hasPaidSubscription:true, billingProvider:'app_store' };
-assert.match(planManagement(apple,'ios','premium').url,/apps.apple.com/);
+assert.equal(planManagement(apple,'ios','premium').nativeSheet,true);
+assert.equal(planManagement(apple,'ios','premium').url,null,'iOS must use StoreKit instead of the production-only subscriptions URL');
+assert.equal(planManagement(apple,'android','premium').nativeSheet,false);
 assert.equal(planManagement(apple,'android','premium').url,null);
 assert.match(planManagement(apple,'android','free').message,/Apple device/);
 assert.match(planManagement(apple,'ios','free').message,/paid access ends/);

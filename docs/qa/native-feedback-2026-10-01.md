@@ -52,3 +52,9 @@ These changes require promotion of the API changes to production and a new nativ
 Restored the compact active-campaign notice beneath the web Plan cards and added it to native Plan. Both use the public server-side campaign-open flag; draft, paused, expired, ended, or unavailable status hides the notice. Native rechecks on focus, foreground, and before opening the existing secure web application page. Browser sign-in can be required separately from native sign-in. Application eligibility and receipt review remain enforced by the existing server rules, including exclusion of paid subscribers. Production reported `open: false` during verification; the campaign was not activated or reconfigured.
 
 Figma Plan master `682:93146` now includes the compact active-campaign notice below the plan cards; verified the rendered full-content layout and bottom navigation after extending the frame. Native offer clicks use the same `campaign_progress` event as web.
+
+## TestFlight subscription management follow-up
+
+User confirmed restore, Home performance, currencies/balances/charts, campaign visibility, login, navigation, logos, grouping, and upload/review/save on iOS 20 / Android 24. The generic Apple subscriptions URL did not list the TestFlight subscription, so plan-change completion remains unverified.
+
+iOS now presents the installed RevenueCat SDK’s `showManageSubscriptions()` StoreKit sheet, invalidates SDK customer-info cache after dismissal, and re-verifies with Clover’s server even without an AppState change. A failed presentation does not fall back to the same unsuitable generic URL. Android original-store guidance is preserved. Native route guards and SDK interactions are exercised with mocks; an actual TestFlight upgrade and cancellation/expiry still require device testing. No developer-owned layout changes or separate sandbox app are required.

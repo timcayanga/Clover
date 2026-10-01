@@ -17,6 +17,7 @@ import { Body, Card, Icon, Notice, useTheme } from "./ui";
 import {
   canUseStore,
   loadStorePackages,
+  manageAppleStoreSubscription,
   purchaseStorePackage,
   restoreStorePurchases,
   type StoreStatus,
@@ -124,6 +125,23 @@ export function SettingsPlan() {
     });
     return () => subscription.remove();
   }, []);
+  const manageAppleSubscription = async () => {
+    if (!status || locked.current || session.demo) return;
+    locked.current = true;
+    setBusy(true); setError(""); setMessage("");
+    let dismissed = false;
+    try {
+      await manageAppleStoreSubscription(status);
+      dismissed = true;
+    } catch {
+      if (mounted.current) setError("Unable to open Apple subscription management. Please try again.");
+    } finally {
+      locked.current = false;
+      if (mounted.current) setBusy(false);
+    }
+    // The native sheet may close without an AppState transition. Always re-verify after dismissal.
+    if (dismissed && mounted.current) await act(undefined, false, true);
+  };
   const access = status ?? session.data?.entitlement;
   const limits = access ? PLAN_CATALOG[access.planTier] : null;
   const showUsageInfo = () => Alert.alert("Plan usage", "Monthly Clover tokens reset on the first day of each month in Asia/Manila. Unused tokens do not roll over. The 24-hour allowance is a rolling window. Cash accounts do not count toward the account limit. Linked bank slots remain reserved after unlinking until the next monthly period.\n\n" + RETENTION_MESSAGE + "\n\n" + DOWNGRADE_MESSAGE);
@@ -133,9 +151,9 @@ export function SettingsPlan() {
     if (!status) { setError("Plan details are still loading. Please try again."); return; }
     if ((status.hasPaidSubscription !== false && access?.planTier !== "free") || tier === "free") {
       const management = planManagement(status, Platform.OS, tier);
-      Alert.alert(management.title, management.message, management.url ? [
+      Alert.alert(management.title, management.message, management.nativeSheet || management.url ? [
         { text: "Cancel", style: "cancel" },
-        { text: "Open subscriptions", onPress: () => void Linking.openURL(management.url!).catch(() => setError("Open subscriptions in your original store's settings.")) },
+        { text: "Open subscriptions", onPress: () => management.nativeSheet ? void manageAppleSubscription() : void Linking.openURL(management.url!).catch(() => setError("Open subscriptions in your original store's settings.")) },
       ] : [{ text: "OK" }]);
       return;
     }
