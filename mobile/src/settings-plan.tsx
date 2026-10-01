@@ -2,6 +2,7 @@ import { planManagement, storePriceLabel, storeVerificationMessage } from "./sto
 import { tokenUsagePercent } from "./recorded-summary";
 import { RETENTION_MESSAGE, DOWNGRADE_MESSAGE, type RetentionSnapshot } from "../../shared/plan-retention";
 import { PlanCardSurface } from "./plan-card-surface";
+import { SettingsSwitchOffer } from "./settings-switch-offer";
 import { SettingsReferrals } from "./settings-referrals";
 import { telemetry } from "../../shared/analytics";
 import { PLAN_CATALOG } from "../../shared/plan-catalog";
@@ -187,6 +188,7 @@ export function SettingsPlan() {
         </PlanCardSurface>;
       })}
     </ScrollView>
+    <SettingsSwitchOffer />
     <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 20 }}>
       {status && canUseStore(status) ? <Text accessibilityRole="button" disabled={busy || loading} onPress={() => void act(() => restoreStorePurchases(status), true)} style={{ color: colors.teal }}>Restore purchases</Text> : null}
       <Text accessibilityRole="button" disabled={busy || loading || session.demo} onPress={() => void act()} style={{ color: colors.teal }}>Refresh plan status</Text>

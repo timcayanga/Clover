@@ -1,4 +1,5 @@
 "use client";
+import { SwitchOfferNotice } from "./switch-campaign";
 import type { RetentionSnapshot } from "../../shared/plan-retention";
 import cardSurface from "./plan-card-surface.module.css";
 import { PlanDialog } from "./settings-plan-dialog";
@@ -281,6 +282,7 @@ export function SettingsPlanPanel({
           </article>;
         })}
       </div>
+      <SwitchOfferNotice compact directToApplication />
       {campaignActive ? <section className="settings-plan-referral"><h5>Refer and Earn</h5><p>Invite friends and explore your available rewards.</p><a href="/referrals">View referral offer →</a></section> : null}
       <footer className="settings-plan-footer"><button type="button" onClick={() => setDialog("terms-of-service")}>Terms</button><button type="button" onClick={() => setDialog("privacy-policy")}>Privacy Policy</button></footer>
       <PlanDialog open={dialog !== null} title={dialog === "usage" ? "Plan usage" : dialog === "terms-of-service" ? "Terms" : dialog === "privacy-policy" ? "Privacy Policy" : `Switch to ${dialog ? planName(dialog) : ""}`} onClose={() => setDialog(null)}>

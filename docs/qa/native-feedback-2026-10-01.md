@@ -46,3 +46,9 @@ User confirmed a successful iOS Plus purchase and activation. Apple confirmation
 - Regression coverage verifies overview skips secondary queries, balances remain unchanged, progressive advice/review merging, original-store routing, concurrent reads and invalidation races. Mocked-database timings are not physical-device benchmarks.
 
 These changes require promotion of the API changes to production and a new native binary before production-installed apps use the new behavior.
+
+## Switch to Clover entry point
+
+Restored the compact active-campaign notice beneath the web Plan cards and added it to native Plan. Both use the public server-side campaign-open flag; draft, paused, expired, ended, or unavailable status hides the notice. Native rechecks on focus, foreground, and before opening the existing secure web application page. Browser sign-in can be required separately from native sign-in. Application eligibility and receipt review remain enforced by the existing server rules, including exclusion of paid subscribers. Production reported `open: false` during verification; the campaign was not activated or reconfigured.
+
+Figma Plan master `682:93146` now includes the compact active-campaign notice below the plan cards; verified the rendered full-content layout and bottom navigation after extending the frame. Native offer clicks use the same `campaign_progress` event as web.
