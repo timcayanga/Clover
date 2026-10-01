@@ -87,7 +87,7 @@ async function handle(
     }
     const user = await prisma.user.findUnique({
       where: { clerkUserId: userId },
-      select: { id: true, firstName: true, lastName: true, email: true, clerkUserId: true, planTier: true, accountLimit:true, monthlyUploadLimit:true, transactionLimit:true, dataWipedAt: true, onboardingCompletedAt: true, regionalPreferences: true },
+      select: { id: true, firstName: true, lastName: true, email: true, environment: true, clerkUserId: true, planTier: true, accountLimit:true, monthlyUploadLimit:true, transactionLimit:true, dataWipedAt: true, onboardingCompletedAt: true, regionalPreferences: true },
     });
     const catalog = operation === "bootstrap" ? await import("@/lib/currencies") : null;
     const currencyChoices = catalog ? catalog.getCurrencyCatalogOptions(catalog.getCurrencyCatalogCodes()) : undefined;
@@ -822,6 +822,8 @@ async function handle(
     }
     return reply(mobileApiResponse(operation, responseData), response.status);
   } catch (error) {
+    if (error instanceof Error && error.message === "IDENTITY_ENVIRONMENT_CONFLICT")
+      return reply({ error: "This email is already linked to another Clover sign-in. Use your original sign-in method or contact support." }, 409);
     if (error instanceof PlanQuotaError) return reply({ error: error.message }, 403);
     if(error instanceof NativeInputError)return reply({error:error.message},400);
     if (error instanceof z.ZodError)

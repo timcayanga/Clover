@@ -1,3 +1,4 @@
+import { getCurrentUserEnvironment } from "@/lib/user-environment";
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import {
@@ -42,7 +43,7 @@ const getInvitationViewer = async () => {
 
 const findInvitation = (token: string) =>
   prisma.circleInvitation.findUnique({
-    where: { token },
+    where: { token, circle: { owner: { environment: getCurrentUserEnvironment() } } },
     include: {
       circle: {
         select: {

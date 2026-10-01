@@ -934,6 +934,7 @@ export async function updateAdminUser(userId: string, input: AdminUserUpdateInpu
     const existingEmail = await prisma.user.findFirst({
       where: {
         email: nextEmail,
+        environment: currentUser.environment,
         NOT: { id: currentUser.id },
       },
       select: { id: true },

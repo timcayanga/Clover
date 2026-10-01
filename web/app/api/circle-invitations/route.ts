@@ -29,6 +29,7 @@ export async function GET() {
         expiresAt: { gt: new Date() },
         circle: {
           archivedAt: null,
+          owner: { environment: user.environment },
           memberships: {
             none: { userId: user.id, status: "active" },
           },

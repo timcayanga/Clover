@@ -69,8 +69,9 @@ export default function Onboarding() {
   return (
     <Screen>
       <Image
-        source={require("../assets/clover-icon.png")}
+        source={require("../assets/organize/clover.png")}
         accessibilityLabel="Clover"
+        resizeMode="contain"
         style={{ width: 48, height: 48, alignSelf: "center" }}
       />
       {step === "experience" ? (
@@ -82,22 +83,22 @@ export default function Onboarding() {
                 "beginner",
                 "Still learning",
                 "Keep the language simple and show me what matters first.",
-                "🌱",
+                require("../assets/onboarding/beginner.png"),
               ],
               [
                 "comfortable",
                 "Comfortable",
                 "I understand budgets, statements, and general money tracking.",
-                "🪴",
+                require("../assets/onboarding/intermediate.png"),
               ],
               [
                 "advanced",
                 "Very comfortable",
                 "Give me the numbers, trends, and short explanations.",
-                "🌿",
+                require("../assets/onboarding/advanced.png"),
               ],
             ] as const
-          ).map(([value, title, description, symbol]) => (
+          ).map(([value, title, description, icon]) => (
             <Pressable
               key={value}
               accessibilityRole="radio"
@@ -116,7 +117,7 @@ export default function Onboarding() {
                 minHeight: 80,
               }}
             >
-              <Text style={{ fontSize: 24 }}>{symbol}</Text>
+              <Image source={icon} resizeMode="contain" style={{ width: 40, height: 48 }} />
               <View style={{ flex: 1 }}>
                 <Text
                   style={{ color: colors.ink, fontFamily: "Poppins-SemiBold" }}

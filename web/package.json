@@ -201,7 +201,8 @@
     "qa:regional-benchmark": "NODE_OPTIONS=--conditions=react-server tsx scripts/korea-indonesia-benchmark.ts",
     "qa:regional-image-benchmark": "NODE_OPTIONS=--conditions=react-server tsx scripts/korea-indonesia-image-benchmark.ts",
     "qa:regional-accuracy": "npm run qa:regional-benchmark -- --iterations=1 --no-stress --no-speed-gate",
-    "qa:local-receipt-ocr": "tsx scripts/local-receipt-ocr-regression.ts"
+    "qa:local-receipt-ocr": "tsx scripts/local-receipt-ocr-regression.ts",
+    "qa:native-onboarding:fixture": "NODE_ENV=production CLOVER_MOBILE_API_ENABLED=true CLERK_SECRET_KEY=sk_test_fixture tsx --require ./scripts/native-organize-fixture-preload.cjs scripts/native-onboarding-fixture.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1095.0",

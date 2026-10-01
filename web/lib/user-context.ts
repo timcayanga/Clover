@@ -93,7 +93,7 @@ export const getOrCreateCurrentUser = async (clerkUserId: string): Promise<User>
     }
 
     const existingByEmail = await prisma.user.findUnique({
-      where: { email: syncedEmail },
+      where: { email_environment: { email: syncedEmail, environment: resolvePersistedUserEnvironment(currentEnvironment, existing?.environment) } },
     });
 
     if (!existingByEmail) {

@@ -1,3 +1,4 @@
+import { getCurrentUserEnvironment } from "./user-environment";
 import { bankLifecycleOverview } from "./finverse-lifecycle";
 import { bankWarningStage } from "../../shared/finverse-lifecycle";
 import { getAppPreferences } from "./app-preferences";
@@ -20,6 +21,7 @@ import { getEffectiveProfileLimit, getEffectiveUserLimits } from "@/lib/user-lim
 import { countNonCashAccounts } from "@/lib/account-limit-count";
 
 type NotificationUser = {
+  environment?: string;
   id: string;
   email: string;
   clerkUserId?: string | null;
@@ -172,6 +174,7 @@ export const buildInAppNotificationCandidates = async (
         expiresAt: { gt: now },
         circle: {
           archivedAt: null,
+          owner: { environment: user.environment ?? getCurrentUserEnvironment() },
           memberships: { none: { userId: user.id, status: "active" } },
         },
       },

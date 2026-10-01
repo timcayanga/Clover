@@ -44,6 +44,7 @@ For security and device-storage guidance, also follow `docs/security-architectur
 - Clerk owns account linking and verification. Matching verified email addresses resolve to the existing Clerk user. Do not merge Clover users, Profiles, or financial records to connect providers.
 - Connect Google or Apple from the signed-in Account settings using Clerk reverification. Apple Hide My Email can return a different address; connect from the existing account instead of relying on email matching.
 - An Apple-only user needs another connected method to sign in on Android. Platform detection is a presentation rule, not an authentication or security boundary.
+- Email uniqueness is scoped to the account environment. A legacy staging identity must not block a distinct production identity using the same email; never merge or reassign their Profiles, financial records, or subscriptions by email. Same-environment identity conflicts remain blocked.
 - Each Clerk instance must have its providers configured. Production Apple credentials have been verified through Account Portal signup and repeat sign-in.
 
 Acceptance checks:
