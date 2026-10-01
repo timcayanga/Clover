@@ -1,3 +1,4 @@
+import { readLocalReceiptOcrText } from "@/lib/local-receipt-ocr-envelope";
 import { finalizePortfolioImport, isHoldingsOnlyPortfolio, portfolioConfidence } from "@/lib/portfolio-import";
 import { assessImportEvidenceSafety, assertSafeImportEvidence } from "@/lib/import-evidence-safety";
 import { startImportTiming, measureImportTiming } from "@/lib/import-timing";
@@ -9486,7 +9487,10 @@ export const processImportFileText = async (
     return processImportTrainingJson(importFileId, importFile, text, options, startedAt);
   }
 
-  let textForParse = imageImport && importMode === "statement" ? normalizeStatementImageOcrText(text) : text;
+  const localOpticalReceiptText = readLocalReceiptOcrText(text);
+  // Coordinates/confidence belong to the raw audit envelope, not statement
+  // rows, identity detection or the remote model's financial context.
+  let textForParse = localOpticalReceiptText ?? (imageImport && importMode === "statement" ? normalizeStatementImageOcrText(text) : text);
   const cachedParseRecord = canReuseCachedStatementParse ? textCacheInfo?.cacheRecord ?? null : null;
   const detectedMetadata = cachedParseRecord?.metadata && typeof cachedParseRecord.metadata === "object" && !Array.isArray(cachedParseRecord.metadata)
     ? (cachedParseRecord.metadata as ReturnType<typeof detectStatementMetadataFromText>)
@@ -10568,7 +10572,7 @@ export const processImportFileText = async (
       dateCoverage: Number(parsedDateCoverage.toFixed(3)),
     });
   }
-  const receiptPreview = (imageImport || importMode === "receipt") && !isTransactionHistoryImage() ? parseReceiptText(textForParse) : null;
+  const receiptPreview = (imageImport || importMode === "receipt") && !isTransactionHistoryImage() ? parseReceiptText(localOpticalReceiptText !== null ? text : textForParse) : null;
   if (!cachedReceiptExtraction && perceptualReceiptCacheCandidate && receiptPreview) {
     const cachedDetails = perceptualReceiptCacheCandidate.extraction.receiptDetails;
     const previewTotal = Number(receiptPreview.total);

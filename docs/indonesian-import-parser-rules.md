@@ -116,3 +116,7 @@ The live staging photo benchmark also exposed missing guidance in the compact co
 Prompt guidance alone did not stop regional currency inference in the first live retest. The core schema now requests `currency_source_text`, and the server clears unsupported KRW/IDR suggestions before persistence while retaining the original model output in audit. Keep high image detail and a 1440px core image budget so grand-total, tender and change rows remain distinguishable. Do not retry a core request at the same detail merely because a deliberately redacted merchant is missing. Product/menu names must not replace a redacted business header.
 
 Normalize quoted integer receipt totals with the existing unlocalized grammar before trusting a model's numeric conversion. When quoted final total conflicts with quoted cash minus change, perform one bounded image verification; unresolved conflicts keep total null and require review. Never manufacture a corrected digit by arithmetic alone. Core merchant extraction must identify an explicit business header, logo or footer with quoted evidence; a product line or unknown source cannot supply the merchant. Keep the unmodified provider output for audit.
+
+## Server image OCR follow-up
+
+See [local receipt OCR](local-receipt-ocr.md) for the bounded PP-OCRv5 receipt reader, raw optical evidence envelope, mandatory review, model provenance and original-image benchmark. Native device OCR and direct cloud vision remain separate paths.

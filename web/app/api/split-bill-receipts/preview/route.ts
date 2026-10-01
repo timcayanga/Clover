@@ -1,3 +1,4 @@
+import { readLocalReceiptOcrText } from "@/lib/local-receipt-ocr-envelope";
 import { getMobileRequestContext } from "@/lib/mobile-request-context";
 import { after, NextResponse } from "next/server";
 import { cookies } from "next/headers";
@@ -297,15 +298,16 @@ export async function POST(request: Request) {
       console.warn("Local receipt extraction failed; trying backup parser", error);
       localPreview = parseReceiptText("");
     }
+    const readingText = readLocalReceiptOcrText(receiptText) ?? receiptText;
     const preview = await tryReceiptBackup({
       consentUserId: user.id,
       file: selectedFile,
-      receiptText,
+      receiptText: readingText,
       preview: localPreview,
       onUsage: recordUsage,
     });
     if (workspace) {
-      const localParser = estimateLocalParserTokens(receiptText);
+      const localParser = estimateLocalParserTokens(readingText);
       after(async () => {
         await prisma.auditLog.create({
           data: {

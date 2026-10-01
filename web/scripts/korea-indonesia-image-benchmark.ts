@@ -1,3 +1,4 @@
+import { readLocalReceiptOcrText } from "../lib/local-receipt-ocr-envelope";
 import assert from "node:assert/strict";
 import { readFileSync, writeFileSync, mkdirSync, existsSync } from "node:fs";
 import { dirname, join, resolve, basename } from "node:path";
@@ -17,7 +18,7 @@ const output = option("--out", join(tmpdir(), "clover-regional-benchmark", `ocr-
 const transcriptRoot = join(dirname(output), basename(output, ".json") + "-transcripts");
 const repeats = Number(option("--repeats", "2"));
 assert.ok(Number.isInteger(repeats) && repeats >= 2 && repeats <= 5, "Use 2–5 rounds so warm latency is measurable");
-type Sample = { id: string; country: string; path?: string; fileName?: string; sha256: string; expectedTotal: string; sourceUrl: string; datasetRow?: number };
+type Sample = { id: string; country: string; path?: string; fileName?: string; sha256: string; expectedTotal: string; sourceUrl: string; datasetRow?: number; liveExpected?: { missing?: string[] } };
 const manifest = JSON.parse(readFileSync(manifestPath, "utf8"));
 const samples = (Array.isArray(manifest) ? manifest : manifest.samples) as Sample[];
 assert.ok(samples.length > 0 && ["KR", "ID"].every(country => samples.some(s => s.country === country)));
@@ -49,7 +50,7 @@ async function loadSample(sample: Sample) {
   return bytes;
 }
 async function main() {
-  const results: Array<{ id: string; country: string; round: number; expected: string; actual: string | null; exact: boolean; safe: boolean; requiresReview?: boolean; fastPath: boolean; currency: string; ocrMs: number; totalMs: number; transcriptSha256: string; sourceSha256: string }> = [];
+  const results: Array<{ id: string; country: string; round: number; engine: string; expected: string; actual: string | null; exact: boolean; safe: boolean; requiresReview?: boolean; fastPath: boolean; currency: string; ocrMs: number; totalMs: number; transcriptSha256: string; sourceSha256: string }> = [];
   // Download/read inputs before timing. Never use dataset labels to inform OCR.
   const inputs = [];
   for (const sample of samples) inputs.push({ sample, bytes: await loadSample(sample) });
@@ -67,7 +68,7 @@ async function main() {
     const accuracyPassed = complete && countries.every(c => c.coverage >= targets.exactTotalCoverage);
     const safetyPassed = unsafeFastAcceptance === 0;
     const speedPassed = complete && warmP95Ms !== null && warmP95Ms <= targets.warmP95Ms;
-    const report = { startedAt, updatedAt: new Date().toISOString(), method: "Public original receipt images through readUploadedFileText + parseReceiptText. Downloads and input reads excluded; normalization/OCR/parsing included. No file cache, cloud AI, queue, persistence or customer account. Round 0 includes worker initialization; later rounds reuse workers. This is a small development diagnostic, not production accuracy or full field accuracy. Total ground truth is not passed to OCR. Missing/uncertain currencies and other fields remain review-required.", environment: { node: process.version, cpu: cpus()[0]?.model }, targets, repeats, complete, accuracyPassed, safetyPassed, speedPassed, passed: accuracyPassed && safetyPassed && speedPassed, countries, warmP95Ms, unsafeFastAcceptance, results };
+    const report = { startedAt, updatedAt: new Date().toISOString(), method: "Public original receipt images through readUploadedFileText + parseReceiptText. Downloads and input reads excluded; normalization/OCR/parsing included. No file cache, cloud AI, queue, persistence or customer account. Round 0 includes worker initialization; later rounds reuse workers. Model weights may already be cached on disk; cold model downloads are measured separately. This is a small development diagnostic, not production accuracy or full field accuracy. Total ground truth is not passed to OCR. Missing/uncertain currencies and other fields remain review-required.", environment: { node: process.version, cpu: cpus()[0]?.model }, targets, repeats, complete, accuracyPassed, safetyPassed, speedPassed, passed: accuracyPassed && safetyPassed && speedPassed, countries, warmP95Ms, unsafeFastAcceptance, results };
     mkdirSync(dirname(output), { recursive: true });
     writeFileSync(output, JSON.stringify(report, null, 2) + "\n");
     return report;
@@ -82,7 +83,7 @@ async function main() {
       const totalMs = performance.now() - start;
       const exact = parsed.total === sample.expectedTotal;
       const fastPath = assessReceiptPreviewQuality(parsed).reliableForFastPath;
-      const result = { id: sample.id, country: sample.country, round, expected: sample.expectedTotal, actual: parsed.total, exact, safe: exact || !fastPath, requiresReview: parsed.requiresReview, fastPath, currency: parsed.currency, ocrMs: +ocrMs.toFixed(1), totalMs: +totalMs.toFixed(1), transcriptSha256: hash(text), sourceSha256: sample.sha256 };
+      const result = { engine: readLocalReceiptOcrText(text) === null ? "tesseract" : "ppocr-v5-local", id: sample.id, country: sample.country, round, expected: sample.expectedTotal, actual: parsed.total, exact, safe: !fastPath || (exact && !sample.liveExpected?.missing?.length), requiresReview: parsed.requiresReview, fastPath, currency: parsed.currency, ocrMs: +ocrMs.toFixed(1), totalMs: +totalMs.toFixed(1), transcriptSha256: hash(text), sourceSha256: sample.sha256 };
       results.push(result);
       // Originals may contain publisher-visible personal data. Keep complete OCR
       // transcripts only in local temporary storage, never source control/logs.

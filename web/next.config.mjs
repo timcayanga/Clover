@@ -34,9 +34,21 @@ const nextConfig = {
   // Keep each open document pinned to the Vercel deployment that rendered it.
   // This prevents HTML and hashed chunks from different builds being mixed.
   deploymentId: process.env.VERCEL_DEPLOYMENT_ID ?? process.env.NEXT_DEPLOYMENT_ID,
-  serverExternalPackages: ["@napi-rs/canvas", "tesseract.js", "heic-decode", "libheif-js"],
+  serverExternalPackages: ["@napi-rs/canvas", "tesseract.js", "heic-decode", "libheif-js", "onnxruntime-node", "@techstark/opencv-js"],
+  outputFileTracingExcludes: {
+    "/*": ["./node_modules/onnxruntime-node/bin/napi-v6/darwin/**/*", "./node_modules/onnxruntime-node/bin/napi-v6/win32/**/*", "./node_modules/onnxruntime-node/bin/napi-v6/linux/arm64/**/*"],
+  },
   outputFileTracingIncludes: {
     "/*": [
+      "./lib/receipt-ocr-worker.cjs",
+      "./node_modules/onnxruntime-node/dist/**/*",
+      "./node_modules/onnxruntime-node/package.json",
+      "./node_modules/onnxruntime-node/bin/napi-v6/linux/x64/onnxruntime_binding.node",
+      "./node_modules/onnxruntime-node/bin/napi-v6/linux/x64/libonnxruntime.so.1",
+      "./node_modules/onnxruntime-common/dist/**/*",
+      "./node_modules/onnxruntime-common/package.json",
+      "./node_modules/@techstark/opencv-js/dist/opencv.js",
+      "./node_modules/@techstark/opencv-js/package.json",
       "./node_modules/@napi-rs/canvas/**/*",
       "./node_modules/@napi-rs/canvas-*/**/*",
       "./node_modules/tesseract.js-core/tesseract-core-relaxedsimd.js",

@@ -1,5 +1,7 @@
 # Public Korean and Indonesian receipt corpus
 
+**Latest original-image result:** the October 1 local OCR follow-up below now passes all eight original totals in three repeats (24/24), with warm p95 19.69 seconds. Older failed baselines below are retained for comparison. Native device OCR is still untested.
+
 33 financial text excerpts: seven Korean receipt images and 26 Indonesian CORD annotations. These are separate from Clover's synthetic fixtures in `../korea-indonesia/`.
 
 ## Sources and attribution
@@ -115,3 +117,18 @@ node --env-file=/secure/path/staging-qa.env web/scripts/korea-indonesia-staging-
 ```
 
 Use the active staging SHA if newer code is intentionally being evaluated. Never substitute production credentials or loosen a failed accuracy assertion to make a run pass.
+
+## Local OCR recovery, October 1
+
+The original-image accuracy gap is now closed for this diagnostic set. [Machine-readable results](benchmark-local-ocr-results-2026-10-01.json) retain the unchanged source hashes and total expectations, runtime file hashes and all three final rounds on Node 22.23.3 / Apple M1. The actual upload reader preserves its successful Tesseract first pass and uses a bounded, CPU-only PP-OCRv5 rescue before expensive crop retries. It corrects perspective/row association, decodes each model's embedded alphabet and keeps raw optical evidence separate from normalized receipt text. Narrow label/spacing repairs never change digits or manufacture currency. See [runtime and safety notes](../../../../docs/local-receipt-ocr.md).
+
+| Gate | Final result | Existing target |
+| --- | ---: | ---: |
+| Korean exact printed totals | 12/12, all four documents consistent | ≥95% per country |
+| Indonesian exact printed totals | 12/12, all four documents consistent | ≥95% per country |
+| Incorrect fast acceptance | 0 | 0 |
+| Warm reader + parser p95 | 19.69 s | ≤30 s |
+
+All 24 outputs used the new local engine and remained review-required. The engine-only trial was faster (warm p95 6.81 s); 19.69 s is the final complete-reader figure, including the retained first pass. A separate empty-model-cache probe downloaded and initialized all three verified models and read an Indonesian image in 4.17 seconds. These are local timings, not Vercel or phone performance promises.
+
+The previous local-only result was 1/8 consistently exact and 24.24 seconds warm p95. Thresholds were not reduced, difficult originals were not removed, expected totals were never given to OCR, and cloud AI was not invoked in these local runs. Pretrained optical models were integrated; neither ChatGPT nor device models were trained. The successful cloud backup benchmark above is a separate earlier test. These eight development photos have informed the fixes, so this result does not establish ≥95% accuracy on unseen receipts, every field, statements, native OCR or production traffic.

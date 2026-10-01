@@ -1,3 +1,4 @@
+import { readLocalReceiptImage, shutdownLocalReceiptOcr } from "./local-receipt-ocr.server";
 import { hasHangul, hasKoreanFinancialHeaders } from "@/lib/korean-financial-text";
 import { koreanStatementLineEvidence } from "@/lib/korean-statement-evidence";
 import { buildKoreanBankTable, koreanBankTableHeader } from "@/lib/korean-bank-table";
@@ -474,6 +475,7 @@ const loadCanvasModule = async (): Promise<CanvasModule | null> => {
 const ocrWorkerPromises = new Map<string, Promise<OcrWorker | null>>();
 
 export const shutdownImportOcrWorkers = async () => {
+  await shutdownLocalReceiptOcr();
   const workers = await Promise.all(ocrWorkerPromises.values());
   ocrWorkerPromises.clear();
   await Promise.all(workers.filter((worker): worker is OcrWorker => Boolean(worker)).map((worker) => worker.terminate()));
@@ -843,6 +845,7 @@ const buildReceiptAwareOcrCandidates = async (
 const extractTextFromImageBufferWithReceiptAwareFallback = async (params: {
   normalizedDataUrl: string;
   normalizedBuffer: Buffer;
+  originalBytes?: Uint8Array;
   fileType?: string | null;
   fileName?: string | null;
   importMode?: string | null;
@@ -857,6 +860,13 @@ const extractTextFromImageBufferWithReceiptAwareFallback = async (params: {
     })
   ) {
     return firstPassText;
+  }
+
+  // Preserve the existing successful fast path. Use neural OCR only after
+  // the first optical pass needs a retry, before expensive crop/PSM retries.
+  if (params.importMode === "receipt") {
+    const localText = await readLocalReceiptImage(params.originalBytes ?? params.normalizedBuffer);
+    if (localText) return localText;
   }
 
   const originalProfile = resolveImageNormalizationProfile({
@@ -2822,8 +2832,9 @@ export const readUploadedFileText = async (
       throw new Error("Unable to read imported file.");
     }
 
+    const originalBytes = new Uint8Array(await file.arrayBuffer());
     const normalized = await normalizeImportedImageBytes(
-      new Uint8Array(await file.arrayBuffer()),
+      originalBytes,
       lowerType,
       lowerName,
       importMode
@@ -2831,6 +2842,7 @@ export const readUploadedFileText = async (
     return extractTextFromImageBufferWithReceiptAwareFallback({
       normalizedDataUrl: normalized.dataUrl,
       normalizedBuffer: normalized.buffer,
+      originalBytes,
       fileType: lowerType,
       fileName: lowerName,
       importMode,
@@ -3038,6 +3050,7 @@ export const readImportedFileTextWithCacheInfo = async (
       return extractTextFromImageBufferWithReceiptAwareFallback({
         normalizedDataUrl: normalized.dataUrl,
         normalizedBuffer: normalized.buffer,
+        originalBytes: bytes,
         fileType: params.fileType,
         fileName: params.fileName,
         importMode: params.importMode,

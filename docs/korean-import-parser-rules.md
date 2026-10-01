@@ -109,3 +109,7 @@ Use `web/lib/korea-indonesia-corpus.ts` for reviewed provider context and `docs/
 ## Benchmark safety controls
 
 Unreadable labeled totals remain evidence rather than being discarded when another total parses. Conflicting or malformed duplicate totals must stay unresolved. A recognized horizontal taxable-amount/VAT/final-total table is accepted only when its three amounts parse and reconcile; headers themselves are not amounts. Unknown currency remains MIXED and cannot qualify for the receipt fast path. See the public corpus README for measured speed, accuracy, and the separate local-photo OCR limitation.
+
+## Server image OCR follow-up
+
+See [local receipt OCR](local-receipt-ocr.md) for the bounded PP-OCRv5 receipt reader, raw optical evidence envelope, mandatory review, model provenance and original-image benchmark. Native device OCR and direct cloud vision remain separate paths.

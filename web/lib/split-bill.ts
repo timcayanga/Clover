@@ -1,3 +1,5 @@
+import { normalizeLocalReceiptOcrText } from "./local-receipt-ocr-normalization";
+import { readLocalReceiptOcrText } from "./local-receipt-ocr-envelope";
 import { hasHangul } from "@/lib/korean-financial-text";
 import { parseKoreanReceiptText } from "@/lib/korean-receipt";
 import { parseIndonesianReceiptText } from "@/lib/indonesian-receipt";
@@ -2198,7 +2200,7 @@ export const assessReceiptPreviewQuality = (preview: ReceiptPreviewResult): Rece
   let score = 0;
   let severeIssue = false;
   if (preview.requiresReview || preview.currency === "MIXED") {
-    issues.push("backup parser result requires review");
+    issues.push(readLocalReceiptOcrText(preview.receiptText) === null ? "backup parser result requires review" : "optical reading requires review against the original image");
     score -= 2;
     severeIssue = true;
   }
@@ -2485,6 +2487,14 @@ export const parseAirlineTicketReceiptText = (receiptText: string): ReceiptPrevi
 };
 
 export const parseReceiptText = (receiptText: string): ReceiptPreviewResult => {
+  const opticalText = readLocalReceiptOcrText(receiptText);
+  const result = parseReceiptTextCore(opticalText === null ? receiptText : normalizeLocalReceiptOcrText(opticalText));
+  // Optical confidence does not establish financial correctness. Until wider
+  // field-level validation, this engine always asks the user to review.
+  return opticalText === null ? result : { ...result, receiptText, requiresReview: true, confidence: Math.min(45, result.confidence) };
+};
+
+const parseReceiptTextCore = (receiptText: string): ReceiptPreviewResult => {
   const indonesian = parseIndonesianReceiptText(receiptText);
   if (indonesian) return indonesian;
   const korean = parseKoreanReceiptText(receiptText);
