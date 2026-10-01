@@ -1,12 +1,10 @@
 import { homeCurrencyScope } from "../../shared/home-currency-scope";
 import { buildHomeAdviserInsights } from "../../shared/home-adviser-insights";
 import { buildHomeNextSteps } from "./home-next-steps";
-import { getPlannedPaymentSuggestions } from "./planned-payment-suggestions";
 import { convertHomeWindow } from "./home-currency-total";
 import { finverseBalances } from "./finverse-balances";
 import { mobileHomePeriods, homeDateKey } from "./mobile-home-periods";
 import { buildReviewQueueWhere } from "./review-queue";
-import { loadCachedBudgetWorkspaceData } from "./budgeting-data";
 import { serializeFinancialCommitment } from "./commitments";
 import { mobileHomePayments } from "./mobile-home-payments";
 import { prisma } from "./prisma";
@@ -25,7 +23,7 @@ import { resolveFinancialTransactionType } from "./transaction-directions";
 
 // Read-only native dashboard. Reuses Clover's balance/checkpoint and direction
 // rules; never totals a paginated list or mixes currencies without conversion.
-export async function mobileHome(workspaceId: string, selectedCurrency: string, profileCurrency = "PHP") {
+export async function mobileHome(workspaceId: string, selectedCurrency: string, profileCurrency = "PHP", overviewOnly = false) {
   const { allCurrencies, displayCurrency: currency } = homeCurrencyScope(selectedCurrency, profileCurrency);
   const { day, tomorrow, month, previousMonth, rolling } = mobileHomePeriods();
   const since = new Date(+day - 90 * 86400000);
@@ -38,6 +36,7 @@ export async function mobileHome(workspaceId: string, selectedCurrency: string, 
     reportCurrencies,
     latestImport,
     allSuggestions,
+    bankSnapshots,
   ] = await Promise.all([
     prisma.account.findMany({
       where: { workspaceId },
@@ -98,7 +97,7 @@ export async function mobileHome(workspaceId: string, selectedCurrency: string, 
       where: { workspaceId, status: "active", ...(allCurrencies ? {} : { currency }) },
       include: { occurrences: { select: { dueDate: true } } },
     }),
-    loadCachedBudgetWorkspaceData(workspaceId, { directory: true }),
+    overviewOnly ? Promise.resolve(null) : import("./budgeting-data").then(module => module.loadCachedBudgetWorkspaceData(workspaceId, { directory: true })),
     prisma.transaction.count({ where: { AND: [buildReviewQueueWhere(workspaceId), ...(allCurrencies ? [] : [{ currency }])] } }),
     prisma.transaction.findMany({
       where: buildActiveWorkspaceTransactionWhere(workspaceId),
@@ -106,10 +105,10 @@ export async function mobileHome(workspaceId: string, selectedCurrency: string, 
       select: { currency: true },
     }),
     prisma.importFile.findFirst({ where: { workspaceId }, orderBy: { uploadedAt: "desc" }, select: { uploadedAt: true } }),
-    getPlannedPaymentSuggestions(workspaceId),
+    overviewOnly ? Promise.resolve([]) : import("./planned-payment-suggestions").then(module => module.getPlannedPaymentSuggestions(workspaceId)),
+    finverseBalances(workspaceId),
   ]);
   const suggestions = allSuggestions.filter(s => allCurrencies || s.currency === currency);
-  const bankSnapshots = await finverseBalances(workspaceId);
   const spendable = accounts.filter((a) => isSpendableAccountType(a.type) && (allCurrencies || a.currency === currency));
   const rates = new Map<string, number>();
   rates.set(currency, 1);
@@ -259,8 +258,7 @@ export async function mobileHome(workspaceId: string, selectedCurrency: string, 
     .sort((a, b) => b.delta - a.delta || b.current - a.current)[0] ?? null;
   const monthTotals = totals(month, tomorrow);
   const currencies = [...new Set([currency, ...accounts.map((a) => a.currency), ...reportCurrencies.map((t) => t.currency)])].sort();
-  return {
-    insights: buildHomeAdviserInsights({
+  const insightInput = {
       currency,
       daysSinceLastImport: latestImport ? Math.max(0, Math.floor((Date.now() - +latestImport.uploadedAt) / 86400000)) : null,
       categorySpike: spike,
@@ -272,13 +270,16 @@ export async function mobileHome(workspaceId: string, selectedCurrency: string, 
       hasRecentTransactions: transactions.some((t) => t.currency === currency && t.date >= rolling(7).from),
       // Conservatively suppress the all-clear card while any queue item remains.
       recentReviewCount: reviewCount,
-    }),
+  };
+  return {
+    ...(overviewOnly ? { insightInput, detailsPending: true } : {}),
+    insights: buildHomeAdviserInsights(insightInput),
     nextSteps: buildHomeNextSteps({ transactionCount: reviewCount, recurringCount, statementCount: suggestions.filter((s) => s.sourceKind === "statement_reminder").length }),
     currencyReports: (allCurrencies ? currencies : [currency]).map((c) => ({ currency: c, weekly: report(7, c), monthly: report(30, c) })),
     heroTotals: { current: convertHomeWindow(transactions, month, tomorrow, Object.fromEntries(rates)), previous: convertHomeWindow(transactions, previousMonth, month, Object.fromEntries(rates)) },
     currencies,
     reviewCount,
-    budgets: budgetData.overview.budgets.filter(b => allCurrencies || b.currency === currency).map((b) => ({
+    budgets: (budgetData?.overview.budgets ?? []).filter(b => allCurrencies || b.currency === currency).map((b) => ({
       id: b.id,
       name: b.name,
       currency: b.currency,
@@ -300,5 +301,25 @@ export async function mobileHome(workspaceId: string, selectedCurrency: string, 
     weekly,
     monthly,
     upcoming,
+  };
+}
+
+/** Secondary dashboard work is isolated from the first balance/chart response. */
+export async function mobileHomeDetails(workspaceId: string, selectedCurrency: string, profileCurrency = "PHP") {
+  const { allCurrencies, displayCurrency: currency } = homeCurrencyScope(selectedCurrency, profileCurrency);
+  const [budgetData, allSuggestions] = await Promise.all([
+    import("./budgeting-data").then(module => module.loadCachedBudgetWorkspaceData(workspaceId, { directory: true })),
+    import("./planned-payment-suggestions").then(module => module.getPlannedPaymentSuggestions(workspaceId)),
+  ]);
+  const suggestions = allSuggestions.filter(s => allCurrencies || s.currency === currency);
+  const recurringCount = suggestions.filter(s => s.sourceKind === "recurring_transaction" || s.sourceKind === "installment").length;
+  return {
+    paymentTitles: suggestions.filter(s => s.dueDate && +new Date(s.dueDate) <= Date.now() + 7 * 86400000).map(s => s.title),
+    recurringCount,
+    nextSteps: buildHomeNextSteps({ transactionCount: 0, recurringCount, statementCount: suggestions.filter(s => s.sourceKind === "statement_reminder").length }),
+    budgets: budgetData.overview.budgets.filter(b => allCurrencies || b.currency === currency).map(b => ({
+      id: b.id, name: b.name, currency: b.currency, actualAmount: b.actualAmount, targetAmount: b.targetAmount,
+      progressPercent: b.progressPercent, statusLabel: b.statusLabel, periodLabel: b.periodLabel, isAtRisk: b.isAtRisk,
+    })),
   };
 }

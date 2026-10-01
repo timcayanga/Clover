@@ -21,7 +21,7 @@ import { getProAccess } from "@/lib/pro-access";
 import { mobileApiResponse } from "@/lib/mobile-api-response";
 import { getCurrentUserEnvironment } from "@/lib/user-environment";
 import { mobileEditSchema, mobileCreateSchema, mobileAccountCreateSchema } from "@/lib/mobile-edit-schema";
-import { mobileHome } from "@/lib/mobile-home";
+import { mobileHome, mobileHomeDetails } from "@/lib/mobile-home";
 import { loadActiveInAppNotificationFeed } from "@/lib/in-app-notifications.server";
 import { mobileBudgetInput } from "@/lib/mobile-budget-input";
 import { mobileCircleInput, mobileSplitBillInput, mobileSplitBillPayload } from "@/lib/mobile-together-input";
@@ -143,7 +143,7 @@ async function handle(
         await syncStoreAccess(user.id);
       }
       const access = await getProAccess(user.id);
-      return reply({ available: config.enabled && !(access.user.planTierLocked && access.planTier === "free"), appUserId: userId, entitlementId: config.entitlementId, offeringId: config.offeringId, productIds: config.products, planTier: access.planTier, accessEndsAt: access.accessEndsAt, renewing: access.renewing });
+      return reply({ available: config.enabled && !(access.user.planTierLocked && access.planTier === "free"), appUserId: userId, entitlementId: config.entitlementId, offeringId: config.offeringId, productIds: config.products, planTier: access.planTier, accessEndsAt: access.accessEndsAt, renewing: access.renewing, hasPaidSubscription: access.hasPaidSubscription, accessSource: access.source, billingProvider: access.storeSubscription?.expiresAt && access.storeSubscription.expiresAt > new Date() ? access.storeSubscription.store : access.hasPaidSubscription ? access.subscription?.provider ?? null : null });
     }
     if (operation === "settings-ai-consent") {
       const { getAiConsent, setAiConsent } = await import("@/lib/ai-consent");
@@ -485,7 +485,9 @@ async function handle(
     }
     if (operation === "home") {
       const currency = z.string().regex(/^(ALL|[A-Z]{3})$/).parse(url.searchParams.get("currency") ?? normalizeRegionalPreferences(user.regionalPreferences).baseCurrency);
-      return reply(await mobileHome(workspaceId, currency, normalizeRegionalPreferences(user.regionalPreferences).baseCurrency));
+      const section = z.enum(["full", "overview", "details"]).parse(url.searchParams.get("section") ?? "full");
+      const baseCurrency = normalizeRegionalPreferences(user.regionalPreferences).baseCurrency;
+      return reply(section === "details" ? await mobileHomeDetails(workspaceId, currency, baseCurrency) : await mobileHome(workspaceId, currency, baseCurrency, section === "overview"));
     }
     if (operation === "transaction") {
       const row = await prisma.transaction.findFirst({

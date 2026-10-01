@@ -1,3 +1,4 @@
+import { mergeHomeDetails, type HomeDetails, type HomeSections } from "../../src/home-sections";
 import { registerScreenRefresh } from "../../src/screen-refresh";
 import { HomeAdviser } from "../../src/home-adviser";
 import type { HomeInsight } from "../../../shared/home-adviser-insights";
@@ -25,7 +26,7 @@ import {
 } from "../../src/ui";
 type Totals = { income: number; expense: number };
 type HomeReport = Totals & { previous?: Totals; days: (Totals & { date: string })[] };
-type HomeData = {
+type HomeData = HomeSections & {
   insights?: HomeInsight[];
   nextSteps?: { id: string; title: string; description: string; count: number; href: string }[];
   currencyReports?: { currency: string; weekly: HomeReport; monthly: HomeReport }[];
@@ -71,6 +72,7 @@ export default function Home() {
   const session = useSession();
   const [data, setData] = useState<HomeData | null>(null);
   const [error, setError] = useState("");
+  const [detailsError, setDetailsError] = useState(false);
   const [hidden, setHidden] = useState(true);
   const profileCurrency = session.data?.defaultCurrency ?? "PHP";
   const [currency, setCurrency] = useState(profileCurrency);
@@ -130,7 +132,7 @@ export default function Home() {
       } satisfies HomeData;
     }
     return session.request<HomeData>(
-      `home?workspaceId=${encodeURIComponent(session.profileId)}&currency=${currency}`,
+      `home?workspaceId=${encodeURIComponent(session.profileId)}&currency=${currency}&section=overview`,
     );
   }, [
     session.demo,
@@ -142,16 +144,30 @@ export default function Home() {
   ]);
   useFocusEffect(
     useCallback(() => {
-      let active = true;
-      setData(session.cached<HomeData>(`home?workspaceId=${encodeURIComponent(session.profileId)}&currency=${currency}`));
-      setError("");
-      const refresh = () => load()
-        .then((value) => {
-          if (active) { setError(""); setData(value); setCurrencyOptions(value.currencies ?? [value.currency]); }
-        })
-        .catch((e) => {
-          if (active) setError(e.message);
-        });
+      let active = true, generation = 0;
+      const basePath = `home?workspaceId=${encodeURIComponent(session.profileId)}&currency=${currency}`;
+      const cachedOverview = session.cached<HomeData>(`${basePath}&section=overview`);
+      setData(cachedOverview ? mergeHomeDetails(cachedOverview, session.cached<HomeDetails>(`${basePath}&section=details`)) : null);
+      setError(""); setDetailsError(false);
+      const refresh = async () => {
+        const run = ++generation;
+        try {
+          const value = await load();
+          if (!active || run !== generation) return;
+          setError(""); setDetailsError(false); setCurrencyOptions(value.currencies ?? [value.currency]);
+          setData(mergeHomeDetails(value, session.cached<HomeDetails>(`${basePath}&section=details`)));
+          // Older servers return the complete payload and need no second request.
+          if (!value.detailsPending) return;
+          try {
+            const details = await session.request<HomeDetails>(`${basePath}&section=details`);
+            if (active && run === generation) setData(mergeHomeDetails(value, details));
+          } catch {
+            if (active && run === generation) setDetailsError(true);
+          }
+        } catch (e) {
+          if (active && run === generation) setError((e as Error).message);
+        }
+      };
       void refresh();
       const unregister = registerScreenRefresh("/", refresh);
       return () => {
@@ -274,6 +290,7 @@ export default function Home() {
           </LinearGradient>
           <HomeQuickAccess />
           <HomeAdviser insights={data.insights ?? []} hidden={hidden} />
+          {detailsError ? <Body>Budgets and suggestions could not load. Pull down to retry.</Body> : data.detailsPending ? <Body>Loading budgets and suggestions…</Body> : null}
           {Boolean(data.nextSteps?.length) && (
             <Card>
               <Text style={styles.sectionTitle}>Next Steps</Text>

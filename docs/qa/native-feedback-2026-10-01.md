@@ -34,3 +34,15 @@ https://www.revenuecat.com/docs/test-and-launch/sandbox/apple-app-store
 ## Remaining physical-device checks
 
 Check iPhone safe area, cold/warm page timing, Apple/Google signup, actual monthly/yearly store prices, cancel/reopen purchase, and sandbox purchase/restore. A browser preview and automated tests do not certify these store/device behaviors.
+
+## Purchase and Home follow-up
+
+User confirmed a successful iOS Plus purchase and activation. Apple confirmation displays PHP; Android price display and checkout opening also reported working. Restore and plan-change completion have not yet been confirmed.
+
+- Removed the store-price explanatory sentence from native Plan; it was already absent from the Figma Plan master.
+- Subscription management now uses the verified original provider. Apple subscriptions opened on Android explain how to manage on an Apple device; they do not open Google Play or offer a duplicate subscription. Free explains cancelling renewal and retaining access until paid access ends. Manual/granted access does not send users to an empty store subscription page. Unknown provider waits for refreshed metadata.
+- Home requests a lightweight overview first and secondary budgets/payment suggestions afterward. Existing clients retain the full response. Slow secondary work cannot block balances/charts; errors preserve the overview and provide a retry instruction. Currency/Profile changes and repeat refreshes reject late UI updates.
+- Bank snapshots now load alongside the other overview queries. Secondary analysis modules load only when required. Concurrent identical presentation reads share one network call; invalidation starts a fresh generation.
+- Regression coverage verifies overview skips secondary queries, balances remain unchanged, progressive advice/review merging, original-store routing, concurrent reads and invalidation races. Mocked-database timings are not physical-device benchmarks.
+
+These changes require promotion of the API changes to production and a new native binary before production-installed apps use the new behavior.

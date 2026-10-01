@@ -11,6 +11,9 @@ export type StoreStatus = {
   planTier: "free" | "pro" | "premium";
   accessEndsAt: string | null;
   renewing: boolean;
+  hasPaidSubscription?: boolean;
+  billingProvider?: string | null;
+  accessSource?: string;
 };
 let account: string | null = null;
 let serial: Promise<unknown> = Promise.resolve();

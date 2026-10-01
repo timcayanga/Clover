@@ -1,4 +1,4 @@
-import { storePriceLabel, storeVerificationMessage } from "./store-presentation";
+import { planManagement, storePriceLabel, storeVerificationMessage } from "./store-presentation";
 import { tokenUsagePercent } from "./recorded-summary";
 import { RETENTION_MESSAGE, DOWNGRADE_MESSAGE, type RetentionSnapshot } from "../../shared/plan-retention";
 import { PlanCardSurface } from "./plan-card-surface";
@@ -9,7 +9,7 @@ import * as WebBrowser from "expo-web-browser";
 import { STORE_PACKAGES } from "../../shared/store-catalog";
 import { Text } from "./app-text";
 import { useEffect, useRef, useState } from "react";
-import { Alert, AppState, Linking, Pressable, ScrollView, View, useWindowDimensions } from "react-native";
+import { Alert, AppState, Linking, Platform, Pressable, ScrollView, View, useWindowDimensions } from "react-native";
 import type { PurchasesPackage } from "react-native-purchases";
 import { useSession } from "./session";
 import { Body, Card, Icon, Notice, useTheme } from "./ui";
@@ -18,7 +18,6 @@ import {
   loadStorePackages,
   purchaseStorePackage,
   restoreStorePurchases,
-  storeManagementUrl,
   type StoreStatus,
 } from "./store-billing";
 type Usage = Record<"profiles" | "accounts" | "monthly" | "rolling24h", { used: number; limit: number | null }>;
@@ -130,10 +129,13 @@ export function SettingsPlan() {
   const switchPlan = (tier: "free" | "pro" | "premium") => {
     if (tier === access?.planTier || busy || loading || session.demo) return;
     setMessage(""); setError("");
-    if (access?.planTier !== "free" || tier === "free") {
-      const url = storeManagementUrl();
-      if (url) void Linking.openURL(url).catch(() => setError("Open subscriptions in your device's store settings."));
-      else setError("Manage your subscription with your original billing provider.");
+    if (!status) { setError("Plan details are still loading. Please try again."); return; }
+    if ((status.hasPaidSubscription !== false && access?.planTier !== "free") || tier === "free") {
+      const management = planManagement(status, Platform.OS, tier);
+      Alert.alert(management.title, management.message, management.url ? [
+        { text: "Cancel", style: "cancel" },
+        { text: "Open subscriptions", onPress: () => void Linking.openURL(management.url!).catch(() => setError("Open subscriptions in your original store's settings.")) },
+      ] : [{ text: "OK" }]);
       return;
     }
     const choices = packages.filter(item => STORE_PACKAGES.find(p => p.identifier === item.identifier)?.tier === tier);
@@ -185,7 +187,6 @@ export function SettingsPlan() {
         </PlanCardSurface>;
       })}
     </ScrollView>
-    <Body>Prices are supplied by your store. The store confirmation shows the final price and currency before you pay.</Body>
     <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 20 }}>
       {status && canUseStore(status) ? <Text accessibilityRole="button" disabled={busy || loading} onPress={() => void act(() => restoreStorePurchases(status), true)} style={{ color: colors.teal }}>Restore purchases</Text> : null}
       <Text accessibilityRole="button" disabled={busy || loading || session.demo} onPress={() => void act()} style={{ color: colors.teal }}>Refresh plan status</Text>
