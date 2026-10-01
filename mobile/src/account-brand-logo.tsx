@@ -15,7 +15,7 @@ export function AccountBrandLogo({
   const path = account.brandLogoUrl?.includes("/assets/account-types/") ? null : account.brandLogoUrl;
   const uri = path?.startsWith("/")
     ? `${apiBase()}${path}`
-    : path?.startsWith("https:")
+    : path?.startsWith("https:") || (path && path.length <= 350_000 && /^data:image\/(png|jpeg|webp);base64,/i.test(path))
       ? path
       : null;
   return (

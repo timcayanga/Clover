@@ -1,3 +1,4 @@
+import { recordedSummary } from "../../src/recorded-summary";
 import { FinversePendingChip } from "../../src/finverse-pending-chip";
 import type { PendingBankConnection } from "../../../shared/finverse-pending";
 import { registerScreenRefresh } from "../../src/screen-refresh";
@@ -155,7 +156,7 @@ function AccountsContent() {
     }, [session.demo, session.profileId, session.request, revision]),
   );
   const label = (account: Account) =>
-    [account.name, account.lastFour].filter(Boolean).join(" ");
+    [account.name, account.lastFour && !account.name.trim().endsWith(account.lastFour) ? account.lastFour : null].filter(Boolean).join(" ");
   const amountLabel = (account: Account) =>
     ["credit_card", "loan", "mortgage", "liability"].includes(account.type)
       ? "Outstanding balance"
@@ -183,7 +184,7 @@ function AccountsContent() {
       other: "Tracked assets",
     })[type] ?? "Other accounts";
   const ownedCurrencies = [...new Set(accounts.map(account => account.currency))];
-  const displayedCurrency = ownedCurrencies.includes(currencyFilter) ? currencyFilter : ownedCurrencies.includes(session.data?.defaultCurrency ?? "") ? session.data!.defaultCurrency : ownedCurrencies[0];
+  const displayedCurrency = currencyFilter === "ALL" ? "ALL" : ownedCurrencies.includes(currencyFilter) ? currencyFilter : ownedCurrencies.includes(session.data?.defaultCurrency ?? "") ? session.data!.defaultCurrency : ownedCurrencies[0];
   useLayoutEffect(() => {
     navigation.setOptions({ header: () => <AppHeader title="Accounts" trailing={<>
       <Pressable accessibilityRole="button" accessibilityLabel={`Select account currency: ${displayedCurrency ?? "none"}`} onPress={() => setCurrencyOpen(true)} style={styles.iconButton}><Icon line name="globe-outline" size={24} /></Pressable>
@@ -195,7 +196,7 @@ function AccountsContent() {
     string,
     { title: string; currency: string; rows: Account[] }
   >();
-  for (const account of accounts.filter(account => account.currency === displayedCurrency)) {
+  for (const account of accounts.filter(account => displayedCurrency === "ALL" || account.currency === displayedCurrency)) {
     const title = sectionName(account.type),
       key = `${title}:${account.currency}`;
     if (!groups.has(key))
@@ -232,12 +233,14 @@ function AccountsContent() {
               ? Math.max(0, Number(amount))
               : Number(amount);
       });
-      const known = values.every((v) => v !== null && Number.isFinite(v));
+      const coverage = recordedSummary(values);
+      const safe = values.map(v => v !== null && Number.isFinite(v) ? v : 0);
       return {
         currency,
-        values: known
+        coverage,
+        values: coverage.known > 0
           ? [
-              values.reduce<number>((s, v) => s + v!, 0),
+              safe.reduce((s, v) => s + v, 0),
               rows.reduce(
                 (s, a, i) =>
                   s +
@@ -249,12 +252,12 @@ function AccountsContent() {
                     "wallet",
                     "cash",
                   ].includes(a.type)
-                    ? Math.max(0, values[i]!)
+                    ? Math.max(0, safe[i])
                     : 0),
                 0,
               ),
-              values.reduce<number>((s, v) => s + Math.max(0, v!), 0),
-              values.reduce<number>((s, v) => s + Math.max(0, -v!), 0),
+              safe.reduce((s, v) => s + Math.max(0, v), 0),
+              safe.reduce((s, v) => s + Math.max(0, -v), 0),
             ]
           : [null, null, null, null],
       };
@@ -308,14 +311,16 @@ function AccountsContent() {
           <View accessibilityViewIsModal style={{ backgroundColor: colors.white, borderRadius: 20, padding: 20, gap: 12 }}>
             <Heading>Account currency</Heading>
             <ScrollView style={{ maxHeight: 360 }}>
-            {ownedCurrencies.length ? ownedCurrencies.map(code => <Pressable key={code} accessibilityRole="button" accessibilityLabel={code} accessibilityState={{ selected: displayedCurrency === code }} onPress={() => { setCurrencyFilter(code); setCurrencyOpen(false); }} style={{ minHeight: 48, flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}><Text style={{ color: colors.ink }}>{code}</Text>{displayedCurrency === code ? <Icon line name="checkmark" /> : null}</Pressable>) : <Body>Add an account to see its currency here.</Body>}
+            {ownedCurrencies.length ? ["ALL", ...ownedCurrencies].map(code => <Pressable key={code} accessibilityRole="button" accessibilityLabel={code === "ALL" ? "All Currencies" : code} accessibilityState={{ selected: displayedCurrency === code }} onPress={() => { setCurrencyFilter(code); setCurrencyOpen(false); }} style={{ minHeight: 48, flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}><Text style={{ color: colors.ink }}>{code === "ALL" ? "All Currencies" : code}</Text>{displayedCurrency === code ? <Icon line name="checkmark" /> : null}</Pressable>) : <Body>Add an account to see its currency here.</Body>}
             </ScrollView>
             <Button secondary title="Close" onPress={() => setCurrencyOpen(false)} />
           </View>
         </View>
       </Modal>
-      {summaries.filter(summary => summary.currency === displayedCurrency).map((summary) => (
+      {summaries.filter(summary => displayedCurrency === "ALL" || summary.currency === displayedCurrency).map((summary) => (
         <View key={summary.currency} style={{ gap: 8 }}>
+          {displayedCurrency === "ALL" ? <Heading>{summary.currency}</Heading> : null}
+          {summary.coverage.missing > 0 ? <Body>Known balances · {summary.coverage.known} of {summary.coverage.known + summary.coverage.missing} accounts. {summary.coverage.missing} without a recorded balance.</Body> : null}
           <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
             {["Net worth", "Spendable", "Assets", "Liabilities"].map(
               (title, i) => (

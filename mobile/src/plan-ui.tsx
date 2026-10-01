@@ -122,20 +122,22 @@ export function PlanTabs({
   onChange: (value: string) => void;
 }) {
   const { colors, dark } = useTheme();
-  const { width } = useWindowDimensions();
+  const { width, fontScale } = useWindowDimensions();
+  const columnWidth = (width - 32) / (items.length > 4 ? 3 : items.length);
+  const stackedLabels = items.some(item => item.replace(" · Plus", "").length * 6.4 * fontScale + 26 > columnWidth);
   return (
-    <View accessibilityRole="tablist" style={{ flexDirection: "row", flexWrap: items.length > 4 ? "wrap" : "nowrap" }}>
+    <View accessibilityRole="tablist" style={{ flexDirection: "row", flexWrap: items.length > 4 || stackedLabels ? "wrap" : "nowrap" }}>
       {items.map((item, index) => {
         const label = item.replace(" · Plus", "");
         const selected = item === value;
         const premium = item.includes(" · Plus");
-        const color = premium ? (dark ? "#C7A5EE" : "#8561AF") : selected ? colors.teal : colors.muted;
+        const color = premium ? (dark ? "#7DE3B0" : "#287C52") : selected ? colors.teal : colors.muted;
         return (
           <Pressable key={item} accessibilityRole="tab" accessibilityLabel={premium ? `${label}, Plus and Pro` : label}
             accessibilityState={{ selected }} aria-selected={selected}
             onPress={() => onChange(item)}
             style={{
-              flexGrow: 1, flexBasis: items.length > 4 ? "30%" : 0, minWidth: 0,
+              flexGrow: 1, flexBasis: stackedLabels ? "45%" : items.length > 4 ? "30%" : 0, minWidth: 0,
               minHeight: 44, paddingVertical: 8, paddingHorizontal: 2,
               flexDirection: "row", flexWrap: "wrap", justifyContent: "center", alignItems: "center", gap: 4,
               borderWidth: 1, borderColor: selected ? colors.line : "transparent",

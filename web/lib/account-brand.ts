@@ -199,7 +199,8 @@ const makeBrand = (params: {
   const resolvedForeground = inferForeground(params.accent, resolvedBackground);
   return {
     label: params.label,
-    logoSrc: params.logoSrc ?? null,
+    // Native clients need one usable URL as well as the browser fallback list.
+    logoSrc: params.logoSrc ?? params.logoSrcs?.find(src => getCurrentBuiltInAccountLogoUrl(src)) ?? params.logoSrcs?.[0] ?? null,
     logoSrcs: params.logoSrcs ?? (params.logoSrc ? [params.logoSrc] : []),
     fallbackIconSrc: params.fallbackIconSrc,
     accent: params.accent,

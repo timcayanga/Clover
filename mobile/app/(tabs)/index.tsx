@@ -173,7 +173,7 @@ export default function Home() {
           <View accessibilityViewIsModal style={{ maxHeight: "75%", backgroundColor: colors.white, borderRadius: 20, padding: 20, gap: 12 }}>
             <Heading>Home currency</Heading>
             <ScrollView>{["ALL", ...new Set([profileCurrency, ...currencyOptions])].map(code => <Pressable key={code} accessibilityRole="button" accessibilityState={{ selected: currency === code }} onPress={() => { setCurrency(code); setCurrencyOpen(false); }} style={{ minHeight: 48, flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}><Text style={{ color: colors.ink }}>{code === "ALL" ? "All Currencies" : code}</Text>{currency === code ? <Icon line name="checkmark" /> : null}</Pressable>)}</ScrollView>
-            <Body>{currency === "ALL" ? `Combined balance in ${profileCurrency}. Reports remain separated by currency.` : "Applies to every section on Home."}</Body>
+            <>{currency === "ALL" ? <Body>Combined balance in {profileCurrency}. Reports remain separated by currency.</Body> : null}</>
             <Button title="Done" secondary onPress={() => setCurrencyOpen(false)} />
           </View>
         </View>
@@ -403,8 +403,8 @@ export default function Home() {
                     justifyContent: "space-between",
                   }}
                 >
-                  <Body>{item.title}</Body>
-                  <Body>{amount(item.amount, item.currency)}</Body>
+                  <Text style={{ flex: 1, minWidth: 0, color: colors.muted, fontSize: 14 }}>{item.title}</Text>
+                  <Text style={{ flexShrink: 1, maxWidth: "48%", textAlign: "right", color: colors.muted, fontSize: 14 }}>{amount(item.amount, item.currency)}</Text>
                 </View>
               ))
             ) : (

@@ -1,5 +1,6 @@
+import { cashFlowLayout, flowBand } from "./cash-flow-layout";
 import { View } from "react-native";
-import Svg, { Path, Rect, Text as SvgText } from "react-native-svg";
+import Svg, { G, Path, Rect, Text as SvgText } from "react-native-svg";
 import { Body, money, useTheme } from "./ui";
 export function CashFlowChart({
   flows,
@@ -9,20 +10,9 @@ export function CashFlowChart({
   currency: string;
 }) {
   const { colors } = useTheme();
-  if (!flows.length) return <Body>No recorded cash flows in this period.</Body>;
-  const visible = flows.slice(0, 5);
-  if (flows.length > 5)
-    visible.push({
-      account: "Other accounts",
-      income: flows.slice(5).reduce((n, r) => n + r.income, 0),
-      expense: flows.slice(5).reduce((n, r) => n + r.expense, 0),
-    });
-  const total = Math.max(
-    visible.reduce((n, r) => n + r.income, 0),
-    visible.reduce((n, r) => n + r.expense, 0),
-    1,
-  );
-  const height = 100 + visible.length * 72;
+  const layout = cashFlowLayout(flows);
+  if (!layout) return <Body>No recorded cash flows in this period.</Body>;
+  const { nodes, height, top, incomeHeight, expenseHeight } = layout;
   return (
     <View style={{ gap: 12 }}>
       <Svg
@@ -52,65 +42,21 @@ export function CashFlowChart({
         >
           Expenses
         </SvgText>
-        {visible.map((r, i) => {
-          const y = 60 + i * 72;
-          return [
-            <Path
-              key={`in${i}`}
-              d={`M 22 ${height / 2} C 65 ${height / 2} 90 ${y} 124 ${y}`}
-              stroke={colors.positive}
-              strokeOpacity={0.4}
-              strokeWidth={(r.income / total) * 70}
-              fill="none"
-            />,
-            <Path
-              key={`out${i}`}
-              d={`M 206 ${y} C 240 ${y} 265 ${height / 2} 308 ${height / 2}`}
-              stroke={colors.danger}
-              strokeOpacity={0.35}
-              strokeWidth={(r.expense / total) * 70}
-              fill="none"
-            />,
-            <Rect
-              key={`node${i}`}
-              x={124}
-              y={y - 12}
-              width={82}
-              height={24}
-              rx={6}
-              fill={colors.teal}
-            />,
-            <SvgText
-              key={`label${i}`}
-              x={165}
-              y={y + 4}
-              fill="#fff"
-              fontSize={9}
-              textAnchor="middle"
-            >
-              {r.account.length > 15 ? r.account.slice(0, 14) + "…" : r.account}
-            </SvgText>,
-          ];
-        })}
-        <Rect
-          x={12}
-          y={height / 2 - 35}
-          width={10}
-          height={70}
-          fill={colors.positive}
-          rx={4}
-        />
-        <Rect
-          x={308}
-          y={height / 2 - 35}
-          width={10}
-          height={70}
-          fill={colors.danger}
-          rx={4}
-        />
+        {nodes.map((row, i) => (
+          <G key={`${row.account}-${i}`}>
+            {row.incomeHeight > 0 ? <Path d={flowBand(22, 124, row.incomeY, row.y, row.incomeHeight)} fill={colors.positive} fillOpacity={0.4} /> : null}
+            {row.expenseHeight > 0 ? <Path d={flowBand(206, 308, row.y, row.expenseY, row.expenseHeight)} fill={colors.danger} fillOpacity={0.35} /> : null}
+            <Rect x={124} y={row.y} width={82} height={row.height} rx={Math.min(4, row.height / 2)} fill={colors.teal} />
+            <SvgText x={165} y={row.height >= 20 ? row.y + row.height / 2 + 3 : row.y + row.height + 13} fill={row.height >= 20 ? "#fff" : colors.ink} fontSize={10} textAnchor="middle">
+              {row.account.length > 15 ? row.account.slice(0, 14) + "…" : row.account}
+            </SvgText>
+          </G>
+        ))}
+        {incomeHeight > 0 ? <Rect x={12} y={top} width={10} height={incomeHeight} fill={colors.positive} rx={Math.min(4, incomeHeight / 2)} /> : null}
+        {expenseHeight > 0 ? <Rect x={308} y={top} width={10} height={expenseHeight} fill={colors.danger} rx={Math.min(4, expenseHeight / 2)} /> : null}
       </Svg>
-      {visible.map((r) => (
-        <Body key={r.account}>
+      {nodes.map((r, index) => (
+        <Body key={`${r.account}-${index}`}>
           {r.account}: {money(String(r.income), currency)} in ·{" "}
           {money(String(r.expense), currency)} out
         </Body>

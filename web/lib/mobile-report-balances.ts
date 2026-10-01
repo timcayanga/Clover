@@ -7,6 +7,7 @@ import {
 import { mobileHomePeriods } from "./mobile-home-periods";
 import { getCalendarDayEndInTimeZone } from "./report-window";
 import { buildActiveWorkspaceTransactionWhere } from "./transaction-query";
+import { normalizeAccountBalanceSign } from "./account-balance";
 
 // Native Reports uses the same balance reconciliation and movement reversal as
 // web Reports. This is read-only and keeps each currency and Profile separate.
@@ -83,7 +84,7 @@ export async function mobileReportBalances(
   const balances = accounts.map((account) => ({
     id: account.id,
     currency: account.currency,
-    balance: bankSnapshots.has(account.id) ? Number(bankSnapshots.get(account.id)!.bankBalance) : reportAccountBalance({
+    balance: bankSnapshots.has(account.id) ? normalizeAccountBalanceSign(account.type, Number(bankSnapshots.get(account.id)!.bankBalance)) : reportAccountBalance({
       ...account,
       transactions: account.transactions.map((transaction) => ({
         ...transaction,
@@ -92,6 +93,9 @@ export async function mobileReportBalances(
       })),
     }),
   }));
+  // Keep one stable cohort across the range. An unknown account must neither
+  // blank known history nor silently be represented as a zero balance.
+  const knownBalances = balances.filter(account => account.balance !== null && Number.isFinite(account.balance));
   const asOf = getCalendarDayEndInTimeZone(now, "Asia/Manila");
   const datedMovements = movements.map((transaction) => ({
     ...transaction,
@@ -101,7 +105,7 @@ export async function mobileReportBalances(
   }));
   const points = (days: number) =>
     buildReportBalanceSeries(
-      balances,
+      knownBalances,
       datedMovements,
       getCalendarDayEndInTimeZone(rolling(days).from, "Asia/Manila"),
       asOf,
@@ -109,9 +113,10 @@ export async function mobileReportBalances(
     ).find((series) => series.currency === currency)?.points ?? [];
   return {
     currency,
-    range:window?buildReportBalanceSeries(balances,datedMovements,getCalendarDayEndInTimeZone(window.start,"Asia/Manila"),getCalendarDayEndInTimeZone(window.end,"Asia/Manila"),asOf).find(series=>series.currency===currency)?.points??[]:[],
+    range:window?buildReportBalanceSeries(knownBalances,datedMovements,getCalendarDayEndInTimeZone(window.start,"Asia/Manila"),getCalendarDayEndInTimeZone(window.end,"Asia/Manila"),asOf).find(series=>series.currency===currency)?.points??[]:[],
     weekly: points(7),
     monthly: points(30),
     accountCount: accounts.length,
+    knownAccountCount: knownBalances.length,
   };
 }

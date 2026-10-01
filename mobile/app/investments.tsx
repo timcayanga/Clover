@@ -1,3 +1,5 @@
+import { DropdownFilter } from "../src/transaction-filters";
+import { recordedSummary } from "../src/recorded-summary";
 import { registerScreenRefresh } from "../src/screen-refresh";
 import { EntryOverlay } from "../src/entry-overlay";
 import { Text } from "../src/app-text";
@@ -53,6 +55,7 @@ export default function Investments() {
   const [currency, setCurrency] = useState("");
   const [search, setSearch] = useState("");
   const [type, setType] = useState("all");
+  const [institutionFilter, setInstitutionFilter] = useState("");
   const [filters, setFilters] = useState(false);
   const [editor, setEditor] = useState<{
     account: AccountRecord | null;
@@ -63,6 +66,7 @@ export default function Investments() {
     setHolding(null);
     setCurrency("");
     setType("all");
+    setInstitutionFilter("");
     setSearch("");
     setFilters(false);
     setTab("Overview");
@@ -79,6 +83,7 @@ export default function Investments() {
     (a) =>
       a.currency === selectedCurrency &&
       (type === "all" || a.investmentSubtype === type) &&
+      (!institutionFilter || a.institution === institutionFilter) &&
       `${a.name} ${a.institution} ${a.investmentSymbol}`
         .toLowerCase()
         .includes(search.toLowerCase()),
@@ -87,14 +92,13 @@ export default function Investments() {
     (h) =>
       h.currency === selectedCurrency &&
       (type === "all" || h.subtype === type) &&
+      (!institutionFilter || h.institution === institutionFilter) &&
       `${h.name} ${h.institution} ${h.symbol}`
         .toLowerCase()
         .includes(search.toLowerCase()),
   );
-  const total = visibleHoldings.reduce((n, h) => n + Number(h.value ?? 0), 0);
-  const completeValue = visibleHoldings.length > 0 && visibleHoldings.every(
-    (h) => recordedNumber(h.value) !== null,
-  );
+  const valuation = recordedSummary(visibleHoldings.map(h => h.value));
+  const total = valuation.value ?? 0;
   const known = visibleHoldings.filter(
     (h) => recordedNumber(h.value) !== null && recordedNumber(h.cost) !== null,
   );
@@ -230,27 +234,15 @@ export default function Investments() {
             value={search}
             onChangeText={setSearch}
           />
-          <Body>Currency</Body>
-          {currencies.map((c) => (
-            <PlanAction
-              key={c}
-              title={`${c}${c === selectedCurrency ? " ✓" : ""}`}
-              onPress={() => setCurrency(c)}
-            />
-          ))}
-          <Body>Asset type</Body>
-          {["all", ...new Set(holdings.map((a) => a.subtype))].map((t) => (
-            <PlanAction
-              key={t}
-              title={`${t.replaceAll("_", " ")}${t === type ? " ✓" : ""}`}
-              onPress={() => setType(t)}
-            />
-          ))}
+          <DropdownFilter label="Currency" value={selectedCurrency} options={currencies.map(value => ({value,label:value}))} onChange={setCurrency} />
+          <DropdownFilter label="Asset Type" value={type} options={[{value:"all",label:"All Types"}, ...[...new Set(holdings.map(holding => holding.subtype))].map(value => ({value,label:value.replaceAll("_", " ").replace(/\b\w/g, letter => letter.toUpperCase())}))]} onChange={setType} />
+          <DropdownFilter label="Institution" value={institutionFilter} options={[{value:"",label:"All Institutions"}, ...[...new Set(holdings.map(holding => holding.institution).filter((value): value is string => Boolean(value)))].sort().map(value => ({value,label:value}))]} onChange={setInstitutionFilter} />
           <PlanAction
             title="Clear filters"
             onPress={() => {
               setSearch("");
               setType("all");
+              setInstitutionFilter("");
             }}
           />
         </Card>
@@ -283,7 +275,7 @@ export default function Investments() {
               title="Est. value"
               color={colors.positive}
               value={
-                completeValue
+                valuation.value !== null
                   ? compactSummaryMoney(total, selectedCurrency)
                   : "—"
               }
@@ -313,6 +305,7 @@ export default function Investments() {
               }
             />
           </View>
+          {valuation.missing > 0 ? <Body>Known value · {valuation.known} of {visibleHoldings.length} holdings. {valuation.missing} without a recorded value.</Body> : null}
           <Body>
             Portfolio values are estimates. Check your investment apps for the latest amounts.
           </Body>

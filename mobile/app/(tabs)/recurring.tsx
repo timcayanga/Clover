@@ -537,16 +537,19 @@ export default function Recurring() {
                 fontSize: 16,
               }}
             >
-              All saved items
+              All Recurring
             </Text>
             {items.length ? (
               items.map((item) => (
-                <Button
-                  key={item.id}
-                  title={`${item.title} · ${amount(item)}`}
-                  secondary
-                  onPress={() => setSelected(item)}
-                />
+                <Pressable key={item.id} accessibilityRole="button" onPress={() => setSelected(item)} style={{ minHeight: 72, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: colors.line, flexDirection: "row", alignItems: "center", gap: 12 }}>
+                  <View style={{ flex: 1, minWidth: 0, gap: 4 }}>
+                    <Text style={{ color: colors.ink, fontFamily: "Poppins-Medium", fontSize: 14 }}>{item.title}</Text>
+                    <Text style={{ color: colors.teal, fontSize: 12 }}>{kinds.find(option => option.value === item.kind)?.label ?? "Recurring"}</Text>
+                    <Text style={{ color: colors.muted, fontSize: 12 }}>{[item.accountName, item.status[0].toUpperCase() + item.status.slice(1)].filter(Boolean).join(" · ")}</Text>
+                  </View>
+                  <Text style={{ color: colors.ink, fontSize: 13, maxWidth: "40%", textAlign: "right" }}>{amount(item)}</Text>
+                  <Icon line name="chevron-forward" size={14} />
+                </Pressable>
               ))
             ) : (
               <Body>No recurring items yet.</Body>

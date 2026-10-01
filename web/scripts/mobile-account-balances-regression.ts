@@ -1,9 +1,17 @@
 import assert from 'node:assert/strict';
+import { existsSync } from 'node:fs';
+import { getAccountBrand } from '../lib/account-brand';
 import { mock } from 'node:test';
 import { prisma } from '../lib/prisma';
 import { mobileAccountBalances } from '../lib/mobile-account-balances';
 import { mobileApiResponse } from '../lib/mobile-api-response';
 async function main() {
+  for (const institution of ['BPI', 'Maya', 'Metrobank', 'RCBC', 'BDO', 'Security Bank']) {
+    const brand = getAccountBrand({institution,type:'bank'});
+    assert(brand.logoSrc, `${institution} must expose a primary native logo`);
+    assert(existsSync(`public${decodeURIComponent(brand.logoSrc.split('?')[0])}`), `${institution} logo must exist`);
+  }
+
   const tx = (amount:number,type:string,rawPayload:unknown=null,currency='PHP') => ({amount,type,rawPayload,currency,merchantRaw:'QA',merchantClean:null,description:null,date:new Date('2026-09-14'),createdAt:new Date('2026-09-14')});
   const fixtures = [
     {id:'bank',type:'bank',currency:'PHP',balance:'10000',transactions:[tx(2000,'income'),tx(500,'expense'),tx(1000,'transfer',{amountDelta:-1000})],statementCheckpoints:[]},

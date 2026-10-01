@@ -57,6 +57,7 @@ export default function Transactions() {
   const [page, setPage] = useState(1);
   const [total, setTotal] = useState(0);
   const [busy, setBusy] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState("");
   const sequence = useRef(0);
   const loading = useRef(false);
@@ -65,12 +66,13 @@ export default function Transactions() {
     return () => clearTimeout(timer);
   }, [query]);
   const load = useCallback(
-    async (next = 1) => {
+    async (next = 1, refresh = false) => {
       const ticket = ++sequence.current;
       loading.current = true;
       setBusy(true);
       setError("");
-      if (next === 1) setRows([]);
+      if (next === 1 && !refresh) setRows([]);
+      setRefreshing(refresh);
       try {
         const data: TransactionPage = demo
           ? {
@@ -107,6 +109,7 @@ export default function Transactions() {
         if (ticket === sequence.current) {
           loading.current = false;
           setBusy(false);
+          setRefreshing(false);
         }
       }
     },
@@ -144,16 +147,14 @@ export default function Transactions() {
         {filters && optionError ? <Notice>Unable to load filter choices. Close and reopen Filters to retry.</Notice> : null}
         {error ? (
           <Notice>{error}</Notice>
-        ) : busy && !rows.length ? (
-          <Body>Loading transactions…</Body>
         ) : null}
       </View>
       <FlatList
         data={rows}
         keyExtractor={(row) => row.id}
         keyboardShouldPersistTaps="handled"
-        refreshing={busy && page === 1}
-        onRefresh={() => void load()}
+        refreshing={refreshing}
+        onRefresh={() => { if (!loading.current) void load(1, true); }}
         contentContainerStyle={{
           paddingHorizontal: 0,
           paddingBottom: 120,
@@ -235,11 +236,11 @@ export default function Transactions() {
                 : "No matching transactions. Try another search or upload a record."}
             </Notice>
           ) : (
-            <ActivityIndicator color={colors.teal} />
+            !refreshing ? <View accessibilityLabel="Loading transactions" accessibilityRole="progressbar" style={{ padding: 24, alignItems: "center" }}><ActivityIndicator color={colors.teal} /></View> : null
           )
         }
         ListFooterComponent={
-          rows.length < total && !demo ? (
+          rows.length > 0 && rows.length < total && !demo && !refreshing ? (
             <Button
               title={busy ? "Loading…" : "Load more"}
               disabled={busy}

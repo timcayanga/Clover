@@ -98,10 +98,16 @@ async function main() {
     assert.deepEqual(Object.keys(result).sort(), [
       "accountCount",
       "currency",
+      "knownAccountCount",
       "monthly",
       "range",
       "weekly",
     ]);
+    accounts.push({id:"unknown",type:"investment",source:"import",currency:"PHP",balance:null as unknown as string,transactions:[],statementCheckpoints:[]});
+    const partial = await mobileReportBalances("profile-a", "PHP", now);
+    assert.deepEqual(partial.monthly, result.monthly, "An unknown account must not erase known history");
+    assert.equal(partial.knownAccountCount, 2);
+    assert.equal(partial.accountCount, 3);
     accounts = [];
     assert.deepEqual(
       (await mobileReportBalances("profile-a", "PHP", now)).monthly,

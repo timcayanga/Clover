@@ -1,3 +1,4 @@
+import { tokenUsagePercent } from "./recorded-summary";
 import { RETENTION_MESSAGE, DOWNGRADE_MESSAGE, type RetentionSnapshot } from "../../shared/plan-retention";
 import { PlanCardSurface } from "./plan-card-surface";
 import { SettingsReferrals } from "./settings-referrals";
@@ -23,7 +24,11 @@ type Usage = Record<"profiles" | "accounts" | "monthly" | "rolling24h", { used: 
 export function SettingsPlan() {
   const session = useSession();
   const { colors, styles } = useTheme();
-  const { width } = useWindowDimensions();
+  const { width, fontScale } = useWindowDimensions();
+  const [cardHeights, setCardHeights] = useState<Record<string, number>>({});
+  const cardWidth = Math.max(240, width - 64);
+  const cardLayoutKey = `${cardWidth}:${fontScale}`;
+  const carouselHeight = Math.max(1, ...Object.entries(cardHeights).filter(([key]) => key.startsWith(`${cardLayoutKey}:`)).map(([, height]) => height));
   const [usage, setUsage] = useState<(Usage & { retention?: RetentionSnapshot }) | null>(null);
   const [usageError, setUsageError] = useState(false);
   const [status, setStatus] = useState<StoreStatus | null>(null);
@@ -158,16 +163,16 @@ export function SettingsPlan() {
           { label: "Linked Banks", meter: usage?.retention?.linkedBanks },
         ].map(({ label, meter }) => <View key={label} style={{ flexBasis: "45%", flexGrow: 1, minWidth: 0, borderWidth: 1, borderColor: colors.line, borderRadius: 16, padding: 12, gap: 8 }}>
           <Text style={{ color: colors.muted, fontSize: 12 }}>{label}</Text>
-          <Text style={{ color: colors.ink, fontFamily: "Poppins-SemiBold", fontSize: 16 }} adjustsFontSizeToFit numberOfLines={1}>{meter ? `${meter.used.toLocaleString()} / ${meter.limit === null ? "Unlimited" : meter.limit.toLocaleString()}` : "—"}</Text>
+          <Text style={{ color: colors.ink, fontFamily: "Poppins-SemiBold", fontSize: 16 }} adjustsFontSizeToFit numberOfLines={1}>{label.startsWith("Clover tokens") ? tokenUsagePercent(meter) : meter ? `${meter.used.toLocaleString()} / ${meter.limit === null ? "Unlimited" : meter.limit.toLocaleString()}` : "—"}</Text>
         </View>)}
       </View>
       {usageError ? <Notice>Usage could not be loaded. Refresh plan status to try again.</Notice> : null}
     </Card>
-    <ScrollView horizontal disableIntervalMomentum showsHorizontalScrollIndicator={false} snapToInterval={Math.max(240, width - 64) + 16} decelerationRate="fast" contentContainerStyle={{ gap: 16 }} accessibilityLabel="Plans: Pro, Plus, Free">
+    <ScrollView horizontal directionalLockEnabled automaticallyAdjustContentInsets={false} contentInsetAdjustmentBehavior="never" bounces={false} alwaysBounceVertical={false} alwaysBounceHorizontal={false} disableIntervalMomentum showsHorizontalScrollIndicator={false} snapToInterval={cardWidth + 16} decelerationRate="fast" style={{ flexGrow: 0, flexShrink: 0, ...(carouselHeight > 1 ? { height: carouselHeight } : {}) }} contentContainerStyle={{ gap: 16, alignItems: "flex-start" }} accessibilityLabel="Plans: Pro, Plus, Free">
       {(["premium", "pro", "free"] as const).map(tier => {
         const plan = PLAN_CATALOG[tier];
         const choice = packages.find(item => STORE_PACKAGES.find(p => p.identifier === item.identifier)?.tier === tier);
-        return <PlanCardSurface key={tier} tier={tier} width={Math.max(240, width - 64)}>
+        return <PlanCardSurface key={`${cardLayoutKey}:${tier}`} tier={tier} width={cardWidth} onHeight={height => setCardHeights(current => current[`${cardLayoutKey}:${tier}`] === height ? current : { ...current, [`${cardLayoutKey}:${tier}`]: height })}>
           <View style={{ padding: 20, gap: 8 }}>
             <Text style={{ fontFamily: "Poppins-SemiBold", fontSize: 24, color: "#153b42" }}>{plan.name}</Text>
             <Text style={{ color: "#153b42" }}>{tier === "free" ? "Free forever" : choice ? `${choice.product.priceString} / ${choice.product.subscriptionPeriod === "P1Y" ? "year" : "month"}` : "See store pricing"}</Text>

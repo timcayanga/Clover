@@ -67,7 +67,7 @@
     "build:android": "expo run:android",
     "check:toolchains": "node scripts/check-toolchains.mjs",
     "check:auth": "node --experimental-strip-types scripts/native-auth-check.mjs && node scripts/adaptive-icon-check.mjs",
-    "check:charts": "node --experimental-strip-types scripts/report-chart-check.mjs && node --experimental-strip-types scripts/home-period-label-check.mjs",
+    "check:charts": "node --experimental-strip-types scripts/report-chart-check.mjs && node --experimental-strip-types scripts/home-period-label-check.mjs && node --experimental-strip-types scripts/native-presentation-check.mjs",
     "check:recurring-summary": "node --experimental-strip-types scripts/recurring-summary-check.mjs"
   },
   "private": true

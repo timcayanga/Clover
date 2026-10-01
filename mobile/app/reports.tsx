@@ -1,3 +1,4 @@
+import { DropdownFilter } from "../src/transaction-filters";
 import { Text } from "../src/app-text";
 import { CashFlowChart } from "../src/cash-flow-chart";
 import { ReportLineChart } from "../src/report-line-chart";
@@ -42,6 +43,7 @@ type Report = {
   };
   balances?: {
     currency: string;
+    knownAccountCount?: number;
     range?:{date:string;balance:number}[];
     weekly: { date: string; balance: number }[];
     monthly: { date: string; balance: number }[];
@@ -132,6 +134,8 @@ export default function Reports() {
   const [period, setPeriod] = useState<"weekly" | "monthly">("monthly");
   const [from,setFrom]=useState("");const [to,setTo]=useState("");const [comparison,setComparison]=useState("previous");const [range,setRange]=useState("");
   const [filters, setFilters] = useState(false);
+  const [datePreset, setDatePreset] = useState("30");
+  const [filterError, setFilterError] = useState("");
   const [chart, setChart] = useState("Donut");
   const { data, error, reload } = usePlanData(
     `reports?${requestedCurrency ? `currency=${requestedCurrency}` : ""}${range}`,
@@ -144,6 +148,9 @@ export default function Reports() {
   const balancePoints =
     data?.balances?.currency === currency ? (data.details?data.balances.range??[]:data.balances[period]) : [];
   const latestBalance = balancePoints.at(-1);
+  const estimatedNetWorth = !data?.netWorth.points.length;
+  const netWorthPoints = estimatedNetWorth ? balancePoints : data.netWorth.points;
+  const missingBalances = data?.balances ? data.balances.accountCount - (data.balances.knownAccountCount ?? data.balances.accountCount) : 0;
   const net = (summary?.income ?? 0) - (summary?.expense ?? 0);
   return (
     <Screen gap={20}>
@@ -171,24 +178,21 @@ export default function Reports() {
       />
       {filters ? (
         <Card>
-          <Body>Reporting currency</Body>
-          {(data?.currencies ?? [currency]).map((value) => (
-            <PlanAction
-              key={value}
-              title={`${value}${value === currency ? " ✓" : ""}`}
-              onPress={() => setCurrency(value)}
-            />
-          ))}
-          <Field label="From (YYYY-MM-DD, optional)" value={from} onChangeText={setFrom}/>
-          <Field label="To (YYYY-MM-DD, optional)" value={to} onChangeText={setTo}/>
-          <PlanAction title={`Previous period${comparison==="previous"?" ✓":""}`} onPress={()=>setComparison("previous")}/>
-          <PlanAction title={`Previous year${comparison==="year"?" ✓":""}`} onPress={()=>setComparison("year")}/>
-          <Body>Quick ranges</Body>
-          <PlanAction title="Last 7 days" onPress={() => {setPeriod("weekly");setFrom(new Date(Date.now()-6*86400000).toISOString().slice(0,10));setTo(new Date().toISOString().slice(0,10));}} />
-          <PlanAction
-            title="Last 30 days"
-            onPress={() => {setPeriod("monthly");setFrom(new Date(Date.now()-29*86400000).toISOString().slice(0,10));setTo(new Date().toISOString().slice(0,10));}}
-          />
+          <DropdownFilter label="Currency" value={currency} options={(data?.currencies ?? [currency]).map(value => ({ value, label: value }))} onChange={setCurrency} />
+          <DropdownFilter label="Period" value={datePreset} options={[{value:"7",label:"Last 7 Days"},{value:"30",label:"Last 30 Days"},{value:"90",label:"Last 90 Days"},{value:"custom",label:"Custom Dates"}]} onChange={value => {
+            setDatePreset(value);
+            if (value !== "custom") {
+              setPeriod(value === "7" ? "weekly" : "monthly");
+              setFrom(new Date(Date.now() - (Number(value)-1)*86400000).toISOString().slice(0,10));
+              setTo(new Date().toISOString().slice(0,10));
+            }
+          }} />
+          {datePreset === "custom" ? <>
+            <Field label="From (YYYY-MM-DD)" value={from} onChangeText={setFrom} />
+            <Field label="To (YYYY-MM-DD)" value={to} onChangeText={setTo} />
+          </> : null}
+          <DropdownFilter label="Compare With" value={comparison} options={[{value:"previous",label:"Previous Period"},{value:"year",label:"Previous Year"}]} onChange={setComparison} />
+          {filterError ? <Notice>{filterError}</Notice> : null}
           <Body>
             Transfers are excluded from income and spending. Dates use
             Asia/Manila.
@@ -196,7 +200,10 @@ export default function Reports() {
           <PlanAction
             title="Apply filters"
             tone="primary"
-            onPress={() => {setRange(`${from?`&from=${encodeURIComponent(from)}`:""}${to?`&to=${encodeURIComponent(to)}`:""}&comparison=${comparison}`);setFilters(false);}}
+            onPress={() => {
+              const validDate = (value: string) => /^\d{4}-\d{2}-\d{2}$/.test(value) && Number.isFinite(Date.parse(value)) && new Date(value).toISOString().slice(0,10) === value;
+              if ((from && !validDate(from)) || (to && !validDate(to)) || (from && to && from > to) || (datePreset === "custom" && (!from || !to))) { setFilterError("Choose a valid date range."); return; }
+              setFilterError("");setRange(`${from?`&from=${encodeURIComponent(from)}`:""}${to?`&to=${encodeURIComponent(to)}`:""}&comparison=${comparison}`);setFilters(false);}}
           />
         </Card>
       ) : null}
@@ -345,6 +352,7 @@ export default function Reports() {
               Estimated from current balances and recorded account movements.
               Each currency is shown separately.
             </Body>
+            {missingBalances > 0 ? <Body>Known balances only · {missingBalances} accounts without a recorded balance are excluded.</Body> : null}
             <Body muted={false}>
               {net >= 0
                 ? `You kept ${money(String(net), currency)} after spending`
@@ -374,9 +382,9 @@ export default function Reports() {
               currency={currency}
               series={[
                 {
-                  name: "Net worth",
+                  name: estimatedNetWorth ? "Estimated net worth" : "Net worth",
                   color: colors.bright,
-                  points: data.netWorth.points.map((point) => ({
+                  points: netWorthPoints.map((point) => ({
                     date: point.date,
                     value: point.balance,
                   })),
@@ -384,8 +392,9 @@ export default function Reports() {
               ]}
             />
             <Body>
-              Assets minus liabilities in {currency}. Only complete recorded
-              history is shown.
+              {estimatedNetWorth
+                ? `Estimated assets minus liabilities in ${currency}, using current known balances and recorded movements.${missingBalances > 0 ? ` Excludes ${missingBalances} accounts without a recorded balance.` : ""}`
+                : `Assets minus liabilities in ${currency}. Based on dated account balance records.`}
             </Body>
           </Card>
         </>

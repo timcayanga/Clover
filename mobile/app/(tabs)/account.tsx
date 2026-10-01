@@ -19,7 +19,6 @@ function AccountMenu({ onClose, user }: AccountMenuProps & { user: ReturnType<ty
   const session = useSession();
   const insets = useSafeAreaInsets();
   const name = user?.fullName || user?.firstName || session.data?.firstName || "Clover member";
-  const close = onClose ?? (() => router.canGoBack() ? router.back() : router.navigate("/(tabs)"));
   const viewAccount = () => { onClose?.(); router.push("/settings?section=account"); };
   const { colors } = useTheme();
   const [error, setError] = useState("");
@@ -34,10 +33,7 @@ function AccountMenu({ onClose, user }: AccountMenuProps & { user: ReturnType<ty
     { label: "Log Out", icon: "log-out-outline" as const, act: () => { if (busy) return; setBusy(true); void session.signOut().catch(() => { setError("Unable to sign out. Please try again."); setBusy(false); }); } },
   ];
   return <ScrollView style={{ flex: 1, backgroundColor: colors.white }} contentContainerStyle={{ paddingBottom: Math.max(insets.bottom, 20) }}>
-    <View style={{ backgroundColor: colors.teal, paddingHorizontal: 24, paddingTop: Math.max(insets.top, 16), paddingBottom: 24, gap: 12 }}>
-      <Pressable accessibilityRole="button" accessibilityLabel="Close Account menu" onPress={close} style={{ alignSelf: "flex-end", minWidth: 44, minHeight: 44, alignItems: "center", justifyContent: "center" }}>
-        <Icon name="close-outline" color="#fff" size={24} line />
-      </Pressable>
+    <View style={{ backgroundColor: colors.teal, paddingHorizontal: 24, paddingTop: 16, paddingBottom: 12, gap: 8 }}>
       <View style={{ flexDirection: "row", alignItems: "center", gap: 16 }}>
         {user?.hasImage && user.imageUrl ? <Image source={{ uri: user.imageUrl }} accessibilityLabel="Profile photo" style={{ width: 56, height: 56, borderRadius: 28 }} /> : <AccountAvatar />}
         <Text style={{ color: "#fff", fontSize: 20, fontFamily: "Poppins-SemiBold", flex: 1 }}>{name}</Text>

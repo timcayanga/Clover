@@ -4,7 +4,7 @@ import { Text } from "./app-text";
 import { Button, Field, Icon, useTheme } from "./ui";
 
 import { emptyTransactionFilters, type TransactionFilters, type FilterOptions } from "./transaction-filter-query";
-function FilterRow({ label, summary, children }: { label: string; summary: string; children: ReactNode }) {
+export function FilterRow({ label, summary, children }: { label: string; summary: string; children: ReactNode }) {
   const [open, setOpen] = useState(false);
   const { colors } = useTheme();
   return <View style={{ borderBottomWidth: 1, borderBottomColor: colors.line }}>
@@ -15,6 +15,19 @@ function FilterRow({ label, summary, children }: { label: string; summary: strin
     </Pressable>
     {open ? <View style={{ paddingBottom: 10 }}>{children}</View> : null}
   </View>;
+}
+export function DropdownFilter({ label, value, options, onChange }: {
+  label: string; value: string; options: { value: string; label: string }[]; onChange: (value: string) => void;
+}) {
+  const { colors } = useTheme();
+  return <FilterRow label={label} summary={options.find(option => option.value === value)?.label ?? "All"}>
+    <View accessibilityRole="radiogroup" style={{ borderWidth: 1, borderColor: colors.line, borderRadius: 12, overflow: "hidden" }}>
+      {options.map(option => <Pressable key={option.value} accessibilityRole="radio" accessibilityState={{ checked: option.value === value }} onPress={() => onChange(option.value)} style={{ minHeight: 44, padding: 10, flexDirection: "row", alignItems: "center", gap: 8, backgroundColor: option.value === value ? colors.pale : colors.white, borderBottomWidth: 1, borderBottomColor: colors.line }}>
+        <Text style={{ flex: 1, color: colors.ink, fontSize: 13 }}>{option.label}</Text>
+        {option.value === value ? <Icon line name="checkmark" size={16} /> : null}
+      </Pressable>)}
+    </View>
+  </FilterRow>;
 }
 export function TransactionFilterPanel({ value, options, onApply, onClose }: {
   value: TransactionFilters; options: FilterOptions; onApply: (value: TransactionFilters) => void; onClose: () => void;
