@@ -5,9 +5,7 @@ import {
 } from "../../src/glass-backdrop";
 import { Text } from "../../src/app-text";
 import { Tabs, router } from "expo-router";
-import { Modal, View } from "react-native";
-import { useState } from "react";
-import Account from "./account";
+import { View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAccess } from "../../src/access";
 import { useSession } from "../../src/session";
@@ -24,7 +22,6 @@ export default function TabLayout() {
   const access = useAccess();
   const session = useSession();
   const insets = useSafeAreaInsets();
-  const [accountOpen, setAccountOpen] = useState(false);
   if (!access.active) return null;
   return (
     <ProfileGate>
@@ -144,7 +141,6 @@ export default function TabLayout() {
             />
             <Tabs.Screen
               name="account"
-              listeners={{ tabPress: event => { event.preventDefault(); setAccountOpen(true); } }}
               options={{
                 title: "Account",
                 tabBarAccessibilityLabel: "Account",
@@ -152,9 +148,7 @@ export default function TabLayout() {
               }}
             />
           </Tabs>
-          <Modal visible={accountOpen} animationType="slide" presentationStyle="overFullScreen" onRequestClose={() => setAccountOpen(false)}>
-            <Account onClose={() => setAccountOpen(false)} />
-          </Modal>
+
         </GlassNavigationProvider>
       </View>
     </ProfileGate>

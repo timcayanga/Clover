@@ -1,6 +1,6 @@
 import { beginTelemetry } from "../../shared/analytics";
 import { useState, useRef } from "react";
-import { Image, KeyboardAvoidingView, Platform, Pressable, Switch, View } from "react-native";
+import { Alert, Image, KeyboardAvoidingView, Platform, Pressable, Switch, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { router, useLocalSearchParams } from "expo-router";
 import { useSignIn, useSignUp } from "@clerk/expo";
@@ -52,6 +52,7 @@ function AuthForm() {
   const [code, setCode] = useState("");
   const [remember, setRemember] = useState(true);
   const [terms, setTerms] = useState(false);
+  const [verificationSignup, setVerificationSignup] = useState(false);
   const [visible, setVisible] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -134,6 +135,7 @@ function AuthForm() {
       setCode("");
       if (signUp.status === "complete") await check(signUp.finalize());
       else {
+        setVerificationSignup(true);
         setStep("extra-verification");
         setMessage("Complete the remaining account verification to continue.");
       }
@@ -159,6 +161,12 @@ function AuthForm() {
       await finishSignIn();
     }
   };
+  const confirmSocialTerms = () => step !== "sign-up" || terms ? Promise.resolve(true) : new Promise<boolean>(resolve => {
+    Alert.alert("Create your Clover account", "To continue, agree to Clover's Terms of Service and Privacy Policy. You can read both links on this screen.", [
+      { text: "Not now", style: "cancel", onPress: () => resolve(false) },
+      { text: "I agree", onPress: () => { setTerms(true); resolve(true); } },
+    ], { cancelable: false });
+  });
   const openLegal = async (page: "terms-of-service" | "privacy-policy") => {
     try { await WebBrowser.openBrowserAsync(`https://clover.ph/${page}`); }
     catch { setError("Unable to open this page. Please try again."); }
@@ -347,15 +355,16 @@ function AuthForm() {
               onPress={() => void run(submit)}
             />
           ) : (
-            <AuthVerification signup={params.mode === "sign-up"} />
+            <AuthVerification signup={verificationSignup} />
           )}
           {initial ? (
             <>
-              {Platform.OS === "ios" ? <Button title="Sign in with Apple" fullWidth secondary leading={<Ionicons name="logo-apple" size={20} color={colors.ink} />} disabled={busy || (step === "sign-up" && !terms)} onPress={() => void run(async () => {
+              {Platform.OS === "ios" ? <Button title="Sign in with Apple" fullWidth secondary leading={<Ionicons name="logo-apple" size={20} color={colors.ink} />} disabled={busy} onPress={() => void run(async () => {
+                if (!(await confirmSocialTerms())) return;
                 await setRememberSession(remember);
                 const result = await startAppleAuthenticationFlow();
                 if (result.createdSessionId && result.setActive) await result.setActive({ session: result.createdSessionId });
-                else if (result.signIn?.status === "needs_second_factor" || result.signUp?.status === "missing_requirements") { setStep("extra-verification"); setMessage("Complete your account verification to continue."); }
+                else if (result.signIn?.status === "needs_second_factor" || result.signUp?.status === "missing_requirements") { setVerificationSignup(result.signUp?.status === "missing_requirements"); setStep("extra-verification"); setMessage("Complete your account verification to continue."); }
               })} /> : null}
               {(["google"] as const).map((provider) => (
                 <Button
@@ -364,9 +373,10 @@ function AuthForm() {
                   fullWidth
                   leading={<GoogleIcon />}
                   secondary
-                  disabled={busy || (step === "sign-up" && !terms)}
+                  disabled={busy}
                   onPress={() =>
                     void run(async () => {
+                      if (!(await confirmSocialTerms())) return;
                       await setRememberSession(remember);
                       const result = await startSSOFlow({
                         strategy: `oauth_${provider}`,
@@ -376,6 +386,7 @@ function AuthForm() {
                         result.authSessionResult?.type !== "cancel" &&
                         result.authSessionResult?.type !== "dismiss"
                       ) {
+                        setVerificationSignup(result.signUp?.status === "missing_requirements");
                         setStep("extra-verification");
                         setMessage(
                           "Complete your account verification to continue.",
@@ -385,22 +396,12 @@ function AuthForm() {
                   }
                 />
               ))}
-              <Button
-                title={
-                  step === "sign-in"
-                    ? "New to Clover? Create an account"
-                    : "Already have an account? Sign in"
-                }
-                secondary
-                disabled={busy}
-                onPress={() => {
-                  setStep(step === "sign-in" ? "sign-up" : "sign-in");
-                  setPassword("");
-                  setRepeat("");
-                  setCode("");
-                  setError("");
-                }}
-              />
+              <Pressable accessibilityRole="link" disabled={busy} onPress={() => {
+                setStep(step === "sign-in" ? "sign-up" : "sign-in");
+                setPassword(""); setRepeat(""); setCode(""); setError("");
+              }} style={{ minHeight: 44, justifyContent: "center", alignItems: "center" }}>
+                <Text style={{ color: "#0967C8", fontSize: 14, fontFamily: "Poppins-Medium" }}>{step === "sign-in" ? "Create an account" : "Already have an account? Sign in"}</Text>
+              </Pressable>
             </>
           ) : (
             <Button

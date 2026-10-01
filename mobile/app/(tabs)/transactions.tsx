@@ -23,7 +23,7 @@ import {
 
 export default function Transactions() {
   const { colors, styles, dark } = useTheme();
-  const { demo, rows: samples, profileId, request } = useSession();
+  const { demo, rows: samples, profileId, request, cached } = useSession();
   const [summary, setSummary] = useState<TransactionPage["summary"]>();
   const [filters, setFilters] = useState(false);
   const params = useLocalSearchParams<{ review?: string; query?: string }>();
@@ -71,7 +71,13 @@ export default function Transactions() {
       loading.current = true;
       setBusy(true);
       setError("");
-      if (next === 1 && !refresh) setRows([]);
+      const resource = `transactions?workspaceId=${encodeURIComponent(profileId)}&query=${encodeURIComponent(search)}&page=${next}&${transactionFilterQuery(filterValues)}`;
+      if (next === 1 && !refresh) {
+        const previous = cached<TransactionPage>(resource);
+        setRows(previous?.transactions ?? []);
+        setSummary(previous?.summary);
+        setTotal(previous?.totalCount ?? 0);
+      }
       setRefreshing(refresh);
       try {
         const data: TransactionPage = demo

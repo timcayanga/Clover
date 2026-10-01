@@ -85,11 +85,23 @@ export class OfflineEngine {
     if (profile && !auth.value.profiles.some((p) => p.id === profile))
       throw new Error("This Profile is not available offline.");
   }
+  async presentationCache(profile: string) {
+    await this.assertLocalAccess(profile);
+    const invalidatedAt = await this.store.get<number>("presentation-invalidated-at") ?? 0;
+    const keys = (await this.store.keys("cache:")).filter(key => workspace(key.slice(6)) === profile).slice(-40);
+    const recent = await Promise.all(keys.map(async key => {
+      const entry = await this.store.get<CacheEntry<unknown>>(key);
+      if (!entry || entry.savedAt <= invalidatedAt || this.now() < entry.savedAt || this.now() - entry.savedAt > 5 * 60_000) return null;
+      return { path: key.slice(6), savedAt: entry.savedAt, value: await this.overlay(key.slice(6), entry.value) };
+    }));
+    return recent.filter(entry => entry !== null).sort((a, b) => b.savedAt - a.savedAt).slice(0, 20);
+  }
   async request<T>(path: string, options: RequestInit = {}): Promise<T> {
     if (!this.active) throw new Error("This session is closed.");
     const method = options.method?.toUpperCase() ?? "GET",
       route = path.split("?")[0],
       profile = workspace(path);
+    if (method !== "GET") await this.store.set("presentation-invalidated-at", this.now());
     if (
       (method === "POST" && route === "transactions") ||
       (method === "PATCH" && /^transactions\/[^/]+$/.test(route))

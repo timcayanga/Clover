@@ -1,3 +1,4 @@
+import { PageCache, isPageRead } from "./page-cache";
 import { selectRecentProfile } from "./profile-selection";
 import { useCloudAiConsent } from "./ai-consent";
 import { updateNativePlanAnalytics } from "./analytics";
@@ -31,6 +32,7 @@ import type { Bootstrap, Transaction } from "./types";
 import { removeUploadCopy, type SelectedFile } from "./upload";
 
 type Session = {
+  cached: <T>(path: string) => T | null;
   fileQueue: FileQueue | null;
   queuedFiles: QueuedFile[];
   offline: OfflineEngine | null;
@@ -78,6 +80,8 @@ export function SessionProvider({
   const [profileId, setProfile] = useState(
     demo ? sampleBootstrap.profiles[0].id : "",
   );
+  const pageCache = useRef(new PageCache());
+  const cached = useCallback(<T,>(path: string) => pageCache.current.peek<T>(path), []);
   const preferredProfile = useRef("");
   const [error, setError] = useState("");
   const [rows, setRows] = useState(sampleTransactions);
@@ -135,6 +139,10 @@ export function SessionProvider({
             await engine.assertLocalAccess();
             if (active) {
               const selected = selectRecentProfile(cached.value.profiles, "", preferredProfile.current);
+              for (const entry of await engine.presentationCache(selected)) {
+                if (isPageRead(entry.path)) pageCache.current.seed(entry.path, entry.value, entry.savedAt);
+              }
+              if (!active) { await engine.dispose(); return null; }
               setProfile(selected);
               setData(cached.value);
             }
@@ -144,7 +152,7 @@ export function SessionProvider({
           await engine.dispose();
           return null;
         }
-        await clearTemporaryOfflineCopies();
+        void clearTemporaryOfflineCopies().catch(() => {});
         const owner = engine;
         const queue = new FileQueue(
           store,
@@ -231,9 +239,17 @@ export function SessionProvider({
       if (path.startsWith("split-bill-receipts/preview") && options?.method === "POST" && !demo) await cloudAiRef.current.ensure().catch(() => false);
       if (path.startsWith("settings/ai-consent")) return transport<T>(path, options);
       const engine = await offlineReady.current;
-      return engine
-        ? engine.request<T>(path, options)
-        : transport<T>(path, options);
+      const read = () => engine ? engine.request<T>(path, options) : transport<T>(path, options);
+      if ((options?.method ?? "GET").toUpperCase() !== "GET") {
+        pageCache.current.clear();
+        try { return await read(); } finally { pageCache.current.clear(); }
+      }
+      try {
+        return isPageRead(path) ? await pageCache.current.read(path, read) : await read();
+      } catch (error) {
+        if (error instanceof ApiError && (error.status === 401 || error.status === 403)) pageCache.current.clear();
+        throw error;
+      }
     },
     [transport, demo],
   );
@@ -244,7 +260,11 @@ export function SessionProvider({
     request<Bootstrap>("bootstrap")
       .then((result) => {
         if (!current) return;
-        setData(result);
+        setData(previous => {
+          if (previous && (previous.offlineEpoch !== result.offlineEpoch ||
+            previous.profiles.map(p => p.id).join() !== result.profiles.map(p => p.id).join())) pageCache.current.clear();
+          return result;
+        });
         if (result.entitlement.analytics) updateNativePlanAnalytics(result.entitlement.analytics);
         setProfile((previous) =>
           selectRecentProfile(result.profiles, previous, preferredProfile.current),
@@ -278,6 +298,7 @@ export function SessionProvider({
   return (
     <Context.Provider
       value={{
+        cached,
         fileQueue,
         queuedFiles,
         offline,
@@ -369,6 +390,7 @@ export function SessionProvider({
             );
             if (!confirmed) return;
           }
+          pageCache.current.clear();
           await fileQueue?.close();
           await offline?.clear();
           await signOut();

@@ -1,3 +1,4 @@
+import { storePriceLabel, storeVerificationMessage } from "./store-presentation";
 import { tokenUsagePercent } from "./recorded-summary";
 import { RETENTION_MESSAGE, DOWNGRADE_MESSAGE, type RetentionSnapshot } from "../../shared/plan-retention";
 import { PlanCardSurface } from "./plan-card-surface";
@@ -32,6 +33,7 @@ export function SettingsPlan() {
   const [usage, setUsage] = useState<(Usage & { retention?: RetentionSnapshot }) | null>(null);
   const [usageError, setUsageError] = useState(false);
   const [status, setStatus] = useState<StoreStatus | null>(null);
+  const [period, setPeriod] = useState<"P1M" | "P1Y">("P1M");
   const [packages, setPackages] = useState<PurchasesPackage[]>([]);
   const [verificationPending, setVerificationPending] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -55,10 +57,8 @@ export function SettingsPlan() {
       .then(async (result) => {
         if (!active) return;
         if (canUseStore(result)) {
-          const verified = await session.request<StoreStatus>("billing/store", { method: "POST", body: "{}" });
-          if (!active) return;
-          setStatus(verified);
-          const choices = await loadStorePackages(verified);
+          setStatus(result);
+          const choices = await loadStorePackages(result);
           if (active) setPackages(choices);
         } else setStatus(result);
       })
@@ -79,7 +79,7 @@ export function SettingsPlan() {
     }).catch(() => { if (active) setUsageError(true); });
     return () => { active = false; };
   }, [session.demo, session.request, status]);
-  const act = async (run?: () => Promise<void>, restoring = false) => {
+  const act = async (run?: () => Promise<void>, restoring = false, silent = false) => {
     if (locked.current || session.demo) return;
     locked.current = true;
     setBusy(true);
@@ -97,15 +97,11 @@ export function SettingsPlan() {
       if ((next.planTier === "pro" || next.planTier === "premium")) setVerificationPending(false);
       session.refresh();
       if (restoring) telemetry("billing_restored", { plan_tier: next.planTier, verified_access: next.planTier !== "free" });
-      setMessage(
-        (next.planTier === "pro" || next.planTier === "premium")
-          ? `Clover ${PLAN_CATALOG[next.planTier].name} access verified.`
-          : "No active Clover Plus or Pro purchase was found for this account.",
-      );
+      setMessage(storeVerificationMessage(next.planTier, silent ? "silent" : restoring ? "restore" : run ? "purchase" : "refresh"));
     } catch (e) {
       if (mounted.current && e && typeof e === "object" && "userCancelled" in e && e.userCancelled) setVerificationPending(false);
       if (
-        mounted.current &&
+        mounted.current && !silent &&
         !(e && typeof e === "object" && "userCancelled" in e && e.userCancelled)
       )
         setError(
@@ -123,7 +119,7 @@ export function SettingsPlan() {
   useEffect(() => {
     let previous = AppState.currentState;
     const subscription = AppState.addEventListener("change", next => {
-      if (next === "active" && previous !== "active") void refreshStoreRef.current();
+      if (next === "active" && previous !== "active") void refreshStoreRef.current(undefined, false, true);
       previous = next;
     });
     return () => subscription.remove();
@@ -133,6 +129,7 @@ export function SettingsPlan() {
   const showUsageInfo = () => Alert.alert("Plan usage", "Monthly Clover tokens reset on the first day of each month in Asia/Manila. Unused tokens do not roll over. The 24-hour allowance is a rolling window. Cash accounts do not count toward the account limit. Linked bank slots remain reserved after unlinking until the next monthly period.\n\n" + RETENTION_MESSAGE + "\n\n" + DOWNGRADE_MESSAGE);
   const switchPlan = (tier: "free" | "pro" | "premium") => {
     if (tier === access?.planTier || busy || loading || session.demo) return;
+    setMessage(""); setError("");
     if (access?.planTier !== "free" || tier === "free") {
       const url = storeManagementUrl();
       if (url) void Linking.openURL(url).catch(() => setError("Open subscriptions in your device's store settings."));
@@ -142,7 +139,7 @@ export function SettingsPlan() {
     const choices = packages.filter(item => STORE_PACKAGES.find(p => p.identifier === item.identifier)?.tier === tier);
     if (!status || !canUseStore(status) || !choices.length) { setError("Store plans are not available yet. Please try again later."); return; }
     Alert.alert(`Switch to ${PLAN_CATALOG[tier].name}`, "Choose a billing period. The store will ask you to confirm the purchase.", [
-      ...choices.map(item => ({ text: `${item.product.priceString} / ${item.product.subscriptionPeriod === "P1Y" ? "year" : "month"}`, onPress: () => void act(() => purchaseStorePackage(status, item)) })),
+      ...choices.map(item => ({ text: storePriceLabel(item.product), onPress: () => void act(() => purchaseStorePackage(status, item)) })),
       { text: "Cancel", style: "cancel" },
     ]);
   };
@@ -168,14 +165,17 @@ export function SettingsPlan() {
       </View>
       {usageError ? <Notice>Usage could not be loaded. Refresh plan status to try again.</Notice> : null}
     </Card>
+    <View accessibilityRole="tablist" style={{ flexDirection: "row", gap: 12 }}>
+      {(["P1M", "P1Y"] as const).map(value => <Pressable key={value} accessibilityRole="tab" accessibilityState={{ selected: period === value }} onPress={() => setPeriod(value)} style={{ paddingVertical: 10, paddingHorizontal: 20, borderRadius: 24, borderWidth: 1, borderColor: colors.teal, backgroundColor: period === value ? colors.teal : colors.white }}><Text style={{ color: period === value ? "white" : colors.teal }}>{value === "P1Y" ? "Yearly" : "Monthly"}</Text></Pressable>)}
+    </View>
     <ScrollView horizontal directionalLockEnabled automaticallyAdjustContentInsets={false} contentInsetAdjustmentBehavior="never" bounces={false} alwaysBounceVertical={false} alwaysBounceHorizontal={false} disableIntervalMomentum showsHorizontalScrollIndicator={false} snapToInterval={cardWidth + 16} decelerationRate="fast" style={{ flexGrow: 0, flexShrink: 0, ...(carouselHeight > 1 ? { height: carouselHeight } : {}) }} contentContainerStyle={{ gap: 16, alignItems: "flex-start" }} accessibilityLabel="Plans: Pro, Plus, Free">
       {(["premium", "pro", "free"] as const).map(tier => {
         const plan = PLAN_CATALOG[tier];
-        const choice = packages.find(item => STORE_PACKAGES.find(p => p.identifier === item.identifier)?.tier === tier);
-        return <PlanCardSurface key={`${cardLayoutKey}:${tier}`} tier={tier} width={cardWidth} onHeight={height => setCardHeights(current => current[`${cardLayoutKey}:${tier}`] === height ? current : { ...current, [`${cardLayoutKey}:${tier}`]: height })}>
+        const choice = packages.find(item => STORE_PACKAGES.find(p => p.identifier === item.identifier)?.tier === tier && item.product.subscriptionPeriod === period);
+        return <PlanCardSurface key={`${cardLayoutKey}:${tier}`} tier={tier} width={cardWidth} minHeight={carouselHeight > 1 ? carouselHeight : undefined} onHeight={height => setCardHeights(current => current[`${cardLayoutKey}:${tier}`] === height ? current : { ...current, [`${cardLayoutKey}:${tier}`]: height })}>
           <View style={{ padding: 20, gap: 8 }}>
             <Text style={{ fontFamily: "Poppins-SemiBold", fontSize: 24, color: "#153b42" }}>{plan.name}</Text>
-            <Text style={{ color: "#153b42" }}>{tier === "free" ? "Free forever" : choice ? `${choice.product.priceString} / ${choice.product.subscriptionPeriod === "P1Y" ? "year" : "month"}` : "See store pricing"}</Text>
+            <Text style={{ color: "#153b42" }}>{tier === "free" ? "Free forever" : choice ? storePriceLabel(choice.product) : "See store pricing"}</Text>
             {access?.planTier === tier ? <Text style={{ color: "#153b42" }}>Current plan</Text> : null}
           </View>
           <View style={{ padding: 20, gap: 14 }}>
@@ -185,6 +185,7 @@ export function SettingsPlan() {
         </PlanCardSurface>;
       })}
     </ScrollView>
+    <Body>Prices are supplied by your store. The store confirmation shows the final price and currency before you pay.</Body>
     <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 20 }}>
       {status && canUseStore(status) ? <Text accessibilityRole="button" disabled={busy || loading} onPress={() => void act(() => restoreStorePurchases(status), true)} style={{ color: colors.teal }}>Restore purchases</Text> : null}
       <Text accessibilityRole="button" disabled={busy || loading || session.demo} onPress={() => void act()} style={{ color: colors.teal }}>Refresh plan status</Text>

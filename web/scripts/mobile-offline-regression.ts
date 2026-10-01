@@ -579,6 +579,26 @@ test("pausing one active upload lets other queued files continue",async()=>{
   assert.deepEqual(sent,[file.id,second.id]);assert.equal((await q.list()).find(f=>f.id===file.id)?.state,"paused");assert.equal((await q.list()).find(f=>f.id===second.id)?.state,"processing");
 });
 
+test("presentation cache hydrates recent authorized Profile data and excludes invalidated reads", async () => {
+  let now = Date.parse(version);
+  const e = setup(async () => ({ accounts: [{ id: "a", balance: "10" }] }), memory(), () => now);
+  await e.init(); await e.request("bootstrap");
+  await e.request("accounts?workspaceId=p");
+  assert.equal((await e.presentationCache("p")).length, 1);
+  await assert.rejects(() => e.presentationCache("other"), /not available offline/);
+  now += 300001;
+  assert.equal((await e.presentationCache("p")).length, 0);
+  await e.request("accounts?workspaceId=p");
+  now++;
+  await e.request("settings/preferences", { method: "PATCH", body: "{}" });
+  assert.equal((await e.presentationCache("p")).length, 0);
+  now++;
+  await e.request("accounts?workspaceId=p");
+  assert.equal((await e.presentationCache("p")).length, 1);
+  await e.clear();
+  await assert.rejects(() => e.presentationCache("p"), /refresh your secure offline access/);
+});
+
 (async () => {
   let failures = 0;
   for (const c of cases) {

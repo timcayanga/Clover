@@ -143,7 +143,7 @@ export default function Home() {
   useFocusEffect(
     useCallback(() => {
       let active = true;
-      setData(null);
+      setData(session.cached<HomeData>(`home?workspaceId=${encodeURIComponent(session.profileId)}&currency=${currency}`));
       setError("");
       const refresh = () => load()
         .then((value) => {

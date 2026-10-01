@@ -260,14 +260,17 @@ export function Progress({ value }: { value: number }) {
 export function usePlanData<T>(path: string, sample: T) {
   const screenPath = usePathname();
   const session = useSession();
-  const [data, setData] = useState<T | null>(null);
+  const resource = `${path}${path.includes("?") ? "&" : "?"}workspaceId=${encodeURIComponent(session.profileId)}`;
+  const [loadedResource, setLoadedResource] = useState(resource);
+  const [data, setData] = useState<T | null>(() => session.demo ? sample : session.cached<T>(resource));
   const [error, setError] = useState("");
   const [version, setVersion] = useState(0);
   useFocusEffect(
     useCallback(() => {
       let active = true;
       setError("");
-      setData(null);
+      setLoadedResource(resource);
+      setData(session.demo ? sample : session.cached<T>(resource));
       const refresh = () => (
         session.demo
           ? Promise.resolve(sample)
@@ -297,7 +300,7 @@ export function usePlanData<T>(path: string, sample: T) {
       version,
     ]),
   );
-  return { data, setData, error, reload: () => setVersion((v) => v + 1) };
+  return { data: loadedResource === resource ? data : session.cached<T>(resource), setData, error, reload: () => setVersion((v) => v + 1) };
 }
 
 export function SummaryCard({

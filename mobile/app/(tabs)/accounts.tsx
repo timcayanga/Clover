@@ -1,3 +1,4 @@
+import { institutionGroups } from "../../src/institution-groups";
 import { recordedSummary } from "../../src/recorded-summary";
 import { FinversePendingChip } from "../../src/finverse-pending-chip";
 import type { PendingBankConnection } from "../../../shared/finverse-pending";
@@ -48,6 +49,7 @@ function AccountsContent() {
   const [currencyOpen, setCurrencyOpen] = useState(false);
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [expandedAccount, setExpandedAccount] = useState<string | null>(null);
+  const [institutionId, setInstitutionId] = useState<string | null>(null);
   const [selected, setSelected] = useState<Account | null>(null);
   const [adding, setAdding] = useState(false);
   const [pendingBanks,setPendingBanks]=useState<PendingBankConnection[]>([]);
@@ -111,7 +113,9 @@ function AccountsContent() {
   useFocusEffect(
     useCallback(() => {
       let active = true;
-      setLoading(true);
+      const cached = session.cached<{ accounts: Account[] }>(`accounts?workspaceId=${encodeURIComponent(session.profileId)}`);
+      if (cached) setAccounts(cached.accounts);
+      setLoading(!cached);
       setError("");
       setSelected(null);
       const load = () => session.demo
@@ -300,6 +304,20 @@ function AccountsContent() {
       />
   ) : null;
   if (selected) return accountEditor;
+  const institution = institutionGroups(accounts).find(group => group.id === institutionId);
+  if (institution) return <Screen gap={20}>
+    <Button title="All accounts" secondary onPress={() => setInstitutionId(null)} />
+    <Heading>{institution.name}</Heading>
+    <Body>{institution.assets.length} assets · {institution.currency}</Body>
+    {institution.assets.map(asset => <Pressable key={asset.id} accessibilityRole="button" accessibilityLabel={`View ${asset.name}`} onPress={() => setSelected(asset)}>
+      <Card><View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
+        <AccountBrandLogo account={asset} size={36} />
+        <View style={{ flex: 1 }}><Text style={{ color: colors.ink, fontFamily: "Poppins-SemiBold" }}>{asset.name}</Text><Body>{asset.investmentSymbol ?? "Investment"}</Body></View>
+        <Text style={{ color: colors.ink }}>{accountDisplayBalance(asset) === null ? "Not recorded" : money(accountDisplayBalance(asset)!, asset.currency)}</Text>
+        <Icon line name="chevron-forward" size={16} />
+      </View></Card>
+    </Pressable>)}
+  </Screen>;
   return (
     <Screen gap={24}>
       {adding ? <EntryOverlay onClose={() => setAdding(false)}>{accountEditor}</EntryOverlay> : null}
@@ -320,7 +338,6 @@ function AccountsContent() {
       {summaries.filter(summary => displayedCurrency === "ALL" || summary.currency === displayedCurrency).map((summary) => (
         <View key={summary.currency} style={{ gap: 8 }}>
           {displayedCurrency === "ALL" ? <Heading>{summary.currency}</Heading> : null}
-          {summary.coverage.missing > 0 ? <Body>Known balances · {summary.coverage.known} of {summary.coverage.known + summary.coverage.missing} accounts. {summary.coverage.missing} without a recorded balance.</Body> : null}
           <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
             {["Net worth", "Spendable", "Assets", "Liabilities"].map(
               (title, i) => (
@@ -390,7 +407,19 @@ function AccountsContent() {
                       )}
                 </Text>
               </View>
-              {[...group.rows]
+              {group.title === "Investments" ? institutionGroups(group.rows).map(institution => {
+                const representative = institution.assets[0];
+                const palette = accountCardPalette(representative);
+                const value = recordedSummary(institution.assets.map(accountDisplayBalance));
+                return <Pressable key={institution.id} accessibilityRole="button" accessibilityLabel={`View ${institution.name} investments`} onPress={() => setInstitutionId(institution.id)}>
+                  <LinearGradient colors={palette.colors} locations={palette.locations} style={{ borderRadius: 14, padding: 14, minHeight: 72, flexDirection: "row", alignItems: "center", gap: 10 }}>
+                    <AccountBrandLogo account={representative} size={36} />
+                    <View style={{ flex: 1 }}><Text style={{ color: palette.foreground, fontFamily: "Poppins-SemiBold" }}>{institution.name}</Text><Text style={{ color: palette.foreground, fontSize: 12 }}>{institution.assets.length} {institution.assets.length === 1 ? "asset" : "assets"}</Text></View>
+                    <Text style={{ color: palette.foreground, fontFamily: "Poppins-SemiBold", maxWidth: "40%" }}>{value.value === null ? "Not recorded" : money(String(value.value), institution.currency)}{value.missing > 0 && value.known > 0 ? "*" : ""}</Text>
+                    <Icon line name="chevron-forward" size={16} color={palette.foreground} />
+                  </LinearGradient>
+                </Pressable>;
+              }) : [...group.rows]
                 .sort(
                   (a, b) =>
                     Math.abs(Number(accountDisplayBalance(b))) -

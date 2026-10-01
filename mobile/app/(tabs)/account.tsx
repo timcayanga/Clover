@@ -32,7 +32,7 @@ function AccountMenu({ onClose, user }: AccountMenuProps & { user: ReturnType<ty
     { label: "Privacy Policy", icon: "shield-checkmark-outline" as const, act: () => open("https://clover.ph/privacy-policy") },
     { label: "Log Out", icon: "log-out-outline" as const, act: () => { if (busy) return; setBusy(true); void session.signOut().catch(() => { setError("Unable to sign out. Please try again."); setBusy(false); }); } },
   ];
-  return <ScrollView style={{ flex: 1, backgroundColor: colors.white }} contentContainerStyle={{ paddingBottom: Math.max(insets.bottom, 20) }}>
+  return <ScrollView style={{ flex: 1, backgroundColor: colors.white }} contentContainerStyle={{ paddingBottom: Math.max(insets.bottom, 20) + 96 }}>
     <View style={{ backgroundColor: colors.teal, paddingHorizontal: 24, paddingTop: 16, paddingBottom: 12, gap: 8 }}>
       <View style={{ flexDirection: "row", alignItems: "center", gap: 16 }}>
         {user?.hasImage && user.imageUrl ? <Image source={{ uri: user.imageUrl }} accessibilityLabel="Profile photo" style={{ width: 56, height: 56, borderRadius: 28 }} /> : <AccountAvatar />}
