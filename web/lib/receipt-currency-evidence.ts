@@ -7,7 +7,9 @@ type ReceiptCurrencyCandidate = {
 
 export function hasRegionalReceiptCurrencyEvidence(currency: string | null, text: string) {
   if (currency === "KRW") return /\bKRW\b|[₩￦]|\d[\d,.\s]*원(?=$|[\s).,])/iu.test(text);
-  if (currency === "IDR") return /\b(?:IDR|rupiah)\b|\bRp\.?\s*(?:\d|$)/iu.test(text);
+  // An isolated Rp token without its printed amount is incomplete evidence.
+  // Requiring the monetary context also rejects symbols appended by inference.
+  if (currency === "IDR") return /\b(?:IDR|rupiah)\b|\bRp\.?[ \t]*\d/iu.test(text);
   return true;
 }
 

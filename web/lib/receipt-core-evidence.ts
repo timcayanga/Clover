@@ -8,6 +8,11 @@ type MoneyDetails = { total: number | null; parser_evidence: { source_text?: str
  */
 export function assessReceiptCoreMoney<T extends MoneyDetails>(details: T) {
   const source = details.parser_evidence.source_text ?? "";
+  // This guard only normalizes integer grouping. A printed decimal total
+  // belongs to the locale-aware decimal path and must not be rescaled/rejected.
+  if (/^(?:grand\s*total|total|amount\s+due|due|tl)\s*[:.]?\s*(?:Rp\.?|IDR)?\s*\d[\d.,]*[.,]\d{1,2}\s*$/imu.test(source)) {
+    return { details, needsReread: false };
+  }
   const preview = parseUnlocalizedReceiptText(source);
   if (!preview) return { details, needsReread: false };
   const lines = source.normalize("NFKC").split(/\r?\n/).map(line => line.trim());
@@ -17,8 +22,8 @@ export function assessReceiptCoreMoney<T extends MoneyDetails>(details: T) {
     const amount = readUnlocalizedReceiptInteger(match[1]!, true);
     return amount === null ? [] : [amount];
   }))];
-  const cash = values(/^(?:tunai|cash(?:\s+(?:paid|tendered|received))?|uang\s+diterima)\s*[:.]?\s+(.+)$/iu);
-  const change = values(/^(?:kembali(?:an)?|cg|change)\s*[:.]?\s+(.+)$/iu);
+  const cash = values(/^(?:tunai|cash(?:\s+(?:paid|tendered|received))?|uang\s+diterima)\s*[:.]?\s*(.+)$/iu);
+  const change = values(/^(?:kembali(?:an)?|cg|change)\s*[:.]?\s*(.+)$/iu);
   const total = preview.total === null ? null : Number(preview.total);
   const conflicting = total === null || cash.length > 1 || change.length > 1 ||
     (cash.length === 1 && change.length === 1 && Math.abs(cash[0]! - change[0]! - total) > .001);

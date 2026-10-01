@@ -22,6 +22,9 @@ assert.equal(hasRegionalReceiptCurrencyEvidence("KRW", "정상과세판매가(3,
 assert.equal(hasRegionalReceiptCurrencyEvidence("KRW", "총 합계 157,600 원"), true);
 assert.equal(hasRegionalReceiptCurrencyEvidence("IDR", "GRAND TOTAL 61,799 TUNAI 62,000"), false);
 assert.equal(hasRegionalReceiptCurrencyEvidence("IDR", "Total Rp125.000"), true);
+assert.equal(hasRegionalReceiptCurrencyEvidence("IDR", "Total Rp 125.000,50"), true);
+assert.equal(hasRegionalReceiptCurrencyEvidence("IDR", "GRAND TOTAL 61,799\nRp"), false);
+assert.equal(hasRegionalReceiptCurrencyEvidence("IDR", "Rp\n61,799"), false, "An isolated symbol is not a quoted monetary line");
 const inferred = { currency: "KRW", confidence_score: .98, parser_evidence: { reason: "Korean merchant", source_text: "합계 60,000" } };
 assert.equal(enforceRegionalReceiptCurrencyEvidence(inferred).currency, null);
 assert.equal(enforceRegionalReceiptCurrencyEvidence(inferred).confidence_score, .5);
@@ -34,6 +37,9 @@ assert.equal(money(49, "GRAND TOTAL 49.000\nTUNAI 50.000\nKEMBALI 2.000").detail
 assert.equal(money(62000, "GRAND TOTAL 61,799\nTUNAI 62,000\nKEMBALI 201").details.total, 61799);
 assert.equal(money(14, "TL . 14,000\nCASH . 20,000\nCG . 6,000").details.total, 14000);
 assert.equal(money(14.5, "TOTAL USD14.50\nCASH USD20.00\nCHANGE USD5.50").details.total, 14.5, "Do not apply the integer guard to explicit foreign-currency decimals");
+assert.equal(money(1250000.5, "GRAND TOTAL Rp1.250.000,50\nTUNAI Rp1.300.000,00\nKEMBALI Rp49.999,50").details.total, 1250000.5);
+assert.equal(money(1250000.5, "GRAND TOTAL IDR1,250,000.50\nCASH IDR1,300,000.00\nCHANGE IDR49,999.50").needsReread, false);
+assert.equal(money(14000, "TL .14,000\nCASH .20,000\nCG .1,000").needsReread, true);
 assert.equal(money(48000, "GRAND TOTAL 48.000\nTUNAI 48.000\nKEMBALI 0").needsReread, false);
 assert.equal(money(48000, "GRAND TOTAL 48.000\nTUNAI 50.000\nTUNAI 60.000\nKEMBALI 2.000").needsReread, true);
 const itemName = { merchant_raw: "SYNTHETIC CHOCOLATE", merchant_clean: "Synthetic Chocolate", merchant_source_text: "SYNTHETIC CHOCOLATE 14,000", merchant_source_kind: "product_line" };

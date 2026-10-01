@@ -18,7 +18,7 @@ import {
 import { summarizeMerchantText } from "@/lib/merchant-labels";
 import { assessStatementExtractionQuality } from "@/lib/import-quality";
 
-const OPENAI_PROMPT_VERSION = "clover_bank_statement_extraction_v14";
+const OPENAI_PROMPT_VERSION = "clover_bank_statement_extraction_v15";
 const OPENAI_IMAGE_TRANSCRIPTION_PROMPT_VERSION = "clover_bank_statement_transcription_v3";
 const OPENAI_IMPORT_FAST_MODEL_FALLBACK = "gpt-5.4-mini";
 const OPENAI_IMPORT_STRONG_MODEL_FALLBACK = "gpt-5.5";
