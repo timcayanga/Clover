@@ -1,6 +1,7 @@
 import { maySendToCloudAi } from "./ai-consent";
 import { RECEIPT_MONEY_GUIDANCE } from "./receipt-money-guidance";
 import { enforceRegionalReceiptCurrencyEvidence } from "./receipt-currency-evidence";
+import { assessReceiptCoreMoney, enforceReceiptCoreMerchantEvidence } from "./receipt-core-evidence";
 import { z } from "zod";
 import { getEnv } from "@/lib/env";
 import { assessFinancialUploadScope } from "@/lib/financial-upload-scope";
@@ -17,7 +18,7 @@ import {
 import { summarizeMerchantText } from "@/lib/merchant-labels";
 import { assessStatementExtractionQuality } from "@/lib/import-quality";
 
-const OPENAI_PROMPT_VERSION = "clover_bank_statement_extraction_v13";
+const OPENAI_PROMPT_VERSION = "clover_bank_statement_extraction_v14";
 const OPENAI_IMAGE_TRANSCRIPTION_PROMPT_VERSION = "clover_bank_statement_transcription_v3";
 const OPENAI_IMPORT_FAST_MODEL_FALLBACK = "gpt-5.4-mini";
 const OPENAI_IMPORT_STRONG_MODEL_FALLBACK = "gpt-5.5";
@@ -740,6 +741,8 @@ const importedStatementSchema = z.object({
       receipt_type: z.string().nullable().optional().default(null),
       merchant_raw: z.string().nullable().optional().default(null),
       merchant_clean: z.string().nullable().optional().default(null),
+      merchant_source_text: z.string().nullable().optional().default(null),
+      merchant_source_kind: z.string().nullable().optional().default(null),
       document_number: z.string().nullable().optional().default(null),
       invoice_number: z.string().nullable().optional().default(null),
       booking_reference: z.string().nullable().optional().default(null),
@@ -949,6 +952,8 @@ const openAIJsonSchema = {
             receipt_type: { type: ["string", "null"] },
             merchant_raw: { type: ["string", "null"] },
             merchant_clean: { type: ["string", "null"] },
+            merchant_source_text: { type: ["string", "null"] },
+            merchant_source_kind: { type: "string", enum: ["business_header", "business_logo", "business_footer", "product_line", "unknown"] },
             document_number: { type: ["string", "null"] },
             invoice_number: { type: ["string", "null"] },
             booking_reference: { type: ["string", "null"] },
@@ -1049,6 +1054,8 @@ const openAIJsonSchema = {
             "receipt_type",
             "merchant_raw",
             "merchant_clean",
+            "merchant_source_text",
+            "merchant_source_kind",
             "document_number",
             "invoice_number",
             "booking_reference",
@@ -1315,6 +1322,8 @@ const openAIReceiptCoreJsonSchema = {
             receipt_type: { type: ["string", "null"] },
             merchant_raw: { type: ["string", "null"] },
             merchant_clean: { type: ["string", "null"] },
+            merchant_source_text: { type: ["string", "null"] },
+            merchant_source_kind: { type: "string", enum: ["business_header", "business_logo", "business_footer", "product_line", "unknown"] },
             transaction_date: { type: ["string", "null"] },
             transaction_time: { type: ["string", "null"] },
             currency: { type: ["string", "null"] },
@@ -1344,6 +1353,8 @@ const openAIReceiptCoreJsonSchema = {
             "receipt_type",
             "merchant_raw",
             "merchant_clean",
+            "merchant_source_text",
+            "merchant_source_kind",
             "transaction_date",
             "transaction_time",
             "currency",
@@ -2176,6 +2187,7 @@ const buildOpenAIReceiptCoreSystemPrompt = () =>
     "Return transaction_date as ISO YYYY-MM-DD when a complete date is visible, using visible locale, language, currency, and upload-date proximity to resolve numeric date order.",
     "The merchant must be the actual business name, never Receipt, Test Receipt, Sales Receipt, Official Receipt, Invoice, Proof of Purchase, or another generic heading.",
     "A menu item or product is not the merchant. Use the business header or logo; if it is blurred/redacted and no business name is legible, merchant_raw and merchant_clean must both be null.",
+    "Quote the business name in merchant_source_text and classify its printed location in merchant_source_kind. If the only name is on a priced menu/product line, use product_line and null merchant names. If the header is obscured and no business logo/footer is legible, use unknown and null; never promote an item name to a business header.",
     "A coupon, menu, advertisement, product image, or offer without evidence of a completed purchase is not a financial transaction; return receipt_details null.",
     "Do not extract itemization, tax, discounts, tips, split allocations, categories, or transaction rows in this pass.",
     "Return line_items and transactions as empty arrays.",
@@ -3667,11 +3679,30 @@ export const parseImportTextWithOpenAIFallback = async (params: {
       };
     }
 
+    // A quoted final total must agree with the printed tender/change. Re-read
+    // contradictory evidence once within the existing provider time budget.
+    if (useReceiptCoreOnly && validation.data.receipt_details && assessReceiptCoreMoney(validation.data.receipt_details).needsReread) {
+      const moneyRetryTimeout = getRemainingOpenAIImportAttemptTimeout({ deadlineMs: fallbackDeadlineMs, requestedTimeoutMs: retryTimeoutMs });
+      if (moneyRetryTimeout !== null) {
+        const retry = await callOpenAI(fastModel, pageImagesToSend, moneyRetryTimeout,
+          `${systemPrompt} CRITICAL VERIFICATION: The previous extraction had conflicting printed total and tender/change evidence. Re-read the original image carefully, matching each number to its row. Copy the exact GRAND TOTAL, CASH/TUNAI and CHANGE/KEMBALI lines. Do not round to cash tendered, repair digits by arithmetic, or treat three-digit grouping as decimals.`, "high");
+        if (retry?.ok) {
+          const retryPayload = await retry.json() as Record<string, unknown>;
+          logOpenAIResponseUsage({ payload: retryPayload, response: retry, model: fastModel, stage: "receipt_money_evidence_retry" });
+          const retryOutput = extractOutputText(retryPayload);
+          const retryJson = retryOutput ? parseStructuredJsonText(retryOutput) : null;
+          const retryValidation = retryJson ? importedStatementSchema.safeParse(expandReceiptResponseForInternalValidation(retryJson, params.detectedMetadata)) : null;
+          if (retryValidation?.success && retryValidation.data.receipt_details && !assessReceiptCoreMoney(retryValidation.data.receipt_details).needsReread) {
+            validation = retryValidation; outputText = retryOutput!; parsedJson = retryJson; payload = retryPayload; selectedModel = fastModel;
+          }
+        }
+      }
+    }
     const value = validation.data;
     const documentType = value.document_type ?? "statement";
     const receiptAccountMatch: ReceiptAccountMatch | null = value.receipt_account_match ?? null;
     const receiptDetails: OpenAIParsedReceiptDetails | null = value.receipt_details
-      ? useReceiptCoreOnly ? enforceRegionalReceiptCurrencyEvidence(value.receipt_details) : value.receipt_details
+      ? useReceiptCoreOnly ? enforceRegionalReceiptCurrencyEvidence(enforceReceiptCoreMerchantEvidence(assessReceiptCoreMoney(value.receipt_details).details)) : value.receipt_details
       : null;
     const holdings = Array.isArray((value as { holdings?: OpenAIParsedHolding[] }).holdings)
       ? ((value as { holdings?: OpenAIParsedHolding[] }).holdings ?? [])

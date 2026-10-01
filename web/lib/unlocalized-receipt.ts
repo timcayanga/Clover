@@ -3,11 +3,11 @@ import { detectCurrencyEvidence } from "@/lib/financial-identity-detection";
 
 const finalLabel = /^(?:grand\s*total|amount\s+due|due|du|tl)(?=\s|[:.]|$)\s*[:.]?\s*/i;
 const totalLabel = /^total(?=\s|[:.]|$)\s*[.:]?\s*/i;
-const integer = (text: string): number | null => {
+export const readUnlocalizedReceiptInteger = (text: string, allowZero = false): number | null => {
   const token = text.replace(/^(?:Rp\.?|IDR)\s*/i, "").trim();
   if (!/^(?:[1-9]\d{0,2}(?:,\d{3})+|[1-9]\d{0,2}(?:\.\d{3})+|\d+)$/.test(token)) return null;
   const amount = Number(token.replace(/[.,]/g, ""));
-  return Number.isSafeInteger(amount) && amount > 0 ? amount : null;
+  return Number.isSafeInteger(amount) && (allowZero ? amount >= 0 : amount > 0) ? amount : null;
 };
 
 /**
@@ -28,11 +28,11 @@ export function parseUnlocalizedReceiptText(source: string): ReceiptPreviewResul
     if (match) {
       const remainder = line.slice(match[0].length).trim();
       if (/^(?:item|qty|quantity)\b/i.test(remainder)) return [];
-      return [integer(remainder || lines[index + 1] || "")];
+      return [readUnlocalizedReceiptInteger(remainder || lines[index + 1] || "")];
     }
     const reversed = line.match(/^((?:Rp\.?\s*)?[\d.,]+)\s+(.+)$/i);
     return reversed && label.test(reversed[2]!) && reversed[2]!.replace(label, "").trim() === ""
-      ? [integer(reversed[1]!)] : [];
+      ? [readUnlocalizedReceiptInteger(reversed[1]!)] : [];
   });
   const strong = candidates(finalLabel), ordinary = candidates(totalLabel);
   if (!strong.length && !ordinary.length) return null;
