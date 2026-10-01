@@ -40,10 +40,7 @@ jobs:
       - name: Generate Prisma Client
         run: npm --prefix web exec -- prisma generate --schema web/prisma/schema.prisma
 
-      - name: Reject high-risk production dependency advisories
-        run: |
-          npm --prefix web run qa:production-audit
-          npm --prefix mobile audit --omit=dev --audit-level=high
-
+      # qa:prepush includes both production dependency audits; keep one gate
+      # entry point so a passing local push cannot skip GitHub's security checks.
       - name: Run the same pre-push quality gate used locally
         run: npm run qa:prepush
