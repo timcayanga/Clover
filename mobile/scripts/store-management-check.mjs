@@ -17,7 +17,7 @@ const code=ts.transpileModule(fs.readFileSync(new URL('../src/store-billing.ts',
 vm.runInNewContext(code,{exports,process:{env:{EXPO_PUBLIC_REVENUECAT_IOS_KEY:'appl_fixture',EXPO_PUBLIC_REVENUECAT_ANDROID_KEY:'goog_fixture'}},require:name=>{
   if(name==='react-native')return {Platform:platform};
   if(name==='react-native-purchases')return purchases;
-  if(name.includes('store-catalog'))return {};
+  if(name.includes('store-catalog') || name.includes('store-change-policy'))return {};
   if(name.includes('analytics'))return {trackOperation:(_name,run)=>run()};
   throw new Error(`Unexpected dependency: ${name}`);
 }});

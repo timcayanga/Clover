@@ -2,6 +2,7 @@ import { matchesStorePackage, STORE_OFFERING_ID, STORE_PACKAGES } from "../../sh
 import { trackOperation } from "../../shared/analytics";
 import { Platform } from "react-native";
 import Purchases, { type PurchasesPackage } from "react-native-purchases";
+import { currentStoreProduct, googleReplacement, StoreActionError, type PurchaseIntent } from './store-change-policy';
 export type StoreStatus = {
   available: boolean;
   appUserId: string;
@@ -69,9 +70,43 @@ export function purchaseStorePackage(
   return exclusive(async () => {
     await identify(status);
     if (!status.productIds.includes(item.product.identifier) || !matchesStorePackage(item, Platform.OS))
-      throw new Error("This product is unavailable.");
-    await trackOperation("store_purchase", () => Purchases.purchasePackage(item), { phase: "store_confirmation", target_plan: STORE_PACKAGES.find(p => p.identifier === item.identifier)?.tier, billing_provider: Platform.OS === "ios" ? "app_store" : "play_store", product_id: item.product.identifier });
+      throw new StoreActionError("This product is unavailable. Refresh the available plans and try again.");
+    const target = STORE_PACKAGES.find(p => p.identifier === item.identifier)!;
+    await Purchases.invalidateCustomerInfoCache();
+    const current = currentStoreProduct(await Purchases.getCustomerInfo(), status.appUserId);
+    const paid = status.hasPaidSubscription === true || (status.hasPaidSubscription !== false && status.planTier !== 'free');
+    let change: ReturnType<typeof googleReplacement> | null = null;
+    if (current || paid) {
+      if (!current || !paid || current.tier !== status.planTier)
+        throw new StoreActionError('Your store and Clover plan are not yet in sync. Refresh plan status or use Restore purchases before buying again.');
+      if (Platform.OS !== 'android' || status.billingProvider !== 'play_store' || current.store !== 'PLAY_STORE')
+        throw new StoreActionError('Manage this subscription in its original store.');
+      change = googleReplacement(current, item.product.identifier);
+    }
+    await trackOperation("store_purchase", () => Purchases.purchasePackage(item, null, change ? {
+      oldProductIdentifier: change.oldProductIdentifier,
+      replacementMode: Purchases.STORE_REPLACEMENT_MODE[change.replacementMode],
+    } : null), { phase: "store_confirmation", target_plan: target.tier, billing_provider: Platform.OS === "ios" ? "app_store" : "play_store", product_id: item.product.identifier });
+    await Purchases.invalidateCustomerInfoCache().catch(() => {});
     // Caller must now ask Clover's server to verify; SDK state cannot grant Pro.
+    return { productId: item.product.identifier, tier: target.tier, effect: change?.effect ?? 'immediate', requestedAt: Date.now(), effectiveAt: current?.expiresAt ?? null } satisfies PurchaseIntent;
+  });
+}
+
+export function googleStoreManagementUrl(status: StoreStatus) {
+  return exclusive(async () => {
+    if (Platform.OS !== 'android' || status.billingProvider !== 'play_store' || status.hasPaidSubscription === false)
+      throw new StoreActionError('Manage this subscription in its original store.');
+    // A generic URL remains usable when metadata is incomplete or there are
+    // multiple subscriptions to resolve. Never open an arbitrary SDK URL.
+    let product: ReturnType<typeof currentStoreProduct> = null;
+    try {
+      await identify(status);
+      await Purchases.invalidateCustomerInfoCache();
+      product = currentStoreProduct(await Purchases.getCustomerInfo(), status.appUserId);
+    } catch { /* Cancellation remains accessible even when the SDK is offline. */ }
+    const query = product?.store === 'PLAY_STORE' ? `&sku=${encodeURIComponent(product.subscriptionId)}` : '';
+    return `https://play.google.com/store/account/subscriptions?package=ph.clover.app${query}`;
   });
 }
 export function restoreStorePurchases(status: StoreStatus) {

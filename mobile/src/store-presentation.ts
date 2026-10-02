@@ -26,7 +26,8 @@ export function planManagement(status: { hasPaidSubscription?: boolean; billingP
   const sameStore = apple ? platform === 'ios' : platform === 'android';
   const action = target === 'free'
     ? 'Cancel renewal to return to Free when your paid access ends.'
-    : `Choose Clover ${target === 'premium' ? 'Pro' : 'Plus'} in your subscription options. The store will show the effective date and any charge before you confirm.`;
+    : google ? 'Change your plan in Clover on Android. Google Play will show the effective date and any charge before you confirm.'
+      : `Choose Clover ${target === 'premium' ? 'Pro' : 'Plus'} in your subscription options. The store will show the effective date and any charge before you confirm.`;
   return {
     title: `Manage your ${store} subscription`,
     message: `${action} ${sameStore ? `Continue to ${store} subscriptions.` : `This subscription was purchased through ${store}. Manage it ${apple ? 'on your Apple device' : 'in Google Play using the Google account that purchased it'}. Your Clover access works on both platforms.`}`,
