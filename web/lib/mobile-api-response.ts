@@ -164,7 +164,8 @@ export function mobileApiResponse(operation: string, value: unknown) {
     };
   if (operation === "import-status")
     return {
-      ...pick(data,["nativeUploadReceived","nativeUploadFinalizing"]),
+      ...pick(data,["nativeUploadReceived","nativeUploadFinalizing","canResume"]),
+      statementSelfHeal: pick(data.statementSelfHeal, ["reason"]),
       progress:resolveImportModalStatusDecision({importMode:"statement",...record(data.importFile),...pick(data,["visibleImportComplete","confirmedTransactionsCount","parsedRowsCount"])}).progress,
       importFile: pick(data.importFile, [
         "id",

@@ -135,15 +135,17 @@ native privacy behavior on devices before release.
 
 ### Upload limits and recovery
 
-This first native transport accepts one file up to **3.5 MB**, below the hosting
-request-body ceiling. Larger files still use Clover's existing website. Expand
-to direct-to-storage native upload before general launch.
+Native imports accept photos up to **10 MB** and documents up to **25 MB**.
+Resumable transport splits the original into requests below the hosting body limit.
+The local iOS and Android OCR modules use the same source-size limits.
 
-Each selected upload gets a stable import ID. Network timeouts never automatically
-resend the file; poll or resume the saved import first. Recent imports are reloaded
-from Clover so an app restart does not require re-uploading. Passwords are not
-stored persistently. Native background file transfer and full offline editing are
-not implemented. A password error may require returning to the website in this preview.
+After durable encrypted queuing, the add sheet closes and shared progress appears
+above navigation. Uploads continue while using other pages and resume on foreground
+or restored connectivity; this is not an OS background-transfer service. Stable
+import IDs and status reconciliation prevent duplicate uploads after timeouts.
+Source bytes stay encrypted until server acknowledgement. Receipt/statement intent
+travels with the upload; server-approved recovery checkpoints can resume reading.
+Users can explicitly open review or retry without automatically entering a status page.
 
 ## Pro and store integration preparation
 

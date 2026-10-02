@@ -77,7 +77,7 @@ export function PlanHeader({
         onClose={back}
         trailing={
           trailing ??
-          (back ? undefined : add ? (
+          (back && /^(Add|Edit|New|Create|Upload|Review Suggestion)/i.test(title) ? <View style={{ width: 44 }} /> : back ? undefined : add ? (
             <Pressable
               accessibilityRole="button"
               accessibilityLabel={`Add ${title}`}

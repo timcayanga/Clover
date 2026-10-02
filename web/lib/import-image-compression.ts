@@ -2,7 +2,8 @@
 
 import { isImageImportFile } from "@/lib/import-file-helpers";
 
-export const MAX_IMPORT_IMAGE_SOURCE_SIZE = 16 * 1024 * 1024;
+import { IMPORT_PHOTO_MAX_SIZE } from "../../shared/native-upload";
+export const MAX_IMPORT_IMAGE_SOURCE_SIZE = IMPORT_PHOTO_MAX_SIZE;
 export const IMPORT_IMAGE_TARGET_SIZE = 3_500_000;
 export const RECEIPT_IMPORT_IMAGE_TARGET_SIZE = 750_000;
 
@@ -55,7 +56,7 @@ export const optimizeImportImage = async (
   }
 
   if (file.size > MAX_IMPORT_IMAGE_SOURCE_SIZE) {
-    throw new Error("This photo is larger than 16 MB. Please choose a smaller photo.");
+    throw new Error("This photo is larger than 10 MB. Please choose a smaller photo.");
   }
 
   const image = await loadImage(file);

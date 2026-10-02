@@ -1,4 +1,4 @@
-import { useEffect, useRef, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import {
   Animated,
   AccessibilityInfo,
@@ -20,8 +20,23 @@ export function EntrySelector({
   disabled?: boolean;
 }) {
   const { colors } = useTheme();
+  const [width, setWidth] = useState(0);
+  const offset = useRef(new Animated.Value(0)).current;
+  const reduced = useRef(false);
+  useEffect(() => {
+    void AccessibilityInfo.isReduceMotionEnabled().then(value => { reduced.current = value; });
+    const listener = AccessibilityInfo.addEventListener("reduceMotionChanged", value => { reduced.current = value; });
+    return () => listener.remove();
+  }, []);
+  const segmentWidth = Math.max(0, width - 10) / items.length;
+  const selectedIndex = Math.max(0, items.indexOf(value));
+  useEffect(() => {
+    Animated.timing(offset, { toValue: selectedIndex * segmentWidth, duration: reduced.current ? 0 : 220, useNativeDriver: true }).start();
+    return () => offset.stopAnimation();
+  }, [offset, selectedIndex, segmentWidth]);
   return (
     <View
+      onLayout={event => setWidth(event.nativeEvent.layout.width)}
       accessibilityRole="tablist"
       style={{
         flexDirection: "row",
@@ -32,6 +47,7 @@ export function EntrySelector({
         backgroundColor: colors.pale,
       }}
     >
+      {width > 0 ? <Animated.View pointerEvents="none" style={{ position: "absolute", top: 4, bottom: 4, left: 4, width: segmentWidth, borderRadius: 999, backgroundColor: colors.teal, transform: [{ translateX: offset }] }} /> : null}
       {items.map((method) => (
         <Pressable
           key={method}
@@ -46,7 +62,7 @@ export function EntrySelector({
             justifyContent: "center",
             gap: 4,
             borderRadius: 999,
-            backgroundColor: value === method ? colors.teal : "transparent",
+            backgroundColor: "transparent",
           }}
         >
           <Icon

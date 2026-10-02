@@ -47,7 +47,8 @@ class CloverLocalAIModule : Module() {
       val parsed=Uri.parse(uri)
       require(parsed.scheme=="file") { "Choose a local file." }
       val file=File(parsed.path ?: error("Invalid file."))
-      require(file.length() in 1..3500000) { "Choose a file up to 3.5 MB." }
+      val maximum = if (file.extension.lowercase()=="pdf") 25L*1024*1024 else 10L*1024*1024
+      require(file.length() in 1..maximum) { "Choose a photo up to 10 MB or a PDF up to 25 MB." }
       val recognizer=TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS)
       try {
         var count=1;var total=1

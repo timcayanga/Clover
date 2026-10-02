@@ -15,7 +15,9 @@ export async function previewFile(file: QueuedFile, bytes: string) {
       throw new Error(
         "Local text extraction requires the updated native build. The file can still be queued for online parsing.",
       );
-    const extracted = await CloverLocalAI.extractText(uri);
+    const extracted = await CloverLocalAI.extractText(uri).catch(() => {
+      throw new Error("This file could not be previewed on this device. You can upload the original for Clover to read instead.");
+    });
     return `Local text preview · Needs review\nRead ${extracted.pagesRead} of ${extracted.totalPages} pages. ${extracted.complete ? "" : "Partial preview. "}OCR may contain errors; no financial rows are confirmed.\n\n${extracted.text || "No readable text found. Connect for full processing."}`;
   });
 }

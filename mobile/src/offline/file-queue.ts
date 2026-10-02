@@ -1,5 +1,5 @@
 import { telemetry } from "../../../shared/analytics";
-import { NATIVE_UPLOAD_MAX_SIZE } from "../../../shared/native-upload";
+import { NATIVE_UPLOAD_MAX_SIZE, uploadSizeProblem } from "../../../shared/native-upload";
 import type { OfflineStore } from "./types";
 export type QueuedFile = {
   id: string;
@@ -14,11 +14,15 @@ export type QueuedFile = {
   error?: string;
   canonicalId?: string;
   password?: string;
+  importMode?: "receipt" | "statement" | "portfolio" | "account_detail";
+  progress?: number;
+  message?: string;
+  canResume?: boolean;
 };
 export type UploadControl = {signal:AbortSignal;progress:(sentBytes:number,finalizing:boolean)=>Promise<void>};
 export type FileTransport = {
   cancel?: (file:QueuedFile)=>Promise<void>;
-  status: (file: QueuedFile) => Promise<{ done: boolean; failed: boolean }>;
+  status: (file: QueuedFile) => Promise<{ done: boolean; failed: boolean; progress?: number; message?: string; canResume?: boolean }>;
   upload: (
     file: QueuedFile,
     base64: string,
@@ -57,6 +61,8 @@ export class FileQueue {
   }
   async add(file: QueuedFile, base64: string) {
     await this.authorize(file.workspaceId);
+    const sizeProblem = uploadSizeProblem(file.name, file.mimeType, file.size);
+    if (sizeProblem) throw new Error(sizeProblem);
     const existing = await this.list();
     if(existing.some(item=>item.id===file.id))throw new Error("This file is already queued.");
     if (existing.filter((f) => f.state !== "done").length >= 10)
@@ -143,6 +149,10 @@ export class FileQueue {
         try {
           const status = await this.transport.status(file);
           exists = true;
+          file.progress = Math.max(file.progress ?? 0, status.progress ?? 0);
+          file.message = status.message;
+          file.canResume = status.canResume;
+          file.error = undefined;
           file.state = status.done
             ? "done"
             : status.failed
@@ -150,9 +160,12 @@ export class FileQueue {
               : "processing";
           if (status.failed)
             file.error =
-              "The server import needs attention. Open the saved import to review or resume it.";
+              status.message || "This file needs review. Open it to check the details.";
         } catch (e) {
           if ((e as { status?: number }).status !== 404) throw e;
+        }
+        if (!exists && (file.originalRetained === false || file.canonicalId)) {
+          throw Object.assign(new Error("The saved import could not be found. Please check your import history."), { status: 404 });
         }
         if (!exists) {
           const bytes = await this.bytes(file);

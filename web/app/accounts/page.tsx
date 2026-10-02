@@ -5155,7 +5155,7 @@ function AccountsPageContent() {
               </button>
             </div>
 
-            <AddEntryMethods key={selectedWorkspaceId} kind="accounts" workspaceId={selectedWorkspaceId} accounts={accounts} initialMethod={searchParams?.get("finverse") ? "connect" : "manual"} onAccountsSynced={() => loadWorkspaceData(selectedWorkspaceId, { silent: true, awaitHydration: true })}>
+            <AddEntryMethods key={selectedWorkspaceId} kind="accounts" workspaceId={selectedWorkspaceId} accounts={accounts} onUploadFiles={(files) => openImportFiles(files)} initialMethod={searchParams?.get("finverse") ? "connect" : "manual"} onAccountsSynced={() => loadWorkspaceData(selectedWorkspaceId, { silent: true, awaitHydration: true })}>
             <div className="accounts-add-grid">
               <AccountCreationForm onSave={saveManualAccount}>
                 {(isSaving, createAnotherManualAccount) => (<>

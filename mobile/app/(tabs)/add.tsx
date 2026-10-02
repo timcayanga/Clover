@@ -1,3 +1,4 @@
+import { isUploadPhoto } from "../../../shared/native-upload";
 import { PlanHeader } from "../../src/plan-ui";
 import { EntrySelector, EntryTransition } from "../../src/entry-controls";
 import { FinverseConnect } from "../../src/finverse-connect";
@@ -49,11 +50,13 @@ export default function Add({ sheet = false }: { sheet?: boolean } = {}) {
   const [tableMode, setTableMode] = useState(false);
   const [tab, setTab] = useState("manual");
   const [draft, setDraft] = useState(emptyTransaction);
-  const { entry, picker } = useLocalSearchParams<{
+  const { entry, picker, importMode } = useLocalSearchParams<{
+    importMode?: "receipt" | "statement" | "portfolio" | "account_detail";
     entry?: string;
     picker?: string;
   }>();
   const handledPicker = useRef(false);
+  const [photoMode, setPhotoMode] = useState<"receipt" | "statement" | "portfolio" | "account_detail">("receipt");
   const close = () => {
     if (busy) return;
     if (sheet && router.canGoBack()) router.back();
@@ -98,7 +101,7 @@ export default function Add({ sheet = false }: { sheet?: boolean } = {}) {
       };
     }, [session.demo, session.profileId, session.request]),
   );
-  const open = (file: SelectedFile) => {
+  const open = async (file: SelectedFile) => {
     const problem = fileProblem(file);
     if (problem) {
       removeUploadCopy(file.uri);
@@ -115,13 +118,17 @@ export default function Add({ sheet = false }: { sheet?: boolean } = {}) {
       setError("Choose a Profile before importing.");
       return;
     }
-    const continueImport = () => {
+    const continueImport = async () => {
       const id = Crypto.randomUUID();
       session.setProfileId(target.id);
       setBusy(true);
-      void session
-        .registerUpload(id, file, target.id)
-        .then(() => router.push({ pathname: "/import/[id]", params: { id } }))
+      await session
+        .registerUpload(id, file, target.id, isUploadPhoto(file.name, file.mimeType) ? (importMode ?? photoMode) : undefined)
+        .then(() => {
+          // Dismiss every nested add sheet before showing shared background progress.
+          if (sheet && router.canDismiss()) router.dismissAll();
+          else router.replace("/(tabs)");
+        })
         .catch((e: Error) => setError(e.message))
         .finally(() => setBusy(false));
     };
@@ -142,7 +149,7 @@ export default function Add({ sheet = false }: { sheet?: boolean } = {}) {
         ],
         { cancelable: false },
       );
-    } else continueImport();
+    } else await continueImport();
   };
   const choose = async (source: "file" | "library" | "camera") => {
     if (busy) return;
@@ -172,7 +179,7 @@ export default function Add({ sheet = false }: { sheet?: boolean } = {}) {
           copyToCacheDirectory: true,
         });
         finishInput(result.canceled ? "canceled" : "completed");
-        if (!result.canceled) open(result.assets[0]);
+        if (!result.canceled) await open(result.assets[0]);
       } else {
         if (
           source === "camera" &&
@@ -197,7 +204,7 @@ export default function Add({ sheet = false }: { sheet?: boolean } = {}) {
         finishInput(result.canceled ? "canceled" : "completed");
         if (!result.canceled) {
           const asset = result.assets[0];
-          open({
+          await open({
             uri: asset.uri,
             name: asset.fileName ?? "receipt.jpg",
             mimeType: asset.mimeType ?? "image/jpeg",
@@ -268,6 +275,10 @@ export default function Add({ sheet = false }: { sheet?: boolean } = {}) {
           <View
             style={{ display: tab === "upload" ? "flex" : "none", gap: 18 }}
           >
+            {!importMode ? <>
+              <Body>Photo contents</Body>
+              <Choices options={[{value:"receipt",label:"Receipt"},{value:"statement",label:"Statement or history"},{value:"portfolio",label:"Investments"},{value:"account_detail",label:"Account details"}]} value={photoMode} onChange={value => setPhotoMode(value as typeof photoMode)} />
+            </> : null}
             <View style={{ gap: 10 }}>
               {(
                 [
@@ -322,7 +333,7 @@ export default function Add({ sheet = false }: { sheet?: boolean } = {}) {
             <Body>
               {session.demo
                 ? "Sample mode shows a completed sample import. It never opens or uploads your files."
-                : "Up to 25 MB per file. Your upload uses Clover’s existing parser and review rules."}
+                : "Photos up to 10 MB. Documents up to 25 MB. Review imported details before confirming."}
             </Body>
             <Body>
               Your files are protected with encrypted connections and restricted

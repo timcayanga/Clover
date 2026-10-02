@@ -1,3 +1,5 @@
+import { needsNativeImportResume } from "../../shared/native-import-status";
+import { notifyImportQueued } from "./import-handoff";
 import { PageCache, isPageRead } from "./page-cache";
 import { selectRecentProfile } from "./profile-selection";
 import { useCloudAiConsent } from "./ai-consent";
@@ -57,6 +59,7 @@ type Session = {
     id: string,
     file: SelectedFile,
     targetProfileId?: string,
+    importMode?: QueuedFile["importMode"],
   ) => Promise<void>;
   markUploadStarted: (id: string) => void;
 };
@@ -123,6 +126,7 @@ export function SessionProvider({
   );
   useEffect(() => {
     if (demo || !userId || Platform.OS === "web") return;
+    NetInfo.configure({ reachabilityUrl: `${apiBase()}/api/health`, reachabilityMethod: "HEAD", useNativeReachability: false });
     let active = true,
       engine: OfflineEngine | null = null,
       unsubscribe: undefined | (() => void),
@@ -154,6 +158,7 @@ export function SessionProvider({
         }
         void clearTemporaryOfflineCopies().catch(() => {});
         const owner = engine;
+        const resumedImports = new Map<string, number>();
         const queue = new FileQueue(
           store,
           {
@@ -164,12 +169,23 @@ export function SessionProvider({
               if(status.nativeUploadReceived === false && file.originalRetained !== false) {
                 throw Object.assign(new Error(status.nativeUploadFinalizing ? "Clover is still receiving this file. Check again shortly." : "Resume this upload."),{status:status.nativeUploadFinalizing ? 503 : 404});
               }
+              const recoverable = needsNativeImportResume(status);
+              if (recoverable && !resumedImports.has(file.id)) {
+                // Continue only the server-approved durable checkpoint, never resend the source.
+                await transport(`imports/${file.canonicalId ?? file.id}/resume?workspaceId=${encodeURIComponent(file.workspaceId)}`,
+                  { method: "POST" });
+                resumedImports.set(file.id, Date.now());
+              }
               return {
+                progress: status.progress,
+                message: status.importFile.processingMessage,
+                canResume: status.canResume,
                 done: Boolean(
                   status.visibleImportComplete ||
                     status.importFile.status === "done",
                 ),
-                failed: status.importFile.status === "failed",
+                failed: (status.importFile.status === "failed" && !recoverable) ||
+                  (recoverable && Date.now() - (resumedImports.get(file.id) ?? 0) > 60_000),
               };
             },
             upload: (file, bytes, control) => uploadInParts(transport,file,bytes,control),
@@ -230,6 +246,14 @@ export function SessionProvider({
       })().catch(() => {});
     };
   }, [demo, userId, transport]);
+  useEffect(() => {
+    if (!fileQueue || !offlineStatus.online || !queuedFiles.some(file =>
+      ["queued", "sending", "finalizing", "processing"].includes(file.state))) return;
+    const tick = () => { if (AppState.currentState !== "background") void fileQueue.flush().catch(() => {}); };
+    const timer = setInterval(tick, 4000);
+    const listener = AppState.addEventListener("change", state => { if (state === "active") tick(); });
+    return () => { clearInterval(timer); listener.remove(); };
+  }, [fileQueue, offlineStatus.online, queuedFiles]);
   const cloudAi = useCloudAiConsent(transport);
   const cloudAiRef = useRef(cloudAi);
   cloudAiRef.current = cloudAi;
@@ -281,8 +305,7 @@ export function SessionProvider({
     const subscription = AppState.addEventListener("change", (state) => {
       if (state === "active") {
         void offlineReady.current.then(async (engine) => {
-          // A transport timeout may mark the engine offline without a network
-          // change event. Recheck reachability before retrying cached requests.
+          // Recheck Clover reachability when returning from background.
           const connection = await NetInfo.fetch();
           await engine?.setOnline(
             connection.isConnected !== false &&
@@ -323,10 +346,10 @@ export function SessionProvider({
             void offlineReady.current.then(engine => engine?.store.set("selected-profile", id)).catch(() => {});
           }
         },
-        refresh: () => setRevision((n) => n + 1),
+        refresh: () => { pageCache.current.clear(); setRevision((n) => n + 1); },
         rows,
         uploads,
-        registerUpload: async (id, file, targetProfileId = profileId) => {
+        registerUpload: async (id, file, targetProfileId = profileId, importMode) => {
           if (!data?.profiles.some((p) => p.id === targetProfileId)) return;
           if (!demo) await cloudAiRef.current.ensure().catch(() => false);
           const uploadQueue=fileQueue??fileQueueRef.current;
@@ -342,10 +365,15 @@ export function SessionProvider({
                 size: file.size ?? 0,
                 createdAt: new Date().toISOString(),
                 state: "draft",
+                importMode,
               },
               bytes,
             );
+            await uploadQueue.enqueue(id);
+            notifyImportQueued();
             removeUploadCopy(file.uri);
+            // The queue owns upload lifetime; navigation can close immediately.
+            if (offlineStatus.online) void uploadQueue.flush().catch(() => {});
             return;
           }
           uploadCopies.current.push(file.uri);

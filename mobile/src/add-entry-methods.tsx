@@ -92,7 +92,7 @@ export function AddEntryMethods({
         </Body>
         <UploadTiles disabled={disabled} onChoose={source => {
           if (onUpload && source === "file") { onUpload(); setTab("manual"); }
-          else router.push({ pathname: "/add-transaction", params: { entry: `upload-${source}`, picker: source } });
+          else router.push({ pathname: "/add-transaction", params: { entry: `upload-${source}`, picker: source, importMode: kind === "investment" || kind === "trade" ? "portfolio" : kind === "split" ? "receipt" : "statement" } });
         }}/>
         <Body>Your manual draft stays here while you switch methods.</Body>
       </View>

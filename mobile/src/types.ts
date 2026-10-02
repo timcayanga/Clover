@@ -59,6 +59,8 @@ export type Bootstrap = {
   };
 };
 export type ImportStatus = {
+  canResume?: boolean;
+  statementSelfHeal?: { reason?: string };
   nativeUploadReceived?: boolean;
   nativeUploadFinalizing?: boolean;
   progress?: number;

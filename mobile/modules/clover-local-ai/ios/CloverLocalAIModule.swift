@@ -46,7 +46,8 @@ public class CloverLocalAIModule: Module {
     AsyncFunction("extractText") { (uri: String) throws -> [String: Any] in
       guard let url = URL(string: uri), url.isFileURL else { throw self.failure("Choose a file stored on this device.") }
       let size = try url.resourceValues(forKeys: [.fileSizeKey]).fileSize ?? 0
-      guard size > 0 && size <= 3_500_000 else { throw self.failure("Choose a file up to 3.5 MB.") }
+      let maximum = url.pathExtension.lowercased() == "pdf" ? 25 * 1024 * 1024 : 10 * 1024 * 1024
+      guard size > 0 && size <= maximum else { throw self.failure("Choose a photo up to 10 MB or a PDF up to 25 MB.") }
       if url.pathExtension.lowercased() == "pdf" {
         guard let doc = PDFDocument(url: url), !doc.isLocked else { throw self.failure("This PDF needs a password or online processing.") }
         let count = min(doc.pageCount, 5)

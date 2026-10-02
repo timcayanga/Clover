@@ -1,4 +1,5 @@
-import type { ReactNode } from "react";
+import { useEffect, type ReactNode } from "react";
+import { onImportQueued } from "./import-handoff";
 import { Modal, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { DetailNavigation } from "./ui";
@@ -10,6 +11,7 @@ export function EntryOverlay({
   onClose: () => void;
 }) {
   const insets = useSafeAreaInsets();
+  useEffect(() => onImportQueued(onClose), [onClose]);
   return (
     <Modal
       transparent

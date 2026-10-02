@@ -245,8 +245,7 @@ export class OfflineEngine {
           throw e;
         }
         if (!(e instanceof NetworkError)) throw e;
-        this.status.online = false;
-        this.status.error = "Connection unavailable. Showing downloaded data.";
+        this.status.error = "Clover could not refresh. Showing saved data; retry shortly.";
         this.emit();
       }
     await this.assertLocalAccess(profile);
@@ -405,7 +404,6 @@ export class OfflineEngine {
             item.current = error.data?.current;
             await this.store.set("mutation:" + item.id, item);
           } else {
-            this.status.online = false;
             this.status.error =
               "Sync paused. Your changes remain on this device.";
             break;

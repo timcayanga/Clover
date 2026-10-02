@@ -59,6 +59,7 @@ export async function uploadInParts(
       method: "POST",
       body: JSON.stringify({
         ...(file.password ? { password: file.password } : {}),
+        ...(file.importMode ? { importMode: file.importMode } : {}),
       }),
     },
   );

@@ -1,5 +1,6 @@
 import { uploadInParts } from "../../mobile/src/offline/resumable-upload";
-import { NATIVE_UPLOAD_PART_SIZE } from "../../shared/native-upload";
+import { needsNativeImportResume } from "../../shared/native-import-status";
+import { uploadSizeProblem, IMPORT_PHOTO_MAX_SIZE, NATIVE_UPLOAD_MAX_SIZE, NATIVE_UPLOAD_PART_SIZE } from "../../shared/native-upload";
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { NetworkError } from "../../mobile/src/api";
@@ -36,10 +37,9 @@ test("a transient timeout can reconnect and replace stale downloaded data", asyn
   failing = true;
   const cached = await e.request<{ transactions: Transaction[] }>(path);
   assert.equal(cached.transactions[0].amount, "15.20");
-  assert.equal(e.status.online, false);
+  assert.equal(e.status.online, true, "A request timeout does not mean the device lost connectivity");
   failing = false;
   amount = "19.75";
-  await e.setOnline(true);
   const fresh = await e.request<{ transactions: Transaction[] }>(path);
   assert.equal(fresh.transactions[0].amount, "19.75");
   assert.equal(e.status.online, true);
@@ -420,6 +420,43 @@ const file: QueuedFile = {
   createdAt: version,
   state: "draft",
 };
+test("photo limits accept 10 MB, reject larger photos, and preserve document limits", () => {
+  for (const [name, mime] of [["receipt.HEIC", "application/octet-stream"], ["camera", "image/jpeg"], ["receipt.png", "image/png"]]) {
+    assert.equal(uploadSizeProblem(name, mime, IMPORT_PHOTO_MAX_SIZE), null);
+    assert.match(uploadSizeProblem(name, mime, IMPORT_PHOTO_MAX_SIZE + 1)!, /10 MB/);
+  }
+  assert.equal(uploadSizeProblem("statement.pdf", "application/pdf", NATIVE_UPLOAD_MAX_SIZE), null);
+  assert.match(uploadSizeProblem("statement.pdf", "application/pdf", NATIVE_UPLOAD_MAX_SIZE + 1)!, /25 MB/);
+});
+test("native recovery only resumes a server-approved checkpoint", () => {
+  const status = { importFile: { status: "failed", processingPhase: "queued_retry" }, canResume: true };
+  assert.equal(needsNativeImportResume(status), true);
+  assert.equal(needsNativeImportResume({ ...status, canResume: false }), false);
+  assert.equal(needsNativeImportResume({ ...status, visibleImportComplete: true }), false);
+  assert.equal(needsNativeImportResume({ ...status, importFile: { status: "done" } }), false);
+  assert.equal(needsNativeImportResume({ importFile: { status: "processing" }, statementSelfHeal: { reason: "stale_statement_image_queue" } }), true);
+  assert.equal(needsNativeImportResume({ importFile: { status: "failed", processingPhase: "password_required" }, canResume: true }), false);
+});
+test("status preserves actionable errors, monotonic progress, and review recovery without resending", async () => {
+  let status = { done: false, failed: false, progress: 75, message: "Reading receipt", canResume: false };
+  let uploads = 0;
+  const q = new FileQueue(memory(), { status: async () => status, upload: async () => { uploads++; return {}; } }, async () => {});
+  await q.add(file, "b3JpZ2luYWw="); await q.enqueue(file.id); await q.flush();
+  status = { done: false, failed: true, progress: 25, message: "This statement needs its password.", canResume: true };
+  await q.flush();
+  const failed = (await q.list())[0];
+  assert.equal(failed.state, "attention"); assert.equal(failed.error, status.message);
+  assert.equal(failed.canResume, true); assert.equal(failed.progress, 75);
+  status = { done: true, failed: false, progress: 100, message: "Ready to review", canResume: false };
+  await q.enqueue(file.id); await q.flush();
+  assert.equal((await q.list())[0].state, "done"); assert.equal(uploads, 0);
+});
+test("missing acknowledged imports never re-upload a duplicate source", async () => {
+  const store = memory(); let exists = true, uploads = 0;
+  const q = new FileQueue(store, { status: async () => { if (!exists) throw Object.assign(new Error("missing"), {status:404}); return {done:false,failed:false}; }, upload: async () => {uploads++; return {};} }, async () => {});
+  await q.add(file, "b3JpZ2luYWw="); await q.enqueue(file.id); await q.flush(); exists = false;
+  await q.flush(); assert.equal(uploads, 0); assert.equal((await q.list())[0].state, "attention");
+});
 test("queued file restarts with original bytes and never auto-uploads a draft", async () => {
   const store = memory();
   let uploads = 0;
@@ -544,10 +581,11 @@ test("resumable transport sends only missing parts and preserves exact bytes",as
     const body=JSON.parse(String(options?.body));
     if(path.includes("/start"))return {parts:[0],state:"uploading"} as T;
     if(path.includes("/part")){sent.push(body.index);received.push(Buffer.from(body.base64,"base64"));return {ok:true} as T;}
+    assert.equal(body.importMode,"receipt");
     return {canonicalImportFileId:"canonical"} as T;
   };
   const progress:number[]=[];
-  const result=await uploadInParts(request,{...file,size:bytes.length},bytes.toString("base64"),{signal:new AbortController().signal,progress:async(n)=>{progress.push(n);}});
+  const result=await uploadInParts(request,{...file,importMode:"receipt",size:bytes.length},bytes.toString("base64"),{signal:new AbortController().signal,progress:async(n)=>{progress.push(n);}});
   assert.deepEqual(sent,[1,2]);assert.deepEqual(Buffer.concat(received),bytes.subarray(NATIVE_UPLOAD_PART_SIZE));assert.equal(progress.at(-1),bytes.length);assert.equal(result.canonicalId,"canonical");
 });
 test("pause aborts the active transfer, retains original bytes, and requires explicit resume",async()=>{

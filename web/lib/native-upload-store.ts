@@ -16,6 +16,7 @@ import {
   NATIVE_UPLOAD_MAX_SIZE,
   NATIVE_UPLOAD_PART_SIZE,
   nativeUploadPartBytes,
+  uploadSizeProblem,
 } from "../../shared/native-upload";
 
 type Upload = {
@@ -115,6 +116,8 @@ export async function nativeUploadRequest(
       })
       .strict()
       .parse(await request.json());
+    const sizeProblem = uploadSizeProblem(input.name, input.mimeType, input.size);
+    if (sizeProblem) throw new NativeInputError(sizeProblem);
     const problem = validateImportFileMetadata({
       fileName: input.name,
       contentType: input.mimeType,
@@ -243,8 +246,8 @@ export async function nativeUploadRequest(
     throw new NativeInputError("Unknown upload action.");
   if (Number(request.headers.get("content-length")) > 2000)
     throw new NativeInputError("Upload details are too large.");
-  const { password } = z
-    .object({ password: z.string().max(256).optional() })
+  const { password, importMode } = z
+    .object({ password: z.string().max(256).optional(), importMode: z.enum(["receipt", "statement", "portfolio", "account_detail"]).optional() })
     .strict()
     .parse(await request.json());
   if (row.state === "done")
@@ -297,6 +300,7 @@ export async function nativeUploadRequest(
     );
     form.set("workspaceId", workspaceId);
     if (password) form.set("password", password);
+    if (importMode) form.set("importMode", importMode);
     const forwarded = new Request(request.url, { method: "POST", body: form });
     const result = await withMobileRequestContext(userId, forwarded, () =>
       withCompletedNativeUpload(() => processor(forwarded, id)),

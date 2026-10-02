@@ -20,6 +20,7 @@ import { useEffect } from "react";
 import { SafeAreaProvider, SafeAreaView } from "react-native-safe-area-context";
 import { AccessContext, useAccess } from "../src/access";
 import { SessionProvider, useSession } from "../src/session";
+import { ImportActivity } from "../src/import-activity";
 import { useTheme, AppHeader, DetailNavigation } from "../src/ui";
 
 void SplashScreen.preventAutoHideAsync().catch(() => {});
@@ -159,12 +160,13 @@ function Routes() {
               <Stack.Screen
                 name="import/[id]"
                 options={{
-                  title: "Import status",
-                  header: () => <AppHeader title="Import status" back />,
+                  title: "Review import",
+                  header: () => <AppHeader title="Review import" back />,
                 }}
               />
             </Stack.Protected>
           </Stack>
+          {active ? <ImportActivity /> : null}
       </GlassNavigationProvider>
     </PrivacyShield>
   );

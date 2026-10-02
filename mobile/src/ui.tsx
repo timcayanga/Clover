@@ -295,7 +295,7 @@ export function Screen({
           <Text style={{ color: colors.ink, fontWeight: "600" }}>
             {session.offlineStatus.online
               ? `${session.offlineStatus.pending} changes pending sync`
-              : "You are offline · Downloaded data"}
+              : "You are offline. Changes are saved on this device."}
           </Text>
           <Text style={{ color: colors.muted }}>
             View sync status · Charts reflect the last downloaded data

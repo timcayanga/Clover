@@ -291,7 +291,7 @@ export function ManualTransaction({
       />
       <Field
         label={`Amount (${draft.currency})`}
-        style={{ fontSize: 28, fontFamily: "Poppins-SemiBold", minHeight: 68 }}
+        style={{ fontSize: 28, lineHeight: 42, fontFamily: "Poppins-SemiBold", minHeight: 80, paddingVertical: 16, textAlignVertical: "center", includeFontPadding: true }}
         value={draft.amount}
         onChangeText={(amount) => change({ amount })}
         keyboardType="decimal-pad"

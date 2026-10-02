@@ -20,6 +20,11 @@ import { assertTrustedRequestOrigin } from "../lib/request-security";
 import { getSessionContext, isLocalDevHost } from "../lib/auth";
 
 async function main() {
+  const resume = mobileApiResponse("import-status", {canResume:true, statementSelfHeal:{reason:"stale_statement_image_queue",rawPayload:"private"}, importFile:{status:"failed",processingPhase:"queued_retry",processingMessage:"Waiting to resume"}}) as {canResume:boolean;statementSelfHeal:{reason:string}};
+  assert.equal(resume.canResume,true);
+  assert.deepEqual(resume.statementSelfHeal,{reason:"stale_statement_image_queue"});
+  assert.ok(!JSON.stringify(resume).includes("private"));
+
   assert.equal(mobileOperation("GET",["circle-invitations"]),"circle-invitations");
   assert.equal(mobileOperation("POST",["circle-invitations","token"]),"circle-invitation");
   assert.equal(mobileOperation("PATCH",["circles","circle","invitations","invite"]),"circle-invite-manage");
