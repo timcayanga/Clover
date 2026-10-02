@@ -235,6 +235,10 @@ async function handle(
     const workspaceId = url.searchParams.get("workspaceId");
     if (!workspaceId) return reply({ error: "Choose a Profile first." }, 400);
     await assertWorkspaceAccess(userId, workspaceId);
+    if (operation === "imports") {
+      const { listImportFileSummariesCompat } = await import("@/lib/data-engine");
+      return reply(mobileApiResponse("imports", { importFiles: await listImportFileSummariesCompat(workspaceId) }));
+    }
     if (operation === "native-upload") {
       if(path[2]==="start"){
         const limit=(await import("@/lib/user-limits")).getEffectiveUserLimits(user).monthlyUploadLimit;
@@ -754,8 +758,6 @@ async function handle(
             return (await import("@/app/api/accounts/route")).GET(forwarded);
           case "account-create":
             return (await import("@/app/api/accounts/route")).POST(forwarded);
-          case "imports":
-            return (await import("@/app/api/imports/route")).GET(forwarded);
           case "transaction": {
             const route = await import(
               "@/app/api/transactions/[transactionId]/route"

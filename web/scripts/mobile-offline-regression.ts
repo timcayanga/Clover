@@ -1,3 +1,4 @@
+import { uploadProgress } from "../../mobile/src/offline/upload-progress";
 import { uploadInParts } from "../../mobile/src/offline/resumable-upload";
 import { needsNativeImportResume } from "../../shared/native-import-status";
 import { uploadSizeProblem, IMPORT_PHOTO_MAX_SIZE, NATIVE_UPLOAD_MAX_SIZE, NATIVE_UPLOAD_PART_SIZE } from "../../shared/native-upload";
@@ -457,6 +458,49 @@ test("missing acknowledged imports never re-upload a duplicate source", async ()
   await q.add(file, "b3JpZ2luYWw="); await q.enqueue(file.id); await q.flush(); exists = false;
   await q.flush(); assert.equal(uploads, 0); assert.equal((await q.list())[0].state, "attention");
 });
+test("transfer completion never claims parsing and saving are finished", () => {
+  for (const state of ["sending", "finalizing", "processing", "attention", "paused"] as const) {
+    assert.ok(uploadProgress({state,size:100,sentBytes:100,progress:100}) < 100);
+  }
+  assert.equal(uploadProgress({state:"finalizing",size:100,sentBytes:100}),45);
+  assert.equal(uploadProgress({state:"done",size:100,sentBytes:100}),100);
+  assert.equal(uploadProgress({state:"sending",size:0,sentBytes:0,progress:NaN}),0);
+});
+test("wrong then correct PDF password retries the same completed parts without re-uploading", async () => {
+  const store = memory(); let received = false, unlocked = false, uploads = 0, unlocks = 0;
+  const passwordError = () => Object.assign(new Error("This file is password-protected. Enter the password to continue."), {status:422,data:{code:"IMPORT_PASSWORD_REQUIRED"}});
+  const q = new FileQueue(store, {
+    status: async () => {
+      if (!received) throw Object.assign(new Error("missing"), {status:404});
+      return {done:unlocked,failed:!unlocked,needsPassword:!unlocked,message:unlocked ? "Records ready" : "Enter the statement password."};
+    },
+    upload: async () => {uploads++;received=true;throw passwordError();},
+    unlock: async (_file,password) => {unlocks++;if(password!=="fictional-correct-password")throw passwordError();unlocked=true;return {canonicalId:file.id};},
+  },async()=>{});
+  await q.add(file,"b3JpZ2luYWw="); await q.enqueue(file.id); await q.flush();
+  assert.equal((await q.list())[0].needsPassword,true);
+  assert.equal(await q.bytes(file),"b3JpZ2luYWw=");
+  await q.enqueue(file.id,"fictional-wrong-password"); await q.flush();
+  assert.equal((await q.list())[0].state,"attention");
+  assert.equal((await q.list())[0].password,undefined,"Rejected passwords must be discarded");
+  await q.flush(); assert.equal(unlocks,1,"Wrong passwords must not retry in a loop");
+  await q.enqueue(file.id,"fictional-correct-password"); await q.flush();
+  assert.equal(uploads,1); assert.equal(unlocks,2); assert.equal((await q.list())[0].state,"processing");
+  assert.equal((await q.list())[0].password,undefined);
+  await assert.rejects(q.bytes(file),/no longer/);
+  await q.flush(); assert.equal((await q.list())[0].state,"done");
+});
+test("a password requested after server acknowledgement can unlock without device bytes", async () => {
+  let passwordRequired=false, unlocks=0;
+  const q = new FileQueue(memory(),{
+    status:async()=>({done:false,failed:passwordRequired,needsPassword:passwordRequired}),
+    upload:async()=>{throw new Error("must not re-upload");},
+    unlock:async(_file,password)=>{assert.equal(password,"fictional-password");unlocks++;passwordRequired=false;return {};},
+  },async()=>{});
+  await q.add(file,"b3JpZ2luYWw=");await q.enqueue(file.id);await q.flush();passwordRequired=true;
+  await q.flush();assert.equal((await q.list())[0].state,"attention");await assert.rejects(q.bytes(file),/no longer/);
+  await q.enqueue(file.id,"fictional-password");await q.flush();assert.equal(unlocks,1);assert.equal((await q.list())[0].state,"processing");
+});
 test("queued file restarts with original bytes and never auto-uploads a draft", async () => {
   const store = memory();
   let uploads = 0;
@@ -615,6 +659,18 @@ test("pausing one active upload lets other queued files continue",async()=>{
   const q=new FileQueue(store,{status:async()=>{throw Object.assign(new Error("missing"),{status:404});},upload:async(f,_bytes,control)=>{sent.push(f.id);if(f.id===file.id){started();await new Promise<void>((_,reject)=>control.signal.addEventListener("abort",()=>reject(new Error("aborted")),{once:true}));}return {}; }},async()=>{});
   await q.add(file,"b3JpZ2luYWw=");await q.add(second,"b3JpZ2luYWw=");await q.enqueue(file.id);await q.enqueue(second.id);const flight=q.flush();await began;await q.pause(file.id);await flight;
   assert.deepEqual(sent,[file.id,second.id]);assert.equal((await q.list()).find(f=>f.id===file.id)?.state,"paused");assert.equal((await q.list()).find(f=>f.id===second.id)?.state,"processing");
+});
+
+test("a flush requested during an upload also drains a newly queued file",async()=>{
+  const store=memory();let release!:()=>void,started!:()=>void;
+  const began=new Promise<void>(resolve=>{started=resolve;});const sent:string[]=[];
+  const q=new FileQueue(store,{status:async(f)=>{if(sent.includes(f.id))return {done:false,failed:false};throw Object.assign(new Error("missing"),{status:404});},upload:async(f)=>{
+    sent.push(f.id);if(f.id===file.id){started();await new Promise<void>(resolve=>{release=resolve;});}return {};
+  }},async()=>{});
+  await q.add(file,"b3JpZ2luYWw=");await q.enqueue(file.id);const flight=q.flush();await began;
+  const second={...file,id:randomUUID(),createdAt:"2026-09-15T00:00:00.000Z"};
+  await q.add(second,"b3JpZ2luYWw=");await q.enqueue(second.id);const followup=q.flush();release();
+  await Promise.all([flight,followup]);assert.ok(sent.includes(second.id),"The follow-up flush must not be lost behind the active request");
 });
 
 test("presentation cache hydrates recent authorized Profile data and excludes invalidated reads", async () => {

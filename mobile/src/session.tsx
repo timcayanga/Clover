@@ -166,7 +166,9 @@ export function SessionProvider({
               const status = await transport<import("./types").ImportStatus>(
                 `imports/${file.canonicalId ?? file.id}/status?workspaceId=${encodeURIComponent(file.workspaceId)}`,
               );
-              if(status.nativeUploadReceived === false && file.originalRetained !== false) {
+              const needsPassword = status.importFile.processingPhase === "password_required" &&
+                !status.visibleImportComplete && status.importFile.status !== "done";
+              if(status.nativeUploadReceived === false && file.originalRetained !== false && !needsPassword) {
                 throw Object.assign(new Error(status.nativeUploadFinalizing ? "Clover is still receiving this file. Check again shortly." : "Resume this upload."),{status:status.nativeUploadFinalizing ? 503 : 404});
               }
               const recoverable = needsNativeImportResume(status);
@@ -177,6 +179,7 @@ export function SessionProvider({
                 resumedImports.set(file.id, Date.now());
               }
               return {
+                needsPassword,
                 progress: status.progress,
                 message: status.importFile.processingMessage,
                 canResume: status.canResume,
@@ -187,6 +190,11 @@ export function SessionProvider({
                 failed: (status.importFile.status === "failed" && !recoverable) ||
                   (recoverable && Date.now() - (resumedImports.get(file.id) ?? 0) > 60_000),
               };
+            },
+            unlock: async (file, password) => {
+              const result = await transport<{canonicalImportFileId?: string}>(`uploads/${file.id}/complete?workspaceId=${encodeURIComponent(file.workspaceId)}`,
+                { method: "POST", body: JSON.stringify({password, ...(file.importMode ? {importMode:file.importMode} : {})}) });
+              return {canonicalId: result.canonicalImportFileId};
             },
             upload: (file, bytes, control) => uploadInParts(transport,file,bytes,control),
             cancel: async file => { await transport(`uploads/${file.id}/cancel?workspaceId=${encodeURIComponent(file.workspaceId)}`,{method:"POST",body:"{}"}); },

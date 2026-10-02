@@ -68,12 +68,19 @@ export default function Add({ sheet = false }: { sheet?: boolean } = {}) {
   }, [entry, session.profileId]);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+  const [historyError, setHistoryError] = useState("");
+  const [historyRevision, setHistoryRevision] = useState(0);
+  const [historyLoading, setHistoryLoading] = useState(false);
   const [history, setHistory] = useState<
     { id: string; fileName: string; status: string }[]
   >([]);
   useFocusEffect(
     useCallback(() => {
       let current = true;
+      if (tab !== "upload") return;
+      setHistory([]);
+      setHistoryError("");
+      setHistoryLoading(!session.demo);
       if (session.demo)
         setHistory([
           {
@@ -88,18 +95,16 @@ export default function Add({ sheet = false }: { sheet?: boolean } = {}) {
             `imports?workspaceId=${encodeURIComponent(session.profileId)}`,
           )
           .then((data) => {
-            if (current) setHistory(data.importFiles.slice(0, 10));
+            if (current) { setHistory(data.importFiles.slice(0, 10)); setHistoryError(""); }
           })
           .catch(() => {
             if (current)
-              setError(
-                "Import history could not refresh. Please try again shortly.",
-              );
-          });
+              setHistoryError("Recent imports could not load. You can still upload a new file.");
+          }).finally(() => { if (current) setHistoryLoading(false); });
       return () => {
         current = false;
       };
-    }, [session.demo, session.profileId, session.request]),
+    }, [session.demo, session.profileId, session.request, tab, historyRevision]),
   );
   const open = async (file: SelectedFile) => {
     const problem = fileProblem(file);
@@ -340,6 +345,7 @@ export default function Add({ sheet = false }: { sheet?: boolean } = {}) {
               access. Clover never sells your data.
             </Body>
             <Body>Password-protected PDFs supported.</Body>
+            {historyError ? <Card><Notice>{historyError}</Notice><Button secondary title="Retry recent imports" disabled={historyLoading} onPress={() => setHistoryRevision(value => value + 1)} /></Card> : null}
             {history.length > 0 && (
               <Card>
                 <Body>Recent imports</Body>

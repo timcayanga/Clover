@@ -1,3 +1,4 @@
+import { downloadImportObject } from "./import-storage.server";
 import { NativeInputError } from "./native-input-error";
 import { createHash } from "node:crypto";
 import { readFile, unlink } from "node:fs/promises";
@@ -250,19 +251,23 @@ export async function nativeUploadRequest(
     .object({ password: z.string().max(256).optional(), importMode: z.enum(["receipt", "statement", "portfolio", "account_detail"]).optional() })
     .strict()
     .parse(await request.json());
-  if (row.state === "done")
-    return Response.json(row.response ?? { received: true });
   const saved = await prisma.importFile.findFirst({
     where: { id, workspaceId },
-    select: { status: true },
+    select: { status: true, processingPhase: true, storageKey: true },
   });
+  // A prior acknowledgement remains durable even if a password retry lost its
+  // response while holding the finalization lease. Its temporary parts are gone.
+  const acknowledgedSource = row.state === "done" || (row.state === "finalizing" && row.response !== null);
+  const retrySavedPassword = Boolean(acknowledgedSource && password && saved?.status === "failed" && saved.processingPhase === "password_required");
+  if (row.state === "done" && !retrySavedPassword)
+    return Response.json(row.response ?? { received: true });
   if (saved?.status === "done") {
     await prisma.$executeRaw`UPDATE "NativeUploadSession" SET "state"='done',"leaseUntil"=NULL WHERE "id"=${id}`;
     await cleanup(row).catch(() => {});
     return Response.json({ received: true, canonicalImportFileId: id });
   }
   const claimed =
-    await prisma.$executeRaw`UPDATE "NativeUploadSession" SET "state"='finalizing',"leaseUntil"=CURRENT_TIMESTAMP+INTERVAL '6 minutes' WHERE "id"=${id} AND "expiresAt">CURRENT_TIMESTAMP AND ("state"='uploading' OR ("state"='finalizing' AND "leaseUntil"<CURRENT_TIMESTAMP))`;
+    await prisma.$executeRaw`UPDATE "NativeUploadSession" SET "state"='finalizing',"leaseUntil"=CURRENT_TIMESTAMP+INTERVAL '6 minutes' WHERE "id"=${id} AND "expiresAt">CURRENT_TIMESTAMP AND ("state"='uploading' OR ("state"='done' AND ${retrySavedPassword}) OR ("state"='finalizing' AND "leaseUntil"<CURRENT_TIMESTAMP))`;
   if (!claimed)
     return Response.json(
       { error: "Upload is being finalized. Check its status before retrying." },
@@ -270,7 +275,8 @@ export async function nativeUploadRequest(
     );
   try {
     const parts: Buffer[] = [];
-    for (let i = 0; i < Math.ceil(row.size / NATIVE_UPLOAD_PART_SIZE); i++) {
+    if (retrySavedPassword && saved?.storageKey) parts.push(Buffer.from(await downloadImportObject(saved.storageKey)));
+    for (let i = 0; !retrySavedPassword && i < Math.ceil(row.size / NATIVE_UPLOAD_PART_SIZE); i++) {
       if (!row.parts[String(i)])
         throw new NativeInputError(
           "Some upload parts are missing. Resume the upload.",
@@ -324,10 +330,10 @@ export async function nativeUploadRequest(
       // Failure to remove temporary parts must not turn a durable acknowledgement into an upload failure.
       await cleanup(row).catch(() => {});
     } else
-      await prisma.$executeRaw`UPDATE "NativeUploadSession" SET "state"='uploading',"leaseUntil"=NULL WHERE "id"=${id}`;
+      await prisma.$executeRaw`UPDATE "NativeUploadSession" SET "state"=${retrySavedPassword ? "done" : "uploading"},"leaseUntil"=NULL WHERE "id"=${id}`;
     return result;
   } catch (error) {
-    await prisma.$executeRaw`UPDATE "NativeUploadSession" SET "state"='uploading',"leaseUntil"=NULL WHERE "id"=${id}`;
+    await prisma.$executeRaw`UPDATE "NativeUploadSession" SET "state"=${retrySavedPassword ? "done" : "uploading"},"leaseUntil"=NULL WHERE "id"=${id}`;
     throw error;
   }
 }

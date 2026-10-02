@@ -18,11 +18,13 @@ export type QueuedFile = {
   progress?: number;
   message?: string;
   canResume?: boolean;
+  needsPassword?: boolean;
 };
 export type UploadControl = {signal:AbortSignal;progress:(sentBytes:number,finalizing:boolean)=>Promise<void>};
 export type FileTransport = {
+  unlock?: (file: QueuedFile, password: string) => Promise<{ canonicalId?: string }>;
   cancel?: (file:QueuedFile)=>Promise<void>;
-  status: (file: QueuedFile) => Promise<{ done: boolean; failed: boolean; progress?: number; message?: string; canResume?: boolean }>;
+  status: (file: QueuedFile) => Promise<{ done: boolean; failed: boolean; progress?: number; message?: string; canResume?: boolean; needsPassword?: boolean }>;
   upload: (
     file: QueuedFile,
     base64: string,
@@ -33,6 +35,7 @@ export type FileTransport = {
 export class FileQueue {
   private listeners = new Set<() => void>();
   private flight: Promise<void> | null = null;
+  private flushAgain = false;
   private active = true;
   private current: {file:QueuedFile;controller:AbortController;finished:Promise<void>} | null = null;
   constructor(
@@ -126,8 +129,10 @@ export class FileQueue {
     this.emit();
   }
   flush() {
-    if (this.flight) return this.flight;
-    this.flight = this.run().finally(() => {
+    if (this.flight) { this.flushAgain = true; return this.flight; }
+    this.flight = (async () => {
+      do { this.flushAgain = false; await this.run(); } while (this.active && this.flushAgain);
+    })().finally(() => {
       this.flight = null;
     });
     return this.flight;
@@ -152,17 +157,32 @@ export class FileQueue {
           file.progress = Math.max(file.progress ?? 0, status.progress ?? 0);
           file.message = status.message;
           file.canResume = status.canResume;
+          file.needsPassword = status.needsPassword && !status.done;
           file.error = undefined;
           file.state = status.done
             ? "done"
             : status.failed
               ? "attention"
               : "processing";
-          if (status.failed)
-            file.error =
-              status.message || "This file needs review. Open it to check the details.";
+          if (status.needsPassword && !status.done) {
+            file.state = "attention";
+            if (file.password && this.transport.unlock) {
+              const password = file.password;
+              delete file.password;
+              file.state = "finalizing";
+              file.message = "Unlocking and reading your statement…";
+              await this.store.set("file:" + file.id, file);
+              this.emit();
+              const result = await this.transport.unlock(file, password);
+              file.canonicalId = result.canonicalId ?? file.canonicalId;
+              file.needsPassword = false;
+              file.state = "processing";
+            } else file.error = status.message || "Enter the statement password to continue.";
+          } else if (status.failed) {
+            file.error = status.message || "This file needs review. Open it to check the details.";
+          }
         } catch (e) {
-          if ((e as { status?: number }).status !== 404) throw e;
+          if (exists || (e as { status?: number }).status !== 404) throw e;
         }
         if (!exists && (file.originalRetained === false || file.canonicalId)) {
           throw Object.assign(new Error("The saved import could not be found. Please check your import history."), { status: 404 });
@@ -193,6 +213,11 @@ export class FileQueue {
         }
         const status = (e as { status?: number }).status;
         file.error = (e as Error).message;
+        if ((e as { data?: { code?: string } }).data?.code === "IMPORT_PASSWORD_REQUIRED" ||
+            (status === 422 && /password/i.test(file.error))) {
+          file.needsPassword = true;
+          delete file.password;
+        }
         if (status && status < 500) file.state = "attention";
         await this.store.set("file:" + file.id, file);
         this.emit();

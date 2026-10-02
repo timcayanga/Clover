@@ -1,3 +1,4 @@
+import { uploadProgress } from "./upload-progress";
 import { Progress } from "../plan-ui";
 import * as Crypto from "expo-crypto";
 import {
@@ -37,7 +38,8 @@ export function OfflineFilePanel({ file }: { file: QueuedFile }) {
   const original = file.originalRetained !== false && ["draft", "queued", "sending", "paused", "finalizing", "attention"].includes(
     file.state,
   );
-  const canUpload = original && ["draft", "attention", "paused"].includes(file.state);
+  const needsPassword = file.needsPassword || (file.state === "attention" && /password/i.test(file.error ?? ""));
+  const canUpload = (original || needsPassword) && ["draft", "attention", "paused"].includes(file.state);
   return (
     <Screen>
       <Card>
@@ -67,10 +69,10 @@ export function OfflineFilePanel({ file }: { file: QueuedFile }) {
         </Body>
       </Card>
       {["sending", "paused", "queued", "finalizing"].includes(file.state) ? <Card>
-        <Body>{Math.min(100,Math.round((file.sentBytes??0)/file.size*100))}% uploaded</Body>
-        <Progress value={(file.sentBytes??0)/file.size*100}/>
+        <Body>{uploadProgress(file)}% · Import progress</Body>
+        <Progress value={uploadProgress(file)}/>
         {["sending","queued"].includes(file.state) ? <Button title="Pause upload" secondary onPress={()=>void run(()=>queue.pause(file.id))}/> : null}
-        {file.state==="finalizing" ? <Body>The upload is complete. Clover is checking your file. You can leave this screen and return to its status.</Body> : <Button title="Cancel upload" secondary onPress={()=>Alert.alert("Cancel upload?","This removes the temporary upload and device copy. Your original file is preserved.",[{text:"Keep upload",style:"cancel"},{text:"Cancel upload",style:"destructive",onPress:()=>void run(async()=>{await queue.cancel(file.id);router.replace("/offline");})}])}/>}
+        {file.state==="finalizing" ? <Body>File received. Clover is still unlocking, reading, and saving its contents.</Body> : <Button title="Cancel upload" secondary onPress={()=>Alert.alert("Cancel upload?","This removes the temporary upload and device copy. Your original file is preserved.",[{text:"Keep upload",style:"cancel"},{text:"Cancel upload",style:"destructive",onPress:()=>void run(async()=>{await queue.cancel(file.id);router.replace("/offline");})}])}/>}
       </Card> : null}
       {file.error ? <Notice>{file.error}</Notice> : null}
       {error ? <Notice>{error}</Notice> : null}
@@ -126,7 +128,7 @@ export function OfflineFilePanel({ file }: { file: QueuedFile }) {
       {canUpload ? (
         <Card>
           <Field
-            label="Statement password (if needed)"
+            label={needsPassword ? "Statement password" : "Statement password (if needed)"}
             secureTextEntry
             autoCapitalize="none"
             autoCorrect={false}
@@ -140,7 +142,7 @@ export function OfflineFilePanel({ file }: { file: QueuedFile }) {
           <Button
             title={
               session.offlineStatus.online
-                ? (file.state === "paused" ? "Resume upload" : "Upload original")
+                ? (needsPassword ? "Unlock and continue" : file.state === "paused" ? "Resume upload" : "Upload original")
                 : "Upload when connected"
             }
             disabled={busy}

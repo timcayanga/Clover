@@ -287,7 +287,7 @@ export default function ImportDetail() {
                 {status?.importFile.processingMessage ??
                   "Clover is receiving and reading your file. You can check this import again without uploading another copy."}
               </Body>
-              <Progress value={status?.progress??(uploading?30:10)}/><Body>{status?.progress??(uploading?30:10)}% · Import milestone</Body>
+              <Progress value={Math.min(95, status?.progress??(uploading?30:10))}/><Body>{Math.min(95, status?.progress??(uploading?30:10))}% · Import progress</Body>
             </Card>
           )}
           {complete && (

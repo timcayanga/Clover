@@ -2926,6 +2926,17 @@ export const listImportFilesCompat = async (workspaceId: string): Promise<any[]>
   );
 };
 
+/** Small read-only list for native upload history; never starts recovery jobs. */
+export const listImportFileSummariesCompat = async (workspaceId: string) => {
+  const columns = await getCompatibleImportFileColumns();
+  const fields = ["id", "fileName", "status", "createdAt", "uploadedAt", "processingMessage"]
+    .filter(field => columns.includes(field));
+  if (!fields.includes("id")) return [];
+  const order = columns.includes("uploadedAt") ? "uploadedAt" : columns.includes("createdAt") ? "createdAt" : "id";
+  return prisma.$queryRawUnsafe<any[]>(
+    `SELECT ${fields.map(field => `"${field}"`).join(", ")} FROM "ImportFile" WHERE "workspaceId" = $1 ORDER BY "${order}" DESC, "id" DESC LIMIT 10`, workspaceId);
+};
+
 export const listAllImportFilesCompat = async (limit?: number): Promise<any[]> => {
   const columns = await getCompatibleImportFileColumns();
   if (columns.length === 0) {
