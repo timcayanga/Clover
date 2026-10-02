@@ -72,7 +72,7 @@ assert.match(
   /valid HEIC or HEIF/i
 );
 assert.equal(MAX_IMPORT_FILE_SIZE, 4 * 1024 * 1024);
-assert.equal(MAX_IMPORT_IMAGE_SOURCE_SIZE, 16 * 1024 * 1024);
+assert.equal(MAX_IMPORT_IMAGE_SOURCE_SIZE, 10 * 1024 * 1024);
 assert.ok(IMPORT_IMAGE_TARGET_SIZE < MAX_IMPORT_FILE_SIZE);
 assert.equal(validateImportFile({ fileName: "statement.pdf", contentType: "application/pdf", fileSize: MAX_IMPORT_FILE_SIZE }), null);
 assert.match(
