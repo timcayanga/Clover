@@ -53,6 +53,9 @@
     "typescript": "~6.0.3"
   },
   "scripts": {
+    "postinstall": "node scripts/forge-security-patch.mjs",
+    "eas-build-post-install": "node scripts/forge-security-check.mjs",
+    "qa:production-audit": "node scripts/production-audit.mjs",
     "start": "expo start",
     "android": "expo run:android",
     "ios": "expo run:ios",

@@ -15,10 +15,12 @@ Primary implementation reference: https://github.com/RevenueCat/purchases-androi
 - Isolated PostgreSQL fixture confirms server sync persists canonical Google IDs and updates shared Plus access. No production subscriptions or financial records were changed.
 - Google Play test receipts confirm completed Plus and Pro purchases and renewals today. RevenueCat ties them to a different Clover login from the previously allowed tester. That new login is not in the production sandbox tester allowlist.
 - A read-only replay of the actual RevenueCat response reproduces denied access without the tester allowance and verifies Pro with the patched product normalization plus the exact tester allowance. No production entitlement was manually granted. The user confirmed the additional test login. Its exact production Clerk ID was added to REVENUECAT_SANDBOX_APP_USER_IDS, preserving the existing tester. A fresh Vercel environment pull verified both entries. This setting takes effect on the next production deployment; the product-normalization fix must also be deployed.
-- All remaining qa:prepush checks passed when run separately: web/mobile typechecks, release regressions, native bundle exports, and optimized web build. The full gate remains failed at the dependency security audit.
+- The complete `npm run qa:prepush` now passes, including the dependency security gate, web/mobile typechecks, release regressions, both native bundle exports, and optimized web build. This followed a clean mobile dependency installation and the verified security backport documented below.
 
-## Release blocker
+## Dependency blocker resolved locally
 
-The required qa:prepush security audit fails on GHSA-86w9-cpqp-85rv (node-forge <=1.4.0), introduced through Expo's CLI/code-signing dependencies. npm latest is 1.4.0; the advisory lists no patched release as checked on 2 October 2026. No audit exceptions, dependency overrides, or gate weakening were applied. Do not push/build a replacement release while the required gate fails.
+The initial required `qa:prepush` failed on GHSA-86w9-cpqp-85rv (node-forge <=1.4.0), introduced through Expo's CLI/code-signing dependencies. npm latest is still 1.4.0 as checked on 2 October 2026. A hash-pinned backport of the proposed upstream verifier fix now rejects malformed nested DigestAlgorithm elements. The mobile gate verifies the installed patch and security regressions before accounting for this exact advisory; all other high/critical advisories remain blocking. The mitigation must be reviewed before 1 November 2026 UTC. See [security backport evidence](node-forge-security-backport-2026-10-02.md).
+
+These checks do not replace device verification of the new onboarding navigation or an active Google Play sandbox purchase after the server fix is promoted to production.
 
 https://github.com/advisories/GHSA-86w9-cpqp-85rv
