@@ -185,6 +185,20 @@ async function main() {
     console.log(
       "PASS Server sync persists once, ignores older snapshots, applies verified refunds",
     );
+    for (const [index, basePlan] of ["monthly", "annual"].entries()) {
+      body = { ...sample(), request_date_ms: +now + 2000 + index * 1000 };
+      body.subscriber.entitlements.clover_plus.product_identifier = "clover.plus";
+      Object.assign(body.subscriber.entitlements.clover_plus, { product_plan_identifier: basePlan });
+      body.subscriber.subscriptions = { "clover.plus": { ...body.subscriber.subscriptions[config.products[0]], store: "play_store" } };
+      Object.assign(body.subscriber.subscriptions["clover.plus"], { product_plan_identifier: basePlan });
+      await syncStoreAccess(target.id);
+      const access = await prisma.storeAccess.findUniqueOrThrow({ where: { userId: target.id } });
+      assert.equal(access.productId, `clover.plus:${basePlan}`);
+      assert.equal(access.store, "play_store");
+      assert.equal((await prisma.user.findUniqueOrThrow({ where: { id: target.id } })).planTier, "pro");
+    }
+    count++;
+    console.log("PASS Google v1 split base plans persist canonical product IDs and grant cross-platform Plus");
     assert.equal(
       (
         await webhook(

@@ -42,7 +42,7 @@ import {
   Screen,
   useTheme,
 } from "../../src/ui";
-export default function Add() {
+export default function Add({ sheet = false }: { sheet?: boolean } = {}) {
   const { colors, dark } = useTheme();
   const insets = useSafeAreaInsets();
   const session = useSession();
@@ -54,6 +54,11 @@ export default function Add() {
     picker?: string;
   }>();
   const handledPicker = useRef(false);
+  const close = () => {
+    if (busy) return;
+    if (sheet && router.canGoBack()) router.back();
+    else router.replace("/(tabs)");
+  };
   useEffect(() => {
     setTab(entry?.startsWith("upload-") ? "upload" : "manual");
     setDraft(emptyTransaction());
@@ -225,8 +230,8 @@ export default function Add() {
       keyboardVerticalOffset={insets.top + 70}
       behavior={Platform.OS === "ios" ? "padding" : "height"}
     >
-      <Screen sheet onDismiss={() => { if(!busy) router.back(); }}>
-        <PlanHeader title="Add Transaction" back={() => router.back()}/>
+      <Screen sheet={sheet} onDismiss={close}>
+        <PlanHeader title={entry?.startsWith("upload-") ? "Upload" : "Add Transaction"} back={close}/>
         <View
           style={{
             backgroundColor: colors.white,

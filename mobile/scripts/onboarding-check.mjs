@@ -36,7 +36,7 @@ for(const action of ['skip','file','camera','library']){
  assert.equal(h.requests[0].body.experience,'beginner');
  assert.equal(h.routes.length,1);
  if(action==='skip')assert.equal(h.routes[0],'/(tabs)');
- else {assert.equal(h.routes[0].pathname,'/add-transaction');assert.equal(h.routes[0].params.picker,action);}
+ else {assert.equal(h.routes[0].pathname,'/(tabs)/add');assert.equal(h.routes[0].params.picker,action);}
 }
 const h=harness(true);let n=h.render();n.find(x=>x.props.accessibilityRole==='radio').props.onPress();n=h.render();n.find(x=>x.props.title==='Continue').props.onPress();n=h.render();n.find(x=>x.props.title==='Skip for now').props.onPress();await tick();n=h.render();
 assert.equal(h.routes.length,0);assert.ok(n.some(x=>x.type==='Notice'&&x.props.children==='Setup unavailable'));

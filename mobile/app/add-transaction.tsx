@@ -14,7 +14,7 @@ export default function AddTransactionSheet() {
         paddingRight: insets.right,
       }}
     >
-      <AddTransaction />
+      <AddTransaction sheet />
       <DetailNavigation />
     </View>
   );

@@ -121,6 +121,7 @@ export default function TabLayout() {
               listeners={{ tabPress: event => { event.preventDefault(); router.push("/add-transaction"); } }}
               options={{
                 title: "Add Transaction",
+                headerShown: false,
                 tabBarAccessibilityLabel: "Add",
                 tabBarLabel: () => null,
                 tabBarIcon: () => <AddNavigationMark />,

@@ -45,6 +45,38 @@ async function main() {
       assert.equal(verifiedStoreAccess(data, productionTester, now).expiresAt, null);
     }
   }
+  // Real RevenueCat v1 Google responses use a bare subscription key plus a base plan.
+  for (const item of STORE_PACKAGES) {
+    const [product, basePlan] = item.android.split(":");
+    const google = sample(item.entitlementId, product, "play_store");
+    const entitlement = google.subscriber.entitlements[item.entitlementId] as typeof google.subscriber.entitlements[string] & { product_plan_identifier?: string };
+    const subscription = google.subscriber.subscriptions[product] as typeof google.subscriber.subscriptions[string] & { product_plan_identifier?: string };
+    entitlement.product_plan_identifier = basePlan;
+    subscription.product_plan_identifier = basePlan;
+    assert.equal(verifiedStoreAccess(google, config, now).productId, item.android);
+    assert.equal(storeProductTier(verifiedStoreAccess(google, config, now).productId), item.tier);
+    const tester = { ...config, sandbox: false, sandboxAppUserIds: [config.appUserId] };
+    assert.equal(verifiedStoreAccess(google, tester, now).expiresAt?.toISOString(), future);
+    assert.equal(verifiedStoreAccess(google, { ...tester, sandboxAppUserIds: [] }, now).expiresAt, null);
+    delete entitlement.product_plan_identifier;
+    assert.equal(verifiedStoreAccess(google, config, now).productId, item.android);
+    delete subscription.product_plan_identifier;
+    assert.equal(verifiedStoreAccess(google, config, now).expiresAt, null, "Never guess a missing base plan");
+    entitlement.product_plan_identifier = "unknown";
+    assert.equal(verifiedStoreAccess(google, config, now).expiresAt, null);
+    entitlement.product_plan_identifier = basePlan;
+    subscription.product_plan_identifier = basePlan === "monthly" ? "annual" : "monthly";
+    assert.equal(verifiedStoreAccess(google, config, now).expiresAt, null, "Conflicting verified base plans must fail closed");
+    subscription.product_plan_identifier = basePlan;
+    subscription.refunded_at = now.toISOString();
+    assert.equal(verifiedStoreAccess(google, config, now).expiresAt, null);
+    subscription.refunded_at = null;
+    entitlement.expires_date = new Date(+now - 1000).toISOString();
+    assert.equal(verifiedStoreAccess(google, config, now).expiresAt, null);
+    const combined = sample(item.entitlementId, item.android, "play_store");
+    Object.assign(combined.subscriber.entitlements[item.entitlementId], { product_plan_identifier: "wrong" });
+    assert.equal(verifiedStoreAccess(combined, config, now).expiresAt, null);
+  }
   for (const store of ["paddle", "test_store", "stripe"]) {
     assert.equal(verifiedStoreAccess(sample("clover_pro", "clover.pro.monthly", store), config, now).expiresAt, null);
   }
