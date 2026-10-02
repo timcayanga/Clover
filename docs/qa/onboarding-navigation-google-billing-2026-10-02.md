@@ -14,7 +14,7 @@ Primary implementation reference: https://github.com/RevenueCat/purchases-androi
 - Store-tier regression covers split Google IDs for Plus/Pro monthly/yearly, missing/conflicting/unknown base plans, exact sandbox testers, refunds and expiry.
 - Isolated PostgreSQL fixture confirms server sync persists canonical Google IDs and updates shared Plus access. No production subscriptions or financial records were changed.
 - Google Play test receipts confirm completed Plus and Pro purchases and renewals today. RevenueCat ties them to a different Clover login from the previously allowed tester. That new login is not in the production sandbox tester allowlist.
-- A read-only replay of the actual RevenueCat response reproduces denied access without the tester allowance and verifies Pro with the patched product normalization plus the exact tester allowance. No production entitlement was manually granted. Confirmation to include the additional test login is pending.
+- A read-only replay of the actual RevenueCat response reproduces denied access without the tester allowance and verifies Pro with the patched product normalization plus the exact tester allowance. No production entitlement was manually granted. The user confirmed the additional test login. Its exact production Clerk ID was added to REVENUECAT_SANDBOX_APP_USER_IDS, preserving the existing tester. A fresh Vercel environment pull verified both entries. This setting takes effect on the next production deployment; the product-normalization fix must also be deployed.
 - All remaining qa:prepush checks passed when run separately: web/mobile typechecks, release regressions, native bundle exports, and optimized web build. The full gate remains failed at the dependency security audit.
 
 ## Release blocker
