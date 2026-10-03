@@ -53,8 +53,8 @@
     "typescript": "~6.0.3"
   },
   "scripts": {
-    "postinstall": "node scripts/forge-security-patch.mjs",
-    "eas-build-post-install": "node scripts/forge-security-check.mjs",
+    "postinstall": "node scripts/forge-security-patch.mjs && node scripts/braces-security-patch.mjs",
+    "eas-build-post-install": "node scripts/forge-security-check.mjs && node scripts/braces-security-check.mjs",
     "qa:production-audit": "node scripts/production-audit.mjs",
     "start": "expo start",
     "android": "expo run:android",
@@ -69,7 +69,7 @@
     "build:ios": "expo run:ios",
     "build:android": "expo run:android",
     "check:toolchains": "node scripts/check-toolchains.mjs",
-    "check:auth": "node --experimental-strip-types scripts/native-auth-check.mjs && node scripts/adaptive-icon-check.mjs && node scripts/onboarding-check.mjs && node scripts/upload-navigation-check.mjs",
+    "check:auth": "node --experimental-strip-types scripts/native-auth-check.mjs && node scripts/adaptive-icon-check.mjs && node scripts/onboarding-check.mjs && node scripts/upload-navigation-check.mjs && node --experimental-strip-types scripts/onboarding-persistence-check.mjs",
     "check:charts": "node --experimental-strip-types scripts/report-chart-check.mjs && node --experimental-strip-types scripts/home-period-label-check.mjs && node --experimental-strip-types scripts/native-presentation-check.mjs && node --experimental-strip-types scripts/native-navigation-check.mjs && node scripts/store-management-check.mjs && node scripts/store-plan-change-check.mjs",
     "check:recurring-summary": "node --experimental-strip-types scripts/recurring-summary-check.mjs"
   },

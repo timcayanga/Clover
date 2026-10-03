@@ -5,7 +5,9 @@ import type { ExternalAccountResource } from "@clerk/expo/types";
 import * as AuthSession from "expo-auth-session";
 import * as WebBrowser from "expo-web-browser";
 import { useSession } from "./session";
-import { Body, Button, Card, Notice } from "./ui";
+import { Body, Button, Card, Notice, Icon } from "./ui";
+import { GoogleIcon } from "./google-icon";
+import { View } from "react-native";
 export function SettingsConnections() {
   return useSession().demo ? null : <Connections />;
 }
@@ -75,9 +77,10 @@ function Connections() {
       <Body>Social sign-ins and connected accounts</Body>
       {user?.externalAccounts.map((account) => (
         <Card key={account.id}>
-          <Body>
-            {account.provider} · {account.emailAddress}
-          </Body>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+            {account.provider === "google" ? <GoogleIcon /> : account.provider === "apple" ? <Icon line name="logo-apple" size={22}/> : null}
+            <View style={{ flex: 1 }}><Body>{account.provider === "google" ? "Google" : account.provider === "apple" ? "Apple" : account.provider} · {account.emailAddress}</Body></View>
+          </View>
           <Body>
             {account.verification?.status === "verified"
               ? "Connected"
@@ -98,6 +101,7 @@ function Connections() {
           ) : null}
           <Button
             title="Disconnect"
+            textOnly danger
             secondary
             disabled={busy}
             onPress={() => setRemoving(account)}
@@ -112,22 +116,14 @@ function Connections() {
         .map((provider) => (
           <Button
             key={provider}
+            textOnly
+            leading={provider === "google" ? <GoogleIcon /> : <Icon line name="logo-apple" size={22}/>}
             title={`Connect ${provider === "google" ? "Google" : "Apple"}`}
             secondary
             disabled={busy || !user}
             onPress={() => void run(() => connect(provider))}
           />
         ))}
-      <Button
-        title="Refresh connections"
-        secondary
-        disabled={busy || !user}
-        onPress={() =>
-          void run(async () => {
-            await user!.reload();
-          })
-        }
-      />
       {removing ? (
         <Card>
           <Body>

@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
-import { Platform } from "react-native";
+import { Platform, View } from "react-native";
+import { router } from "expo-router";
 import { printSnapshot } from "./print-snapshot";
 import * as Print from "expo-print";
 import * as Sharing from "expo-sharing";
@@ -94,7 +95,7 @@ export function SettingsData({
   };
   const phrase =
     scope === "account"
-      ? "DELETE MY ACCOUNT"
+      ? "DELETE"
       : scope === "all"
         ? "DELETE ALL DATA"
         : "DELETE";
@@ -205,24 +206,21 @@ export function SettingsData({
             />
           </Card>
         </>
-      ) : (
-        <Card style={{ borderRadius: 16 }}>
-          <Body>Delete account</Body>
-          <Body>
-            Permanently delete your Clover account and the data tied to it.
-          </Body>
-          <Button
-            title="Delete account"
-            secondary
-            disabled={busy}
-            onPress={() => {
-              setScope("account");
-              setTyped("");
-            }}
-          />
-        </Card>
-      )}
-      {scope ? (
+      ) : null}
+      {accountOnly ? <Card style={{ borderRadius: 16 }}>
+        <Body>Permanently delete your Clover account.</Body>
+        {scope === "account" ? <>
+          <Body>This cannot be undone.</Body>
+          <Body>If you have a store subscription, cancel it in your store to stop future billing.</Body>
+          <Button textOnly title="Manage subscription" onPress={() => router.push({ pathname: "/settings", params: { section: "plan" } })}/>
+          <Field label="Type DELETE to confirm" value={typed} onChangeText={setTyped} autoCapitalize="characters" editable={!busy}/>
+          <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 12 }}>
+            <Button danger title={busy ? "Deleting…" : "Confirm deletion"} disabled={busy || typed !== phrase} onPress={() => void run(remove)}/>
+            <Button secondary title="Cancel" disabled={busy} onPress={() => { setScope(null); setTyped(""); }}/>
+          </View>
+        </> : <Button danger title="Delete account" disabled={busy} onPress={() => { setScope("account"); setTyped(""); }}/>}
+      </Card> : null}
+      {scope && !accountOnly ? (
         <Card>
           <Body>
             {scope === "account"

@@ -70,7 +70,7 @@ const hiddenKey = "clover.home.hide-balances";
 export default function Home() {
   const { colors, styles } = useTheme();
   const session = useSession();
-  const [data, setData] = useState<HomeData | null>(null);
+  const [data, setData] = useState<HomeData | null>(() => session.cached<HomeData>(`home?workspaceId=${encodeURIComponent(session.profileId)}&currency=${session.data?.defaultCurrency ?? "PHP"}&section=overview`));
   const [error, setError] = useState("");
   const [detailsError, setDetailsError] = useState(false);
   const [hidden, setHidden] = useState(true);
@@ -150,6 +150,8 @@ export default function Home() {
       setData(cachedOverview ? mergeHomeDetails(cachedOverview, session.cached<HomeDetails>(`${basePath}&section=details`)) : null);
       setError(""); setDetailsError(false);
       const refresh = async () => {
+        // New accounts can reach Home while their starter Profile is created.
+        if (!session.demo && !session.profileId) return;
         const run = ++generation;
         try {
           const value = await load();
@@ -197,7 +199,13 @@ export default function Home() {
       {error ? (
         <Notice>{error}</Notice>
       ) : !data ? (
-        <Body>Loading Home…</Body>
+        <>
+          <LinearGradient colors={["#03A8C0", "#34D3D0"]} style={{ borderRadius: 20, padding: 24, gap: 16 }}>
+            <Text style={{ color: "white", textAlign: "center" }}>My Balance</Text>
+            <View accessibilityLabel="Loading balance" style={{ height: 44, borderRadius: 12, backgroundColor: "#FFFFFF33" }}/>
+          </LinearGradient>
+          <HomeQuickAccess />
+        </>
       ) : (
         <>
           <LinearGradient

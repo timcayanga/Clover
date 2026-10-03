@@ -1,3 +1,4 @@
+import { OnboardingPersistence } from "./onboarding-persistence";
 import { needsNativeImportResume } from "../../shared/native-import-status";
 import { notifyImportQueued } from "./import-handoff";
 import { PageCache, isPageRead } from "./page-cache";
@@ -34,6 +35,7 @@ import type { Bootstrap, Transaction } from "./types";
 import { removeUploadCopy, type SelectedFile } from "./upload";
 
 type Session = {
+  completeOnboarding: (choices: { experience: string; currency: string; locale: string; timeZone: string }) => Promise<void>;
   cached: <T>(path: string) => T | null;
   fileQueue: FileQueue | null;
   queuedFiles: QueuedFile[];
@@ -114,6 +116,7 @@ export function SessionProvider({
   const offlineReady = useRef<Promise<OfflineEngine | null>>(
     Promise.resolve(null),
   );
+  const setupQueue = useRef<OnboardingPersistence | null>(null);
   const transport = useCallback(
     async <T,>(path: string, options?: RequestInit) => {
       if (demo) throw new Error("Sample mode never connects to your account.");
@@ -136,6 +139,8 @@ export function SessionProvider({
         const store = await openOfflineStore(`${apiBase()}:${userId}`);
         engine = new OfflineEngine(store, transport, () => Crypto.randomUUID());
         await engine.init();
+        setupQueue.current = new OnboardingPersistence(store, choices => transport("onboarding", { method: "POST", body: JSON.stringify(choices) }));
+        await setupQueue.current.init();
         preferredProfile.current = await store.get<string>("selected-profile") ?? "";
         const cached = await store.get<CacheEntry<Bootstrap>>("cache:bootstrap");
         if (active && cached) {
@@ -148,7 +153,7 @@ export function SessionProvider({
               }
               if (!active) { await engine.dispose(); return null; }
               setProfile(selected);
-              setData(cached.value);
+              setData(setupQueue.current?.pending ? { ...cached.value, needsOnboarding: false, defaultCurrency: setupQueue.current?.pending.currency } : cached.value);
             }
           } catch { /* Expired access waits for fresh authenticated bootstrap. */ }
         }
@@ -285,6 +290,18 @@ export function SessionProvider({
     },
     [transport, demo],
   );
+  const flushSetup = useCallback(async () => {
+    const engine = await offlineReady.current;
+    if (!setupQueue.current?.pending || (engine && !engine.status.online)) return;
+    await setupQueue.current.flush();
+    setRevision(n => n + 1);
+  }, []);
+  useEffect(() => {
+    if (demo) return;
+    const tick = () => { if (AppState.currentState !== "background") void flushSetup().catch(() => {}); };
+    tick(); const timer = setInterval(tick, 5000);
+    return () => clearInterval(timer);
+  }, [demo, flushSetup]);
   useEffect(() => {
     if (demo) return;
     let current = true;
@@ -295,8 +312,10 @@ export function SessionProvider({
         setData(previous => {
           if (previous && (previous.offlineEpoch !== result.offlineEpoch ||
             previous.profiles.map(p => p.id).join() !== result.profiles.map(p => p.id).join())) pageCache.current.clear();
-          return result;
+          return setupQueue.current?.pending || setupQueue.current?.completed ? { ...result, needsOnboarding: false, ...(setupQueue.current?.pending ? { defaultCurrency: setupQueue.current?.pending.currency } : {}) } : result;
         });
+        const selected = selectRecentProfile(result.profiles, preferredProfile.current, preferredProfile.current);
+        if (selected && !result.needsOnboarding) void request(`home?workspaceId=${encodeURIComponent(selected)}&currency=${result.defaultCurrency}&section=overview`).catch(() => {});
         if (result.entitlement.analytics) updateNativePlanAnalytics(result.entitlement.analytics);
         setProfile((previous) =>
           selectRecentProfile(result.profiles, previous, preferredProfile.current),
@@ -347,6 +366,15 @@ export function SessionProvider({
             throw new Error("Your session expired. Please sign in again.");
           return apiRequest<string>(token, path, {}, "text");
         },
+        completeOnboarding: async (choices) => {
+          if (demo) { setData(previous => previous ? { ...previous, needsOnboarding: false } : previous); return; }
+          const engine = await offlineReady.current;
+          if (!engine) throw new Error("Secure storage is still opening. Please try again.");
+          if (!setupQueue.current) throw new Error("Setup storage is not ready. Please retry.");
+          await setupQueue.current.save(choices);
+          setData(previous => previous ? { ...previous, needsOnboarding: false, defaultCurrency: choices.currency } : previous);
+          void flushSetup().catch(() => {});
+        },
         setProfileId: (id) => {
           if (data?.profiles.some((p) => p.id === id)) {
             preferredProfile.current = id;
@@ -358,8 +386,8 @@ export function SessionProvider({
         rows,
         uploads,
         registerUpload: async (id, file, targetProfileId = profileId, importMode) => {
-          if (!data?.profiles.some((p) => p.id === targetProfileId)) return;
-          if (!demo) await cloudAiRef.current.ensure().catch(() => false);
+          if (!data?.profiles.some((p) => p.id === targetProfileId)) throw new Error("Choose a Profile before importing.");
+
           const uploadQueue=fileQueue??fileQueueRef.current;
           if(!demo && Platform.OS!=="web" && !uploadQueue)throw new Error("Secure file storage is still opening. Please try again in a moment.");
           if (uploadQueue) {
@@ -377,11 +405,17 @@ export function SessionProvider({
               },
               bytes,
             );
-            await uploadQueue.enqueue(id);
             notifyImportQueued();
             removeUploadCopy(file.uri);
-            // The queue owns upload lifetime; navigation can close immediately.
-            if (offlineStatus.online) void uploadQueue.flush().catch(() => {});
+            // Retain the source before dismissing. The session owns this task,
+            // so navigating away cannot discard the file or the consent step.
+            void (async () => {
+              // Let the native sheet finish dismissing before presenting consent.
+              await new Promise(resolve => setTimeout(resolve, 400));
+              if (offlineStatus.online) await cloudAiRef.current.ensure().catch(() => false);
+              await uploadQueue.enqueue(id);
+              if (offlineStatus.online) await uploadQueue.flush();
+            })().catch(() => { /* The retained draft remains resumable in ImportActivity. */ });
             return;
           }
           uploadCopies.current.push(file.uri);

@@ -32,7 +32,7 @@ export async function handleMobileDataSettings(
     );
   }
   if (operation === "settings-delete-account") {
-    z.object({ confirmation: z.literal("DELETE MY ACCOUNT") })
+    z.object({ confirmation: z.enum(["DELETE", "DELETE MY ACCOUNT"]) })
       .strict()
       .parse(await request.json());
     const forwarded = new Request(url, { method: "POST", headers });

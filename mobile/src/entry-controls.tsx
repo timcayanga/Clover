@@ -99,16 +99,18 @@ export function EntrySelector({
 export function EntryTransition({
   value,
   children,
+  direction = 1,
 }: {
   value: string;
   children: ReactNode;
+  direction?: number;
 }) {
   const slide = useRef(new Animated.Value(0)).current;
   useEffect(() => {
     let active = true;
     void AccessibilityInfo.isReduceMotionEnabled().then((reduced) => {
       if (!active || reduced) return;
-      slide.setValue(12);
+      slide.setValue(32 * direction);
       Animated.timing(slide, {
         toValue: 0,
         duration: 180,
@@ -119,7 +121,7 @@ export function EntryTransition({
       active = false;
       slide.stopAnimation();
     };
-  }, [value, slide]);
+  }, [value, slide, direction]);
   return (
     <Animated.View style={{ gap: 16, transform: [{ translateX: slide }] }}>
       {children}

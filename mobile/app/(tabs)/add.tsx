@@ -1,4 +1,4 @@
-import { isUploadPhoto } from "../../../shared/native-upload";
+import { onImportQueued } from "../../src/import-handoff";
 import { PlanHeader } from "../../src/plan-ui";
 import { EntrySelector, EntryTransition } from "../../src/entry-controls";
 import { FinverseConnect } from "../../src/finverse-connect";
@@ -15,7 +15,6 @@ import { router, useFocusEffect, useLocalSearchParams } from "expo-router";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   Alert,
-  KeyboardAvoidingView,
   Platform,
   View,
   Pressable,
@@ -56,12 +55,16 @@ export default function Add({ sheet = false }: { sheet?: boolean } = {}) {
     picker?: string;
   }>();
   const handledPicker = useRef(false);
-  const [photoMode, setPhotoMode] = useState<"receipt" | "statement" | "portfolio" | "account_detail">("receipt");
+
   const close = () => {
     if (busy) return;
     if (sheet && router.canGoBack()) router.back();
     else router.replace("/(tabs)");
   };
+  useFocusEffect(useCallback(() => onImportQueued(() => {
+    if (sheet && router.canGoBack()) router.back();
+    else router.replace("/(tabs)");
+  }), [sheet]));
   useEffect(() => {
     setTab(entry?.startsWith("upload-") ? "upload" : "manual");
     setDraft(emptyTransaction());
@@ -128,12 +131,7 @@ export default function Add({ sheet = false }: { sheet?: boolean } = {}) {
       session.setProfileId(target.id);
       setBusy(true);
       await session
-        .registerUpload(id, file, target.id, isUploadPhoto(file.name, file.mimeType) ? (importMode ?? photoMode) : undefined)
-        .then(() => {
-          // Dismiss every nested add sheet before showing shared background progress.
-          if (sheet && router.canDismiss()) router.dismissAll();
-          else router.replace("/(tabs)");
-        })
+        .registerUpload(id, file, target.id, importMode)
         .catch((e: Error) => setError(e.message))
         .finally(() => setBusy(false));
     };
@@ -184,7 +182,7 @@ export default function Add({ sheet = false }: { sheet?: boolean } = {}) {
           copyToCacheDirectory: true,
         });
         finishInput(result.canceled ? "canceled" : "completed");
-        if (!result.canceled) await open(result.assets[0]);
+        if (!result.canceled) { const asset = result.assets[0]; await open({ ...asset, size: asset.size ?? new File(asset.uri).size }); }
       } else {
         if (
           source === "camera" &&
@@ -228,7 +226,7 @@ export default function Add({ sheet = false }: { sheet?: boolean } = {}) {
   useEffect(() => {
     if (
       handledPicker.current ||
-      !session.data ||
+      !session.data?.profiles.length ||
       !["file", "camera", "library"].includes(picker ?? "")
     )
       return;
@@ -237,11 +235,7 @@ export default function Add({ sheet = false }: { sheet?: boolean } = {}) {
     void choose(picker as "file" | "camera" | "library");
   }, [picker, session.data]);
   return (
-    <KeyboardAvoidingView
-      style={{ flex: 1 }}
-      keyboardVerticalOffset={insets.top + 70}
-      behavior={Platform.OS === "ios" ? "padding" : "height"}
-    >
+    <View style={{ flex: 1 }}>
       <Screen sheet={sheet} onDismiss={close}>
         <PlanHeader title={entry?.startsWith("upload-") ? "Upload" : "Add Transaction"} back={close}/>
         <View
@@ -261,7 +255,7 @@ export default function Add({ sheet = false }: { sheet?: boolean } = {}) {
               <Pressable accessibilityRole="button" accessibilityLabel={tableMode ? "Single entry" : "Table entry"} onPress={() => setTableMode(!tableMode)} style={{ width: 44, height: 44, alignItems: "center", justifyContent: "center" }}><Icon line name={tableMode ? "create-outline" : "grid-outline"} size={22}/></Pressable>
             </View>
             <View style={{ display: tableMode ? "none" : "flex" }}>
-              <ManualTransaction draft={draft} onChange={setDraft} />
+              <ManualTransaction draft={draft} onChange={setDraft} onSaved={() => { if (sheet && router.canGoBack()) router.back(); else router.replace("/(tabs)"); }} />
             </View>
             <View style={{ display: tableMode ? "flex" : "none" }}>
               <TransactionTableEntry key={session.profileId} />
@@ -280,10 +274,7 @@ export default function Add({ sheet = false }: { sheet?: boolean } = {}) {
           <View
             style={{ display: tab === "upload" ? "flex" : "none", gap: 18 }}
           >
-            {!importMode ? <>
-              <Body>Photo contents</Body>
-              <Choices options={[{value:"receipt",label:"Receipt"},{value:"statement",label:"Statement or history"},{value:"portfolio",label:"Investments"},{value:"account_detail",label:"Account details"}]} value={photoMode} onChange={value => setPhotoMode(value as typeof photoMode)} />
-            </> : null}
+
             <View style={{ gap: 10 }}>
               {(
                 [
@@ -368,6 +359,6 @@ export default function Add({ sheet = false }: { sheet?: boolean } = {}) {
           </EntryTransition>
         </View>
       </Screen>
-    </KeyboardAvoidingView>
+    </View>
   );
 }

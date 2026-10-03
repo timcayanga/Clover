@@ -123,9 +123,11 @@ export function ChoiceField({ label, options, value, onChange }: {
 export function ManualTransaction({
   draft,
   onChange,
+  onSaved,
 }: {
   draft: TransactionDraft;
   onChange: (draft: TransactionDraft) => void;
+  onSaved?: () => void;
 }) {
   const session = useSession();
   const [localRows, setLocalRows] = useState<Transaction[]>([]);
@@ -193,7 +195,7 @@ export function ManualTransaction({
     onChange({ ...draft, ...patch });
     setSaved(false);
   };
-  const save = async () => {
+  const save = async (another = false) => {
     if (lock.current) return;
     if (
       !options?.accounts.some((account) => account.id === draft.accountId) ||
@@ -255,6 +257,8 @@ export function ManualTransaction({
       setUncertain(false);
       setSaved(true);
       onChange(emptyTransaction());
+      session.refresh();
+      if (!another) onSaved?.();
     } catch (e) {
       if (draft.adviserEntry && (!(e instanceof ApiError) || e.status >= 500))
         setUncertain(true);
@@ -390,11 +394,9 @@ export function ManualTransaction({
           ))}
         </Card>
       ) : null}
-      <Button
-        title={moreDetails ? "Fewer details" : "More details"}
-        secondary
-        onPress={() => setMoreDetails((value) => !value)}
-      />
+      <Pressable accessibilityRole="button" accessibilityState={{ expanded: moreDetails }} onPress={() => setMoreDetails(value => !value)} style={{ minHeight: 48, flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
+        <Body>More details</Body><Icon line name={moreDetails ? "chevron-up" : "chevron-down"} size={18} />
+      </Pressable>
       {moreDetails ? (
         <Field
           label="Notes (optional)"
@@ -411,6 +413,7 @@ export function ManualTransaction({
         </Notice>
       ) : null}
       {error ? <Notice>{error}</Notice> : null}
+      <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 12 }}>
       <Button
         title={
           busy
@@ -422,6 +425,8 @@ export function ManualTransaction({
         disabled={busy || !options?.accounts.length}
         onPress={() => void save()}
       />
+      <Button title="Add another" textOnly disabled={busy || uncertain || !options?.accounts.length} onPress={() => void save(true)} />
+      </View>
     </View>
   );
 }

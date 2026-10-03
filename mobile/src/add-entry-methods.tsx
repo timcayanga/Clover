@@ -1,3 +1,4 @@
+import { useEntryNavigation } from "./entry-navigation";
 import { EntrySelector, EntryTransition, UploadTiles } from "./entry-controls";
 import { Text } from "./app-text";
 import type { AddFormDraft } from "../../shared/add-form-draft";
@@ -34,6 +35,7 @@ export function AddEntryMethods({
   const [tab, setTab] = useState(initialMethod as string),
     [visited, setVisited] = useState(false);
   const { colors } = useTheme();
+  const navigate = useEntryNavigation();
   if (!enabled) return <>{children}</>;
   return (
     <View style={{ gap: 16 }}>
@@ -92,7 +94,7 @@ export function AddEntryMethods({
         </Body>
         <UploadTiles disabled={disabled} onChoose={source => {
           if (onUpload && source === "file") { onUpload(); setTab("manual"); }
-          else router.push({ pathname: "/add-transaction", params: { entry: `upload-${source}`, picker: source, importMode: kind === "investment" || kind === "trade" ? "portfolio" : kind === "split" ? "receipt" : "statement" } });
+          else navigate(() => router.push({ pathname: "/add-transaction", params: { entry: `upload-${source}`, picker: source } }));
         }}/>
         <Body>Your manual draft stays here while you switch methods.</Body>
       </View>

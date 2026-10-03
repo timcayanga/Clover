@@ -48,17 +48,13 @@ export default function Onboarding() {
     setBusy(true);
     setError("");
     try {
-      await session.request("onboarding", {
-        method: "POST",
-        body: JSON.stringify({
-          experience,
-          currency,
-          locale: Intl.DateTimeFormat().resolvedOptions().locale,
-          timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
-        }),
+      await session.completeOnboarding({
+        experience, currency,
+        locale: Intl.DateTimeFormat().resolvedOptions().locale,
+        timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
       });
       setDestination(upload);
-      session.refresh();
+
     } catch (e) {
       setError(e instanceof Error ? e.message : "Unable to finish setup.");
     } finally {
@@ -237,7 +233,7 @@ export default function Onboarding() {
           {error ? <Notice>{error}</Notice> : null}
           <View style={{ alignItems: "flex-end" }}>
             <Button
-              title={busy ? "Saving…" : "Skip for now"}
+              title="Skip for now"
               secondary
               disabled={busy || !experience || currency.length !== 3}
               onPress={() => void finish("skip")}

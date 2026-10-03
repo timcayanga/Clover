@@ -1,8 +1,9 @@
 import { useEffect, type ReactNode } from "react";
+import { EntryNavigationContext } from "./entry-navigation";
 import { onImportQueued } from "./import-handoff";
 import { Modal, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { DetailNavigation } from "./ui";
+
 export function EntryOverlay({
   children,
   onClose,
@@ -18,6 +19,8 @@ export function EntryOverlay({
       animationType="slide"
       onRequestClose={onClose}
       statusBarTranslucent
+      navigationBarTranslucent
+      presentationStyle="overFullScreen"
     >
       <View
         style={{
@@ -28,8 +31,8 @@ export function EntryOverlay({
           backgroundColor: "#0005",
         }}
       >
-        <View style={{ flex: 1 }}>{children}</View>
-        <DetailNavigation onNavigate={onClose} />
+        <EntryNavigationContext.Provider value={action => { onClose(); setTimeout(action, 400); }}><View style={{ flex: 1 }}>{children}</View></EntryNavigationContext.Provider>
+
       </View>
     </Modal>
   );

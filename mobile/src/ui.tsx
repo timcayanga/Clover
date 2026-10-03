@@ -134,6 +134,8 @@ export function Button({
   icon,
   leading,
   fullWidth = false,
+  textOnly = false,
+  danger = false,
 }: {
   title: string;
   onPress: () => void;
@@ -142,6 +144,8 @@ export function Button({
   icon?: ComponentProps<typeof Ionicons>["name"];
   leading?: ReactNode;
   fullWidth?: boolean;
+  textOnly?: boolean;
+  danger?: boolean;
 }) {
   const { colors, styles } = useTheme();
   return (
@@ -161,11 +165,13 @@ export function Button({
       style={({ pressed }) => [
         styles.button,
         secondary && styles.secondary,
+        danger && { backgroundColor: colors.danger, borderColor: colors.danger },
+        textOnly && { backgroundColor: "transparent", borderWidth: 0, paddingHorizontal: 0, minHeight: 44 },
         fullWidth && { alignSelf: "stretch", width: "100%", minHeight: 52 },
         (pressed || disabled) && { opacity: 0.6 },
       ]}
     >
-      {!secondary ? (
+      {!secondary && !textOnly && !danger ? (
         <LinearGradient
           pointerEvents="none"
           colors={["#03A8C0", "#34D3D0"]}
@@ -182,7 +188,7 @@ export function Button({
           color={secondary ? colors.ink : "#FFFFFF"}
         />
       ) : null}
-      <Text style={[styles.buttonText, secondary && { color: colors.ink }, /^delete /i.test(title) && { color: colors.danger }]}>
+      <Text style={[styles.buttonText, secondary && { color: colors.ink }, textOnly && { color: danger ? colors.danger : colors.teal, fontSize: 13 }, danger && !textOnly && { color: "#FFFFFF" }]}>
         {title}
       </Text>
     </Pressable>
@@ -280,10 +286,11 @@ export function Screen({
       style={{ flex: 1, backgroundColor: colors.bg }}
       contentContainerStyle={[
         styles.content,
-        { gap, paddingBottom: 100 + insets.bottom },
+        { gap, paddingBottom: (sheet ? 24 : 100) + insets.bottom },
       ]}
       keyboardShouldPersistTaps="handled"
       automaticallyAdjustKeyboardInsets
+      keyboardDismissMode="interactive"
     >
       {!session.demo &&
       (!session.offlineStatus.online || session.offlineStatus.pending > 0) ? (

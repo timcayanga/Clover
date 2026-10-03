@@ -28,7 +28,7 @@ export function ImportActivity() {
   const completed = useRef(new Set<string>());
   const pending = useRef(new Set<string>());
   const files = session.queuedFiles.filter(file => file.workspaceId === session.profileId &&
-    file.state !== "draft" && (file.state !== "done" || pending.current.has(file.id)) && !dismissed.includes(file.id));
+    (file.state !== "done" || pending.current.has(file.id)) && !dismissed.includes(file.id));
   const file = files.find(file => !["done", "attention", "paused"].includes(file.state)) ?? files.at(-1);
   useEffect(() => {
     for (const item of session.queuedFiles) {
@@ -80,7 +80,7 @@ export function ImportActivity() {
             await session.fileQueue!.flush();
           })} /> : null}
         {done || (needsReview && !needsPassword) ? <Button secondary title="Review" onPress={review}/> : null}
-        {!needsPassword && (file.state === "paused" || (needsReview && file.originalRetained !== false)) ?
+        {!needsPassword && (file.state === "draft" || file.state === "paused" || (needsReview && file.originalRetained !== false)) ?
           <Button secondary title="Resume upload" disabled={busy} onPress={() => void run(async () => {
             await session.fileQueue!.enqueue(file.id);
             if (!waiting) await session.fileQueue!.flush();

@@ -42,7 +42,7 @@ jobs:
 
       # qa:prepush includes both production dependency audits; keep one gate
       # entry point so a passing local push cannot skip GitHub's security checks.
-      # Mobile verifies the pinned node-forge backport and exploit regressions
-      # before accounting for its one mitigated advisory in the fresh npm audit.
+      # Mobile verifies the pinned node-forge backport and braces depth guards
+      # before accounting for those tested mitigations in the fresh npm audit.
       - name: Run the same pre-push quality gate used locally
         run: npm run qa:prepush

@@ -16,6 +16,7 @@ import { SettingsPhoto } from "../src/settings-photo";
 import { SettingsSecurity } from "../src/settings-security";
 import { SettingsCategories } from "../src/settings-categories";
 import { SettingsProfiles } from "../src/settings-profiles";
+import { EntryTransition } from "../src/entry-controls";
 import { PlanHeader } from "../src/plan-ui";
 export default function Settings() {
   const session = useSession();
@@ -78,18 +79,21 @@ export default function Settings() {
     lastName: "",
     email: "",
   });
+  const [savedAccount, setSavedAccount] = useState({ firstName: "", lastName: "" });
+  const dirty = account.firstName !== savedAccount.firstName || account.lastName !== savedAccount.lastName;
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState(false);
   useEffect(() => {
     let active = true;
-    if (session.demo)
+    if (session.demo) {
+      setSavedAccount({ firstName: "Alex", lastName: "Sample" });
       setAccount({
         firstName: "Alex",
         lastName: "Sample",
         email: "alex@example.test",
       });
-    else
+    } else
       void session
         .request<typeof account>("settings/account")
         .then((data) => {
@@ -99,6 +103,7 @@ export default function Settings() {
               lastName: data.lastName ?? "",
               email: data.email,
             });
+            setSavedAccount({ firstName: data.firstName ?? "", lastName: data.lastName ?? "" });
             setAccountReady(true);
           }
         })
@@ -123,6 +128,7 @@ export default function Settings() {
             lastName: account.lastName,
           }),
         });
+      setSavedAccount({ firstName: account.firstName, lastName: account.lastName });
       setMessage(
         session.demo
           ? "Sample changes stay in this preview."
@@ -165,6 +171,7 @@ export default function Settings() {
         }
         back={() => (section === "menu" ? router.back() : setSection("menu"))}
       />
+      <EntryTransition value={section} direction={section === "menu" ? -1 : 1}>
       {section === "menu" ? (
         <View>
           {(
@@ -235,14 +242,15 @@ export default function Settings() {
           <Body>Email: {account.email}</Body>
           <Button
             title="Change password"
+            textOnly
             secondary
             onPress={() => setSection("security")}
           />
-          <Button
+          {dirty ? <Button
             title={busy ? "Saving…" : "Save changes"}
             disabled={busy || !accountReady}
             onPress={() => void save()}
-          />
+          /> : null}
         </Card>
       ) : null}
       {section === "account" ? <SettingsConnections /> : null}
@@ -345,6 +353,7 @@ export default function Settings() {
       ) : null}
       {error ? <Notice>{error}</Notice> : null}
       {message ? <Body>{message}</Body> : null}
+      </EntryTransition>
     </Screen>
   );
 }

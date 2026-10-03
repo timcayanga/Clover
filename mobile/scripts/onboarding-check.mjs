@@ -5,7 +5,7 @@ import ts from 'typescript';
 const code=ts.transpileModule(fs.readFileSync(new URL('../app/onboarding.tsx',import.meta.url),'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022,jsx:ts.JsxEmit.ReactJSX,esModuleInterop:true}}).outputText;
 function harness(fail=false){
  const states=[],refs=[],requests=[],routes=[];let si=0,ri=0,effects=[];
- const session={data:{needsOnboarding:true,currencyChoices:[{code:'PHP',name:'Philippine Peso'}]},request:async(path,options)=>{requests.push({path,body:JSON.parse(options.body)});if(fail)throw new Error('Setup unavailable');},refresh:()=>{session.data={...session.data,needsOnboarding:false};}};
+ const session={data:{needsOnboarding:true,currencyChoices:[{code:'PHP',name:'Philippine Peso'}]},completeOnboarding:async(body)=>{requests.push({path:"onboarding",body});if(fail)throw new Error("Setup unavailable");session.data={...session.data,needsOnboarding:false};},refresh:()=>{session.data={...session.data,needsOnboarding:false};}};
  const exports={};
  vm.runInNewContext(code,{exports,Intl,Error,require:name=>{
   if(name==='react')return {useState:v=>{const i=si++;if(!(i in states))states[i]=v;return [states[i],v=>{states[i]=v;}];},useRef:v=>{const i=ri++;return refs[i]??=( {current:v});},useEffect:f=>effects.push(f)};

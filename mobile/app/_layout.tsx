@@ -1,3 +1,4 @@
+import { RouteReveal } from "../src/route-reveal";
 import { GlassNavigationProvider } from "../src/glass-backdrop";
 import { Image } from "expo-image";
 import * as SplashScreen from "expo-splash-screen";
@@ -90,11 +91,13 @@ function Routes() {
     }
   }, [active, session.data?.needsOnboarding, path]);
   return (
-    <PrivacyShield>
+    <RouteReveal><PrivacyShield>
       <GlassNavigationProvider>
         <StatusBar style={active && dark ? "light" : "dark"} />
           <Stack
             screenOptions={{
+              animation: "slide_from_right",
+              animationDuration: 220,
               headerTintColor: colors.teal,
               headerTitleStyle: { color: colors.ink },
               headerShadowVisible: false,
@@ -168,7 +171,7 @@ function Routes() {
           </Stack>
           {active ? <ImportActivity /> : null}
       </GlassNavigationProvider>
-    </PrivacyShield>
+    </PrivacyShield></RouteReveal>
   );
 }
 const noToken = async () => null;

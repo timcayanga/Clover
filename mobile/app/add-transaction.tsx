@@ -1,7 +1,7 @@
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { View } from "react-native";
 import AddTransaction from "./(tabs)/add";
-import { DetailNavigation } from "../src/ui";
+
 
 export default function AddTransactionSheet() {
   const insets = useSafeAreaInsets();
@@ -15,7 +15,7 @@ export default function AddTransactionSheet() {
       }}
     >
       <AddTransaction sheet />
-      <DetailNavigation />
+
     </View>
   );
 }

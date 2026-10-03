@@ -1,15 +1,17 @@
 import { useEffect, useRef, useState } from "react";
-import { Image } from "react-native";
+import { Image, View, Pressable } from "react-native";
 import { useUser } from "@clerk/expo";
 import * as ImagePicker from "expo-image-picker";
 import { useSession } from "./session";
 import { removeUploadCopy } from "./upload";
-import { Body, Button, Card, Notice } from "./ui";
+import { Body, Button, Card, Notice, Icon, useTheme } from "./ui";
 export function SettingsPhoto() {
   return useSession().demo ? null : <PhotoControls />;
 }
 function PhotoControls() {
   const { user } = useUser();
+  const { colors } = useTheme();
+  const [editing, setEditing] = useState(false);
   const [photo, setPhoto] = useState<{ uri: string; data: string } | null>(
     null,
   );
@@ -77,6 +79,7 @@ function PhotoControls() {
   return (
     <Card style={{ borderRadius: 16 }}>
       <Body>Photo</Body>
+      <View style={{ alignSelf: "center" }}>
       {photo?.uri || user?.imageUrl ? (
         <Image
           accessibilityLabel="Account photo"
@@ -89,29 +92,29 @@ function PhotoControls() {
           }}
         />
       ) : null}
-      <Button
-        title="Update photo"
-        secondary
-        disabled={busy || !user}
-        onPress={() => void choose()}
-      />
+      <Pressable accessibilityRole="button" accessibilityLabel="Edit photo" onPress={() => setEditing(v => !v)} style={{ position: "absolute", right: -12, top: -12, padding: 12, borderRadius: 24, backgroundColor: colors.white }}><Icon line name="pencil" size={20}/></Pressable>
+      </View>
+      {editing ? <Button title="Update photo" textOnly disabled={busy || !user} onPress={() => void choose()} /> : null}
       {photo ? (
         <>
           <Button
             title="Save photo"
+            textOnly
             disabled={busy}
             onPress={() => void save(false)}
           />
           <Button
             title="Cancel"
+            textOnly
             secondary
             disabled={busy}
             onPress={() => setPhoto(null)}
           />
         </>
-      ) : user?.hasImage ? (
+      ) : editing && user?.hasImage ? (
         <Button
           title="Remove photo"
+          textOnly danger
           secondary
           disabled={busy}
           onPress={() => setRemove(true)}
@@ -122,11 +125,13 @@ function PhotoControls() {
           <Body>Remove your account photo?</Body>
           <Button
             title="Confirm removal"
+            textOnly danger
             disabled={busy}
             onPress={() => void save(true)}
           />
           <Button
             title="Cancel"
+            textOnly
             secondary
             disabled={busy}
             onPress={() => setRemove(false)}
