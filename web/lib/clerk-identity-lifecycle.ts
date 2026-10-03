@@ -1,3 +1,4 @@
+import { cancelStoreBillingForDeletion } from "./store-account-deletion";
 import { revalidateTag } from "next/cache";
 import { clerkClient } from "@clerk/nextjs/server";
 import { prisma } from "@/lib/prisma";
@@ -5,6 +6,7 @@ import { getAdminDataEnvironment } from "@/lib/admin";
 import {
   assertUserErasureScope,
   deleteLocalUserAccount,
+  cancelWebBillingForDeletion,
 } from "@/lib/account-management";
 
 const invalidateIdentityCache = () => {
@@ -80,6 +82,7 @@ export async function syncClerkIdentity(clerkUserId: string) {
 export async function deleteClerkIdentity(
   clerkUserId: string,
   providerAlreadyDeleted = false,
+  appleSubscriptionAcknowledged?: boolean,
 ) {
   const environment = await assertClerkIdentityEnvironment();
   const client = await clerkClient();
@@ -95,6 +98,13 @@ export async function deleteClerkIdentity(
       if (!isMissing(error)) throw error;
     }
   }
+  const billingUser = await prisma.user.findUnique({ where: { clerkUserId }, select: { environment: true } });
+  if (billingUser && billingUser.environment !== environment)
+    throw new Error("Identity belongs to another Clover environment; nothing was deleted.");
+  // Billing must succeed before a tombstone disables login or Clerk erases it.
+  // This also covers Admin deletion and retries following a Clerk webhook.
+  await cancelStoreBillingForDeletion(clerkUserId, appleSubscriptionAcknowledged);
+  await cancelWebBillingForDeletion(clerkUserId);
   await prisma.$transaction(async (tx) => {
     await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`clerk-identity:${clerkUserId}`}))`;
     const user = await tx.user.findUnique({

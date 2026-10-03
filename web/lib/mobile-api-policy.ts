@@ -13,7 +13,7 @@ export function mobileOperation(method: string, segments: string[]) {
   if (segments.length === 3 && segments[0] === "circles" && segments[2] === "invitations" && ["GET", "POST"].includes(method)) return "circle-invite";
   if (segments.length === 4 && segments[0] === "circles" && segments[2] === "invitations" && ["PATCH", "DELETE"].includes(method)) return "circle-invite-manage";
   if (path === "settings/wipe-data" && method === "POST") return "settings-wipe-data";
-  if (path === "settings/delete-account" && method === "POST") return "settings-delete-account";
+  if (path === "settings/delete-account" && ["GET", "POST"].includes(method)) return "settings-delete-account";
   if (path === "settings/data" && ["GET", "DELETE"].includes(method)) return "settings-data";
   if (method === "POST" && path === "offline/allowance") return "offline-allowance";
   if (method === "POST" && path === "offline/sync") return "offline-sync";

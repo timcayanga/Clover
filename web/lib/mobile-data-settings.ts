@@ -32,10 +32,13 @@ export async function handleMobileDataSettings(
     );
   }
   if (operation === "settings-delete-account") {
-    z.object({ confirmation: z.enum(["DELETE", "DELETE MY ACCOUNT"]) })
-      .strict()
-      .parse(await request.json());
-    const forwarded = new Request(url, { method: "POST", headers });
+    if (request.method === "GET") {
+      const forwarded = new Request(url, { method: "GET", headers });
+      return withMobileRequestContext(userId, forwarded, () => import("@/app/api/account/delete/route").then(route => route.GET()));
+    }
+    const input = z.object({ confirmation: z.enum(["DELETE", "DELETE MY ACCOUNT"]), appleSubscriptionAcknowledged: z.boolean().optional() })
+      .strict().parse(await request.json());
+    const forwarded = new Request(url, { method: "POST", headers, body: JSON.stringify({ appleSubscriptionAcknowledged: input.appleSubscriptionAcknowledged }) });
     return withMobileRequestContext(userId, forwarded, () =>
       import("@/app/api/account/delete/route").then((route) =>
         route.POST(forwarded),

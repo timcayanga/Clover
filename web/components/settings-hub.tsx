@@ -1,5 +1,7 @@
 "use client";
 
+import { AccountDeletionControl } from "./account-deletion-control";
+
 import { AiConsentControl } from "./ai-consent";
 
 import { getTimeZoneOptions, formatTimeZoneLabel } from "../../shared/region-options";
@@ -1326,29 +1328,6 @@ export function SettingsHub({
     });
   };
 
-  const handleDeleteAccount = () => {
-    if (!isLoaded || !isSignedIn || !user) {
-      return;
-    }
-
-    const confirmed = window.confirm(
-      "Delete your Clover account? This removes your profile and cannot be undone."
-    );
-
-    if (!confirmed) {
-      return;
-    }
-
-    startTransition(async () => {
-      try {
-        await user.delete();
-        window.location.assign("/");
-      } catch (error) {
-        setAccountMessage(error instanceof Error ? error.message : "Unable to delete your account.");
-      }
-    });
-  };
-
   const dataDeleteCopy = {
     transactions: {
       confirmTitle: "Delete transaction history?",
@@ -1924,10 +1903,7 @@ export function SettingsHub({
               <div className="settings-account-card__head">
                 <h5>Delete account</h5>
               </div>
-              <p>This permanently deletes your Clover account and all data tied to it.</p>
-              <button type="button" className="button button-danger button-small" onClick={handleDeleteAccount} disabled={isPending}>
-                Delete account
-              </button>
+              <AccountDeletionControl />
             </article>
           </section>
         ) : null}

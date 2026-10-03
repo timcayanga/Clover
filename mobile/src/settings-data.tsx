@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
-import { Platform, View } from "react-native";
-import { router } from "expo-router";
+import { AppState, Linking, Platform } from "react-native";
+import { manageAppleStoreSubscription, type StoreStatus } from "./store-billing";
 import { printSnapshot } from "./print-snapshot";
 import * as Print from "expo-print";
 import * as Sharing from "expo-sharing";
@@ -16,6 +16,22 @@ export function SettingsData({
 }) {
   const session = useSession();
   const { styles } = useTheme();
+  const [billing, setBilling] = useState<{ appleCancellationRequired: boolean; googleCancellationRequired: boolean } | null>(null);
+  const [appleReturned, setAppleReturned] = useState(false);
+  const [appleAcknowledged, setAppleAcknowledged] = useState(false);
+  const awaitingApple = useRef(false);
+  useEffect(() => {
+    let leftApp = false;
+    const listener = AppState.addEventListener("change", state => {
+      if (awaitingApple.current && state !== "active") leftApp = true;
+      if (awaitingApple.current && leftApp && state === "active") {
+        awaitingApple.current = false;
+        leftApp = false;
+        setAppleReturned(true);
+      }
+    });
+    return () => listener.remove();
+  }, []);
   const [before, setBefore] = useState("");
   const [scope, setScope] = useState<
     "transactions" | "accounts" | "all" | "account" | null
@@ -29,6 +45,10 @@ export function SettingsData({
   useEffect(() => {
     version.current++;
     setScope(null);
+    setBilling(null);
+    setAppleReturned(false);
+    setAppleAcknowledged(false);
+    awaitingApple.current = false;
     setTyped("");
     setBefore("");
     setError("");
@@ -56,6 +76,31 @@ export function SettingsData({
       pending.current = false;
       setBusy(false);
     }
+  };
+  const beginDeletion = (stamp: number) => session.request<{ appleCancellationRequired: boolean; googleCancellationRequired: boolean }>("settings/delete-account").then(status => {
+    if (stamp !== version.current) return;
+    setBilling(status); setAppleReturned(false); setAppleAcknowledged(false);
+    awaitingApple.current = false; setTyped(""); setScope("account");
+  });
+  const openApple = async (stamp: number) => {
+    setAppleAcknowledged(false);
+    if (Platform.OS === "ios") {
+      try {
+        const status = await session.request<StoreStatus>("billing/store");
+        if (stamp !== version.current) return;
+        await manageAppleStoreSubscription({ ...status, billingProvider: "app_store", hasPaidSubscription: true });
+        if (stamp === version.current) setAppleReturned(true);
+        return;
+      } catch {
+        // Apple management must remain reachable when new purchases are disabled
+        // or StoreKit cannot present its in-app subscription screen.
+      }
+    }
+    if (stamp !== version.current) return;
+    awaitingApple.current = true;
+    try { await Linking.openURL("https://apps.apple.com/account/subscriptions"); }
+    catch (error) { awaitingApple.current = false; throw error; }
+
   };
   const download = async (
     kind: "transactions" | "account-balances",
@@ -105,7 +150,7 @@ export function SettingsData({
     if (scope === "account" || scope === "all") {
       await session.request(
         `settings/${scope === "account" ? "delete-account" : "wipe-data"}`,
-        { method: "POST", body: JSON.stringify({ confirmation: phrase }) },
+        { method: "POST", body: JSON.stringify({ confirmation: phrase, ...(scope === "account" ? { appleSubscriptionAcknowledged: appleAcknowledged } : {}) }) },
       );
       if (scope === "account") {
         await session.signOut();
@@ -211,14 +256,19 @@ export function SettingsData({
         <Body>Permanently delete your Clover account.</Body>
         {scope === "account" ? <>
           <Body>This cannot be undone.</Body>
-          <Body>If you have a store subscription, cancel it in your store to stop future billing.</Body>
-          <Button textOnly title="Manage subscription" onPress={() => router.push({ pathname: "/settings", params: { section: "plan" } })}/>
-          <Field label="Type DELETE to confirm" value={typed} onChangeText={setTyped} autoCapitalize="characters" editable={!busy}/>
-          <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 12 }}>
+          {billing?.googleCancellationRequired ? <Body>Clover will cancel your Google Play subscription before deleting your account. If cancellation fails, your account stays available. No refund is issued automatically.</Body> : null}
+          {billing?.appleCancellationRequired ? <>
+            <Body>Cancel Clover in Apple Subscriptions, then return here to confirm deletion. Deleting your account does not cancel Apple billing.</Body>
+            <Button textOnly title="Open Apple Subscriptions" disabled={busy} onPress={() => void run(openApple)}/>
+            {appleReturned ? <Button secondary title={appleAcknowledged ? "✓ I canceled my Apple subscription" : "I canceled my Apple subscription"} disabled={busy} onPress={() => setAppleAcknowledged(value => !value)}/> : null}
+          </> : null}
+          {!billing?.appleCancellationRequired || (appleReturned && appleAcknowledged) ? <>
+            <Field label="Type DELETE to confirm" value={typed} onChangeText={setTyped} autoCapitalize="characters" editable={!busy}/>
             <Button danger title={busy ? "Deleting…" : "Confirm deletion"} disabled={busy || typed !== phrase} onPress={() => void run(remove)}/>
-            <Button secondary title="Cancel" disabled={busy} onPress={() => { setScope(null); setTyped(""); }}/>
-          </View>
-        </> : <Button danger title="Delete account" disabled={busy} onPress={() => { setScope("account"); setTyped(""); }}/>}
+          </> : null}
+          <Button secondary title="Cancel" disabled={busy} onPress={() => { setScope(null); setTyped(""); awaitingApple.current = false; }}/>
+
+        </> : <Button danger title="Delete account" disabled={busy} onPress={() => void run(beginDeletion)}/>}
       </Card> : null}
       {scope && !accountOnly ? (
         <Card>

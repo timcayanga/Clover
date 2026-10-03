@@ -125,7 +125,7 @@ export const assertUserErasureScope = async (
     );
 };
 
-export const deleteLocalUserAccount = async (clerkUserId: string) => {
+export const cancelWebBillingForDeletion = async (clerkUserId: string) => {
   await assertUserErasureScope(clerkUserId);
   const user = await prisma.user.findUnique({
     where: { clerkUserId },
@@ -159,6 +159,12 @@ export const deleteLocalUserAccount = async (clerkUserId: string) => {
       data: { status: BillingSubscriptionStatus.cancelled },
     });
   }
+};
+
+export const deleteLocalUserAccount = async (clerkUserId: string) => {
+  await assertUserErasureScope(clerkUserId);
+  const user = await prisma.user.findUnique({ where: { clerkUserId }, select: { id: true } });
+  if (!user) return false;
 
   // Private promotional receipts follow the same permanent-erasure policy.
   const campaignEvidence = await prisma.switchEvidence.findMany({where:{application:{userId:user.id},purgedAt:null},select:{id:true,storageKey:true}});
