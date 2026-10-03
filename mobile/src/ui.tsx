@@ -1,4 +1,5 @@
 import { refreshScreen } from "./screen-refresh";
+import { apiBase } from "./api-base";
 import { telemetry, safeAction } from "../../shared/analytics";
 import { Text, TextInput } from "./app-text";
 import { useUser } from "@clerk/expo";
@@ -484,7 +485,7 @@ export function AppHeader({
     closePanel(() => {
       if (native[href]) router.navigate(native[href]);
       else if (href.startsWith("/") && !href.startsWith("//"))
-        void Linking.openURL(`https://staging.clover.ph${href}`);
+        void Linking.openURL(`${apiBase()}${href}`);
     });
   };
   const home = title === "Home";
