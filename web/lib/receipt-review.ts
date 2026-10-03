@@ -24,4 +24,4 @@ export function incompleteReceiptFields(details: {
 }
 
 export const receiptReviewMessage = (fields: string[]) =>
-  `Clover read this receipt, but could not verify its ${fields.join(", ")}. No transaction was added. Upload a complete, clearer receipt or enter the transaction manually.`;
+  `Review the ${fields.join(", ")} to finish this receipt. The details Clover could read have been saved.`;

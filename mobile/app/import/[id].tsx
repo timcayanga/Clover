@@ -1,5 +1,6 @@
 import { Text } from "../../src/app-text";
 import { Progress } from "../../src/plan-ui";
+import { ReceiptDraftReview } from "../../src/receipt-draft-review";
 import { ImportReview } from "../../src/import-review";
 import { OfflineFilePanel } from "../../src/offline/file-panel";
 import { router, useLocalSearchParams } from "expo-router";
@@ -33,9 +34,10 @@ export default function ImportDetail() {
     queuedFiles,
   } = useSession();
   const openedReview = useRef(false);
-  const { id, server } = useLocalSearchParams<{
+  const { id, server, review: requestedReview } = useLocalSearchParams<{
     id: string;
     server?: string;
+    review?: string;
   }>();
   const queued =
     server !== "1" ? queuedFiles.find((f) => f.id === id) : undefined;
@@ -167,6 +169,7 @@ export default function ImportDetail() {
     queued,
   ]);
   if (!access.active) return null;
+  if (requestedReview === "receipt" || status?.importFile.processingPhase === "receipt_review_required") return <ReceiptDraftReview key={`${profileId}:${id}`} id={id} onClose={() => router.replace("/(tabs)/transactions")} />;
   if(review)return <ImportReview key={`${profileId}:${id}`} id={id} onClose={()=>{setReview(false);setRevision(v=>v+1);}}/>;
   if (queued) return <OfflineFilePanel key={queued.id} file={queued} />;
   const upload = async () => {

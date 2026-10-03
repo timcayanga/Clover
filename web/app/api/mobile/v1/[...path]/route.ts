@@ -535,6 +535,17 @@ async function handle(
       )
         return reply({ error: "Import not found" }, 404);
     }
+    if (operation === "import-receipt-draft") {
+      const text = request.method === "GET" ? undefined : await request.text();
+      if (text && new TextEncoder().encode(text).length > 8000) return reply({error:"Receipt details are too large."},413);
+      const forwarded = new Request(request.url,{method:request.method,headers:request.headers,...(text ? {body:text}: {})});
+      const response = await withMobileRequestContext(userId,forwarded,async()=> {
+        const route = await import("@/app/api/imports/[importId]/receipt-draft/route");
+        const handler = request.method === "GET" ? route.GET : request.method === "PATCH" ? route.PATCH : route.POST;
+        return handler(forwarded,{params:Promise.resolve({importId:path[1]})});
+      });
+      return reply(await response.json(),response.status);
+    }
     if (operation === "import-review") {
       const page=z.coerce.number().int().min(1).max(10000).parse(url.searchParams.get("page")??1);
       const [items,totalCount,accounts,file]=await Promise.all([
@@ -805,6 +816,10 @@ async function handle(
             return (
               await import("@/app/api/imports/[importId]/status/route")
             ).GET(forwarded, {
+              params: Promise.resolve({ importId: path[1] }),
+            });
+          case "import-control":
+            return (await import("@/app/api/imports/[importId]/control/route")).POST(forwarded, {
               params: Promise.resolve({ importId: path[1] }),
             });
           case "import-resume":

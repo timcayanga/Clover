@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { prisma } from "../lib/prisma";
 import { applyMobileOfflineMutation } from "../lib/mobile-offline-sync";
-import { reserveLocalAllowance } from "../lib/mobile-local-allowance";
+import { DEVICE_LOCAL_COMPATIBILITY_TOKENS, reserveLocalAllowance } from "../lib/mobile-local-allowance";
 const url = new URL(process.env.DATABASE_URL ?? "");
 if (
   url.hostname !== "127.0.0.1" ||
@@ -175,25 +175,28 @@ let owner: string | undefined;
     console.log("PASS old offline operation cannot restore data after a wipe");
     const grants = await Promise.all(
       Array.from({ length: 7 }, () =>
-        reserveLocalAllowance(user.id, { deviceId: randomUUID() }),
+        reserveLocalAllowance(user.id, { deviceId: randomUUID(), unit: "tokens" }),
       ),
     );
     assert.equal(
       grants.reduce((n, g) => n + (g.grant?.issued ?? 0), 0),
-      50,
+      7 * DEVICE_LOCAL_COMPATIBILITY_TOKENS,
     );
-    assert.equal(grants.filter((g) => !g.grant).length, 2);
-    console.log("PASS concurrent devices cannot exceed Free allowance");
+    assert.equal(grants.filter((g) => !g.grant).length, 0);
+    assert.ok(grants.every(g => g.scope === "device_only"));
+    console.log("PASS device grants are independent of cloud allowance");
     const active = await prisma.mobileLocalAllowance.findFirstOrThrow({
       where: { userId: user.id },
     });
     const refreshed = await reserveLocalAllowance(user.id, {
+      unit: "tokens",
       deviceId: active.deviceId,
       grantId: active.id,
       used: 3,
     });
     assert.equal(refreshed.grant?.used, 3);
     const rolledBack = await reserveLocalAllowance(user.id, {
+      unit: "tokens",
       deviceId: active.deviceId,
       grantId: active.id,
       used: 0,
@@ -202,6 +205,7 @@ let owner: string | undefined;
     console.log("PASS usage receipts are monotonic");
     await assert.rejects(
       reserveLocalAllowance(user.id, {
+        unit: "tokens",
         deviceId: randomUUID(),
         grantId: active.id,
         used: 1,

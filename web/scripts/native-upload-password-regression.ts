@@ -68,6 +68,24 @@ async function main() {
     assert.equal((await complete(expectedPassword)).status,200);assert.equal(calls,6,"An interrupted password retry must reuse its acknowledged original after the lease expires");
     assert.ok(!JSON.stringify(row.response).includes(expectedPassword),"Passwords must never enter persisted response metadata");
     await listImportFileSummariesCompat(workspaceId);
+    // A separate fictional image proves OCR survives the actual native multipart
+    // handoff, not only the client transport mock above.
+    const imageBytes=Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aKRAAAAAASUVORK5CYII=","base64");
+    const evidence={version:1,source:"apple_vision",text:"COFFEE RECEIPT\n".repeat(200),pagesRead:1,totalPages:1,complete:true,durationMs:700};
+    Object.assign(row,{state:"uploading",response:null,fileName:"receipt.png",contentType:"image/png",size:imageBytes.length,parts:{"0":createHash("sha256").update(imageBytes).digest("hex")}});
+    saved.status="failed";saved.processingPhase="receipt_review_required";
+    await writeFile(getLocalImportObjectPath(`native-upload-parts/${id}/0`),imageBytes);
+    const body=JSON.stringify({deviceText:evidence});
+    const imageResult=await nativeUploadRequest(new Request("https://staging.clover.ph/api/mobile/v1/uploads/test/complete",{
+      method:"POST",headers:{"content-type":"application/json","content-length":String(Buffer.byteLength(body))},body,
+    }),id,userId,workspaceId,"complete",async request=>{
+      const form=await request.formData();
+      assert.deepEqual(JSON.parse(String(form.get("deviceText"))),{...evidence,text:evidence.text.trim()});
+      assert.deepEqual(Buffer.from(await (form.get("file") as File).arrayBuffer()),imageBytes);
+      return Response.json({ok:true,canonicalImportFileId:id});
+    });
+    assert.equal(imageResult.status,200);
+    console.log("PASS bounded device OCR reaches the receipt processor alongside the exact original image");
     console.log("PASS native password retries preserve source bytes, forward corrected passwords, reuse acknowledged sources and prevent duplicate completion; recent history is bounded and excludes private storage metadata");
   } finally {
     restore.reverse().forEach(fn=>fn());

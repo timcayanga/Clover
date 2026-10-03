@@ -3493,7 +3493,7 @@ const buildTransactionInsertRecord = async (params: TransactionInsertParams, col
   };
 };
 
-export const insertTransactionCompat = async (params: TransactionInsertParams) => {
+export const insertTransactionCompat = async (params: TransactionInsertParams, db: Pick<Prisma.TransactionClient, "$executeRawUnsafe"> = prisma) => {
   const columns = new Set(await getCompatibleTransactionColumns());
   const { record } = await buildTransactionInsertRecord(params, columns);
   const keys = Object.keys(record);
@@ -3503,7 +3503,7 @@ export const insertTransactionCompat = async (params: TransactionInsertParams) =
 
   const values = keys.map((key) => record[key] ?? null);
   const placeholders = values.map((_, index) => `$${index + 1}`).join(", ");
-  await prisma.$executeRawUnsafe(
+  await db.$executeRawUnsafe(
     `INSERT INTO "Transaction" (${keys.map((key) => `"${key}"`).join(", ")}) VALUES (${placeholders})`,
     ...values
   );

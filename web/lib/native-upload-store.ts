@@ -13,11 +13,13 @@ import {
 } from "./import-file-validation";
 import { withCompletedNativeUpload } from "./native-upload-validation";
 import { withMobileRequestContext } from "./mobile-request-context";
+import { normalizeDeviceTextEvidence } from "../../shared/device-text-evidence";
 import {
   NATIVE_UPLOAD_MAX_SIZE,
   NATIVE_UPLOAD_PART_SIZE,
   nativeUploadPartBytes,
   uploadSizeProblem,
+  isUploadPhoto,
 } from "../../shared/native-upload";
 
 type Upload = {
@@ -245,12 +247,19 @@ export async function nativeUploadRequest(
   }
   if (action !== "complete")
     throw new NativeInputError("Unknown upload action.");
-  if (Number(request.headers.get("content-length")) > 2000)
+  if (Number(request.headers.get("content-length")) > 256_000)
     throw new NativeInputError("Upload details are too large.");
-  const { password, importMode } = z
-    .object({ password: z.string().max(256).optional(), importMode: z.enum(["receipt", "statement", "portfolio", "account_detail"]).optional() })
+  const completionBody = await request.text();
+  if (new TextEncoder().encode(completionBody).length > 256_000)
+    throw new NativeInputError("Upload details are too large.");
+  const { password, importMode, deviceText: suppliedDeviceText } = z
+    .object({ password: z.string().max(256).optional(), importMode: z.enum(["receipt", "statement", "portfolio", "account_detail"]).optional(), deviceText: z.unknown().optional() })
     .strict()
-    .parse(await request.json());
+    .parse(JSON.parse(completionBody));
+  // The original is still validated below. OCR is bounded, untrusted evidence,
+  // forwarded only with its photo; never accept client financial rows here.
+  const deviceText = isUploadPhoto(row.fileName, row.contentType)
+    ? normalizeDeviceTextEvidence(suppliedDeviceText) : null;
   const saved = await prisma.importFile.findFirst({
     where: { id, workspaceId },
     select: { status: true, processingPhase: true, storageKey: true },
@@ -307,6 +316,7 @@ export async function nativeUploadRequest(
     form.set("workspaceId", workspaceId);
     if (password) form.set("password", password);
     if (importMode) form.set("importMode", importMode);
+    if (deviceText) form.set("deviceText", JSON.stringify(deviceText));
     const forwarded = new Request(request.url, { method: "POST", body: form });
     const result = await withMobileRequestContext(userId, forwarded, () =>
       withCompletedNativeUpload(() => processor(forwarded, id)),

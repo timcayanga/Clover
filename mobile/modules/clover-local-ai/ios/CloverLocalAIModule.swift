@@ -72,6 +72,7 @@ public class CloverLocalAIModule: Module {
     let request=VNRecognizeTextRequest()
     request.recognitionLevel = .accurate
     request.usesLanguageCorrection = false
+    request.automaticallyDetectsLanguage = true
     try VNImageRequestHandler(cgImage:image).perform([request])
     return request.results?.compactMap{$0.topCandidates(1).first?.string}.joined(separator:"\n") ?? ""
   }

@@ -13,6 +13,8 @@ import com.google.mlkit.vision.common.InputImage
 import android.net.Uri
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
+import android.graphics.Matrix
+import android.media.ExifInterface
 import android.graphics.pdf.PdfRenderer
 import android.os.ParcelFileDescriptor
 import java.io.File
@@ -65,8 +67,29 @@ class CloverLocalAIModule : Module() {
           }
         } else {
           val bounds=BitmapFactory.Options().apply { inJustDecodeBounds=true };BitmapFactory.decodeFile(file.path,bounds)
-          require(bounds.outWidth>0&&bounds.outHeight>0&&bounds.outWidth.toLong()*bounds.outHeight<=24000000) { "This image needs online processing or a smaller copy for local OCR." }
-          recognizer.process(InputImage.fromFilePath(appContext.reactContext ?: error("Clover is not ready."),parsed)).await().text
+          require(bounds.outWidth>0&&bounds.outHeight>0&&bounds.outWidth.toLong()*bounds.outHeight<=200000000) { "This image needs online processing or a smaller copy for local OCR." }
+          // Read an OCR-sized copy, including 48 MP camera photos, without
+          // decoding a full-resolution bitmap or changing the retained source.
+          var sample=1
+          while(maxOf(bounds.outWidth,bounds.outHeight)/sample>2400) sample*=2
+          val bitmap=BitmapFactory.decodeFile(file.path,BitmapFactory.Options().apply { inSampleSize=sample })
+            ?: error("This image needs online processing.")
+          var oriented=bitmap
+          try {
+            val orientation=runCatching { ExifInterface(file.path).getAttributeInt(ExifInterface.TAG_ORIENTATION,ExifInterface.ORIENTATION_NORMAL) }.getOrDefault(ExifInterface.ORIENTATION_NORMAL)
+            val matrix=Matrix()
+            when(orientation) {
+              ExifInterface.ORIENTATION_FLIP_HORIZONTAL -> matrix.setScale(-1f,1f)
+              ExifInterface.ORIENTATION_ROTATE_180 -> matrix.setRotate(180f)
+              ExifInterface.ORIENTATION_FLIP_VERTICAL -> matrix.setScale(1f,-1f)
+              ExifInterface.ORIENTATION_TRANSPOSE -> { matrix.setRotate(90f);matrix.postScale(-1f,1f) }
+              ExifInterface.ORIENTATION_ROTATE_90 -> matrix.setRotate(90f)
+              ExifInterface.ORIENTATION_TRANSVERSE -> { matrix.setRotate(270f);matrix.postScale(-1f,1f) }
+              ExifInterface.ORIENTATION_ROTATE_270 -> matrix.setRotate(270f)
+            }
+            if(!matrix.isIdentity) oriented=Bitmap.createBitmap(bitmap,0,0,bitmap.width,bitmap.height,matrix,true)
+            recognizer.process(InputImage.fromBitmap(oriented,0)).await().text
+          } finally { if(oriented!==bitmap) oriented.recycle();bitmap.recycle() }
         }
         mapOf("text" to text.take(40000),"pagesRead" to count,"totalPages" to total,"complete" to (count==total&&text.length<=40000))
       } finally {recognizer.close()}

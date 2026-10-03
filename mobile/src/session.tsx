@@ -6,6 +6,7 @@ import { selectRecentProfile } from "./profile-selection";
 import { useCloudAiConsent } from "./ai-consent";
 import { updateNativePlanAnalytics } from "./analytics";
 import { uploadInParts } from "./offline/resumable-upload";
+import { readDeviceText } from "./offline/device-text";
 import { FileQueue, type QueuedFile } from "./offline/file-queue";
 import {
   readUploadBytes,
@@ -191,7 +192,9 @@ export function SessionProvider({
               if(status.nativeUploadReceived === false && file.originalRetained !== false && !needsPassword) {
                 throw Object.assign(new Error(status.nativeUploadFinalizing ? "Clover is still receiving this file. Check again shortly." : "Resume this upload."),{status:status.nativeUploadFinalizing ? 503 : 404});
               }
-              const recoverable = needsNativeImportResume(status);
+              const paused = /^(pause_requested|paused)$/.test(status.importFile.processingPhase ?? "");
+              const cancelled = /^(cancel_requested|cancelled)$/.test(status.importFile.processingPhase ?? "");
+              const recoverable = !paused && !cancelled && needsNativeImportResume(status);
               if (recoverable && !resumedImports.has(file.id)) {
                 // Continue only the server-approved durable checkpoint, never resend the source.
                 await transport(`imports/${file.canonicalId ?? file.id}/resume?workspaceId=${encodeURIComponent(file.workspaceId)}`,
@@ -199,7 +202,8 @@ export function SessionProvider({
                 resumedImports.set(file.id, Date.now());
               }
               return {
-                needsPassword,
+                needsPassword, paused, cancelled,
+                processingPhase: status.importFile.processingPhase ?? undefined,
                 progress: status.progress,
                 message: status.importFile.processingMessage,
                 canResume: status.canResume,
@@ -216,7 +220,8 @@ export function SessionProvider({
                 { method: "POST", body: JSON.stringify({password, ...(file.importMode ? {importMode:file.importMode} : {})}) });
               return {canonicalId: result.canonicalImportFileId};
             },
-            upload: (file, bytes, control) => uploadInParts(transport,file,bytes,control),
+            upload: (file, bytes, control) => uploadInParts(transport,file,bytes,control,readDeviceText),
+            control: async (file, action) => { await transport(`imports/${file.canonicalId ?? file.id}/control?workspaceId=${encodeURIComponent(file.workspaceId)}`, { method: "POST", body: JSON.stringify({ action }) }); },
             cancel: async file => { await transport(`uploads/${file.id}/cancel?workspaceId=${encodeURIComponent(file.workspaceId)}`,{method:"POST",body:"{}"}); },
           },
           (id) => owner.assertLocalAccess(id),

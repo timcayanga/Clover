@@ -25,6 +25,7 @@ import {
   isUnauthorizedDataError,
 } from "@/lib/transient-data";
 import { summarizeErrorForLog } from "@/lib/security-logging";
+import { getImportUserControl } from "@/lib/import-user-control";
 
 export const dynamic = "force-dynamic";
 export const preferredRegion = "sin1";
@@ -102,6 +103,14 @@ export async function GET(_request: Request, { params }: { params: Promise<{ imp
     if (!localDev) {
       await assertWorkspaceAccess(userId, importFile.workspaceId as string);
     }
+
+    const control = await getImportUserControl(importId, String(importFile.workspaceId));
+    if (control !== "running") return NextResponse.json({
+      importFile: { id: importFile.id, status: importFile.status, fileName: importFile.fileName, fileType: importFile.fileType, workspaceId: importFile.workspaceId, accountId: importFile.accountId, updatedAt: importFile.updatedAt, processingPhase: control, processingMessage: control === "paused" ? "Import paused" : "Import cancelled" },
+      control, canResume: control === "paused", visibleImportComplete: false,
+      parsedRowsCount: Number(importFile.parsedRowsCount ?? 0), confirmedTransactionsCount: Number(importFile.confirmedTransactionsCount ?? 0),
+      telemetryPhase: control, telemetryLabel: control === "paused" ? "Import paused" : "Import cancelled",
+    });
 
     const snapshot = await loadImportStatusSnapshot(importId, {
       importFile,

@@ -19,6 +19,15 @@ export function parseUnlocalizedReceiptText(source: string): ReceiptPreviewResul
   const evidence = detectCurrencyEvidence(source);
   if (evidence.ambiguous || (evidence.currency && evidence.currency !== "IDR")) return null;
   const lines = source.normalize("NFKC").split(/\r?\n/).map(line => line.trim().replace(/^\*+/, "")).filter(Boolean);
+  // This grammar handles integers only. A receipt without an ISO/symbol can
+  // still print decimal cents; let the general decimal reader handle those
+  // rather than returning a partial integer receipt with a missing total.
+  if (lines.some((line, index) => {
+    const label = line.match(finalLabel) ?? line.match(totalLabel);
+    if (!label) return false;
+    const value = line.slice(label[0].length).trim() || lines[index + 1] || "";
+    return /^(?:Rp\.?|IDR)?\s*\d[\d,. ]*[.,]\d{1,2}\s*$/i.test(value);
+  })) return null;
   const amounts = source.match(/\b(?:\d{1,3}(?:[.,]\d{3})+|\d{4,})\b/g) ?? [];
   if (amounts.length < 2) return null;
   // Match whole numeric remainders, so "Total Item 5" and "Total Qty 16"

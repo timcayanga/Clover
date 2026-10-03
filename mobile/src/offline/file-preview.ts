@@ -4,6 +4,7 @@ import type { QueuedFile } from "./file-queue";
 import { withUploadCopy } from "./file-storage";
 import { delimitedPreview } from "./table-preview";
 export async function previewFile(file: QueuedFile, bytes: string) {
+  if (file.deviceText) return `Local text preview · Needs review\nOCR may contain errors; no financial rows are confirmed.\n\n${file.deviceText.text}`;
   return withUploadCopy(file, bytes, async (uri) => {
     if (/\.(csv|tsv)$/i.test(file.name))
       return delimitedPreview(await FileSystem.readAsStringAsync(uri));

@@ -74,10 +74,12 @@ export function mobileOperation(method: string, segments: string[]) {
     return "transaction";
   if (segments.length === 3 && segments[0] === "uploads" && ["start", "part", "complete", "cancel"].includes(segments[2]) && method === "POST") return "native-upload";
   if (segments.length === 3 && segments[0] === "imports") {
+    if (["GET", "PATCH", "POST"].includes(method) && segments[2] === "receipt-draft") return "import-receipt-draft";
     if (method === "GET" && segments[2] === "review") return "import-review";
     if (method === "POST" && segments[2] === "confirm") return "import-confirm";
     if (method === "GET" && segments[2] === "status") return "import-status";
     if (method === "POST" && segments[2] === "process") return "import-process";
+    if (method === "POST" && segments[2] === "control") return "import-control";
     if (method === "POST" && segments[2] === "resume") return "import-resume";
   }
   return null;

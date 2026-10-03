@@ -1,10 +1,8 @@
 import { uploadProgress } from "./upload-progress";
 import { Progress } from "../plan-ui";
-import * as Crypto from "expo-crypto";
 import {
   explainLocalFile,
   localCapability,
-  refreshLocalAllowance,
 } from "./local-ai";
 import { useEffect, useState } from "react";
 import { Alert } from "react-native";
@@ -102,10 +100,6 @@ export function OfflineFilePanel({ file }: { file: QueuedFile }) {
                 if ((await localCapability()).model !== "available")
                   throw new Error(
                     "The on-device language model is unavailable. The original preview remains available.",
-                  );
-                if (session.offlineStatus.online)
-                  await refreshLocalAllowance(engine, file.workspaceId, () =>
-                    Crypto.randomUUID(),
                   );
                 setSuggestions(
                   await explainLocalFile(engine, file.workspaceId, preview),

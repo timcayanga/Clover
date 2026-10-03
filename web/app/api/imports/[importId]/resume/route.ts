@@ -10,6 +10,7 @@ import { prisma } from "@/lib/prisma";
 import { getConfiguredPdfJsBaseUrl } from "@/lib/import-file-text.server";
 import { importProcessingLooksActive } from "@/lib/import-resume-policy";
 import { NextResponse } from "next/server";
+import { getImportUserControl } from "@/lib/import-user-control";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 300;
@@ -28,6 +29,9 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
     if (!localDev) {
       await assertWorkspaceAccess(userId, importFile.workspaceId as string);
     }
+
+    const control = await getImportUserControl(importId, String(importFile.workspaceId));
+    if (control !== "running") return NextResponse.json({ error: control === "paused" ? "Resume this paused import using its play icon." : "This import was cancelled.", control }, { status: 409 });
 
     const statementCheckpoint = (await hasCompatibleTable("AccountStatementCheckpoint"))
       ? await prisma.accountStatementCheckpoint.findUnique({

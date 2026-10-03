@@ -29,7 +29,6 @@ import { validateServerImportFile as validateImportFile } from "@/lib/native-upl
 import { countWorkspaceOwnerImportFilesThisMonth } from "@/lib/plan-access";
 import { getOrCreateCurrentUser } from "@/lib/user-context";
 import { getEffectiveUserLimits } from "@/lib/user-limits";
-import { getCloverTokenLimitError, getCloverTokenUsage } from "@/lib/clover-token-usage";
 import { summarizeErrorForLog } from "@/lib/security-logging";
 import { getErrorDetails, recordAppError } from "@/lib/error-logs";
 import { assertTrustedRequestOrigin } from "@/lib/request-security";
@@ -61,6 +60,7 @@ import {
   type VisualImportRecoveryMode,
 } from "@/lib/import-visual-recovery";
 import { isNonFinancialUploadError } from "@/lib/financial-upload-scope";
+import { normalizeDeviceTextEvidence, type DeviceTextEvidence } from "../../../../../../shared/device-text-evidence";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 300;
@@ -1363,6 +1363,7 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
     let allowDuplicateStatement = false;
     let forceInlineProcessing = false;
     let importMode: ImportImageMode | null = null;
+    let deviceText: DeviceTextEvidence | undefined;
 
     let importFile = await fetchImportFileCompat(importId);
     let password: string | undefined;
@@ -1385,6 +1386,7 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
 
       const { processImportFileText } = await importProcessorPromise;
       const result = await processImportFileText(importId, {
+        deviceText,
         text: options?.text,
         textCacheInfo: options?.textCacheInfo ?? undefined,
         password,
@@ -1874,6 +1876,13 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
       const effectiveUploadFileName = file.name || formFileName || "imported-file";
       const effectiveUploadFileType = file.type || formFileType || "";
       const imageUploadFile = isImageUploadFile(effectiveUploadFileName, effectiveUploadFileType);
+      const suppliedDeviceText = formData.get("deviceText");
+      if (imageUploadFile && typeof suppliedDeviceText === "string" && suppliedDeviceText.length <= 256_000) {
+        try {
+          const normalized = normalizeDeviceTextEvidence(JSON.parse(suppliedDeviceText));
+          if (normalized?.complete && normalized.pagesRead === 1 && normalized.totalPages === 1) deviceText = normalized;
+        } catch { /* Malformed evidence never prevents reading the original image. */ }
+      }
       const sanitizedFormBankName =
         imageUploadFile && looksLikeGenericCameraFileName(formBankName) ? "" : formBankName;
       const bankHint = normalizeBankName(
@@ -1935,11 +1944,6 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
             countWorkspaceOwnerImportFilesThisMonth(formWorkspaceId),
           ]);
           responsePlanTier = user.planTier;
-          const tokenUsage = await getCloverTokenUsage(user);
-          const tokenLimitError = getCloverTokenLimitError(tokenUsage);
-          if (tokenLimitError) {
-            return importJsonResponse(tokenLimitError, { status: 403 });
-          }
           const effectiveLimits = getEffectiveUserLimits(user);
           if (effectiveLimits.monthlyUploadLimit !== null && currentMonthUploads >= effectiveLimits.monthlyUploadLimit) {
             const isFreePlan = user.planTier === "free";
@@ -2327,6 +2331,13 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
           receiptDocument: statusSnapshot?.receiptDocument ?? null,
           receiptTransaction: statusSnapshot?.receiptTransaction ?? null,
         });
+      }
+
+      // The worker validates device evidence, detects the document family, and
+      // keeps the original. Avoid re-running server image OCR in this route.
+      if (deviceText) {
+        await uploadBankHintPromise;
+        return processInline({ sourceBytes: bytes, rawFileReady: uploadPromise });
       }
 
       const shouldInlineReceiptProcessing =

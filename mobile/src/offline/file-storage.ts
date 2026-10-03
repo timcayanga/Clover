@@ -2,6 +2,7 @@ import * as FileSystem from "expo-file-system/legacy";
 import { Platform } from "react-native";
 import type { QueuedFile } from "./file-queue";
 import type { SelectedFile } from "../upload";
+let temporaryCopySequence = 0;
 export async function readUploadBytes(file: SelectedFile) {
   if (Platform.OS === "web")
     throw new Error("Offline file retention is available in the native app.");
@@ -21,7 +22,9 @@ export async function withUploadCopy<T>(
       .split(".")
       .pop()
       ?.replace(/[^a-z0-9]/gi, "") ?? "bin";
-  const uri = `${FileSystem.cacheDirectory}clover-offline-${file.id}.${extension}`;
+  // A user can open Preview while automatic upload OCR is still reading. Give
+  // each reader its own temporary copy so one cleanup cannot delete the other's.
+  const uri = `${FileSystem.cacheDirectory}clover-offline-${file.id}-${Date.now()}-${++temporaryCopySequence}.${extension}`;
   try {
     await FileSystem.writeAsStringAsync(uri, base64, {
       encoding: FileSystem.EncodingType.Base64,

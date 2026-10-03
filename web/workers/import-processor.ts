@@ -1,4 +1,9 @@
-import { readLocalReceiptOcrText } from "@/lib/local-receipt-ocr-envelope";
+import { encodeLocalReceiptOcr, readLocalReceiptOcrText } from "@/lib/local-receipt-ocr-envelope";
+import { applyReceiptDefaultCurrency, hasCompleteReceiptCore, hasReceiptPhotoEvidence, receiptSummaryReconciles } from "@/lib/receipt-intake";
+import { normalizeRegionalPreferences } from "@/lib/regional-preferences";
+import { normalizeDeviceTextEvidence, type DeviceTextEvidence } from "../../shared/device-text-evidence";
+import { getImportUserControl, ImportUserControlError, requireImportMayContinue } from "@/lib/import-user-control";
+import { creditFailedImportUsage } from "@/lib/clover-token-usage";
 import { finalizePortfolioImport, isHoldingsOnlyPortfolio, portfolioConfidence } from "@/lib/portfolio-import";
 import { assessImportEvidenceSafety, assertSafeImportEvidence } from "@/lib/import-evidence-safety";
 import { startImportTiming, measureImportTiming } from "@/lib/import-timing";
@@ -2119,7 +2124,7 @@ const assessReceiptExtractionQuality = (params: {
     details.total !== null &&
     Number.isFinite(details.subtotal) &&
     Number.isFinite(details.total) &&
-    Math.abs(details.subtotal + (details.tax ?? 0) + (details.service_charge ?? 0) + (details.tip ?? 0) - (details.discount ?? 0) - details.total) > 0.1
+    !receiptSummaryReconciles(details)
   ) {
     issues.push("summary totals do not reconcile");
     score -= 2;
@@ -2242,14 +2247,13 @@ const normalizeReceiptLineItems = (
     })
     .filter((item): item is NormalizedReceiptLineItem => item !== null);
 
-const buildReceiptDetailsFromPreview = (preview: ReturnType<typeof parseReceiptText>) => {
+const buildReceiptDetailsFromPreview = (preview: ReturnType<typeof parseReceiptText>, quality = assessReceiptPreviewQuality(preview)) => {
   const numberOrNull = (value: string | null) => {
     if (value === null) return null;
     const parsed = Number(value);
     return Number.isFinite(parsed) && parsed >= 0 ? parsed : null;
   };
   const total = numberOrNull(preview.total);
-  const quality = assessReceiptPreviewQuality(preview);
   const subtotalCandidate = numberOrNull(preview.subtotal);
   const subtotal =
     subtotalCandidate !== null &&
@@ -2276,7 +2280,7 @@ const buildReceiptDetailsFromPreview = (preview: ReturnType<typeof parseReceiptT
     booking_reference: null,
     order_number: null,
     buyer_name: preview.receiptPayerName ?? null,
-    transaction_date: preview.billDate ?? null,
+    transaction_date: preview.billDate?.slice(0, 10) ?? null,
     transaction_time: null,
     currency: preview.currency ?? null,
     subtotal,
@@ -8294,7 +8298,9 @@ const isLikelyScreenshotUiArtifactRow = (params: {
   return false;
 };
 
-export const processImportFileText = async (
+const importUsageWrites = new Map<string, Set<Promise<unknown>>>();
+
+const processImportFileTextImpl = async (
   importFileId: string,
   options: {
     text?: string;
@@ -8321,6 +8327,7 @@ export const processImportFileText = async (
     pdfJsBaseUrl?: string | null;
     sourceBytes?: Uint8Array | null;
     rawFileReady?: Promise<unknown> | null;
+    deviceText?: DeviceTextEvidence | null;
   } = {}
 ): Promise<ProcessImportResult> => {
   const startedAt = Date.now();
@@ -8334,11 +8341,15 @@ export const processImportFileText = async (
   const autoRerunEnabled = options.qaSource === "import_processing" || options.qaSource === "import_confirmation";
   const skipVisualBackupParser = Boolean(options.skipVisualBackupParser);
   const importFile = await fetchImportFileCompat(importFileId);
-  const consentUserId = importFile?.workspaceId ? (await prisma.workspace.findUnique({ where: { id: String(importFile.workspaceId) }, select: { userId: true } }))?.userId : undefined;
+  const importOwner = importFile?.workspaceId ? await prisma.workspace.findUnique({
+    where: { id: String(importFile.workspaceId) }, select: { userId: true, user: { select: { regionalPreferences: true } } },
+  }) : null;
+  const consentUserId = importOwner?.userId;
+  const defaultReceiptCurrency = normalizeRegionalPreferences(importOwner?.user.regionalPreferences).baseCurrency;
   const recordOpenAIImportUsage = (usage: OpenAIImportModelUsage) => {
     openAIUsageEntries.push(usage);
     if (!importFile?.workspaceId) return;
-    void prisma.auditLog.create({
+    const write = prisma.auditLog.create({
       data: {
         workspaceId: String(importFile.workspaceId),
         actorUserId: options.actorUserId ?? "system",
@@ -8353,6 +8364,13 @@ export const processImportFileText = async (
         stage: usage.stage,
         error: error instanceof Error ? error.message : String(error),
       });
+    });
+    const writes = importUsageWrites.get(importFileId) ?? new Set<Promise<unknown>>();
+    writes.add(write);
+    importUsageWrites.set(importFileId, writes);
+    void write.finally(() => {
+      writes.delete(write);
+      if (!writes.size && importUsageWrites.get(importFileId) === writes) importUsageWrites.delete(importFileId);
     });
   };
   const updateImportProgress = (data: Partial<Record<string, unknown>>) =>
@@ -8393,8 +8411,10 @@ export const processImportFileText = async (
 
     for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
       try {
+        await requireImportMayContinue(importFileId, String(importFile?.workspaceId ?? ""));
         return await confirmImportFile(importFileId, matchedAccountId);
       } catch (error) {
+        if (error instanceof ImportUserControlError) throw error;
         lastError = error;
         lastParsedRowsReady = await prisma.parsedTransaction.count({ where: { importFileId } }).catch(() => 0);
         const requiresDeletedAccountConfirmation =
@@ -8447,6 +8467,21 @@ export const processImportFileText = async (
   const fileType = String(importFile.fileType ?? "");
   const fileName = String(importFile.fileName ?? "");
   const imageImport = isImageImportFile(fileType, fileName);
+  // Keep optical input separate from normalized financial fields. Recovery can
+  // reuse the original reading without uploading or scanning the photo again.
+  let deviceText = imageImport ? normalizeDeviceTextEvidence(options.deviceText) : null;
+  if (deviceText?.complete && deviceText.pagesRead === 1 && deviceText.totalPages === 1) {
+    await prisma.auditLog.create({ data: { workspaceId: String(importFile.workspaceId),
+      actorUserId: options.actorUserId ?? "system", action: "import.device_text", entity: "ImportFile", entityId: importFileId,
+      metadata: deviceText as unknown as Prisma.InputJsonValue } });
+  } else {
+    deviceText = imageImport ? normalizeDeviceTextEvidence((await prisma.auditLog.findFirst({
+      where: { workspaceId: String(importFile.workspaceId), entityId: importFileId, action: "import.device_text" },
+      orderBy: { createdAt: "desc" }, select: { metadata: true },
+    }))?.metadata) : null;
+  }
+  const usableDeviceText = deviceText?.complete && deviceText.pagesRead === 1 && deviceText.totalPages === 1 && deviceText.text.trim()
+    ? deviceText.text : null;
   const likelyNetWorthSnapshotCsv =
     (
       /\.(?:csv|xlsx|xls|xlsm|xlsb|ods)$/i.test(fileName) ||
@@ -8469,6 +8504,7 @@ export const processImportFileText = async (
     traceUpdatePromise,
   ]);
   let importMode = options.importMode ?? readCheckpointImportMode(statementCheckpoint?.sourceMetadata) ?? "statement";
+  if (imageImport && importMode === "statement" && hasReceiptPhotoEvidence(usableDeviceText ?? options.text ?? "")) importMode = "receipt";
   const storageKey = String(importFile.storageKey ?? "");
   // Image normalization is local and token-free. Overlap it with the receipt
   // cache/history preflight so a cache miss can launch vision immediately.
@@ -8977,7 +9013,7 @@ export const processImportFileText = async (
     processing_phase: autoRerunAttempt > 0 ? "auto_rerunning" : "reading_account_details",
   });
 
-  let text = options.text ?? "";
+  let text = usableDeviceText ?? options.text ?? "";
   const [
     persistedSplitBillReceiptDetails,
     priorSplitBillReceiptDetails,
@@ -9113,7 +9149,7 @@ export const processImportFileText = async (
     fileName,
     fileType,
     importMode,
-    text: options.text,
+    text,
     textCacheInfo: options.textCacheInfo ?? null,
     trainedReceiptDetails,
   });
@@ -9210,7 +9246,7 @@ export const processImportFileText = async (
       throw new Error("Missing imported file.");
     }
 
-    if (!text || !textCacheInfo) {
+    if (!usableDeviceText && (!text || !textCacheInfo)) {
       try {
         const earlyTextCacheResult = earlyTextCachePromise ? await earlyTextCachePromise : null;
         if (earlyTextCacheResult?.error) {
@@ -9245,6 +9281,37 @@ export const processImportFileText = async (
   }
 
   const finishParsingTiming = startImportTiming(importFileId, "parsing_to_candidate_commit");
+  await requireImportMayContinue(importFileId, String(importFile.workspaceId));
+  // Classify receipts before institution guessing or any AI request. A POS
+  // permit number is not a bank account and "Method" is not Ethereum.
+  if (imageImport && importMode === "statement" && hasReceiptPhotoEvidence(readLocalReceiptOcrText(text) ?? text)) {
+    importMode = "receipt";
+    isDocumentImport = true;
+  }
+  if (imageImport && text.trim()) {
+    const scope = assessFinancialUploadScope({ text: readLocalReceiptOcrText(text) ?? text, fileName, fileType });
+    if (scope.decision === "non_financial") throw new Error(getNonFinancialUploadMessage(scope));
+  }
+  // A complete local core is ready for review. Missing itemization is optional
+  // and must not force an expensive second image read before the draft appears.
+  if (imageImport && importMode === "receipt" && !trainedReceiptDetails && text.trim()) {
+    const localPreview = parseReceiptText(usableDeviceText ? encodeLocalReceiptOcr(deviceText!) : text);
+    const itemTotal = localPreview.items.reduce((sum, item) => sum + Number(item.amount || 0), 0);
+    const itemsReconcile = [localPreview.subtotal, localPreview.total].some(value => value !== null && Math.abs(Number(value) - itemTotal) <= .1);
+    // OCR may read both a quantity-price expression and its separate amount
+    // column as two items. An independently printed total can still be usable;
+    // keep the raw OCR, but don't publish an unreconciled itemization.
+    const corePreview = { ...localPreview, items: itemsReconcile ? localPreview.items : [] };
+    const coreQuality = assessReceiptPreviewQuality({ ...corePreview, currency: localPreview.currency === "MIXED" ? defaultReceiptCurrency : localPreview.currency,
+      currencyWarning: null, requiresReview: false });
+    const localDetails = buildReceiptDetailsFromPreview(corePreview, coreQuality);
+    if (hasCompleteReceiptCore(localDetails) && coreQuality.reliableForFastPath) {
+      trainedReceiptDetails = applyReceiptDefaultCurrency({ ...localDetails,
+        confidence_score: Math.min(69, localDetails.confidence_score),
+        parser_evidence: { ...localDetails.parser_evidence, reason: "Receipt read locally; review the suggested details against the original photo." },
+      }, defaultReceiptCurrency);
+    }
+  }
   if (!trainedReceiptDetails && fileType === "application/pdf" && text.trim()) {
     deterministicAirlineReceiptPreview = parseAirlineTicketReceiptText(text);
     if (deterministicAirlineReceiptPreview) {
@@ -9363,7 +9430,7 @@ export const processImportFileText = async (
     });
     earlyReceiptVisionPromise = measureImportTiming(importFileId, "receipt_core_vision", () => parseImportTextWithOpenAIFallback({
             consentUserId,
-      text: "",
+      text: readLocalReceiptOcrText(text) ?? text,
       fileName,
       fileType,
       detectedMetadata: null,
@@ -9915,6 +9982,7 @@ export const processImportFileText = async (
     /wise/i.test([metadataForParse.institution, metadataForParse.accountName, checkpointBankName, fileName].filter(Boolean).join(" "));
   const fallbackAssetPrefetchPromise =
     shouldPrioritizeBackupEarly &&
+    !trainedReceiptDetails &&
     preliminaryNeedsVisualBackupAssets &&
     !pageImages &&
     !pdfFileDataBase64
@@ -10572,7 +10640,8 @@ export const processImportFileText = async (
       dateCoverage: Number(parsedDateCoverage.toFixed(3)),
     });
   }
-  const receiptPreview = (imageImport || importMode === "receipt") && !isTransactionHistoryImage() ? parseReceiptText(localOpticalReceiptText !== null ? text : textForParse) : null;
+  const receiptPreview = (imageImport || importMode === "receipt") && !isTransactionHistoryImage()
+    ? parseReceiptText(usableDeviceText ? encodeLocalReceiptOcr(deviceText!) : localOpticalReceiptText !== null ? text : textForParse) : null;
   if (!cachedReceiptExtraction && perceptualReceiptCacheCandidate && receiptPreview) {
     const cachedDetails = perceptualReceiptCacheCandidate.extraction.receiptDetails;
     const previewTotal = Number(receiptPreview.total);
@@ -10706,7 +10775,7 @@ export const processImportFileText = async (
     }).catch(() => null);
   }
   if (
-    ((shouldUseVisionFallback && needsVisualBackupAssets) ||
+    ((shouldUseVisionFallback && needsVisualBackupAssets && !trainedReceiptDetails) ||
       shouldLoadReceiptBackupAssets ||
       needsPdaxHoldingTranscript) &&
     !pageImages &&
@@ -10811,6 +10880,7 @@ export const processImportFileText = async (
     /\b(?:split\s*bill|shared\s*bill|participant|participants|payer|paid\s+by|amount\s+due\s+per\s+person)\b/i.test(textForParse)
   );
   if (shouldRunOpenAiFallback) {
+    await requireImportMayContinue(importFileId, String(importFile.workspaceId));
     backupParserStartedAt ??= earlyReceiptVisionStartedAt ?? Date.now();
     if (importMode === "receipt") {
       await updateImportProgress({
@@ -10991,6 +11061,9 @@ export const processImportFileText = async (
         sourceLocale: importFile.sourceLocale,
       })
     : null;
+  if (receiptDetails && effectiveImportMode === "receipt") {
+    receiptDetails = applyReceiptDefaultCurrency(receiptDetails, defaultReceiptCurrency);
+  }
   const promotesNotesSplitBillToReceipt =
     effectiveImportMode === "notes" &&
     Boolean(
@@ -11382,10 +11455,30 @@ export const processImportFileText = async (
   // confirming its transaction.
   if (effectiveImportMode === "receipt" && openAiParsed?.receiptDetails) {
     receiptDetails = chooseBetterReceiptDetails(receiptDetails, openAiParsed.receiptDetails);
+    if (receiptDetails) receiptDetails = applyReceiptDefaultCurrency(receiptDetails, defaultReceiptCurrency);
     receiptAccountMatch = openAiParsed.receiptAccountMatch ?? receiptAccountMatch;
     openAiReceiptValidation = assessReceiptExtractionQuality({
       receiptDetails,
       expectedCurrency: openAiMetadata?.currency ?? metadataForParse.currency ?? null,
+    });
+  }
+
+  // A missing total must not discard an otherwise readable receipt when cloud
+  // extraction is unavailable. Keep a low-confidence draft from the original
+  // optical text, including null fields the user can complete without AI.
+  // Do not parse metadata-augmented text as evidence for this fallback.
+  if (effectiveImportMode === "receipt" && !receiptDetails) {
+    const partialPreview = parseReceiptText(usableDeviceText ? encodeLocalReceiptOcr(deviceText!) : text);
+    const partialDetails = buildReceiptDetailsFromPreview(partialPreview);
+    receiptDetails = applyReceiptDefaultCurrency({
+      ...partialDetails,
+      confidence_score: Math.min(35, partialDetails.confidence_score),
+      parser_evidence: { ...partialDetails.parser_evidence,
+        reason: "Incomplete receipt read locally; complete missing details against the original source." },
+    }, defaultReceiptCurrency);
+    openAiReceiptValidation = assessReceiptExtractionQuality({
+      receiptDetails,
+      expectedCurrency: receiptDetails.currency,
     });
   }
 
@@ -12297,12 +12390,16 @@ export const processImportFileText = async (
       transactionId: null,
       merchantRaw: receiptDetailsPayload?.merchant_raw ?? null,
       merchantClean: receiptDetailsPayload?.merchant_clean ?? null,
-      transactionDate: parseDateValue(receiptDetailsPayload?.transaction_date ?? resolvedMetadata.endDate ?? null),
+      transactionDate: parseDateValue(effectiveImportMode === "receipt"
+        ? receiptDetailsPayload?.transaction_date ?? null
+        : receiptDetailsPayload?.transaction_date ?? resolvedMetadata.endDate ?? null),
       transactionTime: receiptDetailsPayload?.transaction_time ?? null,
       currency: receiptAccountCurrency,
       subtotal: receiptDetailsPayload?.subtotal ?? null,
       tax: receiptDetailsPayload?.tax ?? null,
-      total: receiptDetailsPayload?.total ?? resolvedMetadata.endingBalance ?? resolvedMetadata.totalAmountDue ?? null,
+      total: effectiveImportMode === "receipt"
+        ? receiptDetailsPayload?.total ?? null
+        : receiptDetailsPayload?.total ?? resolvedMetadata.endingBalance ?? resolvedMetadata.totalAmountDue ?? null,
       paymentMethod: receiptDetailsPayload?.payment_method ?? null,
       accountMatch: receiptAccountMatchPayload
         ? {
@@ -12482,7 +12579,7 @@ export const processImportFileText = async (
   // Public/redacted receipts can have a readable total but no date or merchant.
   // Keep the source and partial ReceiptDocument, and stop before confirmation,
   // template promotion, or a retry that cannot restore missing source details.
-  const missingReceiptFields = effectiveImportMode === "receipt" && receiptDetails && rows.length === 0
+  const missingReceiptFields = effectiveImportMode === "receipt" && receiptDetails
     ? incompleteReceiptFields(receiptDetails) : [];
   if (missingReceiptFields.length > 0 && documentImportRecord && await countTransactionsByImportFileCompat(importFileId) === 0) {
     const message = receiptReviewMessage(missingReceiptFields);
@@ -12516,6 +12613,14 @@ export const processImportFileText = async (
   }
 
   const runTemplateLearning = async () => {
+    if (await getImportUserControl(importFileId, String(importFile.workspaceId)) !== "running") return;
+    const learningState = await prisma.importFile.findUnique({
+      where: { id: importFileId },
+      select: { status: true, transactions: { select: { reviewStatus: true, deletedAt: true } } },
+    });
+    if (learningState?.status !== "done") return;
+    if (effectiveImportMode === "receipt" && (!learningState.transactions.length ||
+      learningState.transactions.some(row => row.deletedAt || row.reviewStatus === "pending_review"))) return;
     const template = await upsertStatementTemplate({
       workspaceId: importFile.workspaceId,
       fingerprint: statementFingerprint,
@@ -13545,6 +13650,26 @@ export const processImportFileText = async (
   };
 };
 
+export const processImportFileText = async (...args: Parameters<typeof processImportFileTextImpl>): Promise<ProcessImportResult> => {
+  const [importFileId] = args;
+  try {
+    await requireImportMayContinue(importFileId);
+    return await processImportFileTextImpl(...args);
+  } catch (error) {
+    if (!(error instanceof ImportUserControlError)) throw error;
+    // Inner recovery handlers may have set a generic failed phase. Restore the
+    // durable user intent once every parser/confirmation frame has unwound.
+    await requireImportMayContinue(importFileId).catch(() => undefined);
+    return { imported: 0, confirmedTransactionsCount: 0, duplicate: false, requiresInput: true,
+      metadata: detectStatementMetadataFromText("", ""), status: error.control === "paused" ? "staged" : "error" };
+  } finally {
+    const writes = importUsageWrites.get(importFileId);
+    if (writes) await Promise.allSettled([...writes]);
+    importUsageWrites.delete(importFileId);
+    await creditFailedImportUsage(importFileId).catch(() => undefined);
+  }
+};
+
 const normalizeImportMerchant = (transaction: {
   merchantRaw?: unknown;
   merchantClean?: unknown;
@@ -13679,12 +13804,37 @@ const extractHumanReadableDescription = (rawPayload: Prisma.InputJsonValue | nul
   return null;
 };
 
+async function lockImportForConfirmation(tx: Prisma.TransactionClient, importFileId: string, workspaceId: string) {
+  // Share the row lock used by pause/cancel: either control wins before commit,
+  // or the completed transaction wins and the control endpoint reports saved.
+  await tx.$queryRaw`SELECT "id" FROM "ImportFile" WHERE "id" = ${importFileId} FOR UPDATE`;
+  const event = await tx.auditLog.findFirst({
+    where: { workspaceId, entityId: importFileId, action: "import.user_control" },
+    orderBy: [{ createdAt: "desc" }, { id: "desc" }], select: { metadata: true },
+  });
+  const control = (event?.metadata as { control?: string } | null)?.control;
+  if (control === "paused" || control === "cancelled") throw new ImportUserControlError(control);
+}
+
+async function insertReceiptTransactionOnce(params: Parameters<typeof insertTransactionCompat>[0]) {
+  const importFileId = params.importFileId;
+  if (!importFileId) throw new Error("Receipt import is required before saving.");
+  return prisma.$transaction(async tx => {
+    await lockImportForConfirmation(tx, importFileId, params.workspaceId);
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`receipt-confirm:${params.importFileId}`}, 0))`;
+    const existing = await tx.transaction.findFirst({ where: { importFileId: params.importFileId }, select: { id: true, accountId: true, deletedAt: true } });
+    if (existing) return { inserted: false as const, transaction: existing };
+    return { inserted: true as const, transaction: await insertTransactionCompat(params, tx) };
+  }, { timeout: 15_000 });
+}
+
 export const confirmImportFile = async (
   importFileId: string,
   accountId?: string | null,
   options?: { allowDeletedAccountRecreation?: boolean }
 ): Promise<ConfirmImportResult> => {
   const startedAt = Date.now();
+  await requireImportMayContinue(importFileId);
   const importFile = await fetchImportFileCompat(importFileId);
 
   if (!importFile) {
@@ -13723,10 +13873,13 @@ export const confirmImportFile = async (
   if ((importMode === "portfolio" || importMode === "account_detail") &&
       await hasCompatibleTable("InvestmentHolding")) {
     const portfolio = await prisma.$transaction(
-      tx => finalizePortfolioImport(tx, {
+      async tx => {
+        await lockImportForConfirmation(tx, importFileId, String(importFile.workspaceId));
+        return finalizePortfolioImport(tx, {
         importFileId, workspaceId: String(importFile.workspaceId),
         accountLimit: planLimits?.accountLimit ?? null,
-      }),
+        });
+      },
       { timeout: 30_000 },
     );
     if (portfolio) return {
@@ -13775,6 +13928,13 @@ export const confirmImportFile = async (
         : null;
 
     if (importMode === "receipt") {
+      const savedReceipt = await prisma.transaction.findFirst({
+        where: { importFileId }, select: { id: true, accountId: true, deletedAt: true },
+      });
+      if (savedReceipt) return {
+        imported: savedReceipt.deletedAt ? 0 : 1, confirmedTransactionsCount: savedReceipt.deletedAt ? 0 : 1,
+        duplicate: true, accountId: savedReceipt.accountId, status: "done", insightSummary: null, accountBalance: null,
+      };
       const documentPayload =
         documentImport?.rawPayload && typeof documentImport.rawPayload === "object" && !Array.isArray(documentImport.rawPayload)
           ? (documentImport.rawPayload as Record<string, unknown>)
@@ -13802,7 +13962,9 @@ export const confirmImportFile = async (
       const receiptValidationIssues = Array.isArray(receiptValidationRecord?.issues)
         ? receiptValidationRecord.issues.filter((issue): issue is string => typeof issue === "string" && issue.trim().length > 0)
         : [];
-      const receiptNeedsReview = receiptValidationScore < 6 || receiptValidationIssues.length > 0;
+      const receiptNeedsReview = receiptValidationScore < 6 || receiptValidationIssues.length > 0 ||
+        normalizeImportConfidenceScore(receiptDetailsRecord?.confidence_score) < 70 ||
+        Boolean(receiptDetailsRecord?.currency_resolution);
       const receiptLineItems = normalizeReceiptLineItems(
         Array.isArray(receiptDetailsRecord?.line_items)
           ? (receiptDetailsRecord.line_items as Array<{
@@ -14019,6 +14181,7 @@ export const confirmImportFile = async (
           proposedCategory: trainedCategoryName,
           receiptContext: receiptContextText,
           lineItemCategory: receiptLineItemCategory,
+          merchantCategory: guessCategoryName(receiptMerchantClean || receiptMerchantRaw, "expense"),
         });
         if (paymentAwareCategory) {
           return paymentAwareCategory;
@@ -14036,7 +14199,7 @@ export const confirmImportFile = async (
         }
 
         if (
-          /\b(adobo|pares|kare|salmon|lemonade|fizz|tonic|pasta|burger|sandwich|noodle|rice|meal|dish|grill|steak|sushi|ramen|coffee|latte|juice|pastry|bread|dessert|tapsilogan|tapsilog|sisig|longsilog|pancit|bangus|porkchop|pork\s*chop|deli)\b/.test(
+          /\b(adobo|pares|kare|salmon|lemonade|fizz|tonic|pasta|burger|sandwich|noodle|rice|meal|dish|grill|steak|sushi|ramen|coffee|latte|juice|pastry|bread|dessert|tapsilogan|tapsilog|sisig|longsilog|pancit|bangus|porkchop|pork\s*chop|deli)\b/i.test(
             `${receiptContextText} ${lineItemText}`
           )
         ) {
@@ -14044,7 +14207,7 @@ export const confirmImportFile = async (
         }
 
         const merchantGuess = guessCategoryName(receiptMerchantClean || receiptMerchantRaw, "expense");
-        if (merchantGuess !== "Other") {
+        if (merchantGuess !== "Other" && merchantGuess !== "Transfers") {
           return merchantGuess;
         }
 
@@ -14054,7 +14217,7 @@ export const confirmImportFile = async (
             proposedCategory: contextualGuess,
             receiptContext: receiptContextText,
             lineItemCategory: receiptLineItemCategory,
-          }) ?? (contextualGuess !== "Other" ? contextualGuess : "Food & Dining")
+          }) ?? (contextualGuess !== "Transfers" ? contextualGuess : "Other")
         );
       })();
       console.info("[receipt-category] resolved", {
@@ -14099,7 +14262,7 @@ export const confirmImportFile = async (
           createdTransactionId = existingReceiptTransaction.id;
         } else {
           finishReceiptCoreWriteTiming = startImportTiming(importFileId, "receipt_core_persistence");
-          const insertedTransaction = await insertTransactionCompat({
+          const insertedTransaction = await insertReceiptTransactionOnce({
             workspaceId: String(importFile.workspaceId),
             accountId: cashAccountId,
             importFileId,
@@ -14189,9 +14352,15 @@ export const confirmImportFile = async (
             learnedRuleIdsApplied: [],
           });
 
+          if (!insertedTransaction.inserted) return {
+            imported: insertedTransaction.transaction.deletedAt ? 0 : 1,
+            confirmedTransactionsCount: insertedTransaction.transaction.deletedAt ? 0 : 1,
+            duplicate: true, accountId: insertedTransaction.transaction.accountId,
+            status: "done", insightSummary: null, accountBalance: null,
+          };
           createdTransactionId =
-            insertedTransaction && typeof insertedTransaction.id === "string" && insertedTransaction.id.trim()
-              ? insertedTransaction.id
+            insertedTransaction.transaction && typeof insertedTransaction.transaction.id === "string" && insertedTransaction.transaction.id.trim()
+              ? insertedTransaction.transaction.id
               : null;
         }
       }
@@ -14203,8 +14372,8 @@ export const confirmImportFile = async (
           !Array.isArray(existingReceiptTransaction.normalizedPayload)
             ? (existingReceiptTransaction.normalizedPayload as Record<string, unknown>)
             : null;
-        await prisma.transaction.update({
-          where: { id: createdTransactionId },
+        await prisma.transaction.updateMany({
+          where: { id: createdTransactionId, reviewStatus: "pending_review" },
           data: {
             categoryId: receiptCategoryId,
             categoryConfidence: 95,
@@ -14275,12 +14444,9 @@ export const confirmImportFile = async (
           paymentMethod:
             receiptDocument?.paymentMethod ?? (typeof receiptDetailsRecord?.payment_method === "string" ? receiptDetailsRecord.payment_method : null),
           accountMatch: receiptAccountMatchPayload as Prisma.InputJsonValue | null,
-          confidence:
-            Number(
-              receiptDocument?.rawPayload && typeof receiptDocument.rawPayload === "object"
-                ? (receiptDocument.rawPayload as Record<string, unknown>).confidence ?? 0
-                : receiptPayloadSource?.confidence ?? receiptPayloadSource?.confidence_score ?? 0
-            ) || 95,
+          confidence: Math.max(1, Math.min(receiptNeedsReview ? 69 : 100,
+            normalizeImportConfidenceScore(receiptDetailsRecord?.confidence_score ?? receiptPayloadSource?.confidence ?? receiptPayloadSource?.confidence_score) ||
+              (receiptNeedsReview ? 50 : 95))),
           rawPayload: {
             ...(receiptPayloadSource ?? {}),
             receiptDetails: {
@@ -15070,6 +15236,7 @@ export const confirmImportFile = async (
   let confirmationReadSnapshotReadyAt: number | null = null;
   const confirmationResult = await prisma.$transaction(async (tx) => {
     confirmationTransactionCallbackStartedAt = Date.now();
+    await lockImportForConfirmation(tx, importFileId, String(importFile.workspaceId));
     const owner = await tx.workspace.findUniqueOrThrow({ where: { id: String(importFile.workspaceId) }, select: { userId: true } });
     await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`plan-quota:${owner.userId}`}, 0))`;
 

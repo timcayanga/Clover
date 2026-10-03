@@ -1,5 +1,7 @@
 "use client";
 
+import { ReceiptDraftEditor } from "./receipt-draft-editor";
+import { publishWorkspaceDataChange } from "@/lib/workspace-data-sync";
 import { requestAiConsent } from "./ai-consent";
 import { UploadSourceButtons } from "@/components/upload-source-buttons";
 
@@ -7391,16 +7393,26 @@ export function ImportFilesModal({
   const canResumeImport = (item: QueuedFile) =>
     Boolean(item.importFileId && (item.confirmationState === "staged" || isResumableImportErrorCode(item.errorCode)));
 
-  const handleToggleUploadPause = () => {
+  const handleToggleUploadPause = async () => {
     if (!busy || currentErrorItem) {
       return;
     }
 
-    setUploadPaused((current) => {
-      const next = !current;
-      uploadPausedRef.current = next;
-      setMessage(next ? "Upload paused. Clover will continue when you resume." : "Upload resumed.");
-      publishImportActivity({
+    if (activeProgressItem?.importFileId) {
+      try {
+        const response = await fetch(`/api/imports/${encodeURIComponent(activeProgressItem.importFileId)}/control`, {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ action: uploadPausedRef.current ? "resume" : "pause" }),
+        });
+        if (!response.ok) throw new Error("Unable to pause or resume this import. Please try again.");
+      } catch (error) { setMessage(error instanceof Error ? error.message : "Please try again."); return; }
+    }
+
+    const next = !uploadPausedRef.current;
+    setUploadPaused(next);
+    uploadPausedRef.current = next;
+    setMessage(next ? "Import paused" : "Reading file");
+    publishImportActivity({
         workspaceId,
         surface: importActivitySurfaceRef.current,
         status: "active",
@@ -7409,18 +7421,27 @@ export function ImportFilesModal({
         fileTotal: items.length,
         completedFiles: completedFileCount,
         progress: displayedOverallProgress,
-        detail: next ? "Upload paused. Clover will continue when you resume." : "Upload resumed.",
+        detail: next ? "Import paused" : "Reading file",
         summary: null,
         errorMessage: null,
       });
-      return next;
-    });
+
   };
 
-  const handleCancelUpload = () => {
+  const handleCancelUpload = async () => {
     if (!busy && !items.some((item) => item.status === "pending" || item.status === "parsing" || item.status === "importing")) {
       return;
     }
+
+    const importsToCancel = itemsRef.current.filter(item => item.importFileId && item.status !== "done" && item.confirmationState !== "confirmed");
+    try {
+      for (const item of importsToCancel) {
+        const response = await fetch(`/api/imports/${encodeURIComponent(item.importFileId!)}/control`, {
+          method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "cancel" }), keepalive: true,
+        });
+        if (!response.ok) throw new Error("This import could not be cancelled. Check its current status and try again.");
+      }
+    } catch (error) { setMessage(error instanceof Error ? error.message : "Unable to cancel import."); return; }
 
     uploadCancelRequestedRef.current = true;
     setUploadPaused(false);
@@ -7434,21 +7455,11 @@ export function ImportFilesModal({
       visibilityHardStopTimerRef.current = null;
     }
     visibilityDeadlineRef.current = null;
-    const importsToCancel = itemsRef.current.filter(
-      (item) =>
-        item.importFileId &&
-        item.status !== "done" &&
-        item.confirmationState !== "confirmed"
-    );
     for (const item of importsToCancel) {
       retiredImportActivityFileNamesRef.current.add(item.file.name);
       startedImportMonitorKeys.delete(
         `${importModalInstanceIdRef.current}:${workspaceId}:${item.importFileId ?? ""}`
       );
-      void fetch(`/api/imports/${encodeURIComponent(item.importFileId!)}`, {
-        method: "DELETE",
-        keepalive: true,
-      }).catch(() => null);
     }
     const activeId = activeProgressItem?.id ?? null;
     markQueuedUploadsCanceled(activeId);
@@ -7722,7 +7733,7 @@ export function ImportFilesModal({
       lastImportActivityRef.current?.summary ??
       (hasCompletedBatchNow ? buildVisibleImportSummary(items) : null);
     const nextSnapshot: ImportActivitySnapshot = {
-      importFileId: activeProgressItem?.importFileId ?? lastImportActivityRef.current?.importFileId ?? null,
+      importFileId: activeErrorItem?.importFileId ?? activeProgressItem?.importFileId ?? lastImportActivityRef.current?.importFileId ?? null,
       workspaceId,
       surface: importActivitySurfaceRef.current,
       status: nextStatus,
@@ -8453,8 +8464,14 @@ export function ImportFilesModal({
               ))
         }
         errorCode={currentErrorItem?.errorCode ?? null}
-        errorTitle={currentErrorItem?.errorTitle ?? null}
+        errorTitle={/Review the .+ to finish this receipt\./.test(currentErrorItem?.error ?? "") ? "Receipt needs review" : currentErrorItem?.errorTitle ?? null}
         errorNextSteps={currentErrorItem?.errorNextSteps ?? null}
+        reviewImportId={/Review the .+ to finish this receipt\./.test(currentErrorItem?.error ?? "") ? currentErrorItem?.importFileId : null}
+        onReviewSaved={() => {
+          if (currentErrorItem) updateItem(currentErrorItem.id, { status: "done", error: null, errorCode: null, errorTitle: null, errorNextSteps: null, importedRows: 1, confirmationState: "confirmed", progress: 100, progressLabel: "Receipt saved" });
+          publishWorkspaceDataChange({ workspaceId, source: "transactions", affected: ["transactions", "accounts", "home", "reports"], path: `/api/imports/${currentErrorItem?.importFileId}/receipt-draft`, revision: Date.now() });
+          router.refresh();
+        }}
         paused={uploadPaused}
         canControl={busy && !currentErrorItem}
         onPauseToggle={handleToggleUploadPause}
@@ -8621,6 +8638,11 @@ export function ImportFilesModal({
                       ) : null}
                     </div>
                   ) : null}
+
+                  {item.error && item.importFileId && !isPasswordLocked && /Review the .+ to finish this receipt\./.test(item.error) ? <ReceiptDraftEditor key={item.importFileId} importId={item.importFileId} expected onSaved={() => {
+                    updateItem(item.id, {status:"done",error:null,errorCode:null,errorTitle:null,errorNextSteps:null,importedRows:1,confirmationState:"confirmed",progress:100,progressLabel:"Receipt saved"});
+                    router.refresh();
+                  }} /> : null}
 
                   {isPasswordLocked ? (
                     <div className="accounts-import-password-row">

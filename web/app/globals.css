@@ -24780,138 +24780,65 @@ body[data-clover-page-modal] .modal-card {
   right: 14px;
   bottom: 14px;
   z-index: 76;
-  width: min(340px, calc(100vw - 16px));
+  width: min(340px, calc(100vw - 24px));
   pointer-events: none;
 }
-
-.import-upload-dock--error .import-upload-dock__inner {
-  border-color: rgba(239, 68, 68, 0.28);
-}
-
-.import-upload-dock--error .import-upload-dock__status {
-  border-color: rgba(239, 68, 68, 0.18);
-  background: rgba(239, 68, 68, 0.08);
-  color: #b91c1c;
-}
-
-.import-upload-dock--error .import-progress-donut {
-  --accent: #ef4444;
-}
-
 .import-upload-dock__inner {
-  pointer-events: auto;
+  pointer-events: none;
   border-radius: 16px;
-  border: 1px solid rgba(215, 228, 233, 0.92);
+  border: 1px solid var(--line, #d7e4e9);
   box-shadow: var(--shadow);
-  padding: 10px;
-  background: rgba(255, 255, 255, 0.98);
+  padding: 10px 12px 14px;
+  background: var(--surface, #fff);
   display: grid;
   gap: 8px;
-  backdrop-filter: none;
-  -webkit-backdrop-filter: none;
 }
-
-.import-upload-dock__mobile-progress {
-  display: none;
-}
-
-.import-upload-dock__header {
+.import-upload-dock--error .import-upload-dock__inner { border-color: rgba(239, 68, 68, 0.28); }
+.import-upload-dock__step {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   justify-content: space-between;
-  gap: 10px;
-}
-
-.import-upload-dock__copy {
-  min-width: 0;
-}
-
-.import-upload-dock__header strong {
-  display: block;
-  margin-top: 4px;
-  font-size: 14px;
-  line-height: 1.25;
-  letter-spacing: -0.03em;
-  overflow-wrap: anywhere;
-}
-
-.import-upload-dock__header p {
-  margin-top: 6px;
-  color: var(--muted);
-  line-height: 1.45;
-  font-size: 11px;
-  overflow-wrap: anywhere;
-}
-
-.import-upload-dock__message {
-  min-height: 2.9em;
-  display: -webkit-box;
-  overflow: hidden;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
-}
-
-.import-upload-dock__file-name {
-  margin-top: 6px;
-  color: var(--muted-2);
-  font-family: var(--font-mono, monospace);
-  font-size: 10px;
-  line-height: 1.35;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.import-upload-dock__message {
-  min-width: 0;
-}
-
-.import-upload-dock__status {
-  flex: none;
-  padding: 5px 9px;
-  border-radius: 999px;
-  border: 1px solid rgba(3, 168, 192, 0.22);
-  background: rgba(3, 168, 192, 0.08);
-  color: #0a84a0;
-  font-size: 10px;
-  white-space: nowrap;
-}
-
-.import-upload-dock__header-actions {
-  display: grid;
-  gap: 4px;
-  justify-items: end;
-  align-self: start;
-}
-
-.import-upload-dock__close {
-  border: 0;
-  background: rgba(255, 255, 255, 0.9);
+  gap: 8px;
   color: var(--text);
-  font-size: 18px;
-  line-height: 1;
-  padding: 0;
-  margin: 0;
-  width: 28px;
-  height: 28px;
-  border-radius: 999px;
-  border: 1px solid rgba(215, 228, 233, 0.92);
-  box-shadow: 0 8px 18px rgba(15, 23, 42, 0.1);
+  font-size: 13px;
+  line-height: 1.5;
+  font-weight: 600;
+}
+.import-upload-dock__step > span { min-width: 0; }
+.import-upload-dock__controls { display: flex; flex-shrink: 0; gap: 2px; }
+.import-upload-dock__icon {
+  pointer-events: auto;
   display: grid;
   place-items: center;
-  flex: none;
-}
-
-.import-upload-dock__close--dismiss {
-  border-color: transparent;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border: 0;
   border-radius: 0;
   background: transparent;
   box-shadow: none;
+  color: var(--text);
+  cursor: pointer;
 }
-
-.import-upload-dock__close--dismiss:hover {
-  background: transparent;
+.import-upload-dock__icon:focus-visible { outline: 2px solid var(--accent); outline-offset: -4px; border-radius: 8px; }
+.import-upload-dock__icon:hover { color: var(--accent); background: transparent; }
+.import-upload-dock__review { pointer-events: auto; justify-self: start; border: 0; background: transparent; color: var(--accent); padding: 8px 0; min-height: 44px; font: inherit; font-size: 14px; font-weight: 600; cursor: pointer; }
+.receipt-draft-layer { z-index: 2147483501 !important; }
+.receipt-draft-dialog { position: relative; width: min(480px, calc(100vw - 32px)); max-height: calc(100dvh - 32px); overflow-y: auto; padding: 24px; }
+.receipt-draft-dialog__close { position: absolute; right: 8px; top: 8px; font-size: 28px; }
+.receipt-draft-editor { display: grid; gap: 12px; min-width: 0; }
+.receipt-draft-editor h3 { margin: 0; padding-right: 32px; }
+.receipt-draft-editor p { margin: 0; color: var(--muted); }
+.receipt-draft-editor label { display: grid; gap: 6px; min-width: 0; font-size: 14px; }
+.receipt-draft-editor input, .receipt-draft-editor select { width: 100%; min-width: 0; box-sizing: border-box; min-height: 44px; font-size: 16px; }
+@media (max-width: 600px) {
+  .receipt-draft-layer { padding: 0 !important; align-items: flex-end !important; }
+  .receipt-draft-dialog { width: 100% !important; max-width: none !important; max-height: calc(100dvh - max(16px, env(safe-area-inset-top))); margin: 0 !important; border-radius: 24px 24px 0 0 !important; padding: 24px 20px max(24px, env(safe-area-inset-bottom)) !important; }
+  body:has(.receipt-draft-layer) .shell-bottom-nav { visibility: hidden !important; pointer-events: none !important; }
 }
+.import-upload-dock__track { height: 5px; border-radius: 999px; overflow: hidden; background: rgba(3,168,192,.14); }
+.import-upload-dock__track > span { display: block; height: 100%; border-radius: inherit; background: var(--brand-gradient); transition: width 180ms ease-out; }
+@media (prefers-reduced-motion: reduce) { .import-upload-dock__track > span { transition: none; } }
 
 .import-upload-dock__body {
   display: grid;
@@ -39342,77 +39269,6 @@ button.accounts-detail__transaction-head-cell {
     right: 12px;
     width: auto;
     bottom: 12px;
-  }
-
-  .import-upload-dock:not(.import-upload-dock--error) .import-upload-dock__inner {
-    pointer-events: none;
-    min-height: 54px;
-    padding: 10px 12px;
-    border-radius: 16px;
-    gap: 0;
-  }
-
-  .import-upload-dock:not(.import-upload-dock--error) .import-upload-dock__mobile-progress {
-    display: grid;
-    gap: 7px;
-  }
-
-  .import-upload-dock__mobile-progress-copy {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 12px;
-    color: var(--text);
-    font-size: 0.78rem;
-    line-height: 1.45;
-  }
-
-  .import-upload-dock__mobile-progress-copy span {
-    min-width: 0;
-    font-weight: 600;
-    padding-block: 2px;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-
-  .import-upload-dock__mobile-progress-copy strong {
-    flex-shrink: 0;
-    color: var(--accent-hover);
-    font-size: 0.78rem;
-    font-weight: 700;
-  }
-
-  .import-upload-dock__mobile-progress-track {
-    height: 4px;
-    overflow: hidden;
-    border-radius: 999px;
-    background: rgba(3, 168, 192, 0.14);
-  }
-
-  .import-upload-dock__mobile-progress-track span {
-    display: block;
-    height: 100%;
-    min-width: 3px;
-    border-radius: inherit;
-    background: var(--brand-gradient);
-    transition: width 180ms ease-out;
-  }
-
-  .import-upload-dock:not(.import-upload-dock--error) .import-upload-dock__header,
-  .import-upload-dock:not(.import-upload-dock--error) .import-upload-dock__body,
-  .import-upload-dock:not(.import-upload-dock--error) .import-upload-dock__checklist {
-    display: none;
-  }
-
-  .import-upload-dock--error .import-upload-dock__body {
-    grid-template-columns: auto minmax(0, 1fr);
-    justify-items: stretch;
-  }
-
-  .import-upload-dock--error .import-upload-dock__donut {
-    width: 72px;
-    height: 72px;
   }
 
   .accounts-page__headline,

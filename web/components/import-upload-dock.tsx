@@ -1,8 +1,8 @@
 "use client";
 
-import { useEffect, type CSSProperties } from "react";
+import React, { useEffect, useState } from "react";
 import { getImportStageLabel } from "@/lib/import-progress";
-import { buildImportResultChecklist, formatImportResultHeadline } from "@/lib/import-result-summary";
+import { ReceiptDraftDialog } from "@/components/receipt-draft-dialog";
 import type { UploadInsightsSummary } from "@/components/upload-insights-toast";
 
 type ImportUploadDockProps = {
@@ -25,194 +25,51 @@ type ImportUploadDockProps = {
   onPauseToggle?: () => void;
   onCancel?: () => void;
   onClose?: () => void;
+  reviewImportId?: string | null;
+  onReviewSaved?: () => void;
 };
 
-const clampProgress = (value: number) => Math.max(0, Math.min(100, value));
 
-const truncateMiddle = (value: string, maxLength = 44) => {
-  if (value.length <= maxLength) {
-    return value;
-  }
-
-  const extensionMatch = value.match(/(\.[a-z0-9]{2,8})$/i);
-  const extension = extensionMatch?.[1] ?? "";
-  const roomForName = Math.max(8, maxLength - extension.length - 1);
-  const leading = Math.max(6, Math.ceil(roomForName * 0.6));
-  const trailing = Math.max(4, roomForName - leading);
-  return `${value.slice(0, leading)}…${value.slice(-trailing)}${extension}`;
-};
-
-export function ImportUploadDock({
-  open,
-  fileName = null,
-  fileIndex,
-  fileTotal,
-  completedFiles,
-  progress,
-  detail,
-  timingSummary = null,
-  phaseLabel = null,
-  summary = null,
-  tone = "default",
-  errorCode = null,
-  errorTitle = null,
-  errorNextSteps = null,
-  paused = false,
-  canControl = false,
-  onPauseToggle,
-  onCancel,
-  onClose,
-}: ImportUploadDockProps) {
+export function ImportUploadDock({ open, fileIndex, fileTotal, completedFiles, progress, detail,
+  phaseLabel, tone = "default", errorTitle, paused = false, canControl = false,
+  onPauseToggle, onCancel, onClose, reviewImportId, onReviewSaved }: ImportUploadDockProps) {
+  const [reviewOpen, setReviewOpen] = useState(false);
+  useEffect(() => { setReviewOpen(false); }, [reviewImportId, open]);
   useEffect(() => {
-    if (!open || typeof document === "undefined") {
-      return;
-    }
-
+    if (!open || typeof document === "undefined") return;
     delete document.body.dataset.cloverImportModalLocks;
     delete document.body.dataset.cloverImportModalOpen;
     delete document.body.dataset.cloverImportModalVisible;
     delete document.body.dataset.cloverImportModalVisibleCount;
   }, [open]);
-
-  if (!open) {
-    return null;
-  }
-
-  const safeFileTotal = Math.max(0, fileTotal);
-  const safeFileIndex =
-    safeFileTotal > 0 ? Math.min(Math.max(1, fileIndex || 1), safeFileTotal) : Math.max(0, fileIndex || 0);
-  const safeCompletedFiles = safeFileTotal > 0 ? Math.min(Math.max(0, completedFiles), safeFileTotal) : Math.max(0, completedFiles);
-  const rawValue = clampProgress(progress);
-  const isComplete = tone === "success" && safeFileTotal > 0 && safeCompletedFiles >= safeFileTotal && rawValue >= 100;
-  const activeFileBatchCeiling =
-    safeFileTotal > 0 && safeFileIndex > 0 ? Math.max(1, ((safeFileIndex - 0.02) / safeFileTotal) * 100) : 99;
-  const value = safeFileTotal > 0 && !isComplete ? Math.min(rawValue, activeFileBatchCeiling, 99) : rawValue;
-  const donutStyle = { ["--progress" as any]: `${value}%` } as CSSProperties;
-  const fileLabel =
-    safeFileTotal > 0
-      ? isComplete
-        ? `File ${safeFileIndex} of ${safeFileTotal} imported`
-        : tone === "error"
-          ? `${safeCompletedFiles} of ${safeFileTotal} files checked`
-          : null
-      : null;
-  const displayFileName = fileName ? truncateMiddle(fileName) : null;
-  const progressLabel = isComplete
-    ? `${safeCompletedFiles} of ${safeFileTotal}`
-    : getImportStageLabel(phaseLabel || detail || "", value);
-  const progressCaption =
-    safeFileTotal > 0
-      ? isComplete
-        ? "files ready"
-        : `file ${safeFileIndex} of ${safeFileTotal}`
-      : "import queue";
-  const resultHeadline = isComplete ? formatImportResultHeadline(summary) : "";
-  const importMilestones = buildImportResultChecklist(summary);
-  const activeMilestone =
-    !isComplete && importMilestones.length > 0
-      ? importMilestones[
-          Math.min(
-            importMilestones.length - 1,
-            value >= 75 ? 2 : value >= 50 ? 1 : value >= 25 ? 0 : 0
-          )
-        ]
-      : "";
-  const resultChecklist = isComplete ? importMilestones : [];
-  const statusDetail =
-    tone === "error"
-      ? detail
-      : isComplete && tone === "success"
-        ? resultHeadline || "Your import is now visible in Clover."
-        : resultHeadline || (activeMilestone ? `✓ ${activeMilestone}` : detail);
-  const canUsePrimaryAction = isComplete || tone === "error" ? Boolean(onClose) : canControl && Boolean(onCancel);
-  const primaryActionLabel = isComplete || tone === "error" ? "Close import progress" : "Cancel upload";
-  const handlePrimaryAction = isComplete || tone === "error" ? onClose : onCancel;
-
-  return (
-    <div className={`import-upload-dock import-upload-dock--${tone}`} role={tone === "error" ? "alert" : "status"} aria-live={tone === "error" ? "assertive" : "polite"}>
-      <div className="import-upload-dock__inner glass">
-        <div
-          className="import-upload-dock__mobile-progress"
-          role="progressbar"
-          aria-label={isComplete ? "Import complete" : "Import progress"}
-          aria-valuemin={0}
-          aria-valuemax={100}
-          aria-valuenow={Math.round(value)}
-        >
-          <div className="import-upload-dock__mobile-progress-copy">
-            <span>{isComplete ? "Import complete" : progressLabel}</span>
-            <strong>{Math.round(value)}%</strong>
-          </div>
-          <div className="import-upload-dock__mobile-progress-track">
-            <span style={{ width: `${value}%` }} />
-          </div>
+  if (!open) return null;
+  if (reviewOpen && reviewImportId) return <ReceiptDraftDialog importId={reviewImportId} onClose={() => setReviewOpen(false)} onSaved={() => { setReviewOpen(false); onReviewSaved?.(); }}/>;
+  const total = Math.max(0, fileTotal);
+  const rawValue = Math.max(0, Math.min(100, Number(progress) || 0));
+  const isComplete = tone === "success" && total > 0 && completedFiles >= total && rawValue >= 100;
+  const ceiling = total > 0 ? Math.max(1, ((Math.min(Math.max(1, fileIndex), total) - 0.02) / total) * 100) : 99;
+  const value = isComplete ? 100 : Math.min(rawValue, ceiling, 99);
+  const progressLabel = paused ? "Import paused" : tone === "error" ? errorTitle || "Import needs attention" : getImportStageLabel(phaseLabel || detail || "", value);
+  const settled = isComplete || tone === "error";
+  return <div className={`import-upload-dock import-upload-dock--${tone}`} role={tone === "error" ? "alert" : "status"} aria-live={tone === "error" ? "assertive" : "polite"}>
+    <div className="import-upload-dock__inner glass">
+      <div className="import-upload-dock__step">
+        <span>{isComplete ? "Import complete" : progressLabel}</span>
+        <div className="import-upload-dock__controls">
+          {!settled && canControl && onPauseToggle ? <button className="import-upload-dock__icon" type="button" onClick={onPauseToggle} aria-label={paused ? "Resume import" : "Pause import"}>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              {paused ? <path d="m8 5 11 7-11 7V5Z"/> : <path d="M8 5v14M16 5v14"/>}
+            </svg>
+          </button> : null}
+          {(settled ? onClose : canControl && onCancel) ? <button className="import-upload-dock__icon" type="button" onClick={settled ? onClose : onCancel} aria-label={settled ? "Dismiss import progress" : "Cancel import"}>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true"><path d="m6 6 12 12M6 18 18 6"/></svg>
+          </button> : null}
         </div>
-        <div className="import-upload-dock__header">
-          <div className="import-upload-dock__copy">
-            <p className="eyebrow">Import progress</p>
-            {tone === "error" && errorTitle ? (
-              <strong>{errorTitle}</strong>
-            ) : isComplete && tone === "success" ? (
-              <strong>Import complete</strong>
-            ) : fileLabel ? (
-              <strong>{fileLabel}</strong>
-            ) : null}
-            {displayFileName ? <p className="import-upload-dock__file-name" title={fileName ?? undefined}>{displayFileName}</p> : null}
-            <p className="import-upload-dock__message">{statusDetail}</p>
-            {tone === "error" && timingSummary ? <p className="import-upload-dock__phase">{timingSummary}</p> : null}
-            {tone === "error" && errorCode ? <p className="import-upload-dock__phase">Import code {errorCode}</p> : null}
-          </div>
-          <div className="import-upload-dock__header-actions">
-            {canUsePrimaryAction ? (
-              <button
-                className="import-upload-dock__close import-upload-dock__close--dismiss"
-                type="button"
-                onClick={handlePrimaryAction}
-                aria-label={primaryActionLabel}
-              >
-                &times;
-              </button>
-            ) : null}
-            {canControl && onPauseToggle ? (
-              <button
-                className="import-upload-dock__close"
-                type="button"
-                onClick={onPauseToggle}
-                aria-label={paused ? "Resume upload" : "Pause upload"}
-              >
-                {paused ? "▶" : "⏸"}
-              </button>
-            ) : null}
-          </div>
-        </div>
-
-        <div className="import-upload-dock__body">
-          <div className="import-progress-donut import-upload-dock__donut" style={donutStyle}>
-            <div className="import-progress-donut__inner">
-              <strong>{Math.round(value)}%</strong>
-            </div>
-          </div>
-
-          <div className="import-upload-dock__meta">
-            <strong>{progressLabel}</strong>
-            <span>{progressCaption}</span>
-          </div>
-        </div>
-        {resultChecklist.length > 0 ? (
-          <ul className="import-upload-dock__checklist" aria-label="Import highlights">
-            {resultChecklist.map((item) => (
-              <li key={item}>{item}</li>
-            ))}
-          </ul>
-        ) : null}
-        {tone === "error" && errorNextSteps?.length ? (
-          <ul className="import-upload-dock__checklist" aria-label="What to do next">
-            {errorNextSteps.map((item) => (
-              <li key={item}>{item}</li>
-            ))}
-          </ul>
-        ) : null}
       </div>
+      <div className="import-upload-dock__track" role="progressbar" aria-label="Import progress" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(value)} aria-valuetext={isComplete ? "Import complete" : progressLabel}>
+        <span style={{ width: `${value}%` }}/>
+      </div>
+      {tone === "error" && reviewImportId ? <button type="button" className="import-upload-dock__review" onClick={() => setReviewOpen(true)}>Review receipt</button> : null}
     </div>
-  );
+  </div>;
 }

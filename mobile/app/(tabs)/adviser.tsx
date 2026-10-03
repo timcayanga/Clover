@@ -10,9 +10,6 @@ import { router } from "expo-router";
 import * as Crypto from "expo-crypto";
 import {
   askLocally,
-  refreshLocalAllowance,
-  localCapability,
-  deviceAllowance,
 } from "../../src/offline/local-ai";
 import { AdviserInputTools } from "../../src/adviser-input-tools";
 import { useEffect, useRef, useState } from "react";
@@ -144,21 +141,6 @@ export default function Adviser() {
           throw new Error(
             "On-device tools require an updated native build with encrypted storage.",
           );
-        // Reserve credits only on an explicit local request; never send the question online.
-        if (
-          session.offlineStatus.online &&
-          (await localCapability()).model === "available"
-        ) {
-          try {
-            await refreshLocalAllowance(
-              session.offline,
-              session.profileId,
-              () => Crypto.randomUUID(),
-            );
-          } catch (e) {
-            if (!(await deviceAllowance(session.offline).get())?.grant) throw e;
-          }
-        }
         const reply = await askLocally(
           session.offline,
           session.profileId,
@@ -332,7 +314,7 @@ export default function Adviser() {
           <Card>
             <Body>
               {useLocal
-                ? "Uses this Profile’s downloaded data. Calculations stay on your phone. Local model requests have a separate allowance."
+                ? "Uses this Profile’s downloaded data. Processing stays on your phone and does not use cloud tokens."
                 : "Questions are processed online using your cloud token allowance."}
             </Body>
             <PlanAction

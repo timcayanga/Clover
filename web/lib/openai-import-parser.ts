@@ -1,4 +1,5 @@
 import { maySendToCloudAi } from "./ai-consent";
+import { calculateModelCloverTokens, mayUseImportCloudAi } from "./clover-token-usage";
 import { RECEIPT_MONEY_GUIDANCE } from "./receipt-money-guidance";
 import { enforceRegionalReceiptCurrencyEvidence } from "./receipt-currency-evidence";
 import { assessReceiptCoreMoney, enforceReceiptCoreMerchantEvidence } from "./receipt-core-evidence";
@@ -44,6 +45,8 @@ export type OpenAIImportModelUsage = {
   maxOutputTokens: number;
   reasoningEffort: string | null;
   imageDetail: string;
+  allowanceChargeable?: boolean;
+  allowanceCreditReason?: "ai_extraction_failed";
 };
 
 export const extractOpenAIImportUsage = (payload: Record<string, unknown>) => {
@@ -2203,10 +2206,10 @@ export const inferOpenAIDocumentFamily = (params: {
     .filter(Boolean)
     .join("\n");
   const looksLikeInvestmentHistory =
-    /gcrypto|gfunds|fund|portfolio|holdings|asset details|trading wallet|spot wallet|spot order|buy order|sell order|redeem|subscription|navpu|units|shares|market value|btc|eth|usdt|crypto/i.test(
+    /\b(?:gcrypto|gfunds|fund|portfolio|holdings|asset details|trading wallet|spot wallet|spot order|buy order|sell order|redeem|subscription|navpu|units|shares|market value|btc|eth|usdt|crypto)\b/i.test(
       combinedText,
     );
-  const genericImageFileName = /(?:^|[\\/])(?:img|image|photo|screenshot|screen\s*shot|dsc|pxl|\d{4}-\d{2}-\d{2}|\d{9,13})[^\\/]*\.(?:jpe?g|png|webp|heic|heif|gif|bmp|avif)$/i.test(
+  const genericImageFileName = /(?:^|[\\/])(?:receipt|img|image|photo|screenshot|screen\s*shot|dsc|pxl|\d{4}-\d{2}-\d{2}|\d{9,13})[^\\/]*\.(?:jpe?g|png|webp|heic|heif|gif|bmp|avif)$/i.test(
     String(params.fileName ?? "")
   );
   const hasStatementEvidence = Boolean(
@@ -2694,7 +2697,7 @@ const buildFallbackMetadata = (metadata: DetectedStatementMetadata | null): Dete
   };
 };
 
-export const parseImportTextWithOpenAIFallback = async (params: {
+const parseImportTextWithOpenAIFallbackImpl = async (params: {
   consentUserId?: string | null;
   text: string;
   fileName?: string | null;
@@ -3088,6 +3091,8 @@ export const parseImportTextWithOpenAIFallback = async (params: {
   const responseRequestNumbers = new WeakMap<Response, number>();
   const responseImageDetails = new WeakMap<Response, OpenAIImageDetail>();
   let requestCount = 0;
+  let pendingCloudTokens = 0;
+  let cloudAllowanceExhausted = false;
 
   const logOpenAIResponseUsage = (usageParams: {
     payload: Record<string, unknown>;
@@ -3095,6 +3100,11 @@ export const parseImportTextWithOpenAIFallback = async (params: {
     model: string;
     stage: string;
   }) => {
+    const outputText = extractOutputText(usageParams.payload);
+    const parsedJson = outputText ? parseStructuredJsonText(outputText) : null;
+    const allowanceChargeable = Boolean(parsedJson && importedStatementSchema.safeParse(
+      isReceiptMode ? expandReceiptResponseForInternalValidation(parsedJson, params.detectedMetadata) : parsedJson,
+    ).success);
     const usage: OpenAIImportModelUsage = {
       model: usageParams.model,
       stage: usageParams.stage,
@@ -3107,8 +3117,11 @@ export const parseImportTextWithOpenAIFallback = async (params: {
       maxOutputTokens,
       reasoningEffort: receiptReasoningEffort,
       imageDetail: responseImageDetails.get(usageParams.response) ?? "auto",
+      allowanceChargeable,
+      ...(!allowanceChargeable ? { allowanceCreditReason: "ai_extraction_failed" as const } : {}),
     };
     console.info("[import-performance] OpenAI parser request completed", usage);
+    if (usage.allowanceChargeable !== false) pendingCloudTokens += calculateModelCloverTokens(usage);
     params.onUsage?.(usage);
   };
 
@@ -3120,6 +3133,10 @@ export const parseImportTextWithOpenAIFallback = async (params: {
     imageDetail: OpenAIImageDetail = "auto",
     requestController?: AbortController
   ) => {
+    if (cloudAllowanceExhausted || !(await mayUseImportCloudAi(params.consentUserId, pendingCloudTokens))) {
+      cloudAllowanceExhausted = true;
+      return null;
+    }
     const controller = requestController ?? new AbortController();
     const timeout = setTimeout(() => controller.abort(), timeoutMs);
     const requestStartedAt = Date.now();
@@ -3196,6 +3213,7 @@ export const parseImportTextWithOpenAIFallback = async (params: {
     deadlineMs: number,
     imageDetail: OpenAIImageDetail = "auto"
   ): Promise<{ response: Response; model: string } | null> => {
+    if (cloudAllowanceExhausted) return null;
     let firstSequentialModelIndex = 0;
     const shouldHedgeSlowReceiptVision =
       isReceiptMode &&
@@ -3322,6 +3340,7 @@ export const parseImportTextWithOpenAIFallback = async (params: {
       }
 
       let response = await callOpenAI(candidateModel, pageImages, attemptTimeoutMs, systemPrompt, imageDetail);
+      if (cloudAllowanceExhausted) return null;
       let errorText = shouldReadOpenAIImportErrorBody(response)
         ? await response!.text().catch(() => "")
         : response
@@ -3967,6 +3986,28 @@ export const parseImportTextWithOpenAIFallback = async (params: {
   }
 };
 
+/** Delay allowance attribution until we know whether AI produced a usable result. */
+export const parseImportTextWithOpenAIFallback = async (
+  params: Parameters<typeof parseImportTextWithOpenAIFallbackImpl>[0],
+) => {
+  const usageEntries: OpenAIImportModelUsage[] = [];
+  let chargeable = false;
+  try {
+    const result = await parseImportTextWithOpenAIFallbackImpl({ ...params, onUsage: usage => usageEntries.push(usage) });
+    chargeable = Boolean(result?.audit.schemaValidated && (
+      result.rows.length > 0 || result.holdings.length > 0 || result.receiptDetails?.total != null ||
+      result.metadata.endingBalance != null || result.metadata.openingBalance != null
+    ));
+    return result;
+  } finally {
+    for (const usage of usageEntries) params.onUsage?.({
+      ...usage,
+      allowanceChargeable: chargeable && usage.allowanceChargeable !== false,
+      ...(!chargeable || usage.allowanceChargeable === false ? { allowanceCreditReason: "ai_extraction_failed" as const } : {}),
+    });
+  }
+};
+
 export const shouldPrioritizeStrongImageTranscriptModel = (params: {
   inferredDifficulty: "easy" | "medium" | "hard";
   promptImportMode: ImportMode | null;
@@ -3975,7 +4016,7 @@ export const shouldPrioritizeStrongImageTranscriptModel = (params: {
   params.inferredDifficulty === "hard" ||
   (params.promptImportMode === "statement" && params.pageImageCount > 1);
 
-export const transcribeImportImagesWithOpenAI = async (params: {
+const transcribeImportImagesWithOpenAIImpl = async (params: {
   consentUserId?: string | null;
   fileName?: string | null;
   fileType?: string | null;
@@ -4102,7 +4143,9 @@ export const transcribeImportImagesWithOpenAI = async (params: {
 
   try {
     let requestNumber = 0;
+    let pendingCloudTokens = 0;
     const fetchTranscript = async (selectedModel: string) => {
+      if (!(await mayUseImportCloudAi(params.consentUserId, pendingCloudTokens))) return null;
       const startedAt = Date.now();
       requestNumber += 1;
       const currentRequestNumber = requestNumber;
@@ -4178,6 +4221,10 @@ export const transcribeImportImagesWithOpenAI = async (params: {
       currentRequestNumber: number
     ) => {
       const payload = (await response.json()) as Record<string, unknown>;
+      const outputText = extractOutputText(payload);
+      const parsedJson = outputText ? parseStructuredJsonText(outputText) : null;
+      const validation = parsedJson ? openAIImageTranscriptSchema.safeParse(parsedJson) : null;
+      const allowanceChargeable = Boolean(validation?.success && validation.data.transcript.trim());
       const usage: OpenAIImportModelUsage = {
         model: selectedModel,
         stage: "image_transcription",
@@ -4191,24 +4238,13 @@ export const transcribeImportImagesWithOpenAI = async (params: {
           params.importMode === "receipt" ? 1_800 : params.importMode === "notes" ? 3_000 : 6_000,
         reasoningEffort: null,
         imageDetail: "auto",
+        allowanceChargeable,
+        ...(!allowanceChargeable ? { allowanceCreditReason: "ai_extraction_failed" as const } : {}),
       };
       console.info("[import-performance] OpenAI transcription request completed", usage);
+      if (usage.allowanceChargeable !== false) pendingCloudTokens += calculateModelCloverTokens(usage);
       params.onUsage?.(usage);
-      const outputText = extractOutputText(payload);
-      if (!outputText) {
-        return null;
-      }
-
-      const parsedJson = parseStructuredJsonText(outputText);
-      if (!parsedJson) {
-        return null;
-      }
-
-      const validation = openAIImageTranscriptSchema.safeParse(parsedJson);
-      if (!validation.success) {
-        return null;
-      }
-
+      if (!validation?.success || !allowanceChargeable) return null;
       const value = validation.data;
       return {
         documentType: value.document_type,
@@ -4231,6 +4267,7 @@ export const transcribeImportImagesWithOpenAI = async (params: {
 
     for (const candidateModel of modelCandidates) {
       const request = await fetchTranscript(candidateModel);
+      if (!request) break;
       const response = request.response;
       if (!response.ok) {
         const errorText = await response.text().catch(() => "");
@@ -4278,5 +4315,23 @@ export const transcribeImportImagesWithOpenAI = async (params: {
     return null;
   } finally {
     clearTimeout(timeout);
+  }
+};
+
+export const transcribeImportImagesWithOpenAI = async (
+  params: Parameters<typeof transcribeImportImagesWithOpenAIImpl>[0],
+) => {
+  const usageEntries: OpenAIImportModelUsage[] = [];
+  let chargeable = false;
+  try {
+    const result = await transcribeImportImagesWithOpenAIImpl({ ...params, onUsage: usage => usageEntries.push(usage) });
+    chargeable = Boolean(result?.transcript.trim());
+    return result;
+  } finally {
+    for (const usage of usageEntries) params.onUsage?.({
+      ...usage,
+      allowanceChargeable: chargeable && usage.allowanceChargeable !== false,
+      ...(!chargeable || usage.allowanceChargeable === false ? { allowanceCreditReason: "ai_extraction_failed" as const } : {}),
+    });
   }
 };

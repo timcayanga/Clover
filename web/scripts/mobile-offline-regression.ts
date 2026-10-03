@@ -1,5 +1,6 @@
 import { uploadProgress } from "../../mobile/src/offline/upload-progress";
-import { uploadInParts } from "../../mobile/src/offline/resumable-upload";
+import { normalizeDeviceTextEvidence } from "../../shared/device-text-evidence";
+import { boundedDeviceText, uploadInParts } from "../../mobile/src/offline/resumable-upload";
 import { needsNativeImportResume } from "../../shared/native-import-status";
 import { uploadSizeProblem, IMPORT_PHOTO_MAX_SIZE, NATIVE_UPLOAD_MAX_SIZE, NATIVE_UPLOAD_PART_SIZE } from "../../shared/native-upload";
 import assert from "node:assert/strict";
@@ -10,7 +11,7 @@ import {
   OFFLINE_MAX_AGE,
   type Transport,
 } from "../../mobile/src/offline/engine";
-import { LocalAllowance } from "../../mobile/src/offline/local-allowance";
+import { LocalModelQueue } from "../../mobile/src/offline/local-model-queue";
 import {
   FileQueue,
   type QueuedFile,
@@ -327,90 +328,25 @@ test("category suggestions need consistent confirmed exact merchant evidence", (
     null,
   );
 });
-test("local allowance is serialized, persists restart and refuses extra inference", async () => {
-  const store = memory(),
-    a = new LocalAllowance(store, () => Date.parse(version));
-  await a.save({
-    grant: {
-      id: "g",
-      issued: 1,
-      used: 0,
-      issuedAt: version,
-      expiresAt: "2026-10-01T00:00:00Z",
-    },
-    unit: "tokens", monthlyLimit: 50,
-    resetsAt: "2026-10-01",
-    serverTime: version,
-  });
-  let runs = 0;
-  const result = await Promise.allSettled([
-    a.use(async () => ++runs),
-    a.use(async () => ++runs),
-  ]);
-  assert.equal(runs, 1);
-  assert.equal(result.filter((r) => r.status === "rejected").length, 1);
-  const restarted = new LocalAllowance(store, () => Date.parse(version));
-  await assert.rejects(
-    restarted.use(async () => ++runs),
-    /token/,
-  );
+test("device inference works without cloud grants and serializes model access", async () => {
+  const queue = new LocalModelQueue();
+  let active = 0, maximum = 0;
+  const results = await Promise.all([1, 2, 3].map(value => queue.use(async () => {
+    maximum = Math.max(maximum, ++active);
+    await new Promise(resolve => setTimeout(resolve, 2));
+    active--;
+    return value;
+  })));
+  assert.deepEqual(results, [1, 2, 3]);
+  assert.equal(maximum, 1);
+  assert.equal(await new LocalModelQueue().use(async () => "after restart"), "after restart");
 });
-test("local inference charges tokens rather than requests and rejects legacy grants", async () => {
-  const store=memory(), a=new LocalAllowance(store,()=>Date.parse(version));
-  const value={unit:"tokens" as const,grant:{id:"tokens",issued:12,used:0,issuedAt:version,expiresAt:"2026-10-01T00:00:00Z"},monthlyLimit:100000,resetsAt:"2026-10-01",serverTime:version};
-  await a.save(value); await a.use(async()=>"answer",10);
-  assert.equal((await a.get())?.grant?.used,10);
-  await assert.rejects(a.use(async()=>"answer",3),/token/);
-  await assert.rejects(a.use(async()=>"answer",-1),/token/);
-  await store.set("local-allowance",{...value,unit:undefined});
-  await assert.rejects(a.use(async()=>"answer"),/token/);
-});
-test("failed inference refunds tokens and expiry blocks inference", async () => {
-  const store = memory(),
-    a = new LocalAllowance(store, () => Date.parse(version));
-  await a.save({
-    grant: {
-      id: "g",
-      issued: 1,
-      used: 0,
-      issuedAt: version,
-      expiresAt: "2026-10-01T00:00:00Z",
-    },
-    unit: "tokens", monthlyLimit: 50,
-    resetsAt: "2026-10-01",
-    serverTime: version,
-  });
-  await assert.rejects(
-    a.use(async () => {
-      throw new Error("model unavailable");
-    }),
-  );
-  assert.equal((await a.get())?.grant?.used, 0);
-  await assert.rejects(
-    new LocalAllowance(store, () => Date.parse("2026-10-01")).use(
-      async () => 1,
-    ),
-    /token/,
-  );
-});
-test("allowance refresh cannot roll back local usage", async () => {
-  const store = memory(),
-    a = new LocalAllowance(store, () => Date.parse(version));
-  const v = {
-    grant: {
-      id: "g",
-      issued: 10,
-      used: 4,
-      issuedAt: version,
-      expiresAt: "2026-10-01T00:00:00Z",
-    },
-    unit: "tokens", monthlyLimit: 50,
-    resetsAt: "2026-10-01",
-    serverTime: version,
-  };
-  await a.save(v);
-  await a.save({ ...v, grant: { ...v.grant, used: 0 } });
-  assert.equal((await a.get())?.grant?.used, 4);
+test("device generation failures are surfaced once and do not block the next task", async () => {
+  const queue = new LocalModelQueue();
+  let attempts = 0;
+  await assert.rejects(queue.use(async () => { attempts++; throw new Error("OS rate limit"); }), /OS rate limit/);
+  assert.equal(attempts, 1);
+  assert.equal(await queue.use(async () => "ready"), "ready");
 });
 const file: QueuedFile = {
   id: randomUUID(),
@@ -632,6 +568,44 @@ test("resumable transport sends only missing parts and preserves exact bytes",as
   const result=await uploadInParts(request,{...file,importMode:"receipt",size:bytes.length},bytes.toString("base64"),{signal:new AbortController().signal,progress:async(n)=>{progress.push(n);}});
   assert.deepEqual(sent,[1,2]);assert.deepEqual(Buffer.concat(received),bytes.subarray(NATIVE_UPLOAD_PART_SIZE));assert.equal(progress.at(-1),bytes.length);assert.equal(result.canonicalId,"canonical");
 });
+test("device OCR evidence is bounded, normalized and never accepts financial rows", () => {
+  const evidence = {version:1,source:"apple_vision",text:"  SHOP\nTOTAL 125.00  ",pagesRead:1,totalPages:1,complete:true,durationMs:650,confirmedTransactions:[{amount:999}]};
+  assert.deepEqual(normalizeDeviceTextEvidence(evidence), {version:1,source:"apple_vision",text:"SHOP\nTOTAL 125.00",pagesRead:1,totalPages:1,complete:true,durationMs:650});
+  for (const changes of [{version:2},{source:"cloud"},{text:"x".repeat(40001)},{text:"   "},{durationMs:-1},{totalPages:0},{pagesRead:2}]) {
+    assert.equal(normalizeDeviceTextEvidence({...evidence,...changes}), null);
+  }
+  assert.equal(normalizeDeviceTextEvidence({...evidence,pagesRead:1,totalPages:2})?.complete,false);
+});
+test("native upload reads OCR concurrently, forwards it only on completion and reuses saved evidence", async () => {
+  const evidence={version:1 as const,source:"google_mlkit" as const,text:"COFFEE\nTOTAL 425.00",pagesRead:1,totalPages:1,complete:true,durationMs:20};
+  let release!:(value:typeof evidence)=>void, started=false, reads=0, completeBody:any;
+  const reading=new Promise<typeof evidence>(resolve=>{release=resolve;});
+  const photo={...file,name:"receipt.jpg",mimeType:"image/jpeg"};
+  const request=async<T>(path:string,options?:RequestInit):Promise<T>=>{
+    const body=JSON.parse(String(options?.body));
+    if(path.includes("/start")){await Promise.resolve();assert.equal(started,true);assert.equal(body.deviceText,undefined);return {parts:[],state:"uploading"} as T;}
+    if(path.includes("/part")){release(evidence);return {ok:true} as T;}
+    completeBody=body;return {canonicalImportFileId:"canonical"} as T;
+  };
+  const control={signal:new AbortController().signal,progress:async()=>{},saveDeviceText:async(value:typeof evidence)=>{photo.deviceText=value;}};
+  const read=async()=>{started=true;reads++;return reading;};
+  await uploadInParts(request,photo,"b3JpZ2luYWw=",control,read);
+  assert.deepEqual(completeBody.deviceText,evidence);assert.deepEqual(photo.deviceText,evidence);
+  await uploadInParts(request,photo,"b3JpZ2luYWw=",control,read);
+  assert.equal(reads,1,"A transfer retry must not repeat device OCR");
+});
+test("slow or failed device OCR cannot block uploading the original", async () => {
+  assert.equal(await boundedDeviceText(new Promise(()=>{}),5),undefined);
+  assert.equal(await boundedDeviceText(Promise.reject(new Error("OCR unavailable")),5),undefined);
+  let completed=false;
+  const request=async<T>(path:string,options?:RequestInit):Promise<T>=>{
+    if(path.includes("/start"))return {parts:[],state:"uploading"} as T;
+    if(path.includes("/complete")){completed=true;assert.equal(JSON.parse(String(options?.body)).deviceText,undefined);}
+    return {} as T;
+  };
+  await uploadInParts(request,file,"b3JpZ2luYWw=",{signal:new AbortController().signal,progress:async()=>{}},async()=>{throw new Error("unsupported");});
+  assert.equal(completed,true);
+});
 test("pause aborts the active transfer, retains original bytes, and requires explicit resume",async()=>{
   const store=memory();let started!:()=>void;const began=new Promise<void>(r=>{started=r;});
   const q=new FileQueue(store,{status:async()=>{throw Object.assign(new Error("missing"),{status:404});},upload:async(_file,_bytes,control)=>{started();await new Promise<void>((_,reject)=>control.signal.addEventListener("abort",()=>reject(new Error("aborted")),{once:true}));return {};},cancel:async()=>{}},async()=>{});
@@ -641,7 +615,25 @@ test("pause aborts the active transfer, retains original bytes, and requires exp
 test("finalizing cannot be cancelled as if it were still a file transfer",async()=>{
   const store=memory();let finish!:()=>void,ready!:()=>void;const reached=new Promise<void>(r=>{ready=r;});
   const q=new FileQueue(store,{status:async()=>{throw Object.assign(new Error("missing"),{status:404});},upload:async(_file,_bytes,control)=>{await control.progress(file.size,true);ready();await new Promise<void>(r=>{finish=r;});return {}; }},async()=>{});
-  await q.add(file,"b3JpZ2luYWw=");await q.enqueue(file.id);const flight=q.flush();await reached;await assert.rejects(q.cancel(file.id),/already reading/);finish();await flight;assert.equal((await q.list())[0].state,"processing");await assert.rejects(q.bytes(file),/no longer/);
+  await q.add(file,"b3JpZ2luYWw=");await q.enqueue(file.id);const flight=q.flush();await reached;await assert.rejects(q.cancel(file.id),/Cancel is unavailable/);finish();await flight;assert.equal((await q.list())[0].state,"processing");await assert.rejects(q.bytes(file),/no longer/);
+});
+
+test("server pause survives a late finalize response and resumes explicitly",async()=>{
+  const store=memory();let finish!:()=>void,ready!:()=>void,uploaded=false;const reached=new Promise<void>(r=>{ready=r;});const actions:string[]=[];
+  const q=new FileQueue(store,{status:async()=>{if(uploaded)return {done:false,failed:false};throw Object.assign(new Error("missing"),{status:404});},control:async(_file,action)=>{actions.push(action);},upload:async(_file,_bytes,control)=>{await control.progress(file.size,true);ready();await new Promise<void>(r=>{finish=r;});uploaded=true;return {canonicalId:"saved-import"};}},async()=>{});
+  await q.add(file,"b3JpZ2luYWw=");await q.enqueue(file.id);const flight=q.flush();await reached;await q.pause(file.id);finish();await flight;
+  assert.equal((await q.list())[0].state,"paused");assert.equal((await q.list())[0].serverPaused,true);assert.equal((await q.list())[0].canonicalId,"saved-import");
+  await q.enqueue(file.id);await q.flush();assert.deepEqual(actions,["pause","resume"]);assert.equal((await q.list())[0].state,"processing");
+});
+test("server cancellation is acknowledged before local removal and late finalize cannot restore the file",async()=>{
+  const store=memory();let finish!:()=>void,ready!:()=>void;const reached=new Promise<void>(r=>{ready=r;});const actions:string[]=[];
+  const q=new FileQueue(store,{status:async()=>{throw Object.assign(new Error("missing"),{status:404});},control:async(_file,action)=>{actions.push(action);assert.equal((await q.list()).length,1);},upload:async(_file,_bytes,control)=>{await control.progress(file.size,true);ready();await new Promise<void>(r=>{finish=r;});return {canonicalId:"saved-import"};}},async()=>{});
+  await q.add(file,"b3JpZ2luYWw=");await q.enqueue(file.id);const flight=q.flush();await reached;await q.cancel(file.id);assert.deepEqual(await q.list(),[]);finish();await flight;
+  assert.deepEqual(actions,["cancel"]);assert.deepEqual(await q.list(),[]);await assert.rejects(q.bytes(file),/no longer/);
+});
+test("failed server cancellation preserves the import and its source",async()=>{
+  const store=memory();const q=new FileQueue(store,{status:async()=>({done:false,failed:false}),control:async()=>{throw new Error("offline");},upload:async()=>({})},async()=>{});
+  await q.add({...file,state:"processing"},"b3JpZ2luYWw=");await assert.rejects(q.cancel(file.id),/offline/);assert.equal((await q.list())[0].state,"processing");assert.equal(await q.bytes(file),"b3JpZ2luYWw=");
 });
 
 test("pausing a waiting file prevents a stale queue snapshot from uploading it",async()=>{

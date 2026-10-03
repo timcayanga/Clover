@@ -40,7 +40,8 @@ export type CloverTokenUsageUser = {
   planTier: PlanTier;
 };
 
-type UsageLog = {
+export type UsageLog = {
+  id?: string;
   action: string;
   metadata: unknown;
   createdAt: Date;
@@ -99,26 +100,83 @@ export const calculateModelCloverTokens = (metadata: unknown) => {
   return Math.max(totalTokens > 0 ? 1 : 0, Math.ceil(normalizedCost));
 };
 
+export const IMPORT_AI_USAGE_CREDIT_ACTION = "import.ai_usage_credit";
+
 export const calculateUsageParts = (logs: UsageLog[], startsAt: Date): UsageParts => {
   const parts: UsageParts = { localParserTokens: 0, backupParserTokens: 0, adviserTokens: 0 };
+  // A credit belongs to the original request's window, not the day the failure
+  // was reconciled. Referencing its audit ID also makes duplicate credits safe.
+  const creditedCalls = new Set(logs.filter(log => log.action === IMPORT_AI_USAGE_CREDIT_ACTION)
+    .map(log => asRecord(log.metadata)?.sourceAuditLogId)
+    .filter((id): id is string => typeof id === "string"));
   for (const log of logs) {
     if (log.createdAt < startsAt) continue;
-    if (log.action === "import.parser_usage") {
-      const metadata = asRecord(log.metadata);
-      const localParser = asRecord(metadata?.localParser);
-      const estimate = asCount(localParser?.estimatedTokens);
-      if (estimate > 0) parts.localParserTokens += Math.max(250, Math.ceil(estimate * 0.1));
-      continue;
-    }
     if (log.action === "import.openai_model_call") {
+      if ((log.id && creditedCalls.has(log.id)) || asRecord(log.metadata)?.allowanceChargeable === false) continue;
       parts.backupParserTokens += calculateModelCloverTokens(log.metadata);
       continue;
     }
     if (log.action === "adviser.model_call") {
       parts.adviserTokens += calculateModelCloverTokens(log.metadata);
     }
+    // Deterministic parsing and on-device processing have no cloud token cost.
+    // Keep their original audit records for diagnostics, without charging them.
   }
   return parts;
+};
+
+type ImportUsageLog = UsageLog & {
+  id: string;
+  workspaceId: string;
+  actorUserId: string;
+  entity: string;
+  entityId: string | null;
+};
+
+/** Preserve provider usage and record a separate, repeat-safe allowance credit. */
+const persistImportUsageCredits = async (
+  logs: ImportUsageLog[],
+  failedImportIds: Set<string>,
+  db: Prisma.TransactionClient,
+) => {
+  const credits = logs.filter(log => log.action === "import.openai_model_call" && (
+    asRecord(log.metadata)?.allowanceChargeable === false ||
+    (log.entity === "ImportFile" && log.entityId && failedImportIds.has(log.entityId))
+  )).map(log => ({
+    id: `import-ai-credit:${log.id}`,
+    workspaceId: log.workspaceId,
+    actorUserId: "system",
+    action: IMPORT_AI_USAGE_CREDIT_ACTION,
+    entity: log.entity,
+    entityId: log.entityId,
+    metadata: {
+      version: 1,
+      sourceAuditLogId: log.id,
+      sourceCreatedAt: log.createdAt.toISOString(),
+      cloverTokens: calculateModelCloverTokens(log.metadata),
+      reason: asRecord(log.metadata)?.allowanceChargeable === false
+        ? "ai_extraction_failed" : "import_processing_failed",
+    },
+  }));
+  if (credits.length) await db.auditLog.createMany({ data: credits, skipDuplicates: true });
+  return credits.map(credit => ({ ...credit, createdAt: new Date() }));
+};
+
+/** Call after persisting a terminal extraction failure and awaiting its usage logs. */
+export const creditFailedImportUsage = async (
+  importFileId: string,
+  db: Prisma.TransactionClient = prisma,
+) => {
+  const failed = await db.importFile.findFirst({
+    where: { id: importFileId, status: "failed", confirmedTransactionsCount: 0, transactions: { none: {} } },
+    select: { id: true, workspaceId: true },
+  });
+  if (!failed) return;
+  const logs = await db.auditLog.findMany({
+    where: { workspaceId: failed.workspaceId, entity: "ImportFile", entityId: failed.id, action: "import.openai_model_call" },
+    select: { id: true, workspaceId: true, actorUserId: true, entity: true, entityId: true, action: true, metadata: true, createdAt: true },
+  });
+  await persistImportUsageCredits(logs, new Set([failed.id]), db);
 };
 
 export const getManilaMonthWindow = (now: Date) => {
@@ -156,18 +214,25 @@ export const getCloverTokenUsage = async (
   const logs = await db.auditLog.findMany({
     where: {
       workspace: { userId: user.id },
-      action: { in: ["import.parser_usage", "import.openai_model_call", "adviser.model_call"] },
+      action: { in: ["import.openai_model_call", "adviser.model_call", IMPORT_AI_USAGE_CREDIT_ACTION] },
       createdAt: { gte: earliestStart },
     },
-    select: { action: true, metadata: true, createdAt: true },
+    select: { id: true, workspaceId: true, actorUserId: true, entity: true, entityId: true, action: true, metadata: true, createdAt: true },
   });
-  // Tokens are charged when reserved, so cloud and offline work cannot reuse them.
-  const reservations = await db.mobileLocalAllowance.findMany({where:{userId:user.id,unit:"tokens",createdAt:{gte:earliestStart}},select:{issued:true,createdAt:true}});
-  const reservedSince = (since: Date) => reservations.filter(g=>g.createdAt >= since).reduce((sum,g)=>sum+g.issued,0);
-  const monthlyParts = calculateUsageParts(logs, month.startsAt);
-  const rollingParts = calculateUsageParts(logs, rollingStartsAt);
-  monthlyParts.localParserTokens += reservedSince(month.startsAt);
-  rollingParts.localParserTokens += reservedSince(rollingStartsAt);
+  const alreadyCredited = new Set(logs.filter(log => log.action === IMPORT_AI_USAGE_CREDIT_ACTION)
+    .map(log => asRecord(log.metadata)?.sourceAuditLogId));
+  const uncreditedCalls = logs.filter(log => log.action === "import.openai_model_call" && !alreadyCredited.has(log.id));
+  const importIds = [...new Set(uncreditedCalls.filter(log => log.entity === "ImportFile" && log.entityId).map(log => log.entityId!))];
+  // Reconcile historical failures as well as new ones. A successfully delivered
+  // extraction is never refunded just because later optional enrichment failed.
+  const failedImports = importIds.length ? await db.importFile.findMany({
+    where: { workspace: { userId: user.id }, id: { in: importIds }, status: "failed", confirmedTransactionsCount: 0, transactions: { none: {} } },
+    select: { id: true },
+  }) : [];
+  const credits = await persistImportUsageCredits(uncreditedCalls, new Set(failedImports.map(file => file.id)), db);
+  const allLogs = [...logs, ...credits];
+  const monthlyParts = calculateUsageParts(allLogs, month.startsAt);
+  const rollingParts = calculateUsageParts(allLogs, rollingStartsAt);
   const monthlyUsed = monthlyParts.localParserTokens + monthlyParts.backupParserTokens + monthlyParts.adviserTokens;
   const rollingUsed = rollingParts.localParserTokens + rollingParts.backupParserTokens + rollingParts.adviserTokens;
   const unlimited = hasUnlimitedPlanLimits(user) || process.env.NODE_ENV !== "production";
@@ -183,7 +248,7 @@ export const getCloverTokenUsage = async (
 };
 
 export const getCloverTokenLimitError = (usage: CloverTokenUsageSnapshot) => {
-  const exhaustedWindow = usage.rolling24h.exhausted ? usage.rolling24h : usage.monthly.exhausted ? usage.monthly : null;
+  const exhaustedWindow = usage.monthly.exhausted ? usage.monthly : usage.rolling24h.exhausted ? usage.rolling24h : null;
   if (!exhaustedWindow) return null;
   const isRolling = exhaustedWindow === usage.rolling24h;
   return {
@@ -197,4 +262,29 @@ export const getCloverTokenLimitError = (usage: CloverTokenUsageSnapshot) => {
     limitValue: exhaustedWindow.limit,
     usage,
   };
+};
+
+/** Fail closed only at the cloud boundary; deterministic imports remain usable. */
+export const mayUseImportCloudAi = async (
+  userId?: string | null,
+  pendingCloverTokens = 0,
+  db: Prisma.TransactionClient = prisma,
+  now = new Date(),
+) => {
+  if (!userId) return false;
+  try {
+    const user = await db.user.findUnique({ where: { id: userId }, select: { id: true, clerkUserId: true, planTier: true } });
+    if (!user) return false;
+    const usage = await getCloverTokenUsage(user, now, db);
+    return hasImportCloudAllowance(usage, pendingCloverTokens);
+  } catch {
+    // A usage-service outage must not produce an unmetered provider request.
+    return false;
+  }
+};
+
+export const hasImportCloudAllowance = (usage: CloverTokenUsageSnapshot, pendingCloverTokens = 0) => {
+  const pending = Math.max(0, pendingCloverTokens);
+  return [usage.monthly, usage.rolling24h].every(window =>
+    !window.exhausted && (window.remaining === null || window.remaining > pending));
 };

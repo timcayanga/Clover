@@ -100,7 +100,8 @@ Follow [Indonesian import rules](indonesian-import-parser-rules.md) for Bahasa I
 
 ### Receipt benchmark safeguards
 
-- Missing currency remains MIXED, with low confidence and required review; it must not default to PHP without Philippine currency/context evidence.
-- Retry weak receipt OCR when currency remains unknown. Among OCR candidates, a printed settlement total takes precedence over a total inferred only by summing surviving menu lines. Keep the selected source transcript intact; do not splice digits from different passes.
+- Raw missing currency remains unset/MIXED. The normalized receipt uses the user's default currency, marks its origin as `user_default`, and requires review; this is a user-setting suggestion, not evidence that PHP or any other currency was printed.
+- Missing currency alone must not trigger another OCR/model request. Among OCR candidates, a printed settlement total takes precedence over a total inferred only by summing surviving menu lines. Keep the selected source transcript intact; do not splice digits from different passes.
 - Regional text-parser benchmarks and original-image OCR benchmarks are separate gates. A passing post-OCR corpus does not establish image, cloud fallback, or end-to-end import accuracy.
 - A schema-valid partial receipt with no transaction rows and missing merchant, date, currency or positive total must retain its source and extracted ReceiptDocument for review. Use the terminal `receipt_review_required` phase, identify the missing fields, and do not confirm, promote template learning, or retry the same unreadable source automatically. Existing confirmed transactions remain protected. A partial receipt document alone must not count as a visible transaction in the global upload indicator.
+- Native OCR is accepted through a complete, bounded one-page envelope and is checked before cloud routing. Complete local receipt cores remain review-required; incomplete cores offer editable saved drafts, even at the cloud quota limit. See [native receipt intake](local-receipt-ocr.md#native-receipt-intake-october-2026).

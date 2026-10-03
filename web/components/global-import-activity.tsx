@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { ImportErrorToast } from "@/components/import-error-toast";
 import { ImportUploadDock } from "@/components/import-upload-dock";
 import { publishImportedSummary } from "@/lib/imported-summary-events";
@@ -90,6 +90,7 @@ const writeDismissedKeys = (keys: Set<string>) => {
 
 export function GlobalImportActivity() {
   const pathname = usePathname();
+  const router = useRouter();
   // Browser storage must not influence the first client render. Reading it in
   // a state/ref initializer makes the hydrated tree differ from the server
   // whenever an import is in progress (or was dismissed), forcing React to
@@ -101,6 +102,7 @@ export function GlobalImportActivity() {
   const [pageModalActive, setPageModalActive] = useState(false);
   const [importModalVisible, setImportModalVisible] = useState(false);
   const [accountsSplashActive, setAccountsSplashActive] = useState(false);
+  const controlBusyRef = useRef(false);
   const shouldShowOnCurrentPath = canShowImportActivityOnPath(pathname);
 
   useEffect(() => {
@@ -207,6 +209,13 @@ export function GlobalImportActivity() {
         }
 
         const importFile = payload.importFile;
+        if (/^(pause_requested|paused|cancel_requested|cancelled)$/.test(importFile?.processingPhase ?? "")) {
+          if (/^cancel/.test(importFile?.processingPhase ?? "")) {
+            clearImportActivity(); setActivity(null); return;
+          }
+          const held = { ...current, detail: "Import paused", updatedAt: Date.now() };
+          setImportActivity(held); setActivity(held); schedulePoll(importStatusPollMs); return;
+        }
         const decision = resolveImportModalStatusDecision({
           importMode: "statement",
           status: importFile?.status,
@@ -383,7 +392,7 @@ export function GlobalImportActivity() {
   }, []);
 
   useEffect(() => {
-    if (!activity || activity.status !== "active") {
+    if (!activity || activity.status !== "active" || /^(Import paused|Pausing import)$/.test(activity.detail)) {
       return;
     }
 
@@ -550,6 +559,29 @@ export function GlobalImportActivity() {
     );
   }
 
+  const paused = /^(Import paused|Pausing import)$/.test(activity.detail);
+  const controlImport = async (action: "pause" | "resume" | "cancel") => {
+    if (!activity.importFileId || controlBusyRef.current) return;
+    controlBusyRef.current = true;
+    try {
+      const response = await fetch(`/api/imports/${encodeURIComponent(activity.importFileId)}/control`, {
+        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action }),
+      });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || "Unable to update import");
+      if (action === "cancel") { handleClose(); return; }
+      const next = { ...activity, detail: action === "pause" ? "Import paused" : "Reading file", updatedAt: Date.now() };
+      setImportActivity(next); setActivity(next);
+    } catch {
+      // Keep the active import and its controls visible; never report a failed
+      // network request as a successful pause/cancel.
+      const current = readImportActivity();
+      if (current?.importFileId === activity.importFileId) {
+        const retry = { ...current, detail: "Waiting for connection", updatedAt: Date.now() };
+        setImportActivity(retry); setActivity(retry);
+      }
+    } finally { controlBusyRef.current = false; }
+  };
   const isError = activity.status === "error";
 
   if (isError) {
@@ -559,7 +591,8 @@ export function GlobalImportActivity() {
 
     const code = activity.errorCode ?? "I-199";
     const spec = getImportErrorSpecForCode(code);
-    if (code === "I-104") {
+    const receiptReviewId = /Review the .+ to finish this receipt\./.test(activity.errorMessage ?? "") ? activity.importFileId : null;
+    if (code === "I-104" || receiptReviewId) {
       return (
         <ImportUploadDock
           open
@@ -571,9 +604,14 @@ export function GlobalImportActivity() {
           progress={activity.progress}
           detail={spec.message}
           errorCode={code}
-          errorTitle={activity.errorTitle || spec.title || "File not readable"}
+          errorTitle={receiptReviewId ? "Receipt needs review" : activity.errorTitle || spec.title || "File not readable"}
           errorNextSteps={activity.errorNextSteps ?? getImportErrorNextSteps(code)}
           onClose={handleClose}
+          reviewImportId={receiptReviewId}
+          onReviewSaved={() => {
+            publishWorkspaceDataChange({ workspaceId: activity.workspaceId, source: "transactions", affected: ["transactions", "accounts", "home", "reports"], path: `/api/imports/${activity.importFileId}/receipt-draft`, revision: Date.now() });
+            handleClose(); router.refresh();
+          }}
         />
       );
     }
@@ -600,6 +638,10 @@ export function GlobalImportActivity() {
       completedFiles={activity.completedFiles}
       progress={activity.progress}
       detail={activity.detail}
+      paused={paused}
+      canControl={Boolean(activity.importFileId)}
+      onPauseToggle={() => void controlImport(paused ? "resume" : "pause")}
+      onCancel={() => void controlImport("cancel")}
       onClose={handleClose}
     />
   );

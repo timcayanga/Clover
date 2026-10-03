@@ -3,13 +3,30 @@ import {
   nativeUploadPartBytes,
 } from "../../../shared/native-upload";
 import type { QueuedFile, UploadControl } from "./file-queue";
+import { normalizeDeviceTextEvidence, type DeviceTextEvidence } from "../../../shared/device-text-evidence";
 type Request = <T>(path: string, options?: RequestInit) => Promise<T>;
+type ReadDeviceText = (file: QueuedFile, base64: string) => Promise<DeviceTextEvidence | undefined>;
+
+/** OCR runs beside byte transfer and cannot hold a fast upload indefinitely. */
+export function boundedDeviceText(work: Promise<DeviceTextEvidence | undefined>, timeoutMs = 4_000) {
+  return new Promise<DeviceTextEvidence | undefined>(resolve => {
+    const timer = setTimeout(() => resolve(undefined), timeoutMs);
+    work.then(value => { clearTimeout(timer); resolve(normalizeDeviceTextEvidence(value) ?? undefined); },
+      () => { clearTimeout(timer); resolve(undefined); });
+  });
+}
 export async function uploadInParts(
   request: Request,
   file: QueuedFile,
   base64: string,
   control: UploadControl,
+  readDeviceText?: ReadDeviceText,
 ) {
+  // Start before the first network round trip; a saved result survives retries.
+  const cachedText = normalizeDeviceTextEvidence(file.deviceText);
+  const reading = cachedText ? Promise.resolve(cachedText) : boundedDeviceText(
+    readDeviceText ? Promise.resolve().then(() => readDeviceText(file, base64)) : Promise.resolve(undefined),
+  );
   const path = `uploads/${file.id}`;
   const query = `?workspaceId=${encodeURIComponent(file.workspaceId)}`;
   const state = await request<{ parts: number[]; state: string }>(
@@ -50,6 +67,9 @@ export async function uploadInParts(
     await control.progress(sent, false);
   }
   if (control.signal.aborted) throw new Error("Upload paused.");
+  const deviceText = await reading;
+  if (control.signal.aborted) throw new Error("Upload paused.");
+  if (deviceText && !cachedText) await control.saveDeviceText?.(deviceText);
   await control.progress(file.size, true);
   // Finalization must be reconciled with server status if its response is lost;
   // it is intentionally not abortable by a transport pause button.
@@ -60,6 +80,7 @@ export async function uploadInParts(
       body: JSON.stringify({
         ...(file.password ? { password: file.password } : {}),
         ...(file.importMode ? { importMode: file.importMode } : {}),
+        ...(deviceText ? { deviceText } : {}),
       }),
     },
   );

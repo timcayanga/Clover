@@ -7,6 +7,7 @@ import { Text } from "./app-text";
 import { Button, Field, Icon, useTheme } from "./ui";
 import { Progress } from "./plan-ui";
 import { uploadProgress } from "./offline/upload-progress";
+import { getImportStageLabel } from "../../shared/import-stage";
 import { refreshScreen } from "./screen-refresh";
 
 /** Upload lifetime belongs to Session, never to the sheet that selected the file. */
@@ -53,22 +54,31 @@ export function ImportActivity() {
     try { await action(); } catch (error) { setActionError((error as Error).message); }
     finally { setBusy(false); }
   };
-  const review = () => router.push({ pathname: "/import/[id]", params: file.originalRetained !== false
+  const paused = file.state === "paused";
+  const active = !done && !needsReview && !needsPassword;
+  const step = done ? "Ready to review" : needsPassword ? "Statement password needed" : needsReview ? "Import needs attention" : paused ? "Import paused" : waiting ? "Waiting for connection" : file.state === "draft" || file.state === "queued" ? "Preparing file" : file.state === "sending" ? "Uploading file" : getImportStageLabel(file.message || "Reading file", progress);
+  const resume = () => run(async () => { await session.fileQueue!.enqueue(file.id); if (!waiting) await session.fileQueue!.flush(); });
+  const receiptReview = needsReview && file.processingPhase === "receipt_review_required";
+  const review = () => router.push({ pathname: "/import/[id]", params: receiptReview ? { id: file.canonicalId ?? file.id, server: "1", review: "receipt" } : file.originalRetained !== false
     ? { id: file.id } : { id: file.canonicalId ?? file.id, server: "1" } });
   return <View pointerEvents="box-none" style={{ position: "absolute", left: 16, right: 16, bottom: Math.max(Math.max(insets.bottom, 8) + 88, keyboardHeight + 16), alignItems: "center" }}>
     <View accessibilityLiveRegion="polite" style={{ width: "100%", maxWidth: 520, padding: 16, gap: 8, borderRadius: 20,
       backgroundColor: colors.white, borderColor: colors.line, borderWidth: 1, elevation: 6,
       shadowColor: "#07343d", shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.15, shadowRadius: 12 }}>
       <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-        <Text style={{ flex: 1, color: colors.ink, fontFamily: "Poppins-SemiBold" }}>
-          {done ? "Ready to review" : needsPassword ? "Statement password needed" : needsReview ? "Import needs attention" : waiting ? "Upload saved offline" : file.state === "paused" ? "Upload paused" : "Importing your file"}
-        </Text>
-        <Pressable accessibilityRole="button" accessibilityLabel="Dismiss import progress" onPress={() => setDismissed(value => [...value, file.id])} style={{ padding: 8 }}><Icon line name="close" size={20}/></Pressable>
+        <Text style={{ flex: 1, color: colors.ink, fontFamily: "Poppins-SemiBold", fontSize: 13 }}>{step}</Text>
+        {active ? <Pressable accessibilityRole="button" accessibilityLabel={paused ? "Resume import" : "Pause import"}
+          accessibilityState={{ disabled: busy }} disabled={busy} onPress={() => void (paused ? resume() : run(() => session.fileQueue!.pause(file.id)))}
+          style={{ width: 44, height: 44, alignItems: "center", justifyContent: "center", opacity: busy ? 0.45 : 1 }}>
+          <Icon line name={paused ? "play-outline" : "pause-outline"} size={20} color={colors.ink}/>
+        </Pressable> : null}
+        <Pressable accessibilityRole="button" accessibilityLabel={active ? "Cancel import" : "Dismiss import progress"}
+          accessibilityState={{ disabled: busy }} disabled={busy}
+          onPress={() => active ? void run(() => session.fileQueue!.cancel(file.id)) : setDismissed(value => [...value, file.id])}
+          style={{ width: 44, height: 44, alignItems: "center", justifyContent: "center", opacity: busy ? 0.45 : 1 }}><Icon line name="close" size={20} color={colors.ink}/></Pressable>
       </View>
-      <Text numberOfLines={1} style={{ color: colors.muted, fontSize: 12 }}>{file.name}{files.length > 1 ? ` · ${files.length} imports` : ""}</Text>
       <Progress value={progress}/>
-      <Text style={{ color: colors.muted, fontSize: 12 }}>{actionError || file.error ||
-        (waiting ? "Your file will upload when you reconnect." : file.message || (done ? "Review the imported details." : `${progress}% · You can keep using Clover.`))}</Text>
+      {actionError || (needsReview && file.error) ? <Text accessibilityRole="alert" style={{ color: colors.danger, fontSize: 12 }}>{actionError || file.error}</Text> : null}
       {needsPassword ? <Field label="Statement password" value={password} onChangeText={setPassword}
         secureTextEntry autoCapitalize="none" autoCorrect={false} maxLength={256} /> : null}
       <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
@@ -79,8 +89,8 @@ export function ImportActivity() {
             await session.fileQueue!.enqueue(file.id, enteredPassword);
             await session.fileQueue!.flush();
           })} /> : null}
-        {done || (needsReview && !needsPassword) ? <Button secondary title="Review" onPress={review}/> : null}
-        {!needsPassword && (file.state === "draft" || file.state === "paused" || (needsReview && file.originalRetained !== false)) ?
+        {done || (needsReview && !needsPassword) ? <Button secondary title={receiptReview ? "Review receipt" : "Review"} onPress={review}/> : null}
+        {!needsPassword && ((needsReview && file.originalRetained !== false)) ?
           <Button secondary title="Resume upload" disabled={busy} onPress={() => void run(async () => {
             await session.fileQueue!.enqueue(file.id);
             if (!waiting) await session.fileQueue!.flush();

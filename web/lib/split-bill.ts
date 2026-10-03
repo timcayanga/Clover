@@ -549,11 +549,11 @@ const parseBillDateFromText = (text: string) => {
     /\b(\d{1,2})\s+([A-Za-z]{3,9})\s+(\d{2,4})\b/,
   ];
 
-  for (const pattern of datePatterns) {
-    const match = text.match(pattern);
-    if (!match) {
-      continue;
-    }
+  // Reading order matters: the purchase date near the receipt header must
+  // outrank a numeric printer-accreditation date in its footer.
+  const matches = datePatterns.flatMap(pattern => [...text.matchAll(new RegExp(pattern.source, "g"))])
+    .sort((left, right) => left.index! - right.index!);
+  for (const match of matches) {
 
     if (/^\d{4}$/.test(match[1])) {
       const year = normalizeReceiptYear(Number(match[1]));
@@ -594,9 +594,9 @@ const isSummaryLine = (line: string) =>
   );
 
 const isNoiseLine = (line: string) =>
-  /^(thank you|powered by|receipt|order|invoice|official receipt|or no\.?|cashier|store copy|customer copy|page \d+|paid with|paid via|payment method|tendered with|charged to|refund|void|voided|reversal|customer|tin|company|signature|for comments|pls contact|please contact)/i.test(
+  /^(thank you|powered by|receipt|order|invoice|(?:sales|tax|commercial) invoice|official receipt|or no\.?|cashier|store copy|customer copy|page \d+|paid with|paid via|payment (?:method|type)|tendered with|charged to|refund|void|voided|reversal|customer|tin|company|signature|for comments|pls contact|please contact)/i.test(
     line
-  );
+  ) || /^(?:card|visa|mastercard|debit|credit)[ \t]*[:：]?[ \t]*(?:[\d,.]+)?[ \t]*$/i.test(line);
 
 const isReceiptDateLine = (line: string) =>
   /\b(?:jan|feb|mar|apr|may|jun|jul|aug|sep|sept|oct|nov|dec)[a-z]*\b/i.test(line) &&
@@ -604,9 +604,9 @@ const isReceiptDateLine = (line: string) =>
   /\b\d{2,4}\b/.test(line);
 
 const isReceiptAdministrativeLine = (line: string) =>
-  /\b(?:trans(?:action)?\s*no|trans\s*no|ref(?:erence)?\s*no|permit\s*no|serial\s*n[bo0]|or\s*no|invoice\s*no|guest\s*count|cust(?:omer)?\s*count|cashier|server|tin\b|bir\b|accre\.?\s*no|table\s*no|print\s*cnt|terminal|branch|poblacion|makati city|quezon city|this serves as an official receipt|not valid for payment)\b/i.test(
+  /\b(?:trans(?:action)?\s*no|trans\s*no|ref(?:erence)?\s*no|permit\s*no|serial\s*n[bo0]|or\s*no|invoice\s*no|guest\s*count|cust(?:omer)?\s*count|cashier|server|tin\b|bir\b|accred?\.?\s*no|date\s+issued|ptu\s*no|min\s*[:#]|s\/n\s*[:#]|table\s*no|print\s*cnt|terminal|branch|poblacion|makati city|quezon city|this serves as an official receipt|not valid for payment)\b/i.test(
     line
-  );
+  ) || /^(?:MIN|S\/N)\s*[:#]/i.test(line) || /^[A-Za-z][A-Za-z ]{0,20}\s*[#:]\s*\d{7,}\s*$/.test(line);
 
 const isReceiptFooterValueLine = (line: string) =>
   /^\s*amount\b/i.test(line) ||
@@ -1104,7 +1104,8 @@ const parseReceiptAmountToken = (token: string | null | undefined) => {
     return null;
   }
 
-  const trimmed = normalizeWhitespace(token).replace(/,/g, "");
+  const commaCents = normalizeWhitespace(token).match(/^(\d+),(\d{2})$/);
+  const trimmed = commaCents ? `${commaCents[1]}.${commaCents[2]}` : normalizeWhitespace(token).replace(/,/g, "");
   if (!trimmed) {
     return null;
   }
@@ -1530,7 +1531,7 @@ const pruneSuspiciousReceiptItems = (items: ReceiptPreviewItem[]) =>
       return false;
     }
 
-    if (isReceiptFooterValueLine(description)) {
+    if (isReceiptFooterValueLine(description) || isReceiptAdministrativeLine(description)) {
       return false;
     }
 
@@ -2273,7 +2274,8 @@ export const assessReceiptPreviewQuality = (preview: ReceiptPreviewResult): Rece
   if (
     subtotal !== null &&
     total !== null &&
-    Math.abs(subtotal + tax + serviceCharge + tip + rounding - discount - total) <= Math.max(1, total * 0.03)
+    [subtotal + tax + serviceCharge + tip + rounding - discount,
+      subtotal + serviceCharge + tip + rounding - discount].some(value => Math.abs(value - total) <= Math.max(1, total * 0.03))
   ) {
     score += 2;
   } else if (subtotal !== null && total !== null) {
@@ -2542,7 +2544,7 @@ const parseReceiptTextCore = (receiptText: string): ReceiptPreviewResult => {
   const rawItemTotal = filteredItems.reduce((sum, item) => sum + (parseAmountValue(item.amount) ?? 0), 0);
   const totalLine = [...lines].reverse().find((line) =>
     /^[+\-*•]?\s*(amount due|grand total|bill total|bill amount|gross amount|net total|total)\b/i.test(line) &&
-    !/^\s*total\s+(?:no\.?\s+of\s+)?items?\b/i.test(line)
+    !/^\s*total\s+(?:no\.?\s+of\s+)?(?:items?|qty|quantity)\b/i.test(line)
   );
   let subtotal =
     subtotalLine

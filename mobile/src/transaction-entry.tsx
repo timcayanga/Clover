@@ -96,11 +96,12 @@ export function Choices({
     </View>
   );
 }
-export function ChoiceField({ label, options, value, onChange }: {
+export function ChoiceField({ label, options, value, onChange, disabled = false }: {
   label: string;
   options: { value: string; label: string; icon?: ReactNode; group?: string }[];
   value: string;
   onChange: (value: string) => void;
+  disabled?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const { colors } = useTheme();
@@ -108,13 +109,13 @@ export function ChoiceField({ label, options, value, onChange }: {
   const row = { minHeight: 48, paddingVertical: 10, paddingHorizontal: 12, flexDirection: "row" as const, alignItems: "center" as const, gap: 10 };
   return <View style={{ gap: 6 }}>
     <Text style={{ color: colors.muted, fontSize: 13 }}>{label}</Text>
-    <Pressable accessibilityRole="button" accessibilityLabel={`${label}: ${selected?.label ?? "Choose"}`} accessibilityState={{ expanded: open }} onPress={() => setOpen(!open)} style={{ ...row, borderWidth: 1, borderColor: colors.line, borderRadius: 14, backgroundColor: colors.white }}>
+    <Pressable disabled={disabled} accessibilityRole="button" accessibilityLabel={`${label}: ${selected?.label ?? "Choose"}`} accessibilityState={{ expanded: open, disabled }} onPress={() => setOpen(!open)} style={{ ...row, borderWidth: 1, borderColor: colors.line, borderRadius: 14, backgroundColor: colors.white }}>
       {selected?.icon}<Text style={{ flex: 1, color: colors.ink, fontSize: 15 }}>{selected?.label ?? `Choose ${label.toLowerCase()}`}</Text><Icon line name={open ? "chevron-up" : "chevron-down"} size={16}/>
     </Pressable>
     {open ? <View style={{ borderWidth: 1, borderColor: colors.line, borderRadius: 14, overflow: "hidden", backgroundColor: colors.white }}>
       {options.map((option, index) => <View key={option.value}>
         {option.group && option.group !== options[index - 1]?.group ? <Text style={{ padding: 12, color: colors.muted, fontSize: 12, fontFamily: "Poppins-SemiBold" }}>{option.group}</Text> : null}
-        <Pressable accessibilityRole="button" accessibilityState={{ selected: option.value === value }} onPress={() => { onChange(option.value); setOpen(false); }} style={{ ...row, backgroundColor: option.value === value ? colors.pale : colors.white }}>
+        <Pressable disabled={disabled} accessibilityRole="button" accessibilityState={{ selected: option.value === value, disabled }} onPress={() => { onChange(option.value); setOpen(false); }} style={{ ...row, backgroundColor: option.value === value ? colors.pale : colors.white }}>
           {option.icon}<Text style={{ flex: 1, color: colors.ink, fontSize: 15 }}>{option.label}</Text>{option.value === value ? <Icon line name="checkmark" size={16}/> : null}
         </Pressable>
       </View>)}

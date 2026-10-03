@@ -1,6 +1,7 @@
 import { telemetry } from "../../../shared/analytics";
 import { NATIVE_UPLOAD_MAX_SIZE, uploadSizeProblem } from "../../../shared/native-upload";
 import type { OfflineStore } from "./types";
+import type { DeviceTextEvidence } from "../../../shared/device-text-evidence";
 export type QueuedFile = {
   id: string;
   workspaceId: string;
@@ -17,14 +18,22 @@ export type QueuedFile = {
   importMode?: "receipt" | "statement" | "portfolio" | "account_detail";
   progress?: number;
   message?: string;
+  processingPhase?: string;
   canResume?: boolean;
+  serverPaused?: boolean;
   needsPassword?: boolean;
+  deviceText?: DeviceTextEvidence;
 };
-export type UploadControl = {signal:AbortSignal;progress:(sentBytes:number,finalizing:boolean)=>Promise<void>};
+export type UploadControl = {
+  signal: AbortSignal;
+  progress: (sentBytes: number, finalizing: boolean) => Promise<void>;
+  saveDeviceText?: (evidence: DeviceTextEvidence) => Promise<void>;
+};
 export type FileTransport = {
   unlock?: (file: QueuedFile, password: string) => Promise<{ canonicalId?: string }>;
   cancel?: (file:QueuedFile)=>Promise<void>;
-  status: (file: QueuedFile) => Promise<{ done: boolean; failed: boolean; progress?: number; message?: string; canResume?: boolean; needsPassword?: boolean }>;
+  control?: (file: QueuedFile, action: "pause" | "resume" | "cancel") => Promise<void>;
+  status: (file: QueuedFile) => Promise<{ done: boolean; failed: boolean; processingPhase?: string; paused?: boolean; cancelled?: boolean; progress?: number; message?: string; canResume?: boolean; needsPassword?: boolean }>;
   upload: (
     file: QueuedFile,
     base64: string,
@@ -37,6 +46,7 @@ export class FileQueue {
   private flight: Promise<void> | null = null;
   private flushAgain = false;
   private active = true;
+  private controls = new Map<string, "paused" | "cancelled">();
   private current: {file:QueuedFile;controller:AbortController;finished:Promise<void>} | null = null;
   constructor(
     private store: OfflineStore,
@@ -91,6 +101,12 @@ export class FileQueue {
     if (!file) throw new Error("File unavailable.");
     await this.authorize(file.workspaceId);
     if (!["draft", "attention", "paused"].includes(file.state)) return;
+    if (file.serverPaused) {
+      if (!this.transport.control) throw new Error("Resume this import when connected.");
+      await this.transport.control(file, "resume");
+      file.serverPaused = false;
+    }
+    this.controls.delete(id);
     telemetry("offline_action_queued", { action: "file_upload" });
     file.state = "queued";
     file.password = password || file.password;
@@ -99,28 +115,40 @@ export class FileQueue {
     this.emit();
   }
   async pause(id:string) {
-    const current=this.current;
-    if(current?.file.id===id) {
-      if(current.file.state==="finalizing"||current.file.state==="processing")throw new Error("Clover is already reading this file. Check its status.");
-      current.controller.abort();
-      await current.finished;
-    }
-    const file=await this.store.get<QueuedFile>("file:"+id);
-    if(!file)return;
+    const file = await this.store.get<QueuedFile>("file:" + id);
+    if (!file || file.state === "done") return;
     await this.authorize(file.workspaceId);
-    if(["queued","sending","draft","attention","paused"].includes(file.state)){
-      file.state="paused";file.error=undefined;
-      await this.store.set("file:"+id,file);this.emit();
+    const received = file.originalRetained === false || ["finalizing", "processing"].includes(file.state);
+    if (received) {
+      if (!this.transport.control) throw new Error("Pause is unavailable for this saved import.");
+      await this.transport.control(file, "pause");
+      this.controls.set(id, "paused");
+      file.serverPaused = true;
+    } else if (this.current?.file.id === id) {
+      this.current.controller.abort();
+      await this.current.finished;
     }
+    file.state = "paused"; file.error = undefined;
+    await this.store.set("file:" + id, file); this.emit();
   }
   async cancel(id:string) {
-    await this.pause(id);
-    const file=await this.store.get<QueuedFile>("file:"+id);
-    if(!file)return;
-    if(file.state!=="paused")throw new Error("Clover has already received this file. Open the saved import.");
-    await this.transport.cancel?.(file);
-    await this.remove(id);
-    telemetry("input_canceled", { input_method: "file_upload", phase: "queued" });
+    const file = await this.store.get<QueuedFile>("file:" + id);
+    if (!file) return;
+    await this.authorize(file.workspaceId);
+    const received = file.serverPaused || file.originalRetained === false || ["finalizing", "processing"].includes(file.state);
+    if (received) {
+      if (!this.transport.control) throw new Error("Cancel is unavailable for this saved import.");
+      await this.transport.control(file, "cancel");
+      this.controls.set(id, "cancelled");
+      await this.store.remove("file:" + id);
+      await this.store.remove("file-bytes:" + id);
+      this.emit();
+    } else {
+      await this.pause(id);
+      await this.transport.cancel?.(file);
+      await this.remove(id);
+    }
+    telemetry("input_canceled", { input_method: "file_upload", phase: received ? "processing" : "queued" });
   }
   async remove(id: string) {
     if (this.current?.file.id===id) throw new Error("Pause this file before removing it.");
@@ -156,10 +184,17 @@ export class FileQueue {
           exists = true;
           file.progress = Math.max(file.progress ?? 0, status.progress ?? 0);
           file.message = status.message;
+          file.processingPhase = status.processingPhase;
           file.canResume = status.canResume;
           file.needsPassword = status.needsPassword && !status.done;
           file.error = undefined;
-          file.state = status.done
+          if (status.cancelled) {
+            await this.store.remove("file:" + file.id);
+            await this.store.remove("file-bytes:" + file.id);
+            continue;
+          }
+          file.serverPaused = status.paused;
+          file.state = status.paused ? "paused" : status.done
             ? "done"
             : status.failed
               ? "attention"
@@ -193,13 +228,19 @@ export class FileQueue {
           await this.store.set("file:" + file.id, file);
           this.emit();
           if(controller.signal.aborted)throw new Error("Upload paused.");
-          const result = await this.transport.upload(file, bytes, {signal:controller.signal,progress:async(sentBytes,finalizing)=>{
+          const result = await this.transport.upload(file, bytes, {signal:controller.signal,saveDeviceText:async(evidence)=>{
+            file.deviceText=evidence;
+            await this.store.set("file:"+file.id,file);
+          },progress:async(sentBytes,finalizing)=>{
             file.sentBytes=sentBytes;file.state=finalizing?"finalizing":"sending";
             await this.store.set("file:"+file.id,file);this.emit();
           }});
           file.canonicalId = result.canonicalId;
           file.state = "processing";
         }
+        const control = this.controls.get(file.id);
+        if (control === "cancelled") continue;
+        if (control === "paused") { file.state = "paused"; file.serverPaused = true; }
         if (file.state === "done" || file.state === "processing") {
           delete file.password;
           file.originalRetained=false;
@@ -207,6 +248,8 @@ export class FileQueue {
           await this.store.remove("file-bytes:" + file.id);
         } else await this.store.set("file:" + file.id, file);
       } catch (e) {
+        if (this.controls.get(file.id) === "cancelled") continue;
+        if (this.controls.get(file.id) === "paused") { file.state = "paused"; file.serverPaused = true; file.error = undefined; await this.store.set("file:" + file.id, file); continue; }
         if(controller.signal.aborted && file.state!=="finalizing"){
           file.state="paused";file.error=undefined;
           await this.store.set("file:"+file.id,file);this.emit();continue;

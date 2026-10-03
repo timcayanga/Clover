@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
+import { parseImportTextWithOpenAIFallback } from "../lib/openai-import-parser";
 import { ADVISER_OUT_OF_SCOPE_REPLY, ADVISER_OUT_OF_SCOPE_SUGGESTIONS, classifyAdviserScope } from "../lib/adviser-scope";
 import { assessFinancialUploadScope, NON_FINANCIAL_UPLOAD_MESSAGE, PROMOTIONAL_UPLOAD_MESSAGE } from "../lib/financial-upload-scope";
 
@@ -114,7 +115,10 @@ assert.match(adviserRouteSource, /OPENAI_ADVISER_MODEL\?\.trim\(\) \|\| "gpt-4\.
 assert.match(adviserRouteSource, /prompt_cache_key: "clover-adviser-v1"/);
 
 const importParserSource = fs.readFileSync(path.join(process.cwd(), "lib/openai-import-parser.ts"), "utf8");
-const importParserStart = importParserSource.indexOf("export const parseImportTextWithOpenAIFallback");
+const importParserStart = importParserSource.indexOf("const parseImportTextWithOpenAIFallbackImpl");
+const importWrapperStart = importParserSource.indexOf("export const parseImportTextWithOpenAIFallback");
+assert.ok(importParserStart >= 0 && importWrapperStart > importParserStart, "The public parser must delegate to the guarded implementation.");
+assert.match(importParserSource.slice(importWrapperStart, importParserSource.indexOf("export const shouldPrioritizeStrongImageTranscriptModel", importWrapperStart)), /await parseImportTextWithOpenAIFallbackImpl\(/);
 const importGuardIndex = importParserSource.indexOf("assessFinancialUploadScope({", importParserStart);
 const importApiKeyIndex = importParserSource.indexOf("const apiKey =", importParserStart);
 assert.ok(importGuardIndex >= 0 && importGuardIndex < importApiKeyIndex, "Upload scope gate must run before OpenAI setup.");
@@ -146,4 +150,19 @@ const importErrorSpecSource = fs.readFileSync(path.join(process.cwd(), "lib/impo
 assert.match(importErrorSpecSource, /Try another financial file/);
 assert.match(importErrorSpecSource, /Coupons, advertisements, menus, and promotional offers cannot create transactions/);
 
-console.log("Financial upload and Adviser scope gate regression passed.");
+async function verifyPublicScopeBoundary() {
+  const originalFetch = globalThis.fetch;
+  let externalRequests = 0;
+  globalThis.fetch = async () => { externalRequests += 1; throw new Error("Non-financial upload must not reach an external service"); };
+  try {
+    const result = await parseImportTextWithOpenAIFallback({
+      consentUserId: "non-financial-scope-test", text: "Curriculum Vitae. Experienced product designer focused on user research, design systems, collaboration, prototyping, and accessibility across consumer software products.",
+      fileName: "resume.jpg", fileType: "image/jpeg", importMode: "receipt", parsedRows: [], detectedMetadata: null,
+      preferPrimary: true, onUsage: () => assert.fail("Rejected content cannot consume AI allowance"),
+    });
+    assert.equal(result, null);
+    assert.equal(externalRequests, 0, "The actual public wrapper must reject irrelevant photos before any cloud request");
+    console.log("Financial upload and Adviser scope gate regression passed.");
+  } finally { globalThis.fetch = originalFetch; }
+}
+verifyPublicScopeBoundary().catch(error => { console.error(error); process.exitCode = 1; });

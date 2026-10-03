@@ -48,6 +48,8 @@ assert.equal(itemName.merchant_raw, "SYNTHETIC CHOCOLATE", "Preserve original mo
 assert.equal(enforceReceiptCoreMerchantEvidence({ ...itemName, merchant_source_kind: "business_logo", merchant_source_text: "Toko QA", merchant_raw: "Toko QA" }).merchant_raw, "Toko QA");
 assert.deepEqual(incompleteReceiptFields({ ...complete, merchant_raw: " ", merchant_clean: "Toko", currency: "IDR" }), []);
 const message = receiptReviewMessage(["date"]);
+assert.match(message, /Review the date/);
+assert.doesNotMatch(message, /upload|reupload/i, "Partial receipts should invite completing the saved draft");
 const snapshot = { status: "failed", processingPhase: RECEIPT_REVIEW_PHASE, processingMessage: message, workflowStage: "identifying_transactions", parsedRowsCount: 0, confirmedTransactionsCount: 0 };
 const telemetry = buildImportTelemetrySnapshot(snapshot);
 assert.equal(telemetry.canResume, false, "Missing source fields must not trigger repeated provider calls");
@@ -62,7 +64,7 @@ assert.equal((mobile.importFile as typeof snapshot).status, "failed");
 assert.equal(mobile.visibleImportComplete, false);
 const worker = readFileSync("workers/import-processor.ts", "utf8");
 assert.ok(worker.indexOf("const missingReceiptFields =") < worker.indexOf("const runTemplateLearning ="), "Incomplete receipt evidence must not be promoted as a successful template");
-assert.match(worker, /effectiveImportMode === "receipt" && receiptDetails && rows\.length === 0/);
+assert.match(worker, /const missingReceiptFields = effectiveImportMode === "receipt" && receiptDetails\s*\? incompleteReceiptFields/);
 const route = readFileSync("app/api/imports/[importId]/process/route.ts", "utf8");
 assert.match(route, /const needsReceiptConfirmation =\s*!result\.requiresInput &&/);
 assert.match(readFileSync("components/import-files-modal.tsx", "utf8"), /const visualRepairGraceActive =\s*processingPhase !== "receipt_review_required"/);

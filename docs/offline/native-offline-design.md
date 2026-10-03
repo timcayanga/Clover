@@ -1,6 +1,6 @@
 # Clover native offline and on-device design
 
-Current plan policy (24 September 2026): the separate local request allowance below is superseded by [pricing-policy.md](../pricing-policy.md). Cloud and on-device AI share the monthly and rolling 24-hour token budgets, with online reservations for offline use.
+Current plan policy (4 October 2026): device OCR, deterministic calculations, review, and supported on-device AI do not consume cloud tokens or require an online allowance reservation. Cloud models retain the monthly and rolling 24-hour token budgets in [pricing-policy.md](../pricing-policy.md). Device model execution is serialized and remains subject to OS availability/resource limits.
 Figma: [04 — Offline & On-device](https://www.figma.com/design/FNnCmCj90szZAnZ6twMPCy/Screens?node-id=1206-472062).
 
 Fourteen new light/dark mobile screens cover Sync & Offline, working offline, pending changes, conflicts, on-device Adviser, model availability and offline file previews. They retain the shared mobile navigation and semantic Clover colors. The frames are 390 × 844 minimum, with non-clipping layout. These designs describe native app behavior; desktop/mobile web remain online clients.
@@ -8,7 +8,7 @@ Fourteen new light/dark mobile screens cover Sync & Offline, working offline, pe
 ## Device data and access
 
 - SQLCipher database, scoped by API environment and Clerk user. A random 256-bit key stays in SecureStore; iOS uses device-only, unlocked keychain access. Encryption availability is checked and fails closed. Unsupported/old builds continue using the online API.
-- iOS database directory is excluded from backups and uses complete file protection. Android backups are disabled. Files selected for import are stored as encrypted original bytes, up to ten files of 3.5 MB each. Decrypted temporary copies are removed after use and on next launch after an interruption.
+- iOS database directory is excluded from backups and uses complete file protection. Android backups are disabled. Files selected for import are stored as encrypted original bytes, up to ten files, with photos up to 10 MB and documents up to 25 MB (50 MB total queued). Decrypted temporary copies are removed after use and on next launch after an interruption.
 - A server data-wipe epoch purges stale cached records and outboxes on reconnection; stale queued operations cannot restore a pre-wipe record.
 - First sign-in and first data download need a connection. Cached authorization is limited to seven days. Sign-out explicitly warns about unsynced changes and purges local financial data. HTTP authorization errors never become an offline-cache success. Reconnection checks Profile ownership before sending the outbox.
 - Download this Profile fetches Home, accounts, choices and up to 600 transactions. Other supported pages become available after being opened online. Financial lists and charts show downloaded snapshots; partial history and pending edits are disclosed. Shared Circles, billing, provider connections, destructive operations and linked transfers require a connection.
@@ -26,15 +26,15 @@ The file queue checks its stable import ID before upload/retry. Once the server 
 
 - Supported OS speech recognition is forced to run on device when offline. If unavailable, the UI offers typing; it does not silently send audio to a server.
 - iOS uses Vision/PDFKit for text extraction and Apple's Foundation Models when the device has an available Apple Intelligence model. Android uses bundled ML Kit OCR and the ML Kit Prompt API/Gemini Nano when available. Model downloads require a connection and explicit action. Capability checks handle unsupported devices.
-- Adviser calculates current-month downloaded income/spending with integer minor units, separates currencies and excludes transfers/excluded rows. The language model receives only this summary and the question; it explains rather than calculates authoritative balances. Suggestions never execute financial changes. Missing data, model failure or local allowance exhaustion leaves the calculated summary available.
+- Adviser calculates current-month downloaded income/spending with integer minor units, separates currencies and excludes transfers/excluded rows. The language model receives only this summary and the question; it explains rather than calculates authoritative balances. Suggestions never execute financial changes. Missing data or model failure leaves the calculated summary available.
 - Exact matches to at least two consistent, downloaded, confirmed merchant records may suggest a category with confidence and a reason. Applying it is an explicit user action on a draft.
 - Cloud is a separate, visible mode. On-device questions are not silently forwarded to cloud. Broader Adviser questions may need cloud data/context.
 
-## Local allowance
+## Local processing and cloud allowance
 
-User-approved policy: Free 50 / Pro 500 local model requests per UTC calendar month. Cloud token limits do not change. Math, OCR and transcription do not consume local requests.
+Device OCR and language-model execution do not reserve or debit cloud tokens. Available local models are serialized to avoid concurrent requests competing for memory, and OS errors are returned without automatic retries. Supported devices can continue processing downloaded records and previews after cloud limits are reached.
 
-The server reserves device portions (10 Free / 50 Pro at a time) under an account-wide lock. Reservations across devices cannot exceed the monthly allowance. Used receipts are monotonic. The encrypted device counter increments before inference and refunds failed inference. A reservation expires at the monthly boundary; connect to renew. Abandoned/reinstalled-device reservations remain reserved through expiry. Fully offline enforcement is best effort on a tampered/rooted device; it is not equivalent to server-side billing enforcement.
+Camera and photo-library image uploads start device OCR concurrently with byte transfer. Clover waits at most four seconds for this evidence, caches completed text in encrypted queued-file metadata for retries, and forwards a bounded versioned envelope with the validated original photo. Unsupported, empty, or slow OCR falls back to reading the original on the server. Client OCR is untrusted source evidence; it is never a confirmation of financial rows. Partial or non-Latin OCR may require server review.
 
 ## Build and release requirements
 

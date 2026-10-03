@@ -24,7 +24,6 @@ import {
 } from "@/lib/transient-data";
 import { summarizeErrorForLog } from "@/lib/security-logging";
 import { assertTrustedRequestOrigin } from "@/lib/request-security";
-import { getCloverTokenLimitError, getCloverTokenUsage } from "@/lib/clover-token-usage";
 
 export const dynamic = "force-dynamic";
 
@@ -167,11 +166,6 @@ export async function POST(request: Request) {
       await assertWorkspaceAccess(userId, payload.workspaceId);
 
       const user = await getOrCreateCurrentUser(userId);
-      const tokenUsage = await getCloverTokenUsage(user);
-      const tokenLimitError = getCloverTokenLimitError(tokenUsage);
-      if (tokenLimitError) {
-        return NextResponse.json(tokenLimitError, { status: 403 });
-      }
       const effectiveLimits = getEffectiveUserLimits(user);
       const currentMonthUploads = await countWorkspaceOwnerImportFilesThisMonth(payload.workspaceId);
 

@@ -200,6 +200,23 @@ assert.equal(
   }),
   "Shopping"
 );
+assert.equal(resolveReceiptCategoryWithPaymentEvidence({
+  proposedCategory: "Transfers",
+  receiptContext: "Harbour Coffee QA SALES INVOICE Espresso 120.00 SUBTOTAL 120.00 VAT 12.86 TOTAL 120.00 CARD 120.00 Thank you!",
+}), null, "A mixed-case coffee purchase paid by card must reject an unsupported transfer guess");
+assert.equal(resolveReceiptCategoryWithPaymentEvidence({
+  proposedCategory: "Transfers", merchantCategory: "Food & Dining",
+  receiptContext: "Harbour Coffee QA POS PURCHASE SALES INVOICE CARD 120.00",
+}), "Food & Dining", "Specific merchant evidence must outrank a generic POS shopping guess");
+assert.equal(resolveReceiptCategoryWithPaymentEvidence({
+  proposedCategory: "Transfers", merchantCategory: "Food & Dining",
+  receiptContext: "GCash transfer receipt. Amount sent 120.00. Recipient account Harbour Coffee QA.",
+}), "Transfers", "A recipient cafe name alone must not recategorize a genuine funds transfer");
+assert.equal(resolveReceiptCategoryWithPaymentEvidence({
+  proposedCategory: "Health & Wellness", merchantCategory: "Shopping",
+  receiptContext: "Pharmacy sales invoice POS payment Visa",
+}), "Health & Wellness", "A specific existing category must retain priority over generic merchant guesses");
+
 assert.equal(
   resolveReceiptCategoryWithPaymentEvidence({
     proposedCategory: "Transfers",
@@ -400,7 +417,7 @@ assert.match(
 );
 assert.match(
   uploadDockSource,
-  /primaryActionLabel = isComplete \|\| tone === "error" \? "Close import progress" : "Cancel upload"/,
+  /aria-label=\{settled \? "Dismiss import progress" : "Cancel import"\}/,
   "The progress X must cancel an active upload and close only after completion."
 );
 assert.match(

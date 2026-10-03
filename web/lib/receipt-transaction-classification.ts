@@ -45,17 +45,20 @@ export const resolveReceiptCategoryWithPaymentEvidence = ({
   proposedCategory,
   receiptContext,
   lineItemCategory,
+  merchantCategory,
 }: {
   proposedCategory?: string | null;
   receiptContext?: string | null;
   lineItemCategory?: string | null;
+  merchantCategory?: string | null;
 }) => {
   const category = String(proposedCategory ?? "").trim() || null;
   const itemCategory = String(lineItemCategory ?? "").trim() || null;
+  const merchantGuess = String(merchantCategory ?? "").trim() || null;
   const explicitTransfer = hasExplicitReceiptTransferEvidence(receiptContext);
   const posPurchase = hasReceiptPosPurchaseEvidence(receiptContext);
   const purchaseEvidence = hasReceiptPurchaseEvidence(receiptContext);
-  const itemizedPurchaseCategory = new Set([
+  const purchaseCategories = new Set([
     "Bills & Utilities",
     "Business",
     "Education",
@@ -68,13 +71,21 @@ export const resolveReceiptCategoryWithPaymentEvidence = ({
     "Subscriptions",
     "Transport",
     "Travel & Lifestyle",
-  ]).has(itemCategory ?? "");
+  ]);
+  const itemizedPurchaseCategory = purchaseCategories.has(itemCategory ?? "");
 
   if (itemizedPurchaseCategory && (!category || category === "Other" || category === "Transfers")) {
     // A payment rail describes how a receipt was paid, not what was bought.
     // Structured merchandise or meal rows are stronger category evidence than
     // GCash/bank-transfer wording on an otherwise valid purchase receipt.
     return itemCategory;
+  }
+
+  if (purchaseCategories.has(merchantGuess ?? "") && (!explicitTransfer || purchaseEvidence) &&
+      (!category || category === "Other" || category === "Transfers")) {
+    // A known cafe/pharmacy/etc. is more specific than the generic POS rail.
+    // Reuse the caller's merchant classification, never classify the card brand.
+    return merchantGuess;
   }
 
   if (posPurchase && !explicitTransfer && (!category || category === "Other" || category === "Transfers")) {

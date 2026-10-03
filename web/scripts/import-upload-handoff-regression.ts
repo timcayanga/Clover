@@ -330,12 +330,12 @@ const main = async () => {
   );
   assert.match(
     uploadDockSource,
-    /className="import-upload-dock__close import-upload-dock__close--dismiss"/,
+    /className="import-upload-dock__icon"/,
     "The import progress dismiss control must have close-only styling."
   );
   assert.match(
     globalStylesSource,
-    /\.import-upload-dock__close--dismiss\s*\{[\s\S]{0,180}background: transparent;[\s\S]{0,100}box-shadow: none;/,
+    /\.import-upload-dock__icon\s*\{[\s\S]{0,300}background: transparent;[\s\S]{0,100}box-shadow: none;/,
     "The import progress X must blend into the modal instead of rendering inside a circle."
   );
   assert.doesNotMatch(processRouteSource, /Fast preflight routed/, "Progress copy should describe user-visible work, not internal parser jargon.");
@@ -426,7 +426,7 @@ const main = async () => {
   );
   assert.match(
     uploadDockSource,
-    /isComplete && tone === "success"[\s\S]{0,300}<strong>Import complete<\/strong>/,
+    /<span>\{isComplete \? "Import complete" : progressLabel\}<\/span>/,
     "The completed dock must say Import complete rather than relying on 100% alone."
   );
   assert.match(
@@ -446,7 +446,7 @@ const main = async () => {
   );
   assert.match(
     globalStylesSource,
-    /\.import-upload-dock:not\(\.import-upload-dock--error\) \.import-upload-dock__inner \{[\s\S]{0,100}pointer-events: none;/,
+    /\.import-upload-dock__inner \{[\s\S]{0,100}pointer-events: none;/,
     "Active mobile import progress must not intercept navigation or page interactions."
   );
   assert.match(

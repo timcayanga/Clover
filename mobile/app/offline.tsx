@@ -1,16 +1,12 @@
 import { Text } from "../src/app-text";
 import { router } from "expo-router";
-import * as Crypto from "expo-crypto";
 import {
   CloverLocalAI,
   type LocalCapability,
 } from "../modules/clover-local-ai";
 import {
   localCapability,
-  deviceAllowance,
-  refreshLocalAllowance,
 } from "../src/offline/local-ai";
-import type { Allowance } from "../src/offline/local-allowance";
 import { useEffect, useState } from "react";
 import { Alert, View } from "react-native";
 import NetInfo from "@react-native-community/netinfo";
@@ -22,18 +18,12 @@ export default function OfflineScreen() {
   const session = useSession(),
     engine = session.offline,
     status = session.offlineStatus;
-  const [capability, setCapability] = useState<LocalCapability | null>(null),
-    [allowance, setAllowance] = useState<Allowance | null>(null);
+  const [capability, setCapability] = useState<LocalCapability | null>(null);
   useEffect(() => {
     let active = true;
     void localCapability().then((v) => {
       if (active) setCapability(v);
     });
-    void (engine ? deviceAllowance(engine).get() : Promise.resolve(null)).then(
-      (v) => {
-        if (active) setAllowance(v);
-      },
-    );
     return () => {
       active = false;
     };
@@ -151,14 +141,9 @@ export default function OfflineScreen() {
         </Body>
         <Body>{capability?.detail}</Body>
         <Body>
-          {allowance?.grant
-            ? `${Math.max(0, allowance.grant.issued - allowance.grant.used)} AI tokens reserved on this device. Expires ${new Date(allowance.grant.expiresAt).toLocaleDateString()}.`
-            : "Connect to reserve your device allowance."}
-        </Body>
-        <Body>
-          On-device AI draws from the same monthly and rolling 24-hour AI token allowance as cloud AI. Tokens are reserved while online; unused reservations remain charged for their window. Cloud token limits are
-          shared. Local calculations, dictation and OCR do not use these
-          requests.
+          On-device reading, calculations and AI do not use cloud tokens. You can
+          keep using them when your cloud allowance runs out. Model availability
+          and processing speed depend on your device.
         </Body>
         {capability?.model === "downloadable" ? (
           <Button
@@ -172,20 +157,6 @@ export default function OfflineScreen() {
             }
           />
         ) : null}
-        <Button
-          title="Refresh device allowance"
-          secondary
-          disabled={!engine || busy || !status.online || !session.profileId}
-          onPress={() =>
-            void run(async () =>
-              setAllowance(
-                await refreshLocalAllowance(engine!, session.profileId, () =>
-                  Crypto.randomUUID(),
-                ),
-              ),
-            )
-          }
-        />
         <Button
           title="Open Ask Clover"
           secondary

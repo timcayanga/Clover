@@ -33,6 +33,7 @@ const config: ExpoConfig = {
         image: "./assets/splash-brand.png",
         imageWidth: 220,
         resizeMode: "contain",
+        ios: { image: "./assets/splash-brand.png", imageWidth: 220, resizeMode: "contain", backgroundColor: "#F7F9FA" },
         android: { image: "./assets/android-clover-symbol.png", imageWidth: 160, backgroundColor: "#F7F9FA" },
       },
     ],

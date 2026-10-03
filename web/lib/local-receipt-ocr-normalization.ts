@@ -3,7 +3,12 @@
  * Never repair a digit, infer a currency, or replace a recognized total.
  */
 export function normalizeLocalReceiptOcrText(source: string) {
-  const spaced = source.replace(/(\d)([.,])\s+(?=\d{3}(?:\D|$))/g, "$1$2");
+  const spaced = source
+    // Printed decimal cents and thousands groups can be separated by OCR
+    // whitespace. Join only existing digits, never manufacture or correct one.
+    .replace(/(\d)([.,])[ \t]+(?=\d{2,3}(?:\D|$))/g, "$1$2")
+    .replace(/^(\s*\d[\d,]*[.,])\r?\n[ \t]*(\d{2})[ \t]*$/gm, "$1$2")
+    .replace(/^([ \t]*(?:sub[ \t]*total|grand[ \t]+total|total|amount[ \t]+due|vat[ \t]+amount|tax|service[ \t]+charge|discount|tip)[ \t]*[:：]?)[ \t]*\r?\n[ \t]*(\d[\d.,]*)[ \t]*$/gim, "$1 $2");
   const lines = spaced.split(/\r?\n/);
   const strictKoreanTotal =
     /^(?:총결제금액|실결제금액|결제금액|결제액|합계|총합계(?!액))\s*[:：]?\s*\d/m.test(
