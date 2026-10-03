@@ -155,7 +155,7 @@ export function SpendingPaceCard(props: SpendingPaceCardProps) {
           </div>
           <div className="spending-pace__actions">
             <Link className="button button-primary button-small" href={props.transactionsHref}>View transactions</Link>
-            <Link className="button button-secondary button-small" href={props.adviserHref}>Ask Adviser</Link>
+            <Link className="button button-secondary button-small" href={props.adviserHref}>Ask Clover</Link>
           </div>
         </aside>
       </div>

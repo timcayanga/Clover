@@ -1,6 +1,6 @@
 export const AI_CONSENT_VERSION = "2026-09-27-openai-v1";
 export const AI_CONSENT_TITLE = "Allow AI processing?";
-export const AI_CONSENT_DESCRIPTION = "Clover uses OpenAI to help read files and answer your financial questions. We send the text and images in files you choose to process with AI, your Adviser questions, and relevant financial records. Permission applies across your devices. You can withdraw it in Settings → Privacy and Data Use.";
+export const AI_CONSENT_DESCRIPTION = "Clover uses OpenAI to help read files and answer your financial questions. We send the text and images in files you choose to process with AI, your Ask Clover questions, and relevant financial records. Permission applies across your devices. You can withdraw it in Settings → Privacy and Data Use.";
 export const AI_CONSENT_ALTERNATIVE = "Manual entry, bank connections and imports that do not need cloud AI remain available.";
 export type AiConsent = { version: string; grantedAt: string | null; withdrawnAt: string | null };
 export function hasCurrentAiConsent(value: unknown): boolean {

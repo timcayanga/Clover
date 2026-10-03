@@ -16,6 +16,7 @@ const MARKET_PROVIDER_TIMEOUT_MS = 8_000;
 type YahooFinanceResponse = {
   chart?: {
     result?: Array<{
+      meta?: { currency?: string };
       timestamp?: number[];
       indicators?: {
         quote?: Array<{
@@ -186,7 +187,7 @@ const fetchYahooHistory = async (symbol: string, market: MarketRegion, range: Ma
     symbol: normalizeMarketSymbol(symbol),
     market,
     provider: "yahoo-finance" as const,
-    currency: market === "ph" ? ("PHP" as const) : ("USD" as const),
+    currency: payload.chart?.result?.[0]?.meta?.currency?.toUpperCase() ?? "",
     range,
     points,
     latest,

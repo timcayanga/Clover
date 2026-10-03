@@ -1061,19 +1061,19 @@ export const helpSections: HelpSection[] = [
     slug: "reports-adviser-goals",
     eyebrow: "Analysis",
     title: "Insights, budgeting, and goals",
-    summary: "Use reports, Adviser guidance, budgets, and goals to understand what your numbers mean and what to do next.",
+    summary: "Use reports, Ask Clover guidance, budgets, and goals to understand what your numbers mean and what to do next.",
     icon: "play",
     accent: "gold",
     keywords: ["reports", "adviser", "budgets", "budgeting", "goals", "dashboard", "analysis", "trend", "summary", "awareness", "visibility"],
     searchPhrases: [
       "how to read Clover reports",
-      "how to use Adviser in Clover",
+      "how to use Ask Clover in Clover",
       "how budgeting works in Clover",
       "how to set a goal in Clover",
     ],
     highlights: [
       "Reports show structured summaries and trends.",
-      "Adviser points out patterns and changes.",
+      "Ask Clover points out patterns and changes.",
       "Budgets and goals turn the data into action.",
     ],
     articles: [
@@ -1110,9 +1110,9 @@ export const helpSections: HelpSection[] = [
       ),
       createArticle(
         "what-adviser-means-in-clover",
-        "What Adviser means in Clover",
+        "What Ask Clover means in Clover",
         "Understand the guidance layer that points out important changes and patterns.",
-        "Learn what Adviser means in Clover and how to use it to spot patterns faster.",
+        "Learn what Ask Clover means in Clover and how to use it to spot patterns faster.",
         ["adviser", "patterns", "spending trends"],
         [
           "Look for the pattern or change being called out.",
@@ -1121,19 +1121,19 @@ export const helpSections: HelpSection[] = [
         ],
         [
           {
-            question: "How do Adviser and Reports differ?",
+            question: "How do Ask Clover and Reports differ?",
             answer:
-              "Reports are the formatted snapshots; Adviser is the guidance layer that highlights patterns or changes that deserve attention.",
+              "Reports are the formatted snapshots; Ask Clover is the guidance layer that highlights patterns or changes that deserve attention.",
           },
           {
-            question: "What should I do when Adviser flags something important?",
+            question: "What should I do when Ask Clover flags something important?",
             answer:
               "Open the related transactions or report view and confirm whether the change is real before you act on it.",
           },
         ],
         [
           {
-            label: "Open Adviser",
+            label: "Open Ask Clover",
             href: "/adviser",
             description: "See the patterns Clover noticed.",
           },
@@ -1215,9 +1215,9 @@ export const helpSections: HelpSection[] = [
               "Open the goal detail and compare the current value with the target, then review recent transactions or reports to understand the movement behind it.",
           },
           {
-            question: "Can I use Adviser to support a goal?",
+            question: "Can I use Ask Clover to support a goal?",
             answer:
-              "Yes. Adviser can show the patterns that explain why a goal is moving faster or slower than expected.",
+              "Yes. Ask Clover can show the patterns that explain why a goal is moving faster or slower than expected.",
           },
         ],
         [
@@ -1236,9 +1236,9 @@ export const helpSections: HelpSection[] = [
           "The dashboard is the quickest overview, and Reports give you a deeper structured look once you want to analyze the numbers.",
       },
       {
-        question: "How do Adviser and Reports differ?",
+        question: "How do Ask Clover and Reports differ?",
         answer:
-          "Reports are the formatted snapshots; Adviser is the guidance layer that highlights patterns or changes that deserve attention.",
+          "Reports are the formatted snapshots; Ask Clover is the guidance layer that highlights patterns or changes that deserve attention.",
       },
       {
         question: "How does budgeting work in Clover?",
@@ -1248,7 +1248,7 @@ export const helpSections: HelpSection[] = [
       {
         question: "Where do I track goals in Clover?",
         answer:
-          "Use the Goals page to follow progress without losing sight of the reports, budgets, and Adviser signals affecting that goal.",
+          "Use the Goals page to follow progress without losing sight of the reports, budgets, and Ask Clover signals affecting that goal.",
       },
       {
         question: "How do I read Clover reports?",
@@ -1256,9 +1256,9 @@ export const helpSections: HelpSection[] = [
           "Start with the headline numbers, then move into the category or cash flow detail that explains where the money is coming from and where it is going.",
       },
       {
-        question: "What does Adviser mean in Clover?",
+        question: "What does Ask Clover mean in Clover?",
         answer:
-          "Adviser highlights changes, spikes, or patterns so you can act on the most important movement without scanning every transaction manually.",
+          "Ask Clover highlights changes, spikes, or patterns so you can act on the most important movement without scanning every transaction manually.",
       },
       {
         question: "How do I set up a financial goal in Clover?",
@@ -1278,7 +1278,7 @@ export const helpSections: HelpSection[] = [
         description: "Set budgets from your real spending history.",
       },
       {
-        label: "Open Adviser",
+        label: "Open Ask Clover",
         href: "/adviser",
         description: "Check the patterns Clover noticed.",
       },
@@ -1957,12 +1957,12 @@ export const publicHelpSections: HelpSection[] = [
     [
       "how to upload statements and spreadsheets",
       "how recurring activity works",
-      "how to use Adviser and Reports",
+      "how to use Ask Clover and Reports",
       "how Circles and Split Bills work",
     ],
     [
       "Import files and review the results.",
-      "Understand patterns with Reports and Adviser.",
+      "Understand patterns with Reports and Ask Clover.",
       "Plan ahead with recurring activity, budgets, goals, and investments.",
       "Manage shared money with Circles and Split Bills.",
     ]

@@ -3,7 +3,8 @@ import { telemetry, safeAction } from "../../shared/analytics";
 import { Text, TextInput } from "./app-text";
 import { useUser } from "@clerk/expo";
 import { Image as ExpoImage } from "expo-image";
-import { GlassBackdrop, GlassContent } from "./glass-backdrop";
+import { GlassContent } from "./glass-backdrop";
+import { NavigationBar, NavigationItem } from "./navigation-bar";
 import { navigationGroups } from "./navigation-groups";
 import { Children, isValidElement } from "react";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -73,24 +74,6 @@ export function Icon({
     : (mobileNavigationIcons[name] ?? mobileInterfaceIcons[name]);
   // Bundled Android resource IDs can change between same-version preview installs.
   // Keep these small local icons out of the persistent resource-ID cache.
-  if (name === "chatbubble-ellipses-outline" && source)
-    return (
-      <View style={{ width: size, height: size, overflow: "hidden" }}>
-        <ExpoImage
-          source={source}
-          cachePolicy="memory"
-          accessible={false}
-          resizeMode="contain"
-          style={{
-            position: "absolute",
-            width: size * 1.2,
-            height: size * 1.2,
-            left: -size * 0.1,
-            top: -size * 0.075,
-          }}
-        />
-      </View>
-    );
   if (source)
     return (
       <ExpoImage
@@ -457,7 +440,7 @@ export function AppHeader({
   const adviser = (
     <Pressable
       accessibilityRole="button"
-      accessibilityLabel="Open Adviser"
+      accessibilityLabel="Open Ask Clover"
       onPress={() => router.navigate("/(tabs)/adviser")}
       style={styles.iconButton}
     >
@@ -561,7 +544,7 @@ export function AppHeader({
         >
           {adviserShortcut && !adviserOnLeft && !(back || onClose) && (trailing || canAdd) ? adviser : null}
           {trailing ??
-            (title === "Adviser" ? (
+            (title === "Ask Clover" ? (
               <Pressable
                 accessibilityRole="button"
                 accessibilityLabel="View Reports"
@@ -775,6 +758,7 @@ export function AppHeader({
 }
 export function ProfileGate({ children }: { children: ReactNode }) {
   const session = useSession();
+  const { colors } = useTheme();
   if (session.error)
     return (
       <Screen>
@@ -796,23 +780,20 @@ export function ProfileGate({ children }: { children: ReactNode }) {
     );
   if (!session.profileId)
     return (
-      <Screen>
-        <Heading>Set up your Profile</Heading>
-        <Body>Your finances stay separate between Profiles.</Body>
-        {session.data?.profiles.map((profile) => (
-          <Button
-            key={profile.id}
-            title={profile.name}
-            onPress={() => session.setProfileId(profile.id)}
-          />
-        ))}
-        {!session.data?.profiles.length && (
-          <Notice>
-            Create your first Profile on the Clover website, then refresh.
-          </Notice>
-        )}
-        <Button title="Refresh" secondary onPress={session.refresh} />
-      </Screen>
+      <View style={{ flex: 1, backgroundColor: colors.bg }}>
+      <GlassContent><View style={{ flex: 1, padding: 16, gap: 16 }}>
+        <Text accessibilityRole="header" style={{ fontFamily: "Poppins-SemiBold", fontSize: 22, textAlign: "center", color: colors.ink, paddingVertical: 12 }}>Home</Text>
+        <LinearGradient colors={["#03A8C0", "#34D3D0"]} style={{ borderRadius: 20, padding: 24, gap: 16 }}>
+          <Text style={{ color: "white", textAlign: "center" }}>My Balance</Text>
+          <View accessibilityLabel="Opening your balance" style={{ height: 44, borderRadius: 12, backgroundColor: "#FFFFFF33" }} />
+        </LinearGradient>
+        {!session.setupPending && !session.data?.needsOnboarding ? <>
+          <Notice>Your Profile could not load. Try again to open Home.</Notice>
+          <Button title="Try again" secondary onPress={session.refresh} />
+        </> : null}
+      </View></GlassContent>
+      <DetailNavigation disabled />
+      </View>
     );
   return <>{children}</>;
 }
@@ -976,7 +957,7 @@ function UserAvatar() {
     <Image
       accessibilityLabel="Profile photo"
       source={{ uri: user.imageUrl }}
-      style={{ width: 34, height: 34, borderRadius: 10 }}
+      style={{ width: 34, height: 34, borderRadius: 17 }}
     />
   ) : (
     <AvatarFallback />
@@ -1024,35 +1005,22 @@ export function AddNavigationMark({ size = 48 }: { size?: number } = {}) {
         justifyContent: "center",
       }}
     >
-      <Icon name="add" size={size * 0.58} color="white" />
+      <View accessible={false} style={{ width: size * 0.5, height: size * 0.5, alignItems: "center", justifyContent: "center" }}>
+        <View style={{ position: "absolute", width: "100%", height: 2, borderRadius: 1, backgroundColor: "white" }} />
+        <View style={{ position: "absolute", height: "100%", width: 2, borderRadius: 1, backgroundColor: "white" }} />
+      </View>
     </LinearGradient>
   );
 }
 export function DetailNavigation({
   onNavigate,
-}: { onNavigate?: () => void } = {}) {
+  disabled = false,
+}: { onNavigate?: () => void; disabled?: boolean } = {}) {
   const access = useAccess();
   const { colors, dark } = useTheme();
-  const insets = useSafeAreaInsets();
+  const path = usePathname();
   return (
-    <View
-      style={{
-        position: "absolute",
-        left: 8,
-        right: 8,
-        bottom: Math.max(insets.bottom, 8),
-        borderRadius: 32,
-        overflow: "hidden",
-        flexDirection: "row",
-        paddingVertical: 7,
-        minHeight: 72,
-        paddingBottom: 8,
-        borderWidth: 1,
-        borderColor: colors.line,
-        backgroundColor: "transparent",
-      }}
-    >
-      <GlassBackdrop dark={dark} />
+    <NavigationBar dark={dark}>
       {(
         [
           { title: "Home", route: "/(tabs)", icon: "home-outline" },
@@ -1063,7 +1031,7 @@ export function DetailNavigation({
           },
           { title: "Add", route: "/add-transaction", icon: "add" },
           {
-            title: "Adviser",
+            title: "Ask Clover",
             route: "/(tabs)/adviser",
             icon: "chatbubble-ellipses-outline",
           },
@@ -1074,23 +1042,19 @@ export function DetailNavigation({
           },
         ] as const
       ).map((item) => (
-        <Pressable
+        <NavigationItem
           key={item.title}
-          accessibilityRole="button"
-          accessibilityLabel={
+          label={
             access.active ? item.title : `${item.title}, log in required`
           }
+          disabled={disabled}
+          color={colors.muted}
+          add={item.title === "Add"}
+          selected={path === item.route.replace("/(tabs)", "") || (item.title === "Home" && path === "/")}
           onPress={() => {
             onNavigate?.();
             if (access.active) router.navigate(item.route);
             else void access.signIn();
-          }}
-          style={{
-            flex: 1,
-            minHeight: 44,
-            alignItems: "center",
-            justifyContent: "center",
-            gap: 4,
           }}
         >
           {item.title === "Account" ? (
@@ -1100,24 +1064,8 @@ export function DetailNavigation({
           ) : (
             <Icon name={item.icon} size={34} />
           )}
-          {item.title !== "Add" ? (
-            <Text
-              numberOfLines={1}
-              adjustsFontSizeToFit
-              minimumFontScale={0.8}
-              style={{
-                maxWidth: "100%",
-                textAlign: "center",
-                fontFamily: "Poppins-Regular",
-                fontSize: 11,
-                color: colors.muted,
-              }}
-            >
-              {item.title}
-            </Text>
-          ) : null}
-        </Pressable>
+        </NavigationItem>
       ))}
-    </View>
+    </NavigationBar>
   );
 }

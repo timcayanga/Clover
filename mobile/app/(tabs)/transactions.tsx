@@ -1,3 +1,4 @@
+import { CloverEmptyState } from "../../src/clover-mascot";
 import { AccountBrandLogo } from "../../src/account-brand-logo";
 import { Text } from "../../src/app-text";
 import { SummaryCard } from "../../src/plan-ui";
@@ -236,11 +237,9 @@ export default function Transactions() {
         )}
         ListEmptyComponent={
           !busy ? (
-            <Notice>
-              {error
-                ? "Pull down to retry."
-                : "No matching transactions. Try another search or upload a record."}
-            </Notice>
+            <CloverEmptyState pose={error ? "reassuring" : "thinking"}>
+              {error ? "Pull down to retry." : "No matching transactions. Try another search or upload a record."}
+            </CloverEmptyState>
           ) : (
             !refreshing ? <View accessibilityLabel="Loading transactions" accessibilityRole="progressbar" style={{ padding: 24, alignItems: "center" }}><ActivityIndicator color={colors.teal} /></View> : null
           )

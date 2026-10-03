@@ -1,0 +1,12 @@
+.transaction-creation-tabs > button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+}
+
+.adviser-experience--entry .adviser-chat__composer textarea {
+  padding-top: 36px;
+  padding-bottom: 36px;
+  text-align: center;
+}

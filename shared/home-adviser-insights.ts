@@ -52,7 +52,7 @@ export function buildHomeAdviserInsights(input: {
   if (input.monthNet > 0) items.push({
     emoji: "✨", label: "Positive cash flow", tone: "positive",
     parts: [amount(input.monthNet), " more came in than went out this month."],
-    href: "/adviser?section=trends", actionLabel: "Open Adviser",
+    href: "/adviser?section=trends", actionLabel: "Open Ask Clover",
   });
   if (input.hasRecentTransactions && input.recentReviewCount === 0) items.push({
     emoji: "✅", label: "Recent review", tone: "positive",
@@ -67,7 +67,7 @@ export function buildHomeAdviserInsights(input: {
     parts.push(...(input.previousWeeklyExpense > 0
       ? [` Spending is ${delta >= 0 ? "up" : "down"} `, amount(Math.abs(delta)), " vs last week."]
       : [input.weekly.expense > 0 ? " There is not enough prior activity to compare yet." : " There is no spending to compare yet."]));
-    items.push({ emoji: "🗓️", label: "Weekly summary", parts, href: "/adviser", actionLabel: "Open Adviser", tone: input.weekly.income >= input.weekly.expense ? "positive" : "warning" });
+    items.push({ emoji: "🗓️", label: "Weekly summary", parts, href: "/adviser", actionLabel: "Open Ask Clover", tone: input.weekly.income >= input.weekly.expense ? "positive" : "warning" });
   }
   return items.slice(0, 3);
 }

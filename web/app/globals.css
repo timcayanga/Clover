@@ -66794,3 +66794,35 @@ input.transaction-inline-edit[aria-invalid="true"] { box-shadow: inset 0 -1px va
 .transaction-review-controls > .detail-warning-box { width: 100%; box-sizing: border-box; }
 .transaction-review-controls ul { margin: 8px 0 12px; padding-left: 20px; }
 .transaction-review-controls .detail-warning-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+
+/* The mobile Account slot is circular for photos and the default account mark. */
+@media (max-width: 1100px) {
+  .shell-bottom-nav__item--account .shell-bottom-nav__icon {
+    border-radius: 50%;
+    overflow: hidden;
+  }
+  .shell-bottom-nav__item--account .shell-bottom-nav__profile-photo,
+  .shell-bottom-nav__item--account .shell-bottom-nav__icon .menu-icon-3d {
+    border-radius: 50% !important;
+    object-fit: cover;
+  }
+  .shell-bottom-nav.glass:not(.is-compact) {
+    min-height: 72px;
+    align-items: center;
+    padding-block: 7px !important;
+  }
+  .shell-bottom-nav.glass .shell-bottom-nav__add {
+    align-self: center;
+    margin-block: 0;
+    transform: none;
+  }
+}
+
+/* Ask Clover uses approved transparent mascot artwork at sibling-icon scale. */
+.clover-mascot { display:block; flex-shrink:0; object-fit:contain; margin:0 auto 12px; }
+.adviser-chat__welcome-mark { width:128px; height:116px; border-radius:0; object-fit:contain; }
+.nav-link .menu-icon-3d--adviser { width:32px; height:32px; transform:none; object-fit:contain; }
+@media (max-width:1100px) {
+  .shell-bottom-nav .shell-bottom-nav__icon .menu-icon-3d--adviser { width:40px!important; height:40px!important; min-width:40px!important; min-height:40px!important; transform:none; object-fit:contain; }
+  .shell-bottom-nav.is-compact .shell-bottom-nav__icon .menu-icon-3d--adviser { width:30px!important; height:30px!important; min-width:30px!important; min-height:30px!important; }
+}

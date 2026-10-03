@@ -1,4 +1,5 @@
 "use client";
+import { CloverMascot } from "@/components/clover-mascot";
 
 import { CategoryBrandMark } from "@/components/category-brand-mark";
 import Link from "next/link";
@@ -27,7 +28,7 @@ export function GoalDirectory({ goals }: { goals: GoalCardData[] }) {
   return (
     <section>
       {!goals.length ? (
-        <div className="plan-presets">
+        <div className="plan-presets"><CloverMascot />
           <h2>What would you like to work toward?</h2>
           <div className="collection-card-grid">
             {[

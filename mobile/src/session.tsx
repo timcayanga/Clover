@@ -31,7 +31,7 @@ import {
 import { AppState } from "react-native";
 import { apiRequest } from "./api";
 import { sampleBootstrap, sampleTransactions } from "./sample-data";
-import type { Bootstrap, Transaction } from "./types";
+import type { Bootstrap, Profile, Transaction } from "./types";
 import { removeUploadCopy, type SelectedFile } from "./upload";
 
 type Session = {
@@ -43,6 +43,7 @@ type Session = {
   offlineStatus: OfflineStatus;
   demo: boolean;
   ready: boolean;
+  setupPending: boolean;
   data: Bootstrap | null;
   error: string;
   profileId: string;
@@ -117,6 +118,8 @@ export function SessionProvider({
     Promise.resolve(null),
   );
   const setupQueue = useRef<OnboardingPersistence | null>(null);
+  const setupProfileRevision = useRef(0);
+  const setupProfileResolved = useRef(false);
   const transport = useCallback(
     async <T,>(path: string, options?: RequestInit) => {
       if (demo) throw new Error("Sample mode never connects to your account.");
@@ -139,7 +142,19 @@ export function SessionProvider({
         const store = await openOfflineStore(`${apiBase()}:${userId}`);
         engine = new OfflineEngine(store, transport, () => Crypto.randomUUID());
         await engine.init();
-        setupQueue.current = new OnboardingPersistence(store, choices => transport("onboarding", { method: "POST", body: JSON.stringify(choices) }));
+        setupQueue.current = new OnboardingPersistence(store, async choices => {
+          const result = await transport<{ completed: boolean; profiles?: Profile[] }>("onboarding", { method: "POST", body: JSON.stringify(choices) });
+          if (active && result.completed && result.profiles?.length) {
+            const profiles = result.profiles;
+            setupProfileRevision.current += 1;
+            setupProfileResolved.current = true;
+            // These IDs come from the authenticated setup response. Never
+            // manufacture a local Profile or send page requests without one.
+            setData(previous => previous ? { ...previous, profiles, needsOnboarding: false } : previous);
+            setProfile(previous => selectRecentProfile(profiles, previous, preferredProfile.current));
+          }
+          return result;
+        });
         await setupQueue.current.init();
         preferredProfile.current = await store.get<string>("selected-profile") ?? "";
         const cached = await store.get<CacheEntry<Bootstrap>>("cache:bootstrap");
@@ -293,7 +308,11 @@ export function SessionProvider({
   const flushSetup = useCallback(async () => {
     const engine = await offlineReady.current;
     if (!setupQueue.current?.pending || (engine && !engine.status.online)) return;
-    await setupQueue.current.flush();
+    try { await setupQueue.current.flush(); }
+    catch (error) {
+      setError(error instanceof Error ? error.message : "Clover could not open Home. Please try again.");
+      throw error;
+    }
     setRevision(n => n + 1);
   }, []);
   useEffect(() => {
@@ -305,10 +324,14 @@ export function SessionProvider({
   useEffect(() => {
     if (demo) return;
     let current = true;
+    const setupRevision = setupProfileRevision.current;
     setError("");
     request<Bootstrap>("bootstrap")
       .then((result) => {
-        if (!current) return;
+        // A bootstrap requested before setup completed must not replace the
+        // newly authorized starter Profile with its older empty list.
+        if (!current || setupRevision !== setupProfileRevision.current) return;
+        if (result.profiles.length) setupProfileResolved.current = true;
         setData(previous => {
           if (previous && (previous.offlineEpoch !== result.offlineEpoch ||
             previous.profiles.map(p => p.id).join() !== result.profiles.map(p => p.id).join())) pageCache.current.clear();
@@ -322,7 +345,7 @@ export function SessionProvider({
         );
       })
       .catch((e: Error) => {
-        if (current) setError(e.message);
+        if (current && setupRevision === setupProfileRevision.current) setError(e.message);
       });
     return () => {
       current = false;
@@ -358,6 +381,7 @@ export function SessionProvider({
         error,
         profileId,
         ready: Boolean(data),
+        setupPending: !profileId && Boolean(setupQueue.current?.pending || (setupQueue.current?.completed && !setupProfileResolved.current)),
         request,
         download: async (path) => {
           if (demo) throw new Error("Sign in to export your records.");
@@ -382,7 +406,7 @@ export function SessionProvider({
             void offlineReady.current.then(engine => engine?.store.set("selected-profile", id)).catch(() => {});
           }
         },
-        refresh: () => { pageCache.current.clear(); setRevision((n) => n + 1); },
+        refresh: () => { pageCache.current.clear(); void flushSetup().catch(() => {}); setRevision((n) => n + 1); },
         rows,
         uploads,
         registerUpload: async (id, file, targetProfileId = profileId, importMode) => {

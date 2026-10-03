@@ -2026,19 +2026,20 @@ function AccountDetailPageContent() {
           ? String(checkpoint.endingBalance)
           : null;
       const shouldPreserveImportedBalance =
-        account?.source === "upload" && checkpointBalance === null;
+        account?.type !== "cash" && account?.source === "upload" && checkpointBalance === null;
 
       const reconciledValue =
-        checkpointBalance ??
+        (account?.type === "cash" ? null : checkpointBalance) ??
         (shouldPreserveImportedBalance
           ? account?.balance ?? cachedImportedBalance ?? null
-          : account?.source === "manual" && balanceAnchor?.accountId === account.id
-            ? projectPagedAccountBalance(balanceAnchor, account.balance, transactions)
+          : account && (["manual", "adviser_manual"].includes(account.source) || account.type === "cash") && balanceAnchor?.accountId === account.id
+            ? projectPagedAccountBalance(balanceAnchor, account.balance, transactions, account.type)
             : deriveReconciledBalance({
+              accountType: account?.type,
               balance: account?.balance ?? cachedImportedBalance ?? null,
               transactions: transactions as BalanceLikeTransaction[],
               checkpoints: checkpoint ? [checkpoint] : [],
-              treatStoredBalanceAsOpening: account?.source === "manual",
+              treatStoredBalanceAsOpening: ["manual", "adviser_manual"].includes(account?.source ?? ""),
             }));
 
       return normalizeAccountBalanceSign(account?.type ?? "", parseAmount(reconciledValue));

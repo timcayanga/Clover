@@ -2509,7 +2509,7 @@ export function SettingsHub({
                     }
                   />
                   <SettingsToggleRow
-                    label="Use my data context in Adviser"
+                    label="Use my data context in Ask Clover"
                     checked={dataUsePreferences.adviserUsesContext}
                     onToggle={() =>
                       setDataUsePreferences((current) => ({

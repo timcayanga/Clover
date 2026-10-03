@@ -1,3 +1,5 @@
+import { useLiveInvestmentValues } from "../../src/use-live-investment-values";
+import { CloverEmptyState } from "../../src/clover-mascot";
 import { institutionGroups } from "../../src/institution-groups";
 import { recordedSummary } from "../../src/recorded-summary";
 import { FinversePendingChip } from "../../src/finverse-pending-chip";
@@ -47,7 +49,9 @@ function AccountsContent() {
   const session = useSession();
   const [currencyFilter, setCurrencyFilter] = useState("");
   const [currencyOpen, setCurrencyOpen] = useState(false);
-  const [accounts, setAccounts] = useState<Account[]>([]);
+  const [recordedAccounts, setAccounts] = useState<Account[]>([]);
+  const liveValues = useLiveInvestmentValues(recordedAccounts.filter(account => account.type === "investment").map(account => ({ id: account.id, name: account.name, currency: account.currency, subtype: account.investmentSubtype, symbol: account.investmentSymbol, quantity: account.investmentQuantity })));
+  const accounts = recordedAccounts.map(account => liveValues[account.id] === undefined ? account : { ...account, displayBalance: String(liveValues[account.id]) });
   const [expandedAccount, setExpandedAccount] = useState<string | null>(null);
   const [institutionId, setInstitutionId] = useState<string | null>(null);
   const [selected, setSelected] = useState<Account | null>(null);
@@ -556,7 +560,7 @@ function AccountsContent() {
           ))
       )}
       {!loading && !error && !accounts.length ? (
-        <Notice>No accounts yet. Use Add account above to get started.</Notice>
+        <CloverEmptyState>No accounts yet. Use Add account above to get started.</CloverEmptyState>
       ) : null}
     </Screen>
   );

@@ -1,3 +1,5 @@
+import { investmentTypeLabel } from "../../shared/investment-entry";
+import { useLiveInvestmentValues } from "./use-live-investment-values";
 import { Text } from "./app-text";
 import { Image, Pressable, View, useWindowDimensions } from "react-native";
 import type { AccountRecord } from "./account-editor";
@@ -22,8 +24,9 @@ export function AssetSnapshot({
 }) {
   const { colors, dark } = useTheme();
   const narrow = useWindowDimensions().width < 360;
-  const subtype = (account.investmentSubtype || "other").replaceAll("_", " ");
-  const value = amount(
+  const subtype = investmentTypeLabel(account.investmentSubtype || "other");
+  const liveValues = useLiveInvestmentValues([{ id: account.id, name: account.name, currency: account.currency, subtype: account.investmentSubtype, symbol: account.investmentSymbol, quantity: account.investmentQuantity }]);
+  const value = liveValues[account.id] ?? amount(
     account.displayBalance === undefined ? account.balance : account.displayBalance,
   );
   const cost =
@@ -36,7 +39,7 @@ export function AssetSnapshot({
     ["Institution", account.institution],
     ["Investment type", subtype],
     ["Currency", account.currency],
-    ["Symbol", account.investmentSymbol],
+    ["Ticker Name", account.investmentSymbol],
     ["Units", account.investmentQuantity],
     [
       "Deposit amount",
@@ -156,8 +159,8 @@ export function AssetSnapshot({
         Portfolio snapshot
       </Text>
       <View style={{ flexDirection: "row", gap: 10 }}>
-        <SummaryCard title="Current value" value={formatted(value)} />
-        <SummaryCard title="Cost basis" value={formatted(cost)} />
+        <SummaryCard title={liveValues[account.id] === undefined ? "Recorded value" : "Estimated value"} value={formatted(value)} />
+        <SummaryCard title="Purchase Value" value={formatted(cost)} />
       </View>
       <View style={{ flexDirection: "row" }}>
         <SummaryCard

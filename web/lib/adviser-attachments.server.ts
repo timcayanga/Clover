@@ -66,7 +66,7 @@ export async function storeAdviserAttachment(
     );
   if (text.length > MAX_ADVISER_ATTACHMENT_TEXT)
     throw new Error(
-      "This file is too long for Adviser. Attach a shorter excerpt or use Clover’s statement import.",
+      "This file is too long for Ask Clover. Attach a shorter excerpt or use Clover’s statement import.",
     );
   const id = `adviser_file_${randomUUID()}`;
   const name = file.name.replace(/[\u0000-\u001f/\\]/g, "_").slice(0, 180);

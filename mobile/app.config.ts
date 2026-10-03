@@ -61,6 +61,11 @@ const config: ExpoConfig = {
     [
       "expo-speech-recognition",
       {
+        androidSpeechServicePackages: [
+          "com.google.android.googlequicksearchbox",
+          "com.google.android.tts",
+          "com.google.android.as",
+        ],
         microphonePermission:
           "Use your microphone to dictate a Clover message.",
         speechRecognitionPermission:

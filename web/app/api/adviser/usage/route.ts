@@ -51,7 +51,7 @@ export async function GET(request: Request) {
       ...summarizeAdviserUsageAuditLogs(logs),
     });
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Unable to load Adviser usage";
+    const message = error instanceof Error ? error.message : "Unable to load Ask Clover usage";
     return NextResponse.json({ error: message }, { status: message === "UNAUTHORIZED" ? 401 : 400 });
   }
 }

@@ -22,9 +22,11 @@ async function main() {
   assert.equal((await call("skip","PHP","bad")).status,401);
   assert.equal((await call("skip","XXX")).status,400);
   for (const action of ["skip","file","camera","library"]) {
-   const r=await call(action);assert.equal(r.status,200,await r.text());
+   const r=await call(action);const body=await r.json();assert.equal(r.status,200,JSON.stringify(body));
    const user=await prisma.user.findUniqueOrThrow({where:{clerkUserId:identity},include:{workspaces:{include:{accounts:true}}}});
    assert.notEqual(user.id,legacy.id);assert.equal(user.environment,"production");assert.equal(user.planTier,"free");assert.ok(user.onboardingCompletedAt);
+   assert.equal(body.completed,true);
+   assert.deepEqual(body.profiles,user.workspaces.map(({id,name})=>({id,name})),"Setup returns only the new identity's Profiles, without another bootstrap request");
    if (action === "skip") {
     const circle = await prisma.circle.create({data:{ownerUserId:legacy.id,name:"Legacy private Circle",type:"household"}});
     const token="a".repeat(48);
@@ -39,7 +41,7 @@ async function main() {
     console.log("PASS matching email cannot expose or accept legacy staging Circle invitations");
    }
    assert.equal(user.workspaces.length,1);assert.equal(user.workspaces[0].accounts.length,1);assert.equal(user.workspaces[0].accounts[0].currency,"PHP");
-   assert.equal((await call(action,"USD")).status,200);
+   const replay=await call(action,"USD");assert.equal(replay.status,200);assert.deepEqual((await replay.json()).profiles,body.profiles,"Idempotent replay returns the same authorized Profile");
    assert.equal((await prisma.account.findUniqueOrThrow({where:{id:user.workspaces[0].accounts[0].id}})).currency,"PHP");
    assert.deepEqual(await prisma.user.findUniqueOrThrow({where:{id:legacy.id},include:{workspaces:{include:{accounts:true}}}}),legacy);
    await prisma.user.delete({where:{id:user.id}});

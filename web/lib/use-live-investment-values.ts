@@ -1,4 +1,5 @@
 "use client";
+import { investmentQuoteIdentity, investmentValueFromQuote, type InvestmentQuote } from "../../shared/investment-entry";
 import { registerPullRefresh } from "./pull-refresh";
 
 import { useEffect, useMemo, useState } from "react";
@@ -16,18 +17,21 @@ type InvestmentPosition = {
   investmentQuantity?: string | null;
 };
 
-const symbolForPosition = (position: InvestmentPosition) =>
-  resolveGotradeSecuritySymbol({
-    institution: position.institution,
-    name: position.name,
-    symbol: position.investmentSymbol,
-  });
+const symbolForPosition = (position: InvestmentPosition) => {
+  const symbol = resolveGotradeSecuritySymbol({ institution: position.institution, name: position.name, symbol: position.investmentSymbol });
+  if (["stock", "etf", "reit", "crypto"].includes(position.investmentSubtype ?? "")) {
+    return investmentQuoteIdentity({ name: position.name, symbol, subtype: position.investmentSubtype, currency: position.currency })?.symbol ?? null;
+  }
+  return symbol;
+};
 
 type CachedValue = { value: number; expiresAt: number };
 const valueCache = new Map<string, CachedValue>();
 const LIVE_VALUE_TTL_MS = 15 * 60 * 1000;
 
 const marketForPosition = (position: InvestmentPosition) => {
+  const identity = investmentQuoteIdentity({ name: position.name, symbol: position.investmentSymbol, subtype: position.investmentSubtype, currency: position.currency });
+  if (identity) return identity.market;
   if (position.investmentSubtype === "crypto") return "crypto";
   if (formatCurrencyCode(position.currency) === "PHP" || /gstocks|pse|philippine/i.test(position.institution ?? "")) {
     return "ph";
@@ -49,18 +53,20 @@ export const useLiveInvestmentValues = (positions: InvestmentPosition[]) => {
       }),
     [positions]
   );
-  const [values, setValues] = useState<Record<string, number>>({});
+  const signature = JSON.stringify(eligible.map(position => ({ id: position.id, symbol: symbolForPosition(position), market: marketForPosition(position), quantity: Number(position.investmentQuantity), currency: position.currency })));
+  const [values, setValues] = useState<{ signature: string; entries: Record<string, number> }>({ signature: "", entries: {} });
 
   useEffect(() => {
     let cancelled = false;
+    const rows = JSON.parse(signature) as Array<{ id: string; symbol: string; market: string; quantity: number; currency: string }>;
     const load = async () => {
       const next: Record<string, number> = {};
       await Promise.all(
-        eligible.map(async (position) => {
-          const symbol = symbolForPosition(position);
+        rows.map(async (position) => {
+          const symbol = position.symbol;
           if (!symbol) return;
-          const quantity = Number(position.investmentQuantity);
-          const market = marketForPosition(position);
+          const quantity = position.quantity;
+          const market = position.market;
           const key = `${market}:${symbol}:${formatCurrencyCode(position.currency)}:${quantity}`;
           const cached = valueCache.get(key);
           if (cached && cached.expiresAt > Date.now()) {
@@ -69,22 +75,11 @@ export const useLiveInvestmentValues = (positions: InvestmentPosition[]) => {
           }
           try {
             const response = await fetch(
-              `/api/market-history?symbol=${encodeURIComponent(symbol)}&market=${market}&range=5D`
+              `/api/investment-quote?symbol=${encodeURIComponent(symbol)}&market=${market}`
             );
-            const payload = (await response.json().catch(() => null)) as {
-              currency?: string;
-              latest?: { value?: number };
-            } | null;
-            const unitPrice = Number(payload?.latest?.value);
-            if (
-              !response.ok ||
-              !Number.isFinite(unitPrice) ||
-              unitPrice <= 0 ||
-              formatCurrencyCode(payload?.currency ?? position.currency) !== formatCurrencyCode(position.currency)
-            ) {
-              return;
-            }
-            const value = Number((unitPrice * quantity).toFixed(2));
+            const payload = (await response.json().catch(() => null)) as InvestmentQuote | null;
+            const value = payload && response.ok ? investmentValueFromQuote(payload, quantity, position.currency) : null;
+            if (value === null) return;
             valueCache.set(key, { value, expiresAt: Date.now() + LIVE_VALUE_TTL_MS });
             next[position.id] = value;
           } catch {
@@ -92,16 +87,14 @@ export const useLiveInvestmentValues = (positions: InvestmentPosition[]) => {
           }
         })
       );
-      if (!cancelled && Object.keys(next).length > 0) {
-        setValues((current) => ({ ...current, ...next }));
-      }
+      if (!cancelled) setValues({ signature, entries: next });
     };
     void load();
     const unregister = registerPullRefresh(async () => { valueCache.clear(); await load(); });
     return () => {
       unregister(); cancelled = true;
     };
-  }, [eligible]);
+  }, [signature]);
 
-  return values;
+  return values.signature === signature ? values.entries : {};
 };

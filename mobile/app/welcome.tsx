@@ -9,7 +9,7 @@ const slides = [
   { title: "Your money, together\nin Clover.", accent: "in Clover.", image: require("../assets/tutorial/accounts-v2.png"), description: "Clover Accounts preview showing balance summaries and bank accounts.", caption: "Banks, wallets, investments and cash in one place." },
   { title: "Connect, upload,\nor add manually.", accent: "or add manually.", image: require("../assets/tutorial/connect-v2.png"), description: "Clover Add Account preview with Manual, Ask Clover, Upload and Connect selectors.", caption: "Bank connections · Available with Plus and Pro" },
   { title: "See where your\nmoney goes.", accent: "money goes.", image: require("../assets/tutorial/spending-v2.png"), description: "Clover Reports preview with category spending and comparison tools.", caption: "Explore spending, trends and insights." },
-  { title: "Ask Clover.\nTake your next step.", accent: "Take your next step.", image: require("../assets/tutorial/adviser-v2.png"), description: "Clover Adviser preview with a financial question ready to ask.", caption: "Turn your financial questions into clear next steps." },
+  { title: "Ask Clover.\nTake your next step.", accent: "Take your next step.", image: require("../assets/tutorial/adviser-v2.png"), description: "Ask Clover preview with a financial question ready to ask.", caption: "Turn your financial questions into clear next steps." },
 ];
 
 export default function Welcome() {

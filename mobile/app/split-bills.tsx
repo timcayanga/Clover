@@ -1,3 +1,4 @@
+import { CloverEmptyState } from "../src/clover-mascot";
 import { EntryOverlay } from "../src/entry-overlay";
 import type { Transaction } from "../src/types";
 import { Text } from "../src/app-text";
@@ -496,7 +497,7 @@ export default function SplitBills() {
                       >
                         No bills yet
                       </Text>
-                      <Body>Upload a receipt or add a split bill.</Body>
+                      <CloverEmptyState>Upload a receipt or add a split bill.</CloverEmptyState>
                       <View style={{ flexDirection: "row", gap: 12 }}>
                         <Pressable
                           accessibilityRole="button"
@@ -620,7 +621,7 @@ export default function SplitBills() {
                   </Pressable>
                 ))
               ) : (
-                <Notice>No groups yet.</Notice>
+                <CloverEmptyState>No groups yet.</CloverEmptyState>
               )}
             </>
           ) : tab === "People" ? (
@@ -648,7 +649,7 @@ export default function SplitBills() {
                   </Card>
                 ))
               ) : (
-                <Notice>No people saved yet.</Notice>
+                <CloverEmptyState>No people saved yet.</CloverEmptyState>
               )}
             </>
           ) : (

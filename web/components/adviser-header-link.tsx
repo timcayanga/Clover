@@ -7,8 +7,8 @@ export function AdviserHeaderLink() {
     <Link
       className="adviser-header-link"
       href="/adviser"
-      aria-label="Open Adviser"
-      title="Adviser"
+      aria-label="Open Ask Clover"
+      title="Ask Clover"
     >
       <Image
         src={getNavigationIconSrc("adviser")}

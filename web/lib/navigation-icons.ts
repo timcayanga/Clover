@@ -1,4 +1,4 @@
-export const NAVIGATION_ICON_ASSET_ROOT = "/assets/3d%20icons/navigation/figma-v6";
+export const NAVIGATION_ICON_ASSET_ROOT = "/assets/3d%20icons/navigation/figma-v7";
 
 export const NAVIGATION_ICON_SOURCE_FILES = {
   home: "home.png",
@@ -9,7 +9,7 @@ export const NAVIGATION_ICON_SOURCE_FILES = {
   transactions: "transactions.png",
   recurring: "recurring.png",
   reports: "reports.png",
-  adviser: "adviser.png",
+  adviser: "../mascots/icon.png",
   budgeting: "budgeting.png",
   goals: "goals.png",
   plan: "figma-library-transparent/plan.png",

@@ -193,7 +193,7 @@ export function SettingsPreferences({
           {toggle(
             "privacy",
             "adviserUsesContext",
-            "Allow Adviser to use my financial context",
+            "Allow Ask Clover to use my financial context",
           )}
           {toggle(
             "privacy",
@@ -203,7 +203,7 @@ export function SettingsPreferences({
           )}
           <Body>
             Turning learning off stops new learning from edits; existing rules
-            are preserved. Adviser is unavailable while financial context is
+            are preserved. Ask Clover is unavailable while financial context is
             off. Cached financial state is always cleared on sign-out.
           </Body>
         </>

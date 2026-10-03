@@ -51,7 +51,7 @@ export const PLAN_FEATURE_DETAILS: Record<PlanFeatureKey, PlanFeatureDetail> = {
   uploads: createDetail({
     key: "uploads",
     title: "Clover token allowance",
-    summary: "Adviser and AI-assisted parsing share one monthly allowance. Local parsing uses a small workload weight and paid AI is cost-weighted.",
+    summary: "Ask Clover and AI-assisted parsing share one monthly allowance. Local parsing uses a small workload weight and paid AI is cost-weighted.",
     freeLabel: "Free",
     proLabel: "Plus",
     freeItems: ["100,000 Clover tokens monthly", "30,000-token rolling 24-hour safeguard"],
@@ -94,7 +94,7 @@ export const PLAN_FEATURE_DETAILS: Record<PlanFeatureKey, PlanFeatureDetail> = {
   }),
   reports: createDetail({
     key: "reports",
-    title: "Reports and Adviser guidance",
+    title: "Reports and Ask Clover guidance",
     summary: "Free covers the everyday summary views. Plus adds the decision layer that explains movement and next steps.",
     freeLabel: "Free",
     proLabel: "Plus",
@@ -126,11 +126,11 @@ export const PLAN_FEATURE_DETAILS: Record<PlanFeatureKey, PlanFeatureDetail> = {
       "Use the onboarding goal as the default",
       "See a basic checklist of next steps",
       "See a limited history of goal changes",
-      "Let the goal show up in Adviser and Reports in a basic way",
+      "Let the goal show up in Ask Clover and Reports in a basic way",
       "One strong snapshot",
       "One cashflow view",
       "One spending view",
-      "Basic Adviser guidance",
+      "Basic Ask Clover guidance",
       "Light investment summary",
     ],
     proItems: [
@@ -173,8 +173,8 @@ const PLAN_FEATURE_LABEL_MAP: Record<string, PlanFeatureKey> = {
   "unlimited files and transaction rows within the token allowance": "rows",
   "basic investment tracking": "investments",
   "full investment portfolio tools": "investments",
-  "basic reports and Adviser guidance": "reports",
-  "advanced reports and Adviser guidance": "reports",
+  "basic reports and Ask Clover guidance": "reports",
+  "advanced reports and Ask Clover guidance": "reports",
   "basic goal tracking": "goals",
   "enhanced goal tracking and recommendations": "goals",
 };

@@ -66,12 +66,12 @@ export function EntrySelector({
           }}
         >
           <Icon
-            line
+            line={method !== "ask"}
             name={
               method === "manual"
                 ? "pencil-outline"
                 : method === "ask"
-                  ? "sparkles-outline"
+                  ? "chatbubble-ellipses-outline"
                   : method === "upload"
                     ? "cloud-upload-outline"
                     : method === "connect"
@@ -84,6 +84,11 @@ export function EntrySelector({
           <Text
             style={{
               fontSize: 12,
+              lineHeight: 16,
+              textAlign: "center",
+              textAlignVertical: "center",
+              includeFontPadding: false,
+              alignSelf: "stretch",
               color: value === method ? "white" : colors.ink,
             }}
           >

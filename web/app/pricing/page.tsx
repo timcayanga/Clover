@@ -37,7 +37,7 @@ export default async function PricingPage() {
         <h2>How the allowances work</h2>
         <ul>
           <li>Statement and receipt uploads are included in all plans. AI-assisted processing uses your shared token allowance.</li>
-          <li>All plans include Adviser help with creating budgets, goals, and Circles. Plus and Pro add external information and interactive Adviser visuals.</li>
+          <li>All plans include Ask Clover help with creating budgets, goals, and Circles. Plus and Pro add external information and interactive Ask Clover visuals.</li>
           <li>Limits apply across your Profiles combined. Inactive budgets do not count toward the budget limit. Saved personal goals count toward the goal limit.</li>
           <li>Circle allowances count Circles you create, not invitations you accept.</li>
           <li>AI allowances reset monthly, with a separate rolling 24-hour cap. Cloud and on-device AI share this allowance; offline devices reserve tokens before use.</li>

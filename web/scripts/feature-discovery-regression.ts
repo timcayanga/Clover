@@ -25,10 +25,10 @@ async function main() {
   assert.match(reports, /<ReportsPageStream searchParams=\{searchParams\}/);
   assert.match(reports, /<AdviserHeaderLink \/>/);
   assert.doesNotMatch(adviser, /<ReportsStream/);
-  assert.match(adviser, /title="Adviser"[\s\S]{0,500}<AdviserChat[\s\S]{0,220}layout="workspace"/);
-  assert.match(adviserChat, /src="\/clover-mark\.svg"/, "Adviser must use the Clover mark in its empty state.");
-  assert.match(adviserChat, /layout === "workspace" \? <h2>Make your next money move\.<\/h2> : null/, "The full Adviser workspace should retain its welcome headline.");
-  assert.doesNotMatch(adviserChat, /<h2>Make your next money move\.<\/h2>\s*<p/, "The contextual Adviser popup should not render the workspace headline unconditionally.");
+  assert.match(adviser, /title="Ask Clover"[\s\S]{0,500}<AdviserChat(?:(?!\/>)[\s\S])*layout="workspace"/);
+  assert.match(adviserChat, /src="\/assets\/mascots\/welcome\.svg"/, "Ask Clover must use its welcome mascot in its empty state.");
+  assert.match(adviserChat, /layout === "workspace" \? <h2>[\s\S]{0,140}Ask Clover anything about your finances\.<\/h2> : null/, "The full Ask Clover workspace should retain its welcome headline.");
+  assert.doesNotMatch(adviserChat, /<h2>[\s\S]{0,140}Ask Clover anything about your finances\.<\/h2>\s*<p/, "The contextual Ask Clover popup should not render the workspace headline unconditionally.");
   assert.match(adviserChat, /layout === "workspace" \? composer : null/, "The empty Adviser workspace must center its composer with the welcome state.");
   assert.match(adviserChat, /messages\.length > 0 \|\| layout === "embedded" \? composer : null/, "The composer must move below an active Adviser conversation.");
   assert.doesNotMatch(adviserChat, /className="button button-primary button-small adviser-chat__send"/, "Adviser must not show the misleading upward-arrow button.");
@@ -36,8 +36,8 @@ async function main() {
   assert.match(styles, /adviser-chat--workspace \.adviser-chat__prompt-row \.adviser-chat__prompt[\s\S]{0,260}border: 0/, "Empty-state suggestions must be compact and container-free.");
   assert.doesNotMatch(adviser, /<header className="adviser-summary">/);
   assert.doesNotMatch(adviser, /title="What Clover noticed"/);
-  assert.match(transactions, /href="\/transactions\/categories">Manage categories<\/Link>/);
-  assert.match(transactions, /href="\/transactions\/tags">Manage tags<\/Link>/);
+  assert.match(transactions, /href="\/transactions\/categories" role="menuitem"[\s\S]{0,100}\{compact \? "Categories" : "Manage categories"\}/);
+  assert.match(transactions, /href="\/transactions\/tags" role="menuitem"[\s\S]{0,100}\{compact \? "Tags" : "Manage tags"\}/);
   assert.match(transactionDetail, /<TransactionTagsEditor[\s\S]{0,180}onChange=\{setTagDraft\}/);
   assert.match(categoryPicker, /href="\/transactions\/categories"[\s\S]{0,100}Manage categories/);
   assert.match(more, /title: "Split Bills"[\s\S]{0,160}without inviting anyone/);

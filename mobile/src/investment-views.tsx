@@ -1,3 +1,5 @@
+import { useLiveInvestmentValues } from "./use-live-investment-values";
+import { investmentTypeLabel } from "../../shared/investment-entry";
 import { PositionEditor } from "./position-editor";
 import { TradeLedger } from "./trade-ledger";
 import { Text } from "./app-text";
@@ -52,7 +54,7 @@ export function HoldingRow({
         >
           {holding.name}
         </Text>
-        <Body>{holding.symbol || holding.subtype.replaceAll("_", " ")}</Body>
+        <Body>{holding.symbol || investmentTypeLabel(holding.subtype)}</Body>
       </View>
       <Text
         style={{
@@ -314,6 +316,8 @@ export function SnapshotHoldingDetails({
 }) {
   const { colors } = useTheme();
   const [editing,setEditing]=useState(false);
+  const liveValues = useLiveInvestmentValues([holding]);
+  const estimatedValue = liveValues[holding.id];
   if(editing)return <PositionEditor holding={holding} accountId={holding.positionId ? holding.accountId : holding.valuationAccountId??holding.accountId} currency={holding.currency} onClose={()=>setEditing(false)} onSaved={()=>{setEditing(false);onChanged?.();}}/>;
   return (
     <Screen>
@@ -331,12 +335,12 @@ export function SnapshotHoldingDetails({
         </Text>
         <Body>
           {holding.institution} ·{" "}
-          {holding.symbol || holding.subtype.replaceAll("_", " ")}
+          {holding.symbol || investmentTypeLabel(holding.subtype)}
         </Body>
         <SummaryCard
-          title="Recorded value"
+          title={estimatedValue === undefined ? "Recorded value" : "Estimated current value"}
           value={
-            holding.value === null
+            estimatedValue !== undefined ? money(String(estimatedValue), holding.currency) : holding.value === null
               ? "Not recorded"
               : money(holding.value, holding.currency)
           }
@@ -345,7 +349,7 @@ export function SnapshotHoldingDetails({
           {holding.quantity ?? "Not recorded"} units · {holding.currency}
         </Body>
         <Body>
-          Cost basis:{" "}
+          Purchase Value:{" "}
           {holding.cost === null
             ? "Not recorded"
             : money(holding.cost, holding.currency)}

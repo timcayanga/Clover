@@ -69,9 +69,9 @@ export const buildProductionReadinessReport = (
     integrationCheck(
       env,
       "openai",
-      "OCR and Adviser",
+      "OCR and Ask Clover",
       ["OPENAI_API_KEY"],
-      "OpenAI-backed parsing and Adviser requests are configured."
+      "OpenAI-backed parsing and Ask Clover requests are configured."
     ),
     integrationCheck(
       env,

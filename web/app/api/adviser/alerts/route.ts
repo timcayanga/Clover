@@ -79,7 +79,7 @@ export async function GET() {
         title: "Spending moved up",
         body: `Spending is up ${Math.round(spendingChange)}% versus the previous available 30-day window.`,
         href: "/adviser",
-        actionLabel: "Open Adviser",
+        actionLabel: "Open Ask Clover",
       });
     }
 
@@ -108,7 +108,7 @@ export async function GET() {
 
     return NextResponse.json({ alerts: alerts.slice(0, 6), generatedAt: now.toISOString() });
   } catch (error) {
-    console.error("Unable to load Adviser alerts", error);
+    console.error("Unable to load Ask Clover alerts", error);
     return NextResponse.json({ alerts: [] });
   }
 }

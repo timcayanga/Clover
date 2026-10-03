@@ -76,7 +76,7 @@ export default function OfflineScreen() {
       );
       if (!engine?.status.online)
         throw new Error(
-          "Download interrupted. Your previous Adviser snapshot is still available.",
+          "Download interrupted. Your previous Ask Clover snapshot is still available.",
         );
       rows.push(...result.transactions);
       count += result.transactions.length;
@@ -133,7 +133,7 @@ export default function OfflineScreen() {
         <Heading>Downloaded data</Heading>
         <Body>
           Download Home, accounts, choices and up to 600 transactions in the
-          selected Profile. Offline Adviser will state when the downloaded
+          selected Profile. Offline Ask Clover will state when the downloaded
           history is incomplete.
         </Body>
         <Button
@@ -187,7 +187,7 @@ export default function OfflineScreen() {
           }
         />
         <Button
-          title="Open Adviser"
+          title="Open Ask Clover"
           secondary
           onPress={() => router.push("/(tabs)/adviser")}
         />

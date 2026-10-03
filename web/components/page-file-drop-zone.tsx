@@ -31,7 +31,7 @@ export function PageFileDropZone({
   enabled = true,
   title = "Drop files anywhere",
   subtitle = "Clover will pick them up and start importing right away.",
-  illustration = "/illustrations/clover-import-upload-3d.png",
+  illustration = "/assets/mascots/guiding.svg",
   onFilesDropped,
 }: PageFileDropZoneProps) {
   const [dragging, setDragging] = useState(false);

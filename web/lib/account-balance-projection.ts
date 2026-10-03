@@ -105,11 +105,17 @@ export const resolveEffectiveAccountBalance = (params: {
   accountType: string | null | undefined;
   liveBalance: BalanceValue;
   checkpointStatus?: string | null;
+  cashBalanceProjected?: boolean;
   checkpointBalance?: BalanceValue;
 }) => {
-  const liveBalance = toBalanceString(params.liveBalance);
-  const checkpointBalance = toBalanceString(params.checkpointBalance);
-  if (prefersLiveInvestmentBalance(params.accountType)) {
+  const normalize = (value: BalanceValue) => {
+    const result = toBalanceString(value);
+    return params.accountType === "cash" && result !== null && Number.isFinite(Number(result))
+      ? Math.max(0, Number(result)).toFixed(2) : result;
+  };
+  const liveBalance = normalize(params.liveBalance);
+  const checkpointBalance = normalize(params.checkpointBalance);
+  if (prefersLiveInvestmentBalance(params.accountType) || (params.accountType === "cash" && params.cashBalanceProjected && liveBalance !== null)) {
     return liveBalance;
   }
 

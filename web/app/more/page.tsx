@@ -54,7 +54,7 @@ const moreSections: MoreSection[] = [
       },
       {
         href: "/adviser",
-        title: "Adviser",
+        title: "Ask Clover",
         icon: "adviser",
         description: "Ask Clover questions about your money.",
       },

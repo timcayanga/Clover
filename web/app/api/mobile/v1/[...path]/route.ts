@@ -75,14 +75,24 @@ async function handle(
       return await withMobileRequestContext(userId, forwarded, async () => {
         const { getOrCreateCurrentUser } = await import("@/lib/user-context");
         const current = await getOrCreateCurrentUser(userId);
+        const completed = async () => reply({
+          completed: true,
+          // Return only this identity's authorized Profiles so native Home can
+          // open as soon as setup completes, without another bootstrap round trip.
+          profiles: await prisma.workspace.findMany({
+            where: { userId: current.id },
+            select: { id: true, name: true },
+            orderBy: { createdAt: "asc" },
+          }),
+        });
         // Replay must never change the currency of an already configured account.
-        if (current.onboardingCompletedAt) return reply({ completed: true });
+        if (current.onboardingCompletedAt) return completed();
         const { ensureStarterWorkspace } = await import("@/lib/starter-data");
         await ensureStarterWorkspace(current, undefined, undefined, body.currency);
         const result = await (await import("@/app/api/onboarding/route")).POST(forwarded);
         if (!result.ok) return reply({ error: "Unable to finish setup. Please try again." }, result.status);
 
-        return reply({ completed: true });
+        return completed();
       });
     }
     const user = await prisma.user.findUnique({
@@ -256,6 +266,17 @@ async function handle(
       const response = await withMobileRequestContext(userId, request, async () => (await import("@/app/api/transactions/batch/route")).POST(request));
       return reply(await response.json(), response.status);
     }
+    if (operation === "transaction-category-suggestions") {
+      const text = await request.text();
+      if (new TextEncoder().encode(text).length > 2048) return reply({ error: "Please shorten the transaction name." }, 413);
+      const input = z.object({ merchantText: z.string().min(1).max(200), type: z.enum(["income", "expense", "transfer"]) }).strict().parse(JSON.parse(text));
+      const headers = new Headers(request.headers);
+      headers.delete("cookie"); headers.delete("content-length"); headers.set("content-type", "application/json");
+      const forwarded = new Request(request.url, { method: "POST", headers, body: JSON.stringify({ ...input, workspaceId }) });
+      const response = await withMobileRequestContext(userId, forwarded, async () =>
+        (await import("@/app/api/transaction-category-suggestions/route")).POST(forwarded));
+      return reply(await response.json(), response.status);
+    }
     if (operation === "adviser-entries") {
       const text = request.method === "POST" ? await request.text() : undefined;
       if (text && new TextEncoder().encode(text).length > 100000) return reply({error:"Please shorten this draft."},413);
@@ -423,6 +444,10 @@ async function handle(
       const forwarded=new Request(request.url,{method:"POST",headers,body:JSON.stringify({...payload,currency:account.currency})});
       const result=await withMobileRequestContext(userId,forwarded,async()=> (await import("@/app/api/accounts/[accountId]/investment-purchases/route")).POST(forwarded,{params:Promise.resolve({accountId:account.id})}));
       return reply(result.ok?{ok:true}:{error:"Unable to save this purchase."},result.status);
+    }
+    if (operation === "investment-quote") {
+      const response = await withMobileRequestContext(userId, request, async () => (await import("@/app/api/investment-quote/route")).GET(request));
+      return reply(await response.json(), response.status);
     }
     if (operation === "market-history" || operation === "market-news") {
       const access = await getProAccess(user.id);

@@ -1,3 +1,4 @@
+import { CloverEmptyState } from "../src/clover-mascot";
 import { EntryOverlay } from "../src/entry-overlay";
 import { ChoiceField } from "../src/transaction-entry";
 import { CreateDirectoryCard } from "../src/create-directory-card";
@@ -383,7 +384,7 @@ export default function Goals() {
         <>
           {!data.goals.length ? (
             <>
-              <Body>What would you like to work toward?</Body>
+              <CloverEmptyState>What would you like to work toward?</CloverEmptyState>
               {presets.map((preset) => (
                 <Card key={preset.key}>
                   <CategoryMark name={preset.icon} size={40} />

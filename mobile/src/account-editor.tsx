@@ -1,7 +1,10 @@
+import { Pressable } from "react-native";
+import { investmentNameLabel, investmentTickerMatches, investmentTickerHint, investmentTypeLabel } from "../../shared/investment-entry";
+import { useLiveInvestmentValues } from "./use-live-investment-values";
 import { FinverseConnect } from "./finverse-connect";
 import { AddEntryMethods } from "./add-entry-methods";
 import { useEffect, useRef, useState } from "react";
-import { Body, Button, Card, Field, Notice, Screen } from "./ui";
+import { Body, Button, Card, Field, Notice, Screen, Icon, money } from "./ui";
 import { AssetSnapshot } from "./asset-snapshot";
 import { AccountValuationHistory } from "./investment-views";
 import { AccountHistory } from "./account-history";
@@ -67,9 +70,9 @@ const labels: Record<string, string> = {
   creditPeriodStart: "Statement period start",
   creditPeriodEnd: "Statement period end",
   investmentSubtype: "Asset type",
-  investmentSymbol: "Symbol",
+  investmentSymbol: "Ticker Name",
   investmentQuantity: "Quantity",
-  investmentCostBasis: "Cost basis",
+  investmentCostBasis: "Purchase Value",
   investmentPrincipal: "Principal",
   investmentStartDate: "Start date",
   investmentMaturityDate: "Maturity date",
@@ -118,6 +121,8 @@ export function AccountEditor({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [moreDetails, setMoreDetails] = useState(false);
+  const automaticTicker = useRef("");
   const [draft, setDraft] = useState<Record<string, string>>({
     name: "",
     institution: defaultInstitution,
@@ -126,6 +131,16 @@ export function AccountEditor({
     balance: "",
     investmentSubtype: defaultType === "investment" ? "stock" : "",
   });
+  const tickerMatches = investmentTickerMatches(draft.name, draft.investmentSubtype || "stock", draft.currency);
+  useEffect(() => {
+    if (record || draft.type !== "investment") return;
+    const matches = investmentTickerMatches(draft.name, draft.investmentSubtype || "stock", draft.currency);
+    const symbol = matches.length === 1 ? matches[0].symbol : "";
+    if (draft.investmentSymbol && draft.investmentSymbol !== automaticTicker.current) return;
+    automaticTicker.current = symbol;
+    setDraft(current => current.investmentSymbol === symbol ? current : { ...current, investmentSymbol: symbol });
+  }, [draft.name, draft.investmentSubtype, draft.currency, draft.type, draft.investmentSymbol, record]);
+  const previewValues = useLiveInvestmentValues(!record && draft.type === "investment" ? [{ id: "draft", name: draft.name, currency: draft.currency, subtype: draft.investmentSubtype, symbol: draft.investmentSymbol, quantity: draft.investmentQuantity }] : []);
   const alive = useRef(true);
   useEffect(() => {
     alive.current = true;
@@ -206,6 +221,11 @@ export function AccountEditor({
       payload[field] =
         value || (field === "institution" && !record ? "" : null);
     }
+    if (!record) {
+      payload.balance = draft.type === "investment"
+        ? (fixedIncome ? draft.investmentPrincipal : draft.investmentCostBasis)?.trim() || "0"
+        : draft.balance.trim() || "0";
+    }
     if (!Object.keys(payload).length) {
       setEditing(false);
       return;
@@ -216,7 +236,7 @@ export function AccountEditor({
         onSaved({
           ...(record ?? { id: `sample-${Date.now()}` }),
           ...draft,
-          balance: draft.balance || record?.balance || null,
+          balance: record ? draft.balance || record.balance : payload.balance ?? "0",
         } as AccountRecord);
         return;
       }
@@ -316,27 +336,30 @@ export function AccountEditor({
               onChange={(type) => setDraft((d) => ({ ...d, type, ...(type === "investment" ? {investmentSubtype:d.investmentSubtype || "stock"} : {}) }))}
             />
             </> : null}
-            {draft.type === "investment" ? <ChoiceField label="Investment Type" value={draft.investmentSubtype || "stock"} onChange={investmentSubtype=>setDraft(d=>({...d,investmentSubtype}))} options={investmentTypes.map(value=>({value,label:["etf","uitf","reit"].includes(value)?value.toUpperCase():value.replaceAll("_"," ").replace(/\b\w/g,c=>c.toUpperCase())}))}/> : null}
-            {["name", "institution", "currency", ...extra].map((field) => (
-              <Field
-                key={field}
-                label={draft.type === "investment" && field === "name" ? "Investment Name" : draft.type === "investment" && field === "balance" ? "Current Value" : labels[field]}
+            {draft.type === "investment" ? <ChoiceField label="Investment Type" value={draft.investmentSubtype || "stock"} onChange={investmentSubtype=>setDraft(d=>({...d,investmentSubtype}))} options={investmentTypes.map(value=>({value,label:["etf","uitf","reit"].includes(value)?value.toUpperCase():investmentTypeLabel(value)}))}/> : null}
+            {["name", "institution", "currency", ...(draft.type === "investment" && !record ? [fixedIncome ? "investmentPrincipal" : "investmentCostBasis"] : extra)].map((field) => (
+              <Field key={field}
+                label={draft.type === "investment" && field === "name" ? investmentNameLabel(draft.investmentSubtype) : draft.type === "investment" && !record && ["investmentPrincipal", "investmentCostBasis"].includes(field) ? "Purchase Value" : draft.type === "investment" && field === "balance" ? "Recorded Value" : labels[field]}
                 value={draft[field] ?? ""}
-                placeholder={dateFields.has(field) ? "YYYY-MM-DD" : undefined}
-                autoCapitalize={
-                  field === "currency" ? "characters" : "sentences"
-                }
-                keyboardType={
-                  numericFields.has(field) ? "decimal-pad" : "default"
-                }
-                onChangeText={(value) =>
-                  setDraft((d) => ({
-                    ...d,
-                    [field]: field === "currency" ? value.toUpperCase() : value,
-                  }))
-                }
+                placeholder={dateFields.has(field) ? "YYYY-MM-DD" : numericFields.has(field) ? "0" : undefined}
+                autoCapitalize={field === "currency" || field === "investmentSymbol" ? "characters" : "sentences"}
+                keyboardType={numericFields.has(field) ? "decimal-pad" : "default"}
+                onChangeText={value => setDraft(current => ({ ...current, [field]: ["currency", "investmentSymbol"].includes(field) ? value.toUpperCase() : value }))}
               />
             ))}
+            {draft.type === "investment" && !record ? <>
+              {tickerMatches.length > 1 ? <ChoiceField label="Which share class do you own?" value={draft.investmentSymbol || ""} options={tickerMatches.map(match => ({ value: match.symbol, label: `${match.name} (${match.symbol})` }))} onChange={investmentSymbol => { automaticTicker.current = ""; setDraft(current => ({ ...current, investmentSymbol })); }} /> : null}
+              {draft.investmentSymbol ? <Body>{investmentTickerHint(draft.name, draft.investmentSubtype, draft.currency, draft.investmentSymbol)}</Body> : null}
+              <Pressable accessibilityRole="button" accessibilityState={{ expanded: moreDetails }} onPress={() => setMoreDetails(value => !value)} style={{ minHeight: 48, flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
+                <Body>More Details</Body><Icon line name={moreDetails ? "chevron-up" : "chevron-down"} size={18} />
+              </Pressable>
+              {moreDetails ? investmentFields.filter(field => !["investmentCostBasis", "investmentPrincipal"].includes(field)).map(field => <Field key={field}
+                label={labels[field]} value={draft[field] ?? ""} placeholder={dateFields.has(field) ? "YYYY-MM-DD" : undefined}
+                autoCapitalize={field === "investmentSymbol" ? "characters" : "sentences"}
+                keyboardType={numericFields.has(field) ? "decimal-pad" : "default"}
+                onChangeText={value => { if (field === "investmentSymbol") automaticTicker.current = ""; setDraft(current => ({ ...current, [field]: field === "investmentSymbol" ? value.toUpperCase() : value })); }} />) : null}
+              <Body>{previewValues.draft !== undefined ? `Estimated Current Value: ${money(String(previewValues.draft), draft.currency)}` : "Purchase Value is the total you paid. Add a ticker and quantity in More Details to calculate the current value when a matching quote is available."}</Body>
+            </> : null}
             {record?.source === "manual" ? (
               <Body>
                 Leave opening balance blank to keep it unchanged. Saving a new

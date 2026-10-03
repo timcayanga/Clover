@@ -11,7 +11,7 @@ export const dynamic = "force-dynamic";
 type SuggestionWorkspaceCacheEntry = {
   expiresAt: number;
   merchantRules: Awaited<ReturnType<typeof loadMerchantRules>>;
-  categories: Array<{ id: string; name: string }>;
+  categories: Array<{ id: string; name: string; type: TransactionType }>;
   trainingSignals: Awaited<ReturnType<typeof loadTrainingSignals>> | null;
   trainingSignalsExpiresAt: number;
 };
@@ -31,7 +31,7 @@ const resolveSuggestionRouteUserId = async () => {
 
 const suggestionSchema = z.object({
   workspaceId: z.string().min(1),
-  merchantText: z.string().min(1),
+  merchantText: z.string().min(1).max(200),
   type: z.enum(["income", "expense", "transfer"]).default("expense"),
 });
 
@@ -75,7 +75,7 @@ const loadSuggestionWorkspaceData = async (workspaceId: string) => {
     loadMerchantRules(workspaceId),
     prisma.category.findMany({
       where: { workspaceId, isArchived: false },
-      select: { id: true, name: true },
+      select: { id: true, name: true, type: true },
     }),
   ]);
 
@@ -128,6 +128,12 @@ export async function POST(request: Request) {
     }
 
     const { merchantRules, categories } = await loadSuggestionWorkspaceData(payload.workspaceId);
+    const eligibleCategories = categories.filter(category => category.type === payload.type);
+    const namedCategory = eligibleCategories.find(category => normalizeName(category.name) === normalizeName(merchantText) && normalizeName(category.name) !== "other");
+    if (namedCategory) return NextResponse.json({ suggestion: {
+      categoryId: namedCategory.id, categoryName: namedCategory.name, confidence: 100,
+      source: "heuristic", sourceLabel: "category name", reason: "category_name_exact_match",
+    } });
 
     const ruleOnlyResult = classifyMerchant({
       merchantText,
@@ -152,7 +158,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ suggestion: null });
     }
 
-    const category = categories.find((entry) => normalizeName(entry.name) === normalizeName(result.categoryName));
+    const category = eligibleCategories.find((entry) => normalizeName(entry.name) === normalizeName(result.categoryName));
     if (!category) {
       return NextResponse.json({ suggestion: null });
     }

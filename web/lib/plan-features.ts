@@ -10,14 +10,14 @@ export const PLAN_FEATURES: Record<PlanTier, { title: string; headline: string; 
   free: {
     title: "Free",
     headline: "Clover keeps the core workflow open on Free.",
-    copy: "Free includes the core Clover workflow with a monthly shared allowance for Adviser and AI-assisted parsing.",
+    copy: "Free includes the core Clover workflow with a monthly shared allowance for Ask Clover and AI-assisted parsing.",
     bullets: [
       "Manual transaction tracking",
       "3 profiles and 10 non-cash accounts",
       "100,000 Clover tokens monthly",
       "Unlimited files and transaction rows within the token allowance",
       "Basic investment tracking",
-      "Basic reports and Adviser guidance",
+      "Basic reports and Ask Clover guidance",
       "Basic goal tracking",
     ],
   },
@@ -29,7 +29,7 @@ export const PLAN_FEATURES: Record<PlanTier, { title: string; headline: string; 
   pro: {
     title: "Plus",
     headline: "Plus gives you more room to work with the full picture.",
-    copy: "Plus is designed for broader account coverage, heavier importing, and richer analysis across goals, reports, Adviser guidance, recommendations, and investing.",
+    copy: "Plus is designed for broader account coverage, heavier importing, and richer analysis across goals, reports, Ask Clover guidance, recommendations, and investing.",
     bullets: [
       "Manual transaction tracking",
       "10 profiles and 20 non-cash accounts",
@@ -37,7 +37,7 @@ export const PLAN_FEATURES: Record<PlanTier, { title: string; headline: string; 
       "1,000,000 Clover tokens monthly",
       "Unlimited files and transaction rows within the token allowance",
       "Full investment portfolio tools",
-      "Advanced reports and Adviser guidance",
+      "Advanced reports and Ask Clover guidance",
       "Enhanced goal tracking and recommendations",
     ],
   },

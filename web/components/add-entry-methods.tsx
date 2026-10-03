@@ -1,5 +1,6 @@
 "use client";
 import { FinverseConnectButton } from "./finverse-connect-button";
+import { getNavigationIconSrc } from "@/lib/navigation-icons";
 import type { EntryFormContext } from "@/lib/adviser-entry-types";
 import type { AddFormDraft } from "../../shared/add-form-draft";
 import dynamic from "next/dynamic";
@@ -150,7 +151,7 @@ export function AddEntryMethods({
               }
             }}
           >
-            <img src={`/assets/organize/method-${method === "connect" ? "sync" : method}.svg`} width="18" height="18" alt="" />
+            <img src={method === "ask" ? getNavigationIconSrc("adviser") : `/assets/organize/method-${method === "connect" ? "sync" : method}.svg`} width="20" height="20" alt="" />
             {method === "manual"
               ? "Manual"
               : method === "ask"

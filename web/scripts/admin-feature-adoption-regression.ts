@@ -14,7 +14,7 @@ const expectedFeatures = [
   "Imports",
   "Review Queue",
   "Recurring",
-  "Adviser",
+  "Ask Clover",
   "Reports",
   "Split Bills",
   "Circles",

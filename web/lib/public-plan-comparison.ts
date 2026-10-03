@@ -16,7 +16,7 @@ export const plannedProPrices = (market: PricingMarket) => ({
 
 export const PLAN_COMPARISON_ROWS = {
  uploads: ["Statement and receipt uploads", "Upload and review extracted transactions", "Everything in Free", "Everything in Plus"],
- adviser: ["Clover Adviser", "Answers from your Clover records", "External information and interactive visuals", "Plus features with a larger AI allowance"],
+ adviser: ["Ask Clover", "Answers from your Clover records", "External information and interactive visuals", "Plus features with a larger AI allowance"],
  reports: ["Reports", "Essential summaries", "Advanced reporting", "Advanced reporting"],
  investments: ["Investment tracking", "Basic tracking", "Full portfolio tools", "Full portfolio tools"],
  insights: ["Reports & investments", "Essential reports and basic tracking", "Advanced reports and portfolio tools", "Advanced reports and portfolio tools"],

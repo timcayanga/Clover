@@ -1,3 +1,6 @@
+import { investmentTypeLabel } from "../../shared/investment-entry";
+import { useLiveInvestmentValues } from "../src/use-live-investment-values";
+import { CloverEmptyState } from "../src/clover-mascot";
 import { DropdownFilter } from "../src/transaction-filters";
 import { recordedSummary } from "../src/recorded-summary";
 import { registerScreenRefresh } from "../src/screen-refresh";
@@ -72,9 +75,11 @@ export default function Investments() {
     setTab("Overview");
   }, [session.profileId]);
   const accounts = data?.accounts ?? [];
-  const holdings = session.demo
+  const recordedHoldings = session.demo
     ? projectPortfolio(accounts, [])
     : (data?.holdings ?? projectPortfolio(accounts, []));
+  const liveValues = useLiveInvestmentValues(recordedHoldings);
+  const holdings = recordedHoldings.map(row => liveValues[row.id] === undefined ? row : { ...row, value: String(liveValues[row.id]) });
   const currencies = [...new Set(holdings.map((a) => a.currency))];
   const selectedCurrency = currencies.includes(currency)
     ? currency
@@ -141,7 +146,8 @@ export default function Investments() {
       />
     </EntryOverlay>
   ) : null;
-  const openHolding = (item: PortfolioHolding) => setHolding(item);
+  // A live estimate must never become the initial recorded value of an edit.
+  const openHolding = (item: PortfolioHolding) => setHolding(recordedHoldings.find(row => row.id === item.id) ?? item);
   if (holding)
     return (
       <SnapshotHoldingDetails
@@ -235,7 +241,7 @@ export default function Investments() {
             onChangeText={setSearch}
           />
           <DropdownFilter label="Currency" value={selectedCurrency} options={currencies.map(value => ({value,label:value}))} onChange={setCurrency} />
-          <DropdownFilter label="Asset Type" value={type} options={[{value:"all",label:"All Types"}, ...[...new Set(holdings.map(holding => holding.subtype))].map(value => ({value,label:value.replaceAll("_", " ").replace(/\b\w/g, letter => letter.toUpperCase())}))]} onChange={setType} />
+          <DropdownFilter label="Asset Type" value={type} options={[{value:"all",label:"All Types"}, ...[...new Set(holdings.map(holding => holding.subtype))].map(value => ({value,label:investmentTypeLabel(value)}))]} onChange={setType} />
           <DropdownFilter label="Institution" value={institutionFilter} options={[{value:"",label:"All Institutions"}, ...[...new Set(holdings.map(holding => holding.institution).filter((value): value is string => Boolean(value)))].sort().map(value => ({value,label:value}))]} onChange={setInstitutionFilter} />
           <PlanAction
             title="Clear filters"
@@ -411,7 +417,7 @@ export default function Investments() {
                 );
               })}
           {!visibleHoldings.length ? (
-            <Notice>No matching holdings.</Notice>
+            <CloverEmptyState pose="thinking">No matching holdings.</CloverEmptyState>
           ) : null}
         </>
       ) : tab.startsWith("Planner") ? (

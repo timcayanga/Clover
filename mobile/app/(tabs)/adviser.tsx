@@ -1,3 +1,4 @@
+import { CloverMascot } from "../../src/clover-mascot";
 import { Text } from "../../src/app-text";
 import { createAdviserHistoryHook } from "../../../shared/use-adviser-history";
 import {
@@ -20,7 +21,6 @@ import { Body, Card, Icon, Notice, Screen, useTheme } from "../../src/ui";
 import { PlanAction } from "../../src/plan-ui";
 import { useSession } from "../../src/session";
 import {
-  Image,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -126,7 +126,7 @@ export default function Adviser() {
     if (inFlight.current || history.busy || !draft.trim()) return;
     if (session.demo) {
       setError(
-        "Sign in to ask Adviser about your records. Sample mode does not send questions or financial data.",
+        "Sign in to ask Clover about your records. Sample mode does not send questions or financial data.",
       );
       return;
     }
@@ -358,10 +358,7 @@ export default function Adviser() {
         ) : null}
         {!messages.length ? (
           <View style={{ gap: 20, paddingTop: 32 }}>
-            <Image
-              source={require("../../assets/organize/clover.png")}
-              style={{ width: 44, height: 44 }}
-            />
+            <CloverMascot pose="welcome" size={128} />
             <Text
               accessibilityRole="header"
               style={{

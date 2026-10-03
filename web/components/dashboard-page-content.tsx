@@ -669,9 +669,10 @@ async function DashboardStream({
               where: {
                 isExcluded: false,
                 deletedAt: null,
-                account: { source: "manual" },
+                account: { OR: [{ source: { in: ["manual", "adviser_manual"] } }, { type: "cash" }] },
               },
               select: {
+                id: true,
                 amount: true,
                 currency: true,
                 type: true,
@@ -764,16 +765,17 @@ async function DashboardStream({
           (transaction) => formatCurrencyCode(transaction.currency) === formatCurrencyCode(account.currency)
         )
       : account.transactions;
-    const fallbackBalance = account.source === "manual"
+    const fallbackBalance = (account.source === "manual" || account.source === "adviser_manual" || account.type === "cash")
       ? deriveReconciledBalance({
+                accountType: account.type,
           balance: account.balance as Parameters<typeof deriveReconciledBalance>[0]["balance"],
           transactions: accountTransactions as unknown as Parameters<typeof deriveReconciledBalance>[0]["transactions"],
           checkpoints: latestCheckpoint ? ([latestCheckpoint] as unknown as Parameters<typeof deriveReconciledBalance>[0]["checkpoints"]) : [],
-          treatStoredBalanceAsOpening: true,
+          treatStoredBalanceAsOpening: ["manual", "adviser_manual"].includes(account.source),
         })
       : account.balance;
     const reconciledBalance = bankSnapshots.get(account.id)?.bankBalance ?? resolveEffectiveAccountBalance({
-      accountType: account.type,
+      cashBalanceProjected: account.type === "cash",      accountType: account.type,
       liveBalance: fallbackBalance,
       checkpointStatus: latestCheckpoint?.status ?? null,
       checkpointBalance: latestCheckpoint?.endingBalance ?? null,
@@ -1074,10 +1076,10 @@ async function DashboardStream({
 
         <HomeFeatureGrid />
 
-        <article className="dashboard-home__insight-strip glass" aria-label="Home Adviser">
-          <p className="eyebrow">Adviser</p>
+        <article className="dashboard-home__insight-strip glass" aria-label="Home Ask Clover">
+          <p className="eyebrow">Ask Clover</p>
           {insightItems.length > 0 ? (
-            <div className="dashboard-home__insight-strip-list" role="region" aria-label="Adviser suggestions" tabIndex={0}>
+            <div className="dashboard-home__insight-strip-list" role="region" aria-label="Ask Clover suggestions" tabIndex={0}>
               {insightItems.map((item) => (
                 <div key={item.label} className={`dashboard-home__insight-strip-item${item.tone ? ` dashboard-home__insight-strip-item--${item.tone}` : ""}`}>
                   <div className="dashboard-home__insight-strip-label">

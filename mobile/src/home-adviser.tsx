@@ -1,3 +1,4 @@
+import { CloverEmptyState } from "./clover-mascot";
 import { router } from "expo-router";
 import { Pressable, ScrollView, View, useWindowDimensions } from "react-native";
 import type { HomeInsight } from "../../shared/home-adviser-insights";
@@ -22,7 +23,7 @@ export function HomeAdviser({ insights, hidden }: { insights: HomeInsight[]; hid
   const { width } = useWindowDimensions();
   const cardWidth = Math.min(340, Math.max(220, width - 84));
   return <Card>
-    <Text style={styles.sectionTitle}>Adviser</Text>
+    <Text style={styles.sectionTitle}>Ask Clover</Text>
     {insights.length ? <ScrollView horizontal showsHorizontalScrollIndicator={false} snapToInterval={cardWidth + 12} decelerationRate="fast" contentContainerStyle={{ gap: 12 }}>
       {insights.map((item) => <View key={item.label} style={{ width: cardWidth, padding: 12, borderRadius: 12, gap: 8, backgroundColor: dark ? colors.pale : item.tone === "positive" ? "#E5F8EB" : item.tone === "warning" ? "#FFF0EB" : "#E7F7F6" }}>
         <Text style={{ color: colors.ink, fontFamily: "Poppins-SemiBold", fontSize: 13 }}>{item.emoji} {item.label}</Text>
@@ -31,7 +32,7 @@ export function HomeAdviser({ insights, hidden }: { insights: HomeInsight[]; hid
           <Text style={{ color: colors.teal, fontSize: 13, fontFamily: "Poppins-SemiBold" }}>{item.actionLabel} →</Text>
         </Pressable>
       </View>)}
-    </ScrollView> : <Body>No new suggestions right now. Clover will surface helpful next steps here.</Body>}
+    </ScrollView> : <CloverEmptyState compact pose="resting">No new suggestions right now. Clover will surface helpful next steps here.</CloverEmptyState>}
     {insights.length > 1 ? <Text style={{ color: colors.muted, fontSize: 11 }}>Swipe left or right for more advice</Text> : null}
   </Card>;
 }

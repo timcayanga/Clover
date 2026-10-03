@@ -119,13 +119,13 @@ export const FEATURE_FUNNEL_DEFINITIONS: FeatureFunnelDefinition[] = [
   },
   {
     key: "adviser",
-    label: "Adviser",
-    description: "From opening Adviser to asking, exploring, and acting.",
+    label: "Ask Clover",
+    description: "From opening Ask Clover to asking, exploring, and acting.",
     steps: [
-      { key: "viewed", label: "Viewed Adviser", criteria: [viewed("/adviser")] },
+      { key: "viewed", label: "Viewed Ask Clover", criteria: [viewed("/adviser")] },
       { key: "asked", label: "Asked Clover a question", criteria: events("adviser_question_asked") },
       { key: "opened", label: "Opened a recommendation", criteria: events("adviser_recommendation_opened", "insight_opened") },
-      { key: "acted", label: "Completed an Adviser action", criteria: events("adviser_action_completed", "insight_action_taken") },
+      { key: "acted", label: "Completed an Ask Clover action", criteria: events("adviser_action_completed", "insight_action_taken") },
     ],
   },
   {

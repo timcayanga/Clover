@@ -1,3 +1,4 @@
+import { newManualAccountBalance, isInvalidManualAccountBalance } from "../../../../shared/investment-entry";
 import { planName } from "../../../../shared/plan-catalog";
 import { finverseBalances } from "@/lib/finverse-balances";
 import { positionHoldingView } from "../../../../shared/investment-position-view";
@@ -3893,7 +3894,10 @@ export async function POST(request: Request) {
     const investmentDividendAmount = parseNullableDecimal(body?.investmentDividendAmount);
     const investmentPurchaseNote = parseNullableText(body?.investmentPurchaseNote);
     const investmentDividendNote = parseNullableText(body?.investmentDividendNote);
-    const balance = parseNullableDecimal(body?.balance);
+    if (isInvalidManualAccountBalance(body?.source, body?.balance)) {
+      return NextResponse.json({ error: "Enter a valid account balance." }, { status: 400 });
+    }
+    const balance = newManualAccountBalance(body?.source, parseNullableDecimal(body?.balance), type === "investment" ? investmentCostBasis ?? investmentPrincipal : null);
     const normalizedCurrency = normalizeInstitutionCurrency(
       institution,
       body?.currency ? String(body.currency).trim().toUpperCase() : null,

@@ -50,9 +50,10 @@ export async function mobileHome(workspaceId: string, selectedCurrency: string, 
           where: {
             deletedAt: null,
             isExcluded: false,
-            account: { source: "manual" },
+            account: { OR: [{ source: { in: ["manual", "adviser_manual"] } }, { type: "cash" }] },
           },
           select: {
+            id: true,
             amount: true,
             currency: true,
             type: true,
@@ -137,8 +138,9 @@ export async function mobileHome(workspaceId: string, selectedCurrency: string, 
           account.statementCheckpoints,
         );
         const fallback =
-          account.source === "manual"
+          (account.source === "manual" || account.source === "adviser_manual" || account.type === "cash")
             ? deriveReconciledBalance({
+                accountType: account.type,
                 balance: account.balance?.toString() ?? null,
                 transactions: (account.type === "cash"
                   ? account.transactions.filter(
@@ -164,11 +166,11 @@ export async function mobileHome(workspaceId: string, selectedCurrency: string, 
                       },
                     ]
                   : [],
-                treatStoredBalanceAsOpening: true,
+                treatStoredBalanceAsOpening: ["manual", "adviser_manual"].includes(account.source),
               })
             : account.balance;
         const effective = bankSnapshots.get(account.id)?.bankBalance ?? resolveEffectiveAccountBalance({
-          accountType: account.type,
+      cashBalanceProjected: account.type === "cash",          accountType: account.type,
           liveBalance: fallback,
           checkpointStatus: checkpoint?.status ?? null,
           checkpointBalance: checkpoint?.endingBalance ?? null,

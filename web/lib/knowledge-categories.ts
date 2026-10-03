@@ -21,7 +21,7 @@ export const knowledgeCategories: KnowledgeCategory[] = [
   {
     slug: "understand-money",
     title: "Understand Your Money",
-    summary: "Find answers with Reports and Adviser.",
+    summary: "Find answers with Reports and Ask Clover.",
     icon: "reports",
   },
   {

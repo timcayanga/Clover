@@ -819,7 +819,7 @@ function CircleEmptyState({
         plain ? " circles-soft-empty--plain" : ""
       }`}
     >
-      <img src={image} alt="" width={92} height={92} />
+      <img src="/assets/mascots/guiding.svg" alt="" width={128} height={128} />
       <strong>{title}</strong>
       <p>{children}</p>
     </div>
@@ -1101,7 +1101,7 @@ function CircleExpenses({
           ))
         ) : (
           <CircleEmptyState
-            image="/illustrations/clover-transactions-search-3d.png"
+            image="/assets/mascots/guiding.svg"
             title="No shared expenses yet"
             plain
           >
@@ -1464,7 +1464,7 @@ function CircleGoals({
             ))
           ) : (
             <CircleEmptyState
-              image="/illustrations/clover-goals-progress-3d.png"
+              image="/assets/mascots/guiding.svg"
               title="No shared goals yet"
               plain
             >
@@ -1566,7 +1566,7 @@ function CircleGoals({
             ))
           ) : (
             <CircleEmptyState
-              image="/illustrations/clover-investments-portfolio-3d.png"
+              image="/assets/mascots/guiding.svg"
               title="No shared investments"
               plain
             >
@@ -1614,7 +1614,7 @@ function CircleActivity({ circle }: { circle: CircleSummary }) {
           ))
         ) : (
           <CircleEmptyState
-            image="/illustrations/clover-review-checklist-3d.png"
+            image="/assets/mascots/guiding.svg"
             title="No Circle activity yet"
           >
             Changes made by Circle members will appear here.

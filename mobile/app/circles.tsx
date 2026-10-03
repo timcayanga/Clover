@@ -1,3 +1,4 @@
+import { CloverEmptyState } from "../src/clover-mascot";
 import { EntryOverlay } from "../src/entry-overlay";
 import { ChoiceField } from "../src/transaction-entry";
 import { CreateDirectoryCard } from "../src/create-directory-card";
@@ -396,7 +397,7 @@ export default function Circles() {
                   </Card>
                 ))
               ) : (
-                <Notice>No shared expenses yet.</Notice>
+                <CloverEmptyState>No shared expenses yet.</CloverEmptyState>
               )}
             </>
           ) : tab === "Commitments" || tab === "Contributions" ? (
@@ -515,7 +516,7 @@ export default function Circles() {
                   ),
                 )
               ) : (
-                <Notice>No shared {tab.toLowerCase()} yet.</Notice>
+                <CloverEmptyState>No shared {tab.toLowerCase()} yet.</CloverEmptyState>
               )}
             </>
           ) : tab === "Activity" ? (
@@ -528,7 +529,7 @@ export default function Circles() {
                   </Card>
                 ))
               ) : (
-                <Notice>No Circle activity yet.</Notice>
+                <CloverEmptyState pose="resting">No Circle activity yet.</CloverEmptyState>
               )}
             </>
           ) : (

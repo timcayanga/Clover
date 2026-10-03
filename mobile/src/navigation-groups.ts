@@ -21,7 +21,7 @@ export const navigationGroups: {
     items: [
       { label: "Reports", route: "/reports", icon: "pie-chart-outline" },
       {
-        label: "Adviser",
+        label: "Ask Clover",
         route: "/adviser",
         icon: "chatbubble-ellipses-outline",
       },

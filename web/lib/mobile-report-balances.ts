@@ -2,6 +2,7 @@ import { finverseBalances } from "./finverse-balances";
 import { prisma } from "./prisma";
 import {
   reportAccountBalance,
+  reportCashMovements,
   buildReportBalanceSeries,
 } from "./report-balances";
 import { mobileHomePeriods } from "./mobile-home-periods";
@@ -32,9 +33,10 @@ export async function mobileReportBalances(
           where: {
             deletedAt: null,
             isExcluded: false,
-            account: { source: "manual" },
+            account: { OR: [{ source: { in: ["manual", "adviser_manual"] } }, { type: "cash" }] },
           },
           select: {
+            id: true,
             amount: true,
             currency: true,
             type: true,
@@ -84,6 +86,10 @@ export async function mobileReportBalances(
   const balances = accounts.map((account) => ({
     id: account.id,
     currency: account.currency,
+    cashMovements: (() => {
+      const projection = reportCashMovements({ ...account, transactions: account.transactions.map(transaction => ({ ...transaction, amount: transaction.amount.toString(), rawPayload: transaction.rawPayload as RawPayload })) });
+      return projection ? { ...projection, knownFrom: projection.knownFrom ? getCalendarDayEndInTimeZone(new Date(projection.knownFrom), "Asia/Manila") : null, movements: projection.movements.map(movement => ({ ...movement, date: movement.date ? getCalendarDayEndInTimeZone(new Date(movement.date), "Asia/Manila") : movement.date })) } : undefined;
+    })(),
     balance: bankSnapshots.has(account.id) ? normalizeAccountBalanceSign(account.type, Number(bankSnapshots.get(account.id)!.bankBalance)) : reportAccountBalance({
       ...account,
       transactions: account.transactions.map((transaction) => ({

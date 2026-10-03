@@ -1,3 +1,4 @@
+import { investmentTypeLabel } from "../../shared/investment-entry";
 import { useEffect, useRef, useState } from "react";
 import { Alert } from "react-native";
 import * as Crypto from "expo-crypto";
@@ -191,7 +192,7 @@ export function PositionEditor({
         maxLength={120}
       />
       <Field
-        label="Symbol (optional)"
+        label="Ticker Name (optional)"
         value={draft.symbol ?? ""}
         onChangeText={(v) => update("symbol", v)}
         maxLength={30}
@@ -203,7 +204,7 @@ export function PositionEditor({
         onChange={(v) => update("subtype", v)}
         options={types.map((value) => ({
           value,
-          label: value.replaceAll("_", " "),
+          label: investmentTypeLabel(value),
         }))}
       />
       <Field
@@ -227,7 +228,7 @@ export function PositionEditor({
           keyboardType="decimal-pad"
         />
         <Field
-          label={`Opening cost basis (${draft.currency})`}
+          label={`Opening purchase value (${draft.currency})`}
           value={draft.openingCostBasis}
           onChangeText={(v) => update("openingCostBasis", v)}
           keyboardType="decimal-pad"

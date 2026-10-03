@@ -6,7 +6,7 @@ export const dynamic = "force-dynamic";
 export const metadata: Metadata = {
   title: "Help Center",
   description:
-    "Find answers about Clover uploads, accounts, transactions, Reports, Adviser, budgets, goals, investments, Circles, and your account.",
+    "Find answers about Clover uploads, accounts, transactions, Reports, Ask Clover, budgets, goals, investments, Circles, and your account.",
   alternates: { canonical: "https://clover.ph/help" },
 };
 export default async function HelpPage() {

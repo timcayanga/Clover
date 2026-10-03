@@ -1,5 +1,6 @@
 import { entryExample } from "../../shared/entry-examples";
 import { mostUsedTransactionAccount } from "../../shared/default-transaction-account";
+import { applicableCategorySuggestion, type CategorySuggestion } from "../../shared/category-suggestion";
 import { AccountBrandLogo } from "./account-brand-logo";
 import { beginTelemetry } from "../../shared/analytics";
 import { Text } from "./app-text";
@@ -13,7 +14,7 @@ import * as ImagePicker from "expo-image-picker";
 import { AdviserInputTools } from "./adviser-input-tools";
 import { ApiError } from "./api";
 import * as Crypto from "expo-crypto";
-import type { EntryDraft, EntryFormContext } from "./adviser-entry-types";
+import type { EntryAccount, EntryDraft, EntryFormContext } from "./adviser-entry-types";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Platform, Pressable, View } from "react-native";
 import { useSession } from "./session";
@@ -144,13 +145,10 @@ export function ManualTransaction({
       active = false;
     };
   }, [session.offline, session.profileId]);
-  const localSuggestion = !draft.categoryId
-    ? suggestLocalCategory(
-        draft.merchantRaw,
-        localRows.filter((r) => r.type === draft.type),
-      )
-    : null;
   const [options, setOptions] = useState<Options | null>(null);
+  const [categorySuggestion, setCategorySuggestion] = useState<CategorySuggestion | null>(null);
+  const categoryTouched = useRef(false);
+  const autoCategory = useRef<string | null>(null);
   const [error, setError] = useState("");
   const [saved, setSaved] = useState(false);
   const [moreDetails, setMoreDetails] = useState(false);
@@ -159,6 +157,41 @@ export function ManualTransaction({
   const [busy, setBusy] = useState(false);
   const lock = useRef(false);
   const [retry, setRetry] = useState(0);
+  const latest = useRef({ draft, onChange, busy, uncertain });
+  latest.current = { draft, onChange, busy, uncertain };
+  const draftedAccounts = draft.adviserEntry?.accounts ?? [];
+  const availableAccounts = [...(options?.accounts ?? []), ...draftedAccounts.map(account => ({ ...account, id: `new:${account.key}`, name: `New: ${account.name}` }))];
+  useEffect(() => {
+    if (!draft.merchantRaw && !draft.amount) { categoryTouched.current = false; autoCategory.current = null; }
+  }, [draft.merchantRaw, draft.amount]);
+  useEffect(() => {
+    setCategorySuggestion(null);
+    const merchantText = draft.merchantRaw.trim();
+    const type = draft.type;
+    if (merchantText.length < 2 || type === "transfer" || !options || categoryTouched.current) return;
+    let live = true;
+    const controller = new AbortController();
+    const apply = (suggestion: CategorySuggestion | null) => {
+      const current = latest.current;
+      if (!live || current.busy || current.uncertain || current.draft.merchantRaw.trim() !== merchantText || current.draft.type !== type ||
+        !applicableCategorySuggestion(suggestion, options.categories, type, categoryTouched.current)) return;
+      // A draft received from Ask Clover may already contain a category to review.
+      if (current.draft.categoryId && current.draft.categoryId !== autoCategory.current) return;
+      setCategorySuggestion(suggestion);
+      autoCategory.current = suggestion.categoryId;
+      if (current.draft.categoryId !== suggestion.categoryId) current.onChange({ ...current.draft, categoryId: suggestion.categoryId });
+    };
+    const local = suggestLocalCategory(merchantText, localRows.filter(row => row.type === type));
+    const localCategory = local && options.categories.find(category => category.name === local.category && category.type === type);
+    if (local && localCategory) apply({ categoryId: localCategory.id, categoryName: localCategory.name, confidence: local.confidence, source: "training_signal", sourceLabel: "confirmed transaction history", reason: local.reason });
+    const timer = setTimeout(() => {
+      if (session.demo || !session.offlineStatus.online) return;
+      void session.request<{ suggestion: CategorySuggestion | null }>(`transaction-category-suggestions?workspaceId=${encodeURIComponent(session.profileId)}`, {
+        method: "POST", body: JSON.stringify({ merchantText, type }), signal: controller.signal,
+      }).then(result => apply(result.suggestion)).catch(() => {});
+    }, 250);
+    return () => { live = false; clearTimeout(timer); controller.abort(); };
+  }, [draft.merchantRaw, draft.type, options, localRows, session.profileId, session.request, session.demo, session.offlineStatus.online]);
   useEffect(() => {
     let live = true;
     const load = session.demo
@@ -186,19 +219,35 @@ export function ManualTransaction({
     };
   }, [session.demo, session.profileId, session.request, retry]);
   useEffect(() => {
-    if (draft.accountId || !options) return;
+    // An unresolved Ask Clover account is a follow-up question, not permission to use a different default.
+    if (draft.accountId || !options || draft.adviserEntry) return;
     const preferred = mostUsedTransactionAccount(options.accounts);
     if (preferred) onChange({ ...draft, accountId: preferred.id, currency: preferred.currency });
   }, [options, draft, onChange]);
   const change = (patch: Partial<TransactionDraft>) => {
     if (busy || uncertain) return;
+    if (Object.hasOwn(patch, "type")) { categoryTouched.current = false; autoCategory.current = null; setCategorySuggestion(null); }
+    else if (Object.hasOwn(patch, "categoryId")) { categoryTouched.current = true; autoCategory.current = null; setCategorySuggestion(null); }
+    if (Object.hasOwn(patch, "merchantRaw") && autoCategory.current === draft.categoryId && !categoryTouched.current) {
+      patch = { ...patch, categoryId: null }; autoCategory.current = null; setCategorySuggestion(null);
+    }
     onChange({ ...draft, ...patch });
     setSaved(false);
+  };
+  const updateDraftAccount = (key: string, patch: Partial<EntryAccount>) => {
+    if (!draft.adviserEntry) return;
+    change({
+      ...(patch.currency && draft.accountId === `new:${key}` ? { currency: patch.currency } : {}),
+      adviserEntry: { ...draft.adviserEntry,
+        accounts: draftedAccounts.map(account => account.key === key ? { ...account, ...patch } : account),
+        transactions: draft.adviserEntry.transactions.map(row => patch.currency && row.accountId === `new:${key}` ? { ...row, currency: patch.currency } : row),
+      },
+    });
   };
   const save = async (another = false) => {
     if (lock.current) return;
     if (
-      !options?.accounts.some((account) => account.id === draft.accountId) ||
+      !availableAccounts.some((account) => account.id === draft.accountId) ||
       !draft.merchantRaw.trim() ||
       !/^\d{1,12}(\.\d{1,2})?$/.test(draft.amount) ||
       Number(draft.amount) <= 0 ||
@@ -228,11 +277,10 @@ export function ManualTransaction({
               method: "POST",
               body: JSON.stringify({
                 ...entry,
-                accounts: [],
+                accounts: entry.accounts.filter(account => [draft.accountId, ...entry.transactions.slice(1).map(row => row.accountId)].includes(`new:${account.key}`)).map(account => ({ ...account, balance: account.balance.trim() || "0" })),
                 receipts: [],
-                transactions: [
-                  {
-                    ...entry.transactions[0],
+                transactions: entry.transactions.map((row, index) => index === 0 ? {
+                    ...row,
                     accountId: draft.accountId,
                     categoryId: draft.categoryId ?? "",
                     merchant: draft.merchantRaw,
@@ -241,8 +289,7 @@ export function ManualTransaction({
                     type: draft.type,
                     date: draft.date,
                     description: draft.description,
-                  },
-                ],
+                  } : row),
               }),
             },
           );
@@ -309,10 +356,10 @@ export function ManualTransaction({
         maxLength={200}
       />
       {options ? (
-        options.accounts.length ? (
+        availableAccounts.length ? (
           <ChoiceField
             label="Account"
-            options={options.accounts.map((a) => ({
+            options={availableAccounts.map((a) => ({
               value: a.id,
               label: `${a.name} · ${a.currency}`,
               icon: <AccountBrandLogo account={{...a,type:a.type ?? "bank",institution:a.institution ?? null,balance:null}} size={24}/>,
@@ -322,7 +369,7 @@ export function ManualTransaction({
               change({
                 accountId,
                 currency:
-                  options.accounts.find((a) => a.id === accountId)?.currency ??
+                  availableAccounts.find((a) => a.id === accountId)?.currency ??
                   "PHP",
               })
             }
@@ -335,6 +382,14 @@ export function ManualTransaction({
       ) : error ? (
         <Button title="Retry loading accounts" secondary onPress={() => {setError("");setRetry((n) => n + 1);}}/>
       ) : <Body>Loading accounts…</Body>}
+      {draftedAccounts.map(newAccount => <Card key={newAccount.key}>
+        <Body muted={false}>New account · {newAccount.name}</Body>
+        <Body>Created together with this transaction when you confirm. Starting balance defaults to 0.</Body>
+        <Field label="Account name" value={newAccount.name} maxLength={200} onChangeText={name => updateDraftAccount(newAccount.key, { name })} />
+        <ChoiceField label="Account type" value={newAccount.type} options={[{ value: "bank", label: "Bank & Savings" }, { value: "wallet", label: "Wallet" }, { value: "cash", label: "Cash" }, { value: "credit_card", label: "Credit Card" }]} onChange={type => updateDraftAccount(newAccount.key, { type: type as EntryAccount["type"] })} />
+        <Field label="Currency" value={newAccount.currency} maxLength={3} autoCapitalize="characters" onChangeText={currency => updateDraftAccount(newAccount.key, { currency: currency.toUpperCase() })} />
+        <Field label="Starting balance" value={newAccount.balance} keyboardType="decimal-pad" placeholder="0" onChangeText={balance => updateDraftAccount(newAccount.key, { balance })} />
+      </Card>)}
       {options && draft.type !== "transfer" ? (
         <>
           <ChoiceField
@@ -358,32 +413,7 @@ export function ManualTransaction({
         onChangeText={(date) => change({ date })}
         maxLength={10}
       />
-      {localSuggestion &&
-      options?.categories.some(
-        (c) => c.name === localSuggestion.category && c.type === draft.type,
-      ) ? (
-        <Card>
-          <Body>
-            Suggested category: {localSuggestion.category} ·{" "}
-            {localSuggestion.confidence}% confidence
-          </Body>
-          <Body>{localSuggestion.reason}</Body>
-          <Button
-            title="Use suggested category"
-            secondary
-            disabled={busy || uncertain}
-            onPress={() =>
-              change({
-                categoryId: options.categories.find(
-                  (c) =>
-                    c.name === localSuggestion.category &&
-                    c.type === draft.type,
-                )!.id,
-              })
-            }
-          />
-        </Card>
-      ) : null}
+      {categorySuggestion ? <Body>Suggested category: {categorySuggestion.categoryName} · {categorySuggestion.confidence}% confidence. Change it above if needed.</Body> : null}
       {draft.adviserEntry?.transactions[0]?.lines.length ? (
         <Card>
           <Body>Receipt details retained in this draft</Body>
@@ -406,6 +436,18 @@ export function ManualTransaction({
           maxLength={2000}
         />
       ) : null}
+      {draft.adviserEntry?.transactions.slice(1).map((row, index) => {
+        const update = (patch: Partial<typeof row>) => change({ adviserEntry: { ...draft.adviserEntry!, transactions: draft.adviserEntry!.transactions.map(item => item.key === row.key ? { ...item, ...patch } : item) } });
+        return <Card key={row.key}>
+          <Body muted={false}>Transaction {index + 2} · review before confirming</Body>
+          <Field label="What was it for?" value={row.merchant} onChangeText={merchant => update({ merchant })} maxLength={200} />
+          <Field label={`Amount (${row.currency})`} value={row.amount} onChangeText={amount => update({ amount })} keyboardType="decimal-pad" />
+          <ChoiceField label="Account" value={row.accountId} options={availableAccounts.map(account => ({ value: account.id, label: `${account.name} · ${account.currency}` }))} onChange={accountId => update({ accountId, currency: availableAccounts.find(account => account.id === accountId)?.currency ?? row.currency })} />
+          <ChoiceField label="Category" value={row.categoryId} options={[{ value: "", label: "Uncategorized" }, ...(options?.categories ?? []).filter(category => category.type === row.type).map(category => ({ value: category.id, label: category.name }))]} onChange={categoryId => update({ categoryId })} />
+          <Field label="Date" value={row.date} onChangeText={date => update({ date })} maxLength={10} />
+          {row.lines.length ? <Body>Receipt items: {row.lines.map(line => `${line.description} (${line.quantity} × ${line.unitPrice})`).join(", ")}</Body> : null}
+        </Card>;
+      })}
       {uncertain ? (
         <Notice>
           The save result is uncertain. Retry this unchanged draft; Clover
@@ -420,12 +462,12 @@ export function ManualTransaction({
             ? "Saving…"
             : uncertain
               ? "Retry confirmation"
-              : "Add transaction"
+              : (draft.adviserEntry?.transactions.length ?? 0) > 1 ? "Add transactions" : "Add transaction"
         }
-        disabled={busy || !options?.accounts.length}
+        disabled={busy || !availableAccounts.length}
         onPress={() => void save()}
       />
-      <Button title="Add another" textOnly disabled={busy || uncertain || !options?.accounts.length} onPress={() => void save(true)} />
+      <Button title="Add another" textOnly disabled={busy || uncertain || !availableAccounts.length} onPress={() => void save(true)} />
       </View>
     </View>
   );
@@ -444,6 +486,7 @@ export function TransactionChat({
   intro,
   onDraft,
   onReviewForm,
+  active = true,
 }: {
   onReview: (draft: TransactionDraft) => void;
   context?: EntryFormContext;
@@ -451,6 +494,7 @@ export function TransactionChat({
   intro?: string;
   onDraft?: (draft: EntryDraft) => void;
   onReviewForm?: (draft: AddFormDraft) => void;
+  active?: boolean;
 }) {
   const [preparedForm, setPreparedForm] = useState<AddFormDraft | null>(null);
   const [prepared, setPrepared] = useState<EntryDraft | null>(null);
@@ -557,6 +601,7 @@ export function TransactionChat({
           messages: next.slice(-6),
           page,
           formContext: context,
+          entryDraft: prepared || undefined,
           clientDate: today(),
           attachmentIds: attachments.map((item) => item.id),
         }),
@@ -566,7 +611,7 @@ export function TransactionChat({
       setPrepared(entry || null);
       setPreparedForm(parseAddFormDraft(result.formDraft));
       setActions(
-        entry?.transactions.map((transaction) => ({
+        entry?.transactions.slice(0, entry.accounts.length ? 1 : undefined).map((transaction) => ({
           id: transaction.key,
           description: transaction.merchant || "Transaction draft",
           payload: {
@@ -581,9 +626,9 @@ export function TransactionChat({
             adviserEntry: {
               ...entry,
               id: Crypto.randomUUID(),
-              accounts: [],
+              accounts: entry.accounts,
               receipts: [],
-              transactions: [transaction],
+              transactions: entry.accounts.length ? entry.transactions : [transaction],
             },
           },
         })) ?? [],
@@ -600,6 +645,7 @@ export function TransactionChat({
   return (
     <View style={{ gap: 16 }}>
       <AdviserInputTools
+        active={active}
         expanded
         placeholder={entryExample(context?.kind || page)}
         value={input}
@@ -662,7 +708,7 @@ export function TransactionChat({
         <Card key={action.id}>
           <Body>{action.description}</Body>
           <Button
-            title="Review transaction"
+            title={(action.payload.adviserEntry?.transactions.length ?? 0) > 1 ? "Review accounts and transactions" : "Review transaction"}
             onPress={() => {
               onReview({
                 ...emptyTransaction(),
@@ -673,6 +719,7 @@ export function TransactionChat({
               setActions((current) =>
                 current.filter((a) => a.id !== action.id),
               );
+              setPrepared(null);
             }}
           />
         </Card>

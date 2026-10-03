@@ -7,7 +7,7 @@ const sections = [
   ["service", "What Clover provides"],
   ["connected-banks", "Connected bank accounts"],
   ["content", "Your records and content"],
-  ["automation", "Imports, Adviser, and AI"],
+  ["automation", "Imports, Ask Clover, and AI"],
   ["sharing", "Circles and shared expenses"],
   ["acceptable-use", "Acceptable use"],
   ["plans", "Free, Plus and Pro plans"],
@@ -50,7 +50,7 @@ export function TermsOfServiceDocument() {
             <span aria-hidden="true">02</span>
             <h2>Review before relying</h2>
             <p>
-              Connected records, imports, reports, and Adviser guidance can be incomplete or
+              Connected records, imports, reports, and Ask Clover guidance can be incomplete or
               inaccurate.
             </p>
           </article>
@@ -151,7 +151,7 @@ export function TermsOfServiceDocument() {
                   patterns.
                 </li>
                 <li>
-                  Ask Adviser questions based on the information in your
+                  Ask Clover questions based on the information in your
                   account.
                 </li>
                 <li>
@@ -240,7 +240,7 @@ export function TermsOfServiceDocument() {
             </section>
 
             <section className={styles.legalSection} id="automation">
-              <h2>6. Imports, Adviser, and AI</h2>
+              <h2>6. Imports, Ask Clover, and AI</h2>
               <p>
                 Clover uses software rules, optical character recognition,
                 heuristics, and AI services to interpret records and generate
@@ -249,13 +249,13 @@ export function TermsOfServiceDocument() {
               </p>
               <p>
                 You are responsible for reviewing imported transactions,
-                balances, categories, investment details, reports, and Adviser
+                balances, categories, investment details, reports, and Ask Clover
                 guidance before relying on them. Your confirmation does not
                 guarantee that an entry is complete or accurate, and Clover does
                 not independently audit or guarantee the information received from you, a bank, or another provider.
               </p>
               <p>
-                Adviser and other generated guidance are educational and
+                Ask Clover and other generated guidance are educational and
                 informational. They are not personalized financial, investment,
                 legal, accounting, credit, or tax advice and are not a
                 substitute for a qualified professional. You remain responsible

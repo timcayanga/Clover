@@ -7,7 +7,10 @@ export type AccountBalanceAnchor<T extends LedgerBalanceRow = LedgerBalanceRow> 
   rows: T[];
 };
 /** Keep the full ledger total while applying edits to the visible slice. Page reads extend both slices. */
-export function projectPagedAccountBalance<T extends LedgerBalanceRow>(anchor: AccountBalanceAnchor<T>, openingBalance: string | null, rows: T[]) {
+export function projectPagedAccountBalance<T extends LedgerBalanceRow>(anchor: AccountBalanceAnchor<T>, openingBalance: string | null, rows: T[], accountType?: string) {
+  // A partial page cannot replay nonlinear cash floors. Keep the complete server ledger
+  // value until the mutation refresh returns, rather than invent a hidden overdraft.
+  if (accountType === "cash") return Math.max(0, Number(anchor.balance)).toFixed(2);
   const subtotal = (balance: string | null, transactions: T[]) => Number(deriveReconciledBalance({
     balance, transactions: transactions.filter(row => !row.isExcluded).map(row => ({ ...row, rawPayload: row.rawPayload && typeof row.rawPayload === "object" && !Array.isArray(row.rawPayload) ? row.rawPayload as BalanceLikeTransaction["rawPayload"] : null })), treatStoredBalanceAsOpening: true,
   }) ?? 0);

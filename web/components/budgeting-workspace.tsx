@@ -1,4 +1,5 @@
 "use client";
+import { CloverMascot } from "@/components/clover-mascot";
 import { registerPullRefresh } from "@/lib/pull-refresh";
 import { MobileSheetHandle } from "@/components/mobile-sheet-handle";
 
@@ -209,7 +210,7 @@ export function BudgetingWorkspace({
           {!selectedBudget ? (
             <>
               {!budgets.length ? (
-                <section className="plan-presets">
+                <section className="plan-presets"><CloverMascot />
                   <h2>Start with a budget</h2>
                   <p>Choose a starting point and set your own amount.</p>
                   <div className="collection-card-grid">

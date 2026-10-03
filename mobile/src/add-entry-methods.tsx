@@ -48,6 +48,7 @@ export function AddEntryMethods({
       {visited ? (
         <View style={{ display: tab === "ask" ? "flex" : "none", gap: 16 }}>
           <TransactionChat
+            active={tab === "ask"}
             context={context}
             onReviewForm={
               onReviewForm

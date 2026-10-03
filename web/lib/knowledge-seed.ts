@@ -203,11 +203,11 @@ const additions: Array<{ slug: string; content: KnowledgeContent }> = [
       sections: [
         {
           heading: "Move between pages",
-          body: "The bottom navigation gives you Home, Transactions, Adviser, and Account. Use the top-right menu to reach other Clover pages. A Back button appears at the top left when the current page has a parent.",
+          body: "The bottom navigation gives you Home, Transactions, Ask Clover, and Account. Use the top-right menu to reach other Clover pages. A Back button appears at the top left when the current page has a parent.",
         },
         {
           heading: "Use page actions",
-          body: "Adviser appears without a surrounding button container where available. Page-specific add and currency controls appear near the menu. The available actions depend on the page.",
+          body: "Ask Clover appears without a surrounding button container where available. Page-specific add and currency controls appear near the menu. The available actions depend on the page.",
         },
       ],
       questions: [],

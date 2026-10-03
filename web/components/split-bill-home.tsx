@@ -1,4 +1,5 @@
 "use client";
+import { CloverMascot } from "@/components/clover-mascot";
 
 import { CategoryBrandMark } from "@/components/category-brand-mark";
 import { InterfaceIcon } from "@/components/interface-icon";
@@ -388,7 +389,7 @@ export function SplitBillHome({
           ) : null}
           {isBlankState ? (
             <section className="split-bill-empty-cta">
-              <h2>No bills yet</h2>
+              <CloverMascot /><h2>No bills yet</h2>
               <p>Upload a receipt or add a split bill.</p>
               <SplitBillActionButtons
                 onAddBill={() =>

@@ -63,7 +63,7 @@ async function main() {
     assert.deepEqual(args.select.transactions.where, {
       deletedAt: null,
       isExcluded: false,
-      account: { source: "manual" },
+      account: { OR: [{ source: { in: ["manual", "adviser_manual"] } }, { type: "cash" }] },
     });
     return accounts;
   }) as typeof originalAccounts;

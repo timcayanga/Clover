@@ -1,3 +1,4 @@
+import { CloverEmptyState } from "../src/clover-mascot";
 import { EntryOverlay } from "../src/entry-overlay";
 import { ChoiceField } from "../src/transaction-entry";
 import { CreateDirectoryCard } from "../src/create-directory-card";
@@ -296,10 +297,7 @@ export default function Budgeting() {
         <>
           {!data.budgets.length ? (
             <>
-              <Body>
-                Start with a budget. Choose a starting point and set your own
-                amount.
-              </Body>
+              <CloverEmptyState>Start with a budget. Choose a starting point and set your own amount.</CloverEmptyState>
               {["Food & Dining", "Transport", "Monthly savings"].map((name) => (
                 <Card key={name}>
                   <CategoryMark

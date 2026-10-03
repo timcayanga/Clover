@@ -18,7 +18,7 @@ type PlanUpgradeCalloutProps = {
 
 const upgradeFeatureLabels = [
   "Full investment portfolio tools",
-  "Advanced reports and Adviser guidance",
+  "Advanced reports and Ask Clover guidance",
   "Enhanced goal tracking and recommendations",
 ] as const;
 

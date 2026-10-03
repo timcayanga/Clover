@@ -578,7 +578,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ acco
     const skip = (page - 1) * pageSize;
 
     const [manualBalances, totalCount, rows] = await Promise.all([
-      page === 1 && account.source === "manual" && account.type !== "investment"
+      page === 1 && (["manual", "adviser_manual"].includes(account.source) || account.type === "cash") && account.type !== "investment"
         ? mobileAccountBalances(account.workspaceId, [account.id])
         : Promise.resolve(new Map<string, string | null>()),
       prisma.transaction.count({ where }),

@@ -268,7 +268,7 @@ export function SettingsPlanPanel({
             `${plan.budgets} budgets · ${plan.goals} goals · ${plan.circles} ${plan.circles === 1 ? "Circle" : "Circles"}`,
             `${plan.monthlyTokens.toLocaleString()} Clover tokens monthly`,
             `${plan.dailyTokens.toLocaleString()} tokens per rolling 24 hours`,
-            ...(tier === "free" ? ["Basic Adviser and investment tracking"] : ["Full Adviser and investment tools"]),
+            ...(tier === "free" ? ["Basic Ask Clover and investment tracking"] : ["Full Ask Clover and investment tools"]),
           ];
           return <article key={tier} className={`${cardSurface.surface} ${cardSurface[tier]} settings-plan-card settings-plan-card--${tier === "premium" ? "premium" : tier === "pro" ? "pro" : "free"}${planTier === tier ? " is-current" : ""}`}>
             <div className="settings-plan-card__band"><span className="settings-plan-card__band-text">

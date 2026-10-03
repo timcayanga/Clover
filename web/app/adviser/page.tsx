@@ -34,7 +34,7 @@ import { resolveEffectiveAccountBalance, selectLatestAccountCheckpoint } from "@
 export const dynamic = "force-dynamic";
 
 export const metadata = {
-  title: "Adviser",
+  title: "Ask Clover",
 };
 
 type AdviserTransaction = {
@@ -327,14 +327,14 @@ type AdviserThresholdProfile = {
 function AdviserUnavailableContent() {
   return (
     <section className="adviser-page">
-      <TransientDataRecovery eyebrow="Adviser" pageLabel="Adviser" />
+      <TransientDataRecovery eyebrow="Ask Clover" pageLabel="Ask Clover" />
     </section>
   );
 }
 
 function AdviserUnavailableState() {
   return (
-    <CloverShell active="adviser" title="Adviser">
+    <CloverShell active="adviser" title="Ask Clover">
       <AdviserUnavailableContent />
     </CloverShell>
   );
@@ -1029,7 +1029,7 @@ async function AdviserPageContent({ searchParams }: { searchParams?: Promise<Adv
   const nextFourteenDays = new Date(now);
   nextFourteenDays.setDate(nextFourteenDays.getDate() + 14);
   const manualAccountIds = (resolvedWorkspace.accounts as AdviserWorkspaceAccountSource[])
-    .filter((account) => account.source === "manual")
+    .filter((account) => ["manual", "adviser_manual"].includes(account.source) || account.type === "cash")
     .map((account) => account.id);
 
   // Vercel functions intentionally use a small database pool. Keep Adviser
@@ -1128,6 +1128,7 @@ async function AdviserPageContent({ searchParams }: { searchParams?: Promise<Adv
           accountId: { in: manualAccountIds },
         }),
         select: {
+          id: true,
           accountId: true,
           amount: true,
           currency: true,
@@ -1164,18 +1165,19 @@ async function AdviserPageContent({ searchParams }: { searchParams?: Promise<Adv
   const reconcileWorkspaceAccountBalance = (account: AdviserWorkspaceAccountSource) => {
     if (bankSnapshots.has(account.id)) return Number(bankSnapshots.get(account.id)!.bankBalance);
     const latestCheckpoint = selectLatestAccountCheckpoint(account.statementCheckpoints);
-    const fallbackBalance = account.source === "manual"
+    const fallbackBalance = (account.source === "manual" || account.source === "adviser_manual" || account.type === "cash")
         ? deriveReconciledBalance({
+                accountType: account.type,
             balance: account.balance as Parameters<typeof deriveReconciledBalance>[0]["balance"],
             transactions: manualTransactionsByAccount.get(account.id) ?? [],
             checkpoints: latestCheckpoint
               ? ([latestCheckpoint] as Parameters<typeof deriveReconciledBalance>[0]["checkpoints"])
               : [],
-            treatStoredBalanceAsOpening: true,
+            treatStoredBalanceAsOpening: ["manual", "adviser_manual"].includes(account.source),
           })
         : account.balance;
     const reconciledBalance = resolveEffectiveAccountBalance({
-      accountType: account.type,
+      cashBalanceProjected: account.type === "cash",      accountType: account.type,
       liveBalance: fallbackBalance as Parameters<typeof resolveEffectiveAccountBalance>[0]["liveBalance"],
       checkpointStatus: latestCheckpoint?.status ?? null,
       checkpointBalance:
@@ -2051,7 +2053,7 @@ async function AdviserPageContent({ searchParams }: { searchParams?: Promise<Adv
         ? {
             id: "since_last_check",
             title: "There is something new to review",
-            summary: `Clover found ${transactionsSinceLastCheck} transaction${transactionsSinceLastCheck === 1 ? "" : "s"} since your last Adviser check.`,
+            summary: `Clover found ${transactionsSinceLastCheck} transaction${transactionsSinceLastCheck === 1 ? "" : "s"} since your last Ask Clover check.`,
             evidence: `${activeTransactionWindowLabel}: ${formatCurrency(currentSpend)} spent, ${formatCurrency(currentSummary.income)} income, and ${topCategoryName ? `${topCategoryName} is the top category` : "no single top category yet"}`,
             ctaLabel: "Review recent changes",
             href: "/adviser",
@@ -2347,7 +2349,7 @@ async function AdviserPageContent({ searchParams }: { searchParams?: Promise<Adv
             summary:
               investmentDelta !== null
                 ? "Your latest portfolio update shows a change worth understanding."
-                : `${currentInvestmentAccounts.length || 1} visible investment holding${currentInvestmentAccounts.length === 1 ? "" : "s"} can now inform your Adviser guidance.`,
+                : `${currentInvestmentAccounts.length || 1} visible investment holding${currentInvestmentAccounts.length === 1 ? "" : "s"} can now inform your Ask Clover guidance.`,
             evidence:
               investmentDelta !== null && latestInvestmentSnapshot
                 ? `${formatSignedCurrency(investmentDelta, latestInvestmentSnapshot.currency)} since the prior snapshot`
@@ -2459,7 +2461,7 @@ async function AdviserPageContent({ searchParams }: { searchParams?: Promise<Adv
             id: "review_uncategorized",
             title: "Clean up transactions Clover is unsure about",
             summary: `${uncategorizedTransactions.length} row${uncategorizedTransactions.length === 1 ? "" : "s"} still need a category or clearer merchant name.`,
-            evidence: "A few quick fixes will make Adviser more accurate.",
+            evidence: "A few quick fixes will make Ask Clover more accurate.",
             ctaLabel: "Fix transactions",
             href: "/transactions",
             tone: "warning",
@@ -2783,7 +2785,7 @@ async function AdviserPageContent({ searchParams }: { searchParams?: Promise<Adv
         ? {
             id: "cleanup_effect",
             title: "Clean data makes Clover smarter",
-            summary: "Keeping uncategorized rows low makes Adviser more useful.",
+            summary: "Keeping uncategorized rows low makes Ask Clover more useful.",
             evidence: `${uncategorizedTransactions.length} row${uncategorizedTransactions.length === 1 ? "" : "s"} still need attention`,
             ctaLabel: "Fix rows",
             href: "/transactions",
@@ -3172,7 +3174,7 @@ async function AdviserPageContent({ searchParams }: { searchParams?: Promise<Adv
   return (
       <CloverShell
         active="adviser"
-        title="Adviser"
+        title="Ask Clover"
         actions={<Link className="icon-button adviser-reports-link" href="/reports" aria-label="View Reports" title="View Reports"><img src={getNavigationIconSrc("reports")} alt="" width={32} height={32} /></Link>}
       >
       <section className="adviser-page adviser-page--chat">

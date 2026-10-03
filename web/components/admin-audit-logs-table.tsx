@@ -18,7 +18,7 @@ export function AdminAuditLogsTable({ data, query }: { data: AdminAuditLogRespon
         <div>
           <p className="eyebrow">Traceability</p>
           <h2>Audit activity across production workspaces.</h2>
-          <p className="panel-muted">Use this for user-impacting changes, Adviser actions, transaction edits, imports, and other durable records.</p>
+          <p className="panel-muted">Use this for user-impacting changes, Ask Clover actions, transaction edits, imports, and other durable records.</p>
         </div>
         <div className="admin-users__stats">
           <div className="admin-users__stat"><strong>{data.totalCount.toLocaleString()}</strong><span>Total audit entries</span></div>

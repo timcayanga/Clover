@@ -61,7 +61,7 @@ const missionDefinitions: Array<Omit<OnboardingMission, "completed">> = [
     title: "See your first report",
     description: "See how your imported records turn into cash-flow summaries and useful guidance.",
     href: "/adviser",
-    actionLabel: "Open Adviser",
+    actionLabel: "Open Ask Clover",
   },
 ];
 

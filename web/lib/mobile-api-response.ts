@@ -144,6 +144,7 @@ export function mobileApiResponse(operation: string, value: unknown) {
               "currency",
               "balance",
               "displayBalance", "brandLogoUrl", "brandPalette",
+              "investmentSubtype", "investmentSymbol", "investmentQuantity", "investmentCostBasis",
             ]), ...lastFour(row) }),
           )
         : [],

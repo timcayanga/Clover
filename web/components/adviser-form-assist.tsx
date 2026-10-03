@@ -61,7 +61,7 @@ export function AdviserFormAssist({
   return (
     <span ref={ref}>
       <Link href="/adviser" className="button button-secondary button-small">
-        Ask Adviser about this form
+        Ask Clover about this form
       </Link>
     </span>
   );

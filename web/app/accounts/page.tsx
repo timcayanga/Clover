@@ -1,4 +1,5 @@
 "use client";
+import { investmentNameLabel, investmentTickerMatches, investmentTickerHint } from "../../../shared/investment-entry";
 import { usePullRefresh } from "@/lib/pull-refresh";
 import { MobileSheetHandle } from "@/components/mobile-sheet-handle";
 import { FinversePendingAccounts } from "@/components/finverse-pending-accounts";
@@ -1507,6 +1508,16 @@ function AccountsPageContent() {
   const [manualInvestmentMaturityValue, setManualInvestmentMaturityValue] = useState("");
   const [manualBalance, setManualBalance] = useState("");
   const [manualCurrency, setManualCurrency] = useState("PHP");
+  const automaticInvestmentTicker = useRef("");
+  const manualTickerMatches = investmentTickerMatches(manualName, manualInvestmentSubtype, manualCurrency);
+  useEffect(() => {
+    if (manualType !== "investment") return;
+    const matches = investmentTickerMatches(manualName, manualInvestmentSubtype, manualCurrency);
+    const symbol = matches.length === 1 ? matches[0].symbol : "";
+    if (manualInvestmentSymbol && manualInvestmentSymbol !== automaticInvestmentTicker.current) return;
+    automaticInvestmentTicker.current = symbol;
+    setManualInvestmentSymbol(symbol);
+  }, [manualType, manualName, manualInvestmentSubtype, manualCurrency, manualInvestmentSymbol]);
   const [manualScheduleEnabled, setManualScheduleEnabled] = useState(false);
   const [manualScheduleDueDate, setManualScheduleDueDate] = useState("");
   const [manualScheduleRecurrence, setManualScheduleRecurrence] =
@@ -1666,7 +1677,7 @@ function AccountsPageContent() {
   const reconciledAccounts = useMemo(
     () =>
       accounts.map((account) => {
-        const accountTransactions = drawerAccountId === account.id
+        const accountTransactions = drawerAccountId === account.id && account.type !== "cash"
           ? drawerTransactions
           : transactions.filter((transaction) => transactionMatchesAccount(transaction, account));
                         const latestCheckpoint =
@@ -1682,16 +1693,17 @@ function AccountsPageContent() {
                             ? String(latestCheckpoint.endingBalance)
                             : null;
                         const shouldPreserveImportedBalance =
-                          account.source === "upload" && checkpointBalance === null;
+                          account.type !== "cash" && account.source === "upload" && checkpointBalance === null;
                         const reconciledBalance =
-                          account.bankBalance ?? (account.source === "finverse" ? account.balance : null) ?? checkpointBalance ??
+                          account.bankBalance ?? (account.source === "finverse" ? account.balance : null) ?? (effectiveType === "cash" ? null : checkpointBalance) ??
                           (shouldPreserveImportedBalance
                             ? account.balance
                             : deriveReconciledBalance({
+                accountType: account.type,
                                 balance: account.balance,
                                 transactions: accountTransactions,
                                 checkpoints: accountCheckpoints,
-                                treatStoredBalanceAsOpening: account.source === "manual",
+                                treatStoredBalanceAsOpening: ["manual", "adviser_manual"].includes(account.source),
                               }));
                         const normalizedBalance = normalizeAccountBalanceSign(effectiveType, parseAmount(reconciledBalance ?? account.balance));
 
@@ -3411,7 +3423,7 @@ function AccountsPageContent() {
   );
 
   const manualInvestmentFieldConfigs = useMemo(
-    () => getInvestmentFieldConfigs(manualType === "investment" ? manualInvestmentSubtype : null),
+    () => getInvestmentFieldConfigs(manualType === "investment" ? manualInvestmentSubtype : null).filter(field => !["investmentCostBasis", "investmentPrincipal"].includes(field.key)),
     [manualInvestmentSubtype, manualType]
   );
 
@@ -4271,9 +4283,9 @@ function AccountsPageContent() {
           investmentQuantity: manualTracksUnits ? parseNullableNumberInput(manualInvestmentQuantity) : null,
           investmentCostBasis:
             manualTracksPurchaseValue
-              ? parseNullableNumberInput(manualInvestmentCostBasis)
+              ? parseNullableNumberInput(manualBalance) ?? "0"
               : null,
-          investmentPrincipal: manualIsFixedIncome ? parseNullableNumberInput(manualInvestmentPrincipal) : null,
+          investmentPrincipal: manualIsFixedIncome ? parseNullableNumberInput(manualBalance) ?? "0" : null,
           investmentStartDate: manualIsFixedIncome ? parseNullableDateInput(manualInvestmentStartDate) : null,
           investmentMaturityDate: manualIsFixedIncome ? parseNullableDateInput(manualInvestmentMaturityDate) : null,
           investmentInterestRate: manualIsFixedIncome ? parseNullableNumberInput(manualInvestmentInterestRate) : null,
@@ -4281,7 +4293,7 @@ function AccountsPageContent() {
           type: manualType,
           currency: manualCurrency.trim().toUpperCase() || "PHP",
           source: "manual",
-          balance: manualBalance ? Number(manualBalance) : 0,
+          balance: manualBalance.trim() || "0",
         }),
       });
 
@@ -4705,7 +4717,7 @@ function AccountsPageContent() {
                       "Upload statements when you want Clover to populate cards for you.",
                       "Open each card later to review account-specific transactions and details.",
                     ]}
-                    illustration="/illustrations/clover-empty-dashboard-3d.png"
+                    illustration="/assets/mascots/guiding.svg"
                     illustrationAlt="A 3D Clover dashboard illustration"
                     importHref="/accounts?import=1"
                     accountHref="/accounts"
@@ -5191,7 +5203,7 @@ function AccountsPageContent() {
                       </label>
                       <div className="accounts-add-fields__amount-grow" style={{ flex: "1 1 auto", minWidth: 0, width: "100%" }}>
                         <label className="accounts-add-fields__balance">
-                          {manualType === "investment" ? "Current value" : manualType === "receivable" ? "Amount owed to you" : isLiabilityAccountType(manualType) ? "Outstanding balance" : "Current balance"}
+                          {manualType === "investment" ? "Purchase Value" : manualType === "receivable" ? "Amount owed to you" : isLiabilityAccountType(manualType) ? "Outstanding balance" : "Current balance"}
                           <input
                             value={manualBalance}
                             onChange={(event) => setManualBalance(event.target.value)}
@@ -5207,7 +5219,7 @@ function AccountsPageContent() {
                       </span>
                       <div className="accounts-add-fields__name-grow" style={{ flex: "1 1 auto", minWidth: 0, width: "100%" }}>
                         <InstitutionAutocomplete
-                          label="Account name"
+                          label={manualType === "investment" ? investmentNameLabel(manualInvestmentSubtype) : "Account name"}
                           value={manualName}
                           onChange={setManualName}
                           onSelectSuggestion={applyManualNameSuggestion}
@@ -5219,6 +5231,60 @@ function AccountsPageContent() {
                     <details className="accounts-add-advanced">
                       <summary>More details</summary>
                       <div className="accounts-add-advanced__body">
+                        {manualType === "investment" ? (                    <div className="accounts-investment-fields">
+                      {manualInvestmentFieldConfigs.map((field) => {
+                        const value =
+                          field.key === "investmentSymbol"
+                            ? manualInvestmentSymbol
+                            : field.key === "investmentQuantity"
+                              ? manualInvestmentQuantity
+                              : field.key === "investmentCostBasis"
+                                ? manualInvestmentCostBasis
+                                : field.key === "investmentPrincipal"
+                                  ? manualInvestmentPrincipal
+                                  : field.key === "investmentStartDate"
+                                    ? manualInvestmentStartDate
+                                    : field.key === "investmentMaturityDate"
+                                      ? manualInvestmentMaturityDate
+                                      : field.key === "investmentInterestRate"
+                                        ? manualInvestmentInterestRate
+                                        : field.key === "investmentMaturityValue"
+                                          ? manualInvestmentMaturityValue
+                                          : "";
+
+                        const onChange =
+                          field.key === "investmentSymbol"
+                            ? setManualInvestmentSymbol
+                            : field.key === "investmentQuantity"
+                              ? setManualInvestmentQuantity
+                              : field.key === "investmentCostBasis"
+                                ? setManualInvestmentCostBasis
+                                : field.key === "investmentPrincipal"
+                                  ? setManualInvestmentPrincipal
+                                  : field.key === "investmentStartDate"
+                                    ? setManualInvestmentStartDate
+                                    : field.key === "investmentMaturityDate"
+                                      ? setManualInvestmentMaturityDate
+                                      : field.key === "investmentInterestRate"
+                                        ? setManualInvestmentInterestRate
+                                        : field.key === "investmentMaturityValue"
+                                          ? setManualInvestmentMaturityValue
+                                          : setManualInvestmentSymbol;
+
+                        return (
+                          <label key={field.key}>
+                            {field.key === "investmentSymbol" ? "Ticker Name" : field.label}
+                            <input
+                              value={value}
+                              onChange={(event) => onChange(event.target.value)}
+                              placeholder={field.placeholder}
+                              inputMode={field.inputMode}
+                              type={field.type}
+                            />
+                          </label>
+                        );
+                      })}
+                    </div>) : null}
                         <AdviserFormAssist workspaceId={selectedWorkspaceId} context={{kind: "account", fields: {name:manualName,institution:manualInstitution,type:manualType,currency:manualCurrency,balance:manualBalance}}} />
                         <div
                           className="accounts-add-fields__row accounts-add-fields__row--meta"
@@ -5330,60 +5396,10 @@ function AccountsPageContent() {
                         ))}
                       </select>
                     </label>
-                    <div className="accounts-investment-fields">
-                      {manualInvestmentFieldConfigs.map((field) => {
-                        const value =
-                          field.key === "investmentSymbol"
-                            ? manualInvestmentSymbol
-                            : field.key === "investmentQuantity"
-                              ? manualInvestmentQuantity
-                              : field.key === "investmentCostBasis"
-                                ? manualInvestmentCostBasis
-                                : field.key === "investmentPrincipal"
-                                  ? manualInvestmentPrincipal
-                                  : field.key === "investmentStartDate"
-                                    ? manualInvestmentStartDate
-                                    : field.key === "investmentMaturityDate"
-                                      ? manualInvestmentMaturityDate
-                                      : field.key === "investmentInterestRate"
-                                        ? manualInvestmentInterestRate
-                                        : field.key === "investmentMaturityValue"
-                                          ? manualInvestmentMaturityValue
-                                          : "";
+                    {manualTickerMatches.length > 1 ? <label>Which share class do you own?<select value={manualInvestmentSymbol} onChange={event => { automaticInvestmentTicker.current = ""; setManualInvestmentSymbol(event.target.value); }}><option value="">Choose a share class</option>{manualTickerMatches.map(match => <option key={match.symbol} value={match.symbol}>{match.name} ({match.symbol})</option>)}</select></label> : null}
+                    {manualInvestmentSymbol ? <p className="field-help">{investmentTickerHint(manualName, manualInvestmentSubtype, manualCurrency, manualInvestmentSymbol)}</p> : null}
+                    <p className="field-help">Purchase Value is the total you paid. Add a ticker and quantity in More Details to calculate the current value when a matching quote is available.</p>
 
-                        const onChange =
-                          field.key === "investmentSymbol"
-                            ? setManualInvestmentSymbol
-                            : field.key === "investmentQuantity"
-                              ? setManualInvestmentQuantity
-                              : field.key === "investmentCostBasis"
-                                ? setManualInvestmentCostBasis
-                                : field.key === "investmentPrincipal"
-                                  ? setManualInvestmentPrincipal
-                                  : field.key === "investmentStartDate"
-                                    ? setManualInvestmentStartDate
-                                    : field.key === "investmentMaturityDate"
-                                      ? setManualInvestmentMaturityDate
-                                      : field.key === "investmentInterestRate"
-                                        ? setManualInvestmentInterestRate
-                                        : field.key === "investmentMaturityValue"
-                                          ? setManualInvestmentMaturityValue
-                                          : setManualInvestmentSymbol;
-
-                        return (
-                          <label key={field.key}>
-                            {field.label}
-                            <input
-                              value={value}
-                              onChange={(event) => onChange(event.target.value)}
-                              placeholder={field.placeholder}
-                              inputMode={field.inputMode}
-                              type={field.type}
-                            />
-                          </label>
-                        );
-                      })}
-                    </div>
                   </>
                 ) : null}
                 <div className="accounts-add-actions">

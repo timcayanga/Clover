@@ -1,4 +1,7 @@
 "use client";
+import { useDraftCategorySuggestion } from "@/lib/use-draft-category-suggestion";
+import { CloverMascot } from "@/components/clover-mascot";
+import { getNavigationIconSrc } from "@/lib/navigation-icons";
 import { TransactionReviewControls } from "@/components/transaction-review-controls";
 import { mostUsedTransactionAccount } from "../../../shared/default-transaction-account";
 import { usePullRefresh } from "@/lib/pull-refresh";
@@ -328,7 +331,7 @@ const matchesImportedAccountIdentity = (left: Account, right: Account) => {
   return isImportedAccountIdentityMatch(left, right);
 };
 
-const transactionsEmptyStateIllustration = "/illustrations/clover-transactions-search-3d.png";
+const transactionsEmptyStateIllustration = "/assets/mascots/guiding.svg";
 
 const isImageImportFile = (file: File) =>
   /\.(jpe?g|png|webp|heic|heif)$/i.test(file.name.toLowerCase()) || file.type.startsWith("image/");
@@ -2398,6 +2401,12 @@ function TransactionsPageContent() {
   const [merchantRenameBusy, setMerchantRenameBusy] = useState(false);
   const [manualMoreOpen, setManualMoreOpen] = useState(false);
   const [manualCategoryTouched, setManualCategoryTouched] = useState(false);
+  const manualCategorySuggestion = useDraftCategorySuggestion({ workspaceId: selectedWorkspaceId, merchantText: manualForm.merchantRaw, categoryId: manualForm.categoryId,
+    type: manualForm.type === "credit" ? "income" : manualForm.type === "debit" ? "expense" : "transfer", categories,
+    enabled: manualOpen && creationTab === "manual" && !isSaving, manuallyChosen: manualCategoryTouched,
+    onApply: categoryId => setManualForm(current => ({ ...current, categoryId })),
+  });
+  useEffect(() => { if (!manualOpen || (!manualForm.merchantRaw && !manualForm.amount)) setManualCategoryTouched(false); }, [manualOpen, manualForm.merchantRaw, manualForm.amount]);
   const [manualAccountMenuOpen, setManualAccountMenuOpen] = useState(false);
   const [manualCategoryMenuOpen, setManualCategoryMenuOpen] = useState(false);
   const [mobileVisibleCount, setMobileVisibleCount] = useState(MOBILE_TRANSACTIONS_BATCH_SIZE);
@@ -7524,6 +7533,7 @@ function TransactionsPageContent() {
     ...tagFilters.map(id => ({ label: filterTags.find(tag => tag.id === id)?.name ?? "Tag", clear: () => setTagFilters(current => current.filter(value => value !== id)) })),
   ];
   const transactionsNoResults = <div className="empty-state transactions-empty-state transactions-empty-state--table" role="status">
+    <CloverMascot pose="thinking" size={144} />
     <strong className="transactions-empty-state__title">No matching transactions</strong>
     <p>Try a different search or remove a filter.</p>
     <button type="button" className="button button-secondary" onClick={clearTransactionFilters}>Clear filters</button>
@@ -8622,7 +8632,7 @@ function TransactionsPageContent() {
                     const index = tabs.indexOf(tab);
                     const next = event.key === "ArrowRight" ? tabs[(index + 1) % tabs.length] : event.key === "ArrowLeft" ? tabs[(index + tabs.length - 1) % tabs.length] : event.key === "Home" ? tabs[0] : event.key === "End" ? tabs[tabs.length - 1] : null;
                     if (next) { event.preventDefault(); setCreationTab(next); if (next === "ask") setCreationChatVisited(true); document.getElementById(`creation-tab-${next}`)?.focus(); }
-                  }} onClick={() => { setCreationTab(tab); if (tab === "ask") setCreationChatVisited(true); }}><img src={`/assets/organize/method-${tab}.svg`} alt="" width="20" height="20" />{label}</button>
+                  }} onClick={() => { setCreationTab(tab); if (tab === "ask") setCreationChatVisited(true); }}><img src={tab === "ask" ? getNavigationIconSrc("adviser") : `/assets/organize/method-${tab}.svg`} alt="" width="20" height="20" />{label}</button>
                 ))}
               </div>
             )}
@@ -8641,7 +8651,7 @@ function TransactionsPageContent() {
                   <button
                     type="button"
                     className={`transactions-manual-type-toggle__button ${manualForm.type === "debit" ? "is-active" : ""}`}
-                    onClick={() => setManualForm((current) => ({ ...current, type: "debit" }))}
+                    onClick={() => { setManualCategoryTouched(false); setManualForm((current) => ({ ...current, type: "debit", categoryId: "" })); }}
                     aria-pressed={manualForm.type === "debit"}
                   >
                     <span className="transactions-manual-type-symbol" aria-hidden="true">
@@ -8652,7 +8662,7 @@ function TransactionsPageContent() {
                   <button
                     type="button"
                     className={`transactions-manual-type-toggle__button ${manualForm.type === "credit" ? "is-active" : ""}`}
-                    onClick={() => setManualForm((current) => ({ ...current, type: "credit" }))}
+                    onClick={() => { setManualCategoryTouched(false); setManualForm((current) => ({ ...current, type: "credit", categoryId: "" })); }}
                     aria-pressed={manualForm.type === "credit"}
                   >
                     <span className="transactions-manual-type-symbol" aria-hidden="true">
@@ -8663,7 +8673,7 @@ function TransactionsPageContent() {
                   <button
                     type="button"
                     className={`transactions-manual-type-toggle__button ${manualForm.type === "transfer" ? "is-active" : ""}`}
-                    onClick={() => setManualForm((current) => ({ ...current, type: "transfer" }))}
+                    onClick={() => { setManualCategoryTouched(false); setManualForm((current) => ({ ...current, type: "transfer", categoryId: "" })); }}
                     aria-pressed={manualForm.type === "transfer"}
                   >
                     <span className="transactions-manual-type-symbol" aria-hidden="true">↔</span>
@@ -8835,6 +8845,7 @@ function TransactionsPageContent() {
                         setManualForm((current) => ({ ...current, categoryId: category.id }));
                       }}
                     />
+                    {manualCategorySuggestion ? <small>Suggested: {manualCategorySuggestion.categoryName} · {manualCategorySuggestion.confidence}% confidence. Review before saving.</small> : null}
                   </div>
                 </div> : null}
 
@@ -9043,7 +9054,9 @@ function TransactionsPageContent() {
             </div>
             {creationChatVisited ? <div id="creation-panel-ask" role="tabpanel" aria-labelledby="creation-tab-ask" hidden={creationTab !== "ask"} className="transaction-creation-panel">
 
-              <AdviserChat minimal workspaceId={selectedWorkspaceId} prompts={[]} isPro={planTier === "pro" || planTier === "premium"} surface="transactions" pageLabel="Add transactions: prepare editable drafts for review" />
+              <AdviserChat minimal workspaceId={selectedWorkspaceId} prompts={[]} isPro={planTier === "pro" || planTier === "premium"} surface="transactions" pageLabel="Add transactions: prepare editable drafts for review"
+                formContext={{ kind: "transaction", fields: { accountId: manualForm.accountId, currency: manualForm.currency, date: manualForm.date,
+                  type: manualForm.type === "credit" ? "income" : manualForm.type === "debit" ? "expense" : "transfer", merchantRaw: manualForm.merchantRaw, amount: manualForm.amount } }} />
             </div> : null}
             {true ? <div id="creation-panel-upload" role="tabpanel" aria-labelledby="creation-tab-upload" hidden={creationTab !== "upload"} className="transaction-creation-panel">
 

@@ -1,12 +1,11 @@
 import {
-  GlassBackdrop,
   GlassContent,
   GlassNavigationProvider,
 } from "../../src/glass-backdrop";
 import { Text } from "../../src/app-text";
 import { Tabs, router } from "expo-router";
 import { View } from "react-native";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { NavigationBar, NavigationItem } from "../../src/navigation-bar";
 import { useAccess } from "../../src/access";
 import { useSession } from "../../src/session";
 import {
@@ -18,10 +17,9 @@ import {
   useTheme,
 } from "../../src/ui";
 export default function TabLayout() {
-  const { colors, styles, dark } = useTheme();
+  const { colors, dark } = useTheme();
   const access = useAccess();
   const session = useSession();
-  const insets = useSafeAreaInsets();
   if (!access.active) return null;
   return (
     <ProfileGate>
@@ -45,45 +43,28 @@ export default function TabLayout() {
               <GlassContent>{children}</GlassContent>
             )}
             initialRouteName="index"
+            tabBar={({ state, descriptors, navigation }) => (
+              <NavigationBar dark={dark}>
+                {state.routes.filter(route => ["index", "transactions", "add", "adviser", "account"].includes(route.name)).map(route => {
+                  const options = descriptors[route.key].options;
+                  const focused = state.routes[state.index].key === route.key;
+                  const color = focused ? colors.teal : colors.muted;
+                  return <NavigationItem key={route.key} label={route.name === "add" ? "Add" : String(options.title ?? route.name)}
+                    selected={focused} add={route.name === "add"} color={color}
+                    onPress={() => {
+                      const event = navigation.emit({ type: "tabPress", target: route.key, canPreventDefault: true });
+                      if (!focused && !event.defaultPrevented) navigation.navigate(route.name, route.params);
+                    }}
+                    onLongPress={() => navigation.emit({ type: "tabLongPress", target: route.key })}>
+                    {options.tabBarIcon?.({ focused, color, size: 34 })}
+                  </NavigationItem>;
+                })}
+              </NavigationBar>
+            )}
             screenOptions={{
               header: ({ options }) => (
                 <AppHeader title={String(options.title ?? "Clover")} />
               ),
-              tabBarItemStyle: { paddingHorizontal: 0, minWidth: 0 },
-              tabBarActiveTintColor: colors.teal,
-              tabBarInactiveTintColor: colors.muted,
-              tabBarBackground: () => <GlassBackdrop dark={dark} />,
-              tabBarStyle: {
-                position: "absolute",
-                height: 72,
-                bottom: Math.max(insets.bottom,8),
-                marginHorizontal:8,
-                borderRadius:32,
-                overflow:"hidden",
-                borderWidth:1,
-                borderColor:colors.line,
-                paddingTop: 7,
-                paddingBottom: 8,
-                borderTopColor: colors.line,
-                backgroundColor: "transparent",
-              },
-              tabBarLabel: ({ children, color }) => (
-                <Text
-                  numberOfLines={1}
-                  adjustsFontSizeToFit
-                  minimumFontScale={0.8}
-                  style={{
-                    fontFamily: "Poppins-Regular",
-                    fontSize: 10,
-                    color,
-                    textAlign: "center",
-                    maxWidth: "100%",
-                  }}
-                >
-                  {children}
-                </Text>
-              ),
-              tabBarLabelStyle: { fontSize: 10, fontFamily: "Poppins-Regular" },
             }}
           >
             <Tabs.Screen
@@ -130,7 +111,7 @@ export default function TabLayout() {
             <Tabs.Screen
               name="adviser"
               options={{
-                title: "Adviser",
+                title: "Ask Clover",
                 tabBarIcon: ({ color }) => (
                   <Icon
                     name="chatbubble-ellipses-outline"

@@ -445,12 +445,12 @@ export const currentProductHelpSections: HelpSection[] = [
   {
     slug: "gain-insights-current",
     eyebrow: "Understand",
-    title: "Reports and Adviser",
+    title: "Reports and Ask Clover",
     summary: "Move from organized records to clear explanations, useful follow-ups, and practical next steps.",
     icon: "spark",
     accent: "gold",
     keywords: [
-      "Adviser",
+      "Ask Clover",
       "reports",
       "guidance",
       "follow-up",
@@ -460,44 +460,44 @@ export const currentProductHelpSections: HelpSection[] = [
       "confirmed action",
     ],
     searchPhrases: [
-      "what can I ask Clover Adviser",
-      "what data does Adviser use",
-      "how are Reports different from Adviser",
+      "what can I ask Clover",
+      "what data does Ask Clover use",
+      "how are Reports different from Ask Clover",
       "how to act on a Clover recommendation",
     ],
     highlights: [
       "Reports organize what happened.",
-      "Adviser explains patterns and helps you decide what to do next.",
+      "Ask Clover explains patterns and helps you decide what to do next.",
       "You stay in control of any action that changes your financial data.",
     ],
     articles: [
       article(
         "reports-and-adviser-explained",
-        "Reports and Adviser explained",
-        "Use Reports for structured views and Adviser when you want an explanation or a next step.",
-        "Understand the difference between Clover Reports and Adviser guidance.",
-        ["Reports vs Adviser", "financial guidance", "financial reports", "insights"],
+        "Reports and Ask Clover explained",
+        "Use Reports for structured views and Ask Clover when you want an explanation or a next step.",
+        "Understand the difference between Clover Reports and Ask Clover guidance.",
+        ["Reports vs Ask Clover", "financial guidance", "financial reports", "insights"],
         [],
         [
           {
-            question: "How are Reports and Adviser different?",
+            question: "How are Reports and Ask Clover different?",
             answer:
-              "Reports organize your financial activity into trends, balances, categories, and comparisons. Adviser helps explain what those patterns may mean and what deserves attention.",
+              "Reports organize your financial activity into trends, balances, categories, and comparisons. Ask Clover helps explain what those patterns may mean and what deserves attention.",
           },
           {
-            question: "What can I ask Adviser?",
+            question: "What can I ask Clover?",
             answer:
               "Ask about spending changes, cash flow, recurring costs, goals, budgets, account balances, or patterns you want to understand. Better organized data usually leads to more useful answers.",
           },
           {
-            question: "What data does Adviser use?",
+            question: "What data does Ask Clover use?",
             answer:
-              "Adviser uses the financial data available in your active Profile, such as confirmed transactions, accounts, budgets, goals, and relevant trends.",
+              "Ask Clover uses the financial data available in your active Profile, such as confirmed transactions, accounts, budgets, goals, and relevant trends.",
           },
         ],
         [
           {
-            label: "Open Adviser",
+            label: "Open Ask Clover",
             href: "/adviser",
             description: "Ask about your financial picture.",
           },
@@ -510,10 +510,10 @@ export const currentProductHelpSections: HelpSection[] = [
       ),
       article(
         "adviser-recommendations-alerts-and-actions",
-        "Adviser recommendations, alerts, and actions",
+        "Ask Clover recommendations, alerts, and actions",
         "Review why Clover raised a suggestion, then choose whether it should change anything.",
-        "Learn how to review Clover Adviser recommendations, alerts, follow-ups, and proposed actions.",
-        ["Adviser action", "recommendation", "alert", "follow-up", "confirm action"],
+        "Learn how to review Ask Clover recommendations, alerts, follow-ups, and proposed actions.",
+        ["Ask Clover action", "recommendation", "alert", "follow-up", "confirm action"],
         [
           "Open the related recommendation or alert.",
           "Review the records and explanation behind it.",
@@ -521,12 +521,12 @@ export const currentProductHelpSections: HelpSection[] = [
         ],
         [
           {
-            question: "Does Adviser change my financial data automatically?",
+            question: "Does Ask Clover change my financial data automatically?",
             answer:
               "No. Guidance can suggest a next step, but changes to confirmed financial data should remain under your control.",
           },
           {
-            question: "What should I do with an Adviser alert?",
+            question: "What should I do with an Ask Clover alert?",
             answer:
               "Open the related transactions, account, report, budget, or goal. Confirm that the pattern is real, then decide whether to adjust your plan or simply keep watching it.",
           },
@@ -538,7 +538,7 @@ export const currentProductHelpSections: HelpSection[] = [
         ],
         [
           {
-            label: "Open Adviser",
+            label: "Open Ask Clover",
             href: "/adviser",
             description: "Review current guidance and follow-ups.",
           },
@@ -548,7 +548,7 @@ export const currentProductHelpSections: HelpSection[] = [
     questions: [],
     links: [
       {
-        label: "Open Adviser",
+        label: "Open Ask Clover",
         href: "/adviser",
         description: "Understand patterns and next steps.",
       },

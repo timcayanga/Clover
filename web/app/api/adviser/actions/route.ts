@@ -74,7 +74,7 @@ export async function POST(request: Request) {
     const user = await getOrCreateCurrentUser(userId);
     const parsed = actionSchema.safeParse(await request.json().catch(() => null));
     if (!parsed.success) {
-      return NextResponse.json({ error: "This Adviser action is incomplete." }, { status: 400 });
+      return NextResponse.json({ error: "This Ask Clover action is incomplete." }, { status: 400 });
     }
 
     const { action } = parsed.data;
@@ -166,7 +166,7 @@ export async function POST(request: Request) {
 return tx.budget.create({
         data: {
           workspaceId: workspace.id,
-          name: stringValue(payload.name, "Adviser budget"),
+          name: stringValue(payload.name, "Ask Clover budget"),
           emoji: typeof payload.emoji === "string" && isBudgetEmoji(payload.emoji) ? payload.emoji : null,
           kind,
           scope: kind === "savings_target" ? "global" : scope,
@@ -312,6 +312,6 @@ return tx.budget.create({
     return NextResponse.json({ ok: true, result });
   } catch (error) {
     if (error instanceof PlanQuotaError) return NextResponse.json({error:error.message},{status:403});
-    return NextResponse.json({ error: error instanceof Error ? error.message : "Unable to complete the Adviser action." }, { status: 400 });
+    return NextResponse.json({ error: error instanceof Error ? error.message : "Unable to complete the Ask Clover action." }, { status: 400 });
   }
 }

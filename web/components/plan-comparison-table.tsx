@@ -9,7 +9,7 @@ export function PlanComparisonTable({ variant, className, paidFirst = false, foo
   const rows: ReadonlyArray<readonly string[]> = compact ? [
     ["Monthly", "Free", plusPrice.monthly, proPrice.monthly],
     ["Yearly", "Free", plusPrice.annual, proPrice.annual],
-    ["Clover Adviser", "Basic", "Advanced", "Advanced"],
+    ["Ask Clover", "Basic", "Advanced", "Advanced"],
     ["Reports", "Basic", "Advanced", "Advanced"],
     ["Accounts", ...PLAN_COMPARISON_ROWS.accounts.slice(1)],
     ["Linked Banks", ...PLAN_COMPARISON_ROWS.linkedBanks.slice(1)],

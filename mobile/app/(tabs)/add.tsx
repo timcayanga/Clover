@@ -264,6 +264,7 @@ export default function Add({ sheet = false }: { sheet?: boolean } = {}) {
           <View style={{ display: tab === "ask" ? "flex" : "none" }}>
             {tab === "ask" ? (
               <TransactionChat
+                context={{ kind: "transaction", fields: { accountId: draft.accountId, currency: draft.currency, date: draft.date, type: draft.type, merchantRaw: draft.merchantRaw, amount: draft.amount } }}
                 onReview={(value) => {
                   setDraft(value);
                   setTab("manual");

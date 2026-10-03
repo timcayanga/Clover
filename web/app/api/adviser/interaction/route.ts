@@ -76,7 +76,7 @@ export async function POST(request: Request) {
         workspaceId: workspace.id,
         actorUserId: user.clerkUserId,
         action: body.kind === "card" ? "adviser.card_opened" : body.kind === "prompt" ? "adviser.prompt_clicked" : "adviser.chat_feedback",
-        entity: "Adviser",
+        entity: "Ask Clover",
         entityId: body.itemId.trim(),
         metadata: {
           kind: body.kind,
@@ -92,7 +92,7 @@ export async function POST(request: Request) {
 
     return NextResponse.json({ ok: true });
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Unable to record Adviser interaction.";
+    const message = error instanceof Error ? error.message : "Unable to record Ask Clover interaction.";
     return NextResponse.json({ error: message }, { status: 400 });
   }
 }

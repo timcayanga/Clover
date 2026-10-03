@@ -25,7 +25,7 @@ export function mobileOperation(method: string, segments: string[]) {
   if (path === "settings/account" && ["GET", "PATCH"].includes(method)) return "settings-account";
   if (path === "settings/regional" && ["GET", "PATCH"].includes(method)) return "settings-regional";
   if (path === "split-bill-receipts/preview" && method === "POST") return "split-receipt-preview";
-  if (["investments", "market-history", "market-news", "together-options", "reports"].includes(path) && method === "GET") return path;
+  if (["investments", "investment-quote", "market-history", "market-news", "together-options", "reports"].includes(path) && method === "GET") return path;
   if (segments.length === 3 && segments[0] === "investment-positions" && segments[2] === "history" && method === "GET") return "investment-position-history";
   if (path === "investment-positions" && method === "GET") return "investment-positions";
   if (segments.length === 3 && segments[0] === "accounts" && segments[2] === "positions" && method === "POST") return "investment-position-save";
@@ -40,6 +40,7 @@ export function mobileOperation(method: string, segments: string[]) {
   if (segments.length === 3 && segments[0] === "recurring" && segments[2] === "completion" && method === "PATCH") return "recurring-completion";
   if (path === "adviser/attachments" && method === "POST") return "adviser-attachments";
   if (path === "transactions/batch") return method === "POST" ? "transaction-batch" : null;
+  if (path === "transaction-category-suggestions" && method === "POST") return "transaction-category-suggestions";
   if (path === "adviser/entries" && ["GET", "POST"].includes(method)) return "adviser-entries";
   if (path === "adviser/conversations" && ["GET", "POST"].includes(method)) return "adviser-conversations";
   if (path === "adviser/chat" && method === "POST") return "adviser-chat";

@@ -172,8 +172,8 @@ assert.match(dashboardSource, /flow: buildDailyFlow\(inWindow\(period.start, tom
 assert.match(dashboardSource, /Recorded spending in the past \{days\} days/);
 assert.match(dashboardSource, /buildHomeAdviserInsights/);
 assert.ok(
-  dashboardSource.indexOf('aria-label="Home Adviser"') < dashboardSource.indexOf("<HomeNextSteps"),
-  "Next Steps should appear below Adviser.",
+  dashboardSource.indexOf('aria-label="Home Ask Clover"') >= 0 && dashboardSource.indexOf('aria-label="Home Ask Clover"') < dashboardSource.indexOf("<HomeNextSteps"),
+  "Next Steps should appear below Ask Clover.",
 );
 assert.ok(
   dashboardSource.indexOf("<HomeNextSteps") < dashboardSource.indexOf('aria-label="Week and month snapshot"'),
@@ -196,7 +196,7 @@ assert.match(
 );
 assert.doesNotMatch(dashboardSource, /label: "Balance in view"/i, "Home Adviser must not show the balance-in-view card.");
 assert.match(dashboardSource, /plannedPaymentsDueSoon\.map\(\(payment\) => payment\.title\)/, "Upcoming payment advice must name the payments.");
-assert.match(dashboardSource, /aria-label="Adviser suggestions" tabIndex=\{0\}/, "The advice scroller must be keyboard accessible.");
+assert.match(dashboardSource, /aria-label="Ask Clover suggestions" tabIndex=\{0\}/, "The advice scroller must be keyboard accessible.");
 assert.match(globalStylesSource, /grid-auto-columns: 100%;[\s\S]{0,200}scroll-snap-type: x mandatory;/, "Mobile advice must snap one full-width card at a time.");
 assert.match(globalStylesSource, /\.content--transactions \.transactions-mobile-simple-row \{\s*min-height: 56px;\s*padding: 14px/, "Mobile transaction rows must retain their more breathable padding.");
 assert.match(globalStylesSource, /\.content--transactions \.transactions-mobile-simple-row__amount \{\s*font-size: 0\.92rem;/, "Mobile transaction names and amounts must retain the larger text size.");

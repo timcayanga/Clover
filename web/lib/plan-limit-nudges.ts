@@ -108,7 +108,7 @@ export const getPlanLimitNudgeCopy = ({ planTier, limitType, limitValue }: PlanL
         title: `You’ve used ${limitText} Clover tokens on Free.`,
         body: rolling
           ? "Earlier usage clears automatically during the next 24 hours. Plus also includes a larger safeguard for heavier days."
-          : "Upgrade to Plus for a 1,000,000-token monthly allowance shared by Adviser and AI-assisted parsing.",
+          : "Upgrade to Plus for a 1,000,000-token monthly allowance shared by Ask Clover and AI-assisted parsing.",
         ctaLabel: "View Plus",
         ctaHref: "/settings?section=plan",
       };

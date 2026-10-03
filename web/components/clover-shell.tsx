@@ -284,7 +284,7 @@ const sidebarSearchPages: Array<{
   },
   {
     key: "adviser",
-    title: "Adviser",
+    title: "Ask Clover",
     href: "/adviser",
     icon: "adviser",
     detail: "Proactive guidance and coaching.",
@@ -2551,7 +2551,7 @@ export function CloverShell({
           <span className="shell-bottom-nav__icon" aria-hidden="true">
             <MenuIcon name="adviser" />
           </span>
-          <span className="shell-bottom-nav__label">Adviser</span>
+          <span className="shell-bottom-nav__label">Ask Clover</span>
         </Link>
         <button
           type="button"

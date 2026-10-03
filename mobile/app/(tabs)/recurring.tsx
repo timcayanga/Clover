@@ -1,3 +1,4 @@
+import { CloverEmptyState } from "../../src/clover-mascot";
 import { registerScreenRefresh } from "../../src/screen-refresh";
 import { InlineDetailRow } from "../../src/inline-detail-row";
 import { PlanHeader } from "../../src/plan-ui";
@@ -483,7 +484,7 @@ export default function Recurring() {
                     />
                   ))
                 ) : (
-                  <Body>No bills due.</Body>
+                  <CloverEmptyState compact pose="resting">No bills due.</CloverEmptyState>
                 )}
               </View>
             ) : null}
@@ -552,7 +553,7 @@ export default function Recurring() {
                 </Pressable>
               ))
             ) : (
-              <Body>No recurring items yet.</Body>
+              <CloverEmptyState>No recurring items yet. Add a bill or regular payment to get started.</CloverEmptyState>
             )}
           </Card>
         </>

@@ -14,9 +14,9 @@ async function main() {
 
   const tx = (amount:number,type:string,rawPayload:unknown=null,currency='PHP') => ({amount,type,rawPayload,currency,merchantRaw:'QA',merchantClean:null,description:null,date:new Date('2026-09-14'),createdAt:new Date('2026-09-14')});
   const fixtures = [
-    {id:'bank',type:'bank',currency:'PHP',balance:'10000',transactions:[tx(2000,'income'),tx(500,'expense'),tx(1000,'transfer',{amountDelta:-1000})],statementCheckpoints:[]},
-    {id:'cash',type:'cash',currency:'PHP',balance:'0',transactions:[tx(1000,'transfer',{amountDelta:1000}),tx(50,'income',null,'USD')],statementCheckpoints:[]},
-    {id:'usd',type:'cash',currency:'USD',balance:'100',transactions:[],statementCheckpoints:[]},
+    {id:'bank',source:'manual',type:'bank',currency:'PHP',balance:'10000',transactions:[tx(2000,'income'),tx(500,'expense'),tx(1000,'transfer',{amountDelta:-1000})],statementCheckpoints:[]},
+    {id:'cash',source:'manual',type:'cash',currency:'PHP',balance:'0',transactions:[tx(1000,'transfer',{amountDelta:1000}),tx(50,'income',null,'USD')],statementCheckpoints:[]},
+    {id:'usd',source:'manual',type:'cash',currency:'USD',balance:'100',transactions:[],statementCheckpoints:[]},
   ];
   const before=JSON.stringify(fixtures);
   const original = prisma.account.findMany;
@@ -25,7 +25,7 @@ async function main() {
   prisma.finverseAccountLink.findMany = (async () => bankRows) as typeof originalLinks;
   const find=mock.fn(async(args:unknown)=>{
     const q=args as {where:unknown;select:{transactions:{where:unknown}}};
-    assert.deepEqual(q.where,{workspaceId:'qa-profile',id:{in:['bank','cash','usd']},source:'manual'});
+    assert.deepEqual(q.where,{workspaceId:'qa-profile',id:{in:['bank','cash','usd']},OR:[{source:{in:['manual','adviser_manual']}},{type:'cash'}]});
     assert.deepEqual(q.select.transactions.where,{deletedAt:null,isExcluded:false});
     return fixtures;
   });
@@ -38,6 +38,12 @@ async function main() {
     assert.equal(balances.get('cash'),'1000.00');
     assert.equal(balances.get('usd'),'100.00');
     assert.equal(JSON.stringify(fixtures),before);
+    fixtures[1].transactions = [tx(500, 'expense')];
+    assert.equal((await mobileAccountBalances('qa-profile',['bank','cash','usd'])).get('cash'), '0.00');
+    fixtures[1].balance = '300';
+    assert.equal((await mobileAccountBalances('qa-profile',['bank','cash','usd'])).get('cash'), '0.00');
+    fixtures[1].transactions.push({ ...tx(100, 'income'), date:new Date('2026-09-15'), createdAt:new Date('2026-09-15') });
+    assert.equal((await mobileAccountBalances('qa-profile',['bank','cash','usd'])).get('cash'), '100.00');
     bankRows = [{ accountId: "bank", unlinkedAt: null, connection: { status: "linked" }, normalizedPayload: { balance: 45000 }, lastSeenAt: new Date("2026-09-25") }];
     assert.equal((await mobileAccountBalances("qa-profile",["bank","cash","usd"])).get("bank"), "45000.00", "bank snapshot outranks replayed ledger without changing opening balance");
     bankRows.push({ accountId: "bank", unlinkedAt: new Date(), connection: { status: "disconnected" }, normalizedPayload: { balance: 1200 }, lastSeenAt: new Date("2026-09-20") });

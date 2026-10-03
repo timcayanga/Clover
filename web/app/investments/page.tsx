@@ -1,4 +1,5 @@
 "use client";
+import { investmentNameLabel, investmentTickerMatches, investmentTickerHint } from "../../../shared/investment-entry";
 import { registerPullRefresh, usePullRefresh } from "@/lib/pull-refresh";
 import { MobileSheetHandle } from "@/components/mobile-sheet-handle";
 import { readImportActivity, subscribeImportActivity } from "@/lib/import-activity";
@@ -764,7 +765,7 @@ const INVESTMENT_TABS: Array<{ key: InvestmentTab; label: string; icon: ReactNod
   },
 ];
 
-const investmentsEmptyStateIllustration = "/illustrations/clover-investments-portfolio-3d.png";
+const investmentsEmptyStateIllustration = "/assets/mascots/guiding.svg";
 
 const normalizeInvestmentTab = (value: string | null | undefined): InvestmentTab => {
   if (value === "holdings") {
@@ -1101,9 +1102,19 @@ export default function InvestmentsPage() {
   const [manualPurchaseDate, setManualPurchaseDate] = useState("");
   const [manualDividendDate, setManualDividendDate] = useState("");
   const [manualDividendAmount, setManualDividendAmount] = useState("");
-  const [manualBalance, setManualBalance] = useState("");
   const [manualCurrency, setManualCurrency] = useState("PHP");
   const [manualMoreOpen, setManualMoreOpen] = useState(false);
+  const autoTicker = useRef("");
+  const manualTickerMatches = investmentTickerMatches(manualName, manualInvestmentSubtype, manualCurrency);
+  useEffect(() => {
+    const matches = investmentTickerMatches(manualName, manualInvestmentSubtype, manualCurrency);
+    const symbol = matches.length === 1 ? matches[0].symbol : "";
+    if (manualInvestmentSymbol && manualInvestmentSymbol !== autoTicker.current) return;
+    autoTicker.current = symbol;
+    setManualInvestmentSymbol(symbol);
+  }, [manualName, manualInvestmentSubtype, manualCurrency, manualInvestmentSymbol]);
+  const draftPositions = useMemo(() => [{ id: "draft", name: manualName, currency: manualCurrency, investmentSubtype: manualInvestmentSubtype, investmentSymbol: manualInvestmentSymbol, investmentQuantity: manualInvestmentQuantity }], [manualName, manualCurrency, manualInvestmentSubtype, manualInvestmentSymbol, manualInvestmentQuantity]);
+  const draftQuoteValues = useLiveInvestmentValues(draftPositions);
   const [selectedTab, setSelectedTab] = useState<InvestmentTab>(requestedTab);
   const [marketFocusAssetId, setMarketFocusAssetId] = useState<string | null>(null);
   const [newsAsset, setNewsAsset] = useState<PortfolioDisplayRow | null>(null);
@@ -2203,7 +2214,7 @@ export default function InvestmentsPage() {
   }, [accountPerformance]);
 
   const manualInvestmentFieldConfigs = useMemo(
-    () => getInvestmentFieldConfigs(manualInvestmentSubtype),
+    () => getInvestmentFieldConfigs(manualInvestmentSubtype).filter(field => !["investmentCostBasis", "investmentPrincipal"].includes(field.key)),
     [manualInvestmentSubtype]
   );
   const manualSuggestedClassification = useMemo(
@@ -2865,7 +2876,7 @@ export default function InvestmentsPage() {
           type: "investment",
           currency: manualCurrency.trim().toUpperCase() || "PHP",
           source: "manual",
-          balance: manualBalance ? Number(manualBalance) : 0,
+          balance: (manualIsFixedIncome ? manualInvestmentPrincipal : manualInvestmentCostBasis).trim() || "0",
         }),
       });
 
@@ -2892,7 +2903,6 @@ export default function InvestmentsPage() {
       setManualPurchaseDate("");
       setManualDividendDate("");
       setManualDividendAmount("");
-      setManualBalance("");
       setManualCurrency("PHP");
       setManualMoreOpen(false);
       setAddOpen(false);
@@ -3613,7 +3623,7 @@ export default function InvestmentsPage() {
                 <div className="investments-allocation__head-title">
                   <div className="investments-allocation__title-row">
                     <h5>Ask Clover</h5>
-                    <InfoTooltip label="Adviser considers your portfolio together with the rest of your Clover data." />
+                    <InfoTooltip label="Ask Clover considers your portfolio together with the rest of your Clover data." />
                   </div>
                 </div>
               </div>
@@ -4050,7 +4060,7 @@ export default function InvestmentsPage() {
                   ) : null}
                 </div>
                 <label>
-                  Investment name
+                  {investmentNameLabel(manualInvestmentSubtype)}
                   <input value={manualName} onChange={(event) => setManualName(event.target.value)} placeholder="Example: Bitcoin or BPI" />
                 </label>
                 <InstitutionAutocomplete
@@ -4077,25 +4087,32 @@ export default function InvestmentsPage() {
                     />
                   </div>
                   <label>
-                    Current value / balance
+                    Purchase Value
                     <input
-                      value={manualBalance}
-                      onChange={(event) => setManualBalance(event.target.value)}
+                      value={isFixedIncomeInvestmentSubtype(manualInvestmentSubtype) ? manualInvestmentPrincipal : manualInvestmentCostBasis}
+                      onChange={(event) => (isFixedIncomeInvestmentSubtype(manualInvestmentSubtype) ? setManualInvestmentPrincipal : setManualInvestmentCostBasis)(event.target.value)}
                       inputMode="decimal"
                       placeholder="0.00"
                     />
                   </label>
                 </div>
 
+                {manualTickerMatches.length > 1 ? <label>Which share class do you own?
+                  <select value={manualInvestmentSymbol} onChange={event => { autoTicker.current = ""; setManualInvestmentSymbol(event.target.value); }}>
+                    <option value="">Choose a share class</option>{manualTickerMatches.map(match => <option key={match.symbol} value={match.symbol}>{match.name} ({match.symbol})</option>)}
+                  </select>
+                </label> : null}
+                {manualInvestmentSymbol ? <p className="field-help">{investmentTickerHint(manualName, manualInvestmentSubtype, manualCurrency, manualInvestmentSymbol)}</p> : null}
+                <p className="field-help">{draftQuoteValues.draft !== undefined ? `Estimated Current Value: ${formatInvestmentAmount(draftQuoteValues.draft, manualCurrency)}` : "Purchase Value is the total you paid. Add a ticker and quantity in More Details to calculate the current value when a matching quote is available."}</p>
                 <div style={{ display: "grid", gap: 10 }}>
                   <button
                     type="button"
-                    className="button button-secondary button-small"
+                    className="investments-details-toggle"
                     onClick={() => setManualMoreOpen((current) => !current)}
                     aria-expanded={manualMoreOpen}
-                    style={{ justifySelf: "start" }}
+                    style={{ display:"flex", width:"100%", justifyContent:"space-between", alignItems:"center", border:0, background:"transparent", padding:"12px 0", color:"inherit", font:"inherit" }}
                   >
-                    <span>{manualMoreOpen ? "Less" : "More"}</span>
+                    <span>More Details</span>
                     <span aria-hidden="true" style={{ display: "inline-flex", transform: manualMoreOpen ? "rotate(180deg)" : "rotate(0deg)", transition: "transform 160ms ease" }}>
                       <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" style={{ width: 14, height: 14 }}>
                         <path d="m5 8 5 5 5-5" />
@@ -4128,7 +4145,7 @@ export default function InvestmentsPage() {
 
                         return (
                           <label key={field.key}>
-                            {field.label}
+                            {field.key === "investmentSymbol" ? "Ticker Name" : field.label}
                             <input
                               value={value}
                               onChange={(event) => onChange(event.target.value)}

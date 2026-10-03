@@ -1,3 +1,4 @@
+import { CloverEmptyState } from "../src/clover-mascot";
 import { DropdownFilter } from "../src/transaction-filters";
 import { Text } from "../src/app-text";
 import { CashFlowChart } from "../src/cash-flow-chart";
@@ -452,7 +453,7 @@ export default function Reports() {
               </View>
             ))
           ) : (
-            <Body>No categorized spending yet.</Body>
+            <CloverEmptyState compact pose="thinking">No categorized spending yet.</CloverEmptyState>
           )}
           <PlanAction
             title="Open Budgeting"

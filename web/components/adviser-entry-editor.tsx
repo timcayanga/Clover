@@ -252,7 +252,7 @@ export function AdviserEntryEditor({
   return (
     <section
       className="adviser-entry-editor"
-      aria-label="Review Adviser entries"
+      aria-label="Review Ask Clover entries"
     >
       <h3>Review your entries</h3>
       <p>

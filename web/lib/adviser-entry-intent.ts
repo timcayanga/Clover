@@ -3,7 +3,7 @@ import {
   type EntryDraft,
   type EntryFormContext,
 } from "./adviser-entry-types";
-export function simpleEntryRows(question: string, context?: EntryFormContext) {
+export function simpleEntryCandidates(question: string, context?: EntryFormContext) {
   const lines = question
     .trim()
     .replace(
@@ -23,25 +23,35 @@ export function simpleEntryRows(question: string, context?: EntryFormContext) {
     return null;
   const rows = [];
   for (const [index, line] of lines.entries()) {
-    const amountFirst = line.match(/^(?:(PHP|USD|EUR|GBP)\s*)?(\d{1,12}(?:\.\d{1,2})?)\s+(?:at|for)\s+([\p{L}][\p{L}\p{N} '&()./-]{0,120}?)$/iu);
-    const match = amountFirst ? [amountFirst[0], amountFirst[3], amountFirst[1]?.toUpperCase(), amountFirst[2], undefined] : line.match(
-      /^([\p{L}][\p{L}\p{N} '&()./-]{0,120}?)\s+(?:(PHP|USD|EUR|GBP)\s*)?(\d{1,12}(?:\.\d{1,2})?)(?:\s+(\d{4}-\d{2}-\d{2}))?$/u,
-    );
+    const accountSuffix = line.match(/\s+(?:from|using|with|paid with)\s+([\p{L}][\p{L}\p{N} '&()./-]{0,120})$/iu);
+    const entryText = accountSuffix ? line.slice(0, accountSuffix.index) : line;
+    const amount = "((?:\\d{1,3}(?:,\\d{3})+|\\d{1,12})(?:\\.\\d{1,2})?)";
+    const currency = "(?:(PHP|USD|EUR|GBP|SGD|HKD|AUD|CAD|IDR|KRW|JPY|₱|₩)\\s*)?";
+    const name = "([\\p{L}][\\p{L}\\p{N} '&()./-]{0,120}?)";
+    const amountFirst = entryText.match(new RegExp(`^${currency}${amount}\\s+(?:at|for)\\s+${name}$`, "iu"));
+    const match = amountFirst ? [amountFirst[0], amountFirst[3], amountFirst[1], amountFirst[2], undefined] :
+      entryText.match(new RegExp(`^${name}\\s+${currency}${amount}(?:\\s+(\\d{4}-\\d{2}-\\d{2}))?$`, "iu"));
     if (!match) return null;
-    rows.push({
+    const explicitCurrency = match[2] === "₱" ? "PHP" : match[2] === "₩" ? "KRW" : match[2]?.toUpperCase();
+    const normalizedAmount = match[3]!.replace(/,/g, "");
+    if (!/^\d{1,12}(?:\.\d{1,2})?$/.test(normalizedAmount)) return null;
+    rows.push({ accountName: accountSuffix?.[1].trim() || "", explicitCurrency, transaction: {
       ...entryTransaction(`row-${index + 1}`),
       merchant: match[1]!,
-      amount: match[3]!,
+      amount: normalizedAmount,
       date: match[4] || context?.fields.date?.slice(0, 10) || "",
-      currency: match[2] || context?.fields.currency || "",
-      accountId: context?.fields.accountId || "",
+      currency: explicitCurrency || context?.fields.currency || "",
+      accountId: accountSuffix ? "" : context?.fields.accountId || "",
       type:
         context?.fields.type === "income"
           ? ("income" as const)
           : ("expense" as const),
-    });
+    } });
   }
   return rows;
+}
+export function simpleEntryRows(question: string, context?: EntryFormContext) {
+  return simpleEntryCandidates(question, context)?.map(candidate => candidate.transaction) ?? null;
 }
 export function isEntryRequest(
   question: string,

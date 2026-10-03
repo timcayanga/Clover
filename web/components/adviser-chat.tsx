@@ -1,4 +1,5 @@
 "use client";
+import "./ask-clover-entry.css";
 import { entryExample } from "../../shared/entry-examples";
 
 import { requestAiConsent } from "./ai-consent";
@@ -165,7 +166,7 @@ export function AdviserChat(props: AdviserChatProps) {
     update(); window.addEventListener(selectedWorkspaceEventName,update);
     return () => { controller?.abort(); window.removeEventListener(selectedWorkspaceEventName,update); };
   }, [props.workspaceId]);
-  return scope ? <ScopedAdviserChat key={scope} {...props} workspaceId={scope} storageKey={`${adviserChatStorageKey}:${scope}`} /> : <div className="adviser-chat__loading" role="status" aria-label="Loading Adviser">Opening Ask Clover…</div>;
+  return scope ? <ScopedAdviserChat key={scope} {...props} workspaceId={scope} storageKey={`${adviserChatStorageKey}:${scope}`} /> : <div className="adviser-chat__loading" role="status" aria-label="Loading Ask Clover">Opening Ask Clover…</div>;
 }
 function ScopedAdviserChat({ prompts, storageKey = adviserChatStorageKey, initialPrompt = "", layout = "embedded", minimal = false, surface = "general", pageLabel, workspaceId, formContext, onReviewForm }: AdviserChatProps & {workspaceId:string}) {
   const [entryDraft,setEntryDraft] = useState<EntryDraft|null>(null);
@@ -295,7 +296,7 @@ function ScopedAdviserChat({ prompts, storageKey = adviserChatStorageKey, initia
       if (response.ok && response.headers.get("content-type")?.includes("text/event-stream")) {
         const reader = response.body?.getReader();
         if (!reader) {
-          throw new Error("Clover did not return a readable Adviser response.");
+          throw new Error("Clover did not return a readable Ask Clover response.");
         }
 
         const assistantIndex = nextMessages.length;
@@ -369,11 +370,11 @@ function ScopedAdviserChat({ prompts, storageKey = adviserChatStorageKey, initia
       }
 
       if (!payload) {
-        throw new Error("Clover did not return an Adviser response.");
+        throw new Error("Clover did not return an Ask Clover response.");
       }
 
       if (!response.ok) {
-        throw new Error(payload.error ?? "Unable to get a response from Adviser.");
+        throw new Error(payload.error ?? "Unable to get a response from Ask Clover.");
       }
 
       if (payload.grounding) {
@@ -397,7 +398,7 @@ function ScopedAdviserChat({ prompts, storageKey = adviserChatStorageKey, initia
       }
       window.setTimeout(scrollToBottom, 0);
     } catch (error) {
-      setError(error instanceof Error ? error.message : "Unable to get a response from Adviser.");
+      setError(error instanceof Error ? error.message : "Unable to get a response from Ask Clover.");
     } finally {
       setIsSending(false);
     }
@@ -558,12 +559,12 @@ function ScopedAdviserChat({ prompts, storageKey = adviserChatStorageKey, initia
       {attachments.length ? <div className="adviser-chat__attachments" aria-label="Attached files">{attachments.map(file=><span key={file.id}><span>{file.name}</span><button type="button" aria-label={`Remove ${file.name}`} disabled={isSending||attaching||entryLocked} onClick={()=>setAttachments(current=>current.filter(item=>item.id!==file.id))}>×</button></span>)}</div> : null}
 
       <div className="adviser-chat__composer-bar adviser-chat__composer-bar--files">
-        <input ref={attachmentInput} type="file" accept={adviserFileAccept} hidden aria-label="Choose an Adviser attachment" onChange={event=>{void attachFile(event.target.files?.[0]);event.target.value="";}} />
+        <input ref={attachmentInput} type="file" accept={adviserFileAccept} hidden aria-label="Choose an Ask Clover attachment" onChange={event=>{void attachFile(event.target.files?.[0]);event.target.value="";}} />
         <button type="button" className="adviser-chat__attach" aria-label="Attach a file" title="Attach a file (up to 3.5 MB)" disabled={hasReachedLimit||isSending||attaching||entryLocked||attachments.length>=3} onClick={()=>attachmentInput.current?.click()}>+</button>
         <textarea
           ref={inputRef}
           id="adviser-chat-input"
-          rows={minimal || formContext ? 3 : 1}
+          rows={1}
           value={input}
           onChange={(event) => setInput(event.target.value)}
           onKeyDown={handleComposerKeyDown}
@@ -595,7 +596,7 @@ function ScopedAdviserChat({ prompts, storageKey = adviserChatStorageKey, initia
     <div className={`adviser-experience adviser-experience--${layout}${minimal || formContext ? " adviser-experience--entry" : ""}`}>
       {!minimal ? <button className="button button-secondary adviser-history-toggle" type="button" aria-expanded={historyOpen} onClick={()=>setHistoryOpen(!historyOpen)}>Your chats</button> : null}
       <aside className={`adviser-history${historyOpen ? " is-open" : ""}`} aria-label="Chat history">
-        <h2>Adviser</h2>
+        <h2>Ask Clover</h2>
         <button className="button button-primary" type="button" disabled={isSending||attaching||entryLocked||history.busy} onClick={startNewConversation}>+ New chat</button>
         <h3>Your chats</h3>
         {history.busy ? <p role="status">Loading or saving chat…</p> : null}
@@ -618,13 +619,13 @@ function ScopedAdviserChat({ prompts, storageKey = adviserChatStorageKey, initia
       {usage && !usage.unlimited ? (
         <p className="adviser-chat__status">
           {hasReachedLimit
-            ? `Your Adviser questions refresh on ${resetLabel}.`
-            : `${usage.remaining} Adviser question${usage.remaining === 1 ? "" : "s"} left this month on ${usage.plan === "premium" ? "Pro" : usage.plan === "pro" ? "Plus" : "Free"}.`}
+            ? `Your Ask Clover questions refresh on ${resetLabel}.`
+            : `${usage.remaining} Ask Clover question${usage.remaining === 1 ? "" : "s"} left this month on ${usage.plan === "premium" ? "Pro" : usage.plan === "pro" ? "Plus" : "Free"}.`}
         </p>
       ) : null}
       {messages.length === 0 && !minimal ? (
         <div className="adviser-chat__welcome">
-          <Image className="adviser-chat__welcome-mark" src="/clover-mark.svg" alt="" width={42} height={42} priority />
+          <Image className="adviser-chat__welcome-mark" src="/assets/mascots/welcome.svg" alt="" width={128} height={116} priority />
           <div className="adviser-chat__welcome-copy">
             {layout === "workspace" ? <h2>{history.firstName.trim() ? `Hi ${history.firstName.trim()}! ` : ""}Ask Clover anything about your finances.</h2> : null}
             {layout === "embedded" ? <p className="adviser-chat__question-lead">Ask Clover anything about your finances.</p> : null}
@@ -715,7 +716,7 @@ function ScopedAdviserChat({ prompts, storageKey = adviserChatStorageKey, initia
                 <div><dt>Cadence</dt><dd>{planningCadenceLabel}</dd></div>
                 {planningDraft.kind === "budget" ? <div><dt>Type</dt><dd>{planningDraft.payload.kind === "savings_target" ? "Savings target" : "Spending limit"}</dd></div> : null}
               </dl>
-              {planningDraft.missingFields.length > 0 ? <p>Still needed: {planningDraft.missingFields.join(" and ")}.</p> : <p>Ask Adviser to change any detail before you confirm.</p>}
+              {planningDraft.missingFields.length > 0 ? <p>Still needed: {planningDraft.missingFields.join(" and ")}.</p> : <p>Ask Clover to change any detail before you confirm.</p>}
             </div>
           ) : null}
           <div className="adviser-planning-card__actions">

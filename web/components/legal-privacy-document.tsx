@@ -7,7 +7,7 @@ const sections = [
   ["sources", "Where information comes from"],
   ["connected-banks", "Connected bank accounts"],
   ["uses", "How we use information"],
-  ["automation", "Imports, Adviser, and AI"],
+  ["automation", "Imports, Ask Clover, and AI"],
   ["sharing", "When information is shared"],
   ["circles", "Circles and shared features"],
   ["transfers", "International processing"],
@@ -111,7 +111,7 @@ export function PrivacyPolicyDocument() {
                 categories, accounts, balances, holdings, line items, and dates.
                 It may also create reports, trends, recurring-item suggestions,
                 goal progress, import confidence scores, review items, and
-                Adviser responses.
+                Ask Clover responses.
               </p>
               <h3>Shared and collaboration information</h3>
               <p>
@@ -178,7 +178,7 @@ export function PrivacyPolicyDocument() {
                 Clover stores connection identifiers, encrypted access and refresh tokens,
                 sync status and errors, and raw and normalized bank responses. We use these
                 to retrieve authorized records, maintain your connection, prevent duplicate
-                imports, support review, and provide your accounts, reports, and Adviser
+                imports, support review, and provide your accounts, reports, and Ask Clover
                 features. Authorized support and administrators can inspect connection
                 status and linked-account usage to troubleshoot and enforce plan limits.
               </p>
@@ -213,7 +213,7 @@ export function PrivacyPolicyDocument() {
                 </li>
                 <li>
                   Generate reports, patterns, goals, recurring suggestions, and
-                  Adviser guidance.
+                  Ask Clover guidance.
                 </li>
                 <li>
                   Operate Circles, invitations, shared expenses, and other
@@ -249,12 +249,12 @@ export function PrivacyPolicyDocument() {
             </section>
 
             <section className={styles.legalSection} id="automation">
-              <h2>6. Imports, Adviser, and AI</h2>
+              <h2>6. Imports, Ask Clover, and AI</h2>
               <p>
                 Clover uses deterministic rules first where possible. When a
                 file is unfamiliar, incomplete, image-based, or difficult to
                 read, Clover may use optical character recognition or an AI
-                service to extract and structure the information. Adviser also
+                service to extract and structure the information. Ask Clover also
                 uses AI to respond to questions based on the financial context
                 available in your account.
               </p>

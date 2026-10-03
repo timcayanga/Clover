@@ -61,7 +61,7 @@ if (!("error" in parsedPhilippineHistory)) {
 }
 
 assert.match(adviserHeaderLinkSource, /getNavigationIconSrc\("adviser"\)/);
-assert.match(adviserHeaderLinkSource, /aria-label="Open Adviser"/);
+assert.match(adviserHeaderLinkSource, /aria-label="Open Ask Clover"/);
 assert.match(
   globalStyles,
   /\.content--investments \.adviser-header-link img \{\s*width: 48px;\s*height: 48px;/,
@@ -493,7 +493,7 @@ assert.doesNotMatch(marketChartSource, /<iframe/, "PH, US, and Crypto must use t
 assert.doesNotMatch(marketChartSource, /buildPhTradingViewUrl/, "PH charts must not branch into a separate embedded presentation.");
 assert.match(investmentsStyles, /--market-chart-height:\s*clamp\(250px, 28vw, 320px\)/, "Market charts must share one responsive height.");
 assert.match(marketHistoryRouteSource, /isShortPhilippineRange[\s\S]{0,220}fetchYahooHistory/, "Short PH ranges must prefer Clover's intraday data source.");
-assert.match(marketHistoryRouteSource, /currency: market === "ph" \? \("PHP" as const\)/, "Yahoo PH history must retain PHP as its source currency.");
+assert.match(marketHistoryRouteSource, /currency: payload\.chart\?\.result\?\.\[0\]\?\.meta\?\.currency\?\.toUpperCase\(\) \?\? ""/, "Yahoo history must retain provider currency rather than relabel a quote from the requested market.");
 
 assert.equal(getPortfolioGrowthMarket("crypto", "PHP"), "crypto");
 assert.equal(getPortfolioGrowthMarket("stock", "PHP"), "ph");
@@ -750,3 +750,46 @@ assert.ok(investmentRowIssue({ ...tableInvestment, currency: "ZZZ" }, ["PHP"]));
 assert.equal(normalizeInvestmentTableCell("balance", "₱1,250.50"), "1250.50");
 assert.equal(normalizeInvestmentTableCell("investmentSubtype", "Stocks"), "stock");
 assert.equal(normalizeInvestmentTableCell("currency", " usd "), "USD");
+
+// New-entry identities and quote guards are shared by web and native.
+import { investmentTickerMatches, investmentTickerHint, investmentQuoteIdentity, investmentNameLabel, investmentTypeLabel, investmentValueFromQuote, newManualAccountBalance, isInvalidManualAccountBalance } from "../../shared/investment-entry";
+assert.equal(investmentTickerMatches("Apple Inc", "stock", "USD")[0]?.symbol, "AAPL");
+assert.equal(investmentTickerMatches("Jollibee", "stock", "PHP")[0]?.symbol, "JFC");
+assert.equal(investmentTickerMatches("Google", "stock", "USD").length, 2, "Never guess Alphabet's share class.");
+assert.equal(investmentTickerMatches("Apple", "stock", "PHP")[0]?.symbol, "AAPL");
+assert.equal(investmentQuoteIdentity({name:"Apple",subtype:"stock",currency:"PHP"})?.market, "us");
+assert.match(investmentTickerHint("Apple", "stock", "PHP", "AAPL"), /quoted in USD/);
+assert.equal(investmentQuoteIdentity({name:"PLDT",symbol:"TEL",subtype:"stock",currency:"USD"})?.market, "ph");
+assert.equal(investmentQuoteIdentity({name:"TE Connectivity",symbol:"TEL",subtype:"stock",currency:"USD"})?.market, "us");
+assert.equal(investmentQuoteIdentity({name:"TEL",symbol:"TEL",subtype:"stock",currency:"USD"})?.market, "us");
+assert.equal(investmentTickerMatches("TEL", "stock", "USD").length, 0, "A bare US ticker must not assert a Philippine issuer.");
+assert.equal(investmentTickerMatches("TEL", "stock", "PHP")[0]?.name, "PLDT");
+assert.equal(investmentQuoteIdentity({name:"PLDT",symbol:"AAPL",subtype:"stock",currency:"USD"}), null, "Conflicting known name and ticker require clarification.");
+assert.match(investmentTickerHint("PLDT", "stock", "USD", "AAPL"), /does not match/);
+assert.equal(investmentQuoteIdentity({name:"Google",subtype:"stock",currency:"PHP"}), null, "Ambiguous share classes need user selection even under another currency.");
+assert.equal(investmentQuoteIdentity({name:"Google",symbol:"GOOG",subtype:"stock",currency:"PHP"})?.market, "us");
+assert.equal(investmentTickerMatches("Apple lunch", "stock", "USD").length, 0);
+assert.equal(investmentNameLabel("stock"), "Stock Name");
+assert.equal(investmentNameLabel("mutual_fund"), "Fund Name");
+assert.equal(investmentTypeLabel("money_market_fund"), "Money Market Fund");
+assert.equal(investmentTypeLabel("etf"), "ETF");
+const quoteNow = Date.parse("2026-10-03T12:00:00Z");
+const quote = { currency: "USD", latest: { value: 125.25, date: "2026-10-02T20:00:00Z" } };
+assert.equal(investmentValueFromQuote(quote, "2.5", "USD", quoteNow), 313.13);
+assert.equal(investmentValueFromQuote(quote, "0", "USD", quoteNow), 0);
+assert.equal(investmentValueFromQuote(quote, null, "USD", quoteNow), null);
+assert.equal(investmentValueFromQuote(quote, "2", "PHP", quoteNow), null);
+assert.equal(investmentValueFromQuote({ ...quote, currency:"PHP" }, "2", "USD", quoteNow), null, "PLDT quoted in PHP must never be displayed as a USD value.");
+assert.equal(investmentValueFromQuote({ ...quote, latest: { value:125, date:"2026-09-01" } }, "2", "USD", quoteNow), null);
+assert.equal(investmentValueFromQuote({ ...quote, latest: { value:125 } }, "2", "USD", quoteNow), null);
+assert.equal(investmentValueFromQuote({ ...quote, currency:"" }, "2", "USD", quoteNow), null);
+assert.equal(newManualAccountBalance("manual", null), "0");
+assert.equal(newManualAccountBalance("manual", null, "1200"), "1200");
+assert.equal(newManualAccountBalance("manual", "350", "1200"), "350");
+assert.equal(newManualAccountBalance("upload", null), null, "Unknown imports remain unknown.");
+
+assert.equal(isInvalidManualAccountBalance("manual", "abc"), true);
+assert.equal(isInvalidManualAccountBalance("manual", Infinity), true);
+assert.equal(isInvalidManualAccountBalance("manual", false), true);
+for (const balance of [undefined, null, "", "  ", "0", 0, "300.25"]) assert.equal(isInvalidManualAccountBalance("manual", balance), false);
+assert.equal(isInvalidManualAccountBalance("upload", "abc"), false, "Preserve existing unknown-import behavior.");

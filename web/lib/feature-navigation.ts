@@ -5,7 +5,7 @@ export const FEATURE_NAVIGATION = [
     icon: "reports" as const,
     items: [
       { href: "/reports", label: "Reports", key: "reports" as const },
-      { href: "/adviser", label: "Adviser", key: "adviser" as const },
+      { href: "/adviser", label: "Ask Clover", key: "adviser" as const },
     ],
   },
   {

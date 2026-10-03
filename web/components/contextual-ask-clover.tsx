@@ -114,7 +114,7 @@ const contextCopy: Record<
     ],
   },
   budgeting: {
-    label: "Plan a budget with Adviser",
+    label: "Plan a budget with Ask Clover",
     title: "Plan a budget",
     prompts: [
       {
@@ -144,7 +144,7 @@ const contextCopy: Record<
     ],
   },
   goals: {
-    label: "Plan a goal with Adviser",
+    label: "Plan a goal with Ask Clover",
     title: "Plan a goal",
     prompts: [
       {

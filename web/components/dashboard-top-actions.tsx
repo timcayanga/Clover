@@ -1,5 +1,7 @@
 "use client";
 import { mostUsedTransactionAccount } from "../../shared/default-transaction-account";
+import { useDraftCategorySuggestion } from "@/lib/use-draft-category-suggestion";
+import { getNavigationIconSrc } from "@/lib/navigation-icons";
 import { MobileSheetHandle } from "@/components/mobile-sheet-handle";
 import { FinverseConnectButton } from "./finverse-connect-button";
 import { TransactionTableEntry } from "@/components/transaction-table-entry";
@@ -143,6 +145,12 @@ export function DashboardManualTransactionModal({
   });
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const categorySuggestion = useDraftCategorySuggestion({ workspaceId, merchantText: form.merchantRaw, categoryId: form.categoryId,
+    type: form.type === "credit" ? "income" : form.type === "debit" ? "expense" : "transfer", categories,
+    enabled: !isSaving && entryTab === "manual", manuallyChosen: manualCategoryTouched,
+    onApply: categoryId => setForm(current => ({ ...current, categoryId })),
+  });
+  useEffect(() => { if (!form.merchantRaw && !form.amount) setManualCategoryTouched(false); }, [form.merchantRaw, form.amount]);
   const rootRef = useRef<HTMLElement | null>(null);
   const categoryButtonRef = useRef<HTMLButtonElement | null>(null);
   const manualModalStyle = useMemo<CSSProperties>(
@@ -503,7 +511,7 @@ export function DashboardManualTransactionModal({
             const tabs = ["manual", "ask", "upload", "sync"] as const;
             const next = event.key === "ArrowRight" ? tabs[(index + 1) % 4] : event.key === "ArrowLeft" ? tabs[(index + 3) % 4] : event.key === "Home" ? tabs[0] : event.key === "End" ? tabs[3] : null;
             if (next) { event.preventDefault(); setEntryTab(next); if (next === "ask") setAskVisited(true); document.getElementById(`quick-entry-tab-${next}`)?.focus(); }
-          }}><img src={`/assets/organize/method-${tab}.svg`} alt="" width="20" height="20" />{tab === "manual" ? "Manual" : tab === "ask" ? "Ask Clover" : tab === "sync" ? "Sync" : "Upload"}</button>)}
+          }}><img src={tab === "ask" ? getNavigationIconSrc("adviser") : `/assets/organize/method-${tab}.svg`} alt="" width="20" height="20" />{tab === "manual" ? "Manual" : tab === "ask" ? "Ask Clover" : tab === "sync" ? "Sync" : "Upload"}</button>)}
         </div>
         {entryTab === "sync" ? <div id="quick-entry-panel-sync" role="tabpanel" aria-labelledby="quick-entry-tab-sync"><FinverseConnectButton workspaceId={workspaceId} mode="sync" /></div> : null}
         <div id="quick-entry-panel-manual" role="tabpanel" aria-labelledby="quick-entry-tab-manual" hidden={entryTab !== "manual"}>
@@ -515,7 +523,7 @@ export function DashboardManualTransactionModal({
               <button
                 type="button"
                 className={`transactions-manual-type-toggle__button ${form.type === "debit" ? "is-active" : ""}`}
-                onClick={() => setForm((current) => ({ ...current, type: "debit" }))}
+                onClick={() => { setManualCategoryTouched(false); setForm((current) => ({ ...current, type: "debit", categoryId: "" })); }}
                 aria-pressed={form.type === "debit"}
               >
                 <span className="transactions-manual-type-symbol" aria-hidden="true">
@@ -526,7 +534,7 @@ export function DashboardManualTransactionModal({
               <button
                 type="button"
                 className={`transactions-manual-type-toggle__button ${form.type === "credit" ? "is-active" : ""}`}
-                onClick={() => setForm((current) => ({ ...current, type: "credit" }))}
+                onClick={() => { setManualCategoryTouched(false); setForm((current) => ({ ...current, type: "credit", categoryId: "" })); }}
                 aria-pressed={form.type === "credit"}
               >
                 <span className="transactions-manual-type-symbol" aria-hidden="true">
@@ -537,7 +545,7 @@ export function DashboardManualTransactionModal({
               <button
                 type="button"
                 className={`transactions-manual-type-toggle__button ${form.type === "transfer" ? "is-active" : ""}`}
-                onClick={() => setForm((current) => ({ ...current, type: "transfer" }))}
+                onClick={() => { setManualCategoryTouched(false); setForm((current) => ({ ...current, type: "transfer", categoryId: "" })); }}
                 aria-pressed={form.type === "transfer"}
               >
                 <span className="transactions-manual-type-symbol" aria-hidden="true">↔</span>
@@ -679,6 +687,7 @@ export function DashboardManualTransactionModal({
                   setForm((current) => ({ ...current, categoryId: category.id }));
                 }}
               />
+              {categorySuggestion ? <small>Suggested: {categorySuggestion.categoryName} · {categorySuggestion.confidence}% confidence. Review before saving.</small> : null}
             </div> : null}
 
             <label className="transactions-manual-field transactions-manual-field--embedded-label transactions-manual-date">
@@ -881,7 +890,7 @@ export function DashboardManualTransactionModal({
         </div>
         {askVisited ? <div id="quick-entry-panel-ask" role="tabpanel" aria-labelledby="quick-entry-tab-ask" hidden={entryTab !== "ask"} className="transaction-creation-panel">
 
-          <AdviserChat minimal formContext={{kind:"transaction",fields:{currency:form.currency,date:form.date,type:form.type,accountId:initialAccountId || ""}}} workspaceId={workspaceId} prompts={[]} isPro={isPro} surface="transactions" pageLabel="Add transactions: prepare editable drafts for review" />
+          <AdviserChat minimal formContext={{kind:"transaction",fields:{currency:form.currency,date:form.date,type:form.type === "credit" ? "income" : form.type === "debit" ? "expense" : "transfer",accountId:form.accountId}}} workspaceId={workspaceId} prompts={[]} isPro={isPro} surface="transactions" pageLabel="Add transactions: prepare editable drafts for review" />
         </div> : null}
         <div id="quick-entry-panel-upload" role="tabpanel" aria-labelledby="quick-entry-tab-upload" hidden={entryTab !== "upload"} className="transaction-creation-panel">
 

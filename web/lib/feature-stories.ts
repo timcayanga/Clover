@@ -10,11 +10,11 @@ export const FEATURE_STORIES: FeatureStory[] = [
     { id: "recurring", title: "Know what keeps", accent: "coming back.", copy: "Keep recurring bills, subscriptions, income, and other commitments in view. Review what is expected next before it becomes a surprise.", visual: "recurring" },
     { id: "start", title: "Less money admin.", accent: "More room for your day." },
   ] },
-  { slug: "understand-your-money", title: "Understand Your Money", products: "Adviser · Reports", asset: "understand", chapters: [
+  { slug: "understand-your-money", title: "Understand Your Money", products: "Ask Clover · Reports", asset: "understand", chapters: [
     { id: "overview", title: "Understand the story", accent: "behind your spending.", copy: "A total tells you how much. Clover helps you see what changed, what contributed to it, and what deserves a closer look.", visual: "reports" },
     { id: "reports", title: "See the pattern", accent: "behind the total.", copy: "Explore spending, income, and cash flow from connected accounts, uploads, and manual entries. Compare periods and see the bigger picture.", visual: "reports" },
-    { id: "adviser", title: "Ask your next", accent: "money question.", copy: "Ask Adviser about your actual spending, commitments, savings, and goals. Start with a question in your own words—not a spreadsheet formula.", visual: "adviser" },
-    { id: "next-step", title: "From an answer", accent: "to a clearer next step.", copy: "Use the explanation to decide what to review or adjust. Adviser suggests; you remain in control of the decision.", visual: "adviser", link: { href: "/features/plan-ahead", label: "Explore Investments, Budgeting and Goals →" } },
+    { id: "adviser", title: "Ask your next", accent: "money question.", copy: "Ask Clover about your actual spending, commitments, savings, and goals. Start with a question in your own words—not a spreadsheet formula.", visual: "adviser" },
+    { id: "next-step", title: "From an answer", accent: "to a clearer next step.", copy: "Use the explanation to decide what to review or adjust. Ask Clover suggests; you remain in control of the decision.", visual: "adviser", link: { href: "/features/plan-ahead", label: "Explore Investments, Budgeting and Goals →" } },
     { id: "start", title: "Know what changed.", accent: "Decide what comes next." },
   ] },
   { slug: "plan-ahead", title: "Plan Ahead", products: "Investments · Budgeting · Goals", asset: "plan", chapters: [
@@ -40,7 +40,7 @@ export const FEATURE_STORIES: FeatureStory[] = [
   ] },
   { slug: "pro", title: "Pro", asset: "pro", chapters: [
     { id: "overview", title: "More perspective as", accent: "your finances grow.", copy: "Start free with uploads and manual entry. Connect up to 2 bank accounts on Plus or 5 on Pro, with more room for your finances.", visual: "accounts" },
-    { id: "deeper-guidance", title: "Look beyond", accent: "the immediate question.", copy: "Explore advanced Adviser guidance to help connect spending, plans, and the wider financial picture. You choose which suggestions to act on.", visual: "adviser" },
+    { id: "deeper-guidance", title: "Look beyond", accent: "the immediate question.", copy: "Explore advanced Ask Clover guidance to help connect spending, plans, and the wider financial picture. You choose which suggestions to act on.", visual: "adviser" },
     { id: "investment-context", title: "Keep the bigger", accent: "picture in view.", copy: "Bring investment tracking into the same financial picture, alongside the accounts, reports, budgets, and goals you already use.", visual: "reports" },
     { id: "compare", title: "Choose what works", accent: "for you.", copy: "Compare Free, Plus and Pro. Monthly and annual options are shown for your region, and you can keep using Clover for free.", visual: "pricing" },
     { id: "start", title: "More clarity,", accent: "when you’re ready for more." },

@@ -5,7 +5,7 @@ import { getRollingWeekBuckets } from "@/lib/report-week-buckets";
 import { organizeAccountLabels } from "@/lib/organize-account-label";
 import { reportFilterSelection, matchesReportSelection } from "@/lib/report-filter-policy";
 import { buildReportNetWorth } from "@/lib/report-net-worth-data";
-import { reportAccountBalance, buildReportBalanceSeries } from "@/lib/report-balances";
+import { reportCashMovements, reportAccountBalance, buildReportBalanceSeries } from "@/lib/report-balances";
 import { ReportChartSwitch } from "@/components/report-chart-switch";
 import { loadReportNetWorthAccounts } from "@/lib/report-net-worth";
 import nextDynamic from "next/dynamic";
@@ -197,6 +197,7 @@ type MonthBucket = {
 };
 
 type WorkspaceAccountSnapshot = {
+  cashMovements?: ReturnType<typeof reportCashMovements>;
   id: string;
   name: string;
   accountNumber: string | null;
@@ -594,12 +595,12 @@ export async function ReportsStream({
               currency: true,
               type: true,
               source: true,
-              transactions: { where: { deletedAt: null, isExcluded: false, account: { source: "manual" } },
-                select: { amount: true, currency: true, type: true, date: true, createdAt: true, merchantRaw: true, merchantClean: true, description: true, rawPayload: true } },
+              transactions: { where: { deletedAt: null, isExcluded: false, account: { OR: [{ source: { in: ["manual", "adviser_manual"] } }, { type: "cash" }] } },
+                select: { id: true, amount: true, currency: true, type: true, date: true, createdAt: true, merchantRaw: true, merchantClean: true, description: true, rawPayload: true } },
               statementCheckpoints: { select: { endingBalance: true, status: true, statementEndDate: true, createdAt: true, sourceMetadata: true }, orderBy: { createdAt: "desc" }, take: 50 },
             },
             orderBy: [{ balance: "desc" }, { updatedAt: "desc" }],
-          }).then(async accounts => { const snapshots = await finverseBalances(selectedWorkspaceId); return accounts.map(account => ({ id: account.id, name: account.name, accountNumber: account.accountNumber, currency: account.currency, type: account.type, balance: snapshots.has(account.id) ? Number(snapshots.get(account.id)!.bankBalance) : reportAccountBalance({ ...account, transactions: account.transactions.map(t => ({ ...t, amount: t.amount.toString(), rawPayload: t.rawPayload as Parameters<typeof reportAccountBalance>[0]["transactions"][number]["rawPayload"] })) }) })); }) as Promise<WorkspaceAccountSnapshot[]>),
+          }).then(async accounts => { const snapshots = await finverseBalances(selectedWorkspaceId); return accounts.map(account => ({ id: account.id, name: account.name, accountNumber: account.accountNumber, currency: account.currency, type: account.type, cashMovements: reportCashMovements({ ...account, transactions: account.transactions.map(t => ({ ...t, amount: t.amount.toString(), rawPayload: t.rawPayload as Parameters<typeof reportAccountBalance>[0]["transactions"][number]["rawPayload"] })) }), balance: snapshots.has(account.id) ? Number(snapshots.get(account.id)!.bankBalance) : reportAccountBalance({ ...account, transactions: account.transactions.map(t => ({ ...t, amount: t.amount.toString(), rawPayload: t.rawPayload as Parameters<typeof reportAccountBalance>[0]["transactions"][number]["rawPayload"] })) }) })); }) as Promise<WorkspaceAccountSnapshot[]>),
         loadReportNetWorthAccounts(selectedWorkspaceId, requestedAccountId),
       ]),
     }),
@@ -832,6 +833,7 @@ export async function ReportsStream({
               name: typeof account.name === "string" && account.name.trim().length > 0 ? account.name : "Account",
               accountNumber: typeof account.accountNumber === "string" ? account.accountNumber : null,
               balance: account.balance,
+              cashMovements: account.cashMovements,
               currency: typeof account.currency === "string" && account.currency.trim().length > 0 ? account.currency : "MIXED",
               type: typeof account.type === "string" && account.type.trim().length > 0 ? account.type : "account",
             },
@@ -1575,7 +1577,7 @@ export async function ReportsStream({
           title: `Keep ${goalLabel.toLowerCase()} in view`,
           body: goalTargetAmount !== null
             ? `${goalProgress.bandLabel} right now. ${goalProgress.nextAction}`
-            : "Use goal-aware Adviser guidance to see whether spending and cash flow are helping or slowing you down.",
+            : "Use goal-aware Ask Clover guidance to see whether spending and cash flow are helping or slowing you down.",
           href: "/goals",
           label: "Open goals",
         }

@@ -38,7 +38,7 @@ export const BILLING_COPY = {
   free: {
     label: "Free",
     headline: "Start free and upgrade when you need more room.",
-    detail: "Free includes 3 Profiles, 10 non-cash accounts, and 100,000 Clover tokens each month for Adviser and AI-assisted parsing.",
+    detail: "Free includes 3 Profiles, 10 non-cash accounts, and 100,000 Clover tokens each month for Ask Clover and AI-assisted parsing.",
   },
   pro: {
     label: "Plus",

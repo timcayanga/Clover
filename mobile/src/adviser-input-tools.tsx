@@ -1,4 +1,6 @@
 import { beginTelemetry } from "../../shared/analytics";
+import { speechLocale, speechErrorMessage } from "../../shared/speech-input";
+import { getLocales } from "expo-localization";
 import { Text, TextInput } from "./app-text";
 import { useSession } from "./session";
 import {
@@ -6,9 +8,11 @@ import {
   useSpeechRecognitionEvent,
 } from "expo-speech-recognition";
 import { useFocusEffect } from "expo-router";
-import { useCallback, useState, useRef } from "react";
-import { Image, Pressable, View } from "react-native";
-import { Icon, Notice, useTheme } from "./ui";
+import { useCallback, useEffect, useState, useRef } from "react";
+import { Image, Linking, Platform, Pressable, View } from "react-native";
+import { Button, Icon, Notice, useTheme } from "./ui";
+// Speech recognition is a single native service, even when several screens stay mounted.
+let activeSpeechOwner: symbol | null = null;
 export function AdviserInputTools({
   disabled,
   onText,
@@ -19,9 +23,11 @@ export function AdviserInputTools({
   onSend,
   placeholder = "Ask Clover",
   expanded = false,
+  active = true,
 }: {
   placeholder?: string;
   expanded?: boolean;
+  active?: boolean;
   value?: string;
   onChangeText?: (value: string) => void;
   onSend?: () => void;
@@ -33,47 +39,70 @@ export function AdviserInputTools({
   const { colors } = useTheme();
   const { offlineStatus } = useSession();
   const inputFlow = useRef<ReturnType<typeof beginTelemetry> | null>(null);
+  const owner = useRef(Symbol("clover-dictation")).current;
+  const starting = useRef(false);
+  const delivered = useRef(false);
   const [listening, setListening] = useState(false);
   const [error, setError] = useState("");
-  useSpeechRecognitionEvent("start", () => setListening(true));
-  useSpeechRecognitionEvent("end", () => { inputFlow.current?.("canceled", { reason: "no_result" }); setListening(false); });
+  const [showSettings, setShowSettings] = useState(false);
+  const [inputHeight, setInputHeight] = useState(44);
+  useEffect(() => { if (!value) setInputHeight(44); }, [value]);
+  const cancel = useCallback(() => {
+    if (activeSpeechOwner !== owner) return;
+    activeSpeechOwner = null;
+    starting.current = false;
+    setListening(false);
+    inputFlow.current?.("canceled", { reason: "screen_left" });
+    ExpoSpeechRecognitionModule.abort();
+  }, [owner]);
+  useSpeechRecognitionEvent("start", () => { if (activeSpeechOwner === owner) { starting.current = false; setListening(true); } });
+  useSpeechRecognitionEvent("end", () => {
+    if (activeSpeechOwner !== owner) return;
+    inputFlow.current?.("canceled", { reason: "no_result" });
+    activeSpeechOwner = null; starting.current = false; setListening(false);
+  });
   useSpeechRecognitionEvent("result", (event) => {
-    if (event.isFinal && event.results[0]?.transcript) {
+    if (activeSpeechOwner === owner && !delivered.current && event.isFinal && event.results[0]?.transcript) {
+      delivered.current = true;
       inputFlow.current?.("completed");
       onText(event.results[0].transcript);
     }
   });
-  useSpeechRecognitionEvent("error", () => {
-    inputFlow.current?.("failed", { reason: "recognition_error" });
+  useSpeechRecognitionEvent("error", (event) => {
+    if (activeSpeechOwner !== owner) return;
+    inputFlow.current?.(event.error === "aborted" ? "canceled" : "failed", { reason: event.error });
+    activeSpeechOwner = null; starting.current = false;
     setListening(false);
-    setError(
-      "Voice input is unavailable. Check microphone permission or type your message.",
-    );
+    setError(speechErrorMessage(event.error));
+    setShowSettings(["not-allowed", "language-not-supported", "service-not-allowed"].includes(event.error));
   });
-  useFocusEffect(
-    useCallback(
-      () => () => {
-        inputFlow.current?.("canceled", { reason: "screen_left" });
-        ExpoSpeechRecognitionModule.abort();
-      },
-      [],
-    ),
-  );
+  useFocusEffect(useCallback(() => cancel, [cancel]));
+  useEffect(() => { if (!active || disabled) cancel(); }, [active, disabled, cancel]);
   const speak = async () => {
+    if (!active || disabled || starting.current) return;
     if (listening) {
       ExpoSpeechRecognitionModule.stop();
       return;
     }
+    if (activeSpeechOwner) { setError(speechErrorMessage("busy")); return; }
+    activeSpeechOwner = owner; starting.current = true; delivered.current = false;
     setError("");
+    setShowSettings(false);
     inputFlow.current = beginTelemetry("input", { input_method: "microphone", local_only: onDeviceOnly || !offlineStatus.online });
     try {
       const permission =
         await ExpoSpeechRecognitionModule.requestPermissionsAsync();
+      if (activeSpeechOwner !== owner) return;
       if (!permission.granted) {
         inputFlow.current?.("failed", { reason: "permission_denied" });
-        setError(
-          "Allow microphone and speech recognition to dictate, or type below.",
-        );
+        setError(speechErrorMessage("not-allowed")); setShowSettings(true);
+        activeSpeechOwner = null; starting.current = false;
+        return;
+      }
+      if (!ExpoSpeechRecognitionModule.isRecognitionAvailable()) {
+        inputFlow.current?.("failed", { reason: "service_unavailable" });
+        setError(speechErrorMessage("service-not-allowed")); setShowSettings(true);
+        activeSpeechOwner = null; starting.current = false;
         return;
       }
       const onDevice =
@@ -84,19 +113,30 @@ export function AdviserInputTools({
         setError(
           "Offline dictation is unavailable on this device. Type your message, or connect to use voice input.",
         );
+        activeSpeechOwner = null; starting.current = false;
+        return;
+      }
+      const supported = Platform.OS === "web" ? { locales: [], installedLocales: [] } :
+        await ExpoSpeechRecognitionModule.getSupportedLocales({}).catch(() => ({ locales: [], installedLocales: [] }));
+      if (activeSpeechOwner !== owner) return;
+      if (requiresLocal && Platform.OS === "android" && !supported.installedLocales.length) {
+        inputFlow.current?.("failed", { reason: "local_language_unavailable" });
+        setError("Download a dictation language in your device settings to use voice input offline."); setShowSettings(true);
+        activeSpeechOwner = null; starting.current = false;
         return;
       }
       ExpoSpeechRecognitionModule.start({
         requiresOnDeviceRecognition: requiresLocal,
-        lang: "en-PH",
+        lang: speechLocale(getLocales().map(locale => locale.languageTag), requiresLocal && Platform.OS === "android" ? supported.installedLocales : supported.locales),
         interimResults: false,
         continuous: false,
+        contextualStrings: ["Clover", "BPI", "GCash", "Maya", "Metrobank", "RCBC"],
       });
     } catch {
+      if (activeSpeechOwner !== owner) return;
       inputFlow.current?.("failed", { reason: "unavailable" });
-      setError(
-        "Speech recognition is unavailable on this device. You can still type below.",
-      );
+      activeSpeechOwner = null; starting.current = false;
+      setError(speechErrorMessage("unknown"));
     }
   };
   return (
@@ -138,12 +178,21 @@ export function AdviserInputTools({
             maxLength={4000}
             editable={!disabled}
             multiline
-            numberOfLines={expanded ? 3 : 1}
+            numberOfLines={1}
+            onContentSizeChange={event => {
+              if (!value.trim()) return;
+              const height = Math.max(44, Math.min(expanded ? 84 : 96, event.nativeEvent.contentSize.height));
+              setInputHeight(current => current === height ? current : height);
+            }}
             style={{
               flex: 1,
               minWidth: 0,
-              height: expanded ? 84 : 44,
-              textAlignVertical: "top",
+              minHeight: 44,
+              height: value.trim() ? inputHeight : 44,
+              maxHeight: expanded ? 84 : 96,
+              textAlignVertical: "center",
+              textAlign: "center",
+              includeFontPadding: false,
               paddingVertical: 8,
               color: colors.ink,
               fontFamily: "Poppins-Regular",
@@ -231,6 +280,7 @@ export function AdviserInputTools({
           {listening ? "Listening… Review your words before sending." : error}
         </Notice>
       ) : null}
+      {showSettings ? <Button textOnly title="Open Settings" onPress={() => void Linking.openSettings().catch(() => setError("Open your device Settings and allow microphone and speech recognition for Clover."))} /> : null}
     </>
   );
 }

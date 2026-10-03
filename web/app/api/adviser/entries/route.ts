@@ -95,7 +95,7 @@ export async function GET(request: Request) {
         error:
           error instanceof EntrySaveError
             ? error.message
-            : "Unable to load Adviser entry options.",
+            : "Unable to load Ask Clover entry options.",
       },
       error instanceof EntrySaveError ? error.status : 403,
     );

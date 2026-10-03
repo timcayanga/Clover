@@ -88,19 +88,19 @@ export const FEATURE_PAGES: FeatureNeedPage[] = [
     slug: "understand-your-money",
     navLabel: "Understand Your Money",
     shortLabel: "Understand Your Money",
-    overview: "Turn organized financial data into reports, Adviser guidance, and clearer next steps.",
+    overview: "Turn organized financial data into reports, Ask Clover guidance, and clearer next steps.",
     accent: "gold",
     sections: [
       {
         id: "adviser",
-        eyebrow: "Adviser",
+        eyebrow: "Ask Clover",
         title: "Ask about your money in plain language.",
         body: [
-          "Ask Adviser what changed, where money went, or what deserves attention next.",
+          "Ask Clover what changed, where money went, or what deserves attention next.",
           "Its guidance is grounded in the financial history you have organized in Clover, so the answer starts with your actual situation.",
         ],
         imageSrc: "/assets/landing page/Ask about your money in plain language.png",
-        imageAlt: "A conversation with Clover Adviser about personal finances",
+        imageAlt: "A conversation with Ask Clover about personal finances",
       },
       {
         id: "reports",
@@ -243,11 +243,11 @@ export const FEATURE_PAGES: FeatureNeedPage[] = [
         eyebrow: "Deeper guidance",
         title: "See deeper patterns before they become problems.",
         body: [
-          "Use advanced reports and richer Adviser guidance to compare periods, investigate movement, and identify what deserves attention.",
+          "Use advanced reports and richer Ask Clover guidance to compare periods, investigate movement, and identify what deserves attention.",
           "More complete data gives Clover more context for practical recommendations.",
         ],
         imageSrc: "/assets/landing page/See deeper patterns before they become problems.png",
-        imageAlt: "Advanced Clover reports and Adviser recommendations",
+        imageAlt: "Advanced Clover reports and Ask Clover recommendations",
       },
       {
         id: "investment-context",
@@ -308,7 +308,7 @@ export const FEATURE_LINKS: PublicNavLink[] = [
     label: page.navLabel,
     products: ({
       "manage-money": "Transactions · Accounts · Recurring",
-      "understand-your-money": "Adviser · Reports",
+      "understand-your-money": "Ask Clover · Reports",
       "plan-ahead": "Investments · Budgeting · Goals",
       "manage-money-together": "Circles · Split Bills",
     } as Record<string, string>)[page.slug],

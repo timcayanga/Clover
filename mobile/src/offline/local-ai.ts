@@ -73,7 +73,7 @@ async function askLocallyImpl(
   const summary = localSpending(await engine.downloadedTransactions(profileId));
   const capability = await localCapability();
   if (capability.model !== "available" || !CloverLocalAI)
-    return `${summary}\n\n${capability.detail}\nThis is a local spending calculation. Budget, goal, and broader questions require the cloud Adviser when connected.`;
+    return `${summary}\n\n${capability.detail}\nThis is a local spending calculation. Budget, goal, and broader questions require the cloud Ask Clover when connected.`;
   let reply: string;
   try {
     reply = await generateWithTokens(engine,

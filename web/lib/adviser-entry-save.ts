@@ -137,7 +137,9 @@ export async function commitAdviserEntries(
             type: account.type,
             currency: account.currency,
             balance: new Prisma.Decimal(account.balance),
-            source: "adviser_manual",
+            // Account source selects the opening-balance ledger model. The
+            // adviser draft and explicit confirmation remain in the audit log.
+            source: "manual",
             investmentSubtype:
               account.type === "investment"
                 ? account.investmentSubtype || null
@@ -375,7 +377,7 @@ export async function saveAdviserEntries(
             type: transaction.type,
             source: "manual_transaction_creation",
             confidence: 100,
-            notes: "User confirmed an Adviser entry draft.",
+            notes: "User confirmed an Ask Clover entry draft.",
             actorUserId,
           }).catch(() => {});
       void syncWorkspaceRecurringPatterns(draft.workspaceId).catch(() => {});
