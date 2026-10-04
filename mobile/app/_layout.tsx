@@ -67,11 +67,11 @@ function Routes() {
   const { active, authEntry, accountDeleted } = useAccess();
   const path = usePathname();
   const session = useSession();
-  const entry = nativeEntryAccess(active, session.data?.needsOnboarding, Boolean(authEntry), accountDeleted);
+  const entry = nativeEntryAccess(active, session.data?.needsOnboarding, authEntry, accountDeleted);
   const landed = useRef(false);
   useEffect(() => {
     // Cold restored sessions stay under the native launch image until bootstrap.
-    // A just-completed sign-up keeps its auth screen until onboarding is known.
+    // New signups can choose onboarding preferences while bootstrap finishes.
     if (!entry.coldStart || session.error) void SplashScreen.hideAsync().catch(() => {});
   }, [entry.coldStart, session.error]);
   useEffect(() => {

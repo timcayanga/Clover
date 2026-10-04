@@ -113,6 +113,7 @@ function AuthForm() {
   const submit = async () => {
     await setRememberSession(remember);
     if (step === "sign-in") {
+      beginAuthEntry("sign-in");
       await check(signIn.password({ emailAddress: email.trim(), password }));
       setPassword("");
       await finishSignIn();
@@ -130,7 +131,7 @@ function AuthForm() {
       );
       setPassword("");
       setRepeat("");
-      if (signUp.status === "complete") await check(signUp.finalize());
+      if (signUp.status === "complete") { beginAuthEntry("sign-up"); await check(signUp.finalize()); }
       else {
         await check(signUp.verifications.sendEmailCode());
         setStep("verify");
@@ -138,7 +139,7 @@ function AuthForm() {
     } else if (step === "verify") {
       await check(signUp.verifications.verifyEmailCode({ code: code.trim() }));
       setCode("");
-      if (signUp.status === "complete") await check(signUp.finalize());
+      if (signUp.status === "complete") { beginAuthEntry("sign-up"); await check(signUp.finalize()); }
       else {
         setVerificationSignup(true);
         setStep("extra-verification");
@@ -411,6 +412,7 @@ function AuthForm() {
                 />
               ))}
               <Pressable accessibilityRole="link" disabled={busy} onPress={() => {
+                beginAuthEntry(step === "sign-in" ? "sign-up" : "sign-in");
                 setStep(step === "sign-in" ? "sign-up" : "sign-in");
                 setPassword(""); setRepeat(""); setCode(""); setError("");
               }} style={{ minHeight: 44, justifyContent: "center", alignItems: "center" }}>

@@ -1,5 +1,5 @@
 import { isStoreOwnershipConflict, STORE_OWNERSHIP_MESSAGE, isPurchaseCancelled, purchaseFeedback, purchaseVerified, purchaseNeedsVerification, storeErrorMessage, type PurchaseIntent } from './store-change-policy';
-import { planManagement, storePriceLabel, storeVerificationMessage } from "./store-presentation";
+import { catalogStorePrice, planManagement, storePriceLabel, storeVerificationMessage } from "./store-presentation";
 import { tokenUsagePercent } from "./recorded-summary";
 import { RETENTION_MESSAGE, DOWNGRADE_MESSAGE, type RetentionSnapshot } from "../../shared/plan-retention";
 import { PlanCardSurface } from "./plan-card-surface";
@@ -17,6 +17,8 @@ import { useSession } from "./session";
 import { Body, Card, Icon, Notice, useTheme } from "./ui";
 import {
   canUseStore,
+  canRecoverStorePurchase,
+  recoverStorePurchase,
   googleStoreManagementUrl,
   loadStorePackages,
   manageAppleStoreSubscription,
@@ -238,7 +240,7 @@ export function SettingsPlan() {
         return <PlanCardSurface key={`${cardLayoutKey}:${tier}`} tier={tier} width={cardWidth} minHeight={carouselHeight > 1 ? carouselHeight : undefined} onHeight={height => setCardHeights(current => current[`${cardLayoutKey}:${tier}`] === height ? current : { ...current, [`${cardLayoutKey}:${tier}`]: height })}>
           <View style={{ padding: 20, gap: 8 }}>
             <Text style={{ fontFamily: "Poppins-SemiBold", fontSize: 24, color: "#153b42" }}>{plan.name}</Text>
-            <Text style={{ color: "#153b42" }}>{tier === "free" ? "Free forever" : choice ? storePriceLabel(choice.product) : "See store pricing"}</Text>
+            <Text style={{ color: "#153b42" }}>{tier === "free" ? "Free forever" : choice ? storePriceLabel(choice.product) : catalogStorePrice(tier, period)}</Text>
             {access?.planTier === tier ? <Text style={{ color: "#153b42" }}>Current plan</Text> : null}
           </View>
           <View style={{ padding: 20, gap: 14 }}>
@@ -255,7 +257,11 @@ export function SettingsPlan() {
       <Text accessibilityRole="button" disabled={busy || loading || session.demo} onPress={() => void act()} style={{ color: colors.teal }}>Refresh plan status</Text>
     </View>
     {ownershipConflict ? <Card>
-      <Notice>{STORE_OWNERSHIP_MESSAGE}</Notice>
+      <Notice>{status && canRecoverStorePurchase(status) ? "This purchase is linked to another Clover account. If you deleted that account, you can recover the purchase here." : STORE_OWNERSHIP_MESSAGE}</Notice>
+      {status && canRecoverStorePurchase(status) ? <Text accessibilityRole="button" disabled={busy || loading} style={{ color: colors.teal }} onPress={() => Alert.alert("Recover your store purchase?", "Move the purchase from your deleted Clover account to this account. Its cancellation and expiry stay the same. Deleted financial data stays deleted.", [
+        { text: "Cancel", style: "cancel" },
+        { text: "Recover purchase", onPress: () => void act(() => recoverStorePurchase(status, signedTransaction => session.request("billing/store/recover", { method: "POST", body: JSON.stringify({ signedTransaction }) })), true) },
+      ])}>Recover purchase</Text> : null}
       <Text accessibilityRole="link" style={{ color: colors.teal }} onPress={() => void WebBrowser.openBrowserAsync("https://clover.ph/contact-us").catch(() => setError("Visit clover.ph/contact-us for help with your purchase."))}>Contact Clover support</Text>
     </Card> : null}
     {message ? <Body>{message}</Body> : null}

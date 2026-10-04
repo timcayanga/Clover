@@ -2572,3 +2572,18 @@ model TeamAgentEvent {
 
   @@index([runId, createdAt])
 }
+
+// Non-financial purchase ownership audit survives account deletion. Never stores receipts.
+model StorePurchaseRecovery {
+  id String @id @default(cuid())
+  sourceClerkUserId String
+  targetClerkUserId String
+  environment String
+  appId String
+  transactionHash String
+  completedAt DateTime?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  @@unique([sourceClerkUserId, appId])
+  @@index([targetClerkUserId])
+}

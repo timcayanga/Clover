@@ -44,6 +44,11 @@ async function main() {
     assert.equal(entry.auth, needsSetup === undefined, 'Keep the creating-account route during bootstrap');
     assert.equal(entry.onboarding, needsSetup !== undefined, 'Onboarding stays mounted while its completion redirect runs');
   }
+  const creating = nativeEntryAccess(true, undefined, "sign-up");
+  assert.equal(creating.onboarding, true, "Show onboarding while a fresh signup bootstrap is pending");
+  assert.equal(creating.auth, false, "Never leave the blank Create your account screen mounted after signup");
+  assert.equal(creating.app, false, "Home remains gated until onboarding is completed");
+  assert.equal(nativeEntryAccess(true, undefined, "sign-in").auth, true, "Existing-account login retains bootstrap retry controls");
   assert.equal(nativeEntryAccess(true, undefined, false).coldStart, true, 'Restored sessions stay under the native splash while uncached bootstrap resolves');
   assert.equal(nativeEntryAccess(false, undefined, false).welcome, true);
   const deleted = nativeEntryAccess(false, undefined, false, true);

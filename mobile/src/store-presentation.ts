@@ -35,3 +35,10 @@ export function planManagement(status: { hasPaidSubscription?: boolean; billingP
     url: sameStore && google ? 'https://play.google.com/store/account/subscriptions' : null,
   };
 }
+
+/** Immediate catalog display until the store returns localized product metadata. */
+export function catalogStorePrice(tier: "free" | "pro" | "premium", period: "P1M" | "P1Y") {
+  if (tier === "free") return "Free forever";
+  const amount = tier === "premium" ? (period === "P1Y" ? "99.99" : "12.99") : (period === "P1Y" ? "59.99" : "7.99");
+  return `US$${amount} USD / ${period === "P1Y" ? "year" : "month"}`;
+}

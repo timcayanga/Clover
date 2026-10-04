@@ -30,6 +30,7 @@ async function main() {
     };
     assert.deepEqual(project(cleanReceipt).reviewReasons, [], "Pending alone must not mark a clean 98% receipt as a warning.");
     assert.equal(project(cleanReceipt).confidenceScore, 98);
+    assert.deepEqual(project({ ...cleanReceipt, parserConfidence: 1, categoryConfidence: 95, accountMatchConfidence: 100, duplicateConfidence: 0, rawPayload: { receiptValidation: { issues: [] } } }).reviewReasons, [], "Fractional 100% confidence and an empty receipt validation must not invent a warning.");
     assert.deepEqual(project({ ...cleanReceipt, warningReason: "Review similar transaction" }).reviewReasons, ["Review similar transaction"], "High extraction confidence must not hide a real duplicate warning.");
     assert.deepEqual(project({ ...cleanReceipt, accountMatchConfidence: 30 }).reviewReasons, ["Needs account review"]);
     assert.deepEqual(project({ ...cleanReceipt, reviewStatus: "edited", warningReason: "Review similar transaction" }).reviewReasons, []);

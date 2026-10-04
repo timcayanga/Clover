@@ -4,6 +4,7 @@ import UIKit
 import ImageIO
 import Vision
 import PDFKit
+import StoreKit
 #if canImport(FoundationModels)
 import FoundationModels
 #endif
@@ -12,6 +13,23 @@ public class CloverLocalAIModule: Module {
   private func failure(_ message: String) -> NSError { NSError(domain: "CloverLocalAI", code: 1, userInfo: [NSLocalizedDescriptionKey: message]) }
   public func definition() -> ModuleDefinition {
     Name("CloverLocalAI")
+    AsyncFunction("recoverableApplePurchase") { () async throws -> String in
+      // Explicit user action only: StoreKit may ask the customer to authenticate.
+      try await AppStore.sync()
+      let products = ["clover.plus.monthly", "clover.plus.annual", "clover.pro.monthly", "clover.pro.annual"]
+      var newest: (Date, String)?
+      for product in products {
+        guard let result = await Transaction.latest(for: product) else { continue }
+        if case .verified(let transaction) = result,
+           transaction.ownershipType == .purchased, transaction.revocationDate == nil {
+          if newest == nil || transaction.purchaseDate > newest!.0 {
+            newest = (transaction.purchaseDate, result.jwsRepresentation)
+          }
+        }
+      }
+      guard let proof = newest?.1 else { throw self.failure("No Clover purchase was found for this App Store account.") }
+      return proof
+    }
     AsyncFunction("protectOfflineDirectory") { (uri: String) throws -> Void in
       var url = uri.hasPrefix("file://") ? URL(string:uri)! : URL(fileURLWithPath:uri)
       guard url.isFileURL, url.resolvingSymlinksInPath().path.hasPrefix(URL(fileURLWithPath:NSHomeDirectory()).resolvingSymlinksInPath().path+"/") else { throw self.failure("Invalid private directory.") }

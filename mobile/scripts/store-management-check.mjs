@@ -3,6 +3,9 @@ import fs from 'node:fs';
 import vm from 'node:vm';
 import ts from 'typescript';
 const calls=[];
+class ApiError extends Error { constructor(message,status){super(message);this.status=status;} }
+class StoreActionError extends Error {}
+const native={recoverableApplePurchase:async()=>{calls.push('receipt');return 'signed-fixture';}};
 const platform={OS:'ios'};
 let configured=false, fail=false, appUserId=null;
 const purchases={
@@ -16,6 +19,9 @@ const purchases={
 const exports={};
 const code=ts.transpileModule(fs.readFileSync(new URL('../src/store-billing.ts',import.meta.url),'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022,esModuleInterop:true}}).outputText;
 vm.runInNewContext(code,{exports,process:{env:{EXPO_PUBLIC_REVENUECAT_IOS_KEY:'appl_fixture',EXPO_PUBLIC_REVENUECAT_ANDROID_KEY:'goog_fixture'}},require:name=>{
+  if(name==='./api')return {ApiError};
+  if(name.includes('clover-local-ai'))return {CloverLocalAI:native};
+  if(name.includes('store-change-policy'))return {StoreActionError};
   if(name==='react-native')return {Platform:platform};
   if(name==='react-native-purchases')return purchases;
   if(name.includes('store-catalog') || name.includes('store-change-policy'))return {};
@@ -38,3 +44,13 @@ platform.OS='ios';calls.length=0;
 await exports.manageAppleStoreSubscription(status);
 assert.deepEqual(calls,['sheet','invalidate'],'A previous failure must not lock out later management attempts');
 console.log('PASS native Apple subscription management: configuration, dismissal invalidation, failure recovery and original-store guards');
+
+const recovery={...status,purchaseRecoveryAvailable:true};
+calls.length=0;
+assert.equal(exports.canRecoverStorePurchase(recovery),true);
+await exports.recoverStorePurchase(recovery,async proof=>{assert.equal(proof,'signed-fixture');calls.push('server');});
+assert.deepEqual(calls,['receipt','server','invalidate']);
+await assert.rejects(exports.recoverStorePurchase(recovery,async()=>{throw new ApiError('Deleted account required',400);}),/Deleted account required/);
+platform.OS='android';assert.equal(exports.canRecoverStorePurchase(recovery),false);
+platform.OS='ios';assert.equal(exports.canRecoverStorePurchase({...recovery,purchaseRecoveryAvailable:false}),false);
+console.log('PASS native recovery: explicit signed receipt, server verification, invalidation and platform/config guards');

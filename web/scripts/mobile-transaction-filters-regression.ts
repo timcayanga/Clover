@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { emptyTransactionFilters, transactionFilterQuery, matchesDemoFilters } from "../../mobile/src/transaction-filter-query";
+import { hasTransactionFilters, emptyTransactionFilters, transactionFilterQuery, matchesDemoFilters } from "../../mobile/src/transaction-filter-query";
 import { parseTransactionQueryFilters } from "../lib/transaction-query";
 import { transactionReviewReasons } from "../../mobile/src/transaction-review";
 const filters = { ...emptyTransactionFilters, types: ["debit", "transfer"], accounts: ["bank-a", "bank-b"], categories: ["groceries"], tags: ["family", "work"], currency: "PHP", amountMin: "10", amountMax: "100", dateFilterMode: "custom", customStart: "2026-09-01", customEnd: "2026-09-30", sourceFilter: "manual", confidenceFilter: "high", reviewFilter: "pending" };
@@ -32,3 +32,9 @@ assert.deepEqual(transactionReviewReasons({...legacy,isExcluded:true,reviewReaso
 assert.deepEqual(transactionReviewReasons({...legacy,isExcluded:true,reviewStatus:"confirmed"}), [], "Confirmed cached data remains resolved.");
 assert.deepEqual(transactionReviewReasons({reviewStatus:"pending_review"}), [], "Absent cached facts do not invent warnings.");
 console.log("Native transaction filters preserve all desktop query fields and demo filtering semantics.");
+
+assert.equal(hasTransactionFilters(emptyTransactionFilters, ""), false);
+assert.equal(hasTransactionFilters(emptyTransactionFilters, "  "), false);
+assert.equal(hasTransactionFilters(emptyTransactionFilters, "lunch"), true);
+assert.equal(hasTransactionFilters({...emptyTransactionFilters,accounts:["bank"]}, ""), true);
+assert.equal(hasTransactionFilters({...emptyTransactionFilters,reviewFilter:"pending"}, ""), true);

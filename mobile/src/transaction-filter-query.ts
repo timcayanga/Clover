@@ -71,3 +71,10 @@ export function matchesDemoFilters(row: Transaction, filters: TransactionFilters
   }
   return true;
 }
+
+export function hasTransactionFilters(filters: TransactionFilters, query = "") {
+  return Boolean(query.trim()) || Object.entries(emptyTransactionFilters).some(([key, empty]) => {
+    const value = filters[key as keyof TransactionFilters];
+    return Array.isArray(value) ? value.length > 0 : value !== empty;
+  });
+}

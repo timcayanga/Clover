@@ -116,7 +116,7 @@
     "qa:confirmed-data": "tsx scripts/confirmed-data-regression.ts",
     "qa:finverse": "tsx scripts/transaction-category-status-regression.ts && tsx scripts/finverse-enrichment-regression.ts && tsx scripts/finverse-integration-regression.ts && tsx scripts/finverse-connect-route-regression.ts && tsx scripts/finverse-cancel-setup-regression.ts && tsx scripts/finverse-preservation-regression.ts && tsx scripts/finverse-lifecycle-regression.ts && tsx scripts/finverse-reconciliation-regression.ts && tsx scripts/bank-import-safety-regression.ts",
     "qa:lunchflow": "tsx scripts/lunch-flow-integration-regression.ts",
-    "qa:billing-lifecycle": "tsx scripts/paddle-tiers-regression.ts && tsx scripts/billing-lifecycle-regression.ts && tsx scripts/store-deletion-regression.ts && tsx --require ./scripts/store-deletion-fixture-preload.cjs scripts/store-deletion-fixture.ts",
+    "qa:billing-lifecycle": "tsx scripts/store-purchase-recovery-regression.ts && tsx scripts/paddle-tiers-regression.ts && tsx scripts/billing-lifecycle-regression.ts && tsx scripts/store-deletion-regression.ts && tsx --require ./scripts/store-deletion-fixture-preload.cjs scripts/store-deletion-fixture.ts",
     "qa:goal-intent": "tsx scripts/goal-intent-regression.ts",
     "qa:goal-persistence": "tsx scripts/goal-persistence-regression.ts && tsx scripts/personal-goals-regression.ts && tsx scripts/displayed-figures-regression.ts",
     "qa:split-bill-quick-add": "tsx scripts/split-bill-quick-add-regression.ts",
@@ -205,6 +205,7 @@
     "qa:native-onboarding:fixture": "NODE_ENV=production CLOVER_MOBILE_API_ENABLED=true CLERK_SECRET_KEY=sk_test_fixture tsx --require ./scripts/native-organize-fixture-preload.cjs scripts/native-onboarding-fixture.ts"
   },
   "dependencies": {
+    "@apple/app-store-server-library": "3.1.0",
     "@aws-sdk/client-s3": "^3.1095.0",
     "@aws-sdk/s3-request-presigner": "^3.1095.0",
     "@clerk/nextjs": "^6.39.6",

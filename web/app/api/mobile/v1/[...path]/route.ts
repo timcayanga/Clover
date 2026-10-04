@@ -145,6 +145,12 @@ async function handle(
         rolling24h: tokens.rolling24h,
       });
     }
+    if (operation === "store-recovery") {
+      const body = z.object({ signedTransaction: z.string().min(50).max(24000) }).strict().parse(await request.json());
+      const { recoverDeletedStorePurchase } = await import("@/lib/store-purchase-recovery");
+      await recoverDeletedStorePurchase(user.id, body.signedTransaction);
+      return reply({ recovered: true });
+    }
     if (operation === "store-billing") {
       const { storeBillingConfig, syncStoreAccess } = await import("@/lib/store-access");
       const config = storeBillingConfig();
@@ -154,7 +160,7 @@ async function handle(
         await syncStoreAccess(user.id);
       }
       const access = await getProAccess(user.id);
-      return reply({ available: config.enabled && !(access.user.planTierLocked && access.planTier === "free"), appUserId: userId, entitlementId: config.entitlementId, offeringId: config.offeringId, productIds: config.products, planTier: access.planTier, accessEndsAt: access.accessEndsAt, renewing: access.renewing, hasPaidSubscription: access.hasPaidSubscription, accessSource: access.source, billingProvider: access.storeSubscription?.expiresAt && access.storeSubscription.expiresAt > new Date() ? access.storeSubscription.store : access.hasPaidSubscription ? access.subscription?.provider ?? null : null });
+      return reply({ purchaseRecoveryAvailable: config.purchaseRecoveryAvailable, available: config.enabled && !(access.user.planTierLocked && access.planTier === "free"), appUserId: userId, entitlementId: config.entitlementId, offeringId: config.offeringId, productIds: config.products, planTier: access.planTier, accessEndsAt: access.accessEndsAt, renewing: access.renewing, hasPaidSubscription: access.hasPaidSubscription, accessSource: access.source, billingProvider: access.storeSubscription?.expiresAt && access.storeSubscription.expiresAt > new Date() ? access.storeSubscription.store : access.hasPaidSubscription ? access.subscription?.provider ?? null : null });
     }
     if (operation === "settings-ai-consent") {
       const { getAiConsent, setAiConsent } = await import("@/lib/ai-consent");

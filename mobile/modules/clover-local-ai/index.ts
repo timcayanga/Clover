@@ -11,6 +11,7 @@ export type ExtractedText = {
   complete: boolean;
 };
 export const CloverLocalAI = requireOptionalNativeModule<{
+  recoverableApplePurchase?(): Promise<string>;
   protectOfflineDirectory?(uri: string): Promise<void>;
   capabilities(): Promise<LocalCapability>;
   generate(prompt: string): Promise<string>;

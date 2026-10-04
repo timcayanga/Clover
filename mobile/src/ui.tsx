@@ -439,7 +439,7 @@ export function AppHeader({
       active = false;
     };
   }, [panel, session.demo, session.profileId, session.request, revision]);
-  const adviser = (
+  const adviser = usePathname().startsWith("/settings") ? null : (
     <Pressable
       accessibilityRole="button"
       accessibilityLabel="Open Ask Clover"

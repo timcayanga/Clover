@@ -28,12 +28,13 @@ export function launchDestination(loaded: boolean, active: boolean, visited: boo
 }
 
 /** Keep the authenticated app unavailable until its own setup decision resolves. */
-export function nativeEntryAccess(active: boolean, needsOnboarding: boolean | undefined, authEntry: boolean, accountDeleted = false) {
+export function nativeEntryAccess(active: boolean, needsOnboarding: boolean | undefined, authEntry: boolean | "sign-in" | "sign-up" | null, accountDeleted = false) {
+  const preparingSignup = active && needsOnboarding === undefined && authEntry === "sign-up";
   return {
     welcome: !active && !accountDeleted,
-    auth: !accountDeleted && (!active || (needsOnboarding === undefined && authEntry)),
+    auth: !accountDeleted && (!active || (needsOnboarding === undefined && Boolean(authEntry) && !preparingSignup)),
     app: !accountDeleted && active && needsOnboarding === false,
-    onboarding: !accountDeleted && active && needsOnboarding !== undefined,
+    onboarding: !accountDeleted && active && (needsOnboarding !== undefined || preparingSignup),
     coldStart: !accountDeleted && active && needsOnboarding === undefined && !authEntry,
   };
 }

@@ -9,7 +9,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { ActivityIndicator, FlatList, Pressable, View, useWindowDimensions } from "react-native";
 import { matchesDemoFilters, demoFilterOptions } from "../../src/transaction-filter-query";
 import { TransactionFilterPanel } from "../../src/transaction-filters";
-import { emptyTransactionFilters, transactionFilterQuery, type TransactionFilters, type FilterOptions } from "../../src/transaction-filter-query";
+import { hasTransactionFilters, emptyTransactionFilters, transactionFilterQuery, type TransactionFilters, type FilterOptions } from "../../src/transaction-filter-query";
 import { useSession } from "../../src/session";
 import type { Transaction, TransactionPage } from "../../src/types";
 import {
@@ -224,6 +224,7 @@ export default function Transactions() {
                   : ""} · {dateLabel(item.date)}
               </Text>
               </View>
+              {transactionReviewReasons(item).length > 0 ? <Text style={{ fontSize: 10, color: dark ? "#F2CE76" : "#87610D" }}>{transactionReviewReasons(item)[0]}</Text> : null}
             </View>
             <Text
               style={{
@@ -246,7 +247,7 @@ export default function Transactions() {
         ListEmptyComponent={
           !busy ? (
             <CloverEmptyState pose={error ? "reassuring" : "thinking"}>
-              {error ? "Pull down to retry." : "No matching transactions. Try another search or upload a record."}
+              {error ? "Pull down to retry." : hasTransactionFilters(filterValues, search) ? "No matching transactions. Try another search or filter." : "Add your first transaction. Upload a receipt or add one manually."}
             </CloverEmptyState>
           ) : (
             !refreshing ? <View accessibilityLabel="Loading transactions" accessibilityRole="progressbar" style={{ padding: 24, alignItems: "center" }}><ActivityIndicator color={colors.teal} /></View> : null

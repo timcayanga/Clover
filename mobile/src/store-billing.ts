@@ -1,3 +1,5 @@
+import { ApiError } from "./api";
+import { CloverLocalAI } from "../modules/clover-local-ai";
 import { matchesStorePackage, STORE_OFFERING_ID, STORE_PACKAGES } from "../../shared/store-catalog";
 import { trackOperation } from "../../shared/analytics";
 import { Platform } from "react-native";
@@ -5,6 +7,7 @@ import Purchases, { type PurchasesPackage } from "react-native-purchases";
 import { assertStoreOwner, currentStoreProduct, googleReplacement, StoreActionError, type PurchaseIntent } from './store-change-policy';
 export type StoreStatus = {
   available: boolean;
+  purchaseRecoveryAvailable?: boolean;
   appUserId: string;
   entitlementId: string;
   offeringId?: string;
@@ -145,4 +148,21 @@ export function storeManagementUrl() {
     : Platform.OS === "android"
       ? "https://play.google.com/store/account/subscriptions"
       : null;
+}
+
+export function canRecoverStorePurchase(status: StoreStatus) {
+  return Platform.OS === "ios" && status.purchaseRecoveryAvailable === true && Boolean(CloverLocalAI?.recoverableApplePurchase);
+}
+export function recoverStorePurchase(status: StoreStatus, submit: (signedTransaction: string) => Promise<unknown>) {
+  return exclusive(async () => {
+    await identify(status);
+    if (!canRecoverStorePurchase(status)) throw new StoreActionError("Contact Clover support to recover this purchase.");
+    const signedTransaction = await CloverLocalAI!.recoverableApplePurchase!();
+    try { await submit(signedTransaction); }
+    catch (error) {
+      if (error instanceof ApiError && [400, 409].includes(error.status)) throw new StoreActionError(error.message);
+      throw new StoreActionError("Purchase recovery could not finish. Try Recover purchase again. You have not been charged again.");
+    }
+    await Purchases.invalidateCustomerInfoCache();
+  });
 }

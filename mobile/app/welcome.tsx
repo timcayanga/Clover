@@ -7,10 +7,10 @@ import { useAccess } from "../src/access";
 import { CloverMascot } from "../src/clover-mascot";
 
 const slides = [
-  { title: "Your money, together\nin Clover.", accent: "in Clover.", image: require("../assets/tutorial/accounts-v2.png"), mascot: "welcome" as const, cropTop: 0, description: "Clover Accounts preview showing balance summaries and bank accounts.", caption: "Banks, wallets, investments and cash in one place." },
-  { title: "Connect, upload,\nor add manually.", accent: "or add manually.", image: require("../assets/tutorial/connect-v2.png"), mascot: "guiding" as const, cropTop: 0, description: "Clover Add Account preview with Manual, Ask Clover, Upload and Connect selectors.", caption: "Bank connections · Available with Plus and Pro" },
-  { title: "See where your\nmoney goes.", accent: "money goes.", image: require("../assets/tutorial/spending-v2.png"), mascot: "thinking" as const, cropTop: 0, description: "Clover Reports preview with category spending and comparison tools.", caption: "Explore spending, trends and insights." },
-  { title: "Ask Clover.\nTake your next step.", accent: "Take your next step.", image: require("../assets/tutorial/adviser-v2.png"), mascot: "celebrating" as const, cropTop: 64, description: "Ask Clover preview with a financial question ready to ask.", caption: "Turn your financial questions into clear next steps." },
+  { title: "Your money, together\nin Clover.", accent: "in Clover.", image: require("../assets/tutorial/accounts-v2.png"), mascot: "welcome" as const, cropTop: 0, description: "BPI savings, UnionBank credit card and GCash wallet account previews." },
+  { title: "Connect, upload,\nor add manually.", accent: "or add manually.", image: require("../assets/tutorial/connect-v2.png"), mascot: "guiding" as const, cropTop: 0, description: "Clover connection preview with Philippine banks." },
+  { title: "See where your\nmoney goes.", accent: "money goes.", image: require("../assets/tutorial/spending-v2.png"), mascot: "thinking" as const, cropTop: 0, description: "Where It Went report with Housing, Food and Dining, Groceries and Transport." },
+  { title: "Ask Clover.\nTake your next step.", accent: "Take your next step.", image: require("../assets/tutorial/adviser-v2.png"), mascot: "celebrating" as const, cropTop: 0, description: "A sample Ask Clover conversation showing a spending report and a transaction ready for review." },
 ];
 
 export default function Welcome() {
@@ -53,11 +53,10 @@ export default function Welcome() {
             <Text accessibilityRole="header" style={[s.title, compact && { fontSize: 23, lineHeight: 29 }]}>
               {slide.title.slice(0, start)}<Text style={{ color: "#00aabe" }}>{slide.accent}</Text>{slide.title.slice(start + slide.accent.length)}
             </Text>
-            <Text style={s.caption}>{slide.caption}</Text>
             <View style={{ width: artworkWidth, height: artworkHeight + 46, alignSelf: "center" }}>
               <View style={[s.preview, { width: artworkWidth, height: artworkHeight }]}>
                 <Image source={slide.image} accessibilityLabel={slide.description} resizeMode="contain"
-                  style={{ width: artworkWidth, height: artworkWidth * 460 / 342, transform: [{ translateY: -slide.cropTop * artworkWidth / 342 }] }} />
+                  style={{ width: artworkWidth, height: artworkHeight, transform: [{ translateY: -slide.cropTop * artworkWidth / 342 }] }} />
               </View>
               <View style={{ position: "absolute", right: -10, bottom: 0 }}><CloverMascot pose={slide.mascot} size={120} /></View>
             </View>
@@ -92,7 +91,6 @@ const s = StyleSheet.create({
   preview: { overflow: "hidden", borderRadius: 24, borderWidth: 1, borderColor: "#d5e8eb", backgroundColor: "white" },
   slide: { flexGrow: 1, alignItems: "center", justifyContent: "center", gap: 14, paddingHorizontal: 16, paddingBottom: 6 },
   title: { color: "#17363d", fontSize: 26, lineHeight: 33, textAlign: "center", fontFamily: "Poppins-SemiBold", maxWidth: 430 },
-  caption: { fontSize: 12, lineHeight: 18, color: "#596e78", textAlign: "center", maxWidth: 340 },
   footer: { paddingHorizontal: 24, gap: 10, flexShrink: 0 },
   pagination: { flexDirection: "row", justifyContent: "center", height: 36 },
   dotTarget: { width: 44, minHeight: 44, alignItems: "center", justifyContent: "center" },

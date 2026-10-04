@@ -20,6 +20,7 @@ export function storeBillingConfig() {
     );
   return {
     enabled,
+    purchaseRecoveryAvailable: enabled && Boolean(process.env.REVENUECAT_RECOVERY_API_KEY),
     entitlementId: "clover_plus", // Compatibility field for older clients; never used for verification.
     offeringId: STORE_OFFERING_ID,
     tiers,

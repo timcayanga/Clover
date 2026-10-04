@@ -18,6 +18,7 @@ export default function Onboarding() {
   const { colors } = useTheme();
   const [step, setStep] = useState<"experience" | "upload">("experience");
   const saving = useRef(false);
+  const enteredBeforeBootstrap = useRef(!session.data);
   const [experience, setExperience] = useState<
     "beginner" | "comfortable" | "advanced" | null
   >(null);
@@ -39,11 +40,15 @@ export default function Onboarding() {
           : "/(tabs)",
       );
   }, [destination, session.data]);
+  useEffect(() => {
+    if (enteredBeforeBootstrap.current && session.data?.needsOnboarding === false && !saving.current && destination === null) router.replace("/(tabs)");
+  }, [session.data, destination]);
   const currencyName =
     session.data?.currencyChoices?.find((option) => option.code === currency)
       ?.name ?? "Philippine Peso";
   const finish = async (upload: "file" | "camera" | "library" | "skip") => {
     if (!experience || saving.current) return;
+    if (!session.data) { setError(session.error || "Your account is connecting. Please try again in a moment."); return; }
     saving.current = true;
     setBusy(true);
     setError("");

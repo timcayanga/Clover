@@ -10,6 +10,8 @@ const statusFor=(tier='free',provider=null)=>({available:true,appUserId:'user_fi
 let info=infoFor(),fail=null,purchases=[],configured=false,sdkUser=null,loginFailure=false,restoredInfo=null;
 const sdk={isConfigured:async()=>configured,configure:({appUserID})=>{configured=true;sdkUser=appUserID;},getAppUserID:async()=>sdkUser,logIn:async id=>{if(!loginFailure)sdkUser=id;},logOut:async()=>{sdkUser='$RCAnonymousID:fixture';},restorePurchases:async()=>restoredInfo??info,invalidateCustomerInfoCache:async()=>{},getCustomerInfo:async()=>info,purchasePackage:async(...args)=>{purchases.push(args);if(fail)throw fail;return {customerInfo:info};},STORE_REPLACEMENT_MODE:Object.fromEntries(['WITHOUT_PRORATION','WITH_TIME_PRORATION','DEFERRED'].map(x=>[x,x]))};
 const billing=evaluate('../src/store-billing.ts',name=>{
+ if(name==='./api')return {ApiError:class extends Error{}};
+ if(name.includes('clover-local-ai'))return {CloverLocalAI:null};
  if(name==='react-native')return {Platform:{OS:'android'}};
  if(name==='react-native-purchases')return sdk;
  if(name.includes('store-catalog'))return catalog;
@@ -78,7 +80,7 @@ function screen({os='android',tier='pro',provider='play_store',purchaseError=nul
   if(name==='react/jsx-runtime')return {jsx:(type,props)=>({type,props}),jsxs:(type,props)=>({type,props}),Fragment:'Fragment'};
   if(name==='react-native')return {Platform:{OS:os},Alert:{alert:(...args)=>alerts.push(args)},AppState:{currentState:'active',addEventListener:()=>({remove(){}})},Linking:{openURL:async url=>calls.push(url)},useWindowDimensions:()=>({width:390,fontScale:1}),View:'View',ScrollView:'ScrollView',Pressable:'Pressable'};
   if(name==='./session')return {useSession:()=>session};
-  if(name==='./store-billing')return {canUseStore:()=>true,loadStorePackages:async()=>{calls.push('offers');if(offersFail)throw Error('network');return items(os);},purchaseStorePackage:async(_,item)=>{calls.push('purchase');if(purchaseError)throw purchaseError;const p=catalog.STORE_PACKAGES.find(p=>p.identifier===item.identifier);return {productId:p[os],tier:p.tier,effect:tier==='premium'&&p.tier==='pro'?'renewal':tier===p.tier?'next-payment':'immediate'};},restoreStorePurchases:async()=>{calls.push('restore');if(restoreError)throw restoreError;},manageAppleStoreSubscription:async()=>calls.push('apple-sheet'),googleStoreManagementUrl:async()=> 'https://play.google.com/manage-fixture'};
+  if(name==='./store-billing')return {canRecoverStorePurchase:()=>false,canUseStore:()=>true,loadStorePackages:async()=>{calls.push('offers');if(offersFail)throw Error('network');return items(os);},purchaseStorePackage:async(_,item)=>{calls.push('purchase');if(purchaseError)throw purchaseError;const p=catalog.STORE_PACKAGES.find(p=>p.identifier===item.identifier);return {productId:p[os],tier:p.tier,effect:tier==='premium'&&p.tier==='pro'?'renewal':tier===p.tier?'next-payment':'immediate'};},restoreStorePurchases:async()=>{calls.push('restore');if(restoreError)throw restoreError;},manageAppleStoreSubscription:async()=>calls.push('apple-sheet'),googleStoreManagementUrl:async()=> 'https://play.google.com/manage-fixture'};
   if(name==='./store-change-policy')return policy;
   if(name==='./store-presentation')return presentation;
   if(name.includes('store-catalog'))return catalog;

@@ -35,7 +35,7 @@ elapsed.sort((a,b)=>a-b);
 assert(elapsed[950]<10,'Cached navigation lookup p95 must remain under 10ms');
 console.log(`PASS identity/Profile separation, expiry, mutation races, read-only currency-safe institution grouping; cached lookup p95 ${elapsed[950].toFixed(3)}ms (not device render latency)`);
 
-const { storePriceLabel, storeVerificationMessage } = await import('../src/store-presentation.ts');
+const { catalogStorePrice, storePriceLabel, storeVerificationMessage } = await import('../src/store-presentation.ts');
 assert.equal(storePriceLabel({priceString:'₱169.00',currencyCode:'PHP',subscriptionPeriod:'P1M'}),'₱169.00 PHP / month');
 assert.equal(storePriceLabel({priceString:'$19.99',currencyCode:'USD',subscriptionPeriod:'P1Y'}),'$19.99 USD / year');
 assert.equal(storeVerificationMessage('free','silent'),'');
@@ -68,3 +68,6 @@ const old=concurrent.read(path,()=>new Promise(r=>oldFinish=r)); await Promise.r
 concurrent.clear(); const fresh={accounts:[]}; await concurrent.read(path,async()=>fresh);
 oldFinish(snapshot); await old; assert.equal(concurrent.peek(path),fresh);
 console.log('PASS original-store management, shared in-flight reads and invalidation races');
+
+assert.equal(catalogStorePrice('pro','P1M'),'US$7.99 USD / month');
+assert.equal(catalogStorePrice('premium','P1Y'),'US$99.99 USD / year');
