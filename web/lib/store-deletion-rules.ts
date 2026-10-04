@@ -19,10 +19,11 @@ const schema = z.object({
 export type StoreDeletionPlan = { appleCancellationRequired: boolean; googleTransactionIds: string[] };
 /** Accept only a fresh server-fetched response, never SDK/client receipt claims. */
 export function storeDeletionPlan(raw: unknown, config: {
-  appUserId: string; sandbox: boolean; sandboxAppUserIds?: readonly string[];
+  appUserId: string; verifiedRecoveryAlias?: string; sandbox: boolean; sandboxAppUserIds?: readonly string[];
 }, now = Date.now()): StoreDeletionPlan {
   const data = schema.parse(raw);
-  if (data.subscriber.original_app_user_id !== config.appUserId)
+  if (data.subscriber.original_app_user_id !== config.appUserId &&
+    !(config.verifiedRecoveryAlias?.startsWith("$RCAnonymousID:") && data.subscriber.original_app_user_id === config.verifiedRecoveryAlias))
     throw new Error("Store account ownership does not match. Contact support before deleting your account.");
   if (data.request_date_ms < now - 600000 || data.request_date_ms > now + 60000)
     throw new Error("Store verification is stale. Please retry.");

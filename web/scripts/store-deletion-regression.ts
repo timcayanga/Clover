@@ -30,6 +30,10 @@ async function main() {
   assert.throws(() => storeDeletionPlan(payload({ "clover.plus": google }), { ...config, sandbox: true }, now));
   assert.throws(() => storeDeletionPlan(payload({ "clover.plus": { ...google, is_sandbox: true } }), { ...config, sandboxAppUserIds: [] }, now));
   assert.equal(parse({ "clover.plus": { ...google, is_sandbox: true } }).googleTransactionIds.length, 1);
+  const recovered = { request_date_ms: now, subscriber: { original_app_user_id: "$RCAnonymousID:verified", subscriptions: { "clover.pro.monthly": apple } } };
+  assert.throws(() => storeDeletionPlan(recovered, config, now), /ownership/);
+  assert.throws(() => storeDeletionPlan(recovered, { ...config, verifiedRecoveryAlias: "$RCAnonymousID:other" }, now), /ownership/);
+  assert.equal(storeDeletionPlan(recovered, { ...config, verifiedRecoveryAlias: "$RCAnonymousID:verified" }, now).appleCancellationRequired, true);
   const calls: string[] = [];
   const fetcher: typeof fetch = async (url, init) => {
     calls.push(String(url)); assert.equal(init?.method, "POST"); assert.equal(init?.cache, "no-store");

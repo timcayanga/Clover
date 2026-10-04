@@ -1,3 +1,6 @@
+import { eraseDetachedUserRecords } from "./account-erasure-records";
+import { queueAccountErasure } from "./account-erasure-tasks";
+import { purgeNativeUploadsForUser } from "./native-upload-store";
 import { deleteImportObject } from "@/lib/s3-delete";
 import { prisma } from "@/lib/prisma";
 import { ensureStarterWorkspace } from "@/lib/starter-data";
@@ -163,8 +166,10 @@ export const cancelWebBillingForDeletion = async (clerkUserId: string) => {
 
 export const deleteLocalUserAccount = async (clerkUserId: string) => {
   await assertUserErasureScope(clerkUserId);
-  const user = await prisma.user.findUnique({ where: { clerkUserId }, select: { id: true } });
+  const user = await prisma.user.findUnique({ where: { clerkUserId }, select: { id: true, clerkUserId: true, email: true, verified: true, environment: true } });
   if (!user) return false;
+
+  await purgeNativeUploadsForUser(user.id);
 
   // Private promotional receipts follow the same permanent-erasure policy.
   const campaignEvidence = await prisma.switchEvidence.findMany({where:{application:{userId:user.id},purgedAt:null},select:{id:true,storageKey:true}});
@@ -201,8 +206,11 @@ export const deleteLocalUserAccount = async (clerkUserId: string) => {
     });
     await tx.circleActivity.deleteMany({ where: { actorUserId: user.id } });
     await tx.circleMembership.deleteMany({ where: { userId: user.id } });
+    const workspaces = await tx.workspace.findMany({ where: { userId: user.id }, select: { id: true } });
+    await eraseDetachedUserRecords(tx, user, workspaces.map(w => w.id));
+    await queueAccountErasure(tx, user);
     await tx.user.deleteMany({ where: { id: user.id } });
-  });
+  }, { timeout: 30000 });
 
   return true;
 };

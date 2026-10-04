@@ -78,6 +78,7 @@ assert.ok(events.some(e => e.event === "offline_sync_conflict"));
 assert.doesNotMatch(JSON.stringify(events), /PRIVATE|private-profile|private-account|merchantRaw/);
 await engine.dispose();
 // Request-scoped server events preserve device/operation context and run after response.
+let deletedIdentity = false;
 let outgoing: any[] = [], scheduled: Array<() => Promise<void>> = [];
 let requestHeaders: Headers | null = new Headers({ "x-clover-platform": "android", "x-clover-device-model": "Pixel", "x-clover-os-version": "16", "x-clover-app-version": "0.1.0", "x-clover-operation-id": "test-operation-001" });
 const serverModule = { exports: {} as any };
@@ -87,7 +88,7 @@ vm.runInNewContext(serverCode, { exports: serverModule.exports, require: (id: st
   if (id === "next/server") return { after: (run: () => Promise<void>) => { if (!requestHeaders) throw Error("worker"); scheduled.push(run); } };
   if (id.endsWith("shared/analytics")) return { browserContext };
   if (id === "./analytics") return { capturePostHogServerEvent: async (...args: any[]) => { outgoing.push(args); } };
-  if (id === "./prisma") return { prisma: { user: { findUnique: async () => ({ clerkUserId: "user_billing" }) } } };
+  if (id === "./prisma") return { prisma: { user: { findUnique: async () => ({ clerkUserId: "user_billing" }) }, clerkIdentityDeletion: { findUnique: async () => deletedIdentity ? { clerkUserId: "user_billing" } : null } } };
   throw Error(id);
 } });
 await serverModule.exports.capturePostHogServerEvent("account_created", "test-user", { account_type: "cash" });
@@ -101,6 +102,9 @@ await serverModule.exports.capturePostHogServerEvent("import_processing_complete
 assert.equal(outgoing[0][2].platform, "server");
 await serverModule.exports.capturePostHogServerEvent("billing_renewed", "database-user", { plan_tier: "premium" });
 assert.equal(outgoing.at(-1)[1], "user_billing", "billing events must join the signed-in analytics identity");
+deletedIdentity = true; outgoing = [];
+await serverModule.exports.capturePostHogServerEvent("billing_renewed", "database-user", { plan_tier: "premium" });
+assert.equal(outgoing.length, 0, "late billing events must not recreate a deleted analytics identity");
 // Execute native setup under a React Native-shaped environment (no AbortSignal.timeout).
 for (const platform of ["ios", "android"]) {
   const captures: any[] = [], identities: string[] = [];

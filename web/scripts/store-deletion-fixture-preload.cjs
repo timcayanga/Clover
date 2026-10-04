@@ -8,16 +8,18 @@ const prisma = {
   $executeRaw: async () => 1,
   $transaction: async fn => fn(prisma),
   clerkIdentityDeletion: {
-    findUnique: async () => null,
+    findUnique: async () => g().priorDeletion || null,
     upsert: async () => { g().events.push('tombstone'); },
     update: async () => { g().events.push('completed'); },
   },
+  finverseConnection: { findMany: async () => g().banks ? [{id:"fixture-bank"}] : [] },
   adminMember: { updateMany: async () => {} },
 };
 Module._load = function(id) {
   if (id === '@/lib/prisma' || id === './prisma') return { prisma };
   if (id === '@/lib/admin') return { getAdminDataEnvironment: () => 'production' };
-  if (id === './store-access') return { storeBillingConfig: () => ({ sandbox: false, sandboxAppUserIds: [] }) };
+  if (id === './store-access') return { verifyRecoveredStoreAlias: async () => undefined, storeBillingConfig: () => ({ sandbox: false, sandboxAppUserIds: [] }) };
+  if (id === './finverse-lifecycle') return { requestBankDisconnect: async () => { g().events.push("bank-request"); }, revokeBankConnection: async () => { g().events.push("bank-revoke"); return !g().bankFails; } };
   if (id === '@/lib/account-management') return {
     assertUserErasureScope: async () => { if(g().scopeFails) throw Error('shared Circle'); },
     cancelWebBillingForDeletion: async () => { g().events.push('web-cancel'); },

@@ -2587,3 +2587,21 @@ model StorePurchaseRecovery {
   @@unique([sourceClerkUserId, appId])
   @@index([targetClerkUserId])
 }
+
+// Minimal provider cleanup intent survives local erasure. No email, receipt or financial data.
+// Payload references are cleared after the provider confirms cleanup.
+model AccountErasureTask {
+  id String @id @default(cuid())
+  clerkUserId String
+  environment String
+  provider String
+  payload Json @default("{}")
+  status String @default("pending")
+  attempts Int @default(0)
+  lastError String?
+  retryAt DateTime @default(now())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  @@unique([clerkUserId, provider])
+  @@index([environment, status, retryAt])
+}

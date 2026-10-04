@@ -116,7 +116,7 @@
     "qa:confirmed-data": "tsx scripts/confirmed-data-regression.ts",
     "qa:finverse": "tsx scripts/transaction-category-status-regression.ts && tsx scripts/finverse-enrichment-regression.ts && tsx scripts/finverse-integration-regression.ts && tsx scripts/finverse-connect-route-regression.ts && tsx scripts/finverse-cancel-setup-regression.ts && tsx scripts/finverse-preservation-regression.ts && tsx scripts/finverse-lifecycle-regression.ts && tsx scripts/finverse-reconciliation-regression.ts && tsx scripts/bank-import-safety-regression.ts",
     "qa:lunchflow": "tsx scripts/lunch-flow-integration-regression.ts",
-    "qa:billing-lifecycle": "tsx scripts/store-purchase-recovery-regression.ts && tsx scripts/paddle-tiers-regression.ts && tsx scripts/billing-lifecycle-regression.ts && tsx scripts/store-deletion-regression.ts && tsx --require ./scripts/store-deletion-fixture-preload.cjs scripts/store-deletion-fixture.ts",
+    "qa:billing-lifecycle": "tsx scripts/store-purchase-recovery-regression.ts && tsx scripts/paddle-tiers-regression.ts && tsx scripts/billing-lifecycle-regression.ts && tsx scripts/store-deletion-regression.ts && tsx --require ./scripts/store-deletion-fixture-preload.cjs scripts/store-deletion-fixture.ts && tsx scripts/account-erasure-regression.ts && tsx scripts/account-erasure-upload-regression.ts",
     "qa:goal-intent": "tsx scripts/goal-intent-regression.ts",
     "qa:goal-persistence": "tsx scripts/goal-persistence-regression.ts && tsx scripts/personal-goals-regression.ts && tsx scripts/displayed-figures-regression.ts",
     "qa:split-bill-quick-add": "tsx scripts/split-bill-quick-add-regression.ts",

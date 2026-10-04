@@ -73,6 +73,23 @@ async function cleanup(row: Upload) {
       );
   }
 }
+/** Cancel under each upload row lock, so no part can be written after cleanup.
+ * A live finalizer must finish/expire first; the durable deletion tombstone keeps
+ * the identity blocked and the deletion sweep retries rather than losing its files. */
+export async function purgeNativeUploadsForUser(userId: string) {
+  const rows = await prisma.$transaction(async tx => {
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`native-upload:${userId}`}))`;
+    const rows = await tx.$queryRaw<Upload[]>`SELECT * FROM "NativeUploadSession" WHERE "userId"=${userId} FOR UPDATE`;
+    if (rows.some(row => row.state === "finalizing" && row.leaseUntil && row.leaseUntil > new Date()))
+      throw new Error("An upload is finishing. Account cleanup will retry automatically.");
+    await tx.$executeRaw`UPDATE "NativeUploadSession" SET "state"='cancelled' WHERE "userId"=${userId}`;
+    return rows;
+  });
+  for (const row of rows) {
+    await cleanup(row);
+    await prisma.$executeRaw`DELETE FROM "NativeUploadSession" WHERE "id"=${row.id} AND "userId"=${userId} AND "state"='cancelled'`;
+  }
+}
 export async function cleanupExpiredNativeUploads() {
   const rows = await prisma.$queryRaw<
     Upload[]
@@ -128,6 +145,9 @@ export async function nativeUploadRequest(
     if (problem) throw new NativeInputError(problem);
     const row = await prisma.$transaction(async (tx) => {
       await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`native-upload:${userId}`}))`;
+      const owner = await tx.user.findUnique({ where: { id: userId }, select: { clerkUserId: true } });
+      if (!owner || await tx.clerkIdentityDeletion.findUnique({ where: { clerkUserId: owner.clerkUserId } }))
+        throw new NativeInputError("This account is being deleted.");
       const [existing] = await tx.$queryRaw<
         Upload[]
       >`SELECT * FROM "NativeUploadSession" WHERE "id"=${id}`;

@@ -20,6 +20,10 @@
     {
       "path": "/api/cron/team-assignments",
       "schedule": "0 3 * * *"
+    },
+    {
+      "path": "/api/cron/account-erasure",
+      "schedule": "17 * * * *"
     }
   ]
 }

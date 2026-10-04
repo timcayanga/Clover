@@ -1,3 +1,4 @@
+import { requestBankDisconnect, revokeBankConnection } from "./finverse-lifecycle";
 import { cancelStoreBillingForDeletion } from "./store-account-deletion";
 import { revalidateTag } from "next/cache";
 import { clerkClient } from "@clerk/nextjs/server";
@@ -103,8 +104,12 @@ export async function deleteClerkIdentity(
     throw new Error("Identity belongs to another Clover environment; nothing was deleted.");
   // Billing must succeed before a tombstone disables login or Clerk erases it.
   // This also covers Admin deletion and retries following a Clerk webhook.
-  await cancelStoreBillingForDeletion(clerkUserId, appleSubscriptionAcknowledged);
-  await cancelWebBillingForDeletion(clerkUserId);
+  const priorDeletion = await prisma.clerkIdentityDeletion.findUnique({ where: { clerkUserId } });
+  if (priorDeletion && priorDeletion.environment !== environment) throw new Error("Deletion environment mismatch.");
+  if (!priorDeletion) {
+    await cancelStoreBillingForDeletion(clerkUserId, appleSubscriptionAcknowledged);
+    await cancelWebBillingForDeletion(clerkUserId);
+  }
   await prisma.$transaction(async (tx) => {
     await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`clerk-identity:${clerkUserId}`}))`;
     const user = await tx.user.findUnique({
@@ -128,6 +133,16 @@ export async function deleteClerkIdentity(
     });
   });
   invalidateIdentityCache();
+  // Revocation requires the credentials held by the connection. Never cascade
+  // those away before the provider acknowledges disconnect.
+  const billingOwner = await prisma.user.findUnique({ where: { clerkUserId }, select: { id: true } });
+  if (billingOwner) {
+    const connections = await prisma.finverseConnection.findMany({ where: { userId: billingOwner.id, status: { not: "disconnected" } }, select: { id: true } });
+    for (const connection of connections) {
+      await requestBankDisconnect(connection.id, "Clover account deletion");
+      if (!await revokeBankConnection(connection.id)) throw new Error("Bank disconnection is pending. Account cleanup will retry automatically.");
+    }
+  }
   // Keep the tombstone if any stage fails. A webhook retry or Admin sync resumes cleanup.
   if (!providerAlreadyDeleted) {
     try {

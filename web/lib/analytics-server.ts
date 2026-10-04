@@ -25,6 +25,9 @@ export async function capturePostHogServerEvent(event: AnalyticsEventName, disti
     if (/^(plan_|billing_|trial_to_paid)/.test(event) && !distinctId.startsWith("user_")) {
       try { identity = (await prisma.user.findUnique({ where: { id: distinctId }, select: { clerkUserId: true } }))?.clerkUserId ?? distinctId; } catch { /* Delivery must not affect billing. */ }
     }
+    try {
+      if (identity.startsWith("user_") && await prisma.clerkIdentityDeletion.findUnique({ where: { clerkUserId: identity }, select: { clerkUserId: true } })) return;
+    } catch { return; /* Analytics must not block billing or capture an unverified deleted identity. */ }
     await capture(event, identity, { ...context, ...properties });
   };
   try { after(send); } catch { await send(); }

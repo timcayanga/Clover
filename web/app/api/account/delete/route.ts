@@ -3,7 +3,6 @@ import { getStoreDeletionPlan } from "@/lib/store-account-deletion";
 import { NextResponse } from "next/server";
 import { requireAuth } from "@/lib/auth";
 import { deleteClerkIdentity } from "@/lib/clerk-identity-lifecycle";
-import { capturePostHogServerEvent } from "@/lib/analytics-server";
 import { assertTrustedRequestOrigin } from "@/lib/request-security";
 
 export const dynamic = "force-dynamic";
@@ -20,11 +19,6 @@ export async function POST(request: Request) {
     const body = await request.text();
     const input = z.object({ appleSubscriptionAcknowledged: z.boolean().optional() }).strict().parse(body ? JSON.parse(body) : {});
     await deleteClerkIdentity(userId, false, input.appleSubscriptionAcknowledged === true);
-
-    void capturePostHogServerEvent("account_deleted", userId, {
-      account_scope: "full",
-      delete_mode: "hard_delete",
-    });
 
     return NextResponse.json({ success: true });
   } catch (error) {

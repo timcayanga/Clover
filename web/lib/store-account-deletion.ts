@@ -1,5 +1,5 @@
 import { prisma } from "./prisma";
-import { storeBillingConfig } from "./store-access";
+import { storeBillingConfig, verifyRecoveredStoreAlias } from "./store-access";
 import { assertAppleDeletionAcknowledged, storeDeletionPlan, cancelGoogleDeletionSubscriptions, type StoreDeletionPlan } from "./store-deletion-rules";
 const empty = (): StoreDeletionPlan => ({ appleCancellationRequired: false, googleTransactionIds: [] });
 export async function getStoreDeletionPlan(clerkUserId: string): Promise<StoreDeletionPlan> {
@@ -19,7 +19,9 @@ export async function getStoreDeletionPlan(clerkUserId: string): Promise<StoreDe
   });
   if (response.status === 404 && !user.storeAccess) return empty();
   if (!response.ok) throw new Error("Could not verify your store subscription. Your account has not been deleted. Please retry.");
-  return storeDeletionPlan(await response.json(), { ...config, appUserId: clerkUserId });
+  const payload: unknown = await response.json();
+  const verifiedRecoveryAlias = await verifyRecoveredStoreAlias(payload, clerkUserId, user.environment);
+  return storeDeletionPlan(payload, { ...config, appUserId: clerkUserId, verifiedRecoveryAlias });
 }
 export async function cancelStoreBillingForDeletion(clerkUserId: string, appleAcknowledged?: boolean) {
   const plan = await getStoreDeletionPlan(clerkUserId);
