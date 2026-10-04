@@ -90,12 +90,12 @@ export function SettingsPlan() {
     }).catch(() => { if (active) setUsageError(true); });
     return () => { active = false; };
   }, [session.demo, session.request, status]);
-  const act = async (run?: () => Promise<void | PurchaseIntent>, restoring = false, silent = false) => {
+  const act = async (run?: () => Promise<void | PurchaseIntent>, restoring = false, silent = false, recovering = false) => {
     if (locked.current || session.demo) return;
     locked.current = true;
     setBusy(true);
     setError("");
-    setMessage("");
+    setMessage(recovering ? "Verifying your purchase with Apple…" : "");
     try {
       if (run) setVerificationPending(true);
       const intent = await run?.();
@@ -114,7 +114,7 @@ export function SettingsPlan() {
       setVerificationPending(pending);
       session.refresh();
       if (restoring) telemetry("billing_restored", { plan_tier: next.planTier, verified_access: next.planTier !== "free" });
-      setMessage(ownershipConflict && !restoring ? "" : intentToVerify ? purchaseFeedback(next, intentToVerify) : storeVerificationMessage(next.planTier, silent ? "silent" : restoring ? "restore" : run ? "purchase" : "refresh"));
+      setMessage(recovering ? (next.hasPaidSubscription ? "Your purchase is recovered. Your plan is ready to use." : "Your purchase is recovered. It has expired, so you can choose a new plan.") : ownershipConflict && !restoring ? "" : intentToVerify ? purchaseFeedback(next, intentToVerify) : storeVerificationMessage(next.planTier, silent ? "silent" : restoring ? "restore" : run ? "purchase" : "refresh"));
       if (intentToVerify && purchaseVerified(next, intentToVerify)) purchaseIntent.current = null;
       // Refresh also retries a failed initial offering load, without repeating a purchase.
       if (!run && canUseStore(next)) {
@@ -123,6 +123,7 @@ export function SettingsPlan() {
       }
     } catch (e) {
       if (mounted.current) {
+        setMessage("");
         // A canceled/failed confirmation must not permanently disable the cards.
         // Every retry checks fresh store ownership before opening another purchase.
         if (isStoreOwnershipConflict(e)) {
@@ -169,7 +170,7 @@ export function SettingsPlan() {
   };
   const access = status ?? session.data?.entitlement;
   const limits = access ? PLAN_CATALOG[access.planTier] : null;
-  const showUsageInfo = () => Alert.alert("Plan usage", "Monthly Clover tokens reset on the first day of each month in Asia/Manila. Unused tokens do not roll over. The 24-hour allowance is a rolling window. Cash accounts do not count toward the account limit. Linked bank slots remain reserved after unlinking until the next monthly period.\n\n" + RETENTION_MESSAGE + "\n\n" + DOWNGRADE_MESSAGE);
+  const showUsageInfo = () => Alert.alert("Plan usage", "Cloud parsing and Ask Clover use Clover tokens. On-device processing is not counted. Monthly Clover tokens reset on the first day of each month in Asia/Manila. Unused tokens do not roll over. The 24-hour allowance is a rolling window. Cash accounts do not count toward the account limit. Linked bank slots remain reserved after unlinking until the next monthly period.\n\n" + RETENTION_MESSAGE + "\n\n" + DOWNGRADE_MESSAGE);
   const manageGoogleSubscription = async () => {
     if (!status || locked.current || session.demo) return;
     locked.current = true; setBusy(true); setError('');
@@ -204,7 +205,7 @@ export function SettingsPlan() {
     dialogOpen.current = true;
     const close = () => { dialogOpen.current = false; };
     Alert.alert(changingPeriod ? 'Change billing period' : `Switch to ${PLAN_CATALOG[tier].name}`, explanation, [
-      ...choices.map(item => ({ text: storePriceLabel(item.product), onPress: () => { close(); void act(() => purchaseStorePackage(status, item)); } })),
+      ...choices.map(item => ({ text: storePriceLabel(item.product), onPress: () => { close(); void act(() => purchaseStorePackage(status, item, () => session.request<StoreStatus>("billing/store", { method: "POST", body: "{}" }))); } })),
       { text: 'Cancel', style: 'cancel', onPress: close },
     ], { cancelable: true, onDismiss: close });
   };
@@ -260,7 +261,7 @@ export function SettingsPlan() {
       <Notice>{status && canRecoverStorePurchase(status) ? "This purchase is linked to another Clover account. If you deleted that account, you can recover the purchase here." : STORE_OWNERSHIP_MESSAGE}</Notice>
       {status && canRecoverStorePurchase(status) ? <Text accessibilityRole="button" disabled={busy || loading} style={{ color: colors.teal }} onPress={() => Alert.alert("Recover your store purchase?", "Move the purchase from your deleted Clover account to this account. Its cancellation and expiry stay the same. Deleted financial data stays deleted.", [
         { text: "Cancel", style: "cancel" },
-        { text: "Recover purchase", onPress: () => void act(() => recoverStorePurchase(status, signedTransaction => session.request("billing/store/recover", { method: "POST", body: JSON.stringify({ signedTransaction }) })), true) },
+        { text: "Recover purchase", onPress: () => void act(() => recoverStorePurchase(status, signedTransaction => session.request("billing/store/recover", { method: "POST", body: JSON.stringify({ signedTransaction }) })), true, false, true) },
       ])}>Recover purchase</Text> : null}
       <Text accessibilityRole="link" style={{ color: colors.teal }} onPress={() => void WebBrowser.openBrowserAsync("https://clover.ph/contact-us").catch(() => setError("Visit clover.ph/contact-us for help with your purchase."))}>Contact Clover support</Text>
     </Card> : null}

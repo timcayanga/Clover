@@ -144,7 +144,7 @@ export default function Settings() {
     }
   };
   return (
-    <Screen>
+    <Screen scrollKey={section}>
       <PlanHeader
         title={
           section === "menu"

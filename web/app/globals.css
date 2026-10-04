@@ -64281,7 +64281,7 @@ html[data-theme="dark"] .adviser-planning-card__details dl div {
 
 /* One container-free Adviser action across all authenticated product headers.
    Sizes match Transactions; the artwork and clickable box share dimensions. */
-.content { --clover-adviser-action-size: 52px; }
+.content { --clover-adviser-action-size: 40px; }
 @media (max-width: 1100px) {
   .content { --clover-adviser-action-size: 44px; }
   .split-bill-home > .split-bill-pulse { display: none; }

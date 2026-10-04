@@ -51,7 +51,25 @@ function harness(options: Record<string, boolean> = {}) {
   });
   return {run:()=>exports.recoverDeletedStorePurchase("target",signed), calls,getAudit:()=>audit};
 }
+async function checkRecoveredAliases() {
+  const moduleSource=fs.readFileSync(new URL("../lib/store-access.ts",import.meta.url),"utf8");
+  const code=ts.transpileModule(moduleSource,{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText;
+  let completed=true, owner=target, lookups=0;
+  const api:any={};
+  vm.runInNewContext(code,{exports:api,require:(name:string)=>{
+    if(name==="./prisma")return {prisma:{storePurchaseRecovery:{findFirst:async({where}:any)=>{assert.equal(where.targetClerkUserId,target);assert.equal(where.environment,"production");assert.deepEqual(JSON.parse(JSON.stringify(where.completedAt)),{not:null});return completed?{id:"audit"}:null;}}}};
+    if(name==="./store-purchase-recovery")return {subscriptionOwner:async()=>{lookups++;return owner;}};
+    return {};
+  }});
+  const raw={subscriber:{original_app_user_id:"$RCAnonymousID:history",subscriptions:{plus:{store:"app_store",store_transaction_id:"1",is_sandbox:true}}}};
+  assert.equal(await api.verifyRecoveredStoreAlias(raw,target,"production"),"$RCAnonymousID:history");
+  owner="user_other";assert.equal(await api.verifyRecoveredStoreAlias(raw,target,"production"),undefined);
+  owner=target;completed=false;lookups=0;assert.equal(await api.verifyRecoveredStoreAlias(raw,target,"production"),undefined);assert.equal(lookups,0);
+  completed=true;assert.equal(await api.verifyRecoveredStoreAlias({subscriber:{...raw.subscriber,subscriptions:{}}},target,"production"),undefined);
+  assert.equal(await api.verifyRecoveredStoreAlias({subscriber:{...raw.subscriber,original_app_user_id:"user_other"}},target,"production"),undefined);
+}
 async function main(){
+  await checkRecoveredAliases();
   for(const issue of ["disabled","invalidProof","wrongProduct","refunded","wrongStore","shared","providerLive","sourceLive","notDeleted","incomplete","wrongEnvironment","targetDeleted","targetPaid","reservedElsewhere"]){
     const h=harness({[issue]:true});await assert.rejects(h.run());assert(!h.calls.includes("transfer"),issue);assert(!h.calls.includes("sync"),issue);
   }

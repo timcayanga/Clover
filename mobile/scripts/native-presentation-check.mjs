@@ -9,7 +9,7 @@ assert.equal(tokenUsagePercent(undefined),'—');
 assert.equal(tokenUsagePercent({used:0,limit:1000}),'0% used');
 assert.equal(tokenUsagePercent({used:1,limit:1000}),'<1% used');
 assert.equal(tokenUsagePercent({used:280,limit:1000}),'28% used');
-assert.equal(tokenUsagePercent({used:2000,limit:1000}),'200% used');
+assert.equal(tokenUsagePercent({used:2000,limit:1000}),'100% used');
 assert.equal(tokenUsagePercent({used:0,limit:0}),'Not available');
 assert.equal(tokenUsagePercent({used:100,limit:null}),'Unlimited');
 for (const flows of [

@@ -154,13 +154,14 @@ async function handle(
     if (operation === "store-billing") {
       const { storeBillingConfig, syncStoreAccess } = await import("@/lib/store-access");
       const config = storeBillingConfig();
+      let verifiedRecoveryAlias: string | undefined;
       if (request.method === "POST") {
         z.object({}).strict().parse(await request.json());
         if (!config.enabled) return reply({ error: "Store purchases are not configured yet." }, 503);
-        await syncStoreAccess(user.id);
+        ({ verifiedRecoveryAlias } = await syncStoreAccess(user.id));
       }
       const access = await getProAccess(user.id);
-      return reply({ purchaseRecoveryAvailable: config.purchaseRecoveryAvailable, available: config.enabled && !(access.user.planTierLocked && access.planTier === "free"), appUserId: userId, entitlementId: config.entitlementId, offeringId: config.offeringId, productIds: config.products, planTier: access.planTier, accessEndsAt: access.accessEndsAt, renewing: access.renewing, hasPaidSubscription: access.hasPaidSubscription, accessSource: access.source, billingProvider: access.storeSubscription?.expiresAt && access.storeSubscription.expiresAt > new Date() ? access.storeSubscription.store : access.hasPaidSubscription ? access.subscription?.provider ?? null : null });
+      return reply({ verifiedRecoveryAlias, purchaseRecoveryAvailable: config.purchaseRecoveryAvailable, available: config.enabled && !(access.user.planTierLocked && access.planTier === "free"), appUserId: userId, entitlementId: config.entitlementId, offeringId: config.offeringId, productIds: config.products, planTier: access.planTier, accessEndsAt: access.accessEndsAt, renewing: access.renewing, hasPaidSubscription: access.hasPaidSubscription, accessSource: access.source, billingProvider: access.storeSubscription?.expiresAt && access.storeSubscription.expiresAt > new Date() ? access.storeSubscription.store : access.hasPaidSubscription ? access.subscription?.provider ?? null : null });
     }
     if (operation === "settings-ai-consent") {
       const { getAiConsent, setAiConsent } = await import("@/lib/ai-consent");

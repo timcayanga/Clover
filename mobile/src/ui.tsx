@@ -225,11 +225,13 @@ export function Screen({
   children,
   gap = 16,
   sheet = false,
+  scrollKey,
   onDismiss,
 }: {
   children: ReactNode;
   gap?: number;
   sheet?: boolean;
+  scrollKey?: string;
   onDismiss?: () => void;
 }) {
   const { colors, styles, dark } = useTheme();
@@ -265,6 +267,11 @@ export function Screen({
       {sheet ? <View {...drag.panHandlers} accessible accessibilityRole="button" accessibilityLabel="Dismiss sheet" accessibilityHint="Swipe down to return to the previous page" accessibilityActions={[{name:"activate",label:"Dismiss"}]} onAccessibilityAction={() => onDismiss?.()} style={{ height: 28, alignItems: "center", justifyContent: "center" }}><View style={{ width: 36, height: 4, borderRadius: 4, backgroundColor: colors.line }}/></View> : null}
       {header}
     <ScrollView
+      key={scrollKey}
+      bounces={path === "/settings" ? false : undefined}
+      overScrollMode={path === "/settings" ? "never" : "auto"}
+      contentInsetAdjustmentBehavior="never"
+      automaticallyAdjustContentInsets={false}
       refreshControl={refreshable ? <RefreshControl refreshing={refreshing} onRefresh={() => void onRefresh()} tintColor={colors.teal} colors={[colors.teal]} /> : undefined}
       alwaysBounceVertical={refreshable}
       style={{ flex: 1, backgroundColor: colors.bg }}

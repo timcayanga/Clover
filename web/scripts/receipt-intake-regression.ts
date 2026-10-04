@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { hasReceiptPhotoEvidence, applyReceiptDefaultCurrency, hasCompleteReceiptCore, receiptSummaryReconciles } from "../lib/receipt-intake";
+import { hasReceiptPhotoEvidence, applyReceiptDefaultCurrency, hasCompleteReceiptCore, receiptSummaryReconciles, inferReceiptLocationCurrency } from "../lib/receipt-intake";
 import { inferOpenAIDocumentFamily } from "../lib/openai-import-parser";
 import { assessFinancialUploadScope } from "../lib/financial-upload-scope";
 import { parseReceiptText, assessReceiptPreviewQuality } from "../lib/split-bill";
@@ -25,12 +25,12 @@ for (const word of ["method", "refund", "thousands", "subscription fee"]) {
 }
 assert.equal(inferOpenAIDocumentFamily({ text: "ETH holdings market value 100", fileName: "portfolio.jpg", importMode: "statement" }), "investment_history");
 assert.equal(hasReceiptPhotoEvidence("Bank statement\nOpening balance 100\nClosing balance 200\nReceipt number 55\nTOTAL 100"), false);
-const raw = { currency: null, confidence_score: .98, parser_evidence: { reason: "Image extraction", source_text: photo } };
+const raw = { currency: null, confidence_score: .98, parser_evidence: { reason: "Image extraction", source_text: "Harbour Cafe\nTotal 425.00" } };
 const defaulted = applyReceiptDefaultCurrency(raw, "PHP");
 assert.equal(defaulted.currency, "PHP");
 assert.equal(defaulted.confidence_score, .69);
 assert.equal(raw.currency, null, "Raw response is never overwritten");
-assert.equal(defaulted.parser_evidence.source_text, photo, "Default must not be inserted into printed text");
+assert.equal(defaulted.parser_evidence.source_text, raw.parser_evidence.source_text, "Default must not be inserted into printed text");
 assert.equal(applyReceiptDefaultCurrency({ ...raw, currency: "KRW" }, "PHP").currency, "KRW");
 assert.equal(applyReceiptDefaultCurrency({ ...raw, currency: "MIXED" }, "EUR").currency, "EUR");
 assert.equal(applyReceiptDefaultCurrency(defaulted, "EUR").currency, "EUR", "Cached suggestions use the current default, never invent printed evidence");
@@ -76,3 +76,15 @@ assert.equal(opticalPreview.requiresReview, true);
 assert.equal(opticalPreview.receiptText, optical);
 assert.equal(opticalPreview.items.length, 2, "IDs and payment tender are not purchases");
 console.log("Receipt intake: unfamiliar photo routing, honest default currency, VAT, partial-core safety and pre-AI relevance passed.");
+
+const located = applyReceiptDefaultCurrency(raw, "USD", photo);
+assert.equal(located.currency, "PHP");
+assert.equal(located.currency_resolution.source, "receipt_location");
+assert.equal(located.currency_resolution.requiresReview, true);
+assert.equal(applyReceiptDefaultCurrency({...raw,currency:"USD"}, "PHP", photo).currency, "USD");
+assert.equal(inferReceiptLocationCurrency("Singapore 238839")?.currency, "SGD");
+assert.equal(inferReceiptLocationCurrency("Jakarta 12190")?.currency, "IDR");
+assert.equal(inferReceiptLocationCurrency("서울특별시 강남구")?.currency, "KRW");
+assert.equal(inferReceiptLocationCurrency("Philippines\nUnited States"), null);
+assert.equal(inferReceiptLocationCurrency("Maya Coffee\nTOTAL 425"), null);
+assert.equal(applyReceiptDefaultCurrency(raw, "EUR").currency, "EUR");

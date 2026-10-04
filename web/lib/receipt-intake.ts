@@ -13,23 +13,46 @@ type ReceiptCurrencyDetails = {
   currency: string | null;
   confidence_score: number;
   parser_evidence: { reason: string; source_text?: string | null; page?: number | null };
-  currency_resolution?: { source?: string; original?: string | null; currency?: string; requiresReview?: boolean };
+  currency_resolution?: { source?: string; original?: string | null; currency?: string; requiresReview?: boolean; evidence?: string };
 };
 
+/** Strong printed location clues suggest a currency, never rewrite source text.
+ * Conflicting regions deliberately fall back to the user's preference. */
+export function inferReceiptLocationCurrency(text: string) {
+  const source = text.normalize("NFKC");
+  const regions: [string, RegExp][] = [
+    ["PHP", /\bPhilippines\b|\b(?:Makati|Mandaluyong|Taguig|Pasig|Quezon|Cebu|Davao)\s+City\b|\bBIR\b.{0,50}\b(?:permit|accred|TIN)\b/i],
+    ["IDR", /\bIndonesia\b|\b(?:Jakarta|Surabaya|Bandung|Denpasar)\b.{0,60}\b\d{5}\b/i],
+    ["KRW", /\b(?:South Korea|Republic of Korea)\b|(?:서울|부산|인천|대구|대전|광주|울산)(?:특별시|광역시)|대한민국/u],
+    ["SGD", /\bSingapore\s+\d{6}\b/i],
+    ["MYR", /\bMalaysia\b/i], ["THB", /\bThailand\b/i],
+    ["VND", /\bViet\s*Nam\b/i], ["JPY", /\bJapan\b|日本国/u],
+    ["HKD", /\bHong Kong\b/i], ["AUD", /\bAustralia\b/i],
+    ["NZD", /\bNew Zealand\b/i], ["GBP", /\bUnited Kingdom\b/i],
+    ["USD", /\bUnited States(?: of America)?\b/i],
+  ];
+  const matches = regions.flatMap(([currency, pattern]) => {
+    const match = source.match(pattern);
+    return match ? [{ currency, evidence: match[0] }] : [];
+  });
+  return matches.length === 1 ? matches[0] : null;
+}
+
 /** The user's default is a documented suggestion, never printed evidence. */
-export function applyReceiptDefaultCurrency<T extends ReceiptCurrencyDetails>(details: T, defaultCurrency: string): T {
+export function applyReceiptDefaultCurrency<T extends ReceiptCurrencyDetails>(details: T, defaultCurrency: string, receiptText = ""): T {
   const currency = details.currency?.trim().toUpperCase();
   const previousDefault = details.currency_resolution?.source === "user_default" &&
     details.currency_resolution.currency === currency;
   if (!previousDefault && currency && /^[A-Z]{3}$/.test(currency) && !["XXX", "MIXED"].includes(currency)) return details;
-  const resolved = normalizeDefaultCurrency(defaultCurrency);
+  const location = inferReceiptLocationCurrency([receiptText, details.parser_evidence.source_text].filter(Boolean).join("\n"));
+  const resolved = location?.currency ?? normalizeDefaultCurrency(defaultCurrency);
   return {
     ...details,
     currency: resolved,
     confidence_score: Math.min(details.confidence_score, details.confidence_score <= 1 ? .69 : 69),
-    currency_resolution: { source: "user_default", original: previousDefault ? details.currency_resolution?.original ?? null : details.currency, currency: resolved, requiresReview: true },
+    currency_resolution: { source: location ? "receipt_location" : "user_default", original: previousDefault ? details.currency_resolution?.original ?? null : details.currency, currency: resolved, requiresReview: true, ...(location ? { evidence: location.evidence } : {}) },
     parser_evidence: { ...details.parser_evidence,
-      reason: `${details.parser_evidence.reason.replace(/\s*Currency defaulted to [A-Z]{3} from the user's settings; editable in Transactions\./g, "")} Currency defaulted to ${resolved} from the user's settings; editable in Transactions.` },
+      reason: `${details.parser_evidence.reason.replace(/\s*Currency defaulted to [A-Z]{3} from the user's settings; editable in Transactions\./g, "")} ${location ? `Currency suggested as ${resolved} from printed location: ${location.evidence}; editable in Transactions.` : `Currency defaulted to ${resolved} from the user's settings; editable in Transactions.`}` },
   };
 }
 

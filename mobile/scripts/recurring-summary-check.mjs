@@ -8,3 +8,9 @@ assert.deepEqual(recurringSummaryAmounts(items.filter(i=>i.id==='owed'), rows, t
 assert.deepEqual(recurringSummaryAmounts([], rows, false), []);
 assert.deepEqual(recurringSummaryAmounts(items, [occurrence('bill',0)], false), [['PHP',0]]);
 console.log('Recurring summary checks passed: active items, receivables, currencies, missing and zero amounts.');
+
+const {tokenUsagePercent} = await import('../src/recorded-summary.ts');
+assert.equal(tokenUsagePercent({used:33300,limit:30000}), '100% used');
+assert.equal(tokenUsagePercent({used:300,limit:30000}), '1% used');
+assert.equal(tokenUsagePercent({used:1,limit:30000}), '<1% used');
+assert.equal(tokenUsagePercent({used:0,limit:null}), 'Unlimited');

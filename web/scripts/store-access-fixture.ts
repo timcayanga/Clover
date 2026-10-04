@@ -69,6 +69,14 @@ async function main() {
       /ownership/,
     );
   });
+  test("Only a freshly verified anonymous recovery alias can grant access", () => {
+    const data = sample(); data.subscriber.original_app_user_id = "$RCAnonymousID:recovered";
+    assert.throws(() => verifiedStoreAccess(data, config, now), /ownership/);
+    assert.throws(() => verifiedStoreAccess(data, {...config, verifiedRecoveryAlias:"$RCAnonymousID:other"}, now), /ownership/);
+    assert.ok(verifiedStoreAccess(data, {...config, verifiedRecoveryAlias:data.subscriber.original_app_user_id}, now).expiresAt);
+    data.subscriber.original_app_user_id = "user_other";
+    assert.throws(() => verifiedStoreAccess(data, {...config, verifiedRecoveryAlias:"user_other"}, now), /ownership/);
+  });
   test("Cancellation retains paid-through access; refunds remove it", () => {
     const data = sample();
     data.subscriber.subscriptions[config.products[0]].unsubscribe_detected_at =

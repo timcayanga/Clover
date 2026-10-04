@@ -43,7 +43,7 @@ export async function verifyRecoveryReceipt(signedTransaction: string, appUserId
   return fail("Apple could not verify this Clover purchase. Check the App Store account used for the purchase, then try again.");
 }
 
-async function subscriptionOwner(transactionId: string, environment: string) {
+export async function subscriptionOwner(transactionId: string, environment: string) {
   const result = await revenuecat(`subscriptions?store_subscription_identifier=${encodeURIComponent(transactionId)}`);
   const items = Array.isArray(result.items) ? result.items.map(record) : [];
   if (result.next_page || items.length !== 1) fail();

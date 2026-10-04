@@ -54,9 +54,12 @@ export async function syncStoreAccess(userId: string) {
   );
   if (!response.ok)
     throw new Error("Could not verify your store subscription. Please retry.");
-  const { refunded, ...state } = verifiedStoreAccess(await response.json(), {
+  const payload: unknown = await response.json();
+  const verifiedRecoveryAlias = await verifyRecoveredStoreAlias(payload, user.clerkUserId, user.environment);
+  const { refunded, ...state } = verifiedStoreAccess(payload, {
     ...config,
     appUserId: user.clerkUserId,
+    verifiedRecoveryAlias,
   });
   const lifecycle = await prisma.$transaction(async (tx) => {
     await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`store-access:${user.id}`}))`;
@@ -76,4 +79,24 @@ export async function syncStoreAccess(userId: string) {
   });
   if (lifecycle) void capturePostHogServerEvent(lifecycle.event, user.clerkUserId, { billing_provider: lifecycle.provider, plan_tier: lifecycle.tier, sandbox: lifecycle.sandbox }).catch(() => {});
   await refreshProAccess(userId);
+  return { verifiedRecoveryAlias };
+}
+
+/** RevenueCat can retain an anonymous original ID after a verified transfer.
+ * Never infer ownership from that alias: require our completed deletion audit
+ * and a fresh provider lookup for each subscription returned to this identity. */
+export async function verifyRecoveredStoreAlias(raw: unknown, appUserId: string, environment: string) {
+  const value = raw as { subscriber?: { original_app_user_id?: string; subscriptions?: Record<string, {store?: string; store_transaction_id?: string; is_sandbox?: boolean}> } };
+  const subscriber = value?.subscriber;
+  const original = subscriber?.original_app_user_id;
+  if (!original?.startsWith("$RCAnonymousID:")) return undefined;
+  const audit = await prisma.storePurchaseRecovery.findFirst({ where: { targetClerkUserId: appUserId, environment, completedAt: { not: null } }, select: { id: true } });
+  if (!audit) return undefined;
+  const subscriptions = Object.values(subscriber?.subscriptions ?? {});
+  if (!subscriptions.length) return undefined;
+  const { subscriptionOwner } = await import("./store-purchase-recovery");
+  if (subscriptions.some(s => s.store !== "app_store" || !s.store_transaction_id)) return undefined;
+  const owners = await Promise.all(subscriptions.map(s => subscriptionOwner(s.store_transaction_id!, s.is_sandbox ? "sandbox" : "production")));
+  if (owners.some(owner => owner !== appUserId)) return undefined;
+  return original;
 }

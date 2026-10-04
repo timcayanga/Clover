@@ -32,7 +32,7 @@ export const NAVIGATION_ICON_SOURCE_FILES = {
 export type NavigationIconName = keyof typeof NAVIGATION_ICON_SOURCE_FILES;
 
 export const getNavigationIconSrc = (name: NavigationIconName) =>
-  `${NAVIGATION_ICON_ASSET_ROOT}/${name}.webp`;
+  `${NAVIGATION_ICON_ASSET_ROOT}/${name === "adviser" ? "adviser-mascot-v2" : name}.webp`;
 
 // These are visible in the primary desktop or mobile navigation on first paint.
 export const CRITICAL_NAVIGATION_ICON_NAMES: NavigationIconName[] = [

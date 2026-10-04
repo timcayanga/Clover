@@ -9309,7 +9309,7 @@ const processImportFileTextImpl = async (
       trainedReceiptDetails = applyReceiptDefaultCurrency({ ...localDetails,
         confidence_score: Math.min(69, localDetails.confidence_score),
         parser_evidence: { ...localDetails.parser_evidence, reason: "Receipt read locally; review the suggested details against the original photo." },
-      }, defaultReceiptCurrency);
+      }, defaultReceiptCurrency, usableDeviceText ? deviceText!.text : text);
     }
   }
   if (!trainedReceiptDetails && fileType === "application/pdf" && text.trim()) {
@@ -11062,7 +11062,7 @@ const processImportFileTextImpl = async (
       })
     : null;
   if (receiptDetails && effectiveImportMode === "receipt") {
-    receiptDetails = applyReceiptDefaultCurrency(receiptDetails, defaultReceiptCurrency);
+    receiptDetails = applyReceiptDefaultCurrency(receiptDetails, defaultReceiptCurrency, textForParse);
   }
   const promotesNotesSplitBillToReceipt =
     effectiveImportMode === "notes" &&
@@ -11455,7 +11455,7 @@ const processImportFileTextImpl = async (
   // confirming its transaction.
   if (effectiveImportMode === "receipt" && openAiParsed?.receiptDetails) {
     receiptDetails = chooseBetterReceiptDetails(receiptDetails, openAiParsed.receiptDetails);
-    if (receiptDetails) receiptDetails = applyReceiptDefaultCurrency(receiptDetails, defaultReceiptCurrency);
+    if (receiptDetails) receiptDetails = applyReceiptDefaultCurrency(receiptDetails, defaultReceiptCurrency, textForParse);
     receiptAccountMatch = openAiParsed.receiptAccountMatch ?? receiptAccountMatch;
     openAiReceiptValidation = assessReceiptExtractionQuality({
       receiptDetails,
@@ -11475,7 +11475,7 @@ const processImportFileTextImpl = async (
       confidence_score: Math.min(35, partialDetails.confidence_score),
       parser_evidence: { ...partialDetails.parser_evidence,
         reason: "Incomplete receipt read locally; complete missing details against the original source." },
-    }, defaultReceiptCurrency);
+    }, defaultReceiptCurrency, usableDeviceText ? deviceText!.text : text);
     openAiReceiptValidation = assessReceiptExtractionQuality({
       receiptDetails,
       expectedCurrency: receiptDetails.currency,

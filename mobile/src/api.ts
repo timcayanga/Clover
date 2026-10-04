@@ -31,7 +31,7 @@ export async function apiRequest<T>(
       path.startsWith("split-bill-receipts/") ||
       path.startsWith("adviser/chat")
       ? 120000
-      : 25000,
+      : path.startsWith("billing/store") ? 60000 : 25000,
   );
   try {
     const url = new URL(`${apiBase()}/api/mobile/v1/${path}`);

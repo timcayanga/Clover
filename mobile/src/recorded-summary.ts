@@ -12,7 +12,7 @@ export function tokenUsagePercent(meter: { used: number; limit: number | null } 
   if (!meter) return "—";
   if (meter.limit === null) return "Unlimited";
   if (meter.limit <= 0) return "Not available";
-  const percent = Math.max(0, meter.used / meter.limit * 100);
+  const percent = Math.min(100, Math.max(0, Number.isFinite(meter.used) ? meter.used / meter.limit * 100 : 0));
   if (percent > 0 && percent < 1) return "<1% used";
   return `${Math.round(percent)}% used`;
 }

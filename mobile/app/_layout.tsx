@@ -273,11 +273,9 @@ function AuthenticatedApp() {
         router.push({ pathname: "/auth", params: { mode } });
       }}
       logout={async () => {
-        try {
-          await disconnectStoreAccount();
-        } finally {
-          await signOut();
-        }
+        // Billing cleanup is best effort; only an auth failure means sign-out failed.
+        await disconnectStoreAccount().catch(() => {});
+        await signOut();
       }}
     />
   );

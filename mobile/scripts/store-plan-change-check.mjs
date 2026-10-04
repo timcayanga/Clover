@@ -69,6 +69,13 @@ await assert.rejects(billing.purchaseStorePackage(statusFor(),target),/could not
 assert.equal(purchases.length,0);loginFailure=false;
 restoredInfo={...infoFor(),originalAppUserId:'user_other'};
 await assert.rejects(billing.restoreStorePurchases(statusFor()),/another Clover account/);
+restoredInfo={...infoFor(),originalAppUserId:'$RCAnonymousID:recovered'};
+await billing.restoreStorePurchases(statusFor()); // Server verification must follow; SDK grants nothing.
+info={...infoFor(),originalAppUserId:'$RCAnonymousID:recovered'};
+await assert.rejects(billing.purchaseStorePackage(statusFor(),target),/another Clover account/);
+await assert.rejects(billing.purchaseStorePackage(statusFor(),target,async()=>({...statusFor(),verifiedRecoveryAlias:'$RCAnonymousID:wrong'})),/another Clover account/);
+await billing.purchaseStorePackage(statusFor(),target,async()=>({...statusFor(),verifiedRecoveryAlias:'$RCAnonymousID:recovered'}));
+info=infoFor();
 restoredInfo=infoFor();await billing.restoreStorePurchases(statusFor());
 await billing.disconnectStoreAccount();assert.match(sdkUser,/Anonymous/);
 const tick=()=>new Promise(resolve=>setImmediate(resolve));

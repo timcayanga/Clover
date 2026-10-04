@@ -16,13 +16,13 @@ export function isStoreOwnershipConflict(error: unknown) {
   const code = error && typeof error === 'object' && 'code' in error ? String(error.code) : '';
   return error instanceof StoreOwnershipError || ['7', '13'].includes(code);
 }
-export function assertStoreOwner(info: Pick<CustomerInfo, 'originalAppUserId'>, appUserId: string) {
-  if (info.originalAppUserId !== appUserId) throw new StoreOwnershipError(STORE_OWNERSHIP_MESSAGE);
+export function assertStoreOwner(info: Pick<CustomerInfo, 'originalAppUserId'>, appUserId: string, verifiedRecoveryAlias?: string) {
+  if (info.originalAppUserId !== appUserId && !(verifiedRecoveryAlias?.startsWith('$RCAnonymousID:') && info.originalAppUserId === verifiedRecoveryAlias)) throw new StoreOwnershipError(STORE_OWNERSHIP_MESSAGE);
 }
 
 /** SDK data selects the existing purchase to replace; it never grants access. */
-export function currentStoreProduct(info: CustomerInfo, appUserId: string) {
-  assertStoreOwner(info, appUserId);
+export function currentStoreProduct(info: CustomerInfo, appUserId: string, verifiedRecoveryAlias?: string) {
+  assertStoreOwner(info, appUserId, verifiedRecoveryAlias);
   const requested = Date.parse(info.requestDate);
   if (!Number.isFinite(requested) || Math.abs(Date.now() - requested) > 10 * 60000)
     throw new StoreActionError('Store details are out of date. Refresh plan status before changing plans.');

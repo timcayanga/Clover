@@ -7,6 +7,7 @@ import Purchases, { type PurchasesPackage } from "react-native-purchases";
 import { assertStoreOwner, currentStoreProduct, googleReplacement, StoreActionError, type PurchaseIntent } from './store-change-policy';
 export type StoreStatus = {
   available: boolean;
+  verifiedRecoveryAlias?: string;
   purchaseRecoveryAvailable?: boolean;
   appUserId: string;
   entitlementId: string;
@@ -74,6 +75,7 @@ export function loadStorePackages(status: StoreStatus) {
 export function purchaseStorePackage(
   status: StoreStatus,
   item: PurchasesPackage,
+  verifyOwner?: () => Promise<StoreStatus>,
 ) {
   return exclusive(async () => {
     await identify(status);
@@ -81,7 +83,17 @@ export function purchaseStorePackage(
       throw new StoreActionError("This product is unavailable. Refresh the available plans and try again.");
     const target = STORE_PACKAGES.find(p => p.identifier === item.identifier)!;
     await Purchases.invalidateCustomerInfoCache();
-    const current = currentStoreProduct(await Purchases.getCustomerInfo(), status.appUserId);
+    const info = await Purchases.getCustomerInfo();
+    // Historical anonymous identities require fresh server proof before checkout.
+    // The server checks the deletion audit and RevenueCat transaction ownership.
+    let verifiedRecoveryAlias: string | undefined;
+    if (info.originalAppUserId.startsWith('$RCAnonymousID:') && verifyOwner) {
+      const verified = await verifyOwner();
+      if (verified.appUserId !== status.appUserId) throw new StoreActionError('Refresh your Clover session before purchasing.');
+      verifiedRecoveryAlias = verified.verifiedRecoveryAlias;
+      status = verified;
+    }
+    const current = currentStoreProduct(info, status.appUserId, verifiedRecoveryAlias);
     const paid = status.hasPaidSubscription === true || (status.hasPaidSubscription !== false && status.planTier !== 'free');
     let change: ReturnType<typeof googleReplacement> | null = null;
     if (current || paid) {
@@ -121,7 +133,9 @@ export function restoreStorePurchases(status: StoreStatus) {
   return exclusive(async () => {
     await identify(status);
     const info = await trackOperation("store_restore", () => Purchases.restorePurchases(), { phase: "store_confirmation" });
-    assertStoreOwner(info, status.appUserId);
+    // Restore itself cannot grant access. Anonymous historical IDs must reach
+    // the server verification step instead of being rejected on the device.
+    if (!info.originalAppUserId.startsWith('$RCAnonymousID:')) assertStoreOwner(info, status.appUserId);
     await Purchases.invalidateCustomerInfoCache().catch(() => {});
   });
 }
@@ -138,8 +152,8 @@ export function manageAppleStoreSubscription(status: StoreStatus) {
 }
 export function disconnectStoreAccount() {
   return exclusive(async () => {
-    if (account && (await Purchases.isConfigured())) await Purchases.logOut();
-    account = null;
+    try { if (account && (await Purchases.isConfigured())) await Purchases.logOut(); }
+    finally { account = null; }
   });
 }
 export function storeManagementUrl() {
