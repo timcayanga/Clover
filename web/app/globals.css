@@ -24805,7 +24805,8 @@ body[data-clover-page-modal] .modal-card {
   font-weight: 600;
 }
 .import-upload-dock__step > span { min-width: 0; }
-.import-upload-dock__controls { display: flex; flex-shrink: 0; gap: 2px; }
+.import-upload-dock__controls { display: flex; align-items: center; flex-shrink: 0; gap: 2px; }
+.import-upload-dock__percent { margin-right: 6px; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .import-upload-dock__icon {
   pointer-events: auto;
   display: grid;
@@ -66609,7 +66610,7 @@ input.transaction-inline-edit[aria-invalid="true"] { box-shadow: inset 0 -1px va
   .content.content--transactions .content-body { padding-left: 0 !important; padding-right: 0 !important; }
   .content.content--transactions .transactions-main-panel { padding-left: 0; padding-right: 0; overflow: visible; }
   .content.content--transactions .content-body .transaction-selection-toolbar--compact { position: sticky !important; top: 64px; z-index: 35; height: 54px; min-height: 54px; margin: 0; padding: 8px 12px; background: var(--surface, #fff); box-sizing: border-box; }
-  .content.content--transactions .transaction-selection-toolbar input[type="search"] { height: 38px !important; min-height: 38px !important; font-size: 13px; }
+  .content.content--transactions .transaction-selection-toolbar input[type="search"] { height: 38px !important; min-height: 38px !important; font-size: 13px; line-height: 20px; padding-block: 8px !important; }
   .content.content--transactions .transaction-selection-toolbar__filter { flex-basis: 38px; width: 38px; min-width: 38px; height: 38px !important; min-height: 38px !important; }
   .content--transactions .transactions-mobile-simple-row { border-radius: 0; padding-left: 12px; padding-right: 12px; }
   .content--transactions .transactions-mobile-simple-row__meta { display: flex; align-items: center; gap: 5px; min-width: 0; }

@@ -2,7 +2,7 @@ import { matchesStorePackage, STORE_OFFERING_ID, STORE_PACKAGES } from "../../sh
 import { trackOperation } from "../../shared/analytics";
 import { Platform } from "react-native";
 import Purchases, { type PurchasesPackage } from "react-native-purchases";
-import { currentStoreProduct, googleReplacement, StoreActionError, type PurchaseIntent } from './store-change-policy';
+import { assertStoreOwner, currentStoreProduct, googleReplacement, StoreActionError, type PurchaseIntent } from './store-change-policy';
 export type StoreStatus = {
   available: boolean;
   appUserId: string;
@@ -49,8 +49,13 @@ async function identify(status: StoreStatus) {
     throw new Error("Store purchases are not configured yet.");
   if (!(await Purchases.isConfigured()))
     Purchases.configure({ apiKey: apiKey()!, appUserID: status.appUserId });
-  else if (account !== status.appUserId)
+  else if ((await Purchases.getAppUserID()) !== status.appUserId)
     await Purchases.logIn(status.appUserId);
+  // Never trust only our JS cache after app reloads or a failed account switch.
+  // All SDK actions share this queue, including logout, so identity cannot be
+  // changed by another Clover billing operation during checkout or restore.
+  if ((await Purchases.getAppUserID()) !== status.appUserId)
+    throw new StoreActionError("Your store session could not be switched to this Clover account. Sign out and sign in again before purchasing.");
   account = status.appUserId;
 }
 export function loadStorePackages(status: StoreStatus) {
@@ -112,7 +117,9 @@ export function googleStoreManagementUrl(status: StoreStatus) {
 export function restoreStorePurchases(status: StoreStatus) {
   return exclusive(async () => {
     await identify(status);
-    await trackOperation("store_restore", () => Purchases.restorePurchases(), { phase: "store_confirmation" });
+    const info = await trackOperation("store_restore", () => Purchases.restorePurchases(), { phase: "store_confirmation" });
+    assertStoreOwner(info, status.appUserId);
+    await Purchases.invalidateCustomerInfoCache().catch(() => {});
   });
 }
 /** Present StoreKit in the current app environment, including TestFlight's sandbox. */

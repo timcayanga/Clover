@@ -13,9 +13,10 @@ const active = renderToStaticMarkup(<ImportUploadDock {...base}/>);
 assert.match(active, /Reading file/);
 assert.match(active, /aria-label="Pause import"/);
 assert.match(active, /aria-label="Cancel import"/);
-assert.doesNotMatch(active, /private-receipt|keep using|>45%<|import-progress-donut/);
+assert.doesNotMatch(active, /private-receipt|keep using|import-progress-donut/);
 assert.equal((active.match(/role="progressbar"/g) || []).length, 1);
 assert.match(active, /aria-valuenow="45"/);
+assert.match(active, />45%<|>45<!-- -->%<|>45%/);
 const paused = renderToStaticMarkup(<ImportUploadDock {...base} paused/>);
 assert.match(paused, /Import paused/);
 assert.match(paused, /aria-label="Resume import"/);
@@ -36,7 +37,7 @@ assert.equal(getImportStageLabel("Import paused", 90), "Import paused");
 assert.equal(getImportStageLabel("Waiting for connection", 90), "Waiting for connection");
 assert.equal(getImportStageLabel("Reading receipt details", 80), "Reading file");
 assert.equal(getImportStageLabel("Retrying save", 90), "Retrying save");
-console.log("Compact import progress renders only its stage and one bar; pause, resume, cancellation and completion semantics pass.");
+console.log("Compact import progress renders its stage, percentage and one bar; pause, resume, cancellation and completion semantics pass.");
 
 const preview: ReceiptDraftPreview = {
   importId: "partial", canEdit: true, transactionId: null,

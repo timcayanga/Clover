@@ -343,7 +343,7 @@ export function ManualTransaction({
       />
       <Field
         label={`Amount (${draft.currency})`}
-        style={{ fontSize: 28, lineHeight: 42, fontFamily: "Poppins-SemiBold", minHeight: 80, paddingVertical: 16, textAlignVertical: "center", includeFontPadding: true }}
+        style={{ fontSize: 28, lineHeight: 42, fontFamily: "Poppins-SemiBold", minHeight: 80, paddingVertical: 16, textAlignVertical: "center", includeFontPadding: false }}
         value={draft.amount}
         onChangeText={(amount) => change({ amount })}
         keyboardType="decimal-pad"
@@ -443,7 +443,7 @@ export function ManualTransaction({
           <Body muted={false}>Transaction {index + 2} · review before confirming</Body>
           <Field label="What was it for?" value={row.merchant} onChangeText={merchant => update({ merchant })} maxLength={200} />
           <Field label={`Amount (${row.currency})`} value={row.amount} onChangeText={amount => update({ amount })} keyboardType="decimal-pad" />
-          <ChoiceField label="Account" value={row.accountId} options={availableAccounts.map(account => ({ value: account.id, label: `${account.name} · ${account.currency}` }))} onChange={accountId => update({ accountId, currency: availableAccounts.find(account => account.id === accountId)?.currency ?? row.currency })} />
+          <ChoiceField label="Account" value={row.accountId} options={availableAccounts.map(account => ({ value: account.id, label: `${account.name} · ${account.currency}`, icon: <AccountBrandLogo account={{ ...account, type: account.type ?? "bank", institution: account.institution ?? null }} size={24}/> }))} onChange={accountId => update({ accountId, currency: availableAccounts.find(account => account.id === accountId)?.currency ?? row.currency })} />
           <ChoiceField label="Category" value={row.categoryId} options={[{ value: "", label: "Uncategorized" }, ...(options?.categories ?? []).filter(category => category.type === row.type).map(category => ({ value: category.id, label: category.name }))]} onChange={categoryId => update({ categoryId })} />
           <Field label="Date" value={row.date} onChangeText={date => update({ date })} maxLength={10} />
           {row.lines.length ? <Body>Receipt items: {row.lines.map(line => `${line.description} (${line.quantity} × ${line.unitPrice})`).join(", ")}</Body> : null}

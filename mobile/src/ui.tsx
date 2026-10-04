@@ -320,6 +320,7 @@ export function Field({
           {...props}
           style={[
             styles.input,
+            props.multiline ? { textAlignVertical: "top" } : undefined,
             trailing ? { paddingRight: 56 } : undefined,
             props.style,
           ]}
@@ -890,8 +891,12 @@ const makeStyles = (colors: typeof lightColors) =>
     },
     input: {
       fontFamily: "Poppins-Regular",
-      padding: 12,
-      minHeight: 44,
+      paddingHorizontal: 12,
+      paddingVertical: 10,
+      minHeight: 48,
+      textAlignVertical: "center",
+      includeFontPadding: false,
+      lineHeight: 20,
       borderWidth: 1,
       borderColor: colors.line,
       borderRadius: 16,

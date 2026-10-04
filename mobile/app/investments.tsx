@@ -3,7 +3,7 @@ import { useLiveInvestmentValues } from "../src/use-live-investment-values";
 import { CloverEmptyState } from "../src/clover-mascot";
 import { DropdownFilter } from "../src/transaction-filters";
 import { recordedSummary } from "../src/recorded-summary";
-import { registerScreenRefresh } from "../src/screen-refresh";
+import { createScreenDataLoader, registerScreenRefresh } from "../src/screen-refresh";
 import { EntryOverlay } from "../src/entry-overlay";
 import { Text } from "../src/app-text";
 import { LinearGradient } from "expo-linear-gradient";
@@ -512,22 +512,15 @@ function NativeMarkets({ accounts }: { accounts: AccountRecord[] }) {
     setLoading(true);
     setError("");
     setHistory(null);
-    const refresh = () => (
-      session.demo
-        ? Promise.resolve({ points: [] })
-        : session.request<typeof history>(
-            `market-history?workspaceId=${encodeURIComponent(session.profileId)}&symbol=${encodeURIComponent(symbol)}&market=${market}&range=${range}`,
-          )
-    )
-      .then((r) => {
-        if (active) setHistory(r);
-      })
-      .catch((e) => {
-        if (active) setError(e.message);
-      })
-      .finally(() => {
-        if (active) setLoading(false);
-      });
+    const refresh = createScreenDataLoader<typeof history>({
+      load: () => session.demo ? Promise.resolve({ points: [] }) : session.request<typeof history>(
+        `market-history?workspaceId=${encodeURIComponent(session.profileId)}&symbol=${encodeURIComponent(symbol)}&market=${market}&range=${range}`,
+      ),
+      active: () => active,
+      apply: result => { setHistory(result); setError(""); },
+      error: e => setError((e as Error).message),
+      settled: () => setLoading(false),
+    });
     void refresh();
     const unregister = registerScreenRefresh("/investments", refresh);
     return () => {

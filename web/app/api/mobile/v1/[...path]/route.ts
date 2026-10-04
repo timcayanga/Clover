@@ -1,3 +1,4 @@
+import { mobileAccountOption } from "@/lib/mobile-account-option";
 import { normalizeRegionalPreferences } from "@/lib/regional-preferences";
 import { resolveReportCurrency } from "@/lib/report-currency";
 import { PlanQuotaError } from "@/lib/plan-quota";
@@ -500,11 +501,11 @@ async function handle(
     if (operation === "options") {
       const filtering = url.searchParams.get("context") === "filters";
       const [accounts, categories, tags] = await Promise.all([
-        prisma.account.findMany({ where: { workspaceId, ...(filtering ? {} : { type: { not: "investment" as const } }) }, select: { id: true, name: true, currency: true, institution: true, type: true, _count: { select: { transactions: { where: { deletedAt: null } } } } }, orderBy: { name: "asc" } }),
+        prisma.account.findMany({ where: { workspaceId, ...(filtering ? {} : { type: { not: "investment" as const } }) }, select: { id: true, name: true, currency: true, institution: true, type: true, logoUrl: true, _count: { select: { transactions: { where: { deletedAt: null } } } } }, orderBy: { name: "asc" } }),
         prisma.category.findMany({ where: { workspaceId, ...(filtering ? {} : { isArchived: false }) }, select: { id: true, name: true, type: true }, orderBy: { name: "asc" } }),
         prisma.tag.findMany({ where: { workspaceId }, select: { id: true, name: true }, orderBy: { name: "asc" } }),
       ]);
-      return reply({ accounts: accounts.map(({ _count, ...account }) => ({ ...account, transactionCount: _count.transactions })), categories, tags });
+      return reply({ accounts: accounts.map(mobileAccountOption), categories, tags });
     }
     if (operation === "recurring") {
       const now = new Date();

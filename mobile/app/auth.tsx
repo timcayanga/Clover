@@ -1,5 +1,5 @@
 import { beginTelemetry } from "../../shared/analytics";
-import { useState, useRef } from "react";
+import { useEffect, useState, useRef } from "react";
 import { Alert, Image, KeyboardAvoidingView, Platform, Pressable, Switch, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { router, useLocalSearchParams } from "expo-router";
@@ -9,6 +9,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { useSSO } from "@clerk/expo/experimental";
 import { AuthVerification } from "../src/auth-verification";
 import { useAccess } from "../src/access";
+import { useSession } from "../src/session";
 import { setRememberSession } from "../src/auth-token-cache";
 import { Body, Button, Card, Field, Heading, Icon, Notice, Screen, useTheme } from "../src/ui";
 import { Text } from "../src/app-text";
@@ -35,10 +36,14 @@ export default function Authentication() {
   );
 }
 function AuthForm() {
-  const { welcomeAllowed } = useAccess();
+  const { active, welcomeAllowed, beginAuthEntry } = useAccess();
+  const session = useSession();
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
   const params = useLocalSearchParams<{ mode?: string; restartSSO?: string }>();
+  useEffect(() => {
+    if (!active) beginAuthEntry(params.mode === "sign-up" ? "sign-up" : "sign-in");
+  }, [active, beginAuthEntry, params.mode]);
   const { signIn } = useSignIn();
   const { signUp } = useSignUp();
   const { startSSOFlow } = useSSO();
@@ -65,7 +70,7 @@ function AuthForm() {
     if (error) throw error;
   };
   const run = async (action: () => Promise<void>) => {
-    if (pending.current) return;
+    if (pending.current || active) return;
     pending.current = true;
     setBusy(true);
     setError("");
@@ -216,6 +221,15 @@ function AuthForm() {
             resizeMode="contain"
           />
           <Heading>{title}</Heading>
+          {active && session.error ? <>
+            <Notice>{session.error}</Notice>
+            <Button title="Try again" disabled={busy} onPress={session.refresh} />
+            <Button title="Sign out" secondary disabled={busy} onPress={() => {
+              setBusy(true);
+              void session.signOut().catch(() => setError("Unable to sign out. Please try again.")).finally(() => setBusy(false));
+            }} />
+          </> : null}
+          {!active ? <>
           {initial || step === "reset" ? (
             <Field
               label="Email address"
@@ -417,6 +431,7 @@ function AuthForm() {
               }}
             />
           )}
+          </> : null}
           {error ? <Notice>{error}</Notice> : null}
           {message ? <Body>{message}</Body> : null}
         </Card>

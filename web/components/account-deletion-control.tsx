@@ -26,7 +26,7 @@ export function AccountDeletionControl() {
     const response = await fetch("/api/account/delete", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ appleSubscriptionAcknowledged: acknowledged }) });
     const data = await response.json();
     if (!response.ok) throw new Error(data.error);
-    window.location.assign("/");
+    window.location.assign("/account-deleted");
   });
   return <>
     <p>Permanently delete your Clover account. This cannot be undone.</p>

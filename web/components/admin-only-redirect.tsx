@@ -13,6 +13,7 @@ const publicRoutePrefixes = [
   "/terms-of-service",
   "/sign-in",
   "/sign-up",
+  "/account-deleted",
   "/sso-callback",
 ];
 

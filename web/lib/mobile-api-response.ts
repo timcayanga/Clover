@@ -4,6 +4,7 @@ import { parseAdviserChart } from "../../shared/adviser-chart";
 import { parseReceiptLineItemsFromPayload } from "./receipt-line-items";
 import { entryDraftSchema } from "./adviser-entry-schema";
 import { projectAdviserDeviceContext } from "./adviser-device-context";
+import { getTransactionReviewReasons } from "./transaction-review-reasons";
 import { getRecordedTransactionConfidence } from "./transaction-confidence";
 import { getTransactionUserNoteValue, getTransactionParsedNoteValue } from "./transaction-notes";
 
@@ -46,6 +47,11 @@ const transactionFields = [
   "description",
   "tags",
 ];
+const transactionReview = (value: unknown) => {
+  const row = record(value);
+  // Project only actionable review labels; source payloads stay on the server.
+  return { reviewReasons: getTransactionReviewReasons(row), confidenceScore: getRecordedTransactionConfidence(row) };
+};
 const rows = (value: unknown, fields: string[]) => Array.isArray(value) ? value.map(row => pick(row, fields)) : [];
 const circleSummary = (value: unknown) => {
   const circle = record(value);
@@ -121,13 +127,13 @@ export function mobileApiResponse(operation: string, value: unknown) {
       ...pick(data, ["page", "totalCount"]),
       ...(data.summary ? { summary: pick(data.summary,["currencyTotals"]) } : {}),
       transactions: Array.isArray(data.transactions)
-        ? data.transactions.map((row) => ({ ...pick(row, transactionFields), ...lastFour(row) }))
+        ? data.transactions.map((row) => ({ ...pick(row, transactionFields), ...lastFour(row), ...transactionReview(row) }))
         : [],
     };
   if (operation === "transaction") {
     const row = record(data.transaction);
     return {
-      transaction: { ...pick(row, transactionFields), splitBill: row.splitBill ? pick(row.splitBill, ["id", "title"]) : null, confidenceScore: getRecordedTransactionConfidence(row), receiptLineItems: parseReceiptLineItemsFromPayload(row.rawPayload,row.normalizedPayload), userNote: getTransactionUserNoteValue(row), parsedNote: getTransactionParsedNoteValue(row), source: row.source },
+      transaction: { ...pick(row, transactionFields), ...transactionReview(row), splitBill: row.splitBill ? pick(row.splitBill, ["id", "title"]) : null, receiptLineItems: parseReceiptLineItemsFromPayload(row.rawPayload,row.normalizedPayload), userNote: getTransactionUserNoteValue(row), parsedNote: getTransactionParsedNoteValue(row), source: row.source },
       accounts: Array.isArray(data.accounts) ? data.accounts.map(row => pick(row, ["id", "name", "institution", "currency", "type"])) : [],
       categories: Array.isArray(data.categories) ? data.categories.map(row => pick(row, ["id", "name", "type"])) : [],
     };
@@ -177,6 +183,7 @@ export function mobileApiResponse(operation: string, value: unknown) {
       ]),
       ...pick(data, [
         "visibleImportComplete",
+        "settledImportComplete",
         "confirmedTransactionsCount",
         "parsedRowsCount",
       ]),

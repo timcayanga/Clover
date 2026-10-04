@@ -1,4 +1,4 @@
-import { isPurchaseCancelled, purchaseFeedback, purchaseVerified, purchaseNeedsVerification, storeErrorMessage, type PurchaseIntent } from './store-change-policy';
+import { isStoreOwnershipConflict, STORE_OWNERSHIP_MESSAGE, isPurchaseCancelled, purchaseFeedback, purchaseVerified, purchaseNeedsVerification, storeErrorMessage, type PurchaseIntent } from './store-change-policy';
 import { planManagement, storePriceLabel, storeVerificationMessage } from "./store-presentation";
 import { tokenUsagePercent } from "./recorded-summary";
 import { RETENTION_MESSAGE, DOWNGRADE_MESSAGE, type RetentionSnapshot } from "../../shared/plan-retention";
@@ -39,6 +39,7 @@ export function SettingsPlan() {
   const [period, setPeriod] = useState<"P1M" | "P1Y">("P1M");
   const [packages, setPackages] = useState<PurchasesPackage[]>([]);
   const [verificationPending, setVerificationPending] = useState(false);
+  const [ownershipConflict, setOwnershipConflict] = useState(false);
   const [busy, setBusy] = useState(false);
   const [loading, setLoading] = useState(true);
   const locked = useRef(false);
@@ -56,6 +57,9 @@ export function SettingsPlan() {
   useEffect(() => {
     let active = true;
     if (session.demo) { setLoading(false); return; }
+    setOwnershipConflict(false);
+    setVerificationPending(false);
+    purchaseIntent.current = null;
     setLoading(true);
     void session
       .request<StoreStatus>("billing/store")
@@ -100,12 +104,15 @@ export function SettingsPlan() {
       );
       if (!mounted.current) return;
       setStatus(next);
+      // A successful server refresh can still be Free because the receipt is
+      // owned elsewhere. Only a successful explicit restore resolves that issue.
+      if (restoring) setOwnershipConflict(false);
       const intentToVerify = purchaseIntent.current;
       const pending = Boolean(intentToVerify?.effect === 'immediate' && !purchaseVerified(next, intentToVerify));
       setVerificationPending(pending);
       session.refresh();
       if (restoring) telemetry("billing_restored", { plan_tier: next.planTier, verified_access: next.planTier !== "free" });
-      setMessage(intentToVerify ? purchaseFeedback(next, intentToVerify) : storeVerificationMessage(next.planTier, silent ? "silent" : restoring ? "restore" : run ? "purchase" : "refresh"));
+      setMessage(ownershipConflict && !restoring ? "" : intentToVerify ? purchaseFeedback(next, intentToVerify) : storeVerificationMessage(next.planTier, silent ? "silent" : restoring ? "restore" : run ? "purchase" : "refresh"));
       if (intentToVerify && purchaseVerified(next, intentToVerify)) purchaseIntent.current = null;
       // Refresh also retries a failed initial offering load, without repeating a purchase.
       if (!run && canUseStore(next)) {
@@ -116,9 +123,15 @@ export function SettingsPlan() {
       if (mounted.current) {
         // A canceled/failed confirmation must not permanently disable the cards.
         // Every retry checks fresh store ownership before opening another purchase.
-        setVerificationPending(Boolean(purchaseIntent.current?.effect === 'immediate') || Boolean(run && purchaseNeedsVerification(e)));
-        if (!silent && !isPurchaseCancelled(e))
-          setError(run ? storeErrorMessage(e) : 'Unable to refresh plan status. Please try again.');
+        if (isStoreOwnershipConflict(e)) {
+          setOwnershipConflict(true);
+          purchaseIntent.current = null;
+          setVerificationPending(false);
+        } else {
+          setVerificationPending(Boolean(purchaseIntent.current?.effect === 'immediate') || Boolean(run && purchaseNeedsVerification(e)));
+          if (!silent && !isPurchaseCancelled(e))
+            setError(run ? storeErrorMessage(e) : 'Unable to refresh plan status. Please try again.');
+        }
       }
     } finally {
       locked.current = false;
@@ -173,7 +186,7 @@ export function SettingsPlan() {
     ] : [{ text: 'OK', onPress: close }], { cancelable: true, onDismiss: close });
   };
   const switchPlan = (tier: "free" | "pro" | "premium") => {
-    if (busy || loading || locked.current || dialogOpen.current || session.demo) return;
+    if (busy || loading || ownershipConflict || locked.current || dialogOpen.current || session.demo) return;
     setMessage(''); setError('');
     if (!status) { setError('Plan details are still loading. Please try again.'); return; }
     const paid = status.hasPaidSubscription === true || (status.hasPaidSubscription !== false && status.planTier !== 'free');
@@ -230,7 +243,7 @@ export function SettingsPlan() {
           </View>
           <View style={{ padding: 20, gap: 14 }}>
             {[`${plan.profiles} profiles · ${plan.accounts} non-cash accounts`, `${plan.linkedBanks} linked bank accounts`, `${plan.budgets} budgets · ${plan.goals} goals · ${plan.circles} Circles`, `${plan.monthlyTokens.toLocaleString()} Clover tokens monthly`, `${plan.dailyTokens.toLocaleString()} tokens per rolling 24 hours`, tier === "free" ? "Basic Ask Clover and Reports" : "Advanced Ask Clover and Reports"].map(feature => <Text key={feature} style={{color: "#153b42", fontSize: 13, lineHeight: 21}}>✓  {feature}</Text>)}
-            {access?.planTier !== tier || (tier !== "free" && status?.hasPaidSubscription === true) ? <Text accessibilityRole="button" accessibilityState={{ disabled: busy || loading || verificationPending || session.demo }} disabled={busy || loading || verificationPending || session.demo} onPress={() => switchPlan(tier)} style={{ color: "#153b42", paddingVertical: 8, fontFamily: "Poppins-SemiBold" }}>{access?.planTier === tier ? "Change billing period" : `Switch to ${plan.name}`} →</Text> : null}
+            {access?.planTier !== tier || (tier !== "free" && status?.hasPaidSubscription === true) ? <Text accessibilityRole="button" accessibilityState={{ disabled: busy || loading || verificationPending || ownershipConflict || session.demo }} disabled={busy || loading || verificationPending || ownershipConflict || session.demo} onPress={() => switchPlan(tier)} style={{ color: "#153b42", paddingVertical: 8, fontFamily: "Poppins-SemiBold" }}>{access?.planTier === tier ? "Change billing period" : `Switch to ${plan.name}`} →</Text> : null}
           </View>
         </PlanCardSurface>;
       })}
@@ -241,6 +254,10 @@ export function SettingsPlan() {
       {status && canUseStore(status) ? <Text accessibilityRole="button" disabled={busy || loading} onPress={() => void act(() => restoreStorePurchases(status), true)} style={{ color: colors.teal }}>Restore purchases</Text> : null}
       <Text accessibilityRole="button" disabled={busy || loading || session.demo} onPress={() => void act()} style={{ color: colors.teal }}>Refresh plan status</Text>
     </View>
+    {ownershipConflict ? <Card>
+      <Notice>{STORE_OWNERSHIP_MESSAGE}</Notice>
+      <Text accessibilityRole="link" style={{ color: colors.teal }} onPress={() => void WebBrowser.openBrowserAsync("https://clover.ph/contact-us").catch(() => setError("Visit clover.ph/contact-us for help with your purchase."))}>Contact Clover support</Text>
+    </Card> : null}
     {message ? <Body>{message}</Body> : null}
     {error ? <Notice>{error}</Notice> : null}
     <SettingsReferrals />

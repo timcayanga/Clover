@@ -10,12 +10,38 @@ import {
 import { getAccountBrand } from "@/lib/account-brand";
 import { ADDITIONAL_BANK_LOGOS, findAdditionalBankLogo } from "@/lib/bank-logo-catalog";
 import { getInstitutionSuggestionGroups } from "@/lib/institution-suggestions";
+import { suggestAccountInstitution, suggestedDraftInstitution } from "../../shared/account-institution";
+import { mobileAccountOption } from "@/lib/mobile-account-option";
 import { createHash } from "node:crypto";
 import sharp from "sharp";
 
 const read = (relativePath: string) => fs.readFileSync(path.join(process.cwd(), relativePath), "utf8");
 
 const main = async () => {
+  for (const name of ["BPI", "BPI Personal 1234", "my BPI savings", "Bank of the Philippine Islands 1234"]) {
+    const hint = suggestAccountInstitution(name);
+    assert.equal(hint?.institution, "BPI", `Account nickname should identify BPI: ${name}`);
+    assert.ok(hint!.confidence >= 95);
+  }
+  assert.equal(suggestAccountInstitution("BPI Trade Personal", "bank")?.institution, "BPI Trade", "Specific provider wins over parent-bank substring.");
+  assert.equal(suggestAccountInstitution("BPI and BDO savings"), null, "Conflicting providers require a user choice.");
+  assert.equal(suggestAccountInstitution("Happiness fund"), null);
+  assert.equal(suggestAccountInstitution("BPI", "investment"), null, "Stock issuer must not become broker.");
+  assert.equal(suggestAccountInstitution("BPI", "cash"), null);
+  const draft = { name: "BDO Personal", type: "bank", currentInstitution: "BPI", previousSuggestion: "BPI", editedByUser: false, existingAccount: false };
+  assert.equal(suggestedDraftInstitution(draft), "BDO", "Changing nickname updates an automatic suggestion.");
+  assert.equal(suggestedDraftInstitution({ ...draft, name: "Holiday fund" }), "", "Unrecognized renamed drafts clear stale suggestions.");
+  assert.equal(suggestedDraftInstitution({ ...draft, editedByUser: true }), "BPI", "Explicit institution choice survives nickname edits.");
+  assert.equal(suggestedDraftInstitution({ ...draft, currentInstitution: "", editedByUser: true }), "", "Clearing an institution is also a deliberate choice.");
+  assert.equal(suggestedDraftInstitution({ ...draft, existingAccount: true }), "BPI", "Existing accounts never change implicitly.");
+  assert.equal(suggestedDraftInstitution({ ...draft, currentInstitution: "Custom provider" }), "Custom provider");
+  const pickerAccount = { id: "bpi", name: "BPI Personal 1234", institution: "BPI", currency: "PHP", type: "bank", _count: { transactions: 3 }, accountNumber: "private" };
+  const pickerOption = mobileAccountOption(pickerAccount);
+  assert.equal(pickerOption.brandLogoUrl, getAccountBrand(pickerAccount).logoSrc);
+  assert.ok(pickerOption.brandLogoUrl?.includes("bpi"));
+  assert.equal(pickerOption.transactionCount, 3);
+  assert.ok(!JSON.stringify(pickerOption).includes("private"), "Picker projection cannot expose full account numbers.");
+  assert.equal(mobileAccountOption({ ...pickerAccount, logoUrl: "/assets/banks/philippines/gotyme.png" }).brandLogoUrl, "/assets/banks/philippines/gotyme.png", "Picker retains a saved logo override.");
   assert.equal(GENERIC_ACCOUNT_LOGO_OPTIONS.length, 6, "The picker must keep the complete generic account-logo set.");
   assert.ok(INSTITUTION_ACCOUNT_LOGO_OPTIONS.length >= 70, "The picker must expose the full bundled institution-logo library.");
   assert.equal(new Set(ACCOUNT_LOGO_OPTIONS.map((option) => option.id)).size, ACCOUNT_LOGO_OPTIONS.length);

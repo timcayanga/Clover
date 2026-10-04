@@ -27,6 +27,7 @@ export type Transaction = {
   categoryId?: string | null;
   confidenceScore?: number | null;
   reviewStatus: string | null;
+  reviewReasons?: string[];
   tags?: { id: string; name: string }[];
 };
 export type TransactionPage = {
@@ -72,6 +73,7 @@ export type ImportStatus = {
     processingPhase?: string;
   };
   visibleImportComplete?: boolean;
+  settledImportComplete?: boolean;
   confirmedTransactionsCount?: number;
   parsedRowsCount?: number;
 };

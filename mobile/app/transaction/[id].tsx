@@ -1,3 +1,4 @@
+import { transactionReviewReasons } from "../../src/transaction-review";
 import { InlineDetailRow } from "../../src/inline-detail-row";
 import { TransactionRelatedActions } from "../../src/transaction-related-actions";
 import { Text } from "../../src/app-text";
@@ -106,6 +107,7 @@ export default function TransactionDetail() {
     reload,
     access.active,
   ]);
+  const reviewReasons = row ? transactionReviewReasons(row) : [];
   if (!access.active) return null;
   const save = async () => {
     if (!row || busy) return;
@@ -267,6 +269,11 @@ export default function TransactionDetail() {
                     setReload(v=>v+1);
                   }}/>) }
                 </Card>
+                {reviewReasons.length > 0 ? <Card>
+                  <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}><Icon line name="warning-outline" size={18} color="#D6A226"/><Heading>Review transaction</Heading></View>
+                  {reviewReasons.map(reason => <Body key={reason}>{reason}</Body>)}
+                  <Button secondary title="Review details" onPress={() => setEditing(true)} />
+                </Card> : null}
                 <TransactionRelatedActions key={row.id} transaction={row} />
                 <Pressable
                   accessibilityRole="button"
@@ -309,15 +316,7 @@ export default function TransactionDetail() {
               </>
             ) : (
               <>
-                {row.reviewStatus === "pending_review" ? (
-                  <Notice>
-                    {typeof row.confidenceScore === "number"
-                      ? `Recorded confidence: ${row.confidenceScore}%. `
-                      : "This transaction needs review. "}
-                    Check the amount, date, account and category against the
-                    original record before saving corrections.
-                  </Notice>
-                ) : null}
+                {reviewReasons.length > 0 ? <Notice>{reviewReasons.map(reason => reason.replace(/[.]+$/, "")).join(". ")}. Check these details against the original record before saving.</Notice> : null}
                 <ChoiceField
                   label="Type"
                   value={type}

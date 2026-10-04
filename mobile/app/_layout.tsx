@@ -10,7 +10,7 @@ import { disconnectStoreAccount } from "../src/store-billing";
 import { DisplayPreferences } from "../src/display-preferences";
 import { ClerkProvider, useAuth } from "@clerk/expo";
 import * as SecureStore from "expo-secure-store";
-import { hasVisitedClover, rememberCloverVisit, launchDestination, type LaunchStorage } from "../src/launch-history";
+import { hasVisitedClover, rememberCloverVisit, launchDestination, nativeEntryAccess, type LaunchStorage } from "../src/launch-history";
 import { authTokenCache } from "../src/auth-token-cache";
 import { Stack, usePathname, router } from "expo-router";
 import { useFonts } from "expo-font";
@@ -22,7 +22,7 @@ import { SafeAreaProvider, SafeAreaView } from "react-native-safe-area-context";
 import { AccessContext, useAccess } from "../src/access";
 import { SessionProvider, useSession } from "../src/session";
 import { ImportActivity } from "../src/import-activity";
-import { useTheme, AppHeader, DetailNavigation } from "../src/ui";
+import { useTheme, AppHeader, Button, Notice } from "../src/ui";
 
 void SplashScreen.preventAutoHideAsync().catch(() => {});
 
@@ -64,14 +64,16 @@ function PrivacyShield({ children }: { children: ReactNode }) {
 }
 function Routes() {
   const { colors, styles, dark } = useTheme();
-  const { active, welcomeAllowed } = useAccess();
+  const { active, authEntry, accountDeleted } = useAccess();
   const path = usePathname();
   const session = useSession();
+  const entry = nativeEntryAccess(active, session.data?.needsOnboarding, Boolean(authEntry), accountDeleted);
   const landed = useRef(false);
   useEffect(() => {
-    // This navigator only mounts once both session hydration and device history resolve.
-    void SplashScreen.hideAsync().catch(() => {});
-  }, []);
+    // Cold restored sessions stay under the native launch image until bootstrap.
+    // A just-completed sign-up keeps its auth screen until onboarding is known.
+    if (!entry.coldStart || session.error) void SplashScreen.hideAsync().catch(() => {});
+  }, [entry.coldStart, session.error]);
   useEffect(() => {
     if (!active) {
       landed.current = false;
@@ -85,11 +87,7 @@ function Routes() {
     else if (page === "reports") router.replace("/reports");
     else if (page === "accounts") router.replace("/(tabs)/accounts");
   }, [active, session.data, path]);
-  useEffect(() => {
-    if (active && session.data?.needsOnboarding && path !== "/onboarding") {
-      router.replace("/onboarding");
-    }
-  }, [active, session.data?.needsOnboarding, path]);
+  if (entry.coldStart) return session.error ? <View style={{ flex: 1, justifyContent: "center", padding: 24, gap: 16 }}><Notice>{session.error}</Notice><Button title="Try again" onPress={session.refresh} /><Button title="Sign out" secondary onPress={() => void session.signOut()} /></View> : null;
   return (
     <RouteReveal><PrivacyShield>
       <GlassNavigationProvider>
@@ -106,13 +104,16 @@ function Routes() {
               headerBackButtonDisplayMode: "minimal",
             }}
           >
-            <Stack.Protected guard={!active && welcomeAllowed}>
+            <Stack.Protected guard={accountDeleted}>
+              <Stack.Screen name="account-deleted" options={{ headerShown: false, animation: "fade" }} />
+            </Stack.Protected>
+            <Stack.Protected guard={entry.welcome}>
               <Stack.Screen name="welcome" options={{ headerShown: false }} />
             </Stack.Protected>
-            <Stack.Protected guard={!active}>
+            <Stack.Protected guard={entry.auth}>
               <Stack.Screen name="auth" options={{ headerShown: false }} />
             </Stack.Protected>
-            <Stack.Protected guard={active}>
+            <Stack.Protected guard={entry.app}>
 
               <Stack.Screen
                 name="(tabs)"
@@ -129,10 +130,6 @@ function Routes() {
               <Stack.Screen name="settings" options={{ headerShown: false }} />
               <Stack.Screen
                 name="notifications"
-                options={{ headerShown: false }}
-              />
-              <Stack.Screen
-                name="onboarding"
                 options={{ headerShown: false }}
               />
               <Stack.Screen name="reports" options={{ headerShown: false }} />
@@ -168,8 +165,11 @@ function Routes() {
                 }}
               />
             </Stack.Protected>
+            <Stack.Protected guard={entry.onboarding}>
+              <Stack.Screen name="onboarding" options={{ headerShown: false, animation: "slide_from_right" }} />
+            </Stack.Protected>
           </Stack>
-          {active ? <ImportActivity /> : null}
+          {entry.app ? <ImportActivity /> : null}
       </GlassNavigationProvider>
     </PrivacyShield></RouteReveal>
   );
@@ -199,6 +199,8 @@ function AppSession({
 }) {
   const { colors, styles, dark } = useTheme();
   const [demo, setDemo] = useState(false);
+  const [authEntry, setAuthEntry] = useState<"sign-in" | "sign-up" | null>(null);
+  const [accountDeleted, setAccountDeleted] = useState(false);
   const active = demo || Boolean(userId);
   const [visited, setVisited] = useState<boolean | null>(null);
   useEffect(() => {
@@ -219,10 +221,15 @@ function AppSession({
         active,
         configured,
         loaded,
-        welcomeAllowed: !visited && !active,
+        welcomeAllowed: !active,
+        authEntry,
+        beginAuthEntry: setAuthEntry,
+        accountDeleted,
+        markAccountDeleted: () => setAccountDeleted(true),
+        dismissAccountDeleted: () => setAccountDeleted(false),
         enterDemo: () => setDemo(true),
-        signIn: () => login("sign-in"),
-        signUp: () => login("sign-up"),
+        signIn: () => { setAuthEntry("sign-in"); return login("sign-in"); },
+        signUp: () => { setAuthEntry("sign-up"); return login("sign-up"); },
       }}
     >
       <SessionProvider
@@ -231,6 +238,7 @@ function AppSession({
         userId={userId}
         getToken={getToken}
         signOut={async () => {
+          setAuthEntry(null);
           setVisited(true);
           await rememberCloverVisit(launchStorage);
           setDemo(false);

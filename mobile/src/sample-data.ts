@@ -78,5 +78,6 @@ export const sampleTransactions: Transaction[] = [
   description: null,
   categoryName,
   reviewStatus,
+  reviewReasons: reviewStatus === "pending_review" ? ["Needs account review"] : [],
   tags: [],
 }));

@@ -10,10 +10,19 @@ export type PurchaseIntent = {
   effectiveAt: string | null;
 };
 export class StoreActionError extends Error {}
+export class StoreOwnershipError extends StoreActionError {}
+export const STORE_OWNERSHIP_MESSAGE = 'This store purchase is linked to another Clover account. Sign in to the Clover account used for the original purchase, then restore there. If that account was deleted or you cannot access it, contact Clover support. Do not buy again.';
+export function isStoreOwnershipConflict(error: unknown) {
+  const code = error && typeof error === 'object' && 'code' in error ? String(error.code) : '';
+  return error instanceof StoreOwnershipError || ['7', '13'].includes(code);
+}
+export function assertStoreOwner(info: Pick<CustomerInfo, 'originalAppUserId'>, appUserId: string) {
+  if (info.originalAppUserId !== appUserId) throw new StoreOwnershipError(STORE_OWNERSHIP_MESSAGE);
+}
 
 /** SDK data selects the existing purchase to replace; it never grants access. */
 export function currentStoreProduct(info: CustomerInfo, appUserId: string) {
-  if (info.originalAppUserId !== appUserId) throw new StoreActionError('This store purchase belongs to a different Clover account. Use Restore purchases or contact support.');
+  assertStoreOwner(info, appUserId);
   const requested = Date.parse(info.requestDate);
   if (!Number.isFinite(requested) || Math.abs(Date.now() - requested) > 10 * 60000)
     throw new StoreActionError('Store details are out of date. Refresh plan status before changing plans.');
@@ -73,7 +82,8 @@ export function storeErrorMessage(error: unknown) {
   if (error instanceof StoreActionError) return error.message;
   const code = error && typeof error === 'object' && 'code' in error ? String(error.code) : '';
   if (code === '20') return 'Your payment is pending in the store. Complete or cancel it there, then refresh plan status. Please do not start another purchase.';
-  if (['6', '7', '13'].includes(code)) return 'This store account already has a purchase. Use Restore purchases with the Clover account that owns it before buying again.';
+  if (isStoreOwnershipConflict(error)) return STORE_OWNERSHIP_MESSAGE;
+  if (code === '6') return 'This subscription is already purchased in your store account. Use Restore purchases to verify it before buying again.';
   if (['2', '3', '4', '5', '18', '23', '24'].includes(code)) return 'The store could not complete this purchase. Check your payment method and available plan in the store, then try again.';
   return 'Your purchase status could not be verified. Refresh plan status or use Restore purchases before buying again.';
 }

@@ -59,6 +59,36 @@ const getGenericImportReviewReasons = (rawPayload: unknown) => {
   return Array.from(new Set([...detailReasons, ...fallbackReasons]));
 };
 
+const getReceiptReviewReasons = (rawPayload: unknown): string[] => {
+  if (!rawPayload || typeof rawPayload !== "object" || Array.isArray(rawPayload)) return [];
+  const payload = rawPayload as Record<string, unknown>;
+  const record = (value: unknown): Record<string, unknown> => value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
+  const details = record(payload.receiptDetails ?? payload.receipt_details);
+  const currency = record(details.currency_resolution);
+  const reasons: string[] = [];
+  if (currency.source === "user_default" && currency.requiresReview !== false) {
+    const code = typeof currency.currency === "string" && /^[A-Z]{3}$/.test(currency.currency) ? currency.currency : "your default currency";
+    reasons.push(`Currency was not detected. Check ${code} against the receipt.`);
+  }
+  if (payload.dateInferredFromFileName === true) reasons.push("Date came from the file name. Check it against the receipt.");
+  const labels: Record<string, string> = {
+    "merchant missing": "Check the receipt merchant.",
+    "date missing": "Check the receipt date.",
+    "total missing": "Check the receipt total.",
+    "summary totals do not reconcile": "The receipt subtotal and adjustments do not match its total. Check the amount.",
+    "single line item with weak merchant identity": "Check the receipt merchant and line items.",
+    "missing receipt details": "Check the receipt details against the original photo.",
+    "sparse receipt parse": "Only a few receipt details were readable. Check them against the original photo.",
+  };
+  const validation = record(payload.receiptValidation);
+  for (const issue of Array.isArray(validation.issues) ? validation.issues : []) {
+    if (typeof issue !== "string") continue;
+    if (Object.hasOwn(labels, issue)) reasons.push(labels[issue]);
+    else if (/^currency mismatch:/i.test(issue)) reasons.push("The detected currency differs from the account currency. Check the receipt currency.");
+  }
+  return [...new Set(reasons)];
+};
+
 export const getTransactionReviewReasons = (transaction: TransactionReviewReasonInput) => {
   if (isResolvedReviewStatus(transaction.reviewStatus)) {
     return [];
@@ -99,8 +129,10 @@ export const getTransactionReviewReasons = (transaction: TransactionReviewReason
     reasons.add("Needs account review");
   }
 
+  const receiptReasons = getReceiptReviewReasons(transaction.rawPayload);
+  for (const reason of receiptReasons) reasons.add(reason);
   const parserScore = normalizeConfidenceScore(transaction.parserConfidence);
-  if (parserScore !== null && parserScore < REVIEW_THRESHOLD) {
+  if (parserScore !== null && parserScore < REVIEW_THRESHOLD && receiptReasons.length === 0) {
     reasons.add("Import needs review");
   }
 

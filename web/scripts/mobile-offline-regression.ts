@@ -1,7 +1,8 @@
+import { createScreenDataLoader, registerScreenRefresh, refreshScreen } from "../../mobile/src/screen-refresh";
 import { uploadProgress } from "../../mobile/src/offline/upload-progress";
 import { normalizeDeviceTextEvidence } from "../../shared/device-text-evidence";
 import { boundedDeviceText, uploadInParts } from "../../mobile/src/offline/resumable-upload";
-import { needsNativeImportResume } from "../../shared/native-import-status";
+import { nativeImportIsComplete, needsNativeImportResume } from "../../shared/native-import-status";
 import { uploadSizeProblem, IMPORT_PHOTO_MAX_SIZE, NATIVE_UPLOAD_MAX_SIZE, NATIVE_UPLOAD_PART_SIZE } from "../../shared/native-upload";
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
@@ -364,6 +365,106 @@ test("photo limits accept 10 MB, reject larger photos, and preserve document lim
   }
   assert.equal(uploadSizeProblem("statement.pdf", "application/pdf", NATIVE_UPLOAD_MAX_SIZE), null);
   assert.match(uploadSizeProblem("statement.pdf", "application/pdf", NATIVE_UPLOAD_MAX_SIZE + 1)!, /25 MB/);
+});
+test("import completion waits for the focused transaction refresh and releases unfocused loaders", async () => {
+  let release!: () => void;
+  let visibleRows: string[] = [];
+  let completed = false;
+  const savedRows = ["receipt-1"];
+  const stop = registerScreenRefresh("/transactions", async () => {
+    await new Promise<void>(resolve => { release = resolve; });
+    visibleRows = savedRows;
+    return true;
+  });
+  const refresh = refreshScreen("/transactions").then(result => { completed = result; });
+  await Promise.resolve();
+  assert.equal(completed, false, "100% must not precede the page refresh.");
+  release(); await refresh;
+  assert.equal(completed, true);
+  assert.deepEqual(visibleRows, savedRows);
+  stop();
+  const failed = registerScreenRefresh("/transactions", async () => false);
+  assert.equal(await refreshScreen("/transactions"), false, "A failed page refresh must remain distinguishable from durable import success.");
+  failed();
+  assert.equal(await refreshScreen("/transactions"), true, "Unmounted pages leave no stale loaders.");
+});
+test("import refresh follows a replacement filter or focus loader before completing", async () => {
+  let releaseOld!: () => void;
+  let releaseCurrent!: () => void;
+  let visibleRows: string[] = [];
+  let completed = false;
+  const stopOld = registerScreenRefresh("/transactions", async () => {
+    await new Promise<void>(resolve => { releaseOld = resolve; });
+    return false; // The old transaction request was superseded.
+  });
+  const refresh = refreshScreen("/transactions").then(result => { completed = result; });
+  await Promise.resolve();
+  stopOld();
+  const stopCurrent = registerScreenRefresh("/transactions", async () => {
+    await new Promise<void>(resolve => { releaseCurrent = resolve; });
+    visibleRows = ["receipt-in-current-filter"];
+    return true;
+  });
+  releaseOld();
+  while (!releaseCurrent) await Promise.resolve();
+  assert.equal(completed, false, "Discarding the old request must not release 100% while the new query is pending.");
+  releaseCurrent(); await refresh;
+  assert.equal(completed, true);
+  assert.deepEqual(visibleRows, ["receipt-in-current-filter"]);
+  stopCurrent();
+});
+test("account refresh waits for applied balances and reports rejection or discarded responses", async () => {
+  let resolve!: (data: { accounts: string[] }) => void;
+  let reject!: (error: Error) => void;
+  let visibleAccounts = ["old-bank"];
+  let active = true, error = "", completed = false;
+  const load = createScreenDataLoader({
+    load: () => new Promise<{accounts:string[]} >((done, fail) => { resolve = done; reject = fail; }),
+    active: () => active,
+    apply: data => { visibleAccounts = data.accounts; },
+    error: value => { error = (value as Error).message; },
+  });
+  const stop = registerScreenRefresh("/accounts", load);
+  const refresh = refreshScreen("/accounts").then(result => { completed = result; });
+  await Promise.resolve();
+  assert.equal(completed, false);
+  assert.deepEqual(visibleAccounts, ["old-bank"]);
+  resolve({accounts:["updated-bank"]}); await refresh;
+  assert.equal(completed, true);
+  assert.deepEqual(visibleAccounts, ["updated-bank"]);
+  const failed = refreshScreen("/accounts"); await Promise.resolve();
+  reject(new Error("Account balances could not load"));
+  assert.equal(await failed, false);
+  assert.equal(error, "Account balances could not load");
+  const stale = load();
+  const releaseStale = resolve;
+  const latest = load();
+  releaseStale({accounts:["stale-bank"]});
+  assert.equal(await stale, false);
+  assert.deepEqual(visibleAccounts, ["updated-bank"]);
+  resolve({accounts:["newest-bank"]}); assert.equal(await latest, true);
+  const unfocused = load(); active = false;
+  resolve({accounts:["unfocused-bank"]}); assert.equal(await unfocused, false);
+  assert.deepEqual(visibleAccounts, ["newest-bank"]);
+  stop();
+});
+test("partial quote refresh applies valid values in the current scope but reports incomplete refresh", async () => {
+  let visible = { scope: "old-profile", values: { old: 999 } as Record<string, number> };
+  const refresh = createScreenDataLoader({
+    load: async () => ({ scope: "current-profile", values: { successful: 150 }, complete: false }),
+    active: () => true,
+    apply: result => { visible = { scope: result.scope, values: result.values }; return result.complete; },
+    error: () => assert.fail("Per-quote failures must not discard successful quotes"),
+  });
+  assert.equal(await refresh(), false);
+  assert.deepEqual(visible, { scope: "current-profile", values: { successful: 150 } });
+});
+test("native completion waits for committed visible data and account projections", () => {
+  assert.equal(nativeImportIsComplete({}), false);
+  assert.equal(nativeImportIsComplete({ visibleImportComplete: false, settledImportComplete: false }), false);
+  assert.equal(nativeImportIsComplete({ visibleImportComplete: true, settledImportComplete: false }), false);
+  assert.equal(nativeImportIsComplete({ visibleImportComplete: true, settledImportComplete: true }), true);
+  assert.equal(nativeImportIsComplete({ visibleImportComplete: true }), true, "Older server visibility signals remain supported.");
 });
 test("native recovery only resumes a server-approved checkpoint", () => {
   const status = { importFile: { status: "failed", processingPhase: "queued_retry" }, canResume: true };

@@ -5,6 +5,7 @@ import { printSnapshot } from "./print-snapshot";
 import * as Print from "expo-print";
 import * as Sharing from "expo-sharing";
 import { useSession } from "./session";
+import { useAccess } from "./access";
 import { snapshotHtml } from "./snapshot-html";
 import { removeUploadCopy } from "./upload";
 import { Text } from "./app-text";
@@ -15,6 +16,7 @@ export function SettingsData({
   accountOnly?: boolean;
 }) {
   const session = useSession();
+  const access = useAccess();
   const { styles } = useTheme();
   const [billing, setBilling] = useState<{ appleCancellationRequired: boolean; googleCancellationRequired: boolean } | null>(null);
   const [appleReturned, setAppleReturned] = useState(false);
@@ -153,7 +155,8 @@ export function SettingsData({
         { method: "POST", body: JSON.stringify({ confirmation: phrase, ...(scope === "account" ? { appleSubscriptionAcknowledged: appleAcknowledged } : {}) }) },
       );
       if (scope === "account") {
-        await session.signOut();
+        access.markAccountDeleted();
+        await session.signOut({ accountDeleted: true });
         return;
       }
     } else {

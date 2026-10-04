@@ -4,12 +4,13 @@ import { Image, Pressable, ScrollView, StyleSheet, View, useWindowDimensions } f
 import { LinearGradient } from "expo-linear-gradient";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAccess } from "../src/access";
+import { CloverMascot } from "../src/clover-mascot";
 
 const slides = [
-  { title: "Your money, together\nin Clover.", accent: "in Clover.", image: require("../assets/tutorial/accounts-v2.png"), description: "Clover Accounts preview showing balance summaries and bank accounts.", caption: "Banks, wallets, investments and cash in one place." },
-  { title: "Connect, upload,\nor add manually.", accent: "or add manually.", image: require("../assets/tutorial/connect-v2.png"), description: "Clover Add Account preview with Manual, Ask Clover, Upload and Connect selectors.", caption: "Bank connections · Available with Plus and Pro" },
-  { title: "See where your\nmoney goes.", accent: "money goes.", image: require("../assets/tutorial/spending-v2.png"), description: "Clover Reports preview with category spending and comparison tools.", caption: "Explore spending, trends and insights." },
-  { title: "Ask Clover.\nTake your next step.", accent: "Take your next step.", image: require("../assets/tutorial/adviser-v2.png"), description: "Ask Clover preview with a financial question ready to ask.", caption: "Turn your financial questions into clear next steps." },
+  { title: "Your money, together\nin Clover.", accent: "in Clover.", image: require("../assets/tutorial/accounts-v2.png"), mascot: "welcome" as const, description: "Clover Accounts preview showing balance summaries and bank accounts.", caption: "Banks, wallets, investments and cash in one place." },
+  { title: "Connect, upload,\nor add manually.", accent: "or add manually.", image: require("../assets/tutorial/connect-v2.png"), mascot: "guiding" as const, description: "Clover Add Account preview with Manual, Ask Clover, Upload and Connect selectors.", caption: "Bank connections · Available with Plus and Pro" },
+  { title: "See where your\nmoney goes.", accent: "money goes.", image: require("../assets/tutorial/spending-v2.png"), mascot: "thinking" as const, description: "Clover Reports preview with category spending and comparison tools.", caption: "Explore spending, trends and insights." },
+  { title: "Ask Clover.\nTake your next step.", accent: "Take your next step.", image: require("../assets/tutorial/adviser-v2.png"), mascot: "celebrating" as const, description: "Ask Clover preview with a financial question ready to ask.", caption: "Turn your financial questions into clear next steps." },
 ];
 
 export default function Welcome() {
@@ -22,8 +23,10 @@ export default function Welcome() {
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const compact = height < 750;
-  // Fit the complete cropped artwork; larger text can scroll independently of the actions.
-  const artworkHeight = Math.max(180, Math.min(520, height - insets.top - insets.bottom - 308 - Math.max(0, fontScale - 1) * 80));
+  // Show a focused glimpse of the app, with room for Clover beside it. Large
+  // text can scroll independently while the authentication actions stay usable.
+  const artworkHeight = Math.max(180, Math.min(330, height - insets.top - insets.bottom - 370 - Math.max(0, fontScale - 1) * 80));
+  const artworkWidth = Math.min(pageWidth - 64, 342);
   useEffect(() => { pager.current?.scrollTo({ x: pageWidth * index, animated: false }); }, [pageWidth, index]);
   const authenticate = async (signup: boolean) => {
     if (busy || !access.loaded || !access.configured) return;
@@ -39,7 +42,7 @@ export default function Welcome() {
     <LinearGradient colors={["#ffffff", "#f7fcfc", "#e5f7f5"]} style={s.page} onLayout={event => setPageWidth(event.nativeEvent.layout.width)}>
       <View style={[s.brand, compact && { paddingVertical: 8 }]}>
         <Image source={require("../assets/welcome-clover.png")} style={{ width: 28, height: 28 }} />
-        <Text style={s.wordmark}>clover</Text>
+        <Image source={require("../assets/clover-wordmark.png")} accessibilityLabel="Clover" resizeMode="contain" style={{ width: 99, height: 24 }} />
       </View>
       <ScrollView ref={pager} horizontal pagingEnabled style={{ flex: 1 }} showsHorizontalScrollIndicator={false}
         onMomentumScrollEnd={event => setIndex(Math.max(0, Math.min(slides.length - 1, Math.round(event.nativeEvent.contentOffset.x / pageWidth))))}>
@@ -51,8 +54,13 @@ export default function Welcome() {
               {slide.title.slice(0, start)}<Text style={{ color: "#00aabe" }}>{slide.accent}</Text>{slide.title.slice(start + slide.accent.length)}
             </Text>
             <Text style={s.caption}>{slide.caption}</Text>
-            <Image source={slide.image} accessibilityLabel={slide.description} resizeMode="contain"
-              style={{ width: Math.min(pageWidth - 48, 380), height: artworkHeight, alignSelf: "center" }} />
+            <View style={{ width: artworkWidth, height: artworkHeight + 46, alignSelf: "center" }}>
+              <View style={[s.preview, { width: artworkWidth, height: artworkHeight }]}>
+                <Image source={slide.image} accessibilityLabel={slide.description} resizeMode="contain"
+                  style={{ width: artworkWidth, height: artworkWidth * 460 / 342 }} />
+              </View>
+              <View style={{ position: "absolute", right: -10, bottom: 0 }}><CloverMascot pose={slide.mascot} size={120} /></View>
+            </View>
           </ScrollView>;
         })}
       </ScrollView>
@@ -81,7 +89,7 @@ export default function Welcome() {
 const s = StyleSheet.create({
   page: { flex: 1 },
   brand: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, paddingVertical: 12 },
-  wordmark: { color: "#03abc2", fontSize: 22, fontFamily: "Poppins-SemiBold" },
+  preview: { overflow: "hidden", borderRadius: 24, borderWidth: 1, borderColor: "#d5e8eb", backgroundColor: "white" },
   slide: { flexGrow: 1, alignItems: "center", justifyContent: "center", gap: 14, paddingHorizontal: 16, paddingBottom: 6 },
   title: { color: "#17363d", fontSize: 26, lineHeight: 33, textAlign: "center", fontFamily: "Poppins-SemiBold", maxWidth: 430 },
   caption: { fontSize: 12, lineHeight: 18, color: "#596e78", textAlign: "center", maxWidth: 340 },

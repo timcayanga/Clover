@@ -22,6 +22,22 @@ import { getSessionContext, isLocalDevHost } from "../lib/auth";
 async function main() {
   const resume = mobileApiResponse("import-status", {canResume:true, statementSelfHeal:{reason:"stale_statement_image_queue",rawPayload:"private"}, importFile:{status:"failed",processingPhase:"queued_retry",processingMessage:"Waiting to resume"}}) as {canResume:boolean;statementSelfHeal:{reason:string}};
   assert.equal(resume.canResume,true);
+  const cleanReceipt = { id: "receipt", reviewStatus: "pending_review", merchantRaw: "Cafe", categoryId: "food", categoryName: "Food & Dining", parserConfidence: 98, categoryConfidence: 98, accountMatchConfidence: 98 };
+  for (const operation of ["transactions", "transaction"] as const) {
+    const project = (row: object) => {
+      const result = mobileApiResponse(operation, operation === "transactions" ? { transactions: [row] } : { transaction: row }) as { transaction?: { reviewReasons: string[]; confidenceScore: number }; transactions?: { reviewReasons: string[]; confidenceScore: number }[] };
+      return (result.transaction ?? result.transactions?.[0])!;
+    };
+    assert.deepEqual(project(cleanReceipt).reviewReasons, [], "Pending alone must not mark a clean 98% receipt as a warning.");
+    assert.equal(project(cleanReceipt).confidenceScore, 98);
+    assert.deepEqual(project({ ...cleanReceipt, warningReason: "Review similar transaction" }).reviewReasons, ["Review similar transaction"], "High extraction confidence must not hide a real duplicate warning.");
+    assert.deepEqual(project({ ...cleanReceipt, accountMatchConfidence: 30 }).reviewReasons, ["Needs account review"]);
+    assert.deepEqual(project({ ...cleanReceipt, reviewStatus: "edited", warningReason: "Review similar transaction" }).reviewReasons, []);
+    assert.deepEqual(project({ ...cleanReceipt, rawPayload: { receiptDetails: { currency_resolution: { source: "user_default", currency: "PHP", requiresReview: true } } } }).reviewReasons, ["Currency was not detected. Check PHP against the receipt."]);
+  }
+  const unsettled = mobileApiResponse("import-status", { importFile: { status: "done" }, visibleImportComplete: true, settledImportComplete: false });
+  assert.equal((unsettled as { settledImportComplete: boolean }).settledImportComplete, false);
+
   assert.deepEqual(resume.statementSelfHeal,{reason:"stale_statement_image_queue"});
   assert.ok(!JSON.stringify(resume).includes("private"));
 
@@ -242,7 +258,7 @@ async function main() {
     totalCount: 1,
   });
   assert.deepEqual(result, {
-    transactions: [{ id: "t", amount: "500.00" }],
+    transactions: [{ id: "t", amount: "500.00", reviewReasons: ["Needs category review", "Could not identify merchant"], confidenceScore: null }],
     page: 1,
     totalCount: 1,
   });

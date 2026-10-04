@@ -27,26 +27,41 @@ export function ImportActivity() {
     return () => { show.remove(); hide.remove(); };
   }, []);
   const completed = useRef(new Set<string>());
+  const [visibleCompletions, setVisibleCompletions] = useState<string[]>([]);
   const pending = useRef(new Set<string>());
   const files = session.queuedFiles.filter(file => file.workspaceId === session.profileId &&
     (file.state !== "done" || pending.current.has(file.id)) && !dismissed.includes(file.id));
   const file = files.find(file => !["done", "attention", "paused"].includes(file.state)) ?? files.at(-1);
+  const currentView = useRef({ profileId: session.profileId, path, fileId: file?.id });
+  currentView.current = { profileId: session.profileId, path, fileId: file?.id };
   useEffect(() => {
+    const ready: string[] = [];
     for (const item of session.queuedFiles) {
+      if (item.workspaceId !== session.profileId) continue;
       if (item.state !== "done" && item.state !== "draft") pending.current.add(item.id);
       if (item.state === "done" && pending.current.has(item.id) && !completed.current.has(item.id)) {
         completed.current.add(item.id);
-        session.refresh();
-        void refreshScreen(path);
+        ready.push(item.id);
       }
     }
-  }, [session.queuedFiles, path, session.refresh]);
+    if (!ready.length) return;
+    // Clear stale reads and refresh once for the whole settled batch before 100%.
+    session.refresh();
+    void refreshScreen(path).then(refreshed => {
+      const view = currentView.current;
+      if (!refreshed && view.profileId === session.profileId && view.path === path && view.fileId && ready.includes(view.fileId)) {
+        setActionError("Your import is saved. Pull down to refresh this page.");
+      }
+      setVisibleCompletions(current => [...current, ...ready]);
+    });
+  }, [session.queuedFiles, session.profileId, path, session.refresh]);
   useEffect(() => { setActionError(""); setPassword(""); }, [file?.id]);
   if (!file || path.startsWith("/import/") || path === "/onboarding") return null;
-  const done = file.state === "done";
+  const publishing = file.state === "done" && !visibleCompletions.includes(file.id);
+  const done = file.state === "done" && !publishing;
   const needsReview = file.state === "attention";
   const waiting = !session.offlineStatus.online;
-  const progress = uploadProgress(file);
+  const progress = publishing ? 95 : uploadProgress(file);
   const needsPassword = file.needsPassword || (needsReview && /password/i.test(file.error ?? ""));
   const run = async (action: () => Promise<unknown>) => {
     if (busy) return;
@@ -55,8 +70,8 @@ export function ImportActivity() {
     finally { setBusy(false); }
   };
   const paused = file.state === "paused";
-  const active = !done && !needsReview && !needsPassword;
-  const step = done ? "Ready to review" : needsPassword ? "Statement password needed" : needsReview ? "Import needs attention" : paused ? "Import paused" : waiting ? "Waiting for connection" : file.state === "draft" || file.state === "queued" ? "Preparing file" : file.state === "sending" ? "Uploading file" : getImportStageLabel(file.message || "Reading file", progress);
+  const active = !done && !publishing && !needsReview && !needsPassword;
+  const step = done ? "Import complete" : publishing ? "Updating your page" : needsPassword ? "Statement password needed" : needsReview ? "Import needs attention" : paused ? "Import paused" : waiting ? "Waiting for connection" : file.state === "draft" || file.state === "queued" ? "Preparing file" : file.state === "sending" ? "Uploading file" : getImportStageLabel(file.message || "Reading file", progress);
   const resume = () => run(async () => { await session.fileQueue!.enqueue(file.id); if (!waiting) await session.fileQueue!.flush(); });
   const receiptReview = needsReview && file.processingPhase === "receipt_review_required";
   const review = () => router.push({ pathname: "/import/[id]", params: receiptReview ? { id: file.canonicalId ?? file.id, server: "1", review: "receipt" } : file.originalRetained !== false
@@ -67,6 +82,7 @@ export function ImportActivity() {
       shadowColor: "#07343d", shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.15, shadowRadius: 12 }}>
       <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
         <Text style={{ flex: 1, color: colors.ink, fontFamily: "Poppins-SemiBold", fontSize: 13 }}>{step}</Text>
+        <Text accessibilityLabel={`${Math.round(progress)} percent complete`} style={{ color: colors.ink, fontFamily: "Poppins-SemiBold", fontSize: 13, fontVariant: ["tabular-nums"] }}>{Math.round(progress)}%</Text>
         {active ? <Pressable accessibilityRole="button" accessibilityLabel={paused ? "Resume import" : "Pause import"}
           accessibilityState={{ disabled: busy }} disabled={busy} onPress={() => void (paused ? resume() : run(() => session.fileQueue!.pause(file.id)))}
           style={{ width: 44, height: 44, alignItems: "center", justifyContent: "center", opacity: busy ? 0.45 : 1 }}>

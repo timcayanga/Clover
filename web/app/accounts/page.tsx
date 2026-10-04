@@ -9,6 +9,7 @@ import { AddEntryMethods } from "@/components/add-entry-methods";
 import { getInvestmentInstitutionSnapshotSummary } from "@/lib/investment-institution-summary";
 import { compactSummaryMoney } from "../../../shared/summary-format";
 import { AccountCreationForm } from "@/components/account-creation-form";
+import { suggestedDraftInstitution } from "../../../shared/account-institution";
 import { InterfaceIcon } from "@/components/interface-icon";
 import { AdviserFormAssist } from "@/components/adviser-form-assist";
 import { useMobileCreationRoute } from "@/lib/use-mobile-creation-route";
@@ -1496,6 +1497,18 @@ function AccountsPageContent() {
   const [manualType, setManualType] = useState<Account["type"]>("bank");
   const [manualName, setManualName] = useState("");
   const [manualInstitution, setManualInstitution] = useState("");
+  const automaticInstitution = useRef("");
+  const institutionEdited = useRef(false);
+  useEffect(() => {
+    const institution = suggestedDraftInstitution({
+      name: manualName, type: manualType, currentInstitution: manualInstitution,
+      previousSuggestion: automaticInstitution.current, editedByUser: institutionEdited.current,
+      existingAccount: false,
+    });
+    if (institution === manualInstitution) return;
+    automaticInstitution.current = institution;
+    setManualInstitution(institution);
+  }, [manualName, manualType, manualInstitution]);
   const [manualAccountNumber, setManualAccountNumber] = useState("");
   const [manualInvestmentSubtype, setManualInvestmentSubtype] = useState<InvestmentSubtype>("stock");
   const [manualInvestmentSymbol, setManualInvestmentSymbol] = useState("");
@@ -3413,9 +3426,7 @@ function AccountsPageContent() {
         institution:
           manualType === "cash"
             ? "Cash"
-            : manualType === "investment"
-              ? manualInstitution
-              : manualName,
+            : manualInstitution || manualName,
         name: manualName,
         type: manualType,
       }),
@@ -4059,20 +4070,23 @@ function AccountsPageContent() {
   }, [addOpen]);
 
   const applyManualNameSuggestion = (suggestion: InstitutionSuggestion) => {
+    if (!institutionEdited.current) {
+      automaticInstitution.current = suggestion.label;
+      setManualInstitution(suggestion.label);
+    }
     if (suggestion.category === "investment_platform") {
       setManualType("investment");
-      setManualInstitution(suggestion.label);
+      // Choosing a provider is explicit; do not infer a broker later from an asset name.
+      institutionEdited.current = true;
       return;
     }
 
     if (suggestion.category === "wallet") {
       setManualType("wallet");
-      setManualInstitution("");
       return;
     }
 
     setManualType("bank");
-    setManualInstitution("");
   };
 
   const openInvestmentInstitution = (institutionCard: InvestmentInstitutionCard) => {
@@ -4271,9 +4285,7 @@ function AccountsPageContent() {
           institution:
             manualType === "cash"
               ? "Cash"
-              : manualType === "investment"
-                ? manualInstitution.trim() || name
-                : name,
+              : manualInstitution.trim() || (institutionEdited.current ? "" : name),
           accountNumber: manualAccountNumber.trim() || null,
           investmentSubtype: manualIsInvestment ? manualInvestmentSubtype : null,
           investmentSymbol:
@@ -4345,6 +4357,8 @@ function AccountsPageContent() {
       setAccounts((current) => [data.account, ...current]);
       setManualName("");
       setManualInstitution("");
+      automaticInstitution.current = "";
+      institutionEdited.current = false;
       setManualAccountNumber("");
       setManualInvestmentSubtype("stock");
       setManualInvestmentSymbol("");
@@ -5228,6 +5242,15 @@ function AccountsPageContent() {
                         />
                       </div>
                     </div>
+                    {manualType !== "cash" ? (
+                      <InstitutionAutocomplete
+                        label="Institution"
+                        value={manualInstitution}
+                        onChange={value => { institutionEdited.current = true; setManualInstitution(value); }}
+                        placeholder={manualType === "investment" ? "Example: COL Financial" : "Example: BPI"}
+                        variant={manualType === "investment" ? "investment" : "account"}
+                      />
+                    ) : null}
                     <details className="accounts-add-advanced">
                       <summary>More details</summary>
                       <div className="accounts-add-advanced__body">
@@ -5371,16 +5394,6 @@ function AccountsPageContent() {
                     </details>
                   </div>
                 </div>
-                {manualType === "investment" ? (
-                  <InstitutionAutocomplete
-                    label="Institution"
-                    value={manualInstitution}
-                    onChange={setManualInstitution}
-                    placeholder="Example: COL Financial"
-                    variant="investment"
-                    helperText="Use the platform or provider name when it differs from the investment name."
-                  />
-                ) : null}
                 {manualType === "investment" ? (
                   <>
                     <label>

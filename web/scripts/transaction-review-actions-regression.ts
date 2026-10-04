@@ -7,6 +7,10 @@ const clean = { reviewStatus: "pending_review", categoryId: "food", categoryName
 const rows = [clean, { ...clean, isExcluded: true }, { ...clean, parserConfidence: 30 }, { ...clean, warningReason: "Review similar transaction" }, { ...clean, categoryConfidence: 40, reviewStatus: "edited" }, { ...clean, isExcluded: true, reviewStatus: "confirmed" }];
 assert.equal(rows.filter(transactionNeedsReview).length, 3, "Clean pending and edited rows are not warnings");
 assert.deepEqual(getTransactionReviewReasons(rows[1]), ["Ignored from totals"]);
+assert.deepEqual(getTransactionReviewReasons({ ...clean, rawPayload: { dateInferredFromFileName: true } }), ["Date came from the file name. Check it against the receipt."]);
+assert.deepEqual(getTransactionReviewReasons({ ...clean, parserConfidence: 60, rawPayload: { receiptValidation: { issues: ["summary totals do not reconcile"] } } }), ["The receipt subtotal and adjustments do not match its total. Check the amount."], "A specific receipt problem replaces the unexplained generic warning.");
+assert.deepEqual(getTransactionReviewReasons({ ...clean, rawPayload: { receiptValidation: { issues: [] } } }), []);
+
 for (const reviewStatus of ["confirmed", "edited", "rejected", "duplicate_skipped"]) {
   assert.equal(transactionNeedsReview({ ...rows[1], reviewStatus }), false);
 }

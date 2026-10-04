@@ -151,23 +151,27 @@ export default function Home() {
       setError(""); setDetailsError(false);
       const refresh = async () => {
         // New accounts can reach Home while their starter Profile is created.
-        if (!session.demo && !session.profileId) return;
+        if (!session.demo && !session.profileId) return false;
         const run = ++generation;
         try {
           const value = await load();
-          if (!active || run !== generation) return;
+          if (!active || run !== generation) return false;
           setError(""); setDetailsError(false); setCurrencyOptions(value.currencies ?? [value.currency]);
           setData(mergeHomeDetails(value, session.cached<HomeDetails>(`${basePath}&section=details`)));
           // Older servers return the complete payload and need no second request.
-          if (!value.detailsPending) return;
+          if (!value.detailsPending) return true;
           try {
             const details = await session.request<HomeDetails>(`${basePath}&section=details`);
-            if (active && run === generation) setData(mergeHomeDetails(value, details));
+            if (!active || run !== generation) return false;
+            setData(mergeHomeDetails(value, details));
+            return true;
           } catch {
             if (active && run === generation) setDetailsError(true);
+            return false;
           }
         } catch (e) {
           if (active && run === generation) setError((e as Error).message);
+          return false;
         }
       };
       void refresh();

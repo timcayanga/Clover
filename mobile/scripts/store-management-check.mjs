@@ -4,11 +4,12 @@ import vm from 'node:vm';
 import ts from 'typescript';
 const calls=[];
 const platform={OS:'ios'};
-let configured=false, fail=false;
+let configured=false, fail=false, appUserId=null;
 const purchases={
   isConfigured:async()=>configured,
-  configure:()=>{configured=true;calls.push('configure');},
-  logIn:async()=>calls.push('identify'),
+  configure:({appUserID})=>{configured=true;appUserId=appUserID;calls.push('configure');},
+  getAppUserID:async()=>appUserId,
+  logIn:async id=>{appUserId=id;calls.push('identify');},
   showManageSubscriptions:async()=>{calls.push('sheet');if(fail)throw new Error('StoreKit unavailable');},
   invalidateCustomerInfoCache:async()=>calls.push('invalidate'),
 };

@@ -1,3 +1,4 @@
+import { transactionReviewReasons } from "./transaction-review";
 export type TransactionFilters = {
   types: string[]; accounts: string[]; categories: string[]; tags: string[];
   currency: string; amountMin: string; amountMax: string;
@@ -45,7 +46,7 @@ export function matchesDemoFilters(row: Transaction, filters: TransactionFilters
   if(filters.amountMax && amount > Number(filters.amountMax)) return false;
   if(filters.sourceFilter && row.source !== filters.sourceFilter) return false;
   if(filters.reviewFilter === "confirmed" && row.reviewStatus !== "confirmed") return false;
-  if(filters.reviewFilter === "pending" && ["confirmed","rejected","duplicate_skipped"].includes(row.reviewStatus??"")) return false;
+  if(filters.reviewFilter === "pending" && !transactionReviewReasons(row).length) return false;
   if(filters.confidenceFilter) {
     const confidence = row.confidenceScore;
     if(confidence == null) return false;

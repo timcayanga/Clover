@@ -1,4 +1,5 @@
 import { Pressable } from "react-native";
+import { suggestedDraftInstitution } from "../../shared/account-institution";
 import { investmentNameLabel, investmentTickerMatches, investmentTickerHint, investmentTypeLabel } from "../../shared/investment-entry";
 import { useLiveInvestmentValues } from "./use-live-investment-values";
 import { FinverseConnect } from "./finverse-connect";
@@ -123,6 +124,8 @@ export function AccountEditor({
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [moreDetails, setMoreDetails] = useState(false);
   const automaticTicker = useRef("");
+  const automaticInstitution = useRef("");
+  const institutionEdited = useRef(Boolean(defaultInstitution));
   const [draft, setDraft] = useState<Record<string, string>>({
     name: "",
     institution: defaultInstitution,
@@ -132,6 +135,16 @@ export function AccountEditor({
     investmentSubtype: defaultType === "investment" ? "stock" : "",
   });
   const tickerMatches = investmentTickerMatches(draft.name, draft.investmentSubtype || "stock", draft.currency);
+  useEffect(() => {
+    const institution = suggestedDraftInstitution({
+      name: draft.name, type: draft.type, currentInstitution: draft.institution,
+      previousSuggestion: automaticInstitution.current, editedByUser: institutionEdited.current,
+      existingAccount: Boolean(record),
+    });
+    if (institution === draft.institution) return;
+    automaticInstitution.current = institution;
+    setDraft(current => ({ ...current, institution }));
+  }, [draft.name, draft.type, draft.institution, record]);
   useEffect(() => {
     if (record || draft.type !== "investment") return;
     const matches = investmentTickerMatches(draft.name, draft.investmentSubtype || "stock", draft.currency);
@@ -344,7 +357,10 @@ export function AccountEditor({
                 placeholder={dateFields.has(field) ? "YYYY-MM-DD" : numericFields.has(field) ? "0" : undefined}
                 autoCapitalize={field === "currency" || field === "investmentSymbol" ? "characters" : "sentences"}
                 keyboardType={numericFields.has(field) ? "decimal-pad" : "default"}
-                onChangeText={value => setDraft(current => ({ ...current, [field]: ["currency", "investmentSymbol"].includes(field) ? value.toUpperCase() : value }))}
+                onChangeText={value => {
+                  if (field === "institution") institutionEdited.current = true;
+                  setDraft(current => ({ ...current, [field]: ["currency", "investmentSymbol"].includes(field) ? value.toUpperCase() : value }));
+                }}
               />
             ))}
             {draft.type === "investment" && !record ? <>

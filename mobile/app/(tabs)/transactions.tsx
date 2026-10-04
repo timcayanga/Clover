@@ -1,10 +1,12 @@
+import { registerScreenRefresh } from "../../src/screen-refresh";
+import { transactionReviewReasons } from "../../src/transaction-review";
 import { CloverEmptyState } from "../../src/clover-mascot";
 import { AccountBrandLogo } from "../../src/account-brand-logo";
 import { Text } from "../../src/app-text";
 import { SummaryCard } from "../../src/plan-ui";
 import { router, useFocusEffect, useLocalSearchParams } from "expo-router";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { ActivityIndicator, FlatList, Pressable, View } from "react-native";
+import { ActivityIndicator, FlatList, Pressable, View, useWindowDimensions } from "react-native";
 import { matchesDemoFilters, demoFilterOptions } from "../../src/transaction-filter-query";
 import { TransactionFilterPanel } from "../../src/transaction-filters";
 import { emptyTransactionFilters, transactionFilterQuery, type TransactionFilters, type FilterOptions } from "../../src/transaction-filter-query";
@@ -24,6 +26,8 @@ import {
 
 export default function Transactions() {
   const { colors, styles, dark } = useTheme();
+  const { fontScale } = useWindowDimensions();
+  const searchHeight = Math.max(38, Math.ceil(20 * fontScale + 16));
   const { demo, rows: samples, profileId, request, cached } = useSession();
   const [summary, setSummary] = useState<TransactionPage["summary"]>();
   const [filters, setFilters] = useState(false);
@@ -96,7 +100,7 @@ export default function Transactions() {
           : await request(
               `transactions?workspaceId=${encodeURIComponent(profileId)}&query=${encodeURIComponent(search)}&page=${next}&${transactionFilterQuery(filterValues)}`,
             );
-        if (ticket !== sequence.current) return;
+        if (ticket !== sequence.current) return false;
         setRows((previous) =>
           next === 1
             ? data.transactions
@@ -110,8 +114,10 @@ export default function Transactions() {
         setSummary(data.summary);
         setPage(next);
         setTotal(demo ? data.transactions.length : data.totalCount);
+        return true;
       } catch (e) {
         if (ticket === sequence.current) setError((e as Error).message);
+        return false;
       } finally {
         if (ticket === sequence.current) {
           loading.current = false;
@@ -125,7 +131,9 @@ export default function Transactions() {
   useFocusEffect(
     useCallback(() => {
       void load();
+      const unregister = registerScreenRefresh("/transactions", () => load(1, true));
       return () => {
+        unregister();
         sequence.current++;
         loading.current = false;
       };
@@ -139,14 +147,14 @@ export default function Transactions() {
             <Field
               accessibilityLabel="Search transactions"
               placeholder="Search"
-              style={{ height: 38, minHeight: 38, borderRadius: 999, paddingVertical: 0, fontSize: 13 }}
+              style={{ height: searchHeight, minHeight: searchHeight, borderRadius: 999, paddingVertical: 0, fontSize: 13 }}
               value={query}
               onChangeText={setQuery}
               returnKeyType="search"
               autoCorrect={false}
             />
           </View>
-          <Pressable accessibilityRole="button" accessibilityLabel="Filter transactions" accessibilityState={{expanded:filters}} onPress={() => setFilters(v=>!v)} hitSlop={4} style={{width:38,height:38,borderRadius:999,borderWidth:1,borderColor:colors.line,backgroundColor:colors.white,alignItems:"center",justifyContent:"center"}}>
+          <Pressable accessibilityRole="button" accessibilityLabel="Filter transactions" accessibilityState={{expanded:filters}} onPress={() => setFilters(v=>!v)} hitSlop={4} style={{width:searchHeight,height:searchHeight,borderRadius:999,borderWidth:1,borderColor:colors.line,backgroundColor:colors.white,alignItems:"center",justifyContent:"center"}}>
             <Icon line name="options-outline" size={20} color={colors.teal}/>
           </Pressable>
         </View>
@@ -171,7 +179,7 @@ export default function Transactions() {
         renderItem={({ item }) => (
           <Pressable
             accessibilityRole="button"
-            accessibilityLabel={`${item.merchantClean ?? item.merchantRaw}, ${item.type === "income" ? "+" : item.type === "expense" ? "−" : ""}${money(item.amount.replace(/^-/, ""), item.currency)}, ${dateLabel(item.date)}.${item.reviewStatus === "pending_review" ? " Needs review." : ""} Open transaction.`}
+            accessibilityLabel={`${item.merchantClean ?? item.merchantRaw}, ${item.type === "income" ? "+" : item.type === "expense" ? "−" : ""}${money(item.amount.replace(/^-/, ""), item.currency)}, ${dateLabel(item.date)}.${transactionReviewReasons(item).length ? ` ${transactionReviewReasons(item).join(". ")}.` : ""} Open transaction.`}
             onPress={() =>
               router.push({
                 pathname: "/transaction/[id]",
@@ -205,7 +213,7 @@ export default function Transactions() {
               >
                 {item.merchantClean ?? item.merchantRaw}
               </Text>
-              {item.reviewStatus === "pending_review" ? <Icon line name="warning-outline" size={12} color="#D6A226"/> : null}
+              {transactionReviewReasons(item).length > 0 ? <View accessible accessibilityLabel={transactionReviewReasons(item).join(". ")}><Icon line name="warning-outline" size={12} color="#D6A226"/></View> : null}
               </View>
               <View style={{ flexDirection: "row", alignItems: "center", gap: 5 }}>
               <AccountBrandLogo size={16} account={{ name: item.accountName, institution: item.institution ?? null, type: item.accountType ?? "bank", brandLogoUrl: item.brandLogoUrl ?? null }} />

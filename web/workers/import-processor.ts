@@ -14293,6 +14293,7 @@ export const confirmImportFile = async (
               source: "receipt",
               documentType: "receipt",
               dateInferredFromFileName: receiptDateInferredFromFileName,
+              receiptValidation: receiptValidationRecord,
               notes: receiptLineItemNotes || null,
               receiptDocumentId: receiptDocument?.id ?? documentImport?.id ?? null,
               receiptDetails: {

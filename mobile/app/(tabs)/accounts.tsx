@@ -4,7 +4,7 @@ import { institutionGroups } from "../../src/institution-groups";
 import { recordedSummary } from "../../src/recorded-summary";
 import { FinversePendingChip } from "../../src/finverse-pending-chip";
 import type { PendingBankConnection } from "../../../shared/finverse-pending";
-import { registerScreenRefresh } from "../../src/screen-refresh";
+import { createScreenDataLoader, registerScreenRefresh } from "../../src/screen-refresh";
 import { EntryOverlay } from "../../src/entry-overlay";
 import { Text } from "../../src/app-text";
 import { AccountBrandLogo } from "../../src/account-brand-logo";
@@ -146,16 +146,13 @@ function AccountsContent() {
         : session.request<{ accounts: Account[] }>(
             `accounts?workspaceId=${encodeURIComponent(session.profileId)}`,
           );
-      const refresh = () => load()
-        .then((data) => {
-          if (active) { setAccounts(data.accounts); setError(""); }
-        })
-        .catch((e) => {
-          if (active) setError(e.message);
-        })
-        .finally(() => {
-          if (active) setLoading(false);
-        });
+      const refresh = createScreenDataLoader<{ accounts: Account[] }>({
+        load,
+        active: () => active,
+        apply: data => { setAccounts(data.accounts); setError(""); },
+        error: e => setError((e as Error).message),
+        settled: () => setLoading(false),
+      });
       void refresh();
       const unregister = registerScreenRefresh("/accounts", refresh);
       return () => {

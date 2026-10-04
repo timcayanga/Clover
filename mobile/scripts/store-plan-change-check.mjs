@@ -7,8 +7,8 @@ const catalog=evaluate('../../shared/store-catalog.ts',()=>{}), policy=evaluate(
 const items=os=>catalog.STORE_PACKAGES.map(p=>({identifier:p.identifier,product:{identifier:p[os],subscriptionPeriod:p.period,priceString:'₱169.00',currencyCode:'PHP'}}));
 const infoFor=(p=null,patch={})=>({originalAppUserId:'user_fixture',requestDate:new Date().toISOString(),entitlements:{active:{}},activeSubscriptions:p?[p.android]:[],subscriptionsByProductIdentifier:p?{[p.android]:{productIdentifier:p.android.split(':')[0],productPlanIdentifier:p.android.split(':')[1],store:'PLAY_STORE',isActive:true,expiresDate:'2027-01-01T00:00:00Z',periodType:'NORMAL',...patch}}:{}});
 const statusFor=(tier='free',provider=null)=>({available:true,appUserId:'user_fixture',productIds:catalog.STORE_PACKAGES.flatMap(p=>[p.android,p.ios]),planTier:tier,billingProvider:provider,hasPaidSubscription:Boolean(provider)});
-let info=infoFor(),fail=null,purchases=[],configured=false;
-const sdk={isConfigured:async()=>configured,configure:()=>{configured=true;},logIn:async()=>{},invalidateCustomerInfoCache:async()=>{},getCustomerInfo:async()=>info,purchasePackage:async(...args)=>{purchases.push(args);if(fail)throw fail;return {customerInfo:info};},STORE_REPLACEMENT_MODE:Object.fromEntries(['WITHOUT_PRORATION','WITH_TIME_PRORATION','DEFERRED'].map(x=>[x,x]))};
+let info=infoFor(),fail=null,purchases=[],configured=false,sdkUser=null,loginFailure=false,restoredInfo=null;
+const sdk={isConfigured:async()=>configured,configure:({appUserID})=>{configured=true;sdkUser=appUserID;},getAppUserID:async()=>sdkUser,logIn:async id=>{if(!loginFailure)sdkUser=id;},logOut:async()=>{sdkUser='$RCAnonymousID:fixture';},restorePurchases:async()=>restoredInfo??info,invalidateCustomerInfoCache:async()=>{},getCustomerInfo:async()=>info,purchasePackage:async(...args)=>{purchases.push(args);if(fail)throw fail;return {customerInfo:info};},STORE_REPLACEMENT_MODE:Object.fromEntries(['WITHOUT_PRORATION','WITH_TIME_PRORATION','DEFERRED'].map(x=>[x,x]))};
 const billing=evaluate('../src/store-billing.ts',name=>{
  if(name==='react-native')return {Platform:{OS:'android'}};
  if(name==='react-native-purchases')return sdk;
@@ -31,7 +31,7 @@ for(const [snapshot,status,reason] of [
  [infoFor(plus),statusFor(),/not yet in sync/],
  [infoFor(),statusFor('pro','play_store'),/not yet in sync/],
  [infoFor(plus),statusFor('premium','play_store'),/not yet in sync/],
- [{...infoFor(plus),originalAppUserId:'user_other'},statusFor('pro','play_store'),/different Clover account/],
+ [{...infoFor(plus),originalAppUserId:'user_other'},statusFor('pro','play_store'),/another Clover account/],
  [{...infoFor(plus),requestDate:'2020-01-01'},statusFor('pro','play_store'),/out of date/],
  ...['billingIssuesDetectedAt','autoResumeDate','refundedAt'].map(k=>[infoFor(plus,{[k]:'2027-01-01'}),statusFor('pro','play_store'),/Resolve/]),
  [infoFor(plus,{productPlanIdentifier:null}),statusFor('pro','play_store'),/original billing/],
@@ -51,8 +51,26 @@ for(const err of [{code:'1'},{code:'20'},{code:'10'}]){fail=err;await assert.rej
 info=infoFor(plus);assert.match(await billing.googleStoreManagementUrl(statusFor('pro','play_store')),/sku=clover.plus$/);
 info=null;assert.equal(await billing.googleStoreManagementUrl(statusFor('pro','play_store')),'https://play.google.com/store/account/subscriptions?package=ph.clover.app');
 await assert.rejects(billing.googleStoreManagementUrl(statusFor('pro','app_store')),/original store/);
+assert.match(policy.storeErrorMessage({code:'6'}),/already purchased/);
+assert.doesNotMatch(policy.storeErrorMessage({code:'6'}),/another Clover account/);
+for(const code of ['7','13']) {
+ assert.equal(policy.isStoreOwnershipConflict({code}),true);
+ assert.match(policy.storeErrorMessage({code}),/Sign in to the Clover account used for the original purchase/);
+ assert.match(policy.storeErrorMessage({code}),/deleted/);
+}
+// SDK identity may survive a JS reload, or a native login call may fail to switch.
+info=infoFor();sdkUser='user_other';purchases=[];
+await billing.purchaseStorePackage(statusFor(),target);
+assert.equal(sdkUser,'user_fixture');assert.equal(purchases.length,1);
+sdkUser='user_other';loginFailure=true;purchases=[];
+await assert.rejects(billing.purchaseStorePackage(statusFor(),target),/could not be switched/);
+assert.equal(purchases.length,0);loginFailure=false;
+restoredInfo={...infoFor(),originalAppUserId:'user_other'};
+await assert.rejects(billing.restoreStorePurchases(statusFor()),/another Clover account/);
+restoredInfo=infoFor();await billing.restoreStorePurchases(statusFor());
+await billing.disconnectStoreAccount();assert.match(sdkUser,/Anonymous/);
 const tick=()=>new Promise(resolve=>setImmediate(resolve));
-function screen({os='android',tier='pro',provider='play_store',purchaseError=null,resultTier=tier,serverError=false,offeringError=false}={}){
+function screen({os='android',tier='pro',provider='play_store',purchaseError=null,restoreError=null,resultTier=tier,serverError=false,offeringError=false}={}){
  const states=[],refs=[],deps=[];let si=0,ri=0,ei=0,effects=[],alerts=[],calls=[],offersFail=offeringError,syncFail=serverError;const status=statusFor(tier,provider);
  const session={demo:false,data:{entitlement:status},refresh:()=>calls.push('refresh'),request:async(path,options)=>{if(path==='billing/usage')return {};if(options?.method==='POST'){calls.push('verify');if(syncFail)throw Error('offline');return statusFor(resultTier,provider||(resultTier!=='free'?'play_store':null));}return status;}};
  const module=evaluate('../src/settings-plan.tsx',name=>{
@@ -60,7 +78,7 @@ function screen({os='android',tier='pro',provider='play_store',purchaseError=nul
   if(name==='react/jsx-runtime')return {jsx:(type,props)=>({type,props}),jsxs:(type,props)=>({type,props}),Fragment:'Fragment'};
   if(name==='react-native')return {Platform:{OS:os},Alert:{alert:(...args)=>alerts.push(args)},AppState:{currentState:'active',addEventListener:()=>({remove(){}})},Linking:{openURL:async url=>calls.push(url)},useWindowDimensions:()=>({width:390,fontScale:1}),View:'View',ScrollView:'ScrollView',Pressable:'Pressable'};
   if(name==='./session')return {useSession:()=>session};
-  if(name==='./store-billing')return {canUseStore:()=>true,loadStorePackages:async()=>{calls.push('offers');if(offersFail)throw Error('network');return items(os);},purchaseStorePackage:async(_,item)=>{calls.push('purchase');if(purchaseError)throw purchaseError;const p=catalog.STORE_PACKAGES.find(p=>p.identifier===item.identifier);return {productId:p[os],tier:p.tier,effect:tier==='premium'&&p.tier==='pro'?'renewal':tier===p.tier?'next-payment':'immediate'};},restoreStorePurchases:async()=>calls.push('restore'),manageAppleStoreSubscription:async()=>calls.push('apple-sheet'),googleStoreManagementUrl:async()=> 'https://play.google.com/manage-fixture'};
+  if(name==='./store-billing')return {canUseStore:()=>true,loadStorePackages:async()=>{calls.push('offers');if(offersFail)throw Error('network');return items(os);},purchaseStorePackage:async(_,item)=>{calls.push('purchase');if(purchaseError)throw purchaseError;const p=catalog.STORE_PACKAGES.find(p=>p.identifier===item.identifier);return {productId:p[os],tier:p.tier,effect:tier==='premium'&&p.tier==='pro'?'renewal':tier===p.tier?'next-payment':'immediate'};},restoreStorePurchases:async()=>{calls.push('restore');if(restoreError)throw restoreError;},manageAppleStoreSubscription:async()=>calls.push('apple-sheet'),googleStoreManagementUrl:async()=> 'https://play.google.com/manage-fixture'};
   if(name==='./store-change-policy')return policy;
   if(name==='./store-presentation')return presentation;
   if(name.includes('store-catalog'))return catalog;
@@ -89,4 +107,18 @@ h=screen({os:'ios',provider:'app_store'});await h.settle();h.click('Switch to Pr
 h=screen({provider:null,tier:'premium'});await h.settle();h.click('Switch to Free →');assert.match(h.alerts[0][1],/granted without a store subscription/);
 h=screen();await h.settle();h.click('Switch to Free →');await h.choose(1);assert.ok(h.calls.includes('https://play.google.com/manage-fixture'));assert.ok(!h.calls.includes('purchase'));
 h=screen();await h.settle();h.click('Restore purchases');await h.settle();assert.ok(h.calls.includes('restore'));assert.ok(h.calls.includes('verify'));
+// Ownership failures must not become an invitation to repurchase after refresh.
+for(const code of ['7','13']) {
+ h=screen({os:'ios',tier:'free',provider:null,restoreError:{code}});await h.settle();
+ h.click('Restore purchases');await h.settle();assert.match(h.text(),/original purchase/);
+ assert.throws(()=>h.click('Switch to Plus →'),/Disabled/);
+ h.click('Refresh plan status');await h.settle();assert.match(h.text(),/original purchase/);
+ assert.doesNotMatch(h.text(),/You’re on Clover Free/);
+ assert.throws(()=>h.click('Switch to Plus →'),/Disabled/);
+ assert.ok(h.calls.includes('restore'));assert.ok(!h.calls.includes('purchase'));
+}
+h=screen({os:'ios',tier:'free',provider:null,purchaseError:{code:'13'}});await h.settle();
+h.click('Switch to Plus →');await h.choose(0);assert.match(h.text(),/original purchase/);
+h.click('Refresh plan status');await h.settle();assert.throws(()=>h.click('Switch to Plus →'),/Disabled/);
+assert.equal(h.calls.filter(c=>c==='purchase').length,1);
 console.log('PASS Google tier/base-plan matrix, ownership and billing guards, replacement bridge, Plan actions, deferred/delayed verification, cancel, restore, cross-store and retries');

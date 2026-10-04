@@ -1,5 +1,5 @@
 import { CloverEmptyState } from "../../src/clover-mascot";
-import { registerScreenRefresh } from "../../src/screen-refresh";
+import { createScreenDataLoader, registerScreenRefresh } from "../../src/screen-refresh";
 import { InlineDetailRow } from "../../src/inline-detail-row";
 import { PlanHeader } from "../../src/plan-ui";
 import { EntryOverlay } from "../../src/entry-overlay";
@@ -90,15 +90,12 @@ export default function Recurring() {
         : session.request<Data>(
             `recurring?workspaceId=${encodeURIComponent(session.profileId)}&year=${month.getFullYear()}&month=${month.getMonth()}`,
           );
-      const refresh = () => load()
-        .then((value) => {
-          if (active) {
-            setData((current) => (session.demo && current ? current : value)); setError("");
-          }
-        })
-        .catch((e) => {
-          if (active) setError(e.message);
-        });
+      const refresh = createScreenDataLoader<Data>({
+        load,
+        active: () => active,
+        apply: value => { setData(current => session.demo && current ? current : value); setError(""); },
+        error: e => setError((e as Error).message),
+      });
       void refresh();
       const unregister = registerScreenRefresh("/recurring", refresh);
       return () => {

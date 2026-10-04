@@ -3,7 +3,7 @@
 The September 3, 2026 update adds 94 supplied regional logo files to the 82 existing bank/generic picker choices (176 total). The additional files cover China, Hong Kong, Indonesia, Malaysia, the Netherlands, the Philippines (Atome), Singapore, Thailand, the UK and Vietnam. The supplied US directory is empty.
 
 - Canonical originals live in `assets/banks/`. The user's original directory and filenames are preserved, including extensionless ABN AMRO (JPEG) and Airwallex (PNG) inputs.
-- `web/lib/bank-logo-catalog.json` maps each added source to a label, region, aliases and content hash. The catalog adapter serves a stable pathname with a hash-based cache version, and saved built-in selections resolve to the latest version.
+- `shared/bank-logo-catalog.json` maps each added source to a label, region, aliases and content hash. The catalog adapter serves a stable pathname with a hash-based cache version, and saved built-in selections resolve to the latest version.
 - `web/scripts/sync-public-assets.ts` creates sequentially decoded, maximum-128px WebP copies at build time, including browser-safe outputs for extensionless sources. Original inputs total 4,893,818 bytes; optimized outputs total 290,896 bytes (about 94% smaller).
 - Generic icons from `1 generic` are also copied to their existing public URLs so saved generic selections remain valid.
 - The picker includes country labels and lazy-loaded images. Automatic matching uses the supplied institution first and explicit regional wording when present. It does not infer a user's location. Existing custom logo overrides remain authoritative.

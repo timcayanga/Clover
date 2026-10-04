@@ -1,5 +1,5 @@
 import { OnboardingPersistence } from "./onboarding-persistence";
-import { needsNativeImportResume } from "../../shared/native-import-status";
+import { nativeImportIsComplete, needsNativeImportResume } from "../../shared/native-import-status";
 import { notifyImportQueued } from "./import-handoff";
 import { PageCache, isPageRead } from "./page-cache";
 import { selectRecentProfile } from "./profile-selection";
@@ -54,7 +54,7 @@ type Session = {
   request: <T>(path: string, options?: RequestInit) => Promise<T>;
   rows: Transaction[];
   updateSample: (row: Transaction) => void;
-  signOut: () => Promise<void>;
+  signOut: (options?: { accountDeleted?: boolean }) => Promise<void>;
   uploads: Record<
     string,
     { file: SelectedFile; profileId: string; started?: boolean }
@@ -207,10 +207,7 @@ export function SessionProvider({
                 progress: status.progress,
                 message: status.importFile.processingMessage,
                 canResume: status.canResume,
-                done: Boolean(
-                  status.visibleImportComplete ||
-                    status.importFile.status === "done",
-                ),
+                done: nativeImportIsComplete(status),
                 failed: (status.importFile.status === "failed" && !recoverable) ||
                   (recoverable && Date.now() - (resumedImports.get(file.id) ?? 0) > 60_000),
               };
@@ -463,10 +460,10 @@ export function SessionProvider({
           setRows((all) =>
             all.map((item) => (item.id === row.id ? row : item)),
           ),
-        signOut: async () => {
+        signOut: async (options) => {
           if (
-            offlineStatus.pending > 0 ||
-            queuedFiles.some((f) => f.state !== "done")
+            !options?.accountDeleted && (offlineStatus.pending > 0 ||
+            queuedFiles.some((f) => f.state !== "done"))
           ) {
             const confirmed = await new Promise<boolean>((resolve) =>
               Alert.alert(

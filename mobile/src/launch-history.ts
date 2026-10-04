@@ -13,7 +13,7 @@ export async function hasVisitedClover(storage: LaunchStorage): Promise<boolean>
     ]);
     return visited !== null || legacyLogin !== null;
   } catch {
-    // If device storage is unavailable, login remains usable without replaying a tutorial.
+    // Device storage must not prevent access to the signed-out entry flow.
     return true;
   }
 }
@@ -24,5 +24,16 @@ export async function rememberCloverVisit(storage: LaunchStorage): Promise<void>
 }
 export function launchDestination(loaded: boolean, active: boolean, visited: boolean | null) {
   if (!loaded || visited === null) return "loading";
-  return active ? "app" : visited ? "auth" : "welcome";
+  return active ? "app" : "welcome";
+}
+
+/** Keep the authenticated app unavailable until its own setup decision resolves. */
+export function nativeEntryAccess(active: boolean, needsOnboarding: boolean | undefined, authEntry: boolean, accountDeleted = false) {
+  return {
+    welcome: !active && !accountDeleted,
+    auth: !accountDeleted && (!active || (needsOnboarding === undefined && authEntry)),
+    app: !accountDeleted && active && needsOnboarding === false,
+    onboarding: !accountDeleted && active && needsOnboarding !== undefined,
+    coldStart: !accountDeleted && active && needsOnboarding === undefined && !authEntry,
+  };
 }

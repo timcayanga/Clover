@@ -9,3 +9,11 @@ export function needsNativeImportResume(status: {
   return status.statementSelfHeal?.reason === "stale_statement_image_queue" ||
     (status.canResume === true && status.importFile.processingPhase === "queued_retry");
 }
+
+/** Completion requires saved rows/accounts, not merely a finished parser job. */
+export function nativeImportIsComplete(status: {
+  visibleImportComplete?: boolean;
+  settledImportComplete?: boolean;
+}) {
+  return status.settledImportComplete ?? (status.visibleImportComplete === true);
+}
