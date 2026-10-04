@@ -104,6 +104,25 @@ assert.equal(
   "non_financial"
 );
 
+assert.equal(assessFinancialUploadScope({
+  text: "HARBOUR COFFEE OFFICIAL RECEIPT TOTAL 425.00. Coupon: redeem a free coffee with your next order.",
+  fileName: "IMG_1011.jpg", fileType: "image/jpeg",
+}).decision, "financial", "A receipt header and total must outrank its attached coupon text");
+const blurredReceipt = "HARBOUR COFFEE OFFICIAL RECEIPT TOTAL unreadable. Coupon for your next visit. " +
+  "Merchant address and customer service information printed faintly along the bottom edge of the paper. ".repeat(4);
+assert.ok(blurredReceipt.length >= 320);
+assert.equal(assessFinancialUploadScope({ text: blurredReceipt, fileName: "IMG_1012.jpg", fileType: "image/jpeg" }).decision,
+  "ambiguous", "A blurred receipt with an attached coupon is inconclusive, not a rejected promotion");
+const blurredStatement = "ACCOUNT STATEMENT OPENING BALANCE unreadable DEPOSIT unreadable WITHDRAWAL unreadable " +
+  "Customer information and general conditions printed beside a damaged section of the original paper. ".repeat(4);
+assert.ok(blurredStatement.length >= 320);
+assert.equal(assessFinancialUploadScope({ text: blurredStatement, fileName: "IMG_1013.jpg", fileType: "image/jpeg" }).decision,
+  "ambiguous", "Financial labels without legible values must not trigger the long-prose rejection");
+assert.equal(assessFinancialUploadScope({
+  text: "The walking path winds through the forest beneath the leafy canopy, following the river around the hillside. Birds nest among branches and the breeze moves softly through the trees. ".repeat(3),
+  fileName: "IMG_1014.jpg", fileType: "image/jpeg",
+}).decision, "non_financial", "Long ordinary prose without financial evidence remains rejectable");
+
 const adviserRouteSource = fs.readFileSync(path.join(process.cwd(), "app/api/adviser/chat/route.ts"), "utf8");
 const adviserGuardIndex = adviserRouteSource.indexOf("classifyAdviserScope(latestIncomingQuestion");
 const adviserWorkspaceIndex = adviserRouteSource.indexOf("const workspace =");

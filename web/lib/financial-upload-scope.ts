@@ -38,7 +38,12 @@ export const assessFinancialUploadScope = (params: {
   const hasDate = DATE_SIGNAL.test(text) || /\d{4}\s*(?:년|\.)\s*\d{1,2}\s*(?:월|\.)\s*\d{1,2}/.test(text);
   const hasCurrency = CURRENCY_SIGNAL.test(text) || hasRupiahMarker(text);
   const looksPromotional = PROMOTIONAL_WORDS.test(text) || /쿠폰|할인코드|프로모션|메뉴판/.test(text) || /\b(?:kupon|kode promo|daftar harga|diskon hingga)\b/i.test(text);
-  const hasCompletedPurchaseEvidence = COMPLETED_PURCHASE_WORDS.test(text) || /영수증|결제금액|승인번호|거래번호/.test(text) || /\b(?:struk|kuitansi|kwitansi|no\.? struk|sudah dibayar|pembayaran berhasil|kembalian)\b/i.test(text);
+  // A real receipt can carry an offer below its purchase details, and blur
+  // may leave only the header/settlement labels readable. Neither is enough
+  // to save a transaction, but it is enough to avoid rejecting the photo.
+  const hasReceiptStructure = /\b(?:(?:official|sales|cash)\s+receipt|(?:sales|tax|commercial)\s+invoice)\b/i.test(text) &&
+    /\b(?:total|subtotal|amount\s+due|cashier|payment\s+(?:type|method))\b/i.test(text);
+  const hasCompletedPurchaseEvidence = hasReceiptStructure || COMPLETED_PURCHASE_WORDS.test(text) || /영수증|결제금액|승인번호|거래번호/.test(text) || /\b(?:struk|kuitansi|kwitansi|no\.? struk|sudah dibayar|pembayaran berhasil|kembalian)\b/i.test(text);
   const financialWordCount = countMatches(
     text.toLowerCase(),
     /\b(?:account|amount|balance|bank|billing|cash|credit|currency|debit|deposit|due|fee|invoice|merchant|paid|payment|purchase|receipt|statement|subtotal|tax|total|transaction|transfer|withdrawal)\b/g
@@ -88,7 +93,9 @@ export const assessFinancialUploadScope = (params: {
 
   const digitRatio = (text.match(/\d/g)?.length ?? 0) / Math.max(1, text.length);
   const strongNegative = NON_FINANCIAL_WORDS.test(text) && !FINANCIAL_HEADERS.test(text) && !(hasCurrency && hasAmount);
-  if (strongNegative || (text.length >= 320 && digitRatio < 0.015 && !DATE_SIGNAL.test(text) && !AMOUNT_SIGNAL.test(text))) {
+  const hasUnreadableFinancialEvidence = hasReceiptStructure || financialWordCount >= 2 || investmentWordCount >= 2 ||
+    hasIndonesianFinancialText(text) || /영수증|결제금액|거래내역|계좌|입금|출금|잔액|평가금액|보유수량/.test(text);
+  if (strongNegative || (text.length >= 320 && digitRatio < 0.015 && !DATE_SIGNAL.test(text) && !AMOUNT_SIGNAL.test(text) && !hasUnreadableFinancialEvidence)) {
     return {
       decision: "non_financial",
       confidence: strongNegative ? 96 : 88,
