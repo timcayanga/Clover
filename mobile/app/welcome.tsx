@@ -7,10 +7,10 @@ import { useAccess } from "../src/access";
 import { CloverMascot } from "../src/clover-mascot";
 
 const slides = [
-  { title: "Your money, together\nin Clover.", accent: "in Clover.", image: require("../assets/tutorial/accounts-v2.png"), mascot: "welcome" as const, description: "Clover Accounts preview showing balance summaries and bank accounts.", caption: "Banks, wallets, investments and cash in one place." },
-  { title: "Connect, upload,\nor add manually.", accent: "or add manually.", image: require("../assets/tutorial/connect-v2.png"), mascot: "guiding" as const, description: "Clover Add Account preview with Manual, Ask Clover, Upload and Connect selectors.", caption: "Bank connections · Available with Plus and Pro" },
-  { title: "See where your\nmoney goes.", accent: "money goes.", image: require("../assets/tutorial/spending-v2.png"), mascot: "thinking" as const, description: "Clover Reports preview with category spending and comparison tools.", caption: "Explore spending, trends and insights." },
-  { title: "Ask Clover.\nTake your next step.", accent: "Take your next step.", image: require("../assets/tutorial/adviser-v2.png"), mascot: "celebrating" as const, description: "Ask Clover preview with a financial question ready to ask.", caption: "Turn your financial questions into clear next steps." },
+  { title: "Your money, together\nin Clover.", accent: "in Clover.", image: require("../assets/tutorial/accounts-v2.png"), mascot: "welcome" as const, cropTop: 0, description: "Clover Accounts preview showing balance summaries and bank accounts.", caption: "Banks, wallets, investments and cash in one place." },
+  { title: "Connect, upload,\nor add manually.", accent: "or add manually.", image: require("../assets/tutorial/connect-v2.png"), mascot: "guiding" as const, cropTop: 0, description: "Clover Add Account preview with Manual, Ask Clover, Upload and Connect selectors.", caption: "Bank connections · Available with Plus and Pro" },
+  { title: "See where your\nmoney goes.", accent: "money goes.", image: require("../assets/tutorial/spending-v2.png"), mascot: "thinking" as const, cropTop: 0, description: "Clover Reports preview with category spending and comparison tools.", caption: "Explore spending, trends and insights." },
+  { title: "Ask Clover.\nTake your next step.", accent: "Take your next step.", image: require("../assets/tutorial/adviser-v2.png"), mascot: "celebrating" as const, cropTop: 64, description: "Ask Clover preview with a financial question ready to ask.", caption: "Turn your financial questions into clear next steps." },
 ];
 
 export default function Welcome() {
@@ -57,7 +57,7 @@ export default function Welcome() {
             <View style={{ width: artworkWidth, height: artworkHeight + 46, alignSelf: "center" }}>
               <View style={[s.preview, { width: artworkWidth, height: artworkHeight }]}>
                 <Image source={slide.image} accessibilityLabel={slide.description} resizeMode="contain"
-                  style={{ width: artworkWidth, height: artworkWidth * 460 / 342 }} />
+                  style={{ width: artworkWidth, height: artworkWidth * 460 / 342, transform: [{ translateY: -slide.cropTop * artworkWidth / 342 }] }} />
               </View>
               <View style={{ position: "absolute", right: -10, bottom: 0 }}><CloverMascot pose={slide.mascot} size={120} /></View>
             </View>
