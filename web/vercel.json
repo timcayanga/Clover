@@ -23,7 +23,7 @@
     },
     {
       "path": "/api/cron/account-erasure",
-      "schedule": "17 * * * *"
+      "schedule": "17 18 * * *"
     }
   ]
 }

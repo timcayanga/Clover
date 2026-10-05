@@ -128,7 +128,7 @@ export async function deleteClerkIdentity(
       );
     await tx.clerkIdentityDeletion.upsert({
       where: { clerkUserId },
-      update: {},
+      update: { updatedAt: new Date() },
       create: { clerkUserId, environment },
     });
   });
