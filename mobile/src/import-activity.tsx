@@ -72,7 +72,19 @@ export function ImportActivity() {
     });
   }, [session.queuedFiles, session.profileId, path, session.refresh]);
   useEffect(() => { setActionError(""); setPassword(""); }, [file?.id]);
-  if (!file || path.startsWith("/import/") || path === "/onboarding") return null;
+  const noticeVisible = !path.startsWith("/import/") && path !== "/onboarding";
+  const completedFileId = file?.state === "done" && visibleCompletions.includes(file.id) ? file.id : null;
+  useEffect(() => {
+    if (!noticeVisible || !completedFileId) return;
+    // Start at visible 100%, after the current page has refreshed. A new upload
+    // or hidden surface cancels this timer without dismissing another import.
+    const timer = setTimeout(() => {
+      setDismissed(current => [...current, completedFileId]);
+      void session.fileQueue?.acknowledgeProgress(completedFileId).catch(() => {});
+    }, 10_000);
+    return () => clearTimeout(timer);
+  }, [completedFileId, noticeVisible, session.fileQueue]);
+  if (!file || !noticeVisible) return null;
   const publishing = file.state === "done" && !visibleCompletions.includes(file.id);
   const done = file.state === "done" && !publishing;
   const needsReview = file.state === "attention";
@@ -125,7 +137,7 @@ export function ImportActivity() {
             await session.fileQueue!.enqueue(file.id, enteredPassword);
             await session.fileQueue!.flush();
           })} /> : null}
-        {done || (needsReview && !needsPassword) ? <Button secondary title={receiptReview ? "Review receipt" : "Review"} onPress={review}/> : null}
+        {needsReview && !needsPassword ? <Button secondary title={receiptReview ? "Review receipt" : "Review"} onPress={review}/> : null}
         {!needsPassword && ((needsReview && file.originalRetained !== false)) ?
           <Button secondary title="Resume upload" disabled={busy} onPress={() => void run(async () => {
             await session.fileQueue!.enqueue(file.id);

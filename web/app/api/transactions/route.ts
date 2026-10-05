@@ -712,7 +712,6 @@ const getWorkspaceCurrencyCodes = async (workspaceId: string) => {
   return codes;
 };
 
-const RECENT_IMPORT_VISIBILITY_WINDOW_MS = 10 * 60 * 1000;
 export async function GET(request: Request) {
   try {
     const userId = await resolveTransactionsRouteUserId();
@@ -810,23 +809,6 @@ export async function GET(request: Request) {
     });
     if (summaryMode === "light" && filters.reviewFilter !== "pending" && !hasEffectiveCategoryFilters && !hasReviewCandidates) {
       const pageStart = (requestedPage - 1) * (requestedPageSize ?? 25);
-      const shouldBoostRecentImportRows =
-        requestedPage === 1 &&
-        !includeAll &&
-        (filters.sortField ?? "date") === "date" &&
-        (filters.sortDirection ?? "desc") === "desc" &&
-        !filters.query?.trim() &&
-        !filters.currencyFilter?.trim() &&
-        (filters.accountIds ?? []).length === 0 &&
-        (filters.tagIds ?? []).length === 0 &&
-        (filters.typeFilters ?? []).length === 0 &&
-        (filters.merchantFilters ?? []).length === 0 &&
-        (filters.dateFilterMode ?? "ltd") === "ltd" &&
-        !filters.customStart?.trim() &&
-        !filters.customEnd?.trim() &&
-        !filters.amountMin?.trim() &&
-        !filters.reviewFilter && !filters.sourceFilter && !filters.confidenceFilter && !filters.amountMax?.trim();
-      const recentImportCutoff = new Date(Date.now() - RECENT_IMPORT_VISIBILITY_WINDOW_MS);
       const bdoAccountIds = workspaceAccountRows
         .filter((account) => /\bbdo\b|\bbanco de oro\b/i.test(account.institution ?? ""))
         .map((account) => account.id);
@@ -845,7 +827,7 @@ export async function GET(request: Request) {
         })));
         return pages.flat().map(row => row.id);
       })() : null;
-      const [pageRows, recentImportRows, duplicateRows, summaryGroups, summaryCategories, bdoSummaryRows, summaryAdjustmentRows, summaryMatchingRows] = await Promise.all([
+      const [pageRows, duplicateRows, summaryGroups, summaryCategories, bdoSummaryRows, summaryAdjustmentRows, summaryMatchingRows] = await Promise.all([
         prisma.transaction.findMany({
           where: accountPageIds ? { AND: [visibleWhere, { id: { in: accountPageIds } }] } : visibleWhere,
           select: {
@@ -895,60 +877,6 @@ export async function GET(request: Request) {
           skip: accountPageIds ? 0 : pageStart,
           take: includeAll ? totalCount : requestedPageSize ?? 25,
         }),
-        shouldBoostRecentImportRows
-          ? prisma.transaction.findMany({
-              where: {
-                ...visibleWhere,
-                importFileId: { not: null },
-                createdAt: { gte: recentImportCutoff },
-              },
-              select: {
-                id: true,
-                accountId: true,
-                date: true,
-                amount: true,
-                type: true,
-                merchantRaw: true,
-                merchantClean: true,
-                importFileId: true,
-                categoryId: true,
-                rawPayload: true,
-                normalizedPayload: true,
-                reviewStatus: true,
-                parserConfidence: true,
-                categoryConfidence: true,
-                accountMatchConfidence: true,
-                duplicateConfidence: true,
-                transferConfidence: true,
-                currency: true,
-                description: true,
-                category: {
-                  select: {
-                    name: true,
-                  },
-                },
-                account: {
-                  select: {
-                    name: true,
-                    institution: true,
-                    accountNumber: true,
-                    type: true,
-                  },
-                },
-                splitBill: {
-                  select: {
-                    id: true,
-                    title: true,
-                  },
-                },
-                createdAt: true,
-                isTransfer: true,
-                isExcluded: true,
-              },
-              orderBy: [{ createdAt: "desc" }, { date: "desc" }],
-              take: Math.min(25, requestedPageSize ?? 25),
-            })
-          : Promise.resolve([]),
         prisma.transaction.findMany({
           where: {
             ...visibleWhere,
@@ -1062,11 +990,6 @@ export async function GET(request: Request) {
         const position = new Map(accountPageIds.map((id, index) => [id, index]));
         pageRows.sort((a, b) => position.get(a.id)! - position.get(b.id)!);
       }
-      const recentImportRowIds = new Set(recentImportRows.map((transaction) => transaction.id));
-      const boostedPageRows = [
-        ...recentImportRows,
-        ...pageRows.filter((transaction) => !recentImportRowIds.has(transaction.id)),
-      ];
 
       const duplicateCounts = new Map<string, number>();
       for (const transaction of duplicateRows) {
@@ -1079,7 +1002,7 @@ export async function GET(request: Request) {
         duplicateCounts.set(signature, (duplicateCounts.get(signature) ?? 0) + 1);
       }
 
-      const transactions = boostedPageRows.map((transaction) =>
+      const transactions = pageRows.map((transaction) =>
         mapTransactionRow({
           id: transaction.id,
           workspaceId,
@@ -1224,25 +1147,7 @@ export async function GET(request: Request) {
       });
     }
 
-    const shouldBoostRecentImportRows =
-      requestedPage === 1 &&
-      !includeAll &&
-      (filters.sortField ?? "date") === "date" &&
-      (filters.sortDirection ?? "desc") === "desc" &&
-      !filters.query?.trim() &&
-      !filters.currencyFilter?.trim() &&
-      (filters.accountIds ?? []).length === 0 &&
-      (filters.tagIds ?? []).length === 0 &&
-      (filters.typeFilters ?? []).length === 0 &&
-      (filters.merchantFilters ?? []).length === 0 &&
-      (filters.dateFilterMode ?? "ltd") === "ltd" &&
-      !filters.customStart?.trim() &&
-      !filters.customEnd?.trim() &&
-      !filters.amountMin?.trim() &&
-      !filters.reviewFilter && !filters.sourceFilter && !filters.confidenceFilter && !filters.amountMax?.trim() &&
-      !hasEffectiveCategoryFilters;
-    const recentImportCutoff = new Date(Date.now() - RECENT_IMPORT_VISIBILITY_WINDOW_MS);
-    const [summaryRows, recentImportRows, summaryMatchingRows] = await Promise.all([
+    const [summaryRows, summaryMatchingRows] = await Promise.all([
       prisma.transaction.findMany({
         where: visibleWhere,
         select: {
@@ -1290,60 +1195,6 @@ export async function GET(request: Request) {
         },
         orderBy,
       }),
-      shouldBoostRecentImportRows
-        ? prisma.transaction.findMany({
-            where: {
-              ...visibleWhere,
-              importFileId: { not: null },
-              createdAt: { gte: recentImportCutoff },
-            },
-            select: {
-              id: true,
-              accountId: true,
-              importFileId: true,
-              date: true,
-              amount: true,
-              type: true,
-              merchantRaw: true,
-              merchantClean: true,
-              categoryId: true,
-              rawPayload: true,
-              normalizedPayload: true,
-              reviewStatus: true,
-              parserConfidence: true,
-              categoryConfidence: true,
-              accountMatchConfidence: true,
-              duplicateConfidence: true,
-              transferConfidence: true,
-              currency: true,
-              description: true,
-              category: {
-                select: {
-                  name: true,
-                },
-              },
-              account: {
-                select: {
-                  name: true,
-                  institution: true,
-                  accountNumber: true,
-                  type: true,
-                },
-              },
-              splitBill: {
-                select: {
-                  id: true,
-                  title: true,
-                },
-              },
-              createdAt: true,
-              isTransfer: true,
-              isExcluded: true,
-            },
-            orderBy: [{ createdAt: "desc" }, { date: "desc" }],
-            take: Math.min(25, requestedPageSize ?? 25),
-          })
-        : Promise.resolve([]),
       prisma.transaction.findMany({
         where: {
           workspaceId,
@@ -1375,16 +1226,9 @@ export async function GET(request: Request) {
         },
       }),
     ]);
-    const recentImportRowIds = new Set(recentImportRows.map((transaction) => transaction.id));
-    const boostedSummaryRows = shouldBoostRecentImportRows
-      ? [
-          ...recentImportRows,
-          ...summaryRows.filter((transaction) => !recentImportRowIds.has(transaction.id)),
-        ]
-      : summaryRows;
 
     const duplicateCounts = new Map<string, number>();
-    for (const transaction of boostedSummaryRows) {
+    for (const transaction of summaryRows) {
       const signature = [
         transaction.date.toISOString().slice(0, 10),
         Number(transaction.amount).toFixed(2),
@@ -1394,7 +1238,7 @@ export async function GET(request: Request) {
       duplicateCounts.set(signature, (duplicateCounts.get(signature) ?? 0) + 1);
     }
 
-    const mappedSummaryRows = boostedSummaryRows.map((transaction) => {
+    const mappedSummaryRows = summaryRows.map((transaction) => {
       const warningReason = getTransactionWarningReason(transaction, duplicateCounts);
       return {
         transaction,
