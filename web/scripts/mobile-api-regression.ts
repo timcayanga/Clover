@@ -34,7 +34,7 @@ async function main() {
     assert.deepEqual(project({ ...cleanReceipt, warningReason: "Review similar transaction" }).reviewReasons, ["Review similar transaction"], "High extraction confidence must not hide a real duplicate warning.");
     assert.deepEqual(project({ ...cleanReceipt, accountMatchConfidence: 30 }).reviewReasons, ["Needs account review"]);
     assert.deepEqual(project({ ...cleanReceipt, reviewStatus: "edited", warningReason: "Review similar transaction" }).reviewReasons, []);
-    assert.deepEqual(project({ ...cleanReceipt, rawPayload: { receiptDetails: { currency_resolution: { source: "user_default", currency: "PHP", requiresReview: true } } } }).reviewReasons, ["Using PHP, your default currency. Change it if this receipt uses another currency."]);
+    assert.deepEqual(project({ ...cleanReceipt, rawPayload: { receiptDetails: { currency_resolution: { source: "user_default", currency: "PHP", requiresReview: true } } } }).reviewReasons, []);
   }
   const unsettled = mobileApiResponse("import-status", { importFile: { status: "done" }, visibleImportComplete: true, settledImportComplete: false });
   assert.equal((unsettled as { settledImportComplete: boolean }).settledImportComplete, false);

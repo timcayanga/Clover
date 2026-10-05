@@ -119,8 +119,9 @@ export default function Adviser() {
   useEffect(() => {
     if (params.prompt) setDraft(params.prompt.slice(0, 4000));
   }, [params.prompt]);
-  const send = async () => {
-    if (inFlight.current || history.busy || !draft.trim()) return;
+  const send = async (prompt = draft) => {
+    const question = prompt.trim().slice(0, 4000);
+    if (inFlight.current || history.busy || !question) return;
     if (session.demo) {
       setError(
         "Sign in to ask Clover about your records. Sample mode does not send questions or financial data.",
@@ -130,7 +131,7 @@ export default function Adviser() {
     const version = generation.current;
     const next: Message[] = [
       ...messages,
-      { role: "user", content: draft.trim() },
+      { role: "user", content: question },
     ];
     inFlight.current = true;
     setBusy(true);
@@ -144,7 +145,7 @@ export default function Adviser() {
         const reply = await askLocally(
           session.offline,
           session.profileId,
-          draft.trim(),
+          question,
         );
         if (version !== generation.current) return;
         setCloudConversation(false);
@@ -253,21 +254,20 @@ export default function Adviser() {
         ) : null}
         {historyOpen ? (
           <Card>
-            <PlanAction
-              title="New chat"
-              disabled={busy || history.busy}
-              onPress={history.fresh}
-            />
-            {!history.conversations.length ? (
-              <Body>Your conversations will appear here.</Body>
-            ) : null}
+            <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
+              <Text accessibilityRole="header" style={{ color: colors.ink, fontFamily: "Poppins-SemiBold", fontSize: 16 }}>Your Chats</Text>
+              <Pressable accessibilityRole="button" disabled={busy || history.busy} onPress={history.fresh} style={{ minHeight: 44, justifyContent: "center" }}>
+                <Text style={{ color: "#0066CC", fontFamily: "Poppins-Medium", fontSize: 14 }}>+ New Chat</Text>
+              </Pressable>
+            </View>
+            {!history.conversations.length ? <Body>Your conversations will appear here.</Body> : null}
             {history.conversations.map((chat) => (
-              <PlanAction
-                key={chat.id}
-                title={chat.title}
-                disabled={busy || history.busy}
+              <Pressable key={chat.id} accessibilityRole="button" disabled={busy || history.busy}
                 onPress={() => void history.open(chat.id)}
-              />
+                style={{ paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: colors.line, minHeight: 48 }}>
+                <Text style={{ color: colors.ink, fontFamily: "Poppins-Medium", fontSize: 14 }}>{chat.title}</Text>
+                <Text style={{ color: colors.muted, fontSize: 12 }}>{new Date(chat.updatedAt).toLocaleDateString(undefined, { month: "short", day: "numeric" })}</Text>
+              </Pressable>
             ))}
           </Card>
         ) : null}
@@ -367,7 +367,7 @@ export default function Adviser() {
                   key={prompt}
                   title={prompt}
                   disabled={busy}
-                  onPress={() => setDraft(prompt)}
+                  onPress={() => void send(prompt)}
                 />
               ))}
             </View>
@@ -388,6 +388,8 @@ export default function Adviser() {
               gap: 6,
             }}
           >
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+            {message.role === "assistant" ? <CloverMascot pose="guiding" size={28} /> : null}
             <Text
               style={{
                 color: colors.teal,
@@ -397,6 +399,7 @@ export default function Adviser() {
             >
               {message.role === "user" ? "You" : "Clover"}
             </Text>
+            </View>
             <Body muted={false}>{message.content}</Body>
             {message.visualization ? (
               <AdviserReportCard chart={message.visualization} />
@@ -422,7 +425,7 @@ export default function Adviser() {
                 title={`💡 ${item.label}`}
                 disabled={busy}
                 fullWidth
-                onPress={() => setDraft(item.prompt.slice(0, 4000))}
+                onPress={() => void send(item.prompt)}
               />
             ))}
           </View>

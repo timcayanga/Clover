@@ -1,3 +1,4 @@
+import { withStoreSandboxTester } from "./store-sandbox-tester";
 import type { AnalyticsEventName } from "./analytics";
 import { capturePostHogServerEvent } from "./analytics-server";
 import { STORE_OFFERING_ID, STORE_PACKAGES, storeProductTier } from "../../shared/store-catalog";
@@ -33,7 +34,7 @@ export function storeBillingConfig() {
   };
 }
 export async function syncStoreAccess(userId: string) {
-  const config = storeBillingConfig();
+  let config = storeBillingConfig();
   if (!config.enabled)
     throw new Error("Store purchases are not configured yet.");
   const user = await prisma.user.findUniqueOrThrow({
@@ -42,6 +43,7 @@ export async function syncStoreAccess(userId: string) {
   });
   if (config.sandbox !== (user.environment !== "production"))
     throw new Error("Store environment does not match this account.");
+  config = await withStoreSandboxTester(config, user.clerkUserId);
   const response = await fetch(
     `https://api.revenuecat.com/v1/subscribers/${encodeURIComponent(user.clerkUserId)}`,
     {
@@ -82,15 +84,15 @@ export async function syncStoreAccess(userId: string) {
   return { verifiedRecoveryAlias };
 }
 
-/** RevenueCat can retain an anonymous original ID after a verified transfer.
+/** RevenueCat can retain the deleted or anonymous original ID after a verified transfer.
  * Never infer ownership from that alias: require our completed deletion audit
  * and a fresh provider lookup for each subscription returned to this identity. */
 export async function verifyRecoveredStoreAlias(raw: unknown, appUserId: string, environment: string) {
   const value = raw as { subscriber?: { original_app_user_id?: string; subscriptions?: Record<string, {store?: string; store_transaction_id?: string; is_sandbox?: boolean}> } };
   const subscriber = value?.subscriber;
   const original = subscriber?.original_app_user_id;
-  if (!original?.startsWith("$RCAnonymousID:")) return undefined;
-  const audit = await prisma.storePurchaseRecovery.findFirst({ where: { targetClerkUserId: appUserId, environment, completedAt: { not: null } }, select: { id: true } });
+  if (!original || original === appUserId || !(original.startsWith("$RCAnonymousID:") || original.startsWith("user_"))) return undefined;
+  const audit = await prisma.storePurchaseRecovery.findFirst({ where: { targetClerkUserId: appUserId, environment, completedAt: { not: null }, ...(original.startsWith("user_") ? { sourceClerkUserId: original } : {}) }, select: { id: true } });
   if (!audit) return undefined;
   const subscriptions = Object.values(subscriber?.subscriptions ?? {});
   if (!subscriptions.length) return undefined;

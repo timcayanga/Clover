@@ -49,8 +49,7 @@ export function applyReceiptDefaultCurrency<T extends ReceiptCurrencyDetails>(de
   return {
     ...details,
     currency: resolved,
-    confidence_score: Math.min(details.confidence_score, details.confidence_score <= 1 ? .69 : 69),
-    currency_resolution: { source: location ? "receipt_location" : "user_default", original: previousDefault ? details.currency_resolution?.original ?? null : details.currency, currency: resolved, requiresReview: true, ...(location ? { evidence: location.evidence } : {}) },
+    currency_resolution: { source: location ? "receipt_location" : "user_default", original: previousDefault ? details.currency_resolution?.original ?? null : details.currency, currency: resolved, requiresReview: false, ...(location ? { evidence: location.evidence } : {}) },
     parser_evidence: { ...details.parser_evidence,
       reason: `${details.parser_evidence.reason.replace(/\s*Currency defaulted to [A-Z]{3} from the user's settings; editable in Transactions\./g, "")} ${location ? `Currency suggested as ${resolved} from printed location: ${location.evidence}; editable in Transactions.` : `Currency defaulted to ${resolved} from the user's settings; editable in Transactions.`}` },
   };

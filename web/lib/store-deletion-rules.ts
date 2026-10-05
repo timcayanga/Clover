@@ -23,7 +23,7 @@ export function storeDeletionPlan(raw: unknown, config: {
 }, now = Date.now()): StoreDeletionPlan {
   const data = schema.parse(raw);
   if (data.subscriber.original_app_user_id !== config.appUserId &&
-    !(config.verifiedRecoveryAlias?.startsWith("$RCAnonymousID:") && data.subscriber.original_app_user_id === config.verifiedRecoveryAlias))
+    !(config.verifiedRecoveryAlias && data.subscriber.original_app_user_id === config.verifiedRecoveryAlias))
     throw new Error("Store account ownership does not match. Contact support before deleting your account.");
   if (data.request_date_ms < now - 600000 || data.request_date_ms > now + 60000)
     throw new Error("Store verification is stale. Please retry.");

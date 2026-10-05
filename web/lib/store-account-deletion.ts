@@ -1,3 +1,4 @@
+import { withStoreSandboxTester } from "./store-sandbox-tester";
 import { prisma } from "./prisma";
 import { storeBillingConfig, verifyRecoveredStoreAlias } from "./store-access";
 import { assertAppleDeletionAcknowledged, storeDeletionPlan, cancelGoogleDeletionSubscriptions, type StoreDeletionPlan } from "./store-deletion-rules";
@@ -5,7 +6,7 @@ const empty = (): StoreDeletionPlan => ({ appleCancellationRequired: false, goog
 export async function getStoreDeletionPlan(clerkUserId: string): Promise<StoreDeletionPlan> {
   const user = await prisma.user.findUnique({ where: { clerkUserId }, select: { environment: true, storeAccess: true } });
   if (!user) return empty();
-  const config = storeBillingConfig();
+  const config = await withStoreSandboxTester(storeBillingConfig(), clerkUserId);
   if (config.sandbox !== (user.environment !== "production")) throw new Error("Store environment does not match this account.");
   const key = process.env.REVENUECAT_SECRET_API_KEY;
   // Disabling new purchases must not disable cancellation of existing purchases.

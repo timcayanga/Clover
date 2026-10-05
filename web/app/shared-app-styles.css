@@ -162,7 +162,7 @@
 .adviser-history h2 { font: var(--app-title-font); margin: 0; }
 .adviser-history h3 { font: var(--app-section-font); margin: 8px 0 0; }
 .adviser-history p { color: var(--muted); font-size: 13px; }
-.adviser-history > button:not(.button) { text-align: left; border: 0; border-radius: 12px; background: var(--surface); padding: 12px; color: var(--text); display: grid; gap: 4px; font: 500 13px/20px var(--font-poppins),sans-serif; overflow-wrap: anywhere; }
+.adviser-history > button:not(.button) { text-align: left; border: 0; border-radius: 0; border-bottom: 1px solid var(--stroke); background: transparent; padding: 14px 0; color: var(--text); display: grid; gap: 4px; font: 500 13px/20px var(--font-poppins),sans-serif; overflow-wrap: anywhere; }
 .adviser-history small { color: var(--muted); font-weight: 400; }
 .adviser-history-toggle { display: none !important; }
 .app-shell .adviser-chat .adviser-chat__prompt { border: 1px solid var(--stroke) !important; border-radius: 22px !important; background: var(--surface) !important; color: var(--accent) !important; padding: 8px 14px !important; min-height: 40px; font: var(--app-action-font) !important; width: auto; text-align: left; }
@@ -284,3 +284,9 @@
   max-width: 100%;
   overflow-wrap: anywhere;
 }
+
+.adviser-history__header { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.adviser-history__header h2 { font: 600 14px/22px var(--font-poppins),sans-serif; }
+.adviser-history__new { padding: 8px 0; min-height: 44px; background: transparent; border: 0; color: #0066cc; white-space: nowrap; font: 500 13px/22px var(--font-poppins),sans-serif; }
+.adviser-chat__author { display: flex; align-items: center; gap: 6px; color: var(--accent); font: 600 13px/22px var(--font-poppins),sans-serif; margin-bottom: 6px; }
+.adviser-chat__author img { object-fit: contain; }

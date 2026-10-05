@@ -11,6 +11,12 @@ assert.deepEqual(getTransactionReviewReasons({ ...clean, rawPayload: { dateInfer
 assert.deepEqual(getTransactionReviewReasons({ ...clean, parserConfidence: 60, rawPayload: { receiptValidation: { issues: ["summary totals do not reconcile"] } } }), ["The receipt subtotal and adjustments do not match its total. Check the amount."], "A specific receipt problem replaces the unexplained generic warning.");
 assert.deepEqual(getTransactionReviewReasons({ ...clean, rawPayload: { receiptValidation: { issues: [] } } }), []);
 
+for (const source of ["user_default", "receipt_location"]) {
+  const receipt = { receiptDetails: { currency_resolution: {source,currency:"PHP",requiresReview:true} }, receiptValidation: {score:10,issues:[]} };
+  assert.deepEqual(getTransactionReviewReasons({...clean,rawPayload:receipt}),[], "Legacy currency suggestions are not actionable warnings");
+  assert.deepEqual(getTransactionReviewReasons({...clean,rawPayload:{...receipt,receiptValidation:{score:5,issues:["date missing"]}}}),["Check the receipt date."]);
+}
+
 for (const reviewStatus of ["confirmed", "edited", "rejected", "duplicate_skipped"]) {
   assert.equal(transactionNeedsReview({ ...rows[1], reviewStatus }), false);
 }

@@ -34,8 +34,9 @@ function harness(options: Record<string, boolean> = {}) {
         if(options.unknownOutcome){options.unknownOutcome=false;throw new Error("Connection lost");}
         return {ok:true,status:204};
       }
+      if (url.includes("/aliases?limit=100")) return {ok:true,status:200,json:async()=>({items: options.missingAlias ? [] : [{id:owner}, ...(options.ambiguousAlias ? [{id:"user_other"}] : [])], next_page:options.paginatedAlias ? "/next" : null})};
       assert(url.endsWith("subscriptions?store_subscription_identifier=12345"));
-      return {ok:true,status:200,json:async()=>({items:[{customer_id:owner,store:options.wrongStore?"play_store":"app_store",environment:"production",ownership:options.shared?"family_shared":"purchased"}]})};
+      return {ok:true,status:200,json:async()=>({items:[{customer_id:options.anonymousOwner?"$RCAnonymousID:original":owner,store:options.wrongStore?"play_store":"app_store",environment:"production",ownership:options.shared?"family_shared":"purchased"}]})};
     },
     require:(name:string)=> {
       if(name==="node:crypto")return {createHash};
@@ -44,6 +45,7 @@ function harness(options: Record<string, boolean> = {}) {
       if(name==="../../shared/store-catalog")return {STORE_PACKAGES:[{ios:"clover.plus.monthly"}]};
       if(name==="./apple-store-root")return {appleStoreRoot};
       if(name==="./prisma")return {prisma:{...tx,user:{findUniqueOrThrow:async()=>({clerkUserId:target,environment:"production"})},$transaction:async(fn:any)=>fn(tx)}};
+      if(name==="./store-sandbox-tester")return {withStoreSandboxTester:async(config:any)=>config};
       if(name==="./store-access")return {storeBillingConfig:()=>({enabled:true,sandbox:false,sandboxAppUserIds:[]}),syncStoreAccess:async()=>{calls.push("sync");}};
       if(name==="./deployment-environment")return {getDeploymentEnvironment:()=>"production"};
       if(name==="./native-input-error")return {NativeInputError};
@@ -59,24 +61,46 @@ async function checkRecoveredAliases() {
   let completed=true, owner=target, lookups=0;
   const api:any={};
   vm.runInNewContext(code,{exports:api,require:(name:string)=>{
-    if(name==="./prisma")return {prisma:{storePurchaseRecovery:{findFirst:async({where}:any)=>{assert.equal(where.targetClerkUserId,target);assert.equal(where.environment,"production");assert.deepEqual(JSON.parse(JSON.stringify(where.completedAt)),{not:null});return completed?{id:"audit"}:null;}}}};
+    if(name==="./prisma")return {prisma:{storePurchaseRecovery:{findFirst:async({where}:any)=>{assert.equal(where.targetClerkUserId,target);assert.equal(where.environment,"production");assert.deepEqual(JSON.parse(JSON.stringify(where.completedAt)),{not:null});return completed && (!where.sourceClerkUserId || where.sourceClerkUserId === old)?{id:"audit"}:null;}}}};
     if(name==="./store-purchase-recovery")return {subscriptionOwner:async()=>{lookups++;return owner;}};
     return {};
   }});
   const raw={subscriber:{original_app_user_id:"$RCAnonymousID:history",subscriptions:{plus:{store:"app_store",store_transaction_id:"1",is_sandbox:true}}}};
   assert.equal(await api.verifyRecoveredStoreAlias(raw,target,"production"),"$RCAnonymousID:history");
+  assert.equal(await api.verifyRecoveredStoreAlias({subscriber:{...raw.subscriber,original_app_user_id:old}},target,"production"),old);
   owner="user_other";assert.equal(await api.verifyRecoveredStoreAlias(raw,target,"production"),undefined);
   owner=target;completed=false;lookups=0;assert.equal(await api.verifyRecoveredStoreAlias(raw,target,"production"),undefined);assert.equal(lookups,0);
   completed=true;assert.equal(await api.verifyRecoveredStoreAlias({subscriber:{...raw.subscriber,subscriptions:{}}},target,"production"),undefined);
   assert.equal(await api.verifyRecoveredStoreAlias({subscriber:{...raw.subscriber,original_app_user_id:"user_other"}},target,"production"),undefined);
 }
+async function checkRecreatedTesters() {
+  const code = ts.transpileModule(fs.readFileSync(new URL("../lib/store-sandbox-tester.ts",import.meta.url),"utf8"),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText;
+  const config = {sandbox:false,sandboxAppUserIds:["user_previous"]};
+  let verified = true, email = "qa@example.invalid", primary = "email_primary", id = target, requests = 0;
+  const environment = {REVENUECAT_SANDBOX_TESTER_EMAILS:"qa@example.invalid"};
+  const api:any = {};
+  vm.runInNewContext(code,{exports:api,process:{env:environment},require:()=>({clerkClient:async()=>({users:{getUser:async()=>{requests++;return {id,primaryEmailAddressId:primary,emailAddresses:[{id:"email_primary",emailAddress:email,verification:{status:verified?"verified":"unverified"}}]};}}})})});
+  const result = await api.withStoreSandboxTester(config,target);
+  assert(result.sandboxAppUserIds.includes(target)); assert(!config.sandboxAppUserIds.includes(target));
+  verified=false; assert.equal(await api.withStoreSandboxTester(config,target),config);
+  verified=true; email="other@example.invalid"; assert.equal(await api.withStoreSandboxTester(config,target),config);
+  email="qa@example.invalid";primary="another_email";assert.equal(await api.withStoreSandboxTester(config,target),config);
+  primary="email_primary";id="user_other";assert.equal(await api.withStoreSandboxTester(config,target),config);
+  id=target;environment.REVENUECAT_SANDBOX_TESTER_EMAILS="*@example.invalid";requests=0;assert.equal(await api.withStoreSandboxTester(config,target),config);assert.equal(requests,0);
+  await api.withStoreSandboxTester({...config,sandbox:true},target);assert.equal(requests,0);
+}
 async function main(){
+  await checkRecreatedTesters();
   for (const flag of ["erasureRequested", "erasureComplete", "erasureAfterReservation"]) {
     const fixture=harness({[flag]:true});
     await assert.rejects(fixture.run);
     assert.deepEqual(fixture.calls, [], "remote deletion intent blocks transfer before provider deletion finishes");
   }
   await checkRecoveredAliases();
+  const anonymous = harness({anonymousOwner:true}); await anonymous.run(); assert.deepEqual(anonymous.calls,["transfer","sync"]);
+  for (const flag of ["missingAlias","ambiguousAlias","paginatedAlias","providerLive","sourceLive","notDeleted"]) {
+    const blocked = harness({anonymousOwner:true,[flag]:true}); await assert.rejects(blocked.run()); assert(!blocked.calls.includes("transfer"));
+  }
   for(const issue of ["disabled","invalidProof","wrongProduct","refunded","wrongStore","shared","providerLive","sourceLive","notDeleted","incomplete","wrongEnvironment","targetDeleted","targetPaid","reservedElsewhere"]){
     const h=harness({[issue]:true});await assert.rejects(h.run());assert(!h.calls.includes("transfer"),issue);assert(!h.calls.includes("sync"),issue);
   }

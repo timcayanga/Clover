@@ -596,9 +596,10 @@ function ScopedAdviserChat({ prompts, storageKey = adviserChatStorageKey, initia
     <div className={`adviser-experience adviser-experience--${layout}${minimal || formContext ? " adviser-experience--entry" : ""}`}>
       {!minimal ? <button className="button button-secondary adviser-history-toggle" type="button" aria-expanded={historyOpen} onClick={()=>setHistoryOpen(!historyOpen)}>Your chats</button> : null}
       <aside className={`adviser-history${historyOpen ? " is-open" : ""}`} aria-label="Chat history">
-        <h2>Ask Clover</h2>
-        <button className="button button-primary" type="button" disabled={isSending||attaching||entryLocked||history.busy} onClick={startNewConversation}>+ New chat</button>
-        <h3>Your chats</h3>
+        <div className="adviser-history__header">
+          <h2>Your Chats</h2>
+          <button className="adviser-history__new" type="button" disabled={isSending||attaching||entryLocked||history.busy} onClick={startNewConversation}>+ New Chat</button>
+        </div>
         {history.busy ? <p role="status">Loading or saving chat…</p> : null}
         {!history.conversations.length&&!history.busy ? <p>Your conversations will appear here.</p> : null}
         {history.conversations.map(chat=><button key={chat.id} type="button" disabled={isSending||attaching||entryLocked||history.busy} onClick={()=>void history.open(chat.id)}><span>{chat.title}</span><small>{new Date(chat.updatedAt).toLocaleDateString(undefined,{month:"short",day:"numeric"})}</small></button>)}
@@ -654,6 +655,7 @@ function ScopedAdviserChat({ prompts, storageKey = adviserChatStorageKey, initia
               key={`${message.role}-${index}`}
               className={`adviser-chat__message adviser-chat__message--${message.role}`}
             >
+              {message.role === "assistant" ? <div className="adviser-chat__author"><Image src="/assets/mascots/guiding.svg" alt="" width={28} height={28} /><span>Clover</span></div> : null}
               <p>{message.content}</p>
               {message.visualization ? <AdviserReportCard chart={message.visualization} /> : null}
               {message.role === "assistant" && message.content.trim() ? (

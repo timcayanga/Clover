@@ -28,7 +28,7 @@ assert.equal(hasReceiptPhotoEvidence("Bank statement\nOpening balance 100\nClosi
 const raw = { currency: null, confidence_score: .98, parser_evidence: { reason: "Image extraction", source_text: "Harbour Cafe\nTotal 425.00" } };
 const defaulted = applyReceiptDefaultCurrency(raw, "PHP");
 assert.equal(defaulted.currency, "PHP");
-assert.equal(defaulted.confidence_score, .69);
+assert.equal(defaulted.confidence_score, .98);
 assert.equal(raw.currency, null, "Raw response is never overwritten");
 assert.equal(defaulted.parser_evidence.source_text, raw.parser_evidence.source_text, "Default must not be inserted into printed text");
 assert.equal(applyReceiptDefaultCurrency({ ...raw, currency: "KRW" }, "PHP").currency, "KRW");
@@ -80,7 +80,7 @@ console.log("Receipt intake: unfamiliar photo routing, honest default currency, 
 const located = applyReceiptDefaultCurrency(raw, "USD", photo);
 assert.equal(located.currency, "PHP");
 assert.equal(located.currency_resolution.source, "receipt_location");
-assert.equal(located.currency_resolution.requiresReview, true);
+assert.equal(located.currency_resolution.requiresReview, false);
 assert.equal(applyReceiptDefaultCurrency({...raw,currency:"USD"}, "PHP", photo).currency, "USD");
 assert.equal(inferReceiptLocationCurrency("Singapore 238839")?.currency, "SGD");
 assert.equal(inferReceiptLocationCurrency("Jakarta 12190")?.currency, "IDR");

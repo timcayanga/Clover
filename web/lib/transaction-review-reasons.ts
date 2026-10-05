@@ -63,13 +63,7 @@ const getReceiptReviewReasons = (rawPayload: unknown): string[] => {
   if (!rawPayload || typeof rawPayload !== "object" || Array.isArray(rawPayload)) return [];
   const payload = rawPayload as Record<string, unknown>;
   const record = (value: unknown): Record<string, unknown> => value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
-  const details = record(payload.receiptDetails ?? payload.receipt_details);
-  const currency = record(details.currency_resolution);
   const reasons: string[] = [];
-  if (["user_default", "receipt_location"].includes(String(currency.source)) && currency.requiresReview !== false) {
-    const code = typeof currency.currency === "string" && /^[A-Z]{3}$/.test(currency.currency) ? currency.currency : "your default currency";
-    reasons.push(currency.source === "receipt_location" ? `Currency suggested as ${code} from the receipt location. Check it before confirming.` : `Using ${code}, your default currency. Change it if this receipt uses another currency.`);
-  }
   if (payload.dateInferredFromFileName === true) reasons.push("Date came from the file name. Check it against the receipt.");
   const labels: Record<string, string> = {
     "merchant missing": "Check the receipt merchant.",

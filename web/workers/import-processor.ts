@@ -13973,8 +13973,7 @@ export const confirmImportFile = async (
         ? receiptValidationRecord.issues.filter((issue): issue is string => typeof issue === "string" && issue.trim().length > 0)
         : [];
       const receiptNeedsReview = receiptValidationScore < 6 || receiptValidationIssues.length > 0 ||
-        normalizeImportConfidenceScore(receiptDetailsRecord?.confidence_score) < 70 ||
-        Boolean(receiptDetailsRecord?.currency_resolution);
+        normalizeImportConfidenceScore(receiptDetailsRecord?.confidence_score) < 70;
       const receiptLineItems = normalizeReceiptLineItems(
         Array.isArray(receiptDetailsRecord?.line_items)
           ? (receiptDetailsRecord.line_items as Array<{

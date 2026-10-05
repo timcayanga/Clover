@@ -41,7 +41,7 @@ export function verifiedStoreAccess(
 ) {
   const data = payload.parse(raw);
   if (data.subscriber.original_app_user_id !== config.appUserId &&
-      !(config.verifiedRecoveryAlias?.startsWith("$RCAnonymousID:") && data.subscriber.original_app_user_id === config.verifiedRecoveryAlias))
+      !(config.verifiedRecoveryAlias && data.subscriber.original_app_user_id === config.verifiedRecoveryAlias))
     throw new Error("Store account ownership does not match. Contact support.");
   if (
     data.request_date_ms > now.getTime() + 60000 ||

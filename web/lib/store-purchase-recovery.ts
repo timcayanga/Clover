@@ -1,3 +1,4 @@
+import { withStoreSandboxTester } from "./store-sandbox-tester";
 import { createHash } from "node:crypto";
 import { SignedDataVerifier, Environment } from "@apple/app-store-server-library";
 import { clerkClient } from "@clerk/nextjs/server";
@@ -27,7 +28,7 @@ async function revenuecat(path: string, init: RequestInit = {}) {
 
 export async function verifyRecoveryReceipt(signedTransaction: string, appUserId: string) {
   if (signedTransaction.length > 24000 || signedTransaction.split(".").length !== 3) fail();
-  const config = storeBillingConfig();
+  const config = await withStoreSandboxTester(storeBillingConfig(), appUserId);
   // Sandbox is permitted only for the same server-side testers used by normal billing.
   const environments = config.sandbox ? [Environment.SANDBOX]
     : config.sandboxAppUserIds.includes(appUserId) ? [Environment.PRODUCTION, Environment.SANDBOX] : [Environment.PRODUCTION];
@@ -43,16 +44,26 @@ export async function verifyRecoveryReceipt(signedTransaction: string, appUserId
   return fail("Apple could not verify this Clover purchase. Check the App Store account used for the purchase, then try again.");
 }
 
-export async function subscriptionOwner(transactionId: string, environment: string) {
+export async function subscriptionOwner(transactionId: string, environment: string): Promise<string> {
   const result = await revenuecat(`subscriptions?store_subscription_identifier=${encodeURIComponent(transactionId)}`);
   const items = Array.isArray(result.items) ? result.items.map(record) : [];
   if (result.next_page || items.length !== 1) fail();
   const item = items[0];
   if (item.store !== "app_store" || item.environment !== environment || item.ownership !== "purchased"
-    || typeof item.customer_id !== "string" || !item.customer_id.startsWith("user_")) fail();
+    || typeof item.customer_id !== "string") fail();
   // The lookup identifier came from a cryptographically verified Clover iOS
   // transaction. Transfer is additionally restricted to the Clover iOS app.
-  return item.customer_id as string;
+  const customerId = item.customer_id as string;
+  if (customerId.startsWith("user_")) return customerId;
+  if (!customerId.startsWith("$RCAnonymousID:")) fail();
+  const aliases = await revenuecat(`customers/${encodeURIComponent(customerId)}/aliases?limit=100`);
+  if (aliases.next_page || !Array.isArray(aliases.items)) fail();
+  const clerkIds = [...new Set((aliases.items as unknown[]).map(record).map(alias => alias.id)
+    .filter((id): id is string => typeof id === "string" && id.startsWith("user_")))];
+  // Only a unique provider-verified alias can enter the existing deletion guards.
+  // Never use a client-supplied ID, email, or an arbitrary anonymous customer.
+  if (clerkIds.length !== 1) fail();
+  return clerkIds[0];
 }
 
 /** Receipt proof + completed deletion, never an email match or client-provided owner. */
