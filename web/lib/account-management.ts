@@ -169,7 +169,7 @@ export const deleteLocalUserAccount = async (clerkUserId: string) => {
   const user = await prisma.user.findUnique({ where: { clerkUserId }, select: { id: true, clerkUserId: true, email: true, verified: true, environment: true } });
   if (!user) return false;
 
-  await purgeNativeUploadsForUser(user.id);
+  await purgeNativeUploadsForUser(user.clerkUserId);
 
   // Private promotional receipts follow the same permanent-erasure policy.
   const campaignEvidence = await prisma.switchEvidence.findMany({where:{application:{userId:user.id},purgedAt:null},select:{id:true,storageKey:true}});
