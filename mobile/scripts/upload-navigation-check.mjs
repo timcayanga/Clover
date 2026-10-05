@@ -22,7 +22,7 @@ function harness(source,{sheet=false,cancel=true,permission=true,canGoBack=true,
   if(name==='expo-file-system')return {File:class{size=100;}};
   if(name.endsWith('/session'))return {useSession:()=>session};
   if(name.endsWith('/analytics'))return {beginTelemetry:()=>()=>{}};
-  if(name.endsWith('/upload'))return {fileProblem:()=>null,removeUploadCopy:()=>{}};
+  if(name.endsWith('/upload'))return {resolveSelectedFile:file=>({...file,size:100}),fileProblem:()=>null,removeUploadCopy:()=>{}};
   if(name.endsWith('/transaction-entry'))return {emptyTransaction:()=>({}),Choices:'Choices',ManualTransaction:'ManualTransaction',TransactionChat:'TransactionChat'};
   if(name.endsWith('/ui'))return {...Object.fromEntries(['Body','Button','Card','Heading','Icon','Notice','Screen'].map(k=>[k,k])),useTheme:()=>({colors:{}})};
   if(name.endsWith('.png'))return name;

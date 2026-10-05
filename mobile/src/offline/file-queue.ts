@@ -84,7 +84,7 @@ export class FileQueue {
         "Sync or remove a queued file before adding another. Up to 10 files can be kept offline.",
       );
     if (!Number.isInteger(file.size) || file.size <= 0 || file.size > NATIVE_UPLOAD_MAX_SIZE || base64.length !== Math.ceil(file.size/3)*4)
-      throw new Error("Choose a valid file up to 25 MB.");
+      throw new Error("This file could not be read completely. Please choose it again or retake the photo.");
     if(existing.filter(f=>f.state!=="done"&&f.state!=="processing").reduce((sum,f)=>sum+f.size,0)+file.size>50*1024*1024) throw new Error("Finish or remove queued files first. Up to 50 MB can be kept offline.");
     await this.store.set("file-bytes:" + file.id, base64);
     await this.store.set("file:" + file.id, {...file,originalRetained:true});

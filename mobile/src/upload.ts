@@ -22,6 +22,11 @@ export type SelectedFile = Pick<
   DocumentPickerAsset,
   "uri" | "name" | "mimeType" | "size"
 >;
+export function resolveSelectedFile(file: SelectedFile): SelectedFile {
+  // Android's picker can report the source photo's size even though its URI
+  // points to a compressed cache copy. Validate the bytes we will actually send.
+  return { ...file, size: new File(file.uri).size };
+}
 export function fileProblem(file: SelectedFile) {
   if (file.size === undefined || file.size <= 0)
     return "This file is empty or its size could not be checked.";

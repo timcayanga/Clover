@@ -1,6 +1,6 @@
 import { beginTelemetry } from "../../shared/analytics";
 import { useEffect, useState, useRef } from "react";
-import { Alert, Image, KeyboardAvoidingView, Platform, Pressable, Switch, View } from "react-native";
+import { ActivityIndicator, Alert, Image, KeyboardAvoidingView, Platform, Pressable, Switch, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { router, useLocalSearchParams } from "expo-router";
 import { useSignIn, useSignUp } from "@clerk/expo";
@@ -202,6 +202,23 @@ function AuthForm() {
               (step !== "new-password" || password === repeat) &&
               (step !== "sign-up" || terms),
             );
+  // Authentication has already succeeded. Do not flash an empty sign-in or
+  // sign-up card while the account's onboarding/landing decision loads.
+  if (active) return (
+    <Screen>
+      <View style={{ flex: 1, minHeight: 240, justifyContent: "center", gap: 16 }}>
+        {session.error ? <>
+          <Notice>{session.error}</Notice>
+          {error ? <Notice>{error}</Notice> : null}
+          <Button title="Try again" disabled={busy} onPress={session.refresh} />
+          <Button title="Sign out" secondary disabled={busy} onPress={() => {
+            setBusy(true);
+            void session.signOut().catch(() => setError("Unable to sign out. Please try again.")).finally(() => setBusy(false));
+          }} />
+        </> : <ActivityIndicator color={colors.teal} accessibilityLabel="Opening Clover" />}
+      </View>
+    </Screen>
+  );
   return (
     <KeyboardAvoidingView
       style={{ flex: 1 }}
@@ -222,14 +239,6 @@ function AuthForm() {
             resizeMode="contain"
           />
           <Heading>{title}</Heading>
-          {active && session.error ? <>
-            <Notice>{session.error}</Notice>
-            <Button title="Try again" disabled={busy} onPress={session.refresh} />
-            <Button title="Sign out" secondary disabled={busy} onPress={() => {
-              setBusy(true);
-              void session.signOut().catch(() => setError("Unable to sign out. Please try again.")).finally(() => setBusy(false));
-            }} />
-          </> : null}
           {!active ? <>
           {initial || step === "reset" ? (
             <Field

@@ -29,6 +29,7 @@ import {
 import { useSession } from "../../src/session";
 import {
   fileProblem,
+  resolveSelectedFile,
   removeUploadCopy,
   type SelectedFile,
 } from "../../src/upload";
@@ -109,7 +110,8 @@ export default function Add({ sheet = false }: { sheet?: boolean } = {}) {
       };
     }, [session.demo, session.profileId, session.request, tab, historyRevision]),
   );
-  const open = async (file: SelectedFile) => {
+  const open = async (picked: SelectedFile) => {
+    const file = resolveSelectedFile(picked);
     const problem = fileProblem(file);
     if (problem) {
       removeUploadCopy(file.uri);
