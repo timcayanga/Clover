@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { hasReceiptPhotoEvidence, applyReceiptDefaultCurrency, hasCompleteReceiptCore, receiptSummaryReconciles, inferReceiptLocationCurrency } from "../lib/receipt-intake";
+import { hasReceiptPhotoEvidence, applyReceiptDefaultCurrency, hasCompleteReceiptCore, receiptSummaryReconciles, inferReceiptLocationCurrency, receiptCacheQualityPercent } from "../lib/receipt-intake";
 import { inferOpenAIDocumentFamily } from "../lib/openai-import-parser";
 import { assessFinancialUploadScope } from "../lib/financial-upload-scope";
 import { parseReceiptText, assessReceiptPreviewQuality } from "../lib/split-bill";
@@ -88,3 +88,15 @@ assert.equal(inferReceiptLocationCurrency("서울특별시 강남구")?.currency
 assert.equal(inferReceiptLocationCurrency("Philippines\nUnited States"), null);
 assert.equal(inferReceiptLocationCurrency("Maya Coffee\nTOTAL 425"), null);
 assert.equal(applyReceiptDefaultCurrency(raw, "EUR").currency, "EUR");
+
+// Synthetic abbreviated invoice, including a stored-value tender and VAT grid.
+const abbreviatedInvoice = "Harbour Coffee\n09/09/26 2:16 PM\nInv. No.: 00000042\nTotal Php\nCoffee Card\n360\n-360\nVAT 39";
+assert.equal(hasReceiptPhotoEvidence(abbreviatedInvoice), true, "Recognize a camera invoice before the general statement parser");
+assert.equal(hasReceiptPhotoEvidence("Bank statement\nOpening balance 100\nClosing balance 200\nInv. No.: 42\nTotal Php 100"), false);
+
+assert.equal(receiptCacheQualityPercent({score:10, issues:[]}),100);
+assert.equal(receiptCacheQualityPercent({score:7, issues:[]}),70);
+assert.equal(receiptCacheQualityPercent({score:90, issues:[]}),90);
+assert.equal(receiptCacheQualityPercent({score:10, issues:["date missing"]}),null);
+assert.equal(receiptCacheQualityPercent({score:10, critical:true}),null);
+assert.equal(receiptCacheQualityPercent({score:NaN}),null);

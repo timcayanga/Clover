@@ -32,6 +32,8 @@ const toIsoDate = (year: number, month: number, day: number) => {
 };
 
 const getExplicitEvidenceDates = (sourceText: string) => {
+  // Printer permits and accreditation dates are not purchase dates.
+  sourceText = sourceText.split(/\r?\n/).filter(line => !/\b(?:date issued|valid until|accred(?:itation)?|permit|expiry|expiration)\b/i.test(line)).join("\n");
   const dates = new Set<string>();
   const add = (year: number, month: number, day: number) => {
     const iso = toIsoDate(year, month, day);
@@ -41,10 +43,10 @@ const getExplicitEvidenceDates = (sourceText: string) => {
   for (const match of sourceText.matchAll(/\b(20\d{2})\s*(?:[-/.]|年)\s*(\d{1,2})\s*(?:[-/.]|月)\s*(\d{1,2})(?:日)?\b/g)) {
     add(Number(match[1]), Number(match[2]), Number(match[3]));
   }
-  for (const match of sourceText.matchAll(/\b(\d{1,2})\s*[-/.]\s*(\d{1,2})\s*[-/.]\s*(20\d{2})\b/g)) {
+  for (const match of sourceText.matchAll(/\b(\d{1,2})\s*[-/.]\s*(\d{1,2})\s*[-/.]\s*(20\d{2}|\d{2})\b/g)) {
     const left = Number(match[1]);
     const right = Number(match[2]);
-    const year = Number(match[3]);
+    const year = match[3].length === 2 ? 2000 + Number(match[3]) : Number(match[3]);
     add(year, left, right);
     if (left !== right) add(year, right, left);
   }
@@ -101,7 +103,7 @@ export const repairReceiptDateFromEvidence = <T extends ReceiptDateDetails>(
   // model can transcribe the same wrong year into parser_evidence, while the
   // locally extracted receipt text remains an independent source of truth.
   const sourceText = trustedSourceText?.trim() || details.parser_evidence?.source_text?.trim() || "";
-  if (!currentDate || !sourceText) return details;
+  if (!sourceText) return details;
 
   const explicitEvidenceDates = getExplicitEvidenceDates(sourceText);
   // A receipt with one explicit, valid date is stronger evidence than a model
@@ -124,6 +126,14 @@ export const repairReceiptDateFromEvidence = <T extends ReceiptDateDetails>(
       ...details,
       transaction_date: recentEvidenceDate,
     };
+  }
+
+  // A model may return the printed short date despite the ISO schema prompt.
+  // Normalize only a supported interpretation; never guess an ambiguous date.
+  if (!currentDate) {
+    const reportedDates = getExplicitEvidenceDates(details.transaction_date ?? "");
+    const supported = reportedDates.filter(date => explicitEvidenceDates.includes(date));
+    return supported.length === 1 ? { ...details, transaction_date: supported[0] } : details;
   }
 
   const monthDay = currentDate.slice(4);

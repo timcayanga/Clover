@@ -13,6 +13,7 @@ export type QueuedFile = {
   sentBytes?: number;
   originalRetained?: boolean;
   error?: string;
+  progressNoticeSeen?: boolean;
   canonicalId?: string;
   password?: string;
   importMode?: "receipt" | "statement" | "portfolio" | "account_detail";
@@ -111,7 +112,15 @@ export class FileQueue {
     file.state = "queued";
     file.password = password || file.password;
     file.error = undefined;
+    file.progressNoticeSeen = false;
     await this.store.set("file:" + id, file);
+    this.emit();
+  }
+  async acknowledgeProgress(id: string) {
+    const file = await this.store.get<QueuedFile>("file:" + id);
+    if (!file || !["attention", "done"].includes(file.state)) return;
+    await this.authorize(file.workspaceId);
+    await this.store.set("file:" + id, { ...file, progressNoticeSeen: true });
     this.emit();
   }
   async pause(id:string) {

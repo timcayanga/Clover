@@ -26,12 +26,28 @@ export function ImportActivity() {
     const hide = Keyboard.addListener(Platform.OS === "ios" ? "keyboardWillHide" : "keyboardDidHide", () => setKeyboardHeight(0));
     return () => { show.remove(); hide.remove(); };
   }, []);
+  const shownThisSession = useRef(new Set<string>());
   const completed = useRef(new Set<string>());
   const [visibleCompletions, setVisibleCompletions] = useState<string[]>([]);
   const pending = useRef(new Set<string>());
   const files = session.queuedFiles.filter(file => file.workspaceId === session.profileId &&
-    (file.state !== "done" || pending.current.has(file.id)) && !dismissed.includes(file.id));
+    (file.state !== "done" || pending.current.has(file.id)) && !dismissed.includes(file.id) && (!file.progressNoticeSeen || shownThisSession.current.has(file.id)));
   const file = files.find(file => !["done", "attention", "paused"].includes(file.state)) ?? files.at(-1);
+  useEffect(() => {
+    if (path.startsWith("/import/") || path === "/onboarding" || file?.state !== "attention" || file.progressNoticeSeen) return;
+    // Keep this notice visible now, but do not reopen it on the next launch.
+    // The saved import and retry controls remain in upload history.
+    shownThisSession.current.add(file.id);
+    void session.fileQueue?.acknowledgeProgress(file.id).catch(() => {});
+  }, [file?.id, file?.state, file?.progressNoticeSeen, session.fileQueue, path]);
+  useEffect(() => {
+    // An explicit retry starts a new attempt, including in this mounted session.
+    setDismissed(current => {
+      const next = current.filter(id => !session.queuedFiles.some(item => item.id === id &&
+        ["queued", "sending", "finalizing", "processing"].includes(item.state)));
+      return next.length === current.length ? current : next;
+    });
+  }, [session.queuedFiles]);
   const currentView = useRef({ profileId: session.profileId, path, fileId: file?.id });
   currentView.current = { profileId: session.profileId, path, fileId: file?.id };
   useEffect(() => {
@@ -90,7 +106,11 @@ export function ImportActivity() {
         </Pressable> : null}
         <Pressable accessibilityRole="button" accessibilityLabel={active ? "Cancel import" : "Dismiss import progress"}
           accessibilityState={{ disabled: busy }} disabled={busy}
-          onPress={() => active ? void run(() => session.fileQueue!.cancel(file.id)) : setDismissed(value => [...value, file.id])}
+          onPress={() => {
+            if (active) { void run(() => session.fileQueue!.cancel(file.id)); return; }
+            setDismissed(value => [...value, file.id]);
+            void session.fileQueue?.acknowledgeProgress(file.id).catch(() => {});
+          }}
           style={{ width: 44, height: 44, alignItems: "center", justifyContent: "center", opacity: busy ? 0.45 : 1 }}><Icon line name="close" size={20} color={colors.ink}/></Pressable>
       </View>
       <Progress value={progress}/>

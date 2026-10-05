@@ -1,0 +1,46 @@
+// Run only against an explicitly isolated loopback database; no provider calls.
+import assert from 'node:assert/strict';
+import { randomUUID, createHash } from 'node:crypto';
+import { createRequire } from 'node:module';
+import sharp from 'sharp';
+import { prisma } from '../lib/prisma';
+import { resolveImportFileExtractionCacheVersion } from '../lib/data-engine';
+import { AI_CONSENT_VERSION } from '../../shared/ai-consent';
+import { processImportFileText } from '../workers/import-processor';
+const url = new URL(process.env.DATABASE_URL!);
+assert.equal(url.hostname, '127.0.0.1');
+assert.equal(url.port, '55439');
+assert.equal(url.pathname, '/clover_receipt_qa');
+assert.ok(process.argv.includes('--execute'));
+const nextCache = createRequire(import.meta.url)('next/cache');
+nextCache.revalidateTag = () => {};
+let owner: string | undefined;
+let cloudCalls = 0;
+const originalFetch = globalThis.fetch;
+globalThis.fetch = async (...args) => { cloudCalls++; throw new Error(`Unexpected network request ${new URL(String(args[0])).hostname}`); };
+async function main() {
+  await prisma.cloverDeploymentEnvironment.upsert({ where: { id: 'primary' }, create: { environment: 'staging' }, update: {} });
+  const user = await prisma.user.create({ data: { clerkUserId: randomUUID(), email: `${randomUUID()}@example.invalid`, environment: 'staging', planTier: 'free', appPreferences: { aiConsent: { version: AI_CONSENT_VERSION, grantedAt: new Date().toISOString(), withdrawnAt: null } } } });
+  owner = user.id;
+  const w = await prisma.workspace.create({ data: { userId: user.id, name: 'Receipt QA' } });
+  const bytes = await sharp({ create: { width: 30, height: 30, channels: 3, background: 'white' } }).png().toBuffer();
+  const fingerprint = createHash('sha256').update(bytes).digest('hex');
+  const text = 'Harbour Coffee\n09/09/26 2:16 PM\nInv. No.: 42\nTOTAL PHP 360\nCARD 360\nDate Issued: September 15, 2016';
+  const details = { merchant_raw: 'Harbour Coffee', merchant_clean: 'Harbour Coffee', transaction_date: '09/09/26', transaction_time: '2:16 PM', currency: 'PHP', total: 360, subtotal: 321, tax: 39, service_charge: null, discount: null, tip: null, payment_method: 'Card', receipt_type: 'purchase_receipt', line_items: [], split_allocations: [], confidence_score: .95, parser_evidence: { source_text: text, reason: 'Synthetic receipt' } };
+  await prisma.importFileExtractionCache.create({ data: { workspaceId: w.id, fileFingerprint: fingerprint, fileType: 'image/png', importMode: 'receipt', cacheVersion: resolveImportFileExtractionCacheVersion('receipt.png'), extractedText: text, metadata: { receiptExtraction: { receiptDetails: details, validation: { score: 10, issues: [] } } } } });
+  const f = await prisma.importFile.create({ data: { workspaceId: w.id, fileName: 'receipt.png', fileType: 'image/png', storageKey: 'qa/synthetic-receipt', sourceFingerprint: fingerprint, status: 'failed', processingPhase: 'receipt_review_required' } });
+  const started = performance.now();
+  const result = await processImportFileText(f.id, { actorUserId: user.id, importMode: 'statement', sourceBytes: bytes, deviceText: { version: 1, source: 'apple_vision', text, complete: true, pagesRead: 1, totalPages: 1, durationMs: 0 } });
+  const workerMs = Math.round(performance.now() - started);
+  const rows = await prisma.transaction.findMany({ where: { importFileId: f.id } });
+  assert.equal(result.status, 'done');
+  assert.equal(rows.length, 1);
+  assert.equal(rows[0].date.toISOString().slice(0,10), '2026-09-09');
+  assert.equal(Number(rows[0].amount), 360);
+  assert.equal(rows[0].currency, 'PHP');
+  assert.equal(cloudCalls, 0, 'Validated cached extraction must not call AI again');
+  await processImportFileText(f.id, { actorUserId: user.id, importMode: 'receipt', sourceBytes: bytes, text });
+  assert.equal(await prisma.transaction.count({ where: { importFileId: f.id } }), 1);
+  console.log(JSON.stringify({ passed: true, workerMs, cloudCalls, date: '2026-09-09', transactions: 1 }));
+}
+main().finally(async () => { globalThis.fetch = originalFetch; if(owner) await prisma.user.delete({ where: { id: owner } }); await prisma.$disconnect(); }).catch(e => { console.error(e); process.exitCode=1; });

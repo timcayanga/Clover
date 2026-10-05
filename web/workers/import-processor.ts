@@ -1,5 +1,5 @@
 import { encodeLocalReceiptOcr, readLocalReceiptOcrText } from "@/lib/local-receipt-ocr-envelope";
-import { applyReceiptDefaultCurrency, hasCompleteReceiptCore, hasReceiptPhotoEvidence, receiptSummaryReconciles } from "@/lib/receipt-intake";
+import { applyReceiptDefaultCurrency, hasCompleteReceiptCore, hasReceiptPhotoEvidence, receiptSummaryReconciles, receiptCacheQualityPercent } from "@/lib/receipt-intake";
 import { normalizeRegionalPreferences } from "@/lib/regional-preferences";
 import { normalizeDeviceTextEvidence, type DeviceTextEvidence } from "../../shared/device-text-evidence";
 import { getImportUserControl, ImportUserControlError, requireImportMayContinue } from "@/lib/import-user-control";
@@ -250,7 +250,7 @@ const readPersistedReceiptExtraction = (rawPayload: unknown): PersistedReceiptEx
   return {
     receiptDetails,
     receiptAccountMatch: accountMatch,
-    validationScore: typeof validation?.score === "number" ? validation.score : null,
+    validationScore: receiptCacheQualityPercent(validation),
   };
 };
 
@@ -11480,6 +11480,16 @@ const processImportFileTextImpl = async (
       receiptDetails,
       expectedCurrency: receiptDetails.currency,
     });
+  }
+
+  // A later vision/transcript candidate can replace the first candidate. Run
+  // date normalization at this final boundary too, before caching or saving.
+  if (effectiveImportMode === "receipt" && receiptDetails) {
+    receiptDetails = repairReceiptDateFromEvidence(receiptDetails, readLocalReceiptOcrText(text) ?? text, {
+      referenceDate: importFile.uploadedAt, sourceLocale: importFile.sourceLocale,
+    });
+    openAiReceiptValidation = assessReceiptExtractionQuality({ receiptDetails,
+      expectedCurrency: receiptDetails.currency });
   }
 
   if (openAiParsed?.audit && options.actorUserId) {

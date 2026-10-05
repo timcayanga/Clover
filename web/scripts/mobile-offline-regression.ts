@@ -707,6 +707,19 @@ test("slow or failed device OCR cannot block uploading the original", async () =
   await uploadInParts(request,file,"b3JpZ2luYWw=",{signal:new AbortController().signal,progress:async()=>{}},async()=>{throw new Error("unsupported");});
   assert.equal(completed,true);
 });
+test("an error notice is remembered across relaunch without discarding the saved import", async () => {
+  const store = memory();
+  const transport = { status: async () => ({ done: false, failed: true, message: "Check this file" }), upload: async () => ({}) };
+  const q = new FileQueue(store, transport, async () => {});
+  await q.add({ ...file, state: "attention", error: "Check this file" }, "b3JpZ2luYWw=");
+  await q.acknowledgeProgress(file.id);
+  const reopened = new FileQueue(store, transport, async () => {});
+  assert.equal((await reopened.list())[0].progressNoticeSeen, true);
+  assert.equal((await reopened.list())[0].state, "attention");
+  assert.equal(await reopened.bytes(file), "b3JpZ2luYWw=", "Acknowledging a notice never deletes the source");
+  await reopened.enqueue(file.id);
+  assert.equal((await reopened.list())[0].progressNoticeSeen, false, "An explicit retry may report a new result");
+});
 test("pause aborts the active transfer, retains original bytes, and requires explicit resume",async()=>{
   const store=memory();let started!:()=>void;const began=new Promise<void>(r=>{started=r;});
   const q=new FileQueue(store,{status:async()=>{throw Object.assign(new Error("missing"),{status:404});},upload:async(_file,_bytes,control)=>{started();await new Promise<void>((_,reject)=>control.signal.addEventListener("abort",()=>reject(new Error("aborted")),{once:true}));return {};},cancel:async()=>{}},async()=>{});

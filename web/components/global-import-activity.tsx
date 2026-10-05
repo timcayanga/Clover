@@ -69,7 +69,7 @@ const readDismissedKeys = () => {
   }
 
   try {
-    const parsed = JSON.parse(window.sessionStorage.getItem(dismissedImportActivityStorageKey) ?? "[]");
+    const parsed = JSON.parse(window.localStorage.getItem(dismissedImportActivityStorageKey) ?? "[]");
     return new Set(Array.isArray(parsed) ? parsed.filter((entry): entry is string => typeof entry === "string") : []);
   } catch {
     return new Set<string>();
@@ -82,7 +82,7 @@ const writeDismissedKeys = (keys: Set<string>) => {
   }
 
   try {
-    window.sessionStorage.setItem(dismissedImportActivityStorageKey, JSON.stringify([...keys].slice(-50)));
+    window.localStorage.setItem(dismissedImportActivityStorageKey, JSON.stringify([...keys].slice(-50)));
   } catch {
     // Dismissal is best-effort; storage can be unavailable in private contexts.
   }

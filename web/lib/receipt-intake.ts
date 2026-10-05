@@ -3,7 +3,7 @@ import { normalizeDefaultCurrency } from "./regional-preferences";
 /** Classify the document, not a camera filename or incidental crypto substring. */
 export function hasReceiptPhotoEvidence(text: string) {
   const source = text.normalize("NFKC");
-  const receiptHeader = /\b(?:sales\s*invoice|official\s*receipt|sales\s*receipt|receipt\s*(?:no|number|#)|cashier|struk|kuitansi|kwitansi)\b|영수증|승인번호|領収書|收据|收據/iu.test(source);
+  const receiptHeader = /\b(?:sales\s*invoice|inv(?:oice)?\.?\s*(?:no\.?|number|#)\s*:?|official\s*receipt|sales\s*receipt|receipt\s*(?:no|number|#)|cashier|struk|kuitansi|kwitansi)\b|영수증|승인번호|領収書|收据|收據/iu.test(source);
   const settlement = /\b(?:grand\s*total|total(?:\s+(?:due|amount|payment))?|amount\s*due|subtotal|vat(?:able)?\s*(?:sales|amount)|payment\s*(?:type|method)|kembalian)\b|합\s*계|결제금액|받을금액/iu.test(source);
   const statementTable = /\b(?:opening|closing)\s+balance\b|\b(?:debit|withdrawal)\s+(?:credit|deposit)\s+balance\b|거래일자\s+입금\s+출금/iu.test(source);
   return receiptHeader && settlement && /\d/.test(source) && !statementTable;
@@ -77,4 +77,12 @@ export function hasCompleteReceiptCore(details: {
   return merchant.length > 1 && !/^(?:(?:test|official|sales|cash|store)\s+)?(?:receipt|invoice|total)$/i.test(merchant) &&
     !!parsed && Number.isFinite(parsed.getTime()) && parsed.toISOString().slice(0, 10) === date &&
     typeof details.total === "number" && Number.isFinite(details.total) && details.total > 0;
+}
+
+/** Receipt validators score out of ten; cache routing compares percentages. */
+export function receiptCacheQualityPercent(validation: { score?: unknown; issues?: unknown; critical?: unknown } | null) {
+  if (!validation || validation.critical === true || (Array.isArray(validation.issues) && validation.issues.length)) return null;
+  const score = validation.score;
+  if (typeof score !== "number" || !Number.isFinite(score) || score < 0 || score > 100) return null;
+  return score <= 10 ? score * 10 : score;
 }

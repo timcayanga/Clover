@@ -111,6 +111,19 @@ assert.equal(
   "Independent local receipt text must outrank a model-transcribed year."
 );
 
+// Short printed dates must be normalized before the completeness gate.
+for (const reported of ["09/09/26", null, "2026-09-09"]) {
+  const original = { transaction_date: reported, parser_evidence: { source_text: "09/09/26 2:16 PM" } };
+  const repaired = repairReceiptDateFromEvidence(original,
+    "Harbour Coffee\n09/09/26 2:16 PM\nTotal Php 360\nDate Issued: September 15, 2016");
+  assert.equal(repaired.transaction_date, "2026-09-09");
+  assert.equal(original.transaction_date, reported, "Keep raw model and optical evidence unchanged");
+}
+assert.equal(repairReceiptDateFromEvidence({ transaction_date: "09/10/26" }, "09/10/26").transaction_date, "09/10/26", "Do not guess an ambiguous printed date");
+assert.equal(repairReceiptDateFromEvidence({ transaction_date: null }, "Date Issued: September 15, 2016").transaction_date, null, "A printer date cannot supply a missing purchase date");
+assert.equal(repairReceiptDateFromEvidence({ transaction_date: null }, "02/30/26").transaction_date, null, "Invalid dates stay missing");
+assert.equal(repairReceiptDateFromEvidence({ transaction_date: "29/02/24" }, "29/02/24").transaction_date, "2024-02-29");
+
 const receiptText = [
   "UNKNOWN MERCHANT",
   "08/16/2026",
