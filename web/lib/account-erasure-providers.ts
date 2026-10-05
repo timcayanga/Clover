@@ -51,9 +51,15 @@ export async function erasePostHogData(input: {
 export async function eraseRevenueCatCustomer(input: {
   appUserId: string; key: string; readKey: string; projectId: string;
   isLiveIdentity: (id: string) => Promise<boolean>;
+  checkpoint: () => Promise<void>;
 }, fetcher: Fetcher = fetch) {
+  const deadline = Date.now() + 40000;
+  const boundedFetch: Fetcher = (url, init) => {
+    if (Date.now() >= deadline) throw new Error("RevenueCat cleanup deadline exceeded.");
+    return fetcher(url, { ...init, signal: AbortSignal.timeout(Math.min(15000, deadline - Date.now())) });
+  };
   const customerUrl = `https://api.revenuecat.com/v2/projects/${encodeURIComponent(input.projectId)}/customers/${encodeURIComponent(input.appUserId)}`;
-  const customer = await request(fetcher, customerUrl, input.readKey);
+  const customer = await request(boundedFetch, customerUrl, input.readKey);
   if (customer.status === 404) return true;
   if (!customer.ok) failure("RevenueCat", customer.status);
   const data = await customer.json();
@@ -65,7 +71,7 @@ export async function eraseRevenueCatCustomer(input: {
   let url = base;
   const aliases = new Set([input.appUserId]);
   for (let page = 0; ; page++) {
-    const response = await request(fetcher, url, input.readKey);
+    const response = await request(boundedFetch, url, input.readKey);
     if (response.status === 404) return true;
     if (!response.ok) failure("RevenueCat", response.status);
     const data = await response.json();
@@ -83,7 +89,10 @@ export async function eraseRevenueCatCustomer(input: {
   // DELETE is customer-wide, including aliases. Never erase a recovered purchase
   // now belonging to a live Clover identity.
   for (const alias of aliases) if (await input.isLiveIdentity(alias)) throw new Error("RevenueCat cleanup includes a live identity; manual separation is required.");
-  const result = await request(fetcher, `https://api.revenuecat.com/v1/subscribers/${encodeURIComponent(input.appUserId)}`, input.key, "DELETE");
+  // Durable intent must survive an accepted DELETE whose HTTP response is lost.
+  // Recovery checks this marker under the same source lock before any transfer.
+  await input.checkpoint();
+  const result = await request(boundedFetch, `https://api.revenuecat.com/v1/subscribers/${encodeURIComponent(input.appUserId)}`, input.key, "DELETE");
   if (![200, 404].includes(result.status)) failure("RevenueCat", result.status);
   return result.status === 404; // 200 queues asynchronous deletion; verify absence on a later pass.
 }

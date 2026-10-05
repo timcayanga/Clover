@@ -32,20 +32,26 @@ async function main() {
   await assert.rejects(()=>erasePostHogData(analytics,async()=>new Response(null,{status:403})),/HTTP 403/);
   await assert.rejects(()=>erasePostHogData({...analytics,origin:"https://foreign.test"},ph),/host/);
 
-  let rcExists=true, active=false, live=false, queued=0;
+  let rcExists=true, active=false, live=false, queued=0, deletionMarked=false;
   const rc: typeof fetch=async(url,init)=>{
     const path=new URL(String(url)).pathname;
-    if(init?.method==="DELETE") {queued++;return new Response("{}",{status:200});}
+    if(init?.method==="DELETE") {assert.equal(deletionMarked,true,"durable intent before remote deletion");queued++;return new Response("{}",{status:200});}
     if(!rcExists)return new Response(null,{status:404});
     if(path.endsWith("/aliases"))return Response.json({items:[{id:live?"user_live":"$RCAnonymousID:fixture"}]});
     return Response.json({active_entitlements:{items:active?[{entitlement_id:"plus"}]:[]}});
   };
-  const revenuecat={appUserId:"user_deleted",key:"test-only",readKey:"test-only",projectId:"fixture",isLiveIdentity:async(id:string)=>id==="user_live"};
+  const revenuecat={appUserId:"user_deleted",key:"test-only",readKey:"test-only",projectId:"fixture",isLiveIdentity:async(id:string)=>id==="user_live",checkpoint:async()=>{deletionMarked=true;}};
   active=true; assert.equal(await eraseRevenueCatCustomer(revenuecat,rc),false); assert.equal(queued,0,"preserve paid-period recovery");
   active=false; live=true;
   await assert.rejects(()=>eraseRevenueCatCustomer(revenuecat,rc),/live identity/);assert.equal(queued,0);
   live=false; assert.equal(await eraseRevenueCatCustomer(revenuecat,rc),false);assert.equal(queued,1);
   rcExists=false;assert.equal(await eraseRevenueCatCustomer(revenuecat,rc),true);
+  rcExists=true; deletionMarked=false;
+  await assert.rejects(()=>eraseRevenueCatCustomer(revenuecat,async(url,init)=>{
+    if(init?.method==="DELETE")throw Error("response lost after provider acceptance");
+    return rc(url,init);
+  }),/response lost/);
+  assert.equal(deletionMarked,true,"unknown deletion outcome preserves the recovery guard");
   await assert.rejects(()=>eraseRevenueCatCustomer(revenuecat,async()=>new Response(null,{status:403})),/HTTP 403/);
   await assert.rejects(()=>eraseRevenueCatCustomer(revenuecat,async()=>Response.json({})),/entitlement state/);
 

@@ -13,10 +13,12 @@ function harness(options: Record<string, boolean> = {}) {
   let owner = options.alreadyRecovered ? target : old;
   let audit: Record<string, unknown> | null = options.reservedElsewhere ? { targetClerkUserId: "user_other", environment: "production" } : null;
   const calls: string[] = [];
+  let erasureChecks = 0;
   const tx = {
     $executeRaw: async () => {},
     user: { findUnique: async ({where}: any) => where.id ? {id:"target"} : options.sourceLive ? {id:"old"} : null },
     clerkIdentityDeletion: { findUnique: async ({where}: any) => where.clerkUserId === target ? options.targetDeleted ? {completedAt:new Date()} : null : options.notDeleted ? null : {completedAt:options.incomplete ? null : new Date(),environment:options.wrongEnvironment ? "staging" : "production"} },
+    accountErasureTask: { findUnique: async () => (options.erasureRequested || (options.erasureAfterReservation && ++erasureChecks >= 2)) ? {status:"pending",payload:{deletionRequested:true}} : options.erasureComplete ? {status:"completed",payload:{}} : null },
     storePurchaseRecovery: {updateMany:async({data}:any)=>{if(audit)Object.assign(audit,data);},findUnique:async()=>audit,create:async({data}:any)=>{audit=data;},update:async({data}:any)=>{Object.assign(audit!,data);}},
     storeAccess: {findUnique:async()=>options.targetPaid ? {expiresAt:new Date(Date.now()+60000)} : null},
   };
@@ -69,6 +71,11 @@ async function checkRecoveredAliases() {
   assert.equal(await api.verifyRecoveredStoreAlias({subscriber:{...raw.subscriber,original_app_user_id:"user_other"}},target,"production"),undefined);
 }
 async function main(){
+  for (const flag of ["erasureRequested", "erasureComplete", "erasureAfterReservation"]) {
+    const fixture=harness({[flag]:true});
+    await assert.rejects(fixture.run);
+    assert.deepEqual(fixture.calls, [], "remote deletion intent blocks transfer before provider deletion finishes");
+  }
   await checkRecoveredAliases();
   for(const issue of ["disabled","invalidProof","wrongProduct","refunded","wrongStore","shared","providerLive","sourceLive","notDeleted","incomplete","wrongEnvironment","targetDeleted","targetPaid","reservedElsewhere"]){
     const h=harness({[issue]:true});await assert.rejects(h.run());assert(!h.calls.includes("transfer"),issue);assert(!h.calls.includes("sync"),issue);

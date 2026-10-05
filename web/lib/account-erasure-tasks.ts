@@ -3,7 +3,7 @@ import { getDeploymentEnvironment } from "./deployment-environment";
 import { erasePostHogData, eraseRevenueCatCustomer } from "./account-erasure-providers";
 import type { Prisma } from "@prisma/client";
 
-type Payload = { distinctIds?: string[]; personIds?: string[] };
+type Payload = { distinctIds?: string[]; personIds?: string[]; deletionRequested?: boolean };
 /** Called inside the transaction deleting User, so provider intent cannot be lost. */
 export async function queueAccountErasure(tx: Prisma.TransactionClient, user: { id: string; clerkUserId: string; environment: string }) {
   const tasks = [
@@ -57,7 +57,13 @@ export async function runAccountErasureTasks(limit = 5, deadline = Date.now() + 
         // The same source lock serializes recovery transfers against customer erasure.
         done = await prisma.$transaction(async tx => {
           await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`store-recovery:${task.clerkUserId}`}))`;
-          return eraseRevenueCatCustomer({ appUserId: task.clerkUserId, key, readKey, projectId: "c4469f47", isLiveIdentity: liveIdentity(tx) });
+          return eraseRevenueCatCustomer({ appUserId: task.clerkUserId, key, readKey, projectId: "c4469f47", isLiveIdentity: liveIdentity(tx),
+            checkpoint: async () => {
+              // Separate committed write: a transaction timeout after remote acceptance
+              // must not erase the guard against a concurrent recovery transfer.
+              await prisma.accountErasureTask.update({ where: { id: task.id }, data: { payload: { deletionRequested: true } } });
+            },
+          });
         }, { timeout: 60000 });
       } else throw new Error("Unknown account erasure provider.");
       await prisma.accountErasureTask.update({ where: { id: task.id }, data: {

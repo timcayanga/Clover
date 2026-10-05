@@ -75,6 +75,8 @@ export async function recoverDeletedStorePurchase(userId: string, signedTransact
   const key = { sourceClerkUserId_appId: { sourceClerkUserId: source, appId: iosApp } };
   await prisma.$transaction(async tx => {
     await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`store-recovery:${source}`}))`;
+    const erasure = await tx.accountErasureTask.findUnique({ where: { clerkUserId_provider: { clerkUserId: source, provider: "revenuecat" } } });
+    if (erasure?.status === "completed" || record(erasure?.payload).deletionRequested === true) fail();
     const deleted = await tx.clerkIdentityDeletion.findUnique({ where: { clerkUserId: source } });
     if (!deleted?.completedAt || deleted.environment !== target.environment || await tx.user.findUnique({ where: { clerkUserId: source } })) fail();
     const prior = await tx.storePurchaseRecovery.findUnique({ where: key });
@@ -89,6 +91,8 @@ export async function recoverDeletedStorePurchase(userId: string, signedTransact
     await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`clerk-identity:${target.clerkUserId}`}))`;
     await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`store-recovery:${source}`}))`;
     if (await tx.clerkIdentityDeletion.findUnique({ where: { clerkUserId: target.clerkUserId } }) || !await tx.user.findUnique({ where: { id: userId } })) fail();
+    const erasure = await tx.accountErasureTask.findUnique({ where: { clerkUserId_provider: { clerkUserId: source, provider: "revenuecat" } } });
+    if (erasure?.status === "completed" || record(erasure?.payload).deletionRequested === true) fail();
     const currentOwner = await subscriptionOwner(proof.transactionId, proof.environment);
     if (currentOwner !== source && currentOwner !== target.clerkUserId) fail();
     if (currentOwner === source) {
