@@ -37,6 +37,12 @@ jobs:
           npm ci --prefix web
           npm ci --prefix mobile
 
+      - name: Set up Java for Android compatibility regression checks
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
       - name: Generate Prisma Client
         run: npm --prefix web exec -- prisma generate --schema web/prisma/schema.prisma
 

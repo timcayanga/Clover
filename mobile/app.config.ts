@@ -38,7 +38,12 @@ const config: ExpoConfig = {
       },
     ],
     "expo-localization",
-    ["expo-build-properties", { android: { minSdkVersion: 26 } }],
+    ["expo-build-properties", { android: {
+      minSdkVersion: 26,
+      enableMinifyInReleaseBuilds: true,
+      enableShrinkResourcesInReleaseBuilds: true,
+    } }],
+    "./plugins/with-clover-android-release.cjs",
     ["expo-sqlite", { useSQLCipher: true }],
     "./plugins/with-unique-pod-uuids.cjs",
     "./plugins/with-quoted-ios-paths.cjs",
