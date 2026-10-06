@@ -38,7 +38,7 @@ assert.deepEqual(usablePane(1000, 800, [{ x: 400, y: 0, width: 20, height: 800, 
 assert.deepEqual(usablePane(800, 1000, [{ x: 0, y: 490, width: 800, height: 20, vertical: false, separating: true }]), { x: 0, y: 0, width: 800, height: 490 });
 assert.deepEqual(usablePane(1000, 800, [{ x: 500, y: 0, width: 0, height: 800, vertical: true, separating: false }]), { x: 0, y: 0, width: 1000, height: 800 });
 // OEM stale, outside-window and malformed coordinates cannot collapse the UI.
-for (const x of [-10, 1001, NaN]) assert.equal(usablePane(1000, 800, [{ x, y: 0, width: 20, height: 800, vertical: true, separating: true }]).width, 1000);
+for (const x of [-30, 1001, NaN]) assert.equal(usablePane(1000, 800, [{ x, y: 0, width: 20, height: 800, vertical: true, separating: true }]).width, 1000);
 const viewport = { x: 0, y: 50, width: 1000, height: 700 };
 const field = { x: 20, y: 600, width: 300, height: 48 };
 assert.equal(focusScrollDelta(field, viewport, null), 0);
@@ -51,3 +51,8 @@ assert(supportsDetailPane(1366));
 assert(!supportsDetailPane(820));
 assert(!supportsDetailPane(1366, 2), 'Large text returns to a readable single pane');
 console.log('PASS foldable panes, stale hinge data, floating/docked keyboards, resized viewports and accessible split thresholds');
+
+assert.deepEqual(usablePane(1000, 800, [{ x: -10, y: 0, width: 20, height: 800, vertical: true, separating: true }]), { x: 10, y: 0, width: 990, height: 800 }, 'A partial hinge at the edge of a split window must still be avoided');
+assert.deepEqual(usablePane(1000, 500, [{ x: 0, y: 490, width: 1000, height: 20, vertical: false, separating: true }]), { x: 0, y: 0, width: 1000, height: 490 }, 'A keyboard-resized window must not draw into the visible half of a hinge');
+assert.deepEqual(usablePane(1200, 800, [{ x: 500, y: 0, width: 20, height: 800, vertical: true, separating: true }, { x: 850, y: 0, width: 20, height: 800, vertical: true, separating: true }]), { x: 0, y: 0, width: 500, height: 800 }, 'Multiple folds must choose the largest final pane, not a greedy intermediate pane');
+console.log('PASS partial hinges in split/keyboard windows and multi-fold pane selection');

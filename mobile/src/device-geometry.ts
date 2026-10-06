@@ -3,20 +3,25 @@ export type Fold = Rect & { vertical: boolean; separating: boolean };
 
 /** All coordinates are window-relative logical pixels, never physical pixels. */
 export function usablePane(width: number, height: number, folds: Fold[]): Rect {
-  let pane: Rect = { x: 0, y: 0, width, height };
+  let panes: Rect[] = [{ x: 0, y: 0, width, height }];
   for (const fold of folds) {
     if (!fold.separating || fold.width < 0 || fold.height < 0 || ![fold.x, fold.y, fold.width, fold.height].every(Number.isFinite)) continue;
-    const right = pane.x + pane.width, bottom = pane.y + pane.height;
-    let choices: Rect[] = [];
-    if (fold.vertical && fold.x > pane.x && fold.x + fold.width < right && fold.y <= pane.y && fold.y + fold.height >= bottom) {
-      choices = [{ ...pane, width: fold.x - pane.x }, { ...pane, x: fold.x + fold.width, width: right - fold.x - fold.width }];
-    } else if (!fold.vertical && fold.y > pane.y && fold.y + fold.height < bottom && fold.x <= pane.x && fold.x + fold.width >= right) {
-      choices = [{ ...pane, height: fold.y - pane.y }, { ...pane, y: fold.y + fold.height, height: bottom - fold.y - fold.height }];
-    }
-    // Stable left/top tie-break prevents the task jumping between equal panes.
-    if (choices.length) pane = choices[1].width * choices[1].height > choices[0].width * choices[0].height ? choices[1] : choices[0];
+    panes = panes.flatMap(pane => {
+      const right = pane.x + pane.width, bottom = pane.y + pane.height;
+      if (fold.vertical && fold.x < right && fold.x + fold.width > pane.x && fold.y <= pane.y && fold.y + fold.height >= bottom) {
+        const after = Math.min(right, fold.x + fold.width);
+        return [{ ...pane, width: Math.max(0, fold.x - pane.x) }, { ...pane, x: after, width: right - after }].filter(part => part.width > 0);
+      }
+      if (!fold.vertical && fold.y < bottom && fold.y + fold.height > pane.y && fold.x <= pane.x && fold.x + fold.width >= right) {
+        const after = Math.min(bottom, fold.y + fold.height);
+        return [{ ...pane, height: Math.max(0, fold.y - pane.y) }, { ...pane, y: after, height: bottom - after }].filter(part => part.height > 0);
+      }
+      return [pane];
+    });
   }
-  return pane;
+  // Compare all resulting panes (including multi-fold displays), preserving a
+  // left/top tie-break. An invalid OEM report must not collapse the entire app.
+  return panes.reduce((best, pane) => pane.width * pane.height > best.width * best.height ? pane : best, panes[0] ?? { x: 0, y: 0, width, height });
 }
 
 export function focusScrollDelta(field: Rect, viewport: Rect, keyboard: Rect | null, margin = 16): number {

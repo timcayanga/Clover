@@ -5,7 +5,7 @@ import ts from 'typescript';
 import { adaptiveLayout } from '../src/adaptive-layout.ts';
 const flatten = value => Array.isArray(value) ? Object.assign({}, ...value.filter(Boolean).map(flatten)) : value ?? {};
 const tick = () => new Promise(resolve => setImmediate(resolve));
-function load(file, { os = 'ios', available = true, api = true, target = { current: {} }, reduced = false, transparencySupported = true, session = {}, width = 390, height = 844, fontScale = 1 } = {}) {
+function load(file, { os = 'ios', available = true, api = true, target = { current: {} }, reduced = false, transparencySupported = true, session = {}, width = 390, height = 844, fontScale = 1, contrast = false, dark = false } = {}) {
   const states = [], refs = [], effects = [], animations = [];
   const keyboardListeners = new Map();
   let stateIndex = 0, refIndex = 0;
@@ -17,7 +17,7 @@ function load(file, { os = 'ios', available = true, api = true, target = { curre
   const Native = {
     View: 'View', Pressable: 'Pressable', Image: 'Image', StyleSheet: { create: x => x, flatten, absoluteFill: { position: 'absolute', inset: 0 } },
     Keyboard: { addListener: (event, callback) => { keyboardListeners.set(event, callback); return { remove() { keyboardListeners.delete(event); } }; } },
-    Platform: { OS: os }, useColorScheme: () => 'light',
+    Platform: { OS: os }, useColorScheme: () => dark ? 'dark' : 'light',
     AccessibilityInfo: { isReduceMotionEnabled: async () => reduced, ...(transparencySupported ? { isReduceTransparencyEnabled: async () => reduced } : {}), addEventListener: () => ({ remove() {} }) },
     Animated: { View: 'Animated.View', Value: class { constructor(v) { this.value = v; } setValue(v) { this.value = v; } stopAnimation() {} },
       timing: (value, options) => ({ start() { animations.push(options); value.setValue(options.toValue); } }) },
@@ -35,8 +35,8 @@ function load(file, { os = 'ios', available = true, api = true, target = { curre
     if (name === '@clerk/expo') return { useUser: () => ({ user: { hasImage: true, imageUrl: 'test://photo' } }) };
     if (name.endsWith('/adaptive')) return { useAdaptiveLayout: () => ({ width, height, fontScale, ...adaptiveLayout(width, height, fontScale) }) };
     if (name.endsWith('/session')) return { useSession: () => session };
-    if (name.endsWith('/accessibility-preferences')) return { useAccessibilityPreferences: () => ({ reduceMotion: reduced, highContrast: false }) };
-    if (name.endsWith('/display-preferences')) return { useDisplayPreferences: () => ({ appearance: 'light' }) };
+    if (name.endsWith('/accessibility-preferences')) return { useAccessibilityPreferences: () => ({ reduceMotion: reduced, highContrast: contrast }) };
+    if (name.endsWith('/display-preferences')) return { useDisplayPreferences: () => ({ appearance: 'system' }) };
     if (name.endsWith('/access')) return { useAccess: () => ({ active: true }) };
     if (name.endsWith('/icon-assets')) return { mobileNavigationIcons: {}, mobileInterfaceIcons: {}, mobileCategoryIcons: {} };
     if (name.endsWith('/glass-backdrop')) return { GlassBackdrop: 'GlassBackdrop', GlassContent: 'GlassContent' };
@@ -109,3 +109,17 @@ assert(nodes(gate.render('ProfileGate')).some(node => node.props?.title === 'Try
 const avatar = gate.render('AccountAvatar');
 assert.equal(avatar.type().props.style.borderRadius, 17, 'Photo avatars match the 34px circular fallback');
 console.log('PASS onboarding Home handoff, retry recovery, circle avatar, shared Android/iOS nav geometry, glass initialization and accessibility fallback');
+
+const luminance = hex => {
+  const rgb = hex.match(/[a-f0-9]{2}/gi).map(value => { const n = parseInt(value, 16) / 255; return n <= .04045 ? n / 12.92 : ((n + .055) / 1.055) ** 2.4; });
+  return rgb[0] * .2126 + rgb[1] * .7152 + rgb[2] * .0722;
+};
+for (const dark of [false, true]) {
+  const button = load('../src/ui.tsx', { contrast: true, dark }).render('Button', { title: 'Delete account', danger: true, onPress() {} });
+  const background = flatten(button.props.style({ pressed: false })).backgroundColor;
+  const label = nodes(button).find(node => node.props?.children === 'Delete account');
+  const foreground = flatten(label.props.style).color;
+  const a = luminance(background), b = luminance(foreground);
+  assert((Math.max(a, b) + .05) / (Math.min(a, b) + .05) >= 4.5, 'High-contrast destructive buttons must keep readable labels in both themes');
+}
+console.log('PASS destructive action contrast in light/dark increased-contrast themes');

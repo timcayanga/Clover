@@ -153,7 +153,7 @@ export function Button({
       style={({ pressed }) => [
         styles.button,
         secondary && styles.secondary,
-        danger && { backgroundColor: colors.danger, borderColor: colors.danger },
+        danger && { backgroundColor: highContrast ? "#BB2035" : colors.danger, borderColor: highContrast ? "#BB2035" : colors.danger },
         textOnly && { backgroundColor: "transparent", borderWidth: 0, paddingHorizontal: 0, minHeight: 44 },
         fullWidth && { alignSelf: "stretch", width: "100%", minHeight: 52 },
         (pressed || disabled) && { opacity: 0.6 },
