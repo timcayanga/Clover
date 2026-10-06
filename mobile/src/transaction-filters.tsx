@@ -1,3 +1,4 @@
+import { useAdaptiveLayout } from "./adaptive";
 import { useState, type ReactNode } from "react";
 import { Pressable, ScrollView, View } from "react-native";
 import { Text } from "./app-text";
@@ -9,7 +10,7 @@ export function FilterRow({ label, summary, children }: { label: string; summary
   const { colors } = useTheme();
   return <View style={{ borderBottomWidth: 1, borderBottomColor: colors.line }}>
     <Pressable accessibilityRole="button" accessibilityLabel={`${label}: ${summary}`} accessibilityState={{ expanded: open }} onPress={() => setOpen(!open)} style={{ minHeight: 48, flexDirection: "row", alignItems: "center", gap: 10 }}>
-      <Text style={{ color: colors.ink, fontSize: 13 }}>{label}</Text>
+      <Text style={{ color: colors.ink, fontSize: 13, flexShrink: 1 }}>{label}</Text>
       <Text numberOfLines={1} style={{ flex: 1, textAlign: "right", color: colors.muted, fontSize: 12 }}>{summary}</Text>
       <Icon line name={open ? "chevron-up" : "chevron-down"} size={16}/>
     </Pressable>
@@ -33,6 +34,7 @@ export function TransactionFilterPanel({ value, options, onApply, onClose }: {
   value: TransactionFilters; options: FilterOptions; onApply: (value: TransactionFilters) => void; onClose: () => void;
 }) {
   const [draft, setDraft] = useState(value);
+  const { height } = useAdaptiveLayout();
   const { colors } = useTheme();
   const set = <K extends keyof TransactionFilters>(key: K, value: TransactionFilters[K]) => setDraft(current => ({ ...current, [key]: value }));
   const menu = (label: string, key: keyof TransactionFilters, choices: {value:string;label:string}[], multiple = false) => {
@@ -62,7 +64,7 @@ export function TransactionFilterPanel({ value, options, onApply, onClose }: {
       <Pressable accessibilityRole="button" onPress={()=>setDraft(emptyTransactionFilters)} style={{minHeight:44,justifyContent:"center"}}><Text style={{color:colors.teal}}>Reset</Text></Pressable>
       <Pressable accessibilityRole="button" accessibilityLabel="Close filters" onPress={onClose} style={{width:44,height:44,alignItems:"center",justifyContent:"center"}}><Icon line name="close"/></Pressable>
     </View>
-    <ScrollView style={{ maxHeight: 300 }} keyboardShouldPersistTaps="handled" nestedScrollEnabled>
+    <ScrollView style={{ maxHeight: Math.max(90, Math.min(440, height * 0.42)) }} keyboardShouldPersistTaps="handled" nestedScrollEnabled>
       {menu("Dates","dateFilterMode",[{value:"ltd",label:"Lifetime"},{value:"day",label:"Today"},{value:"week",label:"This week"},{value:"month",label:"This month"},{value:"quarter",label:"This quarter"},{value:"year",label:"This year"},{value:"custom",label:"Custom range"}])}
       {draft.dateFilterMode==="custom" ? <View style={{gap:8,paddingVertical:8}}><Field accessibilityLabel="From date" placeholder="From: YYYY-MM-DD" value={draft.customStart} onChangeText={v=>set("customStart",v)}/><Field accessibilityLabel="To date" placeholder="To: YYYY-MM-DD" value={draft.customEnd} onChangeText={v=>set("customEnd",v)}/></View> : null}
       {menu("Type","types",[{value:"debit",label:"Expense"},{value:"credit",label:"Income"},{value:"transfer",label:"Transfer"}],true)}

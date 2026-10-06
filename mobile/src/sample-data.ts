@@ -1,6 +1,7 @@
 import type { Bootstrap, Transaction } from "./types";
 export const sampleBootstrap: Bootstrap = {
   firstName: "Alex",
+  needsOnboarding: false,
   profiles: [{ id: "sample-personal", name: "Personal · sample" }],
   entitlement: {
     planTier: "free",

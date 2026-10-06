@@ -1,3 +1,4 @@
+import { AdaptiveGrid } from "../src/adaptive";
 import { CloverEmptyState } from "../src/clover-mascot";
 import { EntryOverlay } from "../src/entry-overlay";
 import { ChoiceField } from "../src/transaction-entry";
@@ -149,7 +150,7 @@ export default function Budgeting() {
     </EntryOverlay>
   ) : null;
   return (
-    <Screen gap={20}>
+    <Screen layout="dashboard" gap={20}>
       {entryOverlay}
       <PlanHeader
         title={selected ? selected.name : "Budgeting"}
@@ -313,7 +314,7 @@ export default function Budgeting() {
               ))}
             </>
           ) : (
-            data.budgets.map((budget) => (
+            <AdaptiveGrid>{data.budgets.map((budget) => (
               <PlanDirectoryCard
                 key={budget.id}
                 onPress={() => { setSelected(budget); setTab("Overview"); }}
@@ -381,7 +382,7 @@ export default function Budgeting() {
                   }}
                 />
               </PlanDirectoryCard>
-            ))
+            ))}</AdaptiveGrid>
           )}
           <CreateDirectoryCard
             title="Create Budget"

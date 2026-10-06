@@ -1,3 +1,4 @@
+import { AdaptiveGrid } from "../src/adaptive";
 import { CloverEmptyState } from "../src/clover-mascot";
 import { EntryOverlay } from "../src/entry-overlay";
 import { ChoiceField } from "../src/transaction-entry";
@@ -118,7 +119,7 @@ export default function Goals() {
         ? "Health & Wellness"
         : "Income";
   return (
-    <Screen gap={20}>
+    <Screen layout="dashboard" gap={20}>
       {entryOverlay}
       <PlanHeader
         title={selected ? selected.name : "Goals"}
@@ -399,7 +400,7 @@ export default function Goals() {
               ))}
             </>
           ) : (
-            data.goals.map((goal) => (
+            <AdaptiveGrid>{data.goals.map((goal) => (
               <PlanDirectoryCard
                 key={goal.id}
                 onPress={() => { setSelected(goal); setTab("Overview"); }}
@@ -461,7 +462,7 @@ export default function Goals() {
                   }}
                 />
               </PlanDirectoryCard>
-            ))
+            ))}</AdaptiveGrid>
           )}
           <CreateDirectoryCard
             title="Create goal"

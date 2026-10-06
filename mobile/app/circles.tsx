@@ -1,3 +1,4 @@
+import { AdaptiveGrid } from "../src/adaptive";
 import { CloverEmptyState } from "../src/clover-mascot";
 import { EntryOverlay } from "../src/entry-overlay";
 import { ChoiceField } from "../src/transaction-entry";
@@ -239,7 +240,7 @@ export default function Circles() {
     </EntryOverlay>
   ) : null;
   return (
-    <Screen gap={20}>
+    <Screen layout="dashboard" gap={20}>
       {entryOverlay}
       <PlanHeader
         title={selected ? selected.name : "Circles"}
@@ -282,7 +283,7 @@ export default function Circles() {
             </>
           ) : tab === "Overview" ? (
             <>
-              <View style={{ flexDirection: "row", gap: 12 }}>
+              <AdaptiveGrid minItemWidth={140} maxColumns={2} gap={12}>
                 <SummaryCard
                   title="Shared expenses"
                   value={money(
@@ -299,7 +300,7 @@ export default function Circles() {
                   )}
                   color={colors.positive}
                 />
-              </View>
+              </AdaptiveGrid>
               <Body>
                 Only data shared with this Circle is shown. Personal accounts
                 stay private.
@@ -586,6 +587,7 @@ export default function Circles() {
             value={search}
             onChangeText={setSearch}
           />
+          <AdaptiveGrid>
           {data.circles
             .filter((c) => c.name.toLowerCase().includes(search.toLowerCase()))
             .map((circle) => (
@@ -650,6 +652,7 @@ export default function Circles() {
                 />
               </Card>
             ))}
+          </AdaptiveGrid>
           <CreateDirectoryCard
             title="Create Circle"
             subtitle="Start sharing with a new group"

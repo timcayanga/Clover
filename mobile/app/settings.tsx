@@ -144,7 +144,7 @@ export default function Settings() {
     }
   };
   return (
-    <Screen scrollKey={section}>
+    <Screen scrollKey={section} layout={section === "plan" ? "dashboard" : "reading"}>
       <PlanHeader
         title={
           section === "menu"

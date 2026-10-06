@@ -1,3 +1,4 @@
+import { planCardLayout } from "../src/adaptive-layout.ts";
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import vm from 'node:vm';
@@ -83,6 +84,7 @@ function screen({os='android',tier='pro',provider='play_store',purchaseError=nul
  const states=[],refs=[],deps=[];let si=0,ri=0,ei=0,effects=[],alerts=[],calls=[],offersFail=offeringError,syncFail=serverError;const status=statusFor(tier,provider);
  const session={demo:false,data:{entitlement:status},refresh:()=>calls.push('refresh'),request:async(path,options)=>{if(path==='billing/usage')return {};if(options?.method==='POST'){calls.push('verify');if(syncFail)throw Error('offline');return statusFor(resultTier,provider||(resultTier!=='free'?'play_store':null));}return status;}};
  const module=evaluate('../src/settings-plan.tsx',name=>{
+  if(name==='./adaptive-layout')return {planCardLayout};
   if(name==='react')return {useState:initial=>{const i=si++;if(!(i in states))states[i]=typeof initial==='function'?initial():initial;return [states[i],v=>{states[i]=typeof v==='function'?v(states[i]):v;}];},useRef:v=>{const i=ri++;return refs[i]??={current:v};},useEffect:(fn,values)=>{const i=ei++;if(!deps[i]||!values||values.some((v,j)=>v!==deps[i][j])){deps[i]=values;effects.push(fn);}}};
   if(name==='react/jsx-runtime')return {jsx:(type,props)=>({type,props}),jsxs:(type,props)=>({type,props}),Fragment:'Fragment'};
   if(name==='react-native')return {Platform:{OS:os},Alert:{alert:(...args)=>alerts.push(args)},AppState:{currentState:'active',addEventListener:()=>({remove(){}})},Linking:{openURL:async url=>calls.push(url)},useWindowDimensions:()=>({width:390,fontScale:1}),View:'View',ScrollView:'ScrollView',Pressable:'Pressable'};

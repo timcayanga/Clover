@@ -1,3 +1,4 @@
+import { useAdaptiveLayout } from "../../src/adaptive";
 import { registerScreenRefresh } from "../../src/screen-refresh";
 import { transactionReviewReasons } from "../../src/transaction-review";
 import { CloverEmptyState } from "../../src/clover-mascot";
@@ -27,6 +28,7 @@ import {
 export default function Transactions() {
   const { colors, styles, dark } = useTheme();
   const { fontScale } = useWindowDimensions();
+  const adaptive = useAdaptiveLayout();
   const searchHeight = Math.max(38, Math.ceil(20 * fontScale + 16));
   const { demo, rows: samples, profileId, request, cached } = useSession();
   const [summary, setSummary] = useState<TransactionPage["summary"]>();
@@ -141,7 +143,7 @@ export default function Transactions() {
   );
   return (
     <View style={{ flex: 1, backgroundColor: colors.bg }}>
-      <View style={{ paddingHorizontal: 12, paddingVertical: 8, gap: 8 }}>
+      <View style={{ width: "100%", maxWidth: 960, alignSelf: "center", paddingHorizontal: 12, paddingVertical: 8, gap: 8, flexShrink: 1 }}>
         <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
           <View style={{ flex: 1 }}>
             <Field
@@ -172,7 +174,8 @@ export default function Transactions() {
         onRefresh={() => { if (!loading.current) void load(1, true); }}
         contentContainerStyle={{
           paddingHorizontal: 0,
-          paddingBottom: 120,
+          paddingBottom: adaptive.dockHeight + 48,
+          maxWidth: 960,
           width: "100%",
           alignSelf: "center",
         }}

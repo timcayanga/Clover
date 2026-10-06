@@ -1,3 +1,4 @@
+import { AdaptiveGrid } from "../../src/adaptive";
 import { mergeHomeDetails, type HomeDetails, type HomeSections } from "../../src/home-sections";
 import { registerScreenRefresh } from "../../src/screen-refresh";
 import { HomeAdviser } from "../../src/home-adviser";
@@ -188,11 +189,11 @@ export default function Home() {
         ? "Unavailable"
         : money(String(value), code);
   return (
-    <Screen>
+    <Screen layout="dashboard">
       <Modal visible={currencyOpen} transparent animationType="fade" onRequestClose={() => setCurrencyOpen(false)}>
         <View style={{ flex: 1, backgroundColor: "#0006", justifyContent: "center", padding: 24 }}>
           <Pressable accessibilityLabel="Close currency selector" onPress={() => setCurrencyOpen(false)} style={{ position: "absolute", inset: 0 }} />
-          <View accessibilityViewIsModal style={{ maxHeight: "75%", backgroundColor: colors.white, borderRadius: 20, padding: 20, gap: 12 }}>
+          <View accessibilityViewIsModal style={{ width: "100%", maxWidth: 440, alignSelf: "center", maxHeight: "90%", flexShrink: 1, backgroundColor: colors.white, borderRadius: 20, padding: 20, gap: 12 }}>
             <Heading>Home currency</Heading>
             <ScrollView>{["ALL", ...new Set([profileCurrency, ...currencyOptions])].map(code => <Pressable key={code} accessibilityRole="button" accessibilityState={{ selected: currency === code }} onPress={() => { setCurrency(code); setCurrencyOpen(false); }} style={{ minHeight: 48, flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}><Text style={{ color: colors.ink }}>{code === "ALL" ? "All Currencies" : code}</Text>{currency === code ? <Icon line name="checkmark" /> : null}</Pressable>)}</ScrollView>
             <>{currency === "ALL" ? <Body>Combined balance in {profileCurrency}. Reports remain separated by currency.</Body> : null}</>
@@ -315,6 +316,7 @@ export default function Home() {
               </View>)}
             </Card>
           )}
+          <AdaptiveGrid maxColumns={2}>
           {(data.currencyReports ?? [{ currency: data.currency, weekly: data.weekly, monthly: data.monthly }]).flatMap((report) => (["weekly", "monthly"] as const).map((key) => (
             <Card key={`${report.currency}-${key}`}>
               <Text style={styles.sectionTitle}>
@@ -373,6 +375,8 @@ export default function Home() {
               />
             </Card>
           )))}
+          </AdaptiveGrid>
+          <AdaptiveGrid maxColumns={2}>
           {Boolean(data.budgets?.length) && (
             <Card>
               <Text style={styles.sectionTitle}>Budgeting</Text>
@@ -464,6 +468,7 @@ export default function Home() {
               }
             />
           </Card>
+          </AdaptiveGrid>
         </>
       )}
     </Screen>

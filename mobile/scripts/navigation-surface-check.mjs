@@ -2,9 +2,10 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import vm from 'node:vm';
 import ts from 'typescript';
+import { adaptiveLayout } from '../src/adaptive-layout.ts';
 const flatten = value => Array.isArray(value) ? Object.assign({}, ...value.filter(Boolean).map(flatten)) : value ?? {};
 const tick = () => new Promise(resolve => setImmediate(resolve));
-function load(file, { os = 'ios', available = true, api = true, target = { current: {} }, reduced = false, transparencySupported = true, session = {} } = {}) {
+function load(file, { os = 'ios', available = true, api = true, target = { current: {} }, reduced = false, transparencySupported = true, session = {}, width = 390, height = 844, fontScale = 1 } = {}) {
   const states = [], refs = [], effects = [], animations = [];
   let stateIndex = 0, refIndex = 0;
   const react = {
@@ -30,6 +31,7 @@ function load(file, { os = 'ios', available = true, api = true, target = { curre
     if (name === 'expo-blur') return { BlurView: 'BlurView', BlurTargetView: 'BlurTargetView' };
     if (name === 'expo-router') return { usePathname: () => '/', useFocusEffect() {}, router: {} };
     if (name === '@clerk/expo') return { useUser: () => ({ user: { hasImage: true, imageUrl: 'test://photo' } }) };
+    if (name.endsWith('/adaptive')) return { useAdaptiveLayout: () => ({ width, height, fontScale, ...adaptiveLayout(width, height, fontScale) }) };
     if (name.endsWith('/session')) return { useSession: () => session };
     if (name.endsWith('/display-preferences')) return { useDisplayPreferences: () => ({ appearance: 'light' }) };
     if (name.endsWith('/access')) return { useAccess: () => ({ active: true }) };
@@ -55,6 +57,15 @@ for (const os of ['ios', 'android']) {
   const reduced = load('../src/glass-backdrop.tsx', { os, reduced: true });
   reduced.render('GlassBackdrop'); reduced.effects.forEach(effect => effect()); await tick();
   assert.equal(reduced.render('GlassBackdrop').type, 'View', 'Reduced transparency uses an opaque accessible surface');
+}
+for (const width of [320, 600, 820, 1366]) {
+  for (const os of ['ios', 'android']) {
+    const tree = load('../src/navigation-bar.tsx', { os, width, fontScale: 2 }).render('NavigationBar', { children: 'ITEMS' });
+    const surface = tree.props.children;
+    assert.equal(flatten(surface.props.style).maxWidth, 640, 'Tablet dock stays within reach');
+    assert.equal(flatten(tree.props.style).height, 82, 'Enlarged labels get vertical room');
+    assert.equal(flatten(tree.props.style).shadowOpacity, undefined, 'Shadow must follow the capsule, not the full window');
+  }
 }
 for (const [options, expected] of [[{}, 'GlassView'], [{ api: false }, 'View'], [{ available: false }, 'View'], [{ os: 'android' }, 'View']]) {
   const h = load('../src/glass-backdrop.tsx', options), tree = h.render('GlassBackdrop');

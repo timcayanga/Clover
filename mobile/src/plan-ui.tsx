@@ -27,7 +27,7 @@ export function PlanDirectoryCard({
       end={{ x: 1, y: 0 }}
       onLayout={(event) => setWidth(event.nativeEvent.layout.width)}
       style={{
-        minHeight: width,
+        minHeight: Math.min(width, 360),
         padding: 20,
         gap: 16,
         justifyContent: "space-between",
@@ -123,10 +123,12 @@ export function PlanTabs({
 }) {
   const { colors, dark } = useTheme();
   const { width, fontScale } = useWindowDimensions();
-  const columnWidth = (width - 32) / (items.length > 4 ? 3 : items.length);
+  const [containerWidth, setContainerWidth] = useState(0);
+  const availableWidth = containerWidth || Math.min(width - 32, 680);
+  const columnWidth = availableWidth / (items.length > 4 && availableWidth < 720 ? 3 : items.length);
   const stackedLabels = items.some(item => item.replace(" · Plus", "").length * 6.4 * fontScale + 26 > columnWidth);
   return (
-    <View accessibilityRole="tablist" style={{ flexDirection: "row", flexWrap: items.length > 4 || stackedLabels ? "wrap" : "nowrap" }}>
+    <View onLayout={event => setContainerWidth(event.nativeEvent.layout.width)} accessibilityRole="tablist" style={{ flexDirection: "row", flexWrap: stackedLabels || (items.length > 4 && availableWidth < 720) ? "wrap" : "nowrap" }}>
       {items.map((item, index) => {
         const label = item.replace(" · Plus", "");
         const selected = item === value;
@@ -137,7 +139,7 @@ export function PlanTabs({
             accessibilityState={{ selected }} aria-selected={selected}
             onPress={() => onChange(item)}
             style={{
-              flexGrow: 1, flexBasis: stackedLabels ? "45%" : items.length > 4 ? "30%" : 0, minWidth: 0,
+              flexGrow: 1, flexBasis: stackedLabels ? "45%" : items.length > 4 && availableWidth < 720 ? "30%" : 0, minWidth: 0,
               minHeight: 44, paddingVertical: 8, paddingHorizontal: 2,
               flexDirection: "row", flexWrap: "wrap", justifyContent: "center", alignItems: "center", gap: 4,
               borderWidth: 1, borderColor: selected ? colors.line : "transparent",

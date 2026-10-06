@@ -25,9 +25,11 @@ export function ReportLineChart({
   const { colors } = useTheme();
   const gradient = useId().replace(/[^a-z0-9]/gi, "");
   const [showValues, setShowValues] = useState(false);
+  const [chartWidth, setChartWidth] = useState(320);
+  const plotRight = Math.max(180, chartWidth) - 10;
   const chart = reportChartData(series);
   if (!chart) return <Body>No dated history is available yet.</Body>;
-  const x = (value: number) => 52 + value * 258;
+  const x = (value: number) => 52 + value * (plotRight - 52);
   const y = (value: number) => 12 + value * 166;
   const date = (value: number) =>
     new Date(value).toLocaleDateString("en-PH", {
@@ -36,12 +38,12 @@ export function ReportLineChart({
       timeZone: "UTC",
     });
   return (
-    <View style={{ gap: 12, minWidth: 0 }}>
+    <View onLayout={event => setChartWidth(event.nativeEvent.layout.width)} style={{ gap: 12, minWidth: 0 }}>
       <View
         accessibilityRole="image"
         accessibilityLabel={`${series.map((item) => item.name).join(" and ")} in ${currency}, ${date(chart.first)} to ${date(chart.last)}. Expand values for exact amounts.`}
       >
-        <Svg width="100%" height={210} viewBox="0 0 320 210">
+        <Svg width="100%" height={210} viewBox={`0 0 ${Math.max(180, chartWidth)} 210`}>
           <Defs>
             {series.map((item, index) => (
               <LinearGradient
@@ -67,6 +69,7 @@ export function ReportLineChart({
               }).format(chart.max - fraction * (chart.max - chart.min))}
               color={colors.muted}
               line={colors.line}
+              right={plotRight}
             />
           ))}
           {chart.series.map((item, index) => {
@@ -113,7 +116,7 @@ export function ReportLineChart({
           </SvgText>
           <SvgText
             fontFamily="Poppins-Regular"
-            x={310}
+            x={plotRight}
             y={202}
             textAnchor="end"
             fontSize={10}
@@ -185,15 +188,17 @@ function ViewGrid({
   label,
   color,
   line,
+  right,
 }: {
   y: number;
   label: string;
   color: string;
   line: string;
+  right: number;
 }) {
   return (
     <G>
-      <Line x1={52} x2={310} y1={y} y2={y} stroke={line} />
+      <Line x1={52} x2={right} y1={y} y2={y} stroke={line} />
       <SvgText
         fontFamily="Poppins-Regular"
         x={44}

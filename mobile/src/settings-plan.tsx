@@ -1,3 +1,4 @@
+import { planCardLayout } from "./adaptive-layout";
 import { isStoreOwnershipConflict, STORE_OWNERSHIP_MESSAGE, isPurchaseCancelled, purchaseFeedback, purchaseVerified, purchaseNeedsVerification, storeErrorMessage, type PurchaseIntent } from './store-change-policy';
 import { catalogStorePrice, planManagement, storePriceLabel, storeVerificationMessage } from "./store-presentation";
 import { tokenUsagePercent } from "./recorded-summary";
@@ -31,8 +32,9 @@ export function SettingsPlan() {
   const session = useSession();
   const { colors, styles } = useTheme();
   const { width, fontScale } = useWindowDimensions();
+  const [contentWidth, setContentWidth] = useState(0);
   const [cardHeights, setCardHeights] = useState<Record<string, number>>({});
-  const cardWidth = Math.max(240, width - 64);
+  const { width: cardWidth, columns: planColumns } = planCardLayout(contentWidth || Math.min(width - 32, 1072), fontScale);
   const cardLayoutKey = `${cardWidth}:${fontScale}`;
   const carouselHeight = Math.max(1, ...Object.entries(cardHeights).filter(([key]) => key.startsWith(`${cardLayoutKey}:`)).map(([, height]) => height));
   const [usage, setUsage] = useState<(Usage & { retention?: RetentionSnapshot }) | null>(null);
@@ -234,7 +236,8 @@ export function SettingsPlan() {
     <View accessibilityRole="tablist" style={{ flexDirection: "row", gap: 12 }}>
       {(["P1M", "P1Y"] as const).map(value => <Pressable key={value} accessibilityRole="tab" accessibilityState={{ selected: period === value }} onPress={() => setPeriod(value)} style={{ paddingVertical: 10, paddingHorizontal: 20, borderRadius: 24, borderWidth: 1, borderColor: colors.teal, backgroundColor: period === value ? colors.teal : colors.white }}><Text style={{ color: period === value ? "white" : colors.teal }}>{value === "P1Y" ? "Yearly" : "Monthly"}</Text></Pressable>)}
     </View>
-    <ScrollView horizontal directionalLockEnabled automaticallyAdjustContentInsets={false} contentInsetAdjustmentBehavior="never" bounces={false} alwaysBounceVertical={false} alwaysBounceHorizontal={false} disableIntervalMomentum showsHorizontalScrollIndicator={false} snapToInterval={cardWidth + 16} decelerationRate="fast" style={{ flexGrow: 0, flexShrink: 0, ...(carouselHeight > 1 ? { height: carouselHeight } : {}) }} contentContainerStyle={{ gap: 16, alignItems: "flex-start" }} accessibilityLabel="Plans: Pro, Plus, Free">
+    <View onLayout={event => setContentWidth(event.nativeEvent.layout.width)}>
+    <ScrollView horizontal directionalLockEnabled automaticallyAdjustContentInsets={false} contentInsetAdjustmentBehavior="never" bounces={false} alwaysBounceVertical={false} alwaysBounceHorizontal={false} disableIntervalMomentum showsHorizontalScrollIndicator={false} scrollEnabled={planColumns < 3} snapToInterval={cardWidth + 16} decelerationRate="fast" style={{ flexGrow: 0, flexShrink: 0, ...(carouselHeight > 1 ? { height: carouselHeight } : {}) }} contentContainerStyle={{ gap: 16, alignItems: "flex-start" }} accessibilityLabel="Plans: Pro, Plus, Free">
       {(["premium", "pro", "free"] as const).map(tier => {
         const plan = PLAN_CATALOG[tier];
         const choice = packages.find(item => STORE_PACKAGES.find(p => p.identifier === item.identifier)?.tier === tier && item.product.subscriptionPeriod === period);
@@ -251,6 +254,7 @@ export function SettingsPlan() {
         </PlanCardSurface>;
       })}
     </ScrollView>
+    </View>
     <SettingsSwitchOffer />
     <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 20 }}>
       {status?.hasPaidSubscription === true ? <Text accessibilityRole="button" disabled={busy || loading} onPress={() => showManagement('free')} style={{ color: colors.teal }}>Manage subscription</Text> : null}

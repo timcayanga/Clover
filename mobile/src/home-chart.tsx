@@ -14,12 +14,14 @@ export function HomeChart({
 }) {
   const { colors } = useTheme();
   const [selected, setSelected] = useState<string | null>(null);
+  const [chartWidth, setChartWidth] = useState(0);
+  const barWidth = Math.max(44, (chartWidth - Math.max(0, days.length - 1) * 4) / Math.max(1, days.length));
   const peak = Math.max(1, ...days.flatMap((d) => [d.income, d.expense]));
   const current = days.find((d) => d.date === selected);
   if (!days.length)
     return <Body>No daily activity recorded for this period.</Body>;
   return (
-    <View style={{ gap: 10 }}>
+    <View onLayout={event => setChartWidth(event.nativeEvent.layout.width)} style={{ gap: 10 }}>
       <ScrollView
         horizontal
         showsHorizontalScrollIndicator
@@ -33,7 +35,7 @@ export function HomeChart({
             accessibilityState={{ selected: d.date === selected }}
             onPress={() => setSelected(d.date)}
             style={{
-              width: 44,
+              width: barWidth,
               minHeight: 130,
               justifyContent: "flex-end",
               gap: 8,

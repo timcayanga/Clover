@@ -1,3 +1,4 @@
+import { useAdaptiveLayout } from "./adaptive";
 import { useEffect, useRef, useState } from "react";
 import { Keyboard, Platform, Pressable, View } from "react-native";
 import { router, usePathname } from "expo-router";
@@ -15,6 +16,7 @@ export function ImportActivity() {
   const session = useSession();
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
+  const { dockHeight } = useAdaptiveLayout();
   const path = usePathname();
   const [dismissed, setDismissed] = useState<string[]>([]);
   const [actionError, setActionError] = useState("");
@@ -104,7 +106,7 @@ export function ImportActivity() {
   const receiptReview = needsReview && file.processingPhase === "receipt_review_required";
   const review = () => router.push({ pathname: "/import/[id]", params: receiptReview ? { id: file.canonicalId ?? file.id, server: "1", review: "receipt" } : file.originalRetained !== false
     ? { id: file.id } : { id: file.canonicalId ?? file.id, server: "1" } });
-  return <View pointerEvents="box-none" style={{ position: "absolute", left: 16, right: 16, bottom: Math.max(Math.max(insets.bottom, 8) + 88, keyboardHeight + 16), alignItems: "center" }}>
+  return <View pointerEvents="box-none" style={{ position: "absolute", left: 16, right: 16, bottom: Math.max(Math.max(insets.bottom, 8) + dockHeight + 16, keyboardHeight + 16), alignItems: "center" }}>
     <View accessibilityLiveRegion="polite" style={{ width: "100%", maxWidth: 520, padding: 16, gap: 8, borderRadius: 20,
       backgroundColor: colors.white, borderColor: colors.line, borderWidth: 1, elevation: 6,
       shadowColor: "#07343d", shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.15, shadowRadius: 12 }}>

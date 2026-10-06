@@ -1,3 +1,4 @@
+import { AdaptiveGrid } from "../src/adaptive";
 import { investmentTypeLabel } from "../../shared/investment-entry";
 import { useLiveInvestmentValues } from "../src/use-live-investment-values";
 import { CloverEmptyState } from "../src/clover-mascot";
@@ -182,7 +183,7 @@ export default function Investments() {
       />
     );
   return (
-    <Screen gap={20}>
+    <Screen layout="dashboard" gap={20}>
       {entryOverlay}
       <PlanHeader
         title="Investments"
@@ -276,7 +277,7 @@ export default function Investments() {
         <Notice>This section is available with Clover Plus and Pro.</Notice>
       ) : tab === "Overview" ? (
         <>
-          <View style={{ flexDirection: "row", gap: 8 }}>
+          <AdaptiveGrid minItemWidth={100} maxColumns={3} gap={8}>
             <SummaryCard
               title="Est. value"
               color={colors.positive}
@@ -310,7 +311,7 @@ export default function Investments() {
                     : colors.danger
               }
             />
-          </View>
+          </AdaptiveGrid>
           {valuation.missing > 0 ? <Body>Known value · {valuation.known} of {visibleHoldings.length} holdings. {valuation.missing} without a recorded value.</Body> : null}
           <Body>
             Portfolio values are estimates. Check your investment apps for the latest amounts.

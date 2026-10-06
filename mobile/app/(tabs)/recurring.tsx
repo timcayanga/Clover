@@ -1,3 +1,4 @@
+import { AdaptiveGrid } from "../../src/adaptive";
 import { CloverEmptyState } from "../../src/clover-mascot";
 import { createScreenDataLoader, registerScreenRefresh } from "../../src/screen-refresh";
 import { InlineDetailRow } from "../../src/inline-detail-row";
@@ -271,7 +272,7 @@ export default function Recurring() {
     </Screen>
   );
   return (
-    <Screen>
+    <Screen layout="dashboard">
       {entryOverlay}
       <PlanTabs
         items={kinds.map((item) => item.label)}
@@ -305,14 +306,14 @@ export default function Recurring() {
         <Body>Loading recurring…</Body>
       ) : (
         <>
-          <View style={{ flexDirection: "row", gap: 8 }}>
+          <AdaptiveGrid minItemWidth={100} maxColumns={3} gap={8}>
             {(data.summaries?.[({ planned_payment: "planned", debt: "debt", receivable: "owed", reminder: "installments" } as Record<string, string>)[kind] ?? "overview"]?.slice(0, kind ? 3 : 1) ?? [["Due this month", dueLabel]]).map(([label, value]) => (
               <Card key={label} style={{ flex: 1, backgroundColor: colors.pale, alignItems: "center", padding: kind ? 10 : 16 }}>
                 <Text style={[styles.sectionTitle, { fontSize: kind ? 11 : 16, textAlign: "center" }]}>{label}</Text>
                 <Text style={{ color: colors.teal, fontFamily: "Poppins-SemiBold", fontSize: kind ? 16 : 18, textAlign: "center" }}>{value}</Text>
               </Card>
             ))}
-          </View>
+          </AdaptiveGrid>
           <Card>
             <Text
               style={{

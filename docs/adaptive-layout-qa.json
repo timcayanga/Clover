@@ -1,0 +1,161 @@
+{
+  "scope": "Adaptive native UI and tablet/mobile web styles",
+  "baselineCommit": "11e575f296a958fa05f97973e094a526e1a53236",
+  "nativeUiBrowserPreview": {
+    "fixture": "Explicitly enabled localhost-only fictional demo; no financial writes or live API calls",
+    "checks": 383,
+    "failures": [],
+    "windows": [
+      [
+        280,
+        653
+      ],
+      [
+        320,
+        568
+      ],
+      [
+        390,
+        844
+      ],
+      [
+        600,
+        960
+      ],
+      [
+        744,
+        1133
+      ],
+      [
+        820,
+        1180
+      ],
+      [
+        1024,
+        1366
+      ],
+      [
+        1366,
+        1024
+      ],
+      [
+        540,
+        720
+      ],
+      [
+        844,
+        390
+      ]
+    ],
+    "pagesAndFlows": [
+      "/",
+      "/account",
+      "/accounts",
+      "/accounts?add=1 ",
+      "/add-transaction",
+      "/add-transaction Ask Clover",
+      "/add-transaction More details",
+      "/add-transaction Sync",
+      "/add-transaction Table entry",
+      "/add-transaction Upload",
+      "/adviser",
+      "/budgeting",
+      "/budgeting Create Budget",
+      "/circles",
+      "/circles Create Circle",
+      "/goals",
+      "/goals Create goal",
+      "/import/sample",
+      "/investments",
+      "/investments Analysis",
+      "/investments Filter investments",
+      "/investments Markets",
+      "/investments Planner",
+      "/investments Portfolio",
+      "/notifications",
+      "/offline",
+      "/onboarding",
+      "/recurring",
+      "/recurring Debt & Loans",
+      "/recurring Installments",
+      "/recurring Money Owed",
+      "/recurring Planned Payments",
+      "/recurring?add=1 ",
+      "/reports",
+      "/reports Filters",
+      "/reports Insights",
+      "/reports Spending",
+      "/reports Trends",
+      "/settings",
+      "/settings?section=account",
+      "/settings?section=categories",
+      "/settings?section=data",
+      "/settings?section=display",
+      "/settings?section=notifications",
+      "/settings?section=plan",
+      "/settings?section=plan Yearly",
+      "/settings?section=profiles",
+      "/settings?section=region",
+      "/settings?section=review",
+      "/settings?section=security",
+      "/split-bills",
+      "/transaction/groceries",
+      "/transaction/ride",
+      "/transactions",
+      "/transactions Filter transactions",
+      "Draft survives resize",
+      "accounts-tablet",
+      "entry-phone",
+      "home-tablet",
+      "plans-tablet",
+      "reports-tablet"
+    ]
+  },
+  "additionalChecks": [
+    "Draft description and amount retained through phone/tablet/split-window resize",
+    "Opening-screen authentication actions visible at 320x568, 820x1180, 1366x1024 and 844x390",
+    "Web CSS component fixtures at 320, 600, 744, 820, 1024, 1100 and 1366px: no document overflow; tablet dock centered and bounded to 640px",
+    "Adaptive geometry: 12 window sizes x font scales 1, 1.3, 1.5, 2, 3",
+    "Native navigation unit checks on mocked iOS/Android safe areas and large text"
+  ],
+  "limits": [
+    "Browser preview uses React Native Web; this does not certify every supported physical device",
+    "Native keyboards, camera/photo/file pickers, Apple/Google authentication and store billing need physical-device verification",
+    "Foldable-sized cover/inner/split windows covered; hardware hinges, display occlusions and spanning across two physical displays not validated",
+    "iPhone Duo interpreted as foldable/dual-screen sizing, not a verified device model",
+    "Web CSS fixture checks are not authenticated Next.js end-to-end tests",
+    "No Figma changes, production deployment, or store binaries created for this task"
+  ],
+  "layoutRules": {
+    "compactWindow": "Below 600 logical pixels; stacked content and wrapping selectors",
+    "mediumWindow": "600\u2013839 logical pixels; measured grids when each item remains readable",
+    "expandedWindow": "840+ logical pixels; dashboards bounded to 1120, reading pages to 760, form content to 680",
+    "navigation": "Centered 640 maximum width; safe-area bottom placement; 72 height or 82 for larger text",
+    "sheets": "720 maximum width, scrollable content, no extra top margin below 500 window height",
+    "charts": "Plot coordinates use measured container width",
+    "plans": "One, two or three readable cards based on container width and text scale"
+  },
+  "qualityGate": {
+    "command": "npm run qa:prepush",
+    "result": "PASS",
+    "includes": [
+      "web and mobile security policies",
+      "web/mobile TypeScript",
+      "financial and import regressions",
+      "authentication, deletion and billing regressions",
+      "adaptive geometry and navigation tests",
+      "iOS and Android JS bundle exports",
+      "Next.js production build"
+    ]
+  },
+  "dependencyPatch": {
+    "package": "source-map-js",
+    "from": "1.2.1",
+    "to": "1.2.2",
+    "lockfiles": [
+      "web/package-lock.json",
+      "mobile/package-lock.json"
+    ],
+    "advisory": "https://github.com/advisories/GHSA-68fv-2mgg-jv7q"
+  }
+}

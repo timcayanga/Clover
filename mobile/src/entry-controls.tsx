@@ -5,6 +5,7 @@ import {
   Image,
   Pressable,
   View,
+  useWindowDimensions,
 } from "react-native";
 import { Text } from "./app-text";
 import { Icon, useTheme } from "./ui";
@@ -28,6 +29,8 @@ export function EntrySelector({
     const listener = AccessibilityInfo.addEventListener("reduceMotionChanged", value => { reduced.current = value; });
     return () => listener.remove();
   }, []);
+  const { fontScale } = useWindowDimensions();
+  const wrapped = width > 0 && (width - 10) / items.length < 76 * Math.max(1, fontScale);
   const segmentWidth = Math.max(0, width - 10) / items.length;
   const selectedIndex = Math.max(0, items.indexOf(value));
   useEffect(() => {
@@ -40,14 +43,15 @@ export function EntrySelector({
       accessibilityRole="tablist"
       style={{
         flexDirection: "row",
+        flexWrap: wrapped ? "wrap" : "nowrap",
         padding: 4,
-        borderRadius: 999,
+        borderRadius: wrapped ? 20 : 999,
         borderWidth: 1,
         borderColor: colors.line,
         backgroundColor: colors.pale,
       }}
     >
-      {width > 0 ? <Animated.View pointerEvents="none" style={{ position: "absolute", top: 4, bottom: 4, left: 4, width: segmentWidth, borderRadius: 999, backgroundColor: colors.teal, transform: [{ translateX: offset }] }} /> : null}
+      {width > 0 && !wrapped ? <Animated.View pointerEvents="none" style={{ position: "absolute", top: 4, bottom: 4, left: 4, width: segmentWidth, borderRadius: 999, backgroundColor: colors.teal, transform: [{ translateX: offset }] }} /> : null}
       {items.map((method) => (
         <Pressable
           key={method}
@@ -56,13 +60,16 @@ export function EntrySelector({
           disabled={disabled}
           onPress={() => onChange(method)}
           style={{
-            flex: 1,
+            flexGrow: 1,
+            flexBasis: wrapped ? "45%" : 0,
+            minWidth: 0,
+            paddingVertical: 6,
             minHeight: 52,
             alignItems: "center",
             justifyContent: "center",
             gap: 4,
             borderRadius: 999,
-            backgroundColor: "transparent",
+            backgroundColor: wrapped && value === method ? colors.teal : "transparent",
           }}
         >
           <Icon

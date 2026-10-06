@@ -23,9 +23,10 @@ export default function Welcome() {
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const compact = height < 750;
+  const landscape = width >= 600 && height < 500;
   // Show a focused glimpse of the app, with room for Clover beside it. Large
   // text can scroll independently while the authentication actions stay usable.
-  const artworkHeight = Math.max(180, Math.min(330, height - insets.top - insets.bottom - 370 - Math.max(0, fontScale - 1) * 80));
+  const artworkHeight = landscape ? 150 : Math.max(180, Math.min(width >= 600 ? 460 : 330, height - insets.top - insets.bottom - 370 - Math.max(0, fontScale - 1) * 80));
   const artworkWidth = Math.min(pageWidth - 64, 342);
   useEffect(() => { pager.current?.scrollTo({ x: pageWidth * index, animated: false }); }, [pageWidth, index]);
   const authenticate = async (signup: boolean) => {
@@ -39,12 +40,13 @@ export default function Welcome() {
   if (access.active) return null;
   const disabled = busy || !access.loaded || !access.configured;
   return (
-    <LinearGradient colors={["#ffffff", "#f7fcfc", "#e5f7f5"]} style={s.page} onLayout={event => setPageWidth(event.nativeEvent.layout.width)}>
+    <LinearGradient colors={["#ffffff", "#f7fcfc", "#e5f7f5"]} style={s.page}>
       <View style={[s.brand, compact && { paddingVertical: 8 }]}>
         <Image source={require("../assets/welcome-clover.png")} style={{ width: 28, height: 28 }} />
         <Image source={require("../assets/clover-wordmark.png")} accessibilityLabel="Clover" resizeMode="contain" style={{ width: 99, height: 24 }} />
       </View>
-      <ScrollView ref={pager} horizontal pagingEnabled style={{ flex: 1 }} showsHorizontalScrollIndicator={false}
+      <View style={{ flex: 1, flexDirection: landscape ? "row" : "column" }}>
+      <ScrollView ref={pager} onLayout={event => setPageWidth(event.nativeEvent.layout.width)} horizontal pagingEnabled style={{ flex: 1 }} showsHorizontalScrollIndicator={false}
         onMomentumScrollEnd={event => setIndex(Math.max(0, Math.min(slides.length - 1, Math.round(event.nativeEvent.contentOffset.x / pageWidth))))}>
         {slides.map((slide, i) => {
           const start = slide.title.indexOf(slide.accent);
@@ -63,7 +65,7 @@ export default function Welcome() {
           </ScrollView>;
         })}
       </ScrollView>
-      <View style={[s.footer, { paddingBottom: Math.max(insets.bottom, 16) }]}>
+      <View style={[s.footer, landscape && { width: 280 }, { paddingBottom: Math.max(insets.bottom, 16) }]}>
         <View style={s.pagination}>
           {slides.map((slide, i) => <Pressable key={slide.title} accessibilityRole="button" accessibilityLabel={`Tutorial ${i + 1}: ${slide.title.replace("\n", " ")}`}
             accessibilityState={{ selected: i === index }} onPress={() => setIndex(i)} style={s.dotTarget}>
@@ -82,6 +84,7 @@ export default function Welcome() {
           <Text style={s.buttonText}>Log in</Text>
         </Pressable>
       </View>
+      </View>
     </LinearGradient>
   );
 }
@@ -91,7 +94,7 @@ const s = StyleSheet.create({
   preview: { overflow: "hidden", borderRadius: 24, borderWidth: 1, borderColor: "#d5e8eb", backgroundColor: "white" },
   slide: { flexGrow: 1, alignItems: "center", justifyContent: "center", gap: 14, paddingHorizontal: 16, paddingBottom: 6 },
   title: { color: "#17363d", fontSize: 26, lineHeight: 33, textAlign: "center", fontFamily: "Poppins-SemiBold", maxWidth: 430 },
-  footer: { paddingHorizontal: 24, gap: 10, flexShrink: 0 },
+  footer: { width: "100%", maxWidth: 560, alignSelf: "center", paddingHorizontal: 24, gap: 10, flexShrink: 0 },
   pagination: { flexDirection: "row", justifyContent: "center", height: 36 },
   dotTarget: { width: 44, minHeight: 44, alignItems: "center", justifyContent: "center" },
   dot: { width: 8, height: 8, borderRadius: 4, backgroundColor: "#c6dfe1" },

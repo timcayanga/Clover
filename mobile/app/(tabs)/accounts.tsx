@@ -1,3 +1,4 @@
+import { AdaptiveGrid } from "../../src/adaptive";
 import { useLiveInvestmentValues } from "../../src/use-live-investment-values";
 import { CloverEmptyState } from "../../src/clover-mascot";
 import { institutionGroups } from "../../src/institution-groups";
@@ -320,16 +321,16 @@ function AccountsContent() {
     </Pressable>)}
   </Screen>;
   return (
-    <Screen gap={24}>
+    <Screen layout="dashboard" gap={24}>
       {adding ? <EntryOverlay onClose={() => setAdding(false)}>{accountEditor}</EntryOverlay> : null}
       {pendingBanks.map(connection=><FinversePendingChip key={connection.id} connection={connection} busy={cancellingBank} onResume={()=>router.push({pathname:"/accounts",params:{finverseConnection:connection.id,finverseWorkspace:session.profileId}})} onCancel={()=>void cancelBank(connection.id)}/>)}
       {bankMessage?<Notice>{bankMessage}</Notice>:null}
       <Modal visible={currencyOpen} transparent animationType="fade" onRequestClose={() => setCurrencyOpen(false)}>
         <View style={{ flex: 1, justifyContent: "center", padding: 24, backgroundColor: "#0007" }}>
           <Pressable accessibilityLabel="Close currency selector" onPress={() => setCurrencyOpen(false)} style={{ position: "absolute", top: 0, bottom: 0, left: 0, right: 0 }} />
-          <View accessibilityViewIsModal style={{ backgroundColor: colors.white, borderRadius: 20, padding: 20, gap: 12 }}>
+          <View accessibilityViewIsModal style={{ width: "100%", maxWidth: 440, alignSelf: "center", maxHeight: "90%", flexShrink: 1, backgroundColor: colors.white, borderRadius: 20, padding: 20, gap: 12 }}>
             <Heading>Account currency</Heading>
-            <ScrollView style={{ maxHeight: 360 }}>
+            <ScrollView style={{ flexShrink: 1 }}>
             {ownedCurrencies.length ? ["ALL", ...ownedCurrencies].map(code => <Pressable key={code} accessibilityRole="button" accessibilityLabel={code === "ALL" ? "All Currencies" : code} accessibilityState={{ selected: displayedCurrency === code }} onPress={() => { setCurrencyFilter(code); setCurrencyOpen(false); }} style={{ minHeight: 48, flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}><Text style={{ color: colors.ink }}>{code === "ALL" ? "All Currencies" : code}</Text>{displayedCurrency === code ? <Icon line name="checkmark" /> : null}</Pressable>) : <Body>Add an account to see its currency here.</Body>}
             </ScrollView>
             <Button secondary title="Close" onPress={() => setCurrencyOpen(false)} />
@@ -339,10 +340,10 @@ function AccountsContent() {
       {summaries.filter(summary => displayedCurrency === "ALL" || summary.currency === displayedCurrency).map((summary) => (
         <View key={summary.currency} style={{ gap: 8 }}>
           {displayedCurrency === "ALL" ? <Heading>{summary.currency}</Heading> : null}
-          <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+          <AdaptiveGrid minItemWidth={140} maxColumns={4} gap={8}>
             {["Net worth", "Spendable", "Assets", "Liabilities"].map(
               (title, i) => (
-                <View key={title} style={{ width: "48%", flexGrow: 1 }}>
+                <View key={title} style={{ flex: 1 }}>
                   <SummaryCard
                     title={title}
                     value={
@@ -355,7 +356,7 @@ function AccountsContent() {
                 </View>
               ),
             )}
-          </View>
+          </AdaptiveGrid>
         </View>
       ))}
       {loading ? (
@@ -408,6 +409,7 @@ function AccountsContent() {
                       )}
                 </Text>
               </View>
+              <AdaptiveGrid minItemWidth={340} maxColumns={2}>
               {group.title === "Investments" ? institutionGroups(group.rows).map(institution => {
                 const representative = institution.assets[0];
                 const palette = accountCardPalette(representative);
@@ -553,6 +555,7 @@ function AccountsContent() {
                     </View>
                   );
                 })}
+              </AdaptiveGrid>
             </View>
           ))
       )}

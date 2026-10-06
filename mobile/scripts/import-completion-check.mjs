@@ -19,6 +19,7 @@ function harness() {
     if (name === 'react-native') return { View: 'View', Pressable: 'Pressable', Platform: { OS: 'ios' }, Keyboard: { addListener: () => ({ remove() {} }) } };
     if (name === 'expo-router') return { router: { push() {} }, usePathname: () => path };
     if (name === 'react-native-safe-area-context') return { useSafeAreaInsets: () => ({ bottom: 34 }) };
+    if (name === './adaptive') return { useAdaptiveLayout: () => ({ dockHeight: 72 }) };
     if (name === './session') return { useSession: () => session };
     if (name === './ui') return { Button: 'Button', Field: 'Field', Icon: 'Icon', useTheme: () => ({ colors: {} }) };
     if (name === './app-text') return { Text: 'Text' };

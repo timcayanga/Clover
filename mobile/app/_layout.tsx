@@ -198,7 +198,7 @@ function AppSession({
   logout: () => Promise<void>;
 }) {
   const { colors, styles, dark } = useTheme();
-  const [demo, setDemo] = useState(false);
+  const [demo, setDemo] = useState(() => Platform.OS === "web" && process.env.EXPO_PUBLIC_LAYOUT_PREVIEW === "1" && typeof window !== "undefined" && ["localhost", "127.0.0.1"].includes(window.location.hostname));
   const [authEntry, setAuthEntry] = useState<"sign-in" | "sign-up" | null>(null);
   const [accountDeleted, setAccountDeleted] = useState(false);
   const active = demo || Boolean(userId);

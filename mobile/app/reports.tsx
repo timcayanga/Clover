@@ -1,3 +1,4 @@
+import { AdaptiveGrid } from "../src/adaptive";
 import { CloverEmptyState } from "../src/clover-mascot";
 import { DropdownFilter } from "../src/transaction-filters";
 import { Text } from "../src/app-text";
@@ -154,7 +155,7 @@ export default function Reports() {
   const missingBalances = data?.balances ? data.balances.accountCount - (data.balances.knownAccountCount ?? data.balances.accountCount) : 0;
   const net = (summary?.income ?? 0) - (summary?.expense ?? 0);
   return (
-    <Screen gap={20}>
+    <Screen layout="dashboard" gap={20}>
       <PlanHeader
         title="Reports"
         trailing={
@@ -223,7 +224,7 @@ export default function Reports() {
         <Body>Loading reports…</Body>
       ) : tab === "Overview" ? (
         <>
-          <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 12 }}>
+          <AdaptiveGrid minItemWidth={150} maxColumns={4} gap={12}>
             {(() => {
               const prior = summary.previous;
               const priorNet = prior.income - prior.expense;
@@ -290,7 +291,7 @@ export default function Reports() {
                 return (
                   <View
                     key={row.title}
-                    style={{ flexGrow: 1, flexBasis: "44%" }}
+                    style={{ flex: 1 }}
                   >
                     <SummaryCard
                       title={row.title}
@@ -310,7 +311,7 @@ export default function Reports() {
                 );
               });
             })()}
-          </View>
+          </AdaptiveGrid>
           <Card>
             <Text
               style={{

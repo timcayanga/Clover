@@ -1,3 +1,4 @@
+import { useAdaptiveLayout } from "./adaptive";
 import { refreshScreen } from "./screen-refresh";
 import { apiBase } from "./api-base";
 import { telemetry, safeAction } from "../../shared/analytics";
@@ -227,15 +228,18 @@ export function Screen({
   sheet = false,
   scrollKey,
   onDismiss,
+  layout = "reading",
 }: {
   children: ReactNode;
   gap?: number;
   sheet?: boolean;
   scrollKey?: string;
+  layout?: "reading" | "dashboard" | "form";
   onDismiss?: () => void;
 }) {
   const { colors, styles, dark } = useTheme();
   const session = useSession();
+  const adaptive = useAdaptiveLayout();
   const insets = useSafeAreaInsets();
   const slide = useRef(new Animated.Value(0)).current;
   const dismissRef = useRef(onDismiss); dismissRef.current = onDismiss;
@@ -263,7 +267,7 @@ export function Screen({
   const headerIndex = content.findIndex(child => isValidElement(child) && Boolean((child.type as { screenHeader?: boolean }).screenHeader));
   const header = headerIndex >= 0 ? content.splice(headerIndex, 1)[0] : null;
   const body = (
-    <Animated.View style={{ flex: 1, backgroundColor: sheet ? colors.white : colors.bg, ...(sheet ? { marginTop: 12, borderTopLeftRadius: 28, borderTopRightRadius: 28, overflow: "hidden" as const, transform: [{ translateY: slide }] } : {}) }}>
+    <Animated.View style={{ flex: 1, backgroundColor: sheet ? colors.white : colors.bg, ...(sheet ? { width: "100%", maxWidth: 720, alignSelf: "center", marginTop: adaptive.short ? 0 : 12, borderTopLeftRadius: 28, borderTopRightRadius: 28, overflow: "hidden" as const, transform: [{ translateY: slide }] } : {}) }}>
       {sheet ? <View {...drag.panHandlers} accessible accessibilityRole="button" accessibilityLabel="Dismiss sheet" accessibilityHint="Swipe down to return to the previous page" accessibilityActions={[{name:"activate",label:"Dismiss"}]} onAccessibilityAction={() => onDismiss?.()} style={{ height: 28, alignItems: "center", justifyContent: "center" }}><View style={{ width: 36, height: 4, borderRadius: 4, backgroundColor: colors.line }}/></View> : null}
       {header}
     <ScrollView
@@ -277,7 +281,7 @@ export function Screen({
       style={{ flex: 1, backgroundColor: colors.bg }}
       contentContainerStyle={[
         styles.content,
-        { gap, paddingBottom: (sheet ? 24 : 100) + insets.bottom },
+        { gap, paddingHorizontal: adaptive.gutter, maxWidth: sheet || layout === "form" ? adaptive.formMaxWidth : layout === "dashboard" ? adaptive.pageMaxWidth : adaptive.readingMaxWidth, paddingBottom: (sheet ? 24 : adaptive.dockHeight + 28) + insets.bottom },
       ]}
       keyboardShouldPersistTaps="handled"
       automaticallyAdjustKeyboardInsets
@@ -389,6 +393,7 @@ export function AppHeader({
 }) {
   const { colors, styles } = useTheme();
   const { width } = useWindowDimensions();
+  const insets = useSafeAreaInsets();
   const session = useSession();
   const profileRef = useRef(session.profileId);
   profileRef.current = session.profileId;
@@ -516,7 +521,7 @@ export function AppHeader({
   return (
     <>
       <View style={styles.header}>
-        <View style={{ width: adviserOnLeft || leading ? 88 : 48, flexDirection: "row", alignItems: "center" }}>
+        <View style={{ flexShrink: 0, flexDirection: "row", alignItems: "center" }}>
           <Pressable
             accessibilityRole="button"
             accessibilityLabel={back || onClose ? "Back" : "Open navigation menu"}
@@ -530,16 +535,8 @@ export function AppHeader({
         </View>
         <Text
           accessibilityRole="header"
-          numberOfLines={1}
-          style={[
-            styles.headerTitle,
-            {
-              position: "absolute",
-              left: back || onClose ? 54 : adviserOnLeft ? 88 : adviserShortcut || home || trailing ? 100 : 54,
-              fontSize: 18,
-              right: back || onClose ? 54 : adviserOnLeft ? 88 : adviserShortcut || home || trailing ? 100 : 54,
-            },
-          ]}
+          numberOfLines={2}
+          style={[styles.headerTitle, { minWidth: 0, paddingHorizontal: 4, fontSize: 18 }]}
         >
           {title}
         </Text>
@@ -627,7 +624,8 @@ export function AppHeader({
               flex: 1,
               backgroundColor: colors.white,
               padding: 20,
-              paddingTop: 52,
+              paddingTop: Math.max(insets.top, 16),
+              paddingBottom: Math.max(insets.bottom, 16),
               gap: 16,
             }}
           >

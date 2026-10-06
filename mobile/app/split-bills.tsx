@@ -1,3 +1,4 @@
+import { AdaptiveGrid } from "../src/adaptive";
 import { CloverEmptyState } from "../src/clover-mascot";
 import { EntryOverlay } from "../src/entry-overlay";
 import type { Transaction } from "../src/types";
@@ -219,7 +220,7 @@ export default function SplitBills() {
   ) : null;
   if (paymentDetail)
     return (
-      <Screen>
+      <Screen layout="dashboard">
         <PlanHeader
           title="Payment Details"
           back={() => {
@@ -286,7 +287,7 @@ export default function SplitBills() {
       </Screen>
     );
   return (
-    <Screen>
+    <Screen layout="dashboard">
       {entryOverlay}
       <PlanHeader
         title={selected ? "Bill Details" : "Split Bills"}
@@ -325,7 +326,7 @@ export default function SplitBills() {
           />
           {tab === "Bills" ? (
             <>
-              <View style={{ flexDirection: "row", gap: 8 }}>
+              <AdaptiveGrid minItemWidth={140} maxColumns={2} gap={8}>
                 <SummaryCard
                   title="You owe"
                   value={balance.data?.summary?.youOwe ?? "—"}
@@ -334,7 +335,7 @@ export default function SplitBills() {
                   title="Owed to you"
                   value={balance.data?.summary?.owedToYou ?? "—"}
                 />
-              </View>
+              </AdaptiveGrid>
               {balance.error ? (
                 <>
                   <Notice>Balance summary is unavailable.</Notice>
@@ -564,7 +565,7 @@ export default function SplitBills() {
           ) : tab === "Groups" ? (
             <>
               {options.data.groups.length ? (
-                options.data.groups.map((group) => (
+                <AdaptiveGrid>{options.data.groups.map((group) => (
                   <Pressable key={group.id} onPress={() => setEntity({ group })}>
                   <LinearGradient
                     colors={
@@ -619,7 +620,7 @@ export default function SplitBills() {
                     />
                   </LinearGradient>
                   </Pressable>
-                ))
+                ))}</AdaptiveGrid>
               ) : (
                 <CloverEmptyState>No groups yet.</CloverEmptyState>
               )}

@@ -77,6 +77,9 @@ export function Choices({
           onPress={() => onChange(option.value)}
           style={{
             minHeight: 44,
+            minWidth: 0,
+            maxWidth: "100%",
+            paddingVertical: 8,
             justifyContent: "center",
             paddingHorizontal: pill ? 8 : 14,
             flex: pill ? 1 : undefined,
@@ -88,7 +91,7 @@ export function Choices({
               value === option.value ? colors.pale : colors.white,
           }}
         >
-          <Text style={{ color: colors.ink, fontSize: pill ? 12 : undefined }}>
+          <Text style={{ color: colors.ink, textAlign: "center", flexShrink: 1, fontSize: pill ? 12 : undefined }}>
             {option.label}
           </Text>
         </Pressable>
