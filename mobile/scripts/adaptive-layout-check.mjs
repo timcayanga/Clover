@@ -1,5 +1,14 @@
 import assert from 'node:assert/strict';
 import { adaptiveLayout, adaptiveColumns, planCardLayout } from '../src/adaptive-layout.ts';
+import { allowLayoutPreview } from '../src/layout-preview.ts';
+
+for (const platform of ['ios', 'android']) {
+  assert(!allowLayoutPreview(true, platform, false), 'Sample preview must never activate in native release builds');
+  assert(allowLayoutPreview(true, platform, true));
+  assert(!allowLayoutPreview(false, platform, true));
+}
+assert(allowLayoutPreview(true, 'web', false, 'localhost'));
+assert(!allowLayoutPreview(true, 'web', true, 'clover.ph'));
 
 // Logical window sizes, not a hardware allowlist: cover phones, tablets,
 // foldable cover/inner windows, split windows and landscape.
@@ -50,6 +59,10 @@ assert.equal(focusScrollDelta(field, { ...viewport, height: 400 }, null), 214, '
 assert(supportsDetailPane(1366));
 assert(!supportsDetailPane(820));
 assert(!supportsDetailPane(1366, 2), 'Large text returns to a readable single pane');
+for (const width of [1600, 2048, 2560]) {
+  assert(!supportsDetailPane(width, 2), 'The capped content width must govern large-text layout, not the display width');
+  assert(!supportsDetailPane(width, 3), 'Maximum text size must remain readable on large displays');
+}
 console.log('PASS foldable panes, stale hinge data, floating/docked keyboards, resized viewports and accessible split thresholds');
 
 assert.deepEqual(usablePane(1000, 800, [{ x: -10, y: 0, width: 20, height: 800, vertical: true, separating: true }]), { x: 10, y: 0, width: 990, height: 800 }, 'A partial hinge at the edge of a split window must still be avoided');

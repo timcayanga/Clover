@@ -16,6 +16,7 @@ import { hasVisitedClover, rememberCloverVisit, launchDestination, nativeEntryAc
 import { authTokenCache } from "../src/auth-token-cache";
 import { Stack, usePathname, router } from "expo-router";
 import { useFonts } from "expo-font";
+import { allowLayoutPreview } from "../src/layout-preview";
 import { StatusBar } from "expo-status-bar";
 import { useRef, useState, type ReactNode } from "react";
 import { AppState, Platform, StyleSheet, View } from "react-native";
@@ -120,7 +121,7 @@ function Routes() {
 
               <Stack.Screen
                 name="(tabs)"
-                options={{ headerShown: false, title: "Clover" }}
+                options={{ headerShown: false, title: "Clover", freezeOnBlur: false }}
               />
               <Stack.Screen name="add-transaction" options={{ headerShown: false, presentation: "transparentModal", animation: reduceMotion ? "none" : "slide_from_bottom", contentStyle: { backgroundColor: "#0005" } }}/>
 
@@ -201,7 +202,11 @@ function AppSession({
   logout: () => Promise<void>;
 }) {
   const { colors, styles, dark } = useTheme();
-  const [demo, setDemo] = useState(() => Platform.OS === "web" && process.env.EXPO_PUBLIC_LAYOUT_PREVIEW === "1" && typeof window !== "undefined" && ["localhost", "127.0.0.1"].includes(window.location.hostname));
+  // Native preview is debug-only and uses isolated sample data, never an account.
+  const [demo, setDemo] = useState(() => allowLayoutPreview(
+    process.env.EXPO_PUBLIC_LAYOUT_PREVIEW === "1", Platform.OS, __DEV__,
+    Platform.OS === "web" && typeof window !== "undefined" ? window.location.hostname : "",
+  ));
   const [authEntry, setAuthEntry] = useState<"sign-in" | "sign-up" | null>(null);
   const [accountDeleted, setAccountDeleted] = useState(false);
   const active = demo || Boolean(userId);

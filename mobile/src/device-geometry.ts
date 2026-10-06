@@ -37,5 +37,7 @@ export function focusScrollDelta(field: Rect, viewport: Rect, keyboard: Rect | n
 }
 
 export function supportsDetailPane(width: number, fontScale = 1) {
-  return width >= 1000 * Math.min(Math.max(fontScale, 1), 1.6);
+  // Detail containers stop growing at 1440. A larger physical display cannot
+  // make their text readable if the actual panes are still too narrow.
+  return Math.min(width, 1440) >= 1000 * Math.max(fontScale, 1);
 }

@@ -3,7 +3,7 @@ import {
   GlassNavigationProvider,
 } from "../../src/glass-backdrop";
 import { Text } from "../../src/app-text";
-import { Tabs, router } from "expo-router";
+import { Tabs, router, useIsFocused } from "expo-router";
 import { View } from "react-native";
 import { NavigationBar, NavigationItem } from "../../src/navigation-bar";
 import { useAccess } from "../../src/access";
@@ -20,10 +20,14 @@ export default function TabLayout() {
   const { colors, dark } = useTheme();
   const access = useAccess();
   const session = useSession();
+  const coveredByEntry = !useIsFocused();
   if (!access.active) return null;
   return (
     <ProfileGate>
-      <View key={session.profileId} style={{ flex: 1 }}>
+      <View key={session.profileId} style={{ flex: 1 }}
+        pointerEvents={coveredByEntry ? "none" : "auto"}
+        accessibilityElementsHidden={coveredByEntry}
+        importantForAccessibility={coveredByEntry ? "no-hide-descendants" : "auto"}>
         {session.demo && (
           <Text
             style={{

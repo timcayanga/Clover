@@ -245,7 +245,7 @@ export default function Adviser() {
     />
   );
   const historyPanel = <Card>
-            <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
+            <View style={{ flexDirection: "row", flexWrap: "wrap", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
               <Text accessibilityRole="header" style={{ color: colors.ink, fontFamily: "Poppins-SemiBold", fontSize: 16 }}>Your Chats</Text>
               <Pressable accessibilityRole="button" disabled={busy || history.busy} onPress={history.fresh} style={{ minHeight: 44, justifyContent: "center" }}>
                 <Text style={{ color: "#0066CC", fontFamily: "Poppins-Medium", fontSize: 14 }}>+ New Chat</Text>

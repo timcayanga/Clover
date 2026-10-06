@@ -7,6 +7,7 @@ export default function AddTransactionSheet() {
   const insets = useSafeAreaInsets();
   return (
     <View
+      accessibilityViewIsModal
       style={{
         flex: 1,
         paddingTop: insets.top,
