@@ -1,3 +1,4 @@
+import { AdaptiveDetail, useDetailPane } from "../../src/adaptive-detail";
 import { useAdaptiveLayout } from "../../src/adaptive";
 import { registerScreenRefresh } from "../../src/screen-refresh";
 import { transactionReviewReasons } from "../../src/transaction-review";
@@ -14,6 +15,9 @@ import { hasTransactionFilters, emptyTransactionFilters, transactionFilterQuery,
 import { useSession } from "../../src/session";
 import type { Transaction, TransactionPage } from "../../src/types";
 import {
+  Screen,
+  Heading,
+  Card,
   CategoryMark,
   Icon,
   Body,
@@ -29,6 +33,8 @@ export default function Transactions() {
   const { colors, styles, dark } = useTheme();
   const { fontScale } = useWindowDimensions();
   const adaptive = useAdaptiveLayout();
+  const wide = useDetailPane();
+  const [selectedId, setSelectedId] = useState<string | null>(null);
   const searchHeight = Math.max(38, Math.ceil(20 * fontScale + 16));
   const { demo, rows: samples, profileId, request, cached } = useSession();
   const [summary, setSummary] = useState<TransactionPage["summary"]>();
@@ -40,6 +46,7 @@ export default function Transactions() {
   useEffect(() => {
     setFilterValues(emptyTransactionFilters);
     setFilters(false);
+    setSelectedId(null);
     setFilterOptions({accounts:[],categories:[],tags:[]});
   }, [profileId]);
   useEffect(() => {
@@ -141,7 +148,24 @@ export default function Transactions() {
       };
     }, [load]),
   );
-  return (
+  const selected = rows.find(row => row.id === selectedId);
+  const openDetails = (id: string) => router.push({ pathname: "/transaction/[id]", params: { id } });
+  const detail = <Screen>
+    {selected ? <>
+      <Heading>{selected.merchantClean ?? selected.merchantRaw}</Heading>
+      <Card>
+        <Text style={{ color: colors.ink, fontSize: 24 }}>{money(selected.amount, selected.currency)}</Text>
+        <Body>{dateLabel(selected.date)}</Body>
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}><AccountBrandLogo size={28} account={{ name: selected.accountName, institution: selected.institution ?? null, type: selected.accountType ?? "bank", brandLogoUrl: selected.brandLogoUrl ?? null }} /><Body muted={false}>{selected.accountName}</Body></View>
+        <Body>{selected.categoryName ?? "Uncategorized"}</Body>
+        {selected.userNote ? <Body>{selected.userNote}</Body> : null}
+        {transactionReviewReasons(selected).map(reason => <Notice key={reason}>{reason}</Notice>)}
+        <Button title="Open transaction details" onPress={() => openDetails(selected.id)} />
+      </Card>
+      <Button secondary title="Clear selection" onPress={() => setSelectedId(null)} />
+    </> : <Body>Select a transaction to see its details here.</Body>}
+  </Screen>;
+  return <AdaptiveDetail selected={Boolean(selected)} detail={detail} list={(
     <View style={{ flex: 1, backgroundColor: colors.bg }}>
       <View style={{ width: "100%", maxWidth: 960, alignSelf: "center", paddingHorizontal: 12, paddingVertical: 8, gap: 8, flexShrink: 1 }}>
         <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
@@ -183,12 +207,8 @@ export default function Transactions() {
           <Pressable
             accessibilityRole="button"
             accessibilityLabel={`${item.merchantClean ?? item.merchantRaw}, ${item.type === "income" ? "+" : item.type === "expense" ? "−" : ""}${money(item.amount.replace(/^-/, ""), item.currency)}, ${dateLabel(item.date)}.${transactionReviewReasons(item).length ? ` ${transactionReviewReasons(item).join(". ")}.` : ""} Open transaction.`}
-            onPress={() =>
-              router.push({
-                pathname: "/transaction/[id]",
-                params: { id: item.id },
-              })
-            }
+            accessibilityState={{ selected: wide && selectedId === item.id }}
+            onPress={() => wide ? setSelectedId(item.id) : openDetails(item.id)}
             style={({ pressed }) => ({
               minHeight: 68,
               paddingVertical: 12,
@@ -196,7 +216,7 @@ export default function Transactions() {
               flexDirection: "row",
               alignItems: "center",
               gap: 10,
-              backgroundColor: colors.white,
+              backgroundColor: wide && selectedId === item.id ? colors.pale : colors.white,
               borderBottomWidth: 1,
               borderBottomColor: colors.line,
               opacity: pressed ? 0.6 : 1,
@@ -270,5 +290,5 @@ export default function Transactions() {
         }
       />
     </View>
-  );
+  )} />;
 }

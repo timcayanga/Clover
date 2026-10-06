@@ -1,5 +1,6 @@
+import { Modal } from "./adaptive-modal";
 import { useEffect, useRef, useState } from "react";
-import { Linking, Modal, ScrollView, View } from "react-native";
+import { Linking, ScrollView, View } from "react-native";
 import { AI_CONSENT_VERSION, AI_CONSENT_TITLE, AI_CONSENT_DESCRIPTION, AI_CONSENT_ALTERNATIVE } from "../../shared/ai-consent";
 import { Body, Button, Heading, Notice, useTheme } from "./ui";
 type Transport = <T>(path: string, options?: RequestInit) => Promise<T>;

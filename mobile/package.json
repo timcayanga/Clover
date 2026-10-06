@@ -73,7 +73,7 @@
     "check:charts": "node --experimental-strip-types scripts/report-chart-check.mjs && node --experimental-strip-types scripts/home-period-label-check.mjs && node --experimental-strip-types scripts/native-presentation-check.mjs && node --experimental-strip-types scripts/native-navigation-check.mjs && node scripts/store-management-check.mjs && node scripts/store-plan-change-check.mjs",
     "check:recurring-summary": "node --experimental-strip-types scripts/recurring-summary-check.mjs",
     "check:android-release": "node scripts/android-release-check.mjs",
-    "check:layout": "node scripts/adaptive-layout-check.mjs"
+    "check:layout": "node scripts/adaptive-layout-check.mjs && node scripts/adviser-layout-check.mjs"
   },
   "private": true
 }

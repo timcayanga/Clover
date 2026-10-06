@@ -1,3 +1,6 @@
+import { useKeyboardOpen } from "../../src/navigation-bar";
+import { useAdaptiveLayout } from "../../src/adaptive";
+import { useDetailPane } from "../../src/adaptive-detail";
 import { CloverMascot } from "../../src/clover-mascot";
 import { Text } from "../../src/app-text";
 import { createAdviserHistoryHook } from "../../../shared/use-adviser-history";
@@ -38,6 +41,9 @@ type Message = {
   visualization?: AdviserChart;
 };
 export default function Adviser() {
+  const wide = useDetailPane();
+  const keyboardOpen = useKeyboardOpen();
+  const adaptive = useAdaptiveLayout();
   const session = useSession();
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
@@ -238,22 +244,7 @@ export default function Adviser() {
       }
     />
   );
-  return (
-    <KeyboardAvoidingView
-      style={{ flex: 1, backgroundColor: colors.bg }}
-      behavior={Platform.OS === "ios" ? "padding" : undefined}
-      keyboardVerticalOffset={insets.top + 70}
-    >
-      <Screen>
-        {!useLocal && !session.demo ? (
-          <PlanAction
-            title="Your chats"
-            disabled={busy || history.busy}
-            onPress={() => setHistoryOpen(!historyOpen)}
-          />
-        ) : null}
-        {historyOpen ? (
-          <Card>
+  const historyPanel = <Card>
             <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
               <Text accessibilityRole="header" style={{ color: colors.ink, fontFamily: "Poppins-SemiBold", fontSize: 16 }}>Your Chats</Text>
               <Pressable accessibilityRole="button" disabled={busy || history.busy} onPress={history.fresh} style={{ minHeight: 44, justifyContent: "center" }}>
@@ -269,7 +260,23 @@ export default function Adviser() {
                 <Text style={{ color: colors.muted, fontSize: 12 }}>{new Date(chat.updatedAt).toLocaleDateString(undefined, { month: "short", day: "numeric" })}</Text>
               </Pressable>
             ))}
-          </Card>
+          </Card>;
+  return (
+    <KeyboardAvoidingView
+      style={{ flex: 1, backgroundColor: colors.bg }}
+      behavior={Platform.OS === "ios" ? "padding" : undefined}
+      keyboardVerticalOffset={insets.top + 70}
+    >
+      <View style={{ flex: 1, flexDirection: wide ? "row" : "column", minHeight: 0, width: "100%", maxWidth: 1440, alignSelf: "center" }}>
+      <View style={{ width: wide ? 300 : "100%", maxHeight: wide ? "100%" : "40%", display: !useLocal && (wide || historyOpen) ? "flex" : "none" }}><Screen keyboardInsets={false}>{historyPanel}</Screen></View>
+      <View style={{ flex: 1, minWidth: 0 }}>
+      <Screen keyboardInsets={false}>
+        {!useLocal && !session.demo && !wide ? (
+          <PlanAction
+            title="Your chats"
+            disabled={busy || history.busy}
+            onPress={() => setHistoryOpen(!historyOpen)}
+          />
         ) : null}
         {history.error ? (
           <Notice>
@@ -450,6 +457,7 @@ export default function Adviser() {
         <View
           style={{
             padding: 16,
+            paddingBottom: keyboardOpen ? 16 : adaptive.dockHeight + insets.bottom + 16,
             borderTopWidth: 1,
             borderTopColor: colors.line,
           }}
@@ -457,6 +465,7 @@ export default function Adviser() {
           {composer}
         </View>
       ) : null}
+      </View></View>
     </KeyboardAvoidingView>
   );
 }

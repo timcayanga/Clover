@@ -1,0 +1,82 @@
+{
+  "date": "2026-10-06",
+  "scope": "Follow-up to adaptive-layout-qa.json: keyboard, foldable safety, accessibility and tablet detail panes",
+  "implementation": {
+    "keyboard": "Shared focused-field visibility supplements native insets; duplicate avoidance removed from auth and transaction details; navigation hides while a native keyboard is shown.",
+    "foldables": "Android WindowManager 1.5.1 reports separating/occluding hinges. A stable route tree occupies the larger unobstructed pane, left/top on ties. Native modal windows use the same policy. This is safe single-pane support, not dual-screen spanning.",
+    "accessibility": "Reduced motion for route/modal transitions, iOS increased-contrast colors, browser contrast preferences and keyboard focus outlines, decorative icon suppression and button semantics.",
+    "tablet": "Transactions preview beside list, investment institution assets beside accounts, chat history beside Ask Clover. Width and font scale govern split layouts; compact layouts preserve state.",
+    "browser": "Visual-viewport focus correction for software keyboards/zoom; existing upload drop zones and file pickers retained. Native file drag-and-drop is not implemented."
+  },
+  "verification": {
+    "browser": {
+      "renderer": "Expo RN Web local sample preview in Chromium",
+      "views": 234,
+      "pages": 26,
+      "windows": [
+        [
+          320,
+          568
+        ],
+        [
+          390,
+          844
+        ],
+        [
+          600,
+          960
+        ],
+        [
+          744,
+          1133
+        ],
+        [
+          820,
+          1180
+        ],
+        [
+          1024,
+          1366
+        ],
+        [
+          1366,
+          1024
+        ],
+        [
+          540,
+          720
+        ],
+        [
+          844,
+          390
+        ]
+      ],
+      "horizontalOverflowFailures": 0,
+      "visibleTextClippingFailures": 0,
+      "crashes": 0
+    },
+    "interactions": [
+      "Account entry draft preserved after 1366 to 540 width resize",
+      "Ask Clover draft preserved after 1366 to 390 width resize",
+      "Tab focuses Institution with a 3px visible outline",
+      "Escape closes account entry sheet",
+      "Transaction selection displays details beside the list",
+      "Fictional investment institution selection shows assets and survives collapse to 540px"
+    ],
+    "simulator": "iPad Pro 11-inch M5 / iOS 26.5 Safari rendered the local Transactions preview at 834 logical pixels. This is WebKit rendering verification, not native-app or physical-device certification.",
+    "androidNative": "clover-window:compileDebugKotlin passed, including autolinking and WindowManager dependency resolution",
+    "geometry": "12 windows x 5 text scales plus separating/flat/stale hinges, floating and docked keyboard overlap, resized Android viewport and readable detail-pane thresholds",
+    "uploadRegression": "Existing native upload tests passed: compressed camera bytes, stale size metadata, encrypted retention, corruption and real photo/document limits",
+    "releaseGate": "npm run qa:prepush is enforced by the staging pre-push hook; check the commit CI for the release-gate outcome",
+    "chatComposer": "Component regression passed for after-reply composer: phone/tablet and keyboard shown/hidden; reserves visible dock and safe area, with one keyboard inset owner."
+  },
+  "physicalDeviceChecksPending": [
+    "iPad docked, floating and split keyboard typing through every add/edit form",
+    "Android tablet/foldable hardware keyboard, live hinge changes and OEM window resizing",
+    "VoiceOver and TalkBack reading/focus order; large text on physical devices",
+    "Real camera/file-provider permissions and upload while backgrounded",
+    "Apple/Google login and test purchases after resize/background/resume",
+    "Startup and scrolling performance on a lower-memory physical device"
+  ],
+  "release": "Staging only. Native changes require future binaries. No production deployment or store submission requested."
+}

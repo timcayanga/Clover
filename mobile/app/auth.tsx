@@ -1,6 +1,6 @@
 import { beginTelemetry } from "../../shared/analytics";
 import { useEffect, useState, useRef } from "react";
-import { ActivityIndicator, Alert, Image, KeyboardAvoidingView, Platform, Pressable, Switch, View } from "react-native";
+import { ActivityIndicator, Alert, Image, Platform, Pressable, Switch, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { router, useLocalSearchParams } from "expo-router";
 import { useSignIn, useSignUp } from "@clerk/expo";
@@ -220,12 +220,7 @@ function AuthForm() {
     </Screen>
   );
   return (
-    <KeyboardAvoidingView
-      style={{ flex: 1 }}
-      enabled={Platform.OS === "android"}
-      behavior="padding"
-      keyboardVerticalOffset={insets.top}
-    >
+    <View style={{ flex: 1 }}>
     <Screen>
       <View style={{ paddingVertical: 8, maxWidth: 520, width: "100%", alignSelf: "center" }}>
         {welcomeAllowed && <Pressable accessibilityRole="button" accessibilityLabel="Back to tutorial" onPress={() => router.back()} style={{ minHeight: 44, alignSelf: "flex-start", justifyContent: "center", marginBottom: 8 }}>
@@ -448,6 +443,6 @@ function AuthForm() {
         </Card>
       </View>
     </Screen>
-    </KeyboardAvoidingView>
+    </View>
   );
 }

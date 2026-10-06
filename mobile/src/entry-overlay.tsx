@@ -1,7 +1,9 @@
+import { Modal } from "./adaptive-modal";
+import { useAccessibilityPreferences } from "./accessibility-preferences";
 import { useEffect, type ReactNode } from "react";
 import { EntryNavigationContext } from "./entry-navigation";
 import { onImportQueued } from "./import-handoff";
-import { Modal, View } from "react-native";
+import { View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 export function EntryOverlay({
@@ -12,11 +14,13 @@ export function EntryOverlay({
   onClose: () => void;
 }) {
   const insets = useSafeAreaInsets();
+  const { reduceMotion } = useAccessibilityPreferences();
+
   useEffect(() => onImportQueued(onClose), [onClose]);
   return (
     <Modal
       transparent
-      animationType="slide"
+      animationType={reduceMotion ? "none" : "slide"}
       onRequestClose={onClose}
       statusBarTranslucent
       navigationBarTranslucent
@@ -31,7 +35,7 @@ export function EntryOverlay({
           backgroundColor: "#0005",
         }}
       >
-        <EntryNavigationContext.Provider value={action => { onClose(); setTimeout(action, 400); }}><View style={{ flex: 1 }}>{children}</View></EntryNavigationContext.Provider>
+        <EntryNavigationContext.Provider value={action => { onClose(); setTimeout(action, reduceMotion ? 0 : 400); }}><View style={{ flex: 1 }}>{children}</View></EntryNavigationContext.Provider>
 
       </View>
     </Modal>

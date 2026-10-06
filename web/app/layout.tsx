@@ -1,3 +1,4 @@
+import { ViewportAccessibility } from "@/components/viewport-accessibility";
 import type { Metadata, Viewport } from "next";
 import { cookies } from "next/headers";
 import { Poppins, Raleway } from "next/font/google";
@@ -184,7 +185,7 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
         <PwaServiceWorker />
         <ThemeSync />
         <HelperTextSync />
-        <ModalKeyboardController />
+        <ModalKeyboardController /><ViewportAccessibility />
         <StagingBrowserStateReset
           buildId={buildInfo.buildId}
           deploymentId={buildInfo.deploymentId ?? null}

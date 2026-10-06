@@ -7,7 +7,6 @@ import { router, useLocalSearchParams } from "expo-router";
 import { useEffect, useState } from "react";
 import {
   Alert,
-  KeyboardAvoidingView,
   Platform,
   Pressable,
   Switch,
@@ -202,10 +201,7 @@ export default function TransactionDetail() {
     }
   };
   return (
-    <KeyboardAvoidingView
-      style={{ flex: 1 }}
-      behavior={Platform.OS === "ios" ? "padding" : "height"}
-    >
+    <View style={{ flex: 1 }}>
       <Screen>
         {error ? <Notice>{error}</Notice> : null}
         {!row ? (
@@ -452,6 +448,6 @@ export default function TransactionDetail() {
           </>
         )}
       </Screen>
-    </KeyboardAvoidingView>
+    </View>
   );
 }

@@ -7,6 +7,7 @@ const flatten = value => Array.isArray(value) ? Object.assign({}, ...value.filte
 const tick = () => new Promise(resolve => setImmediate(resolve));
 function load(file, { os = 'ios', available = true, api = true, target = { current: {} }, reduced = false, transparencySupported = true, session = {}, width = 390, height = 844, fontScale = 1 } = {}) {
   const states = [], refs = [], effects = [], animations = [];
+  const keyboardListeners = new Map();
   let stateIndex = 0, refIndex = 0;
   const react = {
     createContext: initial => ({ initial }), useContext: () => ({ target }), useCallback: fn => fn,
@@ -15,6 +16,7 @@ function load(file, { os = 'ios', available = true, api = true, target = { curre
   };
   const Native = {
     View: 'View', Pressable: 'Pressable', Image: 'Image', StyleSheet: { create: x => x, flatten, absoluteFill: { position: 'absolute', inset: 0 } },
+    Keyboard: { addListener: (event, callback) => { keyboardListeners.set(event, callback); return { remove() { keyboardListeners.delete(event); } }; } },
     Platform: { OS: os }, useColorScheme: () => 'light',
     AccessibilityInfo: { isReduceMotionEnabled: async () => reduced, ...(transparencySupported ? { isReduceTransparencyEnabled: async () => reduced } : {}), addEventListener: () => ({ remove() {} }) },
     Animated: { View: 'Animated.View', Value: class { constructor(v) { this.value = v; } setValue(v) { this.value = v; } stopAnimation() {} },
@@ -33,6 +35,7 @@ function load(file, { os = 'ios', available = true, api = true, target = { curre
     if (name === '@clerk/expo') return { useUser: () => ({ user: { hasImage: true, imageUrl: 'test://photo' } }) };
     if (name.endsWith('/adaptive')) return { useAdaptiveLayout: () => ({ width, height, fontScale, ...adaptiveLayout(width, height, fontScale) }) };
     if (name.endsWith('/session')) return { useSession: () => session };
+    if (name.endsWith('/accessibility-preferences')) return { useAccessibilityPreferences: () => ({ reduceMotion: reduced, highContrast: false }) };
     if (name.endsWith('/display-preferences')) return { useDisplayPreferences: () => ({ appearance: 'light' }) };
     if (name.endsWith('/access')) return { useAccess: () => ({ active: true }) };
     if (name.endsWith('/icon-assets')) return { mobileNavigationIcons: {}, mobileInterfaceIcons: {}, mobileCategoryIcons: {} };
@@ -40,7 +43,7 @@ function load(file, { os = 'ios', available = true, api = true, target = { curre
     if (name.endsWith('/navigation-bar')) return { NavigationBar: 'NavigationBar', NavigationItem: 'NavigationItem' };
     return new Proxy({}, { get: (_, key) => key === '__esModule' ? true : String(key) });
   } });
-  return { render(name, props = {}) { stateIndex = 0; refIndex = 0; effects.length = 0; return exports[name](props); }, effects, animations };
+  return { render(name, props = {}) { stateIndex = 0; refIndex = 0; effects.length = 0; return exports[name](props); }, effects, animations, keyboardListeners };
 }
 function nodes(tree) { const result = []; const visit = node => { if (Array.isArray(node)) return node.forEach(visit); if (!node || typeof node !== 'object') return; result.push(node); visit(node.props?.children); }; visit(tree); return result; }
 const name = node => typeof node.type === 'function' ? node.type.name : node.type;
@@ -49,6 +52,11 @@ for (const os of ['ios', 'android']) {
   const tree = bar.render('NavigationBar', { children: 'ITEMS' });
   assert.equal(flatten(tree.props.style).height, 72);
   assert.equal(flatten(tree.props.style).bottom, os === 'ios' ? 34 : 24, 'Safe area belongs outside the shared capsule');
+  bar.effects.forEach(effect => effect());
+  bar.keyboardListeners.get('keyboardDidShow')();
+  assert.equal(bar.render('NavigationBar', { children: 'ITEMS' }), null, 'Keyboard must not be covered by the floating navigation');
+  bar.keyboardListeners.get('keyboardDidHide')();
+  assert(bar.render('NavigationBar', { children: 'ITEMS' }), 'Navigation returns after dismissing the keyboard');
   const row = nodes(tree).find(node => node.props?.children === 'ITEMS');
   assert.equal(flatten(row.props.style).paddingVertical, 7, 'Equal top/bottom padding keeps the add control centered');
   const add = bar.render('NavigationItem', { label: 'Add', children: '+', add: true, color: 'teal', onPress() {} });

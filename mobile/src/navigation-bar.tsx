@@ -1,14 +1,26 @@
 import { useAdaptiveLayout } from "./adaptive";
-import type { ReactNode } from "react";
-import { Pressable, StyleSheet, View } from "react-native";
+import { useEffect, useState, type ReactNode } from "react";
+import { Keyboard, Pressable, StyleSheet, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Text } from "./app-text";
 import { GlassBackdrop } from "./glass-backdrop";
 
+export function useKeyboardOpen() {
+  const [keyboardOpen, setKeyboardOpen] = useState(false);
+  useEffect(() => {
+    const show = Keyboard.addListener("keyboardDidShow", () => setKeyboardOpen(true));
+    const hide = Keyboard.addListener("keyboardDidHide", () => setKeyboardOpen(false));
+    return () => { show.remove(); hide.remove(); };
+  }, []);
+  return keyboardOpen;
+}
+
 /** One physical frame for tab and detail navigation on both native platforms. */
 export function NavigationBar({ children, dark = false }: { children: ReactNode; dark?: boolean }) {
+  const keyboardOpen = useKeyboardOpen();
   const insets = useSafeAreaInsets();
   const layout = useAdaptiveLayout();
+  if (keyboardOpen) return null;
   return <View pointerEvents="box-none" style={[styles.position, { bottom: Math.max(insets.bottom, 8), height: layout.dockHeight }]}>
     <View style={[styles.capsule, { width: "100%", maxWidth: layout.dockMaxWidth }]}>
     <View style={[styles.surface, { borderColor: dark ? "#59778399" : "#FFFFFFCC" }]}>

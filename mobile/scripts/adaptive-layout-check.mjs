@@ -30,3 +30,24 @@ assert.equal(planCardLayout(1000, 2).columns, 1);
 assert.equal(adaptiveColumns(540, 300, 3), 1, 'A narrow tablet split window must use the phone layout');
 assert.equal(adaptiveColumns(1080, 300, 3), 3);
 console.log('PASS adaptive geometry: 12 windows × 5 text scales, readable columns, bounded forms and fitting plan cards');
+
+const { usablePane, focusScrollDelta, supportsDetailPane } = await import('../src/device-geometry.ts');
+assert.deepEqual(usablePane(1000, 800, []), { x: 0, y: 0, width: 1000, height: 800 });
+assert.deepEqual(usablePane(1000, 800, [{ x: 490, y: 0, width: 20, height: 800, vertical: true, separating: true }]), { x: 0, y: 0, width: 490, height: 800 });
+assert.deepEqual(usablePane(1000, 800, [{ x: 400, y: 0, width: 20, height: 800, vertical: true, separating: true }]), { x: 420, y: 0, width: 580, height: 800 });
+assert.deepEqual(usablePane(800, 1000, [{ x: 0, y: 490, width: 800, height: 20, vertical: false, separating: true }]), { x: 0, y: 0, width: 800, height: 490 });
+assert.deepEqual(usablePane(1000, 800, [{ x: 500, y: 0, width: 0, height: 800, vertical: true, separating: false }]), { x: 0, y: 0, width: 1000, height: 800 });
+// OEM stale, outside-window and malformed coordinates cannot collapse the UI.
+for (const x of [-10, 1001, NaN]) assert.equal(usablePane(1000, 800, [{ x, y: 0, width: 20, height: 800, vertical: true, separating: true }]).width, 1000);
+const viewport = { x: 0, y: 50, width: 1000, height: 700 };
+const field = { x: 20, y: 600, width: 300, height: 48 };
+assert.equal(focusScrollDelta(field, viewport, null), 0);
+assert.equal(focusScrollDelta(field, viewport, { x: 0, y: 500, width: 1000, height: 300 }), 164);
+assert.equal(focusScrollDelta(field, viewport, { x: 500, y: 500, width: 400, height: 200 }), 0, 'Floating keyboard elsewhere must not move the field');
+assert.equal(focusScrollDelta(field, viewport, { x: 100, y: 500, width: 400, height: 200 }), 164);
+assert.equal(focusScrollDelta({ ...field, y: 20 }, viewport, null), -46);
+assert.equal(focusScrollDelta(field, { ...viewport, height: 400 }, null), 214, 'Android already-resized viewport is respected without adding keyboard height twice');
+assert(supportsDetailPane(1366));
+assert(!supportsDetailPane(820));
+assert(!supportsDetailPane(1366, 2), 'Large text returns to a readable single pane');
+console.log('PASS foldable panes, stale hinge data, floating/docked keyboards, resized viewports and accessible split thresholds');

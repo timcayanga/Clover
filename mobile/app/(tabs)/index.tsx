@@ -1,3 +1,4 @@
+import { Modal } from "../../src/adaptive-modal";
 import { AdaptiveGrid } from "../../src/adaptive";
 import { mergeHomeDetails, type HomeDetails, type HomeSections } from "../../src/home-sections";
 import { registerScreenRefresh } from "../../src/screen-refresh";
@@ -11,7 +12,7 @@ import { router, useFocusEffect, useNavigation } from "expo-router";
 import { LinearGradient } from "expo-linear-gradient";
 import * as SecureStore from "expo-secure-store";
 import { useCallback, useEffect, useLayoutEffect, useState } from "react";
-import { Modal, ScrollView, Platform, Pressable, View } from "react-native";
+import { ScrollView, Platform, Pressable, View } from "react-native";
 import { useSession } from "../../src/session";
 import {
   AppHeader,

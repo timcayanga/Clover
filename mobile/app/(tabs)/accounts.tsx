@@ -1,3 +1,5 @@
+import { Modal } from "../../src/adaptive-modal";
+import { AdaptiveDetail } from "../../src/adaptive-detail";
 import { AdaptiveGrid } from "../../src/adaptive";
 import { useLiveInvestmentValues } from "../../src/use-live-investment-values";
 import { CloverEmptyState } from "../../src/clover-mascot";
@@ -20,7 +22,7 @@ import {
 import { SummaryCard } from "../../src/plan-ui";
 import { LinearGradient } from "expo-linear-gradient";
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
-import { Modal, Pressable, ScrollView, View } from "react-native";
+import { Pressable, ScrollView, View } from "react-native";
 import { useSession } from "../../src/session";
 import {
   AppHeader,
@@ -307,7 +309,7 @@ function AccountsContent() {
   ) : null;
   if (selected) return accountEditor;
   const institution = institutionGroups(accounts).find(group => group.id === institutionId);
-  if (institution) return <Screen gap={20}>
+  const institutionDetail = institution ? <Screen gap={20}>
     <Button title="All accounts" secondary onPress={() => setInstitutionId(null)} />
     <Heading>{institution.name}</Heading>
     <Body>{institution.assets.length} assets · {institution.currency}</Body>
@@ -319,8 +321,8 @@ function AccountsContent() {
         <Icon line name="chevron-forward" size={16} />
       </View></Card>
     </Pressable>)}
-  </Screen>;
-  return (
+  </Screen> : <Screen><Body>Select an investment institution to see its assets here.</Body></Screen>;
+  return <AdaptiveDetail selected={Boolean(institution)} detailOnlyOnCompact detail={institutionDetail} list={(
     <Screen layout="dashboard" gap={24}>
       {adding ? <EntryOverlay onClose={() => setAdding(false)}>{accountEditor}</EntryOverlay> : null}
       {pendingBanks.map(connection=><FinversePendingChip key={connection.id} connection={connection} busy={cancellingBank} onResume={()=>router.push({pathname:"/accounts",params:{finverseConnection:connection.id,finverseWorkspace:session.profileId}})} onCancel={()=>void cancelBank(connection.id)}/>)}
@@ -563,5 +565,5 @@ function AccountsContent() {
         <CloverEmptyState>No accounts yet. Use Add account above to get started.</CloverEmptyState>
       ) : null}
     </Screen>
-  );
+  )} />;
 }

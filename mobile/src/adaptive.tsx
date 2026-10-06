@@ -1,9 +1,12 @@
+import { useWindowPane } from "./window-pane";
 import { Children, useState, type ReactNode } from "react";
 import { View, useWindowDimensions, type StyleProp, type ViewStyle } from "react-native";
 import { adaptiveColumns, adaptiveLayout } from "./adaptive-layout";
 
 export function useAdaptiveLayout() {
-  const window = useWindowDimensions();
+  const dimensions = useWindowDimensions();
+  const pane = useWindowPane();
+  const window = { ...dimensions, ...(pane ? { width: pane.width, height: pane.height } : {}) };
   return { ...window, ...adaptiveLayout(window.width, window.height, window.fontScale) };
 }
 

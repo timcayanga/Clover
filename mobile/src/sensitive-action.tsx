@@ -1,5 +1,6 @@
+import { Modal } from "./adaptive-modal";
 import { useEffect, useRef, useState } from "react";
-import { Modal, View } from "react-native";
+import { View } from "react-native";
 import { useReverification, useSession as useClerkSession } from "@clerk/expo";
 import type { SessionVerificationResource } from "@clerk/expo/types";
 import { Body, Button, Card, DetailNavigation, Field, Heading, Screen, useTheme } from "./ui";

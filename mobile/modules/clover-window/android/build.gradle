@@ -1,0 +1,12 @@
+apply plugin: 'com.android.library'
+apply plugin: 'expo-module-gradle-plugin'
+group = 'ph.clover.window'
+version = '1.0.0'
+android {
+  namespace 'ph.clover.window'
+  defaultConfig { versionCode 1; versionName '1.0.0' }
+}
+dependencies {
+  implementation 'androidx.window:window:1.5.1'
+  implementation 'org.jetbrains.kotlinx:kotlinx-coroutines-android:1.10.2'
+}

@@ -1,3 +1,6 @@
+import { Modal } from "./adaptive-modal";
+import { FocusVisibility, useKeyboardVisibility } from "./keyboard-visibility";
+import { useAccessibilityPreferences } from "./accessibility-preferences";
 import { useAdaptiveLayout } from "./adaptive";
 import { refreshScreen } from "./screen-refresh";
 import { apiBase } from "./api-base";
@@ -20,7 +23,6 @@ import {
   Animated,
   PanResponder,
   AccessibilityInfo,
-  Modal,
   Linking,
   useColorScheme,
   useWindowDimensions,
@@ -92,7 +94,7 @@ export function Icon({
         }}
       />
     );
-  return <Ionicons name={name} color={color ?? colors.teal} size={size} />;
+  return <Ionicons accessible={false} importantForAccessibility="no" name={name} color={color ?? colors.teal} size={size} />;
 }
 export function CategoryMark({
   name,
@@ -133,6 +135,7 @@ export function Button({
   danger?: boolean;
 }) {
   const { colors, styles } = useTheme();
+  const { highContrast } = useAccessibilityPreferences();
   return (
     <Pressable
       accessibilityRole="button"
@@ -159,7 +162,7 @@ export function Button({
       {!secondary && !textOnly && !danger ? (
         <LinearGradient
           pointerEvents="none"
-          colors={["#03A8C0", "#34D3D0"]}
+          colors={highContrast ? ["#006675", "#006675"] : ["#03A8C0", "#34D3D0"]}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 0 }}
           style={[StyleSheet.absoluteFill, { borderRadius: 26 }]}
@@ -220,7 +223,7 @@ export function Card({
   style?: ViewStyle;
 }) {
   const { colors, styles, dark } = useTheme();
-  return onPress ? <Pressable onPress={onPress} style={[styles.card, style]}>{children}</Pressable> : <View style={[styles.card, style]}>{children}</View>;
+  return onPress ? <Pressable accessibilityRole="button" onPress={onPress} style={[styles.card, style]}>{children}</Pressable> : <View style={[styles.card, style]}>{children}</View>;
 }
 export function Screen({
   children,
@@ -229,18 +232,23 @@ export function Screen({
   scrollKey,
   onDismiss,
   layout = "reading",
+  keyboardInsets = true,
 }: {
   children: ReactNode;
   gap?: number;
   sheet?: boolean;
   scrollKey?: string;
   layout?: "reading" | "dashboard" | "form";
+  keyboardInsets?: boolean;
   onDismiss?: () => void;
 }) {
   const { colors, styles, dark } = useTheme();
   const session = useSession();
   const adaptive = useAdaptiveLayout();
   const insets = useSafeAreaInsets();
+  const keyboardVisibility = useKeyboardVisibility(sheet ? insets.bottom : adaptive.dockHeight + insets.bottom + 8);
+  const { reduceMotion } = useAccessibilityPreferences();
+  const reduceMotionRef = useRef(reduceMotion); reduceMotionRef.current = reduceMotion;
   const slide = useRef(new Animated.Value(0)).current;
   const dismissRef = useRef(onDismiss); dismissRef.current = onDismiss;
   const drag = useRef(PanResponder.create({
@@ -248,6 +256,7 @@ export function Screen({
     onMoveShouldSetPanResponder: (_, gesture) => Math.abs(gesture.dy) > Math.abs(gesture.dx),
     onPanResponderMove: (_, gesture) => slide.setValue(Math.max(0, gesture.dy)),
     onPanResponderRelease: (_, gesture) => {
+      if (reduceMotionRef.current) { slide.setValue(0); if (gesture.dy > 90 || gesture.vy > 0.8) dismissRef.current?.(); return; }
       if (gesture.dy > 90 || gesture.vy > 0.8) Animated.timing(slide, { toValue: 900, duration: 180, useNativeDriver: true }).start(() => { dismissRef.current?.(); slide.setValue(0); });
       else Animated.spring(slide, { toValue: 0, useNativeDriver: true, bounciness: 0 }).start();
     },
@@ -270,7 +279,11 @@ export function Screen({
     <Animated.View style={{ flex: 1, backgroundColor: sheet ? colors.white : colors.bg, ...(sheet ? { width: "100%", maxWidth: 720, alignSelf: "center", marginTop: adaptive.short ? 0 : 12, borderTopLeftRadius: 28, borderTopRightRadius: 28, overflow: "hidden" as const, transform: [{ translateY: slide }] } : {}) }}>
       {sheet ? <View {...drag.panHandlers} accessible accessibilityRole="button" accessibilityLabel="Dismiss sheet" accessibilityHint="Swipe down to return to the previous page" accessibilityActions={[{name:"activate",label:"Dismiss"}]} onAccessibilityAction={() => onDismiss?.()} style={{ height: 28, alignItems: "center", justifyContent: "center" }}><View style={{ width: 36, height: 4, borderRadius: 4, backgroundColor: colors.line }}/></View> : null}
       {header}
-    <ScrollView
+    <FocusVisibility.Provider value={keyboardVisibility.focus}><ScrollView
+      ref={keyboardVisibility.scroll}
+      onScroll={event => { keyboardVisibility.offset.current = event.nativeEvent.contentOffset.y; }}
+      scrollEventThrottle={16}
+      onLayout={keyboardVisibility.ensureVisible}
       key={scrollKey}
       bounces={path === "/settings" ? false : undefined}
       overScrollMode={path === "/settings" ? "never" : "auto"}
@@ -284,7 +297,7 @@ export function Screen({
         { gap, paddingHorizontal: adaptive.gutter, maxWidth: sheet || layout === "form" ? adaptive.formMaxWidth : layout === "dashboard" ? adaptive.pageMaxWidth : adaptive.readingMaxWidth, paddingBottom: (sheet ? 24 : adaptive.dockHeight + 28) + insets.bottom },
       ]}
       keyboardShouldPersistTaps="handled"
-      automaticallyAdjustKeyboardInsets
+      automaticallyAdjustKeyboardInsets={keyboardInsets}
       keyboardDismissMode="interactive"
     >
       {!session.demo &&
@@ -305,7 +318,7 @@ export function Screen({
         </Pressable>
       ) : null}
       {content}
-    </ScrollView>
+    </ScrollView></FocusVisibility.Provider>
     </Animated.View>
   );
   // Keep the blur target and its navigation backdrop as siblings. Including
@@ -946,16 +959,21 @@ const darkColors: typeof lightColors = {
   danger: "#FF9D9D",
   positive: "#69DB9E",
 };
+const contrastLight = { ...lightColors, teal: "#006675", bright: "#006675", muted: "#455160", line: "#7C8E9B", positive: "#08753A", danger: "#BB2035" };
+const contrastDark = { ...darkColors, teal: "#71E5E2", muted: "#CFDEE4", line: "#91AAB4" };
+const contrastLightStyles = makeStyles(contrastLight);
+const contrastDarkStyles = makeStyles(contrastDark);
 const lightStyles = makeStyles(lightColors);
 const darkStyles = makeStyles(darkColors);
 export function useTheme() {
+  const { highContrast } = useAccessibilityPreferences();
   const systemDark = useColorScheme() === "dark";
   const { appearance } = useDisplayPreferences();
   const dark = appearance === "system" ? systemDark : appearance === "dark";
   return {
     dark,
-    colors: dark ? darkColors : lightColors,
-    styles: dark ? darkStyles : lightStyles,
+    colors: highContrast ? (dark ? contrastDark : contrastLight) : dark ? darkColors : lightColors,
+    styles: highContrast ? (dark ? contrastDarkStyles : contrastLightStyles) : dark ? darkStyles : lightStyles,
   };
 }
 

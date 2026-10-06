@@ -1,3 +1,5 @@
+import { WindowPane, WindowPaneProvider } from "../src/window-pane";
+import { AccessibilityPreferences, useAccessibilityPreferences } from "../src/accessibility-preferences";
 import { RouteReveal } from "../src/route-reveal";
 import { GlassNavigationProvider } from "../src/glass-backdrop";
 import { Image } from "expo-image";
@@ -63,6 +65,7 @@ function PrivacyShield({ children }: { children: ReactNode }) {
   );
 }
 function Routes() {
+  const { reduceMotion } = useAccessibilityPreferences();
   const { colors, styles, dark } = useTheme();
   const { active, authEntry, accountDeleted } = useAccess();
   const path = usePathname();
@@ -94,7 +97,7 @@ function Routes() {
         <StatusBar style={active && dark ? "light" : "dark"} />
           <Stack
             screenOptions={{
-              animation: "slide_from_right",
+              animation: reduceMotion ? "none" : "slide_from_right",
               animationDuration: 220,
               headerTintColor: colors.teal,
               headerTitleStyle: { color: colors.ink },
@@ -105,7 +108,7 @@ function Routes() {
             }}
           >
             <Stack.Protected guard={accountDeleted}>
-              <Stack.Screen name="account-deleted" options={{ headerShown: false, animation: "fade" }} />
+              <Stack.Screen name="account-deleted" options={{ headerShown: false, animation: reduceMotion ? "none" : "fade" }} />
             </Stack.Protected>
             <Stack.Protected guard={entry.welcome}>
               <Stack.Screen name="welcome" options={{ headerShown: false }} />
@@ -119,7 +122,7 @@ function Routes() {
                 name="(tabs)"
                 options={{ headerShown: false, title: "Clover" }}
               />
-              <Stack.Screen name="add-transaction" options={{ headerShown: false, presentation: "transparentModal", animation: "slide_from_bottom", contentStyle: { backgroundColor: "#0005" } }}/>
+              <Stack.Screen name="add-transaction" options={{ headerShown: false, presentation: "transparentModal", animation: reduceMotion ? "none" : "slide_from_bottom", contentStyle: { backgroundColor: "#0005" } }}/>
 
               <Stack.Screen
                 name="offline"
@@ -166,7 +169,7 @@ function Routes() {
               />
             </Stack.Protected>
             <Stack.Protected guard={entry.onboarding}>
-              <Stack.Screen name="onboarding" options={{ headerShown: false, animation: "slide_from_right" }} />
+              <Stack.Screen name="onboarding" options={{ headerShown: false, animation: reduceMotion ? "none" : "slide_from_right" }} />
             </Stack.Protected>
           </Stack>
           {entry.app ? <ImportActivity /> : null}
@@ -245,7 +248,7 @@ function AppSession({
           if (!demo) await logout();
         }}
       >
-        <SafeAreaView
+        <WindowPane><SafeAreaView
           style={{
             flex: 1,
             backgroundColor: active ? colors.white : "#f7fcfc",
@@ -253,7 +256,7 @@ function AppSession({
           edges={["top", "left", "right"]}
         >
           <Routes />
-        </SafeAreaView>
+        </SafeAreaView></WindowPane>
       </SessionProvider>
     </AccessContext.Provider>
   );
@@ -291,7 +294,7 @@ export default function RootLayout() {
   if (!fontsLoaded && !fontError) return null;
   return (
     <SafeAreaProvider>
-      <DisplayPreferences>
+      <WindowPaneProvider><AccessibilityPreferences><DisplayPreferences>
         <NativeAnalytics />
         {key ? (
           <ClerkProvider
@@ -311,7 +314,7 @@ export default function RootLayout() {
             logout={async () => {}}
           />
         )}
-      </DisplayPreferences>
+      </DisplayPreferences></AccessibilityPreferences></WindowPaneProvider>
     </SafeAreaProvider>
   );
 }
