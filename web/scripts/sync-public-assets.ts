@@ -18,7 +18,7 @@ const errorDestinationPath = fileURLToPath(new URL("../public/assets/error-clove
 
 const buildNavigationIcon = async (name: NavigationIconName, sourceFile: string) => {
   const sourcePath = `${navigationSourceRoot}${sourceFile}`;
-  const destinationPath = `${navigationDestinationRoot}${name === "adviser" ? "adviser-mascot-v2" : name}.webp`;
+  const destinationPath = `${navigationDestinationRoot}${name === "adviser" ? "adviser-velvet-v3" : name}.webp`;
 
   await stat(sourcePath);
   await sharp(sourcePath)

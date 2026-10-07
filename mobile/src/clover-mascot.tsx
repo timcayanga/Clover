@@ -3,12 +3,14 @@ import type { ReactNode } from "react";
 import { Body, useTheme } from "./ui";
 
 const poses = {
-  welcome: require("../assets/mascots/welcome.png"),
-  thinking: require("../assets/mascots/thinking.png"),
-  guiding: require("../assets/mascots/guiding.png"),
-  celebrating: require("../assets/mascots/celebrating.png"),
-  resting: require("../assets/mascots/resting.png"),
-  reassuring: require("../assets/mascots/reassuring.png"),
+  savings: require("../assets/mascots/velvet-savings.png"),
+  compact: require("../assets/mascots/velvet-compact.png"),
+  welcome: require("../assets/mascots/velvet-welcome.png"),
+  thinking: require("../assets/mascots/velvet-thinking.png"),
+  guiding: require("../assets/mascots/velvet-statement.png"),
+  celebrating: require("../assets/mascots/velvet-wave.png"),
+  resting: require("../assets/mascots/velvet-thinking.png"),
+  reassuring: require("../assets/mascots/velvet-thinking.png"),
 };
 export type MascotPose = keyof typeof poses;
 

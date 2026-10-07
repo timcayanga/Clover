@@ -1,5 +1,7 @@
 "use client";
 
+import { CloverMascot } from "@/components/clover-mascot";
+
 import { StoryBackground } from "./story-background";
 import { connectPlatformDesigns } from "@/lib/connect-platform-designs";
 import { LandingTransactionPhone } from "@/app/landing-preview/landing-journey";
@@ -83,7 +85,7 @@ export function FeatureStory({ story, authEnabled, initialMarket, countryResolve
       <div className={styles.wash} aria-hidden="true" />
       <section ref={copyRef} className={`${styles.content} ${pricing?styles.pricingContent:""}`} data-landing-copy data-final={final} aria-live="polite" aria-atomic="true">
         <div className={styles.copy} key={current.id}>
-          <h1>{current.title} <em>{current.accent}</em></h1>
+          {story.slug === "understand-your-money" && current.id === "adviser" ? <div className="marketing-clover-companion"><CloverMascot pose="celebrating" /></div> : null}<h1>{current.title} <em>{current.accent}</em></h1>
           {current.copy && <p className={styles.description}>{current.copy}</p>}
           {current.link && <Link className={styles.contextLink} href={current.link.href}>{current.link.label}</Link>}
           {pricing ? <ProActions market={market} /> : null}

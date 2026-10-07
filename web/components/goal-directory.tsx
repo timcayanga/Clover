@@ -28,33 +28,10 @@ export function GoalDirectory({ goals }: { goals: GoalCardData[] }) {
   return (
     <section>
       {!goals.length ? (
-        <div className="plan-presets"><CloverMascot />
+        <div className="plan-presets mascot-empty-state"><CloverMascot pose="savings" />
           <h2>What would you like to work toward?</h2>
-          <div className="collection-card-grid">
-            {[
-              { name: "Save more", key: "save_more", icon: "Income" },
-              {
-                name: "Emergency fund",
-                key: "build_emergency_fund",
-                icon: "Health & Wellness",
-              },
-              {
-                name: "Invest better",
-                key: "invest_better",
-                icon: "Investments",
-              },
-            ].map((preset) => (
-              <Link
-                className="collection-create-card"
-                key={preset.key}
-                href={`/goals/new?preset=${preset.key}`}
-              >
-                <CategoryBrandMark categoryName={preset.icon} size={40} />
-                <strong>{preset.name}</strong>
-                <span>Set a target</span>
-              </Link>
-            ))}
-          </div>
+          <p>Set your target and start working toward it.</p>
+          <div className="mascot-empty-state__actions"><Link className="button button-primary" href="/goals/new">Create custom goal</Link><Link className="button button-secondary" href="/adviser?prompt=Help%20me%20plan%20a%20goal">Plan a goal with Clover</Link></div>
         </div>
       ) : null}
       <div className="collection-card-grid" aria-label="Your goals">
@@ -115,11 +92,11 @@ export function GoalDirectory({ goals }: { goals: GoalCardData[] }) {
             </span>
           </CollectionCard>
         ))}
-        <Link className="collection-create-card" href="/goals/new">
+        {goals.length > 0 ? <Link className="collection-create-card" href="/goals/new">
           <span aria-hidden="true">＋</span>
           <strong>Create goal</strong>
           <small>Make room for another plan</small>
-        </Link>
+        </Link> : null}
       </div>
     </section>
   );

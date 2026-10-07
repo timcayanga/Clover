@@ -1,3 +1,4 @@
-export function CloverMascot({ pose = "guiding", size = 144 }: { pose?: "welcome" | "thinking" | "guiding" | "celebrating" | "resting" | "reassuring"; size?: number }) {
-  return <img className="clover-mascot" src={`/assets/mascots/${pose}.svg`} alt="" aria-hidden="true" width={size} height={size} loading="lazy" decoding="async" />;
+const poses = { welcome: "welcome", thinking: "thinking", guiding: "statement", celebrating: "wave", resting: "thinking", reassuring: "thinking", savings: "savings", compact: "compact" } as const;
+export function CloverMascot({ pose = "guiding", size = 112 }: { pose?: keyof typeof poses; size?: number }) {
+  return <img className="clover-mascot" src={`/assets/mascots/velvet-${poses[pose]}.png`} alt="" aria-hidden="true" width={size} height={size} decoding="async" />;
 }

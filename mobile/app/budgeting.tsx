@@ -298,20 +298,7 @@ export default function Budgeting() {
         <>
           {!data.budgets.length ? (
             <>
-              <CloverEmptyState>Start with a budget. Choose a starting point and set your own amount.</CloverEmptyState>
-              {["Food & Dining", "Transport", "Monthly savings"].map((name) => (
-                <Card key={name}>
-                  <CategoryMark
-                    name={name === "Monthly savings" ? "Income" : name}
-                    size={40}
-                  />
-                  <Body muted={false}>{name}</Body>
-                  <PlanAction
-                    title={`Set up ${name}`}
-                    onPress={() => setEditor({ budget: null, preset: name })}
-                  />
-                </Card>
-              ))}
+              <CloverEmptyState pose="savings">Start with a budget that fits your life. Set an amount and start planning your spending.</CloverEmptyState>
             </>
           ) : (
             <AdaptiveGrid>{data.budgets.map((budget) => (

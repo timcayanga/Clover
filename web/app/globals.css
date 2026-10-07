@@ -56441,7 +56441,7 @@ html[data-theme="dark"] .content--adviser .adviser-summary .adviser-summary-card
   height: auto;
   aspect-ratio: 1;
   border-radius: 22px;
-  object-fit: cover;
+  object-fit: contain;
 }
 
 .error-screen__copy {
@@ -66746,3 +66746,27 @@ input.transaction-inline-edit[aria-invalid="true"] { box-shadow: inset 0 -1px va
 .report-v2-search select{width:100%;min-height:48px;border:1px solid var(--stroke);border-radius:12px;padding:10px 12px;color:var(--ink);background:var(--surface,#fff);font:inherit}
 .report-v2-panel h2{scroll-margin-top:100px}
 .report-v2-panel h2:focus-visible{outline:2px solid var(--accent);outline-offset:4px}
+/* Approved mint velvet mascot rollout — 7 Oct 2026. */
+.onboarding-card .onboarding-card__mark { width:160px; height:160px; object-fit:contain; }
+.onboarding-card__brand { min-height:160px; }
+.mascot-empty-state { text-align:center; padding:24px; }
+.mascot-empty-state__actions { display:flex; justify-content:center; flex-wrap:wrap; gap:12px; margin-top:20px; }
+.collection-card-grid[hidden] { display:none; }
+.marketing-clover-companion { width:112px; height:112px; margin:0 0 20px; }
+.marketing-clover-companion .clover-mascot { width:100%; height:100%; margin:0; }
+.nav-link .menu-icon-3d--adviser { width:32px; height:32px; object-fit:contain; transform:none; }
+@media (max-width:700px) {
+ .onboarding-card .onboarding-card__mark { width:128px; height:128px; }
+ .onboarding-card__brand { min-height:128px; }
+ .marketing-clover-companion { width:88px; height:88px; margin-bottom:16px; }
+}
+/* Keep the compact mascot at the shared header icon size; retain the touch target. */
+.content.content .adviser-header-link img,
+.content.content .contextual-ask-clover__icon {
+  width: 32px !important;
+  height: 32px !important;
+  min-width: 32px !important;
+  min-height: 32px !important;
+  flex: 0 0 32px !important;
+  object-fit: contain;
+}

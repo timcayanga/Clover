@@ -452,7 +452,7 @@ export function OnboardingForm({
           ))}
         </div>
         <div className="onboarding-card__brand" aria-label="Clover">
-          <img className="onboarding-card__mark" src="/clover-mark.svg" alt="" aria-hidden="true" loading="eager" fetchPriority="high" />
+          <img className="onboarding-card__mark" src={step === "experience" ? "/assets/mascots/velvet-thinking.png" : step === "upload" ? "/assets/mascots/velvet-statement.png" : "/assets/mascots/velvet-welcome.png"} alt="" aria-hidden="true" loading="eager" fetchPriority="high" />
         </div>
 
         {step === "upgrade" ? upgradeStep : step === "experience" ? experienceStep : uploadStep}

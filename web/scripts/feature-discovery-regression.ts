@@ -26,7 +26,7 @@ async function main() {
   assert.match(reports, /<AdviserHeaderLink \/>/);
   assert.doesNotMatch(adviser, /<ReportsStream/);
   assert.match(adviser, /title="Ask Clover"[\s\S]{0,500}<AdviserChat(?:(?!\/>)[\s\S])*layout="workspace"/);
-  assert.match(adviserChat, /src="\/assets\/mascots\/welcome\.svg"/, "Ask Clover must use its welcome mascot in its empty state.");
+  assert.match(adviserChat, /src="\/assets\/mascots\/velvet-welcome\.png"/, "Ask Clover must use its welcome mascot in its empty state.");
   assert.match(adviserChat, /layout === "workspace" \? <h2>[\s\S]{0,140}Ask Clover anything about your finances\.<\/h2> : null/, "The full Ask Clover workspace should retain its welcome headline.");
   assert.doesNotMatch(adviserChat, /<h2>[\s\S]{0,140}Ask Clover anything about your finances\.<\/h2>\s*<p/, "The contextual Ask Clover popup should not render the workspace headline unconditionally.");
   assert.match(adviserChat, /layout === "workspace" \? composer : null/, "The empty Adviser workspace must center its composer with the welcome state.");

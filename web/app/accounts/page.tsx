@@ -4709,7 +4709,7 @@ function AccountsPageContent() {
                       "Upload statements when you want Clover to populate cards for you.",
                       "Open each card later to review account-specific transactions and details.",
                     ]}
-                    illustration="/assets/mascots/guiding.svg"
+                    illustration="/assets/mascots/velvet-statement.png"
                     illustrationAlt="A 3D Clover dashboard illustration"
                     importHref="/accounts?import=1"
                     accountHref="/accounts"

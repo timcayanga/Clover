@@ -626,7 +626,7 @@ function ScopedAdviserChat({ prompts, storageKey = adviserChatStorageKey, initia
       ) : null}
       {messages.length === 0 && !minimal ? (
         <div className="adviser-chat__welcome">
-          <Image className="adviser-chat__welcome-mark" src="/assets/mascots/welcome.svg" alt="" width={128} height={116} priority />
+          <Image className="adviser-chat__welcome-mark" src="/assets/mascots/velvet-welcome.png" alt="" width={128} height={116} priority />
           <div className="adviser-chat__welcome-copy">
             {layout === "workspace" ? <h2>{history.firstName.trim() ? `Hi ${history.firstName.trim()}! ` : ""}Ask Clover anything about your finances.</h2> : null}
             {layout === "embedded" ? <p className="adviser-chat__question-lead">Ask Clover anything about your finances.</p> : null}
@@ -655,7 +655,7 @@ function ScopedAdviserChat({ prompts, storageKey = adviserChatStorageKey, initia
               key={`${message.role}-${index}`}
               className={`adviser-chat__message adviser-chat__message--${message.role}`}
             >
-              {message.role === "assistant" ? <div className="adviser-chat__author"><Image src="/assets/mascots/guiding.svg" alt="" width={28} height={28} /><span>Clover</span></div> : null}
+              {message.role === "assistant" ? <div className="adviser-chat__author"><Image src="/assets/mascots/velvet-compact.png" alt="" width={28} height={28} /><span>Clover</span></div> : null}
               <p>{message.content}</p>
               {message.visualization ? <AdviserReportCard chart={message.visualization} /> : null}
               {message.role === "assistant" && message.content.trim() ? (

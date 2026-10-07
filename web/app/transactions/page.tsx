@@ -331,7 +331,7 @@ const matchesImportedAccountIdentity = (left: Account, right: Account) => {
   return isImportedAccountIdentityMatch(left, right);
 };
 
-const transactionsEmptyStateIllustration = "/assets/mascots/guiding.svg";
+const transactionsEmptyStateIllustration = "/assets/mascots/velvet-statement.png";
 
 const isImageImportFile = (file: File) =>
   /\.(jpe?g|png|webp|heic|heif)$/i.test(file.name.toLowerCase()) || file.type.startsWith("image/");
