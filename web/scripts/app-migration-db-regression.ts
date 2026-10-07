@@ -24,15 +24,19 @@ async function main() {
   const start = performance.now(); const result = await processImportFileText(f.id, { text: content, importMode: "statement", actorUserId: u.id });
   return { result, id: f.id, ms: Math.round(performance.now() - start) };
  };
+ const legacyAccount = await prisma.account.create({ data: { workspaceId: w.id, name: "Existing account", type: "bank", currency: "PHP" } });
+ const legacyCategory = await prisma.category.create({ data: { workspaceId: w.id, name: "Transfers", type: "transfer" } });
+ const legacyImport = await prisma.importFile.create({ data: { workspaceId: w.id, fileName: "previous.csv", fileType: "text/csv", storageKey: "qa/previous", status: "done" } });
+ const legacy = await prisma.transaction.create({ data: { workspaceId: w.id, accountId: legacyAccount.id, categoryId: legacyCategory.id, importFileId: legacyImport.id, date: new Date("2026-09-03"), amount: 800, currency: "PHP", type: "transfer", isTransfer: true, merchantRaw: "External payment", reviewStatus: "confirmed" } });
  const first = await upload(text, "migration.csv");
- const rows = await prisma.transaction.findMany({ where: { workspaceId: w.id, deletedAt: null }, include: { account: true, category: true, transactionTags: { include: { tag: true } } } });
+ const rows = await prisma.transaction.findMany({ where: { importFileId: first.id, deletedAt: null }, include: { account: true, category: true, transactionTags: { include: { tag: true } } } });
  assert.equal(rows.length, 4, JSON.stringify(first.result));
  const lunch = rows.find(r => r.merchantRaw === "Lunch")!;
  assert(lunch); assert.equal(lunch.account.name, "Cash"); assert.equal(lunch.category?.name, "Food / Lunch"); assert.equal(lunch.isExcluded, true); assert.equal(lunch.type, "expense"); assert.deepEqual(lunch.transactionTags.map(t => t.tag.name).sort(), ["personal", "work"]);
  assert.equal(rows.filter(r => r.isTransfer).length, 2); assert.equal(rows.find(r => r.merchantRaw === "Monthly pay")?.type, "income");
  await prisma.transaction.update({ where: { id: lunch.id }, data: { merchantClean: "My confirmed lunch", reviewStatus: "confirmed" } });
  const again = await upload(text + "\nspreadsheet,2026-09-06,New purchase,25,PHP,Cash,Expense,Food,,,false,example-new\n", "overlap.csv");
- assert.equal(await prisma.transaction.count({ where: { workspaceId: w.id, deletedAt: null } }), 5, JSON.stringify(again.result));
+ assert.equal(await prisma.transaction.count({ where: { workspaceId: w.id, deletedAt: null } }), 6, JSON.stringify(again.result));
  assert.equal((await prisma.transaction.findUnique({ where: { id: lunch.id } }))?.merchantClean, "My confirmed lunch");
  const blue = await upload(readFileSync("scripts/fixtures/app-migrations/bluecoins-official-advanced.csv", "utf8"), "bluecoins.csv");
  assert.equal(await prisma.transaction.count({ where: { importFileId: blue.id, deletedAt: null } }), 9, JSON.stringify(blue.result));
@@ -57,6 +61,8 @@ async function main() {
  assert.equal(await prisma.transaction.count({where: {importFileId: largeRun.id}}), 1000);
  assert(largeRun.ms < 10000, `Local 1,000-row worker exceeded 10s: ${largeRun.ms}`);
  await drain();
+ const legacyAfter = await prisma.transaction.findUniqueOrThrow({ where: { id: legacy.id } });
+ assert.equal(legacyAfter.type, legacy.type); assert.equal(legacyAfter.isTransfer, legacy.isTransfer); assert.equal(legacyAfter.categoryId, legacy.categoryId); assert.equal(legacyAfter.updatedAt.getTime(), legacy.updatedAt.getTime());
  assert.equal(networkCalls, 0);
  console.log(JSON.stringify({ passed: true, firstImportMs: first.ms, duplicateMs: again.ms, bluecoinsMs: blue.ms, networkCalls, tags: "preserved", exclusions: "preserved", confirmedEdits: "preserved", savedTransactions: await prisma.transaction.count({ where: { workspaceId: w.id } }), thousandRowWorkerMs: largeRun.ms }));
 }

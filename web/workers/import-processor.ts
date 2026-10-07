@@ -8037,7 +8037,7 @@ export const processImportEnrichmentJobs = async (options: {
         : null;
       const reconciliationPaddingMs = 14 * 24 * 60 * 60 * 1000;
       const transferReconciliationStartedAt = Date.now();
-      await reconcileWorkspaceInternalTransfers(prisma, String(importFile.workspaceId), {
+      if (!transactions.every(transaction => readAppMigration(transaction.rawPayload))) await reconcileWorkspaceInternalTransfers(prisma, String(importFile.workspaceId), {
         dateFrom: earliestImportedDate
           ? new Date(earliestImportedDate.getTime() - reconciliationPaddingMs)
           : null,
@@ -16513,7 +16513,9 @@ export const confirmImportFile = async (
   // another account owned by this workspace makes the transaction internal.
   // Re-running this after every import also promotes historical counterparts
   // when their destination account is uploaded later.
-  await reconcileWorkspaceInternalTransfers(tx, String(importFile.workspaceId));
+  if (!parsedRows.every(row => readAppMigration(row.rawPayload))) {
+    await reconcileWorkspaceInternalTransfers(tx, String(importFile.workspaceId));
+  }
 
   const visibleTransactionsCount =
     retainedExistingImportTransactionsCount +
