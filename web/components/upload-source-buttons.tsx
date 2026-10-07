@@ -23,9 +23,9 @@ export function UploadSourceButtons({
     <div className="organize-upload-choices">
       {(
         [
-          ["files", "Choose files", onFiles],
-          ["camera", "Take photo", onCamera],
           ["library", "Photo library", onLibrary],
+          ["camera", "Take photo", onCamera],
+          ["files", "Choose files", onFiles],
         ] as const
       ).map(([key, label, onClick]) => (
         <button
@@ -38,7 +38,7 @@ export function UploadSourceButtons({
           }}
         >
           <img
-            src={`/assets/organize/upload-${key}.svg`}
+            src={`/assets/organize/upload-${key}.svg?v=20261007`}
             alt=""
             width="56"
             height="56"

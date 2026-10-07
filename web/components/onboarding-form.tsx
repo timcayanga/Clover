@@ -1,7 +1,8 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import type { ChangeEvent } from "react";
+import type { ChangeEvent, CSSProperties } from "react";
+import { UploadSourceButtons } from "@/components/upload-source-buttons";
 import { useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { PageFileDropZone } from "@/components/page-file-drop-zone";
@@ -108,6 +109,7 @@ export function OnboardingForm({
   const [isPending, startTransition] = useTransition();
   const [isCompleting, setIsCompleting] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
+  const [accountMethod, setAccountMethod] = useState<"connect" | "upload" | "manual">("connect");
   const [importSeedFiles, setImportSeedFiles] = useState<File[] | null>(null);
   const [regionalPreferences, setRegionalPreferences] = useState<RegionalPreferences>(regionalDefaults);
   const [currencyError, setCurrencyError] = useState<string | null>(null);
@@ -137,7 +139,7 @@ export function OnboardingForm({
 
   const upgradePlanId = selectedUpgradeInterval === "annual" ? paypalAnnualPlanId : paypalMonthlyPlanId;
 
-  const persistOnboarding = async (startAction: "import" | "skip") => {
+  const persistOnboarding = async (startAction: "import" | "skip" | "connect" | "manual") => {
     const preferences = getBrowserRegionalDefaults();
     persistRegionalPreferences(preferences);
     const payload = JSON.stringify({
@@ -277,7 +279,7 @@ export function OnboardingForm({
                 .then((preferences) => {
                   setRegionalPreferences(preferences);
                   setStep("upload");
-                  setMessage("Upload a statement, screenshot, or receipt to see Clover read it with OCR.");
+                  setMessage(null);
                 })
                 .catch((error) => {
                   setCurrencyError(error instanceof Error ? error.message : "Unable to save your default currency.");
@@ -294,75 +296,36 @@ export function OnboardingForm({
 
   const uploadStep = (
     <>
-      <h3>Upload your first file</h3>
-      <p className="onboarding-card__copy">
-        Add a statement, receipt, or financial screenshot. Clover will read it and create your transactions.
-      </p>
-      <p className="onboarding-card__copy onboarding-card__copy--subtle">
-        Take a photo or choose a file. You can review every detail before relying on it.
-      </p>
-
-      <div
-        className="onboarding-upload"
-        role="presentation"
-        onClick={(event) => {
-          if (event.target === event.currentTarget) {
-            fileInputRef.current?.click();
-          }
-        }}
-      >
-        <PageFileDropZone
-          enabled={!importOpen}
-          title="Add a statement, receipt, or financial screenshot"
-          subtitle="Clover starts reading it as soon as you add it."
-          onFilesDropped={(files) => openImportFiles(files)}
-        />
-
-        <div className="onboarding-upload__visual" aria-hidden="true">
-          <span className="onboarding-upload__icon">
-            <svg viewBox="0 0 24 24">
-              <path d="M12 3v10" />
-              <path d="m8 7 4-4 4 4" />
-              <path d="M5 13v6h14v-6" />
-            </svg>
-          </span>
-        </div>
-
-        <div className="onboarding-upload__copy">
-          <strong>Add your file</strong>
-          <span>Choose the quickest option for your device.</span>
-        </div>
-
-        <div className="onboarding-upload__actions">
-          <button className="button button-primary" type="button" disabled={isPending} onClick={() => fileInputRef.current?.click()}>
-            <img src="/assets/connect-platform/choose-files.svg" alt="" />Choose Files
-          </button>
-          <button className="button button-secondary onboarding-upload__mobile-choice" type="button" disabled={isPending} onClick={() => photoInputRef.current?.click()}>
-            <img src="/assets/connect-platform/take-photo.svg" alt="" />Take Photo
-          </button>
-          <button className="button button-secondary onboarding-upload__mobile-choice" type="button" disabled={isPending} onClick={() => libraryInputRef.current?.click()}>
-            <img src="/assets/connect-platform/photo-library.svg" alt="" />Photo Library
-          </button>
-        </div>
+      <h3>Add your accounts</h3>
+      <p className="onboarding-card__copy">Connect, upload, or add manually.</p>
+      <div className="transaction-creation-tabs" role="tablist" aria-label="Add your accounts"
+        style={{ "--entry-tab-index": ["connect", "upload", "manual"].indexOf(accountMethod), "--entry-tab-count": 3 } as CSSProperties}>
+        {(["connect", "upload", "manual"] as const).map((method, index, methods) => <button type="button" role="tab" key={method}
+          id={`onboarding-${method}`} aria-controls={`onboarding-${method}-panel`} aria-selected={accountMethod === method} tabIndex={accountMethod === method ? 0 : -1}
+          onClick={() => setAccountMethod(method)} onKeyDown={event => {
+            const next = event.key === "ArrowRight" ? (index + 1) % 3 : event.key === "ArrowLeft" ? (index + 2) % 3 : event.key === "Home" ? 0 : event.key === "End" ? 2 : null;
+            if (next !== null) { event.preventDefault(); setAccountMethod(methods[next]); document.getElementById(`onboarding-${methods[next]}`)?.focus(); }
+          }}>{method === "connect" ? "Connect" : method === "upload" ? "Upload" : "Manual"}</button>)}
       </div>
-
-      <input
-        ref={photoInputRef}
-        className="sr-only"
-        type="file"
-        accept="image/*"
-        capture="environment"
-        onChange={handleFilePickerChange}
-      />
-      <input ref={libraryInputRef} className="sr-only" type="file" accept="image/*" multiple onChange={handleFilePickerChange} />
-      <input
-        ref={fileInputRef}
-        className="sr-only"
-        type="file"
-        accept={acceptedImportFiles}
-        multiple
-        onChange={handleFilePickerChange}
-      />
+      <div role="tabpanel" id={`onboarding-${accountMethod}-panel`} aria-labelledby={`onboarding-${accountMethod}`} className="onboarding-account-method">
+        {accountMethod === "upload" ? <>
+          <h4>Add a statement or receipt</h4>
+          <PageFileDropZone enabled={!importOpen} title="Add a statement or receipt" subtitle="Drop a file to get started." onFilesDropped={openImportFiles} />
+          <UploadSourceButtons onFiles={() => fileInputRef.current?.click()} onCamera={() => photoInputRef.current?.click()} onLibrary={() => libraryInputRef.current?.click()} />
+          <input ref={photoInputRef} className="sr-only" type="file" accept="image/*" capture="environment" onChange={handleFilePickerChange} />
+          <input ref={libraryInputRef} className="sr-only" type="file" accept="image/*" multiple onChange={handleFilePickerChange} />
+          <input ref={fileInputRef} className="sr-only" type="file" accept={acceptedImportFiles} multiple onChange={handleFilePickerChange} />
+        </> : <>
+          <h4>{accountMethod === "connect" ? "Connect a supported bank" : "Add an account manually"}</h4>
+          <p className="onboarding-card__copy">{accountMethod === "connect" ? "Choose your bank and securely link the accounts you want to see in Clover." : "Add a bank account, wallet, cash, or another account yourself."}</p>
+          {accountMethod === "connect" ? <p className="onboarding-card__copy onboarding-card__copy--subtle">Available with Plus and Pro</p> : null}
+          <button className="button button-primary" type="button" disabled={isCompleting} onClick={() => {
+            const method = accountMethod;
+            setIsCompleting(true);
+            void persistOnboarding(method).then(() => router.replace(`/accounts?add=1&onboarding=${method}`)).catch(error => { setIsCompleting(false); setMessage(error instanceof Error ? error.message : "Unable to continue setup."); });
+          }}>{accountMethod === "connect" ? "Connect a bank" : "Add account"}</button>
+        </>}
+      </div>
 
       <div className="onboarding-actions onboarding-actions--upload">
         <div className="onboarding-actions__group onboarding-actions__group--secondary">
@@ -452,7 +415,7 @@ export function OnboardingForm({
           ))}
         </div>
         <div className="onboarding-card__brand" aria-label="Clover">
-          <img className="onboarding-card__mark" src={step === "experience" ? "/assets/mascots/velvet-thinking.webp" : step === "upload" ? "/assets/mascots/velvet-statement.webp" : "/assets/mascots/velvet-welcome.webp"} alt="" aria-hidden="true" loading="eager" fetchPriority="high" />
+          <img className="onboarding-card__mark" src={step === "experience" ? "/assets/mascots/velvet-thinking.webp" : step === "upload" ? "/assets/mascots/velvet-welcome.webp" : "/assets/mascots/velvet-welcome.webp"} alt="" aria-hidden="true" loading="eager" fetchPriority="high" />
         </div>
 
         {step === "upgrade" ? upgradeStep : step === "experience" ? experienceStep : uploadStep}

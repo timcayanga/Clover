@@ -1,129 +1,21 @@
 import { prisma } from "@/lib/prisma";
-import { getPlannedPaymentSuggestions } from "@/lib/planned-payment-suggestions";
+import { buildOnboardingMissions, type OnboardingMissionSnapshot } from "../../shared/onboarding-missions";
+export type { OnboardingMission, OnboardingMissionId, OnboardingMissionSnapshot } from "../../shared/onboarding-missions";
 
-export type OnboardingMissionId =
-  | "add_data"
-  | "check_data"
-  | "review_transaction"
-  | "confirm_recurring"
-  | "open_insights";
-
-export type OnboardingMission = {
-  id: OnboardingMissionId;
-  title: string;
-  description: string;
-  href: string;
-  actionLabel: string;
-  completed: boolean;
-  optional?: boolean;
-};
-
-export type OnboardingMissionSnapshot = {
-  dismissed: boolean;
-  completedCount: number;
-  totalCount: number;
-  complete: boolean;
-  missions: OnboardingMission[];
-  nextMission: OnboardingMission | null;
-};
-
-const missionDefinitions: Array<Omit<OnboardingMission, "completed">> = [
-  {
-    id: "add_data",
-    title: "Bring in your first data",
-    description: "Upload a statement, screenshot, or receipt so Clover can build your financial picture.",
-    href: "/accounts?import=1",
-    actionLabel: "Upload a file",
-  },
-  {
-    id: "check_data",
-    title: "Check what Clover found",
-    description: "Open your accounts and transactions to make sure the imported details look right.",
-    href: "/accounts",
-    actionLabel: "Check your data",
-  },
-  {
-    id: "review_transaction",
-    title: "Confirm or correct a transaction",
-    description: "Review one transaction so Clover can learn how you want your money organized.",
-    href: "/transactions?review=1",
-    actionLabel: "Review a transaction",
-  },
-  {
-    id: "confirm_recurring",
-    title: "Review recurring suggestions",
-    description: "Keep or dismiss the repeat payments Clover found.",
-    href: "/recurring",
-    actionLabel: "Review recurring",
-  },
-  {
-    id: "open_insights",
-    title: "See your first report",
-    description: "See how your imported records turn into cash-flow summaries and useful guidance.",
-    href: "/adviser",
-    actionLabel: "Open Ask Clover",
-  },
-];
-
-export const getOnboardingMissionSnapshot = async (
-  actorUserIds: string[],
-  workspaceId: string,
-): Promise<OnboardingMissionSnapshot> => {
-  const [importCount, manualAccountCount, manualTransactionCount, auditActions, recurringCount, paymentSuggestions] = await Promise.all([
-    prisma.importFile.count({
-      where: {
-        workspaceId,
-        OR: [{ confirmedAt: { not: null } }, { transactions: { some: { deletedAt: null } } }],
-      },
-    }),
-    prisma.account.count({ where: { workspaceId, source: "manual" } }),
-    prisma.transaction.count({ where: { workspaceId, importFileId: null, deletedAt: null, isExcluded: false } }),
-    prisma.auditLog.findMany({
-      where: {
-        workspaceId,
-        actorUserId: { in: actorUserIds },
-        action: {
-          in: [
-            "onboarding_mission.check_data",
-            "onboarding_mission.open_insights",
-            "onboarding_mission.dismissed",
-            "transaction_updated",
-          ],
-        },
-      },
-      select: { action: true },
-      distinct: ["action"],
-    }),
-    prisma.financialCommitment.count({
-      where: { workspaceId, source: "recurring_detection", status: "active" },
-    }),
-    getPlannedPaymentSuggestions(workspaceId),
+/** Read-only, profile-scoped progress. Entry method and step order do not matter. */
+export async function getOnboardingMissionSnapshot(actorUserIds: string[], workspaceId: string): Promise<OnboardingMissionSnapshot> {
+  const [accountCount, transactionCount, budgetCount, goalCount, questionCount, dismissed] = await Promise.all([
+    // Do not award progress merely for the automatically seeded, untouched Cash account.
+    prisma.account.count({ where: { workspaceId, OR: [
+      { type: { not: "cash" } }, { name: { not: "Cash" } }, { institution: { not: "Cash" } },
+      { balance: { not: 0 } }, { transactions: { some: { deletedAt: null } } },
+    ] } }),
+    prisma.transaction.count({ where: { workspaceId, deletedAt: null, isExcluded: false } }),
+    prisma.budget.count({ where: { workspaceId } }),
+    prisma.personalGoal.count({ where: { workspaceId } }),
+    // Saved conversations contain an actual user question and a completed answer.
+    prisma.adviserConversation.count({ where: { workspaceId, userId: { in: actorUserIds } } }),
+    prisma.auditLog.findFirst({ where: { workspaceId, actorUserId: { in: actorUserIds }, action: "onboarding_mission.dismissed" }, select: { id: true } }),
   ]);
-
-  const recurringSuggestionCount = paymentSuggestions.filter(
-    (suggestion) => suggestion.sourceKind === "recurring_transaction" || suggestion.sourceKind === "installment",
-  ).length;
-  const actions = new Set(auditActions.map((entry) => entry.action));
-  const hasData = importCount > 0 || (manualAccountCount > 0 && manualTransactionCount > 0);
-  const completion: Record<OnboardingMissionId, boolean> = {
-    add_data: hasData,
-    check_data: hasData && actions.has("onboarding_mission.check_data"),
-    review_transaction: hasData && actions.has("transaction_updated"),
-    confirm_recurring: hasData && recurringSuggestionCount === 0,
-    open_insights: hasData && actions.has("onboarding_mission.open_insights"),
-  };
-  const missions = missionDefinitions
-    .filter((mission) => mission.id !== "confirm_recurring" || recurringSuggestionCount > 0 || recurringCount > 0)
-    .map((mission) => ({ ...mission, completed: completion[mission.id] }));
-  const completedCount = missions.filter((mission) => mission.completed).length;
-  const complete = completedCount === missions.length;
-
-  return {
-    dismissed: actions.has("onboarding_mission.dismissed"),
-    completedCount,
-    totalCount: missions.length,
-    complete,
-    missions,
-    nextMission: missions.find((mission) => !mission.completed) ?? null,
-  };
-};
+  return buildOnboardingMissions({ add_account: accountCount > 0, add_transaction: transactionCount > 0, set_budget: budgetCount > 0, create_goal: goalCount > 0, ask_clover: questionCount > 0 }, Boolean(dismissed));
+}

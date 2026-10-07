@@ -504,6 +504,15 @@ async function handle(
       const result = await saveMobileGoal(workspaceId, input);
       return result ? reply(result) : reply({ error: "Goal not found in this Profile." }, 404);
     }
+    if (operation === "missions") {
+      const { getOnboardingMissionSnapshot } = await import("@/lib/onboarding-missions");
+      if (request.method === "POST") {
+        z.object({ action: z.literal("dismiss") }).strict().parse(await request.json());
+        const exists = await prisma.auditLog.findFirst({ where: { workspaceId, actorUserId: user.id, action: "onboarding_mission.dismissed" }, select: { id: true } });
+        if (!exists) await prisma.auditLog.create({ data: { workspaceId, actorUserId: user.id, action: "onboarding_mission.dismissed", entity: "OnboardingMission", entityId: "dismiss", metadata: { source: "native_missions" } } });
+      }
+      return reply({ missions: await getOnboardingMissionSnapshot([user.id, user.clerkUserId], workspaceId) });
+    }
     if (operation === "notifications") {
       const feed = await loadActiveInAppNotificationFeed(user, workspaceId);
       if (request.method === "PATCH") {
