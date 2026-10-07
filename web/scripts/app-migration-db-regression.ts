@@ -19,8 +19,8 @@ async function main() {
  const u = await prisma.user.create({ data: { clerkUserId: randomUUID(), email: `${randomUUID()}@example.invalid`, environment: "staging", planTier: "pro", planTierLocked: true, appPreferences: { aiConsent: { version: AI_CONSENT_VERSION, grantedAt: new Date().toISOString(), withdrawnAt: null } } } }); owner = u.id;
  const w = await prisma.workspace.create({ data: { userId: u.id, name: "Migration synthetic QA" } });
  const text = readFileSync("public/templates/clover-migration.csv", "utf8").replace("personal,false,example-1", "personal;work,true,example-1");
- const upload = async (content: string, name: string) => {
-  const f = await prisma.importFile.create({ data: { workspaceId: w.id, fileName: name, fileType: "text/csv", storageKey: "qa/synthetic-migration" } });
+ const upload = async (content: string, name: string, accountId?: string) => {
+  const f = await prisma.importFile.create({ data: { workspaceId: w.id, accountId, fileName: name, fileType: name.endsWith(".qif") ? "application/qif" : "text/csv", storageKey: "qa/synthetic-migration" } });
   const start = performance.now(); const result = await processImportFileText(f.id, { text: content, importMode: "statement", actorUserId: u.id });
   return { result, id: f.id, ms: Math.round(performance.now() - start) };
  };
@@ -121,6 +121,40 @@ async function main() {
  const mixedRows = await prisma.transaction.findMany({ where: { importFileId: mixed.id }, include: { account: true } });
  assert.equal(mixedRows.length, 2); assert.notEqual(mixedRows[0].accountId, mixedRows[1].accountId);
  assert(mixedRows.every(r => r.currency === r.account.currency && r.account.name === "Travel"));
+ const qifText = readFileSync("scripts/fixtures/app-migrations/qif-multi-account-synthetic.qif", "utf8");
+ const qifRun = await upload(qifText, "history.qif");
+ const qifRows = await prisma.transaction.findMany({ where: { importFileId: qifRun.id }, include: { account: true, category: true, transactionTags: { include: { tag: true } } } });
+ assert.equal(qifRows.length, 7, JSON.stringify(qifRun.result));
+ assert.equal(new Set(qifRows.map(r => r.accountId)).size, 3);
+ assert.equal(qifRows.filter(r => r.isTransfer).length, 2);
+ const qifFood = qifRows.find(r => r.category?.name === "Food / Groceries")!;
+ assert(qifFood); assert.equal(qifFood.description, "Weekend purchases · Weekly food");
+ assert.deepEqual(qifFood.transactionTags.map(t => t.tag.name), ["QIF: Household"]);
+ assert.equal(qifRows.find(r => r.merchantRaw === "Coffee shop")?.account.type, "credit_card");
+ assert.equal(qifRows.filter(r => r.merchantRaw === "Opening Balance").length, 0);
+ const qifBalance = qifFood.account.balance;
+ const qifCad = await prisma.account.create({ data: { workspaceId: w.id, name: "QIF Canadian Checking", type: "bank", currency: "CAD", balance: 123 } });
+ const qifSelected = await upload("!Type:Bank\nD2026-09-13\nT-12.50\nPCanadian Shop\nLFood\n^", "selected-account.qif", qifCad.id);
+ const qifSelectedRow = await prisma.transaction.findFirstOrThrow({ where: { importFileId: qifSelected.id } });
+ assert.equal(qifSelectedRow.accountId, qifCad.id); assert.equal(qifSelectedRow.currency, "CAD");
+ assert.equal((await prisma.account.findUniqueOrThrow({ where: { id: qifCad.id } })).balance?.toString(), "123");
+ const csvSelected = await upload("Migration Source,Date,Description,Amount,Currency,Account,Type,Category,Balance\nspreadsheet,2026-09-14,Historical purchase,7,CAD,QIF Canadian Checking,Expense,Food,50", "selected-history.csv", qifCad.id);
+ assert.equal(await prisma.transaction.count({ where: { importFileId: csvSelected.id, accountId: qifCad.id } }), 1, JSON.stringify(csvSelected.result));
+ await drain();
+ assert.equal((await prisma.account.findUniqueOrThrow({ where: { id: qifCad.id } })).balance?.toString(), "123", "Historical CSV balance must not replace the current account balance");
+ await prisma.transaction.update({ where: { id: qifFood.id }, data: { reviewStatus: "confirmed", amount: 999, date: new Date("2025-01-01"), description: "Confirmed QIF correction" } });
+ const qifAgain = await upload(qifText, "history-again.qif");
+ assert.equal(await prisma.transaction.count({ where: { importFileId: qifAgain.id } }), 0, JSON.stringify(qifAgain.result));
+ const qifAfter = await prisma.transaction.findUniqueOrThrow({ where: { id: qifFood.id }, include: { account: true } });
+ assert.equal(qifAfter.amount.toString(), "999"); assert.equal(qifAfter.description, "Confirmed QIF correction");
+ assert.equal(qifAfter.account.balance?.toString(), qifBalance?.toString());
+ for (const invalidQif of [qifText.replace("$-60.00", "$-59.00"), qifText.replace("!Type:CCard", "!Type:Invst"), qifText.replace("2026-09-05", "2026-02-30")]) {
+   const count = await prisma.transaction.count({ where: { workspaceId: w.id } });
+   const accounts = await prisma.account.count({ where: { workspaceId: w.id } });
+   const result = await upload(invalidQif, "invalid.qif").catch(e => ({ error: String(e) }));
+   assert.equal(await prisma.transaction.count({ where: { workspaceId: w.id } }), count, JSON.stringify(result));
+   assert.equal(await prisma.account.count({ where: { workspaceId: w.id } }), accounts);
+ }
  const large = ["Date,Merchant,Category,Account,Original Statement,Notes,Amount,Tags,Currency", ...Array.from({length:1000}, (_,i) => `2026-09-01,Migration purchase ${i},Source category,QA Ledger,POS ${i},Receipt,-12.50,qa,USD`)].join("\n");
  const largeRun = await upload(large, "large.csv");
  assert.equal(await prisma.transaction.count({where: {importFileId: largeRun.id}}), 1000);

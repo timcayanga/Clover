@@ -134,7 +134,7 @@ export const validateImportFileBytes = (params: {
     const decoded = new TextDecoder("utf-8", { fatal: false }).decode(bytes).trim();
     const header = decoded.slice(0, 2_048);
     const looksOfx = /^(?:OFXHEADER:|<\?OFX|<OFX)/i.test(header);
-    const looksQif = /^!Type:/i.test(header);
+    const looksQif = /^!(?:Type:|Account[ \t]*(?:[\r\n]|$)|Option:(?:AutoSwitch|AllXfr)[ \t]*(?:[\r\n]|$))/i.test(header);
     const looksMt940 = /(?:^|\n):20:[^\n]+[\s\S]*?(?:^|\n):25:[^\n]+[\s\S]*?(?:^|\n):61:/m.test(decoded);
     const looksCamt = /<(?:\w+:)?Document\b[\s\S]*?<(?:\w+:)?BkToCstmrStmt\b/i.test(decoded) || /camt\.053/i.test(header);
     const looksFinancialJson = (() => {

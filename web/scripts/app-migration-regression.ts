@@ -1,3 +1,4 @@
+import { runQifMigrationRegression } from "./qif-migration-regression";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { performance } from "node:perf_hooks";
@@ -9,6 +10,7 @@ import { readAppMigration, createMigrationOverlapMatcher } from "@/lib/app-migra
 import { persistMigrationTags } from "@/lib/app-migration-persistence";
 const parse = (text: string) => parseImportText(text, "export.csv", "text/csv", { currency: "PHP" });
 const main = async () => {
+ await runQifMigrationRegression();
  const actualText=readFileSync('scripts/fixtures/app-migrations/actual-query-synthetic.csv','utf8');
  const actual=parse(actualText);
  assert.equal(actual.length,7,'Actual split parents and starting balances must not be imported as movements');
@@ -252,6 +254,6 @@ const main = async () => {
  const start=performance.now(); const rows=parse(large); const ready=await enrichParsedRowsWithTraining({workspaceId:'offline-performance',rows});const elapsed=performance.now()-start;
  assert.equal(ready.length,count);assert(ready.every(r=>r.amount==='125.50'&&r.categoryName==='My food'&&r.type==='expense'));
  assert(elapsed<10000, `10,000 deterministic migration rows exceeded 10s: ${elapsed}ms`);
- console.log(`PASS migrations: 8 adapters, official Bluecoins 9/9, fields/enrichment, workbook formats, invalid rows, duplicates, tags. 10,000 rows parsed+enriched in ${Math.round(elapsed)}ms.`);
+ console.log(`PASS migrations: 8 CSV/workbook adapters plus QIF, official Bluecoins 9/9, fields/enrichment, workbook formats, invalid rows, duplicates, tags. 10,000 rows parsed+enriched in ${Math.round(elapsed)}ms.`);
 };
 main().catch(e=>{console.error(e);process.exitCode=1;});

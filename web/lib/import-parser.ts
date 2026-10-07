@@ -1,4 +1,5 @@
 import { parseAppMigrationTable, readAppMigration } from "@/lib/app-migration-import";
+import { parseQifMigration } from "@/lib/qif-migration-import";
 import { getRegionalMerchantCategoryHint } from "@/lib/korea-indonesia-corpus";
 import { parseRegionalJsonFinancialExport } from "@/lib/regional-json-financial-export";
 import { getIndonesianMerchantCategoryHint, getIndonesianIncomeCategoryHint, needsIndonesianPaymentCategoryReview } from "@/lib/indonesian-merchant-context";
@@ -26437,56 +26438,6 @@ const parseOfxFinancialExport = (text: string, context: ImportParseContext): Par
   return rows;
 };
 
-const parseQifFinancialExport = (text: string, context: ImportParseContext): ParsedImportRow[] | null => {
-  if (!/^!Type:/im.test(text)) return null;
-  const rows: ParsedImportRow[] = [];
-  const records = text.split(/^\^\s*$/m);
-  for (const record of records) {
-    const fields = new Map<string, string>();
-    for (const line of record.split(/\r?\n/)) {
-      const code = line[0];
-      if (!code || code === "!" || line.startsWith("!Type:")) continue;
-      const value = line.slice(1).trim();
-      if (value && !fields.has(code)) fields.set(code, value);
-    }
-    const date = parseFinancialExchangeDate(fields.get("D"));
-    const rawAmount = Number((fields.get("T") ?? "").replaceAll(",", ""));
-    const payee = fields.get("P") ?? fields.get("M") ?? "Imported transaction";
-    if (!date || !Number.isFinite(rawAmount) || rawAmount === 0) continue;
-    const category = fields.get("L") ?? null;
-    const type: TransactionType = /transfer|\[[^\]]+\]/i.test(category ?? "")
-      ? "transfer"
-      : rawAmount > 0
-        ? "income"
-        : "expense";
-    rows.push({
-      date,
-      amount: String(Math.abs(rawAmount)),
-      currency: context.currency,
-      merchantRaw: humanizeMerchantText(payee),
-      merchantClean: summarizeMerchantText(payee, context.institution),
-      description: fields.get("M") ?? payee,
-      categoryName: category?.replace(/^\[|\]$/g, "") || guessCategoryName(payee, type),
-      accountName: context.accountName ?? undefined,
-      accountNumber: context.accountNumber ?? undefined,
-      institution: context.institution ?? undefined,
-      type,
-      confidence: 100,
-      parserConfidence: 100,
-      categoryConfidence: category ? 100 : 70,
-      rawPayload: {
-        kind: "financial_exchange_transaction",
-        format: "qif",
-        category,
-        number: fields.get("N") ?? null,
-        clearedStatus: fields.get("C") ?? null,
-        rawAmount,
-      },
-    });
-  }
-  return rows;
-};
-
 const parseMt940FinancialExport = (text: string, context: ImportParseContext): ParsedImportRow[] | null => {
   if (!/(?:^|\n):20:[^\n]+[\s\S]*?(?:^|\n):25:[^\n]+[\s\S]*?(?:^|\n):61:/m.test(text)) return null;
   const institution = context.institution ?? null;
@@ -26782,7 +26733,7 @@ export const parseFinancialExchangeImport = (
     return parseOfxFinancialExport(text, context) ?? [];
   }
   if (normalizedName.endsWith(".qif") || /(?:application|text)\/qif/.test(normalizedType)) {
-    return parseQifFinancialExport(text, context) ?? [];
+    return parseQifMigration(text, context) ?? [];
   }
   if (/\.(?:mt940|sta)$/.test(normalizedName) || /mt940/.test(normalizedType)) {
     return parseMt940FinancialExport(text, context) ?? [];

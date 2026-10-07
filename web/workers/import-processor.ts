@@ -9698,6 +9698,11 @@ const processImportFileTextImpl = async (
     text: textForParse,
     fileName: importFile.fileName,
   });
+  const isQifMigration = /\.qif$/i.test(importFile.fileName) || /^(?:application|text)\/qif$/i.test(importFile.fileType);
+  const qifSelectedAccount = isQifMigration && importFile.accountId
+    ? await prisma.account.findFirst({ where: { id: String(importFile.accountId), workspaceId: String(importFile.workspaceId) }, select: { name: true, currency: true } })
+    : null;
+  if (isQifMigration && importFile.accountId && !qifSelectedAccount) throw new Error("The selected QIF account is not in this Profile.");
 
   const trainedNotesRows =
     importMode === "notes"
@@ -9716,6 +9721,11 @@ const processImportFileTextImpl = async (
         accountName: metadataForParse.accountName,
         accountNumber: metadataForParse.accountNumber,
         currency: metadataForParse.currency,
+        // QIF has no currency field. Use the selected account or the user's
+        // default, never a currency/account guessed from a payee or memo.
+        ...(isQifMigration
+          ? { accountName: qifSelectedAccount?.name ?? null, currency: qifSelectedAccount?.currency ?? defaultReceiptCurrency }
+          : {}),
       }));
   const isBpiHybridFallbackCandidate = (() => {
     const lowerFileName = String(importFile.fileName ?? "").toLowerCase();
@@ -14887,6 +14897,7 @@ export const confirmImportFile = async (
             ? (payload as Record<string, unknown>).source
             : null;
         return (
+          Boolean(readAppMigration(payload)) ||
           source === "investment_summary" ||
           source === "structured_transaction_csv" ||
           source === "account_snapshot_csv" ||
@@ -15054,8 +15065,10 @@ export const confirmImportFile = async (
     });
     const groupBalance = getImportAccountBalanceFromParsedRows(group.rows as EnrichedParsedImportRow[]);
     const groupIsSnapshotOnly = group.rows.length > 0 && group.rows.every(isSnapshotOnlyParsedRow);
+    const groupIsMigration = group.rows.length > 0 && group.rows.every(row => readAppMigration(row.rawPayload));
     const publishedGroupBalance =
-      groupBalance ?? (groupIsSnapshotOnly ? 0 : snapshotBalanceToString(groupAccount.balance));
+      groupIsMigration ? snapshotBalanceToString(groupAccount.balance)
+        : groupBalance ?? (groupIsSnapshotOnly ? 0 : snapshotBalanceToString(groupAccount.balance));
     const existingSummary = accountSummaryById.get(groupAccount.id);
     accountSummaryById.set(groupAccount.id, {
       accountId: groupAccount.id,
@@ -15795,7 +15808,11 @@ export const confirmImportFile = async (
   const shouldPersistWideAccountSnapshotCsvGroupBalances =
     multiAccountImport &&
     parsedRows.every((row) => (row.rawPayload as Record<string, unknown> | null)?.source === "wide_account_snapshot_csv");
-  if (
+  // App migrations are history, not a balance snapshot. A partial date range
+  // must never replace a confirmed balance with its net imported movements.
+  if (parsedRows.length > 0 && parsedRows.every(row => readAppMigration(row.rawPayload))) {
+    reconciledAccountBalance = snapshotBalanceToString(account.balance);
+  } else if (
     shouldRunDestructiveMultiAccountCleanup({
       multiAccountImport,
       visibleTransactionsCount: candidateVisibleTransactionsCount,

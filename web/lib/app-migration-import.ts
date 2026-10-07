@@ -2,7 +2,7 @@ import { createActualSplitValidator, type ActualSplitEvidence } from "@/lib/actu
 import type { ImportParseContext, ParsedImportRow } from "@/lib/import-parser";
 import { sanitizeTransactionTagNames } from "@/lib/transaction-tags";
 
-export const MIGRATION_SOURCES = ["realbyte", "money-lover", "wallet", "bluecoins", "ynab", "monarch", "actual", "spreadsheet"] as const;
+export const MIGRATION_SOURCES = ["realbyte", "money-lover", "wallet", "bluecoins", "ynab", "monarch", "actual", "qif", "spreadsheet"] as const;
 export type MigrationSource = typeof MIGRATION_SOURCES[number];
 export type MigrationEvidence = {
   version: 1;
@@ -47,7 +47,7 @@ type DateOrder = "DMY" | "MDY" | null;
 // Source apps let users choose date formats. Do not use the user's country or
 // JavaScript's permissive date rollover to guess an ambiguous exported date.
 const numericDate = (value: string) => value.match(/^(\d{1,2})[./-](\d{1,2})[./-](\d{4})$/);
-const dateOrderFrom = (values: string[]): DateOrder => {
+export const migrationDateOrderFrom = (values: string[]): DateOrder => {
   const orders = new Set<string>();
   for (const value of values) {
     const match = numericDate(value);
@@ -58,7 +58,7 @@ const dateOrderFrom = (values: string[]): DateOrder => {
   if (orders.size > 1) throw new Error("This migration mixes day-first and month-first dates. Use YYYY-MM-DD dates. Nothing was added.");
   return (orders.values().next().value as DateOrder | undefined) ?? null;
 };
-const migrationDate = (value: string, order: DateOrder): string | null => {
+export const migrationDate = (value: string, order: DateOrder): string | null => {
   const iso = value.match(/^(\d{4})[./-](\d{2})[./-](\d{2})(?:[ T]\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?(?:Z|[+-]\d{2}:?\d{2})?)?$/);
   const local = numericDate(value);
   let year: number, month: number, day: number;
@@ -96,7 +96,7 @@ export const parseAppMigrationTable = (
     return /^(?:v|void|voided|pending|processing|scheduled|failed|declined|cancelled|canceled|reversed)$/.test(status)
       ? status : /^(?:true|1|yes)$/i.test(get(cells, "pending")) ? "pending" : null;
   };
-  const inferredDateOrder = dateOrderFrom(table.rows.filter(cells => !get(cells, "date_format") && !skipStatus(cells) && !((source === "ynab" || source === "actual") && /^starting balance$/i.test(get(cells, "payee")))).map(cells => get(cells, "date", "period", "datetime", "transaction_date")));
+  const inferredDateOrder = migrationDateOrderFrom(table.rows.filter(cells => !get(cells, "date_format") && !skipStatus(cells) && !((source === "ynab" || source === "actual") && /^starting balance$/i.test(get(cells, "payee")))).map(cells => get(cells, "date", "period", "datetime", "transaction_date")));
   // These two published templates specify month-first dates. Other sources
   // must supply unambiguous evidence or an explicit Date Format column.
   const defaultDateOrder = source === "realbyte" || source === "bluecoins" ? "MDY" : null;
@@ -331,6 +331,7 @@ export const createMigrationOverlapMatcher = (existing: Array<Record<string, unk
         get("amount"), get("outflow"), get("inflow"),
         get("item_or_payee", "payee", "merchant", "name", "contents"),
         get("note", "notes", "memo"), get("description", "details"), get("original_statement"),
+        ...(migration.source === "qif" ? [raw?.number ?? null] : []),
         get("item_or_payee", "payee", "merchant", "name", "contents", "note", "notes", "memo", "description", "details")
           ? "" : get("subcategory", "sub_category", "category", "main_category", "parent_category", "category_group")]);
     }
