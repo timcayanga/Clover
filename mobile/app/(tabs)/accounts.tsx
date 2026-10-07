@@ -1,10 +1,12 @@
+import { recordedSummary } from "../../src/recorded-summary";
 import { Modal } from "../../src/adaptive-modal";
 import { AdaptiveDetail } from "../../src/adaptive-detail";
 import { AdaptiveGrid } from "../../src/adaptive";
 import { useLiveInvestmentValues } from "../../src/use-live-investment-values";
 import { CloverEmptyState } from "../../src/clover-mascot";
 import { institutionGroups } from "../../src/institution-groups";
-import { recordedSummary } from "../../src/recorded-summary";
+import { consolidatedAccountSummary } from "../../../shared/account-summary";
+import { useExchangeRates } from "../../src/use-exchange-rates";
 import { FinversePendingChip } from "../../src/finverse-pending-chip";
 import type { PendingBankConnection } from "../../../shared/finverse-pending";
 import { createScreenDataLoader, registerScreenRefresh } from "../../src/screen-refresh";
@@ -221,56 +223,10 @@ function AccountsContent() {
     "Cash",
     "Other accounts",
   ];
-  const summaries = [...new Set(accounts.map((a) => a.currency))].map(
-    (currency) => {
-      const rows = accounts.filter((a) => a.currency === currency);
-      const values = rows.map((a) => {
-        const amount = accountDisplayBalance(a);
-        return amount === null
-          ? null
-          : [
-                "credit_card",
-                "loan",
-                "mortgage",
-                "line_of_credit",
-                "payable",
-                "bnpl",
-              ].includes(a.type)
-            ? -Math.abs(Number(amount))
-            : a.type === "cash"
-              ? Math.max(0, Number(amount))
-              : Number(amount);
-      });
-      const coverage = recordedSummary(values);
-      const safe = values.map(v => v !== null && Number.isFinite(v) ? v : 0);
-      return {
-        currency,
-        coverage,
-        values: coverage.known > 0
-          ? [
-              safe.reduce((s, v) => s + v, 0),
-              rows.reduce(
-                (s, a, i) =>
-                  s +
-                  ([
-                    "bank",
-                    "bank_account",
-                    "savings",
-                    "checking",
-                    "wallet",
-                    "cash",
-                  ].includes(a.type)
-                    ? Math.max(0, safe[i])
-                    : 0),
-                0,
-              ),
-              safe.reduce((s, v) => s + Math.max(0, v), 0),
-              safe.reduce((s, v) => s + Math.max(0, -v), 0),
-            ]
-          : [null, null, null, null],
-      };
-    },
-  );
+  const summaryCurrency = displayedCurrency === "ALL" ? session.data?.defaultCurrency ?? "PHP" : displayedCurrency ?? session.data?.defaultCurrency ?? "PHP";
+  const summaryRows = accounts.filter(a => displayedCurrency === "ALL" || a.currency === displayedCurrency).map(a => ({ type: a.type, currency: a.currency, balance: accountDisplayBalance(a) === null ? null : Number(accountDisplayBalance(a)) }));
+  const exchangeRates = useExchangeRates(summaryRows.filter(a => a.balance !== null && a.balance !== 0).map(a => a.currency), summaryCurrency, displayedCurrency === "ALL");
+  const summary = consolidatedAccountSummary(summaryRows, summaryCurrency, exchangeRates.rates);
   const accountEditor = selected || adding ? (
       <AccountEditor
         defaultCurrency={session.data?.defaultCurrency ?? "PHP"}
@@ -339,28 +295,15 @@ function AccountsContent() {
           </View>
         </View>
       </Modal>
-      {summaries.filter(summary => displayedCurrency === "ALL" || summary.currency === displayedCurrency).map((summary) => (
-        <View key={summary.currency} style={{ gap: 8 }}>
-          {displayedCurrency === "ALL" ? <Heading>{summary.currency}</Heading> : null}
-          <AdaptiveGrid minItemWidth={140} maxColumns={4} gap={8}>
-            {["Net worth", "Spendable", "Assets", "Liabilities"].map(
-              (title, i) => (
-                <View key={title} style={{ flex: 1 }}>
-                  <SummaryCard
-                    title={title}
-                    value={
-                      summary.values[i] === null
-                        ? "—"
-                        : money(String(summary.values[i]), summary.currency)
-                    }
-                    color={i === 3 ? colors.danger : colors.positive}
-                  />
-                </View>
-              ),
-            )}
-          </AdaptiveGrid>
-        </View>
-      ))}
+      <View style={{ gap: 8 }}>
+        {displayedCurrency === "ALL" ? <Body>{summary.estimated ? "Estimated in" : "All balances in"} {summaryCurrency}</Body> : null}
+        <AdaptiveGrid minItemWidth={140} maxColumns={4} gap={8}>
+          {["Net worth", "Spendable", "Assets", "Liabilities"].map((title, i) => <View key={title} style={{ flex: 1 }}><SummaryCard title={title} value={summary.values[i] === null ? "—" : money(String(summary.values[i]), summaryCurrency)} color={i === 3 || (summary.values[i] ?? 0) < 0 ? colors.danger : colors.positive} /></View>)}
+        </AdaptiveGrid>
+        {summary.estimated && exchangeRates.asOf ? <Body>Estimated using exchange rates dated {exchangeRates.asOf}. Accounts keep their original currencies.</Body> : null}
+        {summary.missingCurrencies.length ? <><Body>{exchangeRates.loading ? "Loading exchange rates…" : `Unable to estimate all balances. Exchange rate unavailable: ${summary.missingCurrencies.join(", ")}.`}</Body>{!exchangeRates.loading ? <Button secondary title="Retry rates" onPress={exchangeRates.retry} /> : null}</> : null}
+        {summary.unknown ? <Body>{summary.unknown} account{summary.unknown === 1 ? " has" : "s have"} no recorded balance. A complete total is unavailable.</Body> : null}
+      </View>
       {loading ? (
         <Body>Loading accounts…</Body>
       ) : error ? (

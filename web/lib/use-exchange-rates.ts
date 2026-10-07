@@ -17,7 +17,7 @@ const isFreshRate = (value: unknown): value is CachedExchangeRate => {
   const candidate = value as Partial<CachedExchangeRate>;
   return (
     typeof candidate.rate === "number" &&
-    Number.isFinite(candidate.rate) &&
+    Number.isFinite(candidate.rate) && candidate.rate > 0 &&
     typeof candidate.cachedAt === "number" &&
     Date.now() - candidate.cachedAt < rateCacheMaxAgeMs
   );
@@ -72,7 +72,7 @@ const loadRate = async (base: string, quote: string) => {
   }
 
   const payload = (await response.json()) as { rate?: number; date?: string };
-  if (typeof payload.rate !== "number" || !Number.isFinite(payload.rate)) {
+  if (typeof payload.rate !== "number" || !Number.isFinite(payload.rate) || payload.rate <= 0) {
     throw new Error(`Invalid exchange rate for ${base}/${quote}.`);
   }
 
@@ -88,8 +88,10 @@ export const useExchangeRates = (sourceCurrencies: string[], targetCurrency: str
     [sourceCurrencies.join("|")]
   );
   const sourceKey = sources.join("|");
-  const [state, setState] = useState<{ rates: Record<string, number>; loading: boolean; unavailable: string[]; asOf: string | null }>(() => ({
-    rates: target ? { [target]: 1 } : {},
+  const scope = `${enabled}:${target}:${sourceKey}`;
+  const [revision, setRevision] = useState(0);
+  const [state, setState] = useState<{ scope: string; rates: Record<string, number>; loading: boolean; unavailable: string[]; asOf: string | null }>(() => ({
+    scope, rates: target ? { [target]: 1 } : {},
     loading: false,
     unavailable: [],
     asOf: null,
@@ -97,7 +99,7 @@ export const useExchangeRates = (sourceCurrencies: string[], targetCurrency: str
 
   useEffect(() => {
     if (!enabled || !target || sources.length === 0) {
-      setState({ rates: target ? { [target]: 1 } : {}, loading: false, unavailable: [], asOf: null });
+      setState({ scope, rates: target ? { [target]: 1 } : {}, loading: false, unavailable: [], asOf: null });
       return;
     }
 
@@ -108,11 +110,11 @@ export const useExchangeRates = (sourceCurrencies: string[], targetCurrency: str
       const cached = getCachedRate(source, target);
       if (!cached) return true;
       cachedRates[source] = cached.rate;
-      if (cached.date && (!cachedAsOf || cached.date > cachedAsOf)) cachedAsOf = cached.date;
+      if (cached.date && (!cachedAsOf || cached.date < cachedAsOf)) cachedAsOf = cached.date;
       return false;
     });
 
-    setState({ rates: cachedRates, loading: missingSources.length > 0, unavailable: [], asOf: cachedAsOf });
+    setState({ scope, rates: cachedRates, loading: missingSources.length > 0, unavailable: [], asOf: cachedAsOf });
     if (missingSources.length === 0) return;
 
     void Promise.allSettled(missingSources.map(async (source) => ({ source, ...(await loadRate(source, target)) }))).then((results) => {
@@ -122,30 +124,30 @@ export const useExchangeRates = (sourceCurrencies: string[], targetCurrency: str
 
       const rates: Record<string, number> = { ...cachedRates };
       const unavailable: string[] = [];
-      let asOf: string | null = null;
+      let asOf: string | null = cachedAsOf;
       results.forEach((result, index) => {
         const source = missingSources[index];
         if (result.status === "fulfilled") {
           rates[source] = result.value.rate;
-          if (result.value.date && (!asOf || result.value.date > asOf)) {
+          if (result.value.date && (!asOf || result.value.date < asOf)) {
             asOf = result.value.date;
           }
         } else {
           unavailable.push(source);
         }
       });
-      setState({ rates, loading: false, unavailable, asOf });
+      setState({ scope, rates, loading: false, unavailable, asOf });
     });
 
     return () => {
       cancelled = true;
     };
-  }, [enabled, sourceKey, target]);
+  }, [enabled, sourceKey, target, revision]);
 
-  return state;
+  return { ...(state.scope === scope ? state : { rates: target ? { [target]: 1 } : {}, loading: enabled, unavailable: [], asOf: null }), retry: () => setRevision(value => value + 1) };
 };
 
 export const convertAmount = (amount: number, currency: string, rates: Record<string, number>) => {
   const rate = rates[formatCurrencyCode(currency)];
-  return typeof rate === "number" && Number.isFinite(rate) ? amount * rate : null;
+  return typeof rate === "number" && Number.isFinite(rate) && rate > 0 ? amount * rate : null;
 };

@@ -1,4 +1,5 @@
 "use client";
+import { consolidatedAccountSummary } from "../../../shared/account-summary";
 import { investmentNameLabel, investmentTickerMatches, investmentTickerHint } from "../../../shared/investment-entry";
 import { usePullRefresh } from "@/lib/pull-refresh";
 import { MobileSheetHandle } from "@/components/mobile-sheet-handle";
@@ -3122,38 +3123,12 @@ function AccountsPageContent() {
     defaultCurrency,
     usesFxEstimates
   );
-  const estimatedTotals = useMemo(() => {
-    if (!usesFxEstimates) {
-      return totals;
-    }
-
-    return visibleAccounts.reduce(
-      (accumulator, account) => {
-        const displayedBalance = getDisplayedAccountBalance(account);
-        const signedValue = normalizeAccountBalanceSign(getEffectiveAccountType(account), parseAmount(displayedBalance));
-        const convertedValue = convertAmount(signedValue, account.currency, accountExchangeRates.rates);
-        if (convertedValue === null) {
-          return accumulator;
-        }
-        if (isSpendableAccountType(getEffectiveAccountType(account)) && convertedValue > 0) {
-          accumulator.spendable += convertedValue;
-        }
-        if (convertedValue >= 0) {
-          accumulator.assets += convertedValue;
-        } else {
-          accumulator.liabilities += Math.abs(convertedValue);
-        }
-        accumulator.netWorth += convertedValue;
-        return accumulator;
-      },
-      { assets: 0, liabilities: 0, netWorth: 0, spendable: 0 }
-    );
-  }, [accountExchangeRates.rates, totals, usesFxEstimates, visibleAccounts]);
-  const accountEstimateUnavailable =
-    usesFxEstimates &&
-    visibleAccountCurrencies.some(
-      (currency) => currency !== defaultCurrencyCode && !Number.isFinite(accountExchangeRates.rates[currency])
-    );
+  const consolidated = consolidatedAccountSummary(visibleAccounts.map(account => ({
+    type: getEffectiveAccountType(account), currency: formatCurrencyCode(account.currency),
+    balance: getDisplayedAccountBalance(account) === null ? null : parseAmount(getDisplayedAccountBalance(account)),
+  })), isAllCurrenciesView ? defaultCurrencyCode : formatCurrencyCode(selectedCurrency), accountExchangeRates.rates);
+  const estimatedTotals = { netWorth: consolidated.values[0] ?? 0, spendable: consolidated.values[1] ?? 0, assets: consolidated.values[2] ?? 0, liabilities: consolidated.values[3] ?? 0 };
+  const accountEstimateUnavailable = consolidated.values.some(value => value === null);
   const formatAccountSummary = (value: number, signed = false) => {
     if (accountEstimateUnavailable) {
       return "—";
@@ -4614,6 +4589,9 @@ function AccountsPageContent() {
             </article>
           </section>
         ) : null}
+        {usesFxEstimates ? <p className="muted" role="status">{accountExchangeRates.loading ? "Loading exchange rates…" : consolidated.missingCurrencies.length ? `Unable to estimate all balances. Exchange rate unavailable: ${consolidated.missingCurrencies.join(", ")}.` : `Estimated in ${defaultCurrencyCode}${accountExchangeRates.asOf ? ` using exchange rates dated ${accountExchangeRates.asOf}` : ""}. Accounts keep their original currencies.`}</p> : null}
+        {usesFxEstimates && !accountExchangeRates.loading && consolidated.missingCurrencies.length ? <button type="button" className="button button-small" onClick={accountExchangeRates.retry}>Retry rates</button> : null}
+        {consolidated.unknown ? <p className="muted">{consolidated.unknown} accounts have no recorded balance. A complete total is unavailable.</p> : null}
         <section className="accounts-main-grid">
           <div className="accounts-list-column">
             <div className="accounts-sections">

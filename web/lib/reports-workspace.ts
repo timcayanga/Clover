@@ -1,3 +1,5 @@
+import { buildReportOutlook, buildNetWorthChange } from "./report-outlook";
+import { serializeFinancialCommitment } from "./commitments";
 import { buildRecoveryReport } from "../../shared/reports/recoveries";
 import {
   accountImportCoverage,
@@ -129,43 +131,51 @@ export async function loadReportsWorkspace(
     today = reportDay(now, timeZone);
   const paid = hasFullFeatureAccess(access.planTier);
   // Keep the second read batch small enough for the shared database pool.
-  const [budgets, tags, profile, revisions, recoveries] = await Promise.all([
-    paid
-      ? prisma.budget.findMany({
-          where: { workspaceId },
-          include: { category: { select: { name: true } } },
-        })
-      : [],
-    prisma.tag.findMany({
-      where: { workspaceId },
-      select: { id: true, name: true },
-      orderBy: { name: "asc" },
-    }),
-    prisma.workspace.findUnique({
-      where: { id: workspaceId },
-      select: { name: true },
-    }),
-    paid
-      ? prisma.budgetRevision.findMany({
-          where: { workspaceId },
-          orderBy: [{ effectiveAt: "asc" }, { sequence: "asc" }],
-        })
-      : [],
-    prisma.reportRecovery.findMany({
-      where: { workspaceId },
-      select: {
-        id: true,
-        expenseId: true,
-        incomingId: true,
-        kind: true,
-        amount: true,
-      },
-    }),
-  ]);
+  const [budgets, tags, profile, revisions, recoveries, commitments] =
+    await Promise.all([
+      paid
+        ? prisma.budget.findMany({
+            where: { workspaceId },
+            include: { category: { select: { name: true } } },
+          })
+        : [],
+      prisma.tag.findMany({
+        where: { workspaceId },
+        select: { id: true, name: true },
+        orderBy: { name: "asc" },
+      }),
+      prisma.workspace.findUnique({
+        where: { id: workspaceId },
+        select: { name: true },
+      }),
+      paid
+        ? prisma.budgetRevision.findMany({
+            where: { workspaceId },
+            orderBy: [{ effectiveAt: "asc" }, { sequence: "asc" }],
+          })
+        : [],
+      prisma.reportRecovery.findMany({
+        where: { workspaceId },
+        select: {
+          id: true,
+          expenseId: true,
+          incomingId: true,
+          kind: true,
+          amount: true,
+        },
+      }),
+      prisma.financialCommitment.findMany({
+        where: { workspaceId, status: "active" },
+        include: {
+          occurrences: { where: { workspaceId }, select: { dueDate: true } },
+        },
+      }),
+    ]);
   const currencySelection = resolveReportCurrency(
     [
       ...accounts.map((a) => a.currency),
       ...transactions.map((t) => t.currency),
+      ...commitments.map((c) => c.currency),
     ],
     baseCurrency,
     view.currency || undefined,
@@ -338,6 +348,29 @@ export async function loadReportsWorkspace(
           };
         })
       : [];
+    const outlook = buildReportOutlook(
+      commitments
+        .filter(
+          (c) =>
+            c.currency === currency &&
+            (!view.accounts.length ||
+              (c.accountId !== null && view.accounts.includes(c.accountId))),
+        )
+        .map((c) => ({
+          ...serializeFinancialCommitment(c),
+          completedPaymentDates: c.occurrences.map((o) =>
+            o.dueDate.toISOString().slice(0, 10),
+          ),
+        })),
+      scopedAccounts.map((a) => ({
+        id: a.id,
+        name: a.name,
+        type: a.type,
+        balance: snapshot.find((s) => s.id === a.id)?.balance ?? null,
+      })),
+      rows.filter((r) => r.currency === currency),
+      today,
+    );
     // Paid data is omitted at the server boundary, not merely hidden in the app.
     if (!paid) {
       analysis.statement = [];
@@ -347,6 +380,22 @@ export async function loadReportsWorkspace(
     }
     return {
       currency,
+      recurringCosts: outlook.recurringCosts,
+      forecast: paid ? outlook.forecast : undefined,
+      netWorthChange: paid
+        ? buildNetWorthChange(
+            scopedAccounts.map((a) => ({
+              ...a,
+              statementCheckpoints: a.statementCheckpoints.filter(
+                (p) =>
+                  p.status === "reconciled" && p.importFile?.status === "done",
+              ),
+            })),
+            period.from,
+            period.to,
+            timeZone,
+          )
+        : undefined,
       budgets: paid
         ? buildReportBudgets(
             budgets,

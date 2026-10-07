@@ -1,3 +1,9 @@
+import {
+  forecastNote,
+  outlookScopeNote,
+  recurringNote,
+  netWorthChangeNote,
+} from "./outlook";
 import { budgetHistoryExplanation, importCoverageLines } from "./history-copy";
 import { savingsRate, type ReportView } from "./analysis";
 import type { ReportsWorkspace } from "./workspace";
@@ -47,6 +53,108 @@ export function buildReportExport(
     const a = r.analysis;
     const add = (title: string, headers: string[], rows: ExportCell[][]) =>
       result.tables.push({ title: `${title} (${r.currency})`, headers, rows });
+    if (section === "trends" && r.recurringCosts) {
+      const costs = r.recurringCosts;
+      add(
+        "Recurring costs",
+        [
+          "Schedule",
+          "Direction",
+          "Next date",
+          "Next payment",
+          "Next 30 days",
+          "Next 12 months",
+          "Exclusion",
+          "Latest linked payment",
+          "Previous linked payment",
+        ],
+        costs.rows.map((row) => [
+          row.title,
+          row.direction,
+          row.nextDate ?? "N/A",
+          row.nextAmount ?? "N/A",
+          row.cost30,
+          row.costYear,
+          row.excludedReason ?? "",
+          row.latestPayment?.amount ?? "N/A",
+          row.latestPayment?.previous ?? "N/A",
+        ]),
+      );
+      result.notes.push(
+        `${costs.from} to ${costs.to}. ${outlookScopeNote}`,
+        recurringNote,
+      );
+    }
+    if (section === "advanced" && w.paid) {
+      if (r.forecast) {
+        add(
+          "Cash-flow forecast",
+          [
+            "Days",
+            "From",
+            "To",
+            "Starting balance",
+            "Scheduled in",
+            "Scheduled out",
+            "Projected balance",
+            "Lowest balance",
+            "Lowest date",
+          ],
+          r.forecast.horizons.map((h) => [
+            h.days,
+            r.forecast!.today,
+            h.end,
+            r.forecast!.opening ?? "N/A",
+            h.incoming,
+            h.outgoing,
+            h.closing ?? "N/A",
+            h.lowest?.balance ?? "N/A",
+            h.lowest?.date ?? "N/A",
+          ]),
+        );
+        add(
+          "Forecast movements",
+          ["Date", "Schedule", "Direction", "Amount"],
+          r.forecast.movements.map((m) => [
+            m.date,
+            m.title,
+            m.direction,
+            m.amount,
+          ]),
+        );
+        result.notes.push(
+          forecastNote,
+          outlookScopeNote,
+          ...r.forecast.omittedSchedules,
+        );
+      }
+      if (r.netWorthChange) {
+        add(
+          "Net-worth balance changes",
+          [
+            "Account",
+            "Group",
+            "Opening evidence date",
+            "Opening",
+            "Closing evidence date",
+            "Closing",
+            "Change",
+            "Missing evidence",
+          ],
+          r.netWorthChange.accounts.map((a) => [
+            a.name,
+            a.group,
+            a.opening?.date ?? "N/A",
+            a.opening?.balance ?? "N/A",
+            a.closing?.date ?? "N/A",
+            a.closing?.balance ?? "N/A",
+            a.change ?? "N/A",
+            a.issue ?? "",
+          ]),
+        );
+        result.notes.push(netWorthChangeNote);
+      }
+    }
     if (section === "overview") {
       add(
         "Summary",

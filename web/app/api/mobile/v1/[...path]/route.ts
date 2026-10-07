@@ -365,6 +365,10 @@ async function handle(
       });
       return reply(await result.json(),result.status);
     }
+    if (operation === "fx-rate") {
+      const response = await (await import("@/app/api/fx-rate/route")).GET(request);
+      return reply(await response.json(), response.status);
+    }
     if (operation === "reports") {
       const requested = url.searchParams.get("currency") ?? undefined;
       if (requested) z.string().regex(/^[A-Z]{3}$/).parse(requested);

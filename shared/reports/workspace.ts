@@ -1,3 +1,4 @@
+import type { CashForecast, RecurringCosts, NetWorthChange } from "./outlook";
 import type { ReportAnalysis, ReportView, ReportPeriod } from "./analysis";
 export type SavedReport = {
   id: string;
@@ -6,6 +7,9 @@ export type SavedReport = {
   revision: number;
 };
 export type ReportCurrencyData = {
+  forecast?: CashForecast;
+  recurringCosts?: RecurringCosts;
+  netWorthChange?: NetWorthChange;
   budgets?: BudgetReportRow[];
   recoveries?: RecoveryReport;
   importCoverage?: AccountImportCoverage[];

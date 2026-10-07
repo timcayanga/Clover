@@ -64,7 +64,7 @@ export const buildRecurringCalendarOccurrences = (
 
     if (commitment.recurrence === "weekly" || commitment.recurrence === "biweekly") {
       const intervalDays = commitment.recurrence === "weekly" ? 7 : 14;
-      const elapsedDays = Math.floor((monthStart.getTime() - anchor.getTime()) / DAY_MS);
+      const elapsedDays = Math.floor((Date.UTC(monthStart.getFullYear(), monthStart.getMonth(), monthStart.getDate()) - Date.UTC(anchor.getFullYear(), anchor.getMonth(), anchor.getDate())) / DAY_MS);
       const stepsToMonth = Math.max(0, Math.ceil(elapsedDays / intervalDays));
       const occurrence = new Date(anchor);
       occurrence.setDate(anchor.getDate() + stepsToMonth * intervalDays);

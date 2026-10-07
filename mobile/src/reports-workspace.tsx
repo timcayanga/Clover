@@ -1,3 +1,4 @@
+import { ReportOutlook } from "./report-outlook";
 import { ReportRecoveries } from "./report-recoveries";
 import { ReportCoverageDetails, ReportSpendingDetails } from "./report-details";
 import { exportReport } from "./report-export";
@@ -799,6 +800,7 @@ function NativeReportPanels({
       ) : null}
       {view.section === "trends" ? (
         <>
+          <ReportOutlook report={r} section="trends" />
           <ReportCard title="Spending Pace">
             <ReportLineChart
               currency={c}
@@ -1058,6 +1060,7 @@ function NativeReportPanels({
       {view.section === "advanced" ? (
         w.paid ? (
           <>
+            <ReportOutlook report={r} section="advanced" />
             <ReportCard title="Cash Flow">
               <ReportsCashFlow report={r} />
             </ReportCard>
@@ -1109,7 +1112,7 @@ function NativeReportPanels({
         ) : (
           <ReportCard title="Insights">
             <Body>
-              Cash Flow, Main Drivers, Next Steps, and Goal Check are available
+              Cash-flow forecasts, net-worth changes, Cash Flow, Main Drivers, Next Steps, and Goal Check are available
               with Clover Plus and Pro.
             </Body>
             <PlanAction

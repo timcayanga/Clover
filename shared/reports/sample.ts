@@ -1,3 +1,4 @@
+import { cashForecast } from "./outlook";
 import { buildRecoveryReport } from "./recoveries";
 import { accountImportCoverage } from "./import-coverage";
 import {
@@ -71,6 +72,126 @@ export const sampleReportsWorkspace: ReportsWorkspace = {
   })),
   reports: [
     {
+      forecast: cashForecast(
+        "2026-10-07",
+        58000,
+        [
+          {
+            id: "rent",
+            title: "Rent",
+            date: "2026-10-10",
+            amount: 15000,
+            direction: "out",
+          },
+          {
+            id: "ana",
+            title: "Money owed by Ana",
+            date: "2026-10-15",
+            amount: 12000,
+            direction: "in",
+          },
+          {
+            id: "loan",
+            title: "Loan payment",
+            date: "2026-10-20",
+            amount: 8500,
+            direction: "out",
+          },
+        ],
+        [],
+        ["Utilities: Variable amount"],
+      ),
+      recurringCosts: {
+        from: "2026-10-07",
+        to: "2027-10-06",
+        outgoing30: 23500,
+        incoming30: 12000,
+        outgoingYear: 197000,
+        monthlyEquivalent: 197000 / 12,
+        overdueCount: 1,
+        rows: [
+          {
+            id: "rent",
+            title: "Rent",
+            cadence: "monthly",
+            direction: "out",
+            nextDate: "2026-10-10",
+            nextAmount: 15000,
+            cost30: 15000,
+            costYear: 180000,
+            excludedReason: null,
+            latestPayment: {
+              date: "2026-09-10",
+              amount: 15000,
+              previous: 14000,
+            },
+          },
+          {
+            id: "utilities",
+            title: "Utilities",
+            cadence: "monthly",
+            direction: "out",
+            nextDate: "2026-10-15",
+            nextAmount: null,
+            cost30: 0,
+            costYear: 0,
+            excludedReason: "Variable amount",
+            latestPayment: null,
+          },
+          {
+            id: "loan",
+            title: "Loan payment",
+            cadence: "monthly",
+            direction: "out",
+            nextDate: "2026-10-20",
+            nextAmount: 8500,
+            cost30: 8500,
+            costYear: 17000,
+            excludedReason: null,
+            latestPayment: null,
+          },
+        ],
+      },
+      netWorthChange: {
+        from: "2026-07-01",
+        to: "2026-09-30",
+        change: 9000,
+        groups: [
+          { name: "Bank, wallet and cash", change: 4000 },
+          { name: "Investments", change: 3000 },
+          { name: "Liabilities", change: 2000 },
+        ],
+        accounts: [
+          {
+            id: "sample-bank",
+            name: "Sample bank",
+            group: "Bank, wallet and cash",
+            opening: { date: "2026-06-30", balance: 10000 },
+            closing: { date: "2026-09-30", balance: 14000 },
+            change: 4000,
+            issue: null,
+          },
+          {
+            id: "sample-investment",
+            name: "Sample investments",
+            group: "Investments",
+            opening: { date: "2026-06-30", balance: 20000 },
+            closing: { date: "2026-09-30", balance: 23000 },
+            change: 3000,
+            issue: null,
+          },
+          {
+            id: "sample-loan",
+            name: "Sample loan",
+            group: "Liabilities",
+            opening: { date: "2026-06-30", balance: -5000 },
+            closing: { date: "2026-09-30", balance: -3000 },
+            change: 2000,
+            issue: null,
+          },
+        ],
+      },
+
       currency: "PHP",
       analysis,
       merchantAnalysis: reportMerchants(rows, period),

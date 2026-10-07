@@ -1,4 +1,5 @@
 "use client";
+import { ReportOutlook } from "./report-outlook";
 import { ReportRecoveries } from "./report-recoveries";
 import { ReportCoverageDetails, ReportSpendingDetails } from "./report-details";
 import { exportReport } from "@/lib/report-export-client";
@@ -832,6 +833,7 @@ export function ReportPanels({
       ) : null}
       {view.section === "trends" ? (
         <>
+          <ReportOutlook report={r} section="trends" />
           <Panel title="Spending Pace">
             <ReportsComparisonChart
               currency={c}
@@ -1128,6 +1130,7 @@ export function ReportPanels({
       {view.section === "advanced" ? (
         w.paid ? (
           <>
+            <ReportOutlook report={r} section="advanced" />
             <Panel title="Cash Flow">
               <ReportsCashFlowMap
                 currency={c}
@@ -1185,7 +1188,7 @@ export function ReportPanels({
         ) : (
           <Panel title="Insights">
             <p>
-              Cash Flow, Main Drivers, Next Steps, and Goal Check are available
+              Cash-flow forecasts, net-worth changes, Cash Flow, Main Drivers, Next Steps, and Goal Check are available
               with Clover Plus and Pro.
             </p>
             <Link href="/pricing">Explore Plus</Link>
