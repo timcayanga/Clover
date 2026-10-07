@@ -1,7 +1,8 @@
+import { createActualSplitValidator, type ActualSplitEvidence } from "@/lib/actual-migration-splits";
 import type { ImportParseContext, ParsedImportRow } from "@/lib/import-parser";
 import { sanitizeTransactionTagNames } from "@/lib/transaction-tags";
 
-export const MIGRATION_SOURCES = ["realbyte", "money-lover", "wallet", "bluecoins", "ynab", "monarch", "spreadsheet"] as const;
+export const MIGRATION_SOURCES = ["realbyte", "money-lover", "wallet", "bluecoins", "ynab", "monarch", "actual", "spreadsheet"] as const;
 export type MigrationSource = typeof MIGRATION_SOURCES[number];
 export type MigrationEvidence = {
   version: 1;
@@ -14,6 +15,7 @@ export type MigrationEvidence = {
   direction: "income" | "expense";
   splitGroup: string | null;
   derivedTransferLeg?: boolean;
+  actualSplit?: ActualSplitEvidence;
 };
 const object = (value: unknown): Record<string, unknown> | null => value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : null;
 export const readAppMigration = (raw: unknown): MigrationEvidence | null => {
@@ -31,6 +33,7 @@ type Table = { headers: string[]; rows: string[][]; headerIndex: number; delimit
 export const detectAppMigrationSource = (headers: string[]): MigrationSource | null => {
   const h = new Set(headers.map(key));
   if (h.has("migration_source")) return "spreadsheet";
+  if (["account", "date", "payee", "notes", "category", "amount", "split_amount", "cleared"].every(k => h.has(k))) return "actual";
   if (["account", "payee", "memo", "outflow", "inflow"].every(k => h.has(k)) && (h.has("category_group_category") || h.has("category_group"))) return "ynab";
   if (["date", "merchant", "category", "account", "original_statement", "notes", "amount", "tags"].every(k => h.has(k))) return "monarch";
   if (h.has("item_or_payee") && h.has("split") && h.has("account")) return "bluecoins";
@@ -87,13 +90,13 @@ export const parseAppMigrationTable = (
   });
   const get = (row: string[], ...names: string[]) => names.map(n => row[indexes.get(n) ?? -1]?.trim() ?? "").find(Boolean) ?? "";
   const fail = (row: number, message: string): never => { throw new Error(`Migration row ${row}: ${message} Nothing was added. Correct the file and upload again.`); };
-  const strictSource = source === "ynab" || source === "monarch";
+  const strictSource = source === "ynab" || source === "monarch" || source === "actual";
   const skipStatus = (cells: string[]) => {
     const status = get(cells, "status", "state").toLowerCase();
     return /^(?:v|void|voided|pending|processing|scheduled|failed|declined|cancelled|canceled|reversed)$/.test(status)
       ? status : /^(?:true|1|yes)$/i.test(get(cells, "pending")) ? "pending" : null;
   };
-  const inferredDateOrder = dateOrderFrom(table.rows.filter(cells => !get(cells, "date_format") && !skipStatus(cells) && !(source === "ynab" && /^starting balance$/i.test(get(cells, "payee")))).map(cells => get(cells, "date", "period", "datetime", "transaction_date")));
+  const inferredDateOrder = dateOrderFrom(table.rows.filter(cells => !get(cells, "date_format") && !skipStatus(cells) && !((source === "ynab" || source === "actual") && /^starting balance$/i.test(get(cells, "payee")))).map(cells => get(cells, "date", "period", "datetime", "transaction_date")));
   // These two published templates specify month-first dates. Other sources
   // must supply unambiguous evidence or an explicit Date Format column.
   const defaultDateOrder = source === "realbyte" || source === "bluecoins" ? "MDY" : null;
@@ -123,7 +126,8 @@ export const parseAppMigrationTable = (
     return result!;
   };
   const skipped: Array<{ row: number; reason: string }> = [];
-  const prepared: Array<{ cells: string[]; sourceRow: number; name: string; originalStatement: string; note: string; categoryPath: string[]; tags: string[]; excluded: boolean; type: string; direction: "income" | "expense"; sourceId: string; splitGroup: string | null; line: string; canonical: string[]; destinationAccount: string; derivedTransferLeg?: boolean }> = [];
+  const prepared: Array<{ cells: string[]; sourceRow: number; name: string; originalStatement: string; note: string; categoryPath: string[]; tags: string[]; excluded: boolean; type: string; direction: "income" | "expense"; sourceId: string; splitGroup: string | null; line: string; canonical: string[]; destinationAccount: string; derivedTransferLeg?: boolean; actualSplit?: ActualSplitEvidence }> = [];
+  const actualSplits = createActualSplitValidator(fail);
   let splitSequence = 0;
   let previousSplit = "";
   table.rows.forEach((cells, index) => {
@@ -140,11 +144,11 @@ export const parseAppMigrationTable = (
     const parent = get(cells, "parent_category", "category_group");
     const categoryPath = [parent, category, subcategory].filter((v, i, all) => v && all.indexOf(v) === i);
     if (!categoryPath.length && source === "ynab") categoryPath.push(...get(cells, "category_group_category").split(/\s*\/\s*/).filter(Boolean));
-    const name = get(cells, "item_or_payee", "payee", "merchant", "name", "contents");
-    const note = [get(cells, "note", "notes", "memo"), get(cells, "description", "details")].filter((v, i, all) => v && all.indexOf(v) === i).join(" · ");
-    const label = name || note || categoryPath.at(-1) || "Imported transaction";
+    let name = get(cells, "item_or_payee", "payee", "merchant", "name", "contents");
+    let note = [get(cells, "note", "notes", "memo"), get(cells, "description", "details")].filter((v, i, all) => v && all.indexOf(v) === i).join(" · ");
+    let label = name || note || categoryPath.at(-1) || "Imported transaction";
     let date = get(cells, "date", "period", "datetime", "transaction_date");
-    if (source === "ynab" && /^starting balance$/i.test(name)) { skipped.push({ row: sourceRow, reason: "starting balance (not income)" }); return; }
+    if ((source === "ynab" || source === "actual") && /^starting balance$/i.test(name)) { skipped.push({ row: sourceRow, reason: "starting balance (not income)" }); return; }
     if (!date && /^(?:total|subtotal|opening balance|closing balance)$/i.test(label)) { skipped.push({ row: sourceRow, reason: "summary" }); return; }
     if (!date) fail(sourceRow, "A transaction date is required.");
     {
@@ -158,8 +162,27 @@ export const parseAppMigrationTable = (
     }
     const currency = get(cells, "currency", "currency_code") || context.currency || "";
     if (!/^[A-Z]{3}$/i.test(currency)) fail(sourceRow, "Add a three-letter Currency such as PHP, or select the account currency before uploading.");
+    const account = get(cells, "account", "accounts", "wallet", "account_name") || context.accountName || "Cash";
+    if (strictSource && !get(cells, "account")) fail(sourceRow, "An Account name is required for every source transaction.");
+    let actualSplit: ActualSplitEvidence | undefined;
     let amount = get(cells, "amount");
     let rawType = get(cells, "type", "income_expense", "direction", "record_type").toLowerCase().replace(/[_-]/g, " ");
+    if (source === "actual") {
+      const signed = readSourceAmount(amount, currency, sourceRow);
+      const splitAmount = readSourceAmount(get(cells, "split_amount") || "0", currency, sourceRow);
+      const split = actualSplits.accept({ sourceRow, date, account, currency: currency.toUpperCase(), amount: signed, splitAmount, notes: note, payee: name });
+      if (split.skip) { skipped.push({ row: sourceRow, reason: "split parent (individual parts imported)" }); return; }
+      actualSplit = split.evidence;
+      note = split.notes;
+      name = split.payee;
+      label = name || note || categoryPath.at(-1) || "Imported transaction";
+      // Actual's CSV drops transfer_id and payee transfer metadata. An empty
+      // category can mean either a transfer or an uncategorized purchase.
+      if (!rawType && !category) fail(sourceRow, "Set Type to Income, Expense, Transfer In or Transfer Out for uncategorized and transfer rows. Actual's CSV does not identify transfer accounts.");
+      if (!rawType) rawType = signed < 0 ? "expense" : "income";
+      if (/^(?:t|transfer)$/.test(rawType)) rawType = signed < 0 ? "transfer out" : "transfer in";
+      amount = String(signed);
+    }
     if (source === "ynab") {
       const inflowText = get(cells, "inflow"), outflowText = get(cells, "outflow");
       const inflow = inflowText ? readSourceAmount(inflowText, currency, sourceRow) : 0;
@@ -185,9 +208,10 @@ export const parseAppMigrationTable = (
     else if (/^\s*[-(]/.test(amount)) type = "expense";
     else if (/^\s*\+/.test(amount)) type = "income";
     else fail(sourceRow, "Choose Income or Expense in the Type column for an unsigned amount.");
+    if (type === "transfer" && !categoryPath.length) categoryPath.push("Transfers");
     const direction = type === "income" ? "income" : type === "expense" ? "expense" : /\b(?:in|from)\b/.test(rawType) ? "income" : /\b(?:out|to)\b/.test(rawType) ? "expense" : /^\s*[-(]/.test(amount) ? "expense" : "income";
-    if (source === "monarch" && ((type === "income" && Number(amount) < 0) || (type === "expense" && Number(amount) > 0) ||
-      (type === "transfer" && (direction === "income") !== (Number(amount) > 0)))) fail(sourceRow, "The Type conflicts with Monarch's signed amount. Positive is incoming and negative is outgoing.");
+    if ((source === "monarch" || source === "actual") && ((type === "income" && Number(amount) < 0) || (type === "expense" && Number(amount) > 0) ||
+      (type === "transfer" && (direction === "income") !== (Number(amount) > 0)))) fail(sourceRow, "The Type conflicts with the source signed amount. Positive is incoming and negative is outgoing.");
     if (type === "transfer" && source !== "bluecoins" && !/[+-]/.test(amount[0] ?? "") && !/\b(?:in|out|from|to)\b/.test(rawType)) fail(sourceRow, "Use a signed amount or Transfer In/Transfer Out to identify the transfer direction.");
     const numericAmount = readSourceAmount(amount, currency, sourceRow);
     // Keep the resolved direction explicit; a positive magnitude alone loses
@@ -195,8 +219,7 @@ export const parseAppMigrationTable = (
     amount = String(direction === "expense" ? -Math.abs(numericAmount) : Math.abs(numericAmount));
     const balanceText = get(cells, "balance");
     const balance = balanceText ? String(readSourceAmount(balanceText, currency, sourceRow)) : "";
-    const account = get(cells, "account", "accounts", "wallet", "account_name") || context.accountName || "Cash";
-    if (strictSource && !get(cells, "account")) fail(sourceRow, "An Account name is required for every source transaction.");
+
     const excludedText = get(cells, "excluded", "exclude_from_reports", "is_excluded", "hidden").toLowerCase();
     if (excludedText && !/^(?:true|false|yes|no|0|1)$/.test(excludedText)) fail(sourceRow, "Excluded must be true or false.");
     const tags = get(cells, "tags", "labels", "label").split(source === "bluecoins" ? /\s+/ : /[;|,]/).map(x => x.trim()).filter(Boolean);
@@ -208,14 +231,15 @@ export const parseAppMigrationTable = (
     const splitIdentity = split ? `${account}|${date}|${label}` : "";
     if (splitIdentity && splitIdentity !== previousSplit) splitSequence += 1;
     previousSplit = splitIdentity;
-    const splitGroup = split ? `${source}:${splitSequence}:${splitIdentity}` : null;
+    const splitGroup = actualSplit ? `actual:${actualSplit.parentSourceRow}:${account}:${date}` : split ? `${source}:${splitSequence}:${splitIdentity}` : null;
     const sourceId = get(cells, "id", "transaction_id", "reference");
     const destinationAccount = source === "realbyte" && type === "transfer" && direction === "expense" ? category : "";
     if (destinationAccount) categoryPath.splice(0, categoryPath.length, "Transfers");
     const canonical = [date, label, amount, currency.toUpperCase(), account, categoryPath.join(" / "), type, `migration-${prepared.length}`, get(cells, "account_type"), balance, get(cells, "institution", "bank"), get(cells, "account_number")];
     const line = csv(canonical);
-    prepared.push({ cells, sourceRow, name: name || label, originalStatement: get(cells, "original_statement"), note, categoryPath, tags: cleanTags, excluded: /^(?:true|yes|1)$/.test(excludedText), type, direction, sourceId, splitGroup, line, canonical, destinationAccount });
+    prepared.push({ cells, sourceRow, name: name || label, originalStatement: get(cells, "original_statement"), note, categoryPath, tags: cleanTags, excluded: /^(?:true|yes|1)$/.test(excludedText), type, direction, sourceId, splitGroup, line, canonical, destinationAccount, ...(actualSplit ? { actualSplit } : {}) });
   });
+  if (source === "actual") actualSplits.finish();
   // Realbyte's documented template encodes a transfer-out destination in
   // Category. Materialize the other leg only when it is absent from the file.
   const originalPrepared = [...prepared];
@@ -263,7 +287,7 @@ export const parseAppMigrationTable = (
       skipped.push({ row: sourceRow.sourceRow, reason: "duplicate source ID" }); return;
     }
     if (sourceRow.sourceId) seenIds.set(idKey, signature);
-    const evidence: MigrationEvidence = { version: 1, source, sourceRow: sourceRow.sourceRow, sourceId: sourceRow.sourceId, categoryPath: sourceRow.categoryPath, tags: sourceRow.tags, excluded: sourceRow.excluded, direction: sourceRow.direction, splitGroup: sourceRow.splitGroup, ...(sourceRow.derivedTransferLeg ? { derivedTransferLeg: true } : {}) };
+    const evidence: MigrationEvidence = { version: 1, source, sourceRow: sourceRow.sourceRow, sourceId: sourceRow.sourceId, categoryPath: sourceRow.categoryPath, tags: sourceRow.tags, excluded: sourceRow.excluded, direction: sourceRow.direction, splitGroup: sourceRow.splitGroup, ...(sourceRow.derivedTransferLeg ? { derivedTransferLeg: true } : {}), ...(sourceRow.actualSplit ? { actualSplit: sourceRow.actualSplit } : {}) };
     const categoryName = sourceRow.categoryPath.join(" / ") || (sourceRow.type === "transfer" ? "Transfers" : "Other");
     rows.push({ ...r, merchantRaw: sourceRow.originalStatement || sourceRow.name, merchantClean: sourceRow.name, description: sourceRow.note || sourceRow.name, categoryName, type: sourceRow.type as ParsedImportRow["type"], parserConfidence: 100, categoryConfidence: sourceRow.categoryPath.length ? 100 : 35, confidence: sourceRow.categoryPath.length ? 100 : 70,
       rawPayload: { ...r.rawPayload, source: "structured_transaction_csv", accountName: r.accountName, accountCurrency: r.currency, originalHeaders: table.headers, sourceCells: sourceRow.cells, originalStatement: sourceRow.originalStatement || null, sourceRowIndex: sourceRow.sourceRow, description: sourceRow.note || sourceRow.name, appMigration: evidence, parsedDirectionType: sourceRow.direction, reference: sourceRow.sourceId || null,

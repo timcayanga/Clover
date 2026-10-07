@@ -59,7 +59,7 @@ async function main() {
  }
  // Exercise the new profiles through the real worker, including post-save
  // enrichment and duplicate checks, with all external calls forbidden.
- for (const source of ["ynab-register", "monarch-transactions"]) {
+ for (const source of ["ynab-register", "monarch-transactions", "actual-query"]) {
   const content = readFileSync(`scripts/fixtures/app-migrations/${source}-synthetic.csv`, "utf8");
   const firstRun = await upload(content, `${source}.csv`);
   await drain();
@@ -71,6 +71,13 @@ async function main() {
     assert.equal(groceries.category?.name,"Living / Groceries");
     assert.deepEqual(groceries.transactionTags.map(t=>t.tag.name),["YNAB: Blue"]);
     assert(!saved.some(r=>r.merchantRaw==="Starting Balance"));
+  } else if(source==='actual-query') {
+    assert.equal(saved.filter(r=>r.isTransfer).length,2);
+    const parts=saved.filter(r=>r.merchantRaw==='Department Store');
+    assert.equal(parts.length,2);assert.equal(parts.reduce((sum,r)=>sum+Number(r.amount),0),50);
+    assert.deepEqual(parts.map(r=>r.description).sort(),['Shopping · Shirt','Shopping · Snacks']);
+    assert(!saved.some(r=>r.merchantRaw==='Starting Balance'));
+    assert(saved.filter(r=>r.isTransfer).every(r=>r.category?.name==='Transfers'));
   } else {
     assert.equal(saved.filter(r=>r.isTransfer).length,3);
     const store=saved.find(r=>r.merchantRaw==="POS CORNER SHOP 0042")!;
@@ -105,6 +112,9 @@ async function main() {
    const run=await upload(invalid,"invalid-legacy-profile.csv").catch(error=>({error:String(error)}));
    assert.equal(await prisma.transaction.count({where:{workspaceId:w.id}}),countBeforeInvalid,JSON.stringify(run));
  }
+ const actualInvalid=readFileSync('scripts/fixtures/app-migrations/actual-query-synthetic.csv','utf8').replace('-30,0,Cleared','-29,0,Cleared');
+ const badSplit=await upload(actualInvalid,'invalid-actual.csv').catch(error=>({error:String(error)}));
+ assert.equal(await prisma.transaction.count({where:{workspaceId:w.id}}),countBeforeInvalid,JSON.stringify(badSplit));
  const paired=await upload('Date,Account,Category,Subcategory,Note,Amount,Income/Expense,Currency\n2026-09-01,Transfer Bank,Transfer Savings,,Transfer,"1,000.00",Transfer out,PHP\n09/01/2026,Transfer Savings,Transfer Bank,,Transfer,1000,Transfer in,PHP',"paired-realbyte.csv");
  assert.equal(await prisma.transaction.count({where:{importFileId:paired.id}}),2,JSON.stringify(paired.result));
  const mixed = await upload("Migration Source,Date,Description,Amount,Currency,Account,Type,Category\nspreadsheet,2026-09-06,US dollars,100,USD,Travel,Income,Salary\nspreadsheet,2026-09-06,Philippine pesos,200,PHP,Travel,Income,Salary", "mixed.csv");
