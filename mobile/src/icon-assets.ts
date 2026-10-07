@@ -5,7 +5,7 @@ export const mobileNavigationIcons: Record<string, ImageSourcePropType> = {
   "help-circle-outline": require("../assets/icons/navigation/help.png"),
   "home-outline": require("../assets/icons/web/home.webp"),
   "swap-horizontal-outline": require("../assets/icons/web/transactions.webp"),
-  "chatbubble-ellipses-outline": require("../assets/mascots/welcome.png"),
+  "chatbubble-ellipses-outline": require("../assets/mascots/velvet-compact.png"),
   "person-outline": require("../assets/icons/navigation/profile.png"),
   "settings-outline": require("../assets/icons/navigation/settings.png"),
   "search-outline": require("../assets/icons/web/search.png"),

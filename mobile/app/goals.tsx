@@ -385,19 +385,7 @@ export default function Goals() {
         <>
           {!data.goals.length ? (
             <>
-              <CloverEmptyState>What would you like to work toward?</CloverEmptyState>
-              {presets.map((preset) => (
-                <Card key={preset.key}>
-                  <CategoryMark name={preset.icon} size={40} />
-                  <Body muted={false}>{preset.name}</Body>
-                  <PlanAction
-                    title={`Set up ${preset.name}`}
-                    onPress={() =>
-                      setEditor({ goal: null, preset: preset.key })
-                    }
-                  />
-                </Card>
-              ))}
+              <CloverEmptyState pose="savings">What would you like to work toward? Set your target and start working toward it.</CloverEmptyState>
             </>
           ) : (
             <AdaptiveGrid>{data.goals.map((goal) => (

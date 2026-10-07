@@ -40,7 +40,7 @@ export default function Welcome() {
   if (access.active) return null;
   const disabled = busy || !access.loaded || !access.configured;
   return (
-    <LinearGradient colors={["#ffffff", "#f7fcfc", "#e5f7f5"]} style={s.page}>
+    <LinearGradient colors={["#ffffff", "#ffffff"]} style={s.page}>
       <View style={[s.brand, compact && { paddingVertical: 8 }]}>
         <Image source={require("../assets/welcome-clover.png")} style={{ width: 28, height: 28 }} />
         <Image source={require("../assets/clover-wordmark.png")} accessibilityLabel="Clover" resizeMode="contain" style={{ width: 99, height: 24 }} />

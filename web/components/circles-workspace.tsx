@@ -819,7 +819,7 @@ function CircleEmptyState({
         plain ? " circles-soft-empty--plain" : ""
       }`}
     >
-      <img src="/assets/mascots/guiding.svg" alt="" width={128} height={128} />
+      <img src="/assets/mascots/velvet-statement.webp" alt="" width={128} height={128} />
       <strong>{title}</strong>
       <p>{children}</p>
     </div>
@@ -1101,7 +1101,7 @@ function CircleExpenses({
           ))
         ) : (
           <CircleEmptyState
-            image="/assets/mascots/guiding.svg"
+            image="/assets/mascots/velvet-statement.webp"
             title="No shared expenses yet"
             plain
           >
@@ -1464,7 +1464,7 @@ function CircleGoals({
             ))
           ) : (
             <CircleEmptyState
-              image="/assets/mascots/guiding.svg"
+              image="/assets/mascots/velvet-statement.webp"
               title="No shared goals yet"
               plain
             >
@@ -1566,7 +1566,7 @@ function CircleGoals({
             ))
           ) : (
             <CircleEmptyState
-              image="/assets/mascots/guiding.svg"
+              image="/assets/mascots/velvet-statement.webp"
               title="No shared investments"
               plain
             >
@@ -1614,7 +1614,7 @@ function CircleActivity({ circle }: { circle: CircleSummary }) {
           ))
         ) : (
           <CircleEmptyState
-            image="/assets/mascots/guiding.svg"
+            image="/assets/mascots/velvet-statement.webp"
             title="No Circle activity yet"
           >
             Changes made by Circle members will appear here.

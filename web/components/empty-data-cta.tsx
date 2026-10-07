@@ -25,7 +25,7 @@ export function EmptyDataCta({
   title,
   copy,
   highlights,
-  illustration = "/assets/mascots/guiding.svg",
+  illustration = "/assets/mascots/velvet-statement.webp",
   illustrationAlt = "",
   artClassName,
   actions,
@@ -43,7 +43,7 @@ export function EmptyDataCta({
           className={`transactions-empty-state__art${artClassName ? ` ${artClassName}` : ""}`}
           aria-hidden={illustrationAlt === ""}
         >
-          <img src={illustration.startsWith("/illustrations/") ? "/assets/mascots/guiding.svg" : illustration} alt={illustrationAlt} loading="eager" fetchPriority="high" decoding="async" />
+          <img src={illustration.startsWith("/illustrations/") ? "/assets/mascots/velvet-statement.webp" : illustration} alt={illustrationAlt} loading="eager" fetchPriority="high" decoding="async" />
         </div>
       ) : null}
       {eyebrow ? <p className="transactions-empty-state__eyebrow">{eyebrow}</p> : null}

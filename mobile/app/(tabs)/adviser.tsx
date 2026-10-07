@@ -396,7 +396,7 @@ export default function Adviser() {
             }}
           >
             <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
-            {message.role === "assistant" ? <CloverMascot pose="guiding" size={28} /> : null}
+            {message.role === "assistant" ? <CloverMascot pose="compact" size={28} /> : null}
             <Text
               style={{
                 color: colors.teal,

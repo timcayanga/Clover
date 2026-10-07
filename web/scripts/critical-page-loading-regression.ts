@@ -407,7 +407,7 @@ assert.match(errorBoundarySource, /message: error\.message/);
 assert.match(errorBoundarySource, /errorCode/);
 assert.match(errorScreenSource, /Something went wrong/);
 assert.match(errorScreenSource, /Refresh page/);
-assert.match(errorScreenSource, /\/assets\/error-clover\.webp/);
+assert.match(errorScreenSource, /\/assets\/mascots\/velvet-thinking\.webp/);
 assert.match(adminErrorLogsSource, /Frontend reference/);
 
 const commitmentsSource = readSource("components/commitments-panel.tsx");

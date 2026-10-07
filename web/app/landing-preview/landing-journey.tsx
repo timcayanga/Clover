@@ -1,4 +1,6 @@
 "use client";
+
+import { CloverMascot } from "@/components/clover-mascot";
 import { SwitchOfferNotice } from "@/components/switch-campaign";
 import { StoryBackground } from "@/components/story-background";
 import { cloverPhoneScreens } from "@/lib/connect-platform-designs";
@@ -357,7 +359,7 @@ export function LandingJourney({ authEnabled, initialMarket, countryResolved }: 
 
       <section className={styles.story} aria-live="polite">
         {chapters.map((item, index) => <div className={`${styles.chapter} ${index === 1 ? styles.comparisonChapter : ""} ${index === 6 ? styles.proChapter : ""} ${index === 7 ? styles.finalChapter : ""}`} data-landing-copy data-active={chapter === index} key={index} aria-hidden={chapter !== index} inert={chapter !== index} style={chapterMotion(index)}>
-          <div className={styles.chapterCopy} data-visible={index === displayedChapter} style={{ opacity: index === displayedChapter ? 1 : 0 }}><h1>{item.title}</h1>
+          <div className={styles.chapterCopy} data-visible={index === displayedChapter} style={{ opacity: index === displayedChapter ? 1 : 0 }}>{index === 4 ? <div className="marketing-clover-companion"><CloverMascot pose="celebrating" /></div> : null}<h1>{item.title}</h1>
           {item.copy ? <p>{item.copy}</p> : null}
           {index === 6 ? <ProActions market={market} /> : null}</div>
           {index === 1 ? <div className={styles.comparisonDetails} style={tableMotion(index)}><ComparisonTable /></div> : null}

@@ -1,3 +1,4 @@
+import { CloverMascot } from "../src/clover-mascot";
 import { Text } from "../src/app-text";
 import { useEffect, useRef, useState } from "react";
 import { router } from "expo-router";
@@ -69,12 +70,7 @@ export default function Onboarding() {
   };
   return (
     <Screen>
-      <Image
-        source={require("../assets/organize/clover.png")}
-        accessibilityLabel="Clover"
-        resizeMode="contain"
-        style={{ width: 48, height: 48, alignSelf: "center" }}
-      />
+      <View style={{ alignItems: "center" }}><CloverMascot pose={step === "experience" ? "thinking" : "guiding"} size={128} /></View>
       {step === "experience" ? (
         <>
           <Heading>How comfortable are you with financial management?</Heading>

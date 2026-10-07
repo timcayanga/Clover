@@ -12,6 +12,7 @@ function harness(fail=false){
   if(name==='react/jsx-runtime')return {jsx:(type,props)=>({type,props}),jsxs:(type,props)=>({type,props}),Fragment:'Fragment'};
   if(name==='expo-router')return {router:{replace:v=>routes.push(v)}};
   if(name==='react-native')return {Image:'Image',Pressable:'Pressable',View:'View'};
+  if(name.endsWith('/clover-mascot'))return {CloverMascot:'CloverMascot'};
   if(name.endsWith('/app-text'))return {Text:'Text'};
   if(name.endsWith('/session'))return {useSession:()=>session};
   if(name.endsWith('/ui'))return {...Object.fromEntries(['Body','Button','Card','Heading','Notice','Screen'].map(k=>[k,k])),useTheme:()=>({colors:{}})};
@@ -24,11 +25,15 @@ function harness(fail=false){
 const tick=()=>new Promise(resolve=>setImmediate(resolve));
 for(const action of ['skip','file','camera','library']){
  const h=harness();let nodes=h.render();
- assert.equal(nodes.find(n=>n.props.accessibilityLabel==='Clover').props.source,'../assets/organize/clover.png');
+ const mascots=nodes.filter(n=>n.type==='CloverMascot');
+ assert.equal(mascots.length,1,'Use one mascot in the onboarding brand position');
+ assert.equal(mascots[0].props.pose,'thinking');
+ assert.equal(mascots[0].props.size,128);
  const plants=nodes.filter(n=>n.type==='Image'&&n.props.source.includes('/onboarding/')).map(n=>n.props.source.split('/').pop());
  assert.deepEqual(plants,['beginner.png','intermediate.png','advanced.png']);
  nodes.find(n=>n.props.accessibilityRole==='radio').props.onPress();nodes=h.render();
  nodes.find(n=>n.props.title==='Continue').props.onPress();nodes=h.render();
+ assert.equal(nodes.find(n=>n.type==='CloverMascot').props.pose,'guiding');
  const title={skip:'Skip for now',file:'Choose Files',camera:'Take Photo',library:'Photo Library'}[action];
  const button=nodes.find(n=>n.props.title===title||n.props.accessibilityLabel===title);
  button.props.onPress();button.props.onPress();await tick();nodes=h.render();

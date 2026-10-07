@@ -9,7 +9,7 @@ export const NAVIGATION_ICON_SOURCE_FILES = {
   transactions: "transactions.png",
   recurring: "recurring.png",
   reports: "reports.png",
-  adviser: "../mascots/icon.png",
+  adviser: "../mascots/velvet-compact.png",
   budgeting: "budgeting.png",
   goals: "goals.png",
   plan: "figma-library-transparent/plan.png",
@@ -32,7 +32,7 @@ export const NAVIGATION_ICON_SOURCE_FILES = {
 export type NavigationIconName = keyof typeof NAVIGATION_ICON_SOURCE_FILES;
 
 export const getNavigationIconSrc = (name: NavigationIconName) =>
-  `${NAVIGATION_ICON_ASSET_ROOT}/${name === "adviser" ? "adviser-mascot-v2" : name}.webp`;
+  `${NAVIGATION_ICON_ASSET_ROOT}/${name === "adviser" ? "adviser-velvet-v3" : name}.webp`;
 
 // These are visible in the primary desktop or mobile navigation on first paint.
 export const CRITICAL_NAVIGATION_ICON_NAMES: NavigationIconName[] = [

@@ -5,7 +5,7 @@ export const cloverPhoneScreens: Record<string, string> = {
   transactions: "/assets/marketing-screens/transactions-20260921.webp",
   recurring: "/assets/marketing-screens/recurring-20260921.webp",
   reports: "/assets/marketing-screens/reports-20260921.webp",
-  adviser: "/assets/marketing-screens/adviser-20260928.png",
+  adviser: "/assets/marketing-screens/adviser-20261007.png",
   investments: "/assets/marketing-screens/investments-20260921.webp",
   budget: "/assets/marketing-screens/budget-20260921.webp",
   goal: "/assets/marketing-screens/goal-20260921.webp",
@@ -32,7 +32,7 @@ export const connectPlatformDesigns: Record<
   },
   "landing-desktop-4": {
     background: "/assets/connect-platform/landing-desktop-4.webp",
-    screen: "/assets/marketing-screens/adviser-20260928.png",
+    screen: "/assets/marketing-screens/adviser-20261007.png",
   },
   "landing-desktop-5": {
     background: "/assets/connect-platform/landing-desktop-5.webp",
@@ -118,14 +118,14 @@ export const connectPlatformDesigns: Record<
   },
   "understand-your-money-desktop-2": {
     background: "/assets/connect-platform/understand-your-money-desktop-2.webp",
-    screen: "/assets/marketing-screens/adviser-20260928.png",
+    screen: "/assets/marketing-screens/adviser-20261007.png",
   },
   "understand-your-money-mobile-2": {
     background: "/assets/connect-platform/understand-your-money-mobile-2.webp",
   },
   "understand-your-money-desktop-3": {
     background: "/assets/connect-platform/understand-your-money-desktop-3.webp",
-    screen: "/assets/marketing-screens/adviser-20260928.png",
+    screen: "/assets/marketing-screens/adviser-20261007.png",
   },
   "understand-your-money-mobile-3": {
     background: "/assets/connect-platform/understand-your-money-mobile-3.webp",
@@ -244,7 +244,7 @@ export const connectPlatformDesigns: Record<
   },
   "pro-desktop-1": {
     background: "/assets/connect-platform/pro-desktop-1.webp",
-    screen: "/assets/marketing-screens/adviser-20260928.png",
+    screen: "/assets/marketing-screens/adviser-20261007.png",
   },
   "pro-mobile-1": {
     background: "/assets/connect-platform/pro-mobile-1.webp",

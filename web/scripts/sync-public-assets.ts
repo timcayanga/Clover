@@ -18,7 +18,7 @@ const errorDestinationPath = fileURLToPath(new URL("../public/assets/error-clove
 
 const buildNavigationIcon = async (name: NavigationIconName, sourceFile: string) => {
   const sourcePath = `${navigationSourceRoot}${sourceFile}`;
-  const destinationPath = `${navigationDestinationRoot}${name === "adviser" ? "adviser-mascot-v2" : name}.webp`;
+  const destinationPath = `${navigationDestinationRoot}${name === "adviser" ? "adviser-velvet-v3" : name}.webp`;
 
   await stat(sourcePath);
   await sharp(sourcePath)
@@ -37,6 +37,13 @@ const main = async () => {
   await rm(destinationRoot, { recursive: true, force: true });
   await mkdir(destinationRoot, { recursive: true });
   await cp(sourceRoot, destinationRoot, { recursive: true, force: true });
+  // Preserve approved originals; serve appropriately sized transparent web artwork.
+  for (const pose of ["compact", "welcome", "statement", "thinking", "wave", "savings"]) {
+    await sharp(`${sourceRoot}mascots/velvet-${pose}.png`)
+      .resize({ width: 512, height: 512, fit: "inside", withoutEnlargement: true })
+      .webp({ quality: 90, alphaQuality: 100, effort: 5 })
+      .toFile(`${destinationRoot}mascots/velvet-${pose}.webp`);
+  }
   // Keep legacy generic URLs working after the source library moved folders.
   for (const file of ["bank.png", "cash.png", "credit card.png", "investment.png", "others.png", "wallet.png"]) {
     await cp(`${sourceRoot}banks/1 generic/${file}`, `${destinationRoot}banks/${file}`);

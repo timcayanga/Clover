@@ -210,35 +210,13 @@ export function BudgetingWorkspace({
           {!selectedBudget ? (
             <>
               {!budgets.length ? (
-                <section className="plan-presets"><CloverMascot />
-                  <h2>Start with a budget</h2>
-                  <p>Choose a starting point and set your own amount.</p>
-                  <div className="collection-card-grid">
-                    {["Food & Dining", "Transport", "Monthly savings"].map(
-                      (name) => (
-                        <button
-                          className="collection-create-card"
-                          key={name}
-                          onClick={() => {
-                            setPreset(name);
-                            selectEditor("new");
-                          }}
-                        >
-                          <CategoryBrandMark
-                            categoryName={
-                              name === "Monthly savings" ? "Income" : name
-                            }
-                            size={40}
-                          />
-                          <strong>{name}</strong>
-                          <span>Set up budget</span>
-                        </button>
-                      ),
-                    )}
-                  </div>
+                <section className="plan-presets mascot-empty-state"><CloverMascot pose="savings" />
+                  <h2>Start with a budget that fits your life</h2>
+                  <p>Set an amount and start planning your spending.</p>
+                  <div className="mascot-empty-state__actions"><button className="button button-primary" onClick={() => { setPreset(null); selectEditor("new"); }}>Create custom budget</button><a className="button button-secondary" href="/adviser?prompt=Help%20me%20plan%20a%20budget">Plan with Clover</a></div>
                 </section>
               ) : null}
-              <div className="collection-card-grid" aria-label="Budgets">
+              <div className="collection-card-grid" aria-label="Budgets" hidden={!budgets.length}>
                 {budgets.map((budget) => {
                   const appearance = getBudgetAppearance(budget);
                   return (

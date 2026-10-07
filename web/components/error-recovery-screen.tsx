@@ -29,7 +29,7 @@ export function ErrorRecoveryScreen({
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
           className="error-screen__art"
-          src="/assets/error-clover.webp"
+          src="/assets/mascots/velvet-thinking.webp"
           alt=""
           width={360}
           height={360}
