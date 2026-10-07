@@ -66758,7 +66758,7 @@ input.transaction-inline-edit[aria-invalid="true"] { box-shadow: inset 0 -1px va
 @media (max-width:700px) {
  .onboarding-card .onboarding-card__mark { width:128px; height:128px; }
  .onboarding-card__brand { min-height:128px; }
- .marketing-clover-companion { width:88px; height:88px; margin-bottom:16px; }
+ .marketing-clover-companion { width:88px; height:88px; margin:0 auto 16px; }
 }
 /* Keep the compact mascot at the shared header icon size; retain the touch target. */
 .content.content .adviser-header-link img,

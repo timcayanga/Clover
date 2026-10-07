@@ -765,7 +765,7 @@ const INVESTMENT_TABS: Array<{ key: InvestmentTab; label: string; icon: ReactNod
   },
 ];
 
-const investmentsEmptyStateIllustration = "/assets/mascots/velvet-statement.png";
+const investmentsEmptyStateIllustration = "/assets/mascots/velvet-statement.webp";
 
 const normalizeInvestmentTab = (value: string | null | undefined): InvestmentTab => {
   if (value === "holdings") {
