@@ -1,0 +1,9 @@
+Account,Flag,Date,Payee,Category Group/Category,Category Group,Category,Memo,Outflow,Inflow,Cleared,Currency
+YNAB Checking,,2026-09-01,Starting Balance,Inflow: Ready to Assign,,Inflow: Ready to Assign,Opening amount,0,1000,Cleared,USD
+YNAB Checking,Blue,2026-09-02,Neighbourhood Market,Living: Groceries,Living,Groceries,"Apples, bread",45.25,0,Cleared,USD
+YNAB Checking,,2026-09-03,Employer,Income: Salary,Income,Salary,September pay,0,2500,Reconciled,USD
+YNAB Checking,,2026-09-04,Transfer : YNAB Savings,,,,Savings transfer,200,0,Cleared,USD
+YNAB Savings,,2026-09-04,Transfer : YNAB Checking,,,,Savings transfer,0,200,Cleared,USD
+YNAB Checking,,2026-09-05,Neighbourhood Market,Living: Groceries,Living,Groceries,Returned groceries,0,5.25,Uncleared,USD
+YNAB Checking,,2026-09-06,Department Store,Living: Clothing,Living,Clothing,Split component clothing,30,0,Cleared,USD
+YNAB Checking,,2026-09-06,Department Store,Living: Groceries,Living,Groceries,Split component food,20,0,Cleared,USD

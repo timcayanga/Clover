@@ -52,11 +52,42 @@ async function main() {
   if (fixture.name === "realbyte.csv") assert.equal(saved.filter(r => r.isTransfer).length, 2);
   if (fixture.name === "money-lover.csv") { assert.equal(saved[0].currency, "IDR"); assert.equal(Number(saved[0].amount), 5000000); assert.equal(saved[0].account.name, "BCA"); }
  }
+ // Exercise the new profiles through the real worker, including post-save
+ // enrichment and duplicate checks, with all external calls forbidden.
+ for (const source of ["ynab-register", "monarch-transactions"]) {
+  const content = readFileSync(`scripts/fixtures/app-migrations/${source}-synthetic.csv`, "utf8");
+  const firstRun = await upload(content, `${source}.csv`);
+  await drain();
+  const saved = await prisma.transaction.findMany({where:{importFileId:firstRun.id}, include:{category:true,transactionTags:{include:{tag:true}}}});
+  assert.equal(saved.length,7,JSON.stringify(firstRun.result));
+  if(source==="ynab-register") {
+    assert.equal(saved.filter(r=>r.isTransfer).length,2);
+    const groceries=saved.find(r=>r.description==="Apples, bread")!;
+    assert.equal(groceries.category?.name,"Living / Groceries");
+    assert.deepEqual(groceries.transactionTags.map(t=>t.tag.name),["YNAB: Blue"]);
+    assert(!saved.some(r=>r.merchantRaw==="Starting Balance"));
+  } else {
+    assert.equal(saved.filter(r=>r.isTransfer).length,3);
+    const store=saved.find(r=>r.merchantRaw==="POS CORNER SHOP 0042")!;
+    assert.equal(store.merchantClean,"Corner Shop"); assert.equal(store.description,"Lunch, snacks");
+    assert.equal(saved.find(r=>r.merchantRaw==="POS REFUND")?.type,"income");
+    assert.equal(saved.find(r=>r.merchantRaw==="POS HOTEL")?.isExcluded,true);
+  }
+  const protectedRow=await prisma.transaction.update({where:{id:saved[0].id},data:{reviewStatus:"confirmed",merchantClean:"My corrected name"}});
+  const repeated=await upload(content,`${source}-repeated.csv`);
+  await drain();
+  assert.equal(await prisma.transaction.count({where:{importFileId:repeated.id}}),0,JSON.stringify(repeated.result));
+  assert.deepEqual(await prisma.transaction.findUnique({where:{id:protectedRow.id}}),protectedRow);
+ }
+ const countBeforeInvalid=await prisma.transaction.count({where:{workspaceId:w.id}});
+ const invalid=readFileSync("scripts/fixtures/app-migrations/ynab-register-synthetic.csv","utf8").replace("45.25,0,Cleared", "45.25,8,Cleared");
+ const invalidRun=await upload(invalid,"invalid-ynab.csv").catch(error=>({error:String(error)}));
+ assert.equal(await prisma.transaction.count({where:{workspaceId:w.id}}),countBeforeInvalid,JSON.stringify(invalidRun));
  const mixed = await upload("Migration Source,Date,Description,Amount,Currency,Account,Type,Category\nspreadsheet,2026-09-06,US dollars,100,USD,Travel,Income,Salary\nspreadsheet,2026-09-06,Philippine pesos,200,PHP,Travel,Income,Salary", "mixed.csv");
  const mixedRows = await prisma.transaction.findMany({ where: { importFileId: mixed.id }, include: { account: true } });
  assert.equal(mixedRows.length, 2); assert.notEqual(mixedRows[0].accountId, mixedRows[1].accountId);
  assert(mixedRows.every(r => r.currency === r.account.currency && r.account.name === "Travel"));
- const large = ["Migration Source,Date,Description,Amount,Currency,Account,Type,Category", ...Array.from({length:1000}, (_,i) => `spreadsheet,2026-09-01,Migration purchase ${i},12.50,PHP,QA Ledger,Expense,Source category`)].join("\n");
+ const large = ["Date,Merchant,Category,Account,Original Statement,Notes,Amount,Tags,Currency", ...Array.from({length:1000}, (_,i) => `2026-09-01,Migration purchase ${i},Source category,QA Ledger,POS ${i},Receipt,-12.50,qa,USD`)].join("\n");
  const largeRun = await upload(large, "large.csv");
  assert.equal(await prisma.transaction.count({where: {importFileId: largeRun.id}}), 1000);
  assert(largeRun.ms < 10000, `Local 1,000-row worker exceeded 10s: ${largeRun.ms}`);

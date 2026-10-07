@@ -1,0 +1,8 @@
+Date,Merchant,Category,Account,Original Statement,Notes,Amount,Tags,Currency,Hidden
+2026-09-01,Corner Shop,Groceries,Monarch Checking,POS CORNER SHOP 0042,"Lunch, snacks",-24.50,"household,food",USD,false
+2026-09-02,Employer,Paychecks,Monarch Checking,ACH PAYROLL,September pay,2000,work,USD,false
+2026-09-03,Savings,Transfer,Monarch Checking,ONLINE TRANSFER OUT,To savings,-100,,USD,false
+2026-09-03,Checking,Transfer,Monarch Savings,ONLINE TRANSFER IN,From checking,100,,USD,false
+2026-09-04,Card payment,Credit Card Payment,Monarch Checking,CARD PAYMENT 0001,Card payoff,-50,,USD,false
+2026-09-05,Corner Shop,Groceries,Monarch Checking,POS REFUND,Returned item,4.50,household,USD,false
+2026-09-06,Reimbursable,Travel,Monarch Checking,POS HOTEL,Company paid,-15,work,USD,true

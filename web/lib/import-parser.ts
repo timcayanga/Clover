@@ -1162,7 +1162,8 @@ export const parseStructuredTransactionCsv = (
   if (!table) return null;
   if (!skipMigrationAdapter) {
     const migrationRows = parseAppMigrationTable(table, context, (canonical) =>
-      parseStructuredTransactionCsv(canonical, "migration.csv", "text/csv", context, true) ?? []);
+      parseStructuredTransactionCsv(canonical, "migration.csv", "text/csv", context, true) ?? [],
+      (value, currency) => readStructuredMoney({ ...table, headers: ["Amount", "Currency"], canonicalHeaders: ["amount", "currency"] }, [value, currency], "amount"));
     if (migrationRows) return migrationRows;
   }
   const headerScore = scoreStructuredHeaderRow(table.headers);

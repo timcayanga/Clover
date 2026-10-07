@@ -68,11 +68,80 @@ const main = async () => {
  const calls:any[]=[];
  await persistMigrationTags({ tag: { createMany: async (x:any) => { calls.push(x); }, findMany: async (x:any) => { assert.equal(x.where.workspaceId,'test-profile'); return [{id:'tag-1',normalizedName:'travel'},{id:'tag-2',normalizedName:'work'}]; } }, transactionTag: { createMany: async(x:any) => { calls.push(x); } } } as any, 'test-profile', [{id:'new-transaction',rawPayload:wallet[0].rawPayload}]);
  assert.deepEqual(calls[1].data.map((x:any)=>x.transactionId), ['new-transaction','new-transaction']);
+ const ynabText = readFileSync("scripts/fixtures/app-migrations/ynab-register-synthetic.csv", "utf8");
+ const monarchText = readFileSync("scripts/fixtures/app-migrations/monarch-transactions-synthetic.csv", "utf8");
+ const ynab = parse(ynabText), monarch = parse(monarchText);
+ assert.equal(ynab.length, 7); assert.equal(monarch.length, 7);
+ assert(ynab.every(r => readAppMigration(r.rawPayload)?.source === "ynab"));
+ assert(monarch.every(r => readAppMigration(r.rawPayload)?.source === "monarch"));
+ assert.deepEqual(ynab.map(r => r.amount), ["45.25", "2500.00", "200.00", "200.00", "5.25", "30.00", "20.00"]);
+ assert.deepEqual(ynab.map(r => r.type), ["expense", "income", "transfer", "transfer", "income", "expense", "expense"]);
+ assert.equal(ynab[0].categoryName, "Living / Groceries"); assert.equal(ynab[0].description, "Apples, bread");
+ assert.deepEqual(readAppMigration(ynab[0].rawPayload)?.tags, ["YNAB: Blue"]);
+ assert.equal((ynab[0].rawPayload?.migrationSummary as any).skippedRows[0].reason, "starting balance (not income)");
+ assert.equal(monarch[0].merchantRaw, "POS CORNER SHOP 0042"); assert.equal(monarch[0].merchantClean, "Corner Shop");
+ assert.equal(monarch[0].description, "Lunch, snacks"); assert.equal(monarch[5].type, "income");
+ assert.equal(monarch.filter(r => r.type === "transfer").length, 3);
+ assert.equal(readAppMigration(monarch[6].rawPayload)?.excluded, true);
+ assert.deepEqual(readAppMigration(monarch[0].rawPayload)?.tags, ["household", "food"]);
+ const newEnriched = await enrichParsedRowsWithTraining({workspaceId:"offline-new-profiles", rows:[...ynab, ...monarch]});
+ assert.deepEqual(newEnriched.map(r=>[r.merchantRaw,r.merchantClean,r.categoryName,r.type,r.currency,r.amount]), [...ynab,...monarch].map(r=>[r.merchantRaw,r.merchantClean,r.categoryName,r.type,r.currency,r.amount]));
+ const yh = "Account,Flag,Date,Payee,Category Group,Category,Memo,Outflow,Inflow,Cleared,Currency";
+ const yrow = (date:string, out="25", incoming="0") => `YNAB,Blue,${date},Shop,Living,Food,Receipt,${out},${incoming},Cleared,USD`;
+ assert.throws(()=>parse(yh+"\n"+yrow("03/04/2026")), /ambiguous/);
+ assert.throws(()=>parse(yh+"\n"+yrow("2026-02-30")), /invalid/);
+ assert.throws(()=>parse(yh+"\n"+yrow("2026-09-01","25","10")), /not both/);
+ assert.throws(()=>parse(yh+"\n"+yrow("2026-09-01","-25")), /nonnegative/);
+ assert.throws(()=>parse(yh+"\n"+yrow("2026-09-01","fee 25")), /numeric amount/);
+ assert.throws(()=>parse(yh+"\n"+yrow("13/04/2026")+"\n"+yrow("04/13/2026")), /mixes/);
+ const dmy = parse(yh+"\n"+yrow("13/04/2026")+"\n"+yrow("03/04/2026"));
+ assert.equal(dmy[1].date, "2026-04-03");
+ const explicit = parse(yh+",Date Format\n"+yrow("03/04/2026")+",MDY");
+ assert.equal(explicit[0].date, "2026-03-04");
+ const euro = parse(yh.replaceAll(",","\t")+"\n"+yrow("2026-09-01").replaceAll(",","\t").replace("25\t0", "1.234,56\t0,00").replace("USD","EUR"));
+ assert.equal(euro[0].amount, "1234.56");
+ for (const bad of ["12,34,56", "10 20", "(25", "2-5", "25-", "=25", "0.001"]) {
+  assert.throws(()=>parse(yh+"\n"+yrow("2026-09-01",`"${bad}"`)), /amount|decimal|sign/, bad);
+ }
+ assert.throws(()=>parse(monarchText.replace("Date,Merchant", "Account,Date,Merchant").replace("2026-09-01,Corner", "Other,2026-09-01,Corner")), /Duplicate migration column/);
+ assert.equal(parse(monarchText.replace("Currency,Hidden", "Currency,Hidden,Type").replace("USD,false", "USD,false,Transfer"))[0].type,"transfer");
+ assert.throws(()=>parse(monarchText.replace("Currency,Hidden", "Currency,Hidden,Type").replace("USD,false", "USD,false,Income")), /conflicts/);
+ assert.throws(()=>parse(ynabText.replace("YNAB Checking,Blue", ",Blue")), /Account name/);
+ const quoted = parse(monarchText.replace("Lunch, snacks", "Lunch, snacks\nand dinner"));
+ assert.equal(quoted[0].description, "Lunch, snacks\nand dinner");
+ assert.equal(parse(yh+"\n"+yrow("2026-09-01",'"12,5"'))[0].amount,"12.50");
+ assert.equal(parse(yh+"\n"+yrow("2026-09-01",'"1.234,5"'))[0].amount,"1234.50");
+ assert.equal(parse(yh+"\n"+yrow("2026-09-01",'"1 234,50"'))[0].amount,"1234.50");
+ assert.equal(parse(yh+"\n"+yrow("2026-09-01",'"1,234.50"'))[0].amount,"1234.50");
+ const summary=monarch[0].rawPayload?.migrationSummary as any;
+ const checking=summary.totals.find((t:any)=>t.account==="Monarch Checking");
+ assert.deepEqual([checking.income,checking.expense,checking.transferIn,checking.transferOut,checking.excluded],[2004.5,24.5,0,150,15]);
+ const sourceBenchmarks:Record<string,number>={};
+ for(const source of ["ynab","monarch"]) {
+   const text=source==="ynab" ? yh+"\n"+Array.from({length:10000},(_,i)=>yrow("2026-09-01").replace("Shop",`Shop ${i}`)).join("\n")
+     : "Date,Merchant,Category,Account,Original Statement,Notes,Amount,Tags,Currency\n"+Array.from({length:10000},(_,i)=>`2026-09-01,Shop ${i},Food,Monarch,POS ${i},Receipt,-25,work,USD`).join("\n");
+   const start=performance.now();const ready=await enrichParsedRowsWithTraining({workspaceId:"offline-source-benchmark",rows:parse(text)});
+   sourceBenchmarks[source]=Math.round(performance.now()-start);
+   assert.equal(ready.length,10000);assert(ready.every(r=>r.amount==="25.00"&&r.type==="expense"&&r.currency==="USD"));
+   assert(sourceBenchmarks[source]<10000,`${source} exceeded 10s: ${sourceBenchmarks[source]}`);
+ }
+ console.log("New source benchmarks (10,000 rows each):",sourceBenchmarks);
+ const before = ynabText.split("\n").filter(line=>!line.includes("Starting Balance")).join("\n");
+ const occurrence = createMigrationOverlapMatcher(parse(before).map(r=>({...r,accountId:r.accountName})));
+ assert(parse(before).every(r=>occurrence({...r,accountId:r.accountName})));
+ for (const input of [ynabText, monarchText]) {
+   for (const format of ["xlsx", "xls", "ods"] as const) {
+     const book = XLSX.read(input, {type:"string", raw:true});
+     const decoded = await decodeSpreadsheetWorkbookBytes(XLSX.write(book,{type:"buffer",bookType:format}));
+     const actual = parseImportText(decoded, `migration.${format}`, "application/octet-stream", {currency:"USD"});
+     assert.deepEqual(actual.map(r=>[r.amount,r.currency,r.accountName,r.type,r.categoryName]), parse(input).map(r=>[r.amount,r.currency,r.accountName,r.type,r.categoryName]), format);
+   }
+ }
  const count=10000;
  const large=['Migration Source,Date,Description,Amount,Currency,Account,Type,Category', ...Array.from({length:count},(_,i)=>`spreadsheet,2026-09-01,Purchase ${i},125.50,PHP,Cash,Expense,My food`)].join('\n');
  const start=performance.now(); const rows=parse(large); const ready=await enrichParsedRowsWithTraining({workspaceId:'offline-performance',rows});const elapsed=performance.now()-start;
  assert.equal(ready.length,count);assert(ready.every(r=>r.amount==='125.50'&&r.categoryName==='My food'&&r.type==='expense'));
  assert(elapsed<10000, `10,000 deterministic migration rows exceeded 10s: ${elapsed}ms`);
- console.log(`PASS migrations: 5 adapters, official Bluecoins 9/9, fields/enrichment, workbook formats, invalid rows, duplicates, tags. 10,000 rows parsed+enriched in ${Math.round(elapsed)}ms.`);
+ console.log(`PASS migrations: 7 adapters, official Bluecoins 9/9, fields/enrichment, workbook formats, invalid rows, duplicates, tags. 10,000 rows parsed+enriched in ${Math.round(elapsed)}ms.`);
 };
 main().catch(e=>{console.error(e);process.exitCode=1;});
