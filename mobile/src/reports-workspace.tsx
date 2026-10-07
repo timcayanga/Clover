@@ -1,3 +1,4 @@
+import { ReportRecoveries } from "./report-recoveries";
 import { ReportCoverageDetails, ReportSpendingDetails } from "./report-details";
 import { exportReport } from "./report-export";
 import { reportTransactionParams } from "../../shared/reports/drilldown";
@@ -516,6 +517,7 @@ function ReportWorkspace() {
             workspace={data}
             view={view}
             setView={setView}
+            onChanged={reload}
           />
         ))
       )}
@@ -527,11 +529,13 @@ function NativeReportPanels({
   workspace: w,
   view,
   setView,
+  onChanged,
 }: {
   report: ReportCurrencyData;
   workspace: ReportsWorkspace;
   view: ReportView;
   setView: (f: (v: ReportView) => ReportView) => void;
+  onChanged?:()=>void|Promise<unknown>;
 }) {
   const { colors } = useTheme();
   const a = r.analysis,
@@ -789,6 +793,7 @@ function NativeReportPanels({
               <Body>No spending in this period.</Body>
             ) : null}
           </ReportCard>
+          {r.recoveries?<ReportRecoveries key={w.workspaceId+ r.currency} report={r.recoveries} currency={r.currency} workspaceId={w.workspaceId} onChanged={onChanged}/>:null}
           <ReportSpendingDetails report={r} workspace={w} view={view} />
         </>
       ) : null}

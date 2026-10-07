@@ -1,4 +1,9 @@
 "use client";
+import {
+  budgetHistoryExplanation,
+  budgetHistoryLabel,
+  importCoverageLines,
+} from "../../shared/reports/history-copy";
 import { useState } from "react";
 import Link from "next/link";
 import { formatCurrencyAmount } from "@/lib/currency-format";
@@ -9,8 +14,7 @@ import type {
   ReportsWorkspace,
   BudgetReportRow,
 } from "../../shared/reports/workspace";
-export const budgetReportExplanation =
-  "Targets use current active spend-limit settings, starting when each budget was created. Partial periods are prorated by calendar day. Budgets can overlap, so rows are not added together. Filters narrow spending without reducing targets. Historical budget edits are not recorded.";
+export const budgetReportExplanation = budgetHistoryExplanation;
 export function ReportCoverageDetails({
   report: r,
   href,
@@ -34,6 +38,21 @@ export function ReportCoverageDetails({
       {c.missingBalanceAccounts.length ? (
         <p>Missing balances: {c.missingBalanceAccounts.join(", ")}</p>
       ) : null}
+      <h3>Statement coverage</h3>
+      <p>
+        Account and currency filters apply. Transaction filters do not change
+        coverage.
+      </p>
+      {(r.importCoverage ?? []).map((a) => (
+        <details key={a.accountId}>
+          <summary>
+            {a.name} · {a.gaps.length ? "Periods to check" : "View coverage"}
+          </summary>
+          {importCoverageLines(a).map((line, i) => (
+            <p key={i}>{line}</p>
+          ))}
+        </details>
+      ))}
       {c.reviewCount ? (
         <Link href={href}>Open transactions needing review</Link>
       ) : null}
@@ -158,13 +177,10 @@ export function ReportSpendingDetails({
                 </thead>
                 <tbody>
                   {(r.budgets ?? []).slice(0, budgetLimit).map((b) => (
-                    <tr key={b.id + b.month}>
+                    <tr key={[b.id, b.month, b.from, b.revision].join(":")}>
                       <th>
                         {b.name}
-                        <small>
-                          {b.month}
-                          {b.partial ? " · Partial period" : ""}
-                        </small>
+                        <small>{budgetHistoryLabel(b)}</small>
                       </th>
                       <td>{money(b.target)}</td>
                       <td>
@@ -179,7 +195,7 @@ export function ReportSpendingDetails({
             </div>
             {!r.budgets?.length ? (
               <p>
-                No active spend-limit budgets match this period and currency.{" "}
+                No spend-limit budget history matches this period and currency.{" "}
                 <Link href="/budgeting">Open Budgeting</Link>
               </p>
             ) : null}

@@ -1,3 +1,8 @@
+import {
+  budgetHistoryExplanation,
+  budgetHistoryLabel,
+  importCoverageLines,
+} from "../../shared/reports/history-copy";
 import { useState } from "react";
 import { View } from "react-native";
 import { router } from "expo-router";
@@ -32,6 +37,14 @@ export function ReportCoverageDetails({
           {c.missingBalanceAccounts.length ? (
             <Body>Missing balances: {c.missingBalanceAccounts.join(", ")}</Body>
           ) : null}
+          <SectionTitle>Statement coverage</SectionTitle>
+          <Body>
+            Account and currency filters apply. Transaction filters do not
+            change coverage.
+          </Body>
+          {(r.importCoverage ?? []).map((a) => (
+            <CoverageAccount key={a.accountId} account={a} />
+          ))}
           {c.reviewCount ? (
             <PlanAction
               title="Open transactions needing review"
@@ -137,21 +150,14 @@ export function ReportSpendingDetails({
         <SectionTitle>Budget versus actual</SectionTitle>
         {w.paid ? (
           <>
-            <Body>
-              Targets use current active spend-limit settings, starting when
-              each budget was created. Partial periods are prorated by calendar
-              day. Budgets can overlap, so rows are not added together. Filters
-              narrow spending without reducing targets. Historical budget edits
-              are not recorded.
-            </Body>
+            <Body>{budgetHistoryExplanation}</Body>
             {(r.budgets ?? []).slice(0, budgetLimit).map((b) => (
               <View
-                key={b.id + b.month}
+                key={[b.id, b.month, b.from, b.revision].join(":")}
                 style={{ gap: 6, paddingVertical: 12 }}
               >
                 <Body>
-                  {b.name} · {b.month}
-                  {b.partial ? " · Partial period" : ""}
+                  {b.name} · {budgetHistoryLabel(b)}
                 </Body>
                 <Body>Target {format(b.target)}</Body>
                 <PlanAction
@@ -166,7 +172,8 @@ export function ReportSpendingDetails({
             {!r.budgets?.length ? (
               <>
                 <Body>
-                  No active spend-limit budgets match this period and currency.
+                  No spend-limit budget history matches this period and
+                  currency.
                 </Body>
                 <PlanAction
                   title="Open Budgeting"
@@ -195,5 +202,24 @@ export function ReportSpendingDetails({
         )}
       </Card>
     </>
+  );
+}
+
+function CoverageAccount({
+  account: a,
+}: {
+  account: import("../../shared/reports/workspace").AccountImportCoverage;
+}) {
+  const [open, setOpen] = useState(false);
+  return (
+    <View style={{ gap: 8 }}>
+      <PlanAction
+        title={`${a.name} · ${a.gaps.length ? "Periods to check" : "View coverage"}`}
+        onPress={() => setOpen(!open)}
+      />
+      {open
+        ? importCoverageLines(a).map((line, i) => <Body key={i}>{line}</Body>)
+        : null}
+    </View>
   );
 }

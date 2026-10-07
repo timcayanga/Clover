@@ -7,6 +7,7 @@ export function mobileOperation(method: string, segments: string[]) {
   if (segments.join("/") === "settings/preferences" && ["GET", "PATCH"].includes(method)) return "settings-preferences";
   const path = segments.join("/");
   if(path === "reports/workspace" && method === "GET") return "reports-workspace";
+  if(path === "reports/recoveries" && ["GET","POST"].includes(method)) return "reports-recoveries";
   if(path === "reports/saved" && ["GET","POST"].includes(method)) return "reports-saved";
   if (path === "finverse/connections" && ["GET", "POST"].includes(method)) return "finverse-connections";
   if (path === "finverse/institutions" && method === "GET") return "finverse-institutions";

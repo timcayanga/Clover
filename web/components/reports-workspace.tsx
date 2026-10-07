@@ -1,4 +1,5 @@
 "use client";
+import { ReportRecoveries } from "./report-recoveries";
 import { ReportCoverageDetails, ReportSpendingDetails } from "./report-details";
 import { exportReport } from "@/lib/report-export-client";
 import { reportTransactionParams } from "../../shared/reports/drilldown";
@@ -579,6 +580,7 @@ export function ReportsWorkspaceView({
               workspace={data}
               view={view}
               setView={setView}
+              onChanged={()=>apply(view)}
             />
           ))}
         </div>
@@ -591,11 +593,13 @@ export function ReportPanels({
   workspace: w,
   view,
   setView,
+  onChanged,
 }: {
   report: ReportCurrencyData;
   workspace: ReportsWorkspace;
   view: ReportView;
   setView: (f: (v: ReportView) => ReportView) => void;
+  onChanged?:()=>void|Promise<unknown>;
 }) {
   const a = r.analysis,
     c = r.currency,
@@ -822,6 +826,7 @@ export function ReportPanels({
               : null}
             {!a.categories.length ? <p>No spending in this period.</p> : null}
           </Panel>
+          {r.recoveries?<ReportRecoveries key={w.workspaceId+ r.currency} report={r.recoveries} currency={r.currency} workspaceId={w.workspaceId} onChanged={onChanged}/>:null}
           <ReportSpendingDetails report={r} workspace={w} view={view} />
         </>
       ) : null}

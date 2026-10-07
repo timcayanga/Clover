@@ -357,10 +357,10 @@ async function handle(
       return reply(result.body,result.status);
     }
 
-    if (operation === "reports-workspace" || operation === "reports-saved") {
+    if (operation === "reports-workspace" || operation === "reports-saved" || operation === "reports-recoveries") {
       const result=await withMobileRequestContext(userId,request,async()=>{
         if(operation === "reports-workspace") return (await import("@/app/api/reports/workspace/route")).GET(request);
-        const handler=await import("@/app/api/reports/saved/route");
+        const handler=operation === "reports-recoveries" ? await import("@/app/api/reports/recoveries/route") : await import("@/app/api/reports/saved/route");
         return request.method === "POST" ? handler.POST(request) : handler.GET(request);
       });
       return reply(await result.json(),result.status);

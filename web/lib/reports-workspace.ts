@@ -1,10 +1,11 @@
-import { hasTransactionUserEdits } from "./transaction-user-edits";
-import { transactionNeedsReview } from "./transaction-review-reasons";
+import { buildRecoveryReport } from "../../shared/reports/recoveries";
+import {
+  accountImportCoverage,
+  isStatementPeriodSource,
+} from "../../shared/reports/import-coverage";
+import { reportTransactionSelect, normalizeReportRows } from "./report-rows";
 import { prisma } from "./prisma";
 import { buildActiveWorkspaceTransactionWhere } from "./transaction-query";
-import { getEffectiveTransactionCategoryName } from "./transaction-display";
-import { resolveFinancialTransactionType } from "./transaction-directions";
-import { getTransactionSummaryTypeOverrides } from "./transaction-summary";
 import { normalizeRegionalPreferences } from "./regional-preferences";
 import {
   reportAccountBalance,
@@ -83,48 +84,37 @@ export async function loadReportsWorkspace(
               rawPayload: true,
             },
           },
-          statementCheckpoints: { orderBy: { createdAt: "desc" } },
+          statementCheckpoints: {
+            orderBy: { createdAt: "desc" },
+            include: {
+              importFile: {
+                select: {
+                  status: true,
+                  documentImport: { select: { documentFamily: true } },
+                },
+              },
+            },
+          },
+          finverseAccountLink: {
+            select: {
+              unlinkedAt: true,
+              connection: {
+                select: { lastSyncedAt: true, status: true, syncError: true },
+              },
+            },
+          },
+          lunchFlowAccountLink: {
+            select: {
+              connection: {
+                select: { lastSyncedAt: true, status: true, syncError: true },
+              },
+            },
+          },
         },
       }),
       prisma.transaction.findMany({
         where: buildActiveWorkspaceTransactionWhere(workspaceId),
-        select: {
-          id: true,
-          accountId: true,
-          date: true,
-          createdAt: true,
-          amount: true,
-          currency: true,
-          type: true,
-          isTransfer: true,
-          importFileId: true,
-          reviewStatus: true,
-          transactionTags: {
-            where: { tag: { workspaceId } },
-            select: { tagId: true },
-          },
-          normalizedPayload: true,
-          parserConfidence: true,
-          categoryConfidence: true,
-          accountMatchConfidence: true,
-          duplicateConfidence: true,
-          isExcluded: true,
-          categoryId: true,
-          merchantRaw: true,
-          merchantClean: true,
-          description: true,
-          rawPayload: true,
-          category: { select: { id: true, name: true } },
-          account: {
-            select: {
-              id: true,
-              name: true,
-              type: true,
-              institution: true,
-              currency: true,
-            },
-          },
-        },
+        select: reportTransactionSelect(workspaceId),
       }),
       prisma.category.findMany({
         where: { workspaceId },
@@ -139,10 +129,10 @@ export async function loadReportsWorkspace(
     today = reportDay(now, timeZone);
   const paid = hasFullFeatureAccess(access.planTier);
   // Keep the second read batch small enough for the shared database pool.
-  const [budgets, tags, profile] = await Promise.all([
+  const [budgets, tags, profile, revisions, recoveries] = await Promise.all([
     paid
       ? prisma.budget.findMany({
-          where: { workspaceId, isActive: true, kind: "spend_limit" },
+          where: { workspaceId },
           include: { category: { select: { name: true } } },
         })
       : [],
@@ -155,6 +145,22 @@ export async function loadReportsWorkspace(
       where: { id: workspaceId },
       select: { name: true },
     }),
+    paid
+      ? prisma.budgetRevision.findMany({
+          where: { workspaceId },
+          orderBy: [{ effectiveAt: "asc" }, { sequence: "asc" }],
+        })
+      : [],
+    prisma.reportRecovery.findMany({
+      where: { workspaceId },
+      select: {
+        id: true,
+        expenseId: true,
+        incomingId: true,
+        kind: true,
+        amount: true,
+      },
+    }),
   ]);
   const currencySelection = resolveReportCurrency(
     [
@@ -165,55 +171,7 @@ export async function loadReportsWorkspace(
     view.currency || undefined,
   );
   view = { ...view, currency: currencySelection.currentCurrency };
-  const resolvedCategories = new Map(
-    transactions.map((t) => [
-      t.id,
-      hasTransactionUserEdits(t)
-        ? (t.category?.name ?? "Other")
-        : (getEffectiveTransactionCategoryName({
-            categoryName: t.category?.name ?? null,
-            rawPayload: t.rawPayload as never,
-            merchantRaw: t.merchantRaw,
-            merchantClean: t.merchantClean,
-            description: t.description,
-            institution: t.account.institution,
-            source: t.importFileId ? "upload" : "manual",
-            type: t.type,
-          }) ?? "Uncategorized"),
-    ]),
-  );
-  const overrides = getTransactionSummaryTypeOverrides(
-    transactions.map((t) => ({
-      ...t,
-      accountType: t.account.type,
-      categoryName: resolvedCategories.get(t.id),
-    })),
-  );
-  const rows: ReportRow[] = transactions.map((t) => ({
-    id: t.id,
-    date: reportDay(t.date, timeZone),
-    amount: Math.abs(Number(t.amount)),
-    currency: t.currency,
-    type: hasTransactionUserEdits(t)
-      ? t.type
-      : (overrides.get(t.id) ??
-        resolveFinancialTransactionType({
-          ...t,
-          categoryName: resolvedCategories.get(t.id),
-          institution: t.account.institution,
-        })),
-    category: resolvedCategories.get(t.id)!,
-    categoryId: t.category?.id,
-    merchant: t.merchantClean || t.merchantRaw || "Other",
-    accountId: t.accountId,
-    account: t.account.name,
-    reviewStatus: t.reviewStatus,
-    needsReview: transactionNeedsReview({
-      ...t,
-      categoryName: resolvedCategories.get(t.id),
-    }),
-    tags: t.transactionTags.map((tag) => tag.tagId),
-  }));
+  const rows = normalizeReportRows(transactions, timeZone);
   const selected = selectedReportRows(rows, view);
   const earliest =
     selected
@@ -397,8 +355,55 @@ export async function loadReportsWorkspace(
             view,
             currency,
             timeZone,
+            revisions,
+            new Map(categories.map((c) => [c.id, c.name])),
           )
         : [],
+      recoveries: buildRecoveryReport(
+        rows,
+        selected,
+        recoveries.map((r) => ({ ...r, amount: Number(r.amount) })),
+        period,
+        currency,
+      ),
+      importCoverage: scopedAccounts.map((a) =>
+        accountImportCoverage(
+          {
+            id: a.id,
+            name: a.name,
+            type: a.type,
+            createdDay: reportDay(a.createdAt, timeZone),
+          },
+          a.statementCheckpoints.map((c) => ({
+            from: c.statementStartDate?.toISOString().slice(0, 10) ?? null,
+            to: c.statementEndDate?.toISOString().slice(0, 10) ?? null,
+            status: c.status,
+            done: c.importFile?.status === "done",
+            statement: isStatementPeriodSource(
+              c.importFile?.documentImport?.documentFamily,
+              c.sourceMetadata,
+            ),
+          })),
+          [a.finverseAccountLink, a.lunchFlowAccountLink].flatMap((l) =>
+            l &&
+            (!("unlinkedAt" in l) || !l.unlinkedAt) &&
+            !["disconnected", "unlinked", "revoked"].includes(
+              l.connection.status,
+            )
+              ? [
+                  {
+                    lastSyncedAt:
+                      l.connection.lastSyncedAt?.toISOString() ?? null,
+                    status: l.connection.status,
+                    error: !!l.connection.syncError,
+                  },
+                ]
+              : [],
+          ),
+          period,
+          now,
+        ),
+      ),
       merchantAnalysis: reportMerchants(
         selected.filter((t) => t.currency === currency),
         period,

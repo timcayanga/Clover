@@ -1,3 +1,5 @@
+import { buildRecoveryReport } from "./recoveries";
+import { accountImportCoverage } from "./import-coverage";
 import {
   analyzeReport,
   defaultReportView,
@@ -37,6 +39,19 @@ const view = {
   currency: "PHP",
 };
 const period = reportPeriod(view, "2026-10-07");
+rows.push({
+  id: "sample-refund",
+  date: "2026-09-06",
+  amount: 500,
+  type: "income",
+  currency: "PHP",
+  category: "Refund",
+  merchant: "Dining refund",
+  accountId: "sample-bank",
+  account: "Sample bank",
+  reviewStatus: "confirmed",
+  tags: ["household"],
+});
 const analysis = analyzeReport(rows, period);
 export const sampleReportsWorkspace: ReportsWorkspace = {
   workspaceId: "sample",
@@ -60,6 +75,49 @@ export const sampleReportsWorkspace: ReportsWorkspace = {
       analysis,
       merchantAnalysis: reportMerchants(rows, period),
       coverage: reportCoverage(rows, period, view, [], true),
+      recoveries: buildRecoveryReport(
+        rows,
+        rows,
+        [
+          {
+            id: "sample-link",
+            expenseId: "2026-092",
+            incomingId: "sample-refund",
+            kind: "refund",
+            amount: 500,
+          },
+        ],
+        period,
+        "PHP",
+      ),
+      importCoverage: [
+        accountImportCoverage(
+          {
+            id: "sample-bank",
+            name: "Sample bank",
+            type: "bank",
+            createdDay: "2026-07-01",
+          },
+          [
+            {
+              from: "2026-07-01",
+              to: "2026-08-31",
+              status: "reconciled",
+              done: true,
+              statement: true,
+            },
+          ],
+          [
+            {
+              lastSyncedAt: "2026-10-03T12:00:00Z",
+              status: "ready",
+              error: false,
+            },
+          ],
+          period,
+          new Date("2026-10-07T12:00:00Z"),
+        ),
+      ],
       budgets: ["2026-07", "2026-08", "2026-09"].map((month) => ({
         id: "food",
         name: "Dining",
@@ -76,6 +134,8 @@ export const sampleReportsWorkspace: ReportsWorkspace = {
         remaining: 500,
         over: 0,
         partial: false,
+        historyBasis: month === "2026-07" ? "estimate" : "recorded",
+        historyKnownFrom: "2026-08-01",
       })),
       balances: [
         { date: "2026-07-01", balance: 125000 },

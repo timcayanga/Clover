@@ -783,6 +783,8 @@ model SavedReport {
 }
 
 model Workspace {
+  budgetRevisions BudgetRevision[]
+  reportRecoveries ReportRecovery[]
   savedReports SavedReport[]
   adviserConversations AdviserConversation[]
   mobileOfflineMutations MobileOfflineMutation[]
@@ -974,6 +976,8 @@ model Tag {
 }
 
 model Transaction {
+  expenseRecoveries ReportRecovery[] @relation("RecoveryExpense")
+  incomingRecoveries ReportRecovery[] @relation("RecoveryIncoming")
   id                        String                     @id @default(cuid())
   workspaceId               String
   accountId                 String
@@ -2617,4 +2621,34 @@ model AccountErasureTask {
   updatedAt DateTime @updatedAt
   @@unique([clerkUserId, provider])
   @@index([environment, status, retryAt])
+}
+
+// Append-only settings history, retained after a budget is deleted. Profile deletion cascades.
+model BudgetRevision {
+  id String @id @default(cuid())
+  sequence Int @unique @default(autoincrement())
+  workspaceId String
+  budgetId String
+  effectiveAt DateTime @default(now())
+  source String
+  snapshot Json
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  @@index([workspaceId, budgetId, effectiveAt])
+}
+
+// Explicit reporting allocations; never rewrite either financial transaction.
+model ReportRecovery {
+  id String @id @default(cuid())
+  workspaceId String
+  expenseId String
+  incomingId String
+  kind String
+  amount Decimal @db.Decimal(18, 2)
+  createdAt DateTime @default(now())
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  expense Transaction @relation("RecoveryExpense", fields: [expenseId], references: [id], onDelete: Cascade)
+  incoming Transaction @relation("RecoveryIncoming", fields: [incomingId], references: [id], onDelete: Cascade)
+  @@unique([expenseId, incomingId])
+  @@index([workspaceId])
+  @@index([incomingId])
 }

@@ -22,13 +22,14 @@ const days = (from: string, to: string) =>
 const round = (n: number) => Math.round(n * 100) / 100;
 
 /** No grand total: category, account and global budgets can cover the same transaction. */
-export function buildReportBudgets(
+function buildBudgetSettings(
   budgets: (BudgetRecord & { createdAt: Date })[],
   rows: ReportRow[],
   period: ReportPeriod,
   view: ReportView,
   currency: string,
   timeZone: string,
+  categoryNames: ReadonlyMap<string, string> = new Map(),
 ): BudgetReportRow[] {
   const output: BudgetReportRow[] = [];
   for (const budget of budgets) {
@@ -47,7 +48,7 @@ export function buildReportBudgets(
     if (
       view.categories.length &&
       budget.scope === "category" &&
-      !view.categories.includes(budget.category?.name ?? "")
+      !view.categories.includes(categoryNames.get(budget.categoryId ?? "") ?? budget.category?.name ?? "")
     )
       continue;
     const created = reportDay(budget.createdAt, timeZone);
@@ -66,7 +67,10 @@ export function buildReportBudgets(
         isExcluded: false,
       }))
       .filter((t) => matchesBudgetScope(budget, t));
-    for (let month = period.from.slice(0, 7); month <= period.to.slice(0, 7);) {
+    for (
+      let month = period.from.slice(0, 7);
+      month <= period.to.slice(0, 7);
+    ) {
       const start = calendarDate(month + "-01"),
         nextMonth = new Date(start.getFullYear(), start.getMonth() + 1, 1);
       const from = [month + "-01", period.from, created].sort().at(-1)!;
@@ -122,5 +126,138 @@ export function buildReportBudgets(
   }
   return output.sort(
     (a, b) => a.month.localeCompare(b.month) || a.name.localeCompare(b.name),
+  );
+}
+
+export type ReportBudgetRevision = {
+  budgetId: string;
+  sequence: number;
+  effectiveAt: Date;
+  source: string;
+  snapshot: unknown;
+};
+type HistoricalBudget = BudgetRecord & { createdAt: Date };
+function readSnapshot(value: unknown): HistoricalBudget | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const s = value as Record<string, unknown>;
+  if (
+    typeof s.id !== "string" ||
+    typeof s.name !== "string" ||
+    typeof s.currency !== "string" ||
+    !["spend_limit", "savings_target"].includes(String(s.kind)) ||
+    !["global", "category", "account"].includes(String(s.scope)) ||
+    !["daily", "weekly", "biweekly", "monthly", "quarterly", "annual"].includes(
+      String(s.cadence),
+    ) ||
+    !Number.isFinite(Number(s.targetAmount)) ||
+    !Number.isFinite(Date.parse(String(s.createdAt)))
+  )
+    return null;
+  return {
+    id: s.id,
+    name: s.name,
+    kind: s.kind as BudgetRecord["kind"],
+    scope: s.scope as BudgetRecord["scope"],
+    cadence: s.cadence as BudgetRecord["cadence"],
+    targetAmount: Number(s.targetAmount),
+    currency: s.currency,
+    isActive: s.isActive === true,
+    accountId: typeof s.accountId === "string" ? s.accountId : null,
+    categoryId: typeof s.categoryId === "string" ? s.categoryId : null,
+    category:
+      typeof s.categoryName === "string" ? { name: s.categoryName } : null,
+    createdAt: new Date(String(s.createdAt)),
+  };
+}
+/** Last change on a Profile-local calendar day applies to that day. Earlier days never change. */
+export function buildReportBudgets(
+  budgets: HistoricalBudget[],
+  rows: ReportRow[],
+  period: ReportPeriod,
+  view: ReportView,
+  currency: string,
+  timeZone: string,
+  revisions: ReportBudgetRevision[] = [],
+  categoryNames: ReadonlyMap<string, string> = new Map(),
+): BudgetReportRow[] {
+  const groups = new Map<string, ReportBudgetRevision[]>();
+  for (const r of revisions)
+    groups.set(r.budgetId, [...(groups.get(r.budgetId) ?? []), r]);
+  const result: BudgetReportRow[] = [];
+  for (const id of new Set([...budgets.map((b) => b.id), ...groups.keys()])) {
+    const history = (groups.get(id) ?? []).sort(
+      (a, b) => +a.effectiveAt - +b.effectiveAt || a.sequence - b.sequence,
+    );
+    if (!history.length) {
+      const current = budgets.find((b) => b.id === id);
+      if (current)
+        result.push(
+          ...buildBudgetSettings(
+            [current],
+            rows,
+            period,
+            view,
+            currency,
+            timeZone,
+            categoryNames,
+          ).map((r) => ({ ...r, historyBasis: "estimate" as const })),
+        );
+      continue;
+    }
+    const first = readSnapshot(history[0].snapshot);
+    if (!first) continue;
+    const knownFrom = reportDay(history[0].effectiveAt, timeZone);
+    const starts = new Map<
+      string,
+      {
+        budget: HistoricalBudget;
+        basis: "recorded" | "estimate";
+        sequence: number;
+      }
+    >();
+    if (history[0].source === "baseline")
+      starts.set(reportDay(first.createdAt, timeZone), {
+        budget: first,
+        basis: "estimate",
+        sequence: 0,
+      });
+    for (const h of history) {
+      const budget = readSnapshot(h.snapshot);
+      if (budget)
+        starts.set(reportDay(h.effectiveAt, timeZone), {
+          budget,
+          basis: "recorded",
+          sequence: h.sequence,
+        });
+    }
+    const segments = [...starts].sort(([a], [b]) => a.localeCompare(b));
+    for (let i = 0; i < segments.length; i++) {
+      const [start, segment] = segments[i];
+      const from = [period.from, start].sort().at(-1)!;
+      const to = [
+        period.to,
+        segments[i + 1] ? shiftDay(segments[i + 1][0], -1) : period.to,
+      ].sort()[0];
+      if (from > to) continue;
+      result.push(
+        ...buildBudgetSettings(
+          [segment.budget],
+          rows,
+          { ...period, from, to },
+          view,
+          currency,
+          timeZone,
+          categoryNames,
+        ).map((r) => ({
+          ...r,
+          historyBasis: segment.basis,
+          historyKnownFrom: knownFrom,
+          revision: segment.sequence,
+        })),
+      );
+    }
+  }
+  return result.sort(
+    (a, b) => a.from.localeCompare(b.from) || a.name.localeCompare(b.name),
   );
 }

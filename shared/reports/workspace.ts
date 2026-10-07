@@ -7,6 +7,8 @@ export type SavedReport = {
 };
 export type ReportCurrencyData = {
   budgets?: BudgetReportRow[];
+  recoveries?: RecoveryReport;
+  importCoverage?: AccountImportCoverage[];
   coverage?: ReportCoverage;
   merchantAnalysis?: MerchantReportRow[];
   currency: string;
@@ -33,6 +35,9 @@ export type MerchantReportRow = {
   change: number;
 };
 export type BudgetReportRow = {
+  historyBasis?: "recorded" | "estimate";
+  historyKnownFrom?: string;
+  revision?: number;
   id: string;
   name: string;
   categoryId: string | null;
@@ -87,3 +92,47 @@ export function reportViewParams(view: ReportView) {
   }
   return p;
 }
+
+export type RecoveryLink = {
+  id: string;
+  expenseId: string;
+  incomingId: string;
+  kind: "refund" | "reimbursement";
+  amount: number;
+  expenseName: string;
+  incomingName: string;
+  expenseDate: string;
+  receivedDate: string;
+  issue?: string;
+};
+export type RecoveryReport = {
+  gross: number;
+  refunds: number;
+  reimbursements: number;
+  personalCost: number;
+  receivedForEarlierExpenses: number;
+  links: RecoveryLink[];
+  notes: string[];
+};
+export type AccountImportCoverage = {
+  accountId: string;
+  name: string;
+  from: string;
+  to: string;
+  statementPeriods: { from: string; to: string; status: string }[];
+  gaps: { from: string; to: string }[];
+  undatedStatements: number;
+  pendingStatements: number;
+  lastSyncedAt: string | null;
+  connectionState: "not_connected" | "current" | "stale" | "attention";
+  note: string;
+};
+export type RecoveryCandidate = {
+  id: string;
+  name: string;
+  date: string;
+  amount: number;
+  available: number;
+  account: string;
+  currency: string;
+};

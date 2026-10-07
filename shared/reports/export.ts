@@ -1,3 +1,4 @@
+import { budgetHistoryExplanation, importCoverageLines } from "./history-copy";
 import { savingsRate, type ReportView } from "./analysis";
 import type { ReportsWorkspace } from "./workspace";
 export type ExportCell = string | number;
@@ -41,6 +42,7 @@ export function buildReportExport(
     tables: [],
     notes: [],
   };
+  if (section === "advanced" && !w.paid) return result;
   for (const r of w.reports) {
     const a = r.analysis;
     const add = (title: string, headers: string[], rows: ExportCell[][]) =>
@@ -97,6 +99,45 @@ export function buildReportExport(
           m.count,
         ]),
       );
+      if (r.recoveries) {
+        const recovery = r.recoveries;
+        add(
+          "Personal cost",
+          ["Metric", "Amount"],
+          [
+            ["Gross spending", recovery.gross],
+            ["Linked refunds", recovery.refunds],
+            ["Linked reimbursements", recovery.reimbursements],
+            ["Personal cost", recovery.personalCost],
+            [
+              "Received for earlier expenses",
+              recovery.receivedForEarlierExpenses,
+            ],
+          ],
+        );
+        add(
+          "Linked payments",
+          [
+            "Expense",
+            "Expense date",
+            "Money received",
+            "Received date",
+            "Type",
+            "Amount",
+            "Note",
+          ],
+          recovery.links.map((l) => [
+            l.expenseName,
+            l.expenseDate,
+            l.incomingName,
+            l.receivedDate,
+            l.kind,
+            l.amount,
+            l.issue ?? "",
+          ]),
+        );
+        result.notes.push(...recovery.notes.map((n) => `${r.currency}: ${n}`));
+      }
       if (w.paid)
         add(
           "Budget versus actual",
@@ -109,6 +150,7 @@ export function buildReportExport(
             "Spent",
             "Remaining",
             "Over budget",
+            "History basis",
           ],
           (r.budgets ?? []).map((b) => [
             b.name,
@@ -119,6 +161,7 @@ export function buildReportExport(
             b.actual,
             b.remaining,
             b.over,
+            b.historyBasis === "recorded" ? "Recorded settings" : "Estimated",
           ]),
         );
     }
@@ -269,14 +312,21 @@ export function buildReportExport(
         ["Recorded entries"],
         [[a.transferActivity.count]],
       );
+    if (r.importCoverage?.length)
+      add(
+        "Statement coverage",
+        ["Account", "Details"],
+        r.importCoverage.map((c) => [
+          c.name,
+          importCoverageLines(c).join("; "),
+        ]),
+      );
     result.notes.push(
       ...(r.coverage?.notes ?? []).map((n) => `${r.currency}: ${n}`),
     );
   }
   if (section === "spending" && w.paid)
-    result.notes.push(
-      "Budget targets use current active spend-limit settings, from each budget's creation date. Partial periods are prorated by calendar day. Budgets may overlap and must not be added together. Filters narrow actual spending without reducing targets. Historical budget changes are not recorded.",
-    );
+    result.notes.push(budgetHistoryExplanation);
   return result;
 }
 // Keep untrusted names from becoming formulas when opened in spreadsheet applications.
