@@ -1,3 +1,4 @@
+import { forecastScenario } from "../../shared/reports/scenarios";
 import assert from "node:assert/strict";
 import { consolidatedAccountSummary } from "../../shared/account-summary";
 import { cashForecast } from "../../shared/reports/outlook";
@@ -190,7 +191,11 @@ result = run(
 assert.equal(result.forecast.movements[0].date, "2026-11-01");
 process.env.TZ = zone;
 result = run([{ ...base, accountId: "foreign-currency-account" }]);
-assert.equal(result.forecast.movements.length, 0, "a schedule assigned outside this currency cannot silently become an unassigned cash movement");
+assert.equal(
+  result.forecast.movements.length,
+  0,
+  "a schedule assigned outside this currency cannot silently become an unassigned cash movement",
+);
 const forecast = cashForecast("2026-01-01", 100, [
   { id: "x", title: "Bill", date: "2026-01-02", amount: 200, direction: "out" },
   {
@@ -361,4 +366,221 @@ assert.equal(
 );
 console.log(
   "Report outlook and consolidated currency summary regressions passed.",
+);
+
+// Batch 5: scenario arithmetic, immutability, boundaries and evidence-backed findings.
+
+const beforeScenario = JSON.stringify(forecast);
+let scenario = forecastScenario(forecast, [
+  {
+    id: "preview",
+    kind: "expense",
+    title: "Appliance",
+    date: "2026-01-01",
+    amount: 50,
+  },
+]);
+assert.equal(scenario.error, null);
+assert.equal(scenario.forecast.horizons[0].closing, -50);
+assert.equal(scenario.forecast.horizons[0].lowest?.balance, -150);
+scenario = forecastScenario(forecast, [
+  { id: "skip", kind: "replace", movementId: "x", amount: 0 },
+]);
+assert.equal(scenario.forecast.horizons[0].closing, 200);
+assert.equal(scenario.forecast.horizons[1].closing, -300);
+assert.equal(
+  JSON.stringify(forecast),
+  beforeScenario,
+  "Scenario must never mutate actual movements or the baseline",
+);
+for (const amount of [-1, NaN, Infinity, 1e13])
+  assert.ok(
+    forecastScenario(forecast, [
+      { id: "bad", kind: "income", title: "Extra", date: "2026-01-02", amount },
+    ]).error,
+  );
+for (const date of ["2025-12-31", "2026-02-30", "2026-04-01", ""])
+  assert.ok(
+    forecastScenario(forecast, [
+      { id: "bad", kind: "income", title: "Extra", date, amount: 1 },
+    ]).error,
+  );
+assert.ok(
+  forecastScenario(forecast, [
+    { id: "bad", kind: "replace", movementId: "not-found", amount: 1 },
+  ]).error,
+);
+assert.ok(
+  forecastScenario(forecast, [
+    { id: "one", kind: "replace", movementId: "x", amount: 1 },
+    { id: "two", kind: "replace", movementId: "x", amount: 2 },
+  ]).error,
+);
+assert.equal(
+  forecastScenario(cashForecast("2026-01-01", null, []), [
+    {
+      id: "test",
+      kind: "income",
+      title: "Income",
+      date: "2026-01-02",
+      amount: 500,
+    },
+  ]).forecast.horizons[0].closing,
+  null,
+  "Scenarios cannot invent missing opening balances",
+);
+assert.equal(
+  forecastScenario(forecast, [
+    {
+      id: "late",
+      kind: "income",
+      title: "Last day",
+      date: "2026-03-31",
+      amount: 50,
+    },
+  ]).forecast.horizons[1].closing,
+  -450,
+);
+assert.ok(
+  forecastScenario(
+    forecast,
+    Array.from({ length: 11 }, (_, i) => ({
+      id: String(i),
+      kind: "income" as const,
+      title: "Extra",
+      date: "2026-01-02",
+      amount: 1,
+    })),
+  ).error,
+);
+let flagged = run([base, { ...base, id: "rent-two", title: "  RENT  " }]);
+assert.equal(
+  flagged.recurringCosts.findings.filter((f) => f.kind === "possible_duplicate")
+    .length,
+  1,
+);
+assert.equal(
+  flagged.recurringCosts.outgoing30,
+  200,
+  "Suspected duplicates are not silently removed from totals",
+);
+for (const alternate of [
+  { accountId: "other" },
+  { amount: "101" },
+  { recurrence: "weekly" },
+  { title: "Rent other flat" },
+  { status: "inactive" },
+]) {
+  flagged = run([base, { ...base, id: "different", ...alternate }]);
+  assert.equal(
+    flagged.recurringCosts.findings.filter(
+      (f) => f.kind === "possible_duplicate",
+    ).length,
+    0,
+  );
+}
+flagged = run([{ ...base, completedPaymentDates: ["2026-01-31"] }]);
+assert.equal(
+  flagged.recurringCosts.findings.filter((f) => f.kind === "uncompleted")
+    .length,
+  0,
+);
+const evidenceRows = [
+  {
+    id: "prior",
+    date: "2026-01-01",
+    amount: 100,
+    type: "expense" as const,
+    currency: "PHP",
+    accountId: "bank",
+    account: "Bank",
+    category: "Housing",
+    merchant: "Rent",
+  },
+  {
+    id: "latest",
+    date: "2026-01-31",
+    amount: 120,
+    type: "expense" as const,
+    currency: "PHP",
+    accountId: "bank",
+    account: "Bank",
+    category: "Housing",
+    merchant: "Rent",
+  },
+];
+flagged = buildReportOutlook(
+  [{ ...base, evidenceTransactionIds: ["prior", "latest"] }],
+  [bank],
+  evidenceRows,
+  "2026-02-01",
+);
+assert.equal(
+  flagged.recurringCosts.findings.filter((f) => f.kind === "higher_payment")
+    .length,
+  1,
+);
+assert.deepEqual(
+  flagged.recurringCosts.findings
+    .find((f) => f.kind === "higher_payment")
+    ?.transactions.map((t) => t.id),
+  ["prior", "latest"],
+);
+flagged = buildReportOutlook(
+  [{ ...base, evidenceTransactionIds: ["prior", "latest"] }],
+  [bank],
+  evidenceRows.map((r) => ({ ...r, needsReview: true })),
+  "2026-02-01",
+);
+assert.equal(
+  flagged.recurringCosts.findings.filter((f) => f.kind === "higher_payment")
+    .length,
+  0,
+);
+flagged = buildReportOutlook(
+  [{ ...base, evidenceTransactionIds: ["prior", "latest"] }],
+  [bank],
+  evidenceRows,
+  "2026-06-01",
+);
+assert.equal(
+  flagged.recurringCosts.findings.filter((f) => f.kind === "higher_payment")
+    .length,
+  0,
+  "Old comparisons do not produce current findings",
+);
+console.log(
+  "Forecast scenarios and recurring evidence: boundaries, missing data, duplicate safeguards, exclusions and immutability passed.",
+);
+const findingsExport = buildReportExport(sampleReportsWorkspace, "trends");
+assert.ok(
+  findingsExport.tables.some((t) =>
+    t.title.includes("Recurring findings to check"),
+  ),
+  "Exports retain finding evidence",
+);
+const workload = Array.from({ length: 500 }, (_, i) => ({
+  ...base,
+  id: `schedule-${i}`,
+  title: `Schedule ${i}`,
+}));
+const started = performance.now();
+const manySchedules = buildReportOutlook(
+  workload,
+  [bank],
+  Array.from({ length: 20000 }, (_, i) => ({
+    ...evidenceRows[0],
+    id: `t-${i}`,
+  })),
+  "2026-02-01",
+);
+assert.equal(manySchedules.recurringCosts.rows.length, 500);
+assert.equal(
+  manySchedules.recurringCosts.findings.filter(
+    (f) => f.kind === "possible_duplicate",
+  ).length,
+  0,
+);
+console.log(
+  `Report outlook workload: 500 schedules and 20,000 transactions in ${Math.round(performance.now() - started)}ms.`,
 );

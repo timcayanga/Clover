@@ -1,3 +1,4 @@
+import { ReportJumpTarget } from "./report-navigation";
 import { useState } from "react";
 import { View, Pressable } from "react-native";
 import { useSession } from "./session";
@@ -33,7 +34,7 @@ export function ReportRecoveries({
   const e = useRecoveryEditor(useState, request, currency, onChanged),
     format = (n: number) => money(String(n), currency);
   return (
-    <Card>
+    <ReportJumpTarget title="Refunds and reimbursements"><Card>
       <SectionTitle>Refunds and reimbursements</SectionTitle>
       {[
         ["Gross spending", report.gross],
@@ -203,6 +204,6 @@ export function ReportRecoveries({
           onPress={() => setLimit((n) => n + 20)}
         />
       ) : null}
-    </Card>
+    </Card></ReportJumpTarget>
   );
 }

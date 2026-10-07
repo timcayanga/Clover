@@ -233,6 +233,7 @@ export function Screen({
   onDismiss,
   layout = "reading",
   keyboardInsets = true,
+  scrollController,
 }: {
   children: ReactNode;
   gap?: number;
@@ -240,6 +241,7 @@ export function Screen({
   scrollKey?: string;
   layout?: "reading" | "dashboard" | "form";
   keyboardInsets?: boolean;
+  scrollController?: {ref: import("react").RefObject<ScrollView|null>;offset:import("react").RefObject<number>};
   onDismiss?: () => void;
 }) {
   const { colors, styles, dark } = useTheme();
@@ -280,8 +282,8 @@ export function Screen({
       {sheet ? <View {...drag.panHandlers} accessible accessibilityRole="button" accessibilityLabel="Dismiss sheet" accessibilityHint="Swipe down to return to the previous page" accessibilityActions={[{name:"activate",label:"Dismiss"}]} onAccessibilityAction={() => onDismiss?.()} style={{ height: 28, alignItems: "center", justifyContent: "center" }}><View style={{ width: 36, height: 4, borderRadius: 4, backgroundColor: colors.line }}/></View> : null}
       {header}
     <FocusVisibility.Provider value={keyboardVisibility.focus}><ScrollView
-      ref={keyboardVisibility.scroll}
-      onScroll={event => { keyboardVisibility.offset.current = event.nativeEvent.contentOffset.y; }}
+      ref={node=>{keyboardVisibility.scroll.current=node;if(scrollController)scrollController.ref.current=node;}}
+      onScroll={event => { keyboardVisibility.offset.current = event.nativeEvent.contentOffset.y; if(scrollController)scrollController.offset.current=event.nativeEvent.contentOffset.y; }}
       scrollEventThrottle={16}
       onLayout={keyboardVisibility.ensureVisible}
       key={scrollKey}

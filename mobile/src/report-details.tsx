@@ -1,3 +1,4 @@
+import { ReportJumpTarget } from "./report-navigation";
 import {
   budgetHistoryExplanation,
   budgetHistoryLabel,
@@ -101,7 +102,7 @@ export function ReportSpendingDetails({
     );
   return (
     <>
-      <Card>
+      <ReportJumpTarget title="Merchant analysis"><Card>
         <SectionTitle>Merchant analysis</SectionTitle>
         <Body>
           All matching merchants, including those with spending only in the
@@ -145,8 +146,8 @@ export function ReportSpendingDetails({
             onPress={() => setLimit((n) => n + 20)}
           />
         ) : null}
-      </Card>
-      <Card>
+      </Card></ReportJumpTarget>
+      <ReportJumpTarget title="Budget versus actual"><Card>
         <SectionTitle>Budget versus actual</SectionTitle>
         {w.paid ? (
           <>
@@ -200,7 +201,7 @@ export function ReportSpendingDetails({
             />
           </>
         )}
-      </Card>
+      </Card></ReportJumpTarget>
     </>
   );
 }

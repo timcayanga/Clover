@@ -1,4 +1,5 @@
 "use client";
+import { ReportScenario } from "./report-scenario";
 import { useState } from "react";
 import Link from "next/link";
 import type { ReportCurrencyData } from "../../shared/reports/workspace";
@@ -57,6 +58,48 @@ export function ReportOutlook({
               are not included in upcoming totals.{" "}
               <Link href="/recurring">Review recurring payments</Link>
             </p>
+          ) : null}
+          {costs.findings?.length ? (
+            <details className="report-v2-findings">
+              <summary>
+                {costs.findings.length} recurring findings to check
+              </summary>
+              {costs.findings.map((f) => (
+                <article key={f.id} className="report-v2-outlook-row">
+                  <h3>{f.title}</h3>
+                  <p>{f.explanation}</p>
+                  {f.dates.length ? (
+                    <p>Due dates: {f.dates.join(", ")}</p>
+                  ) : null}
+                  {f.scheduleEvidence?.map((s, i) => (
+                    <p key={i}>
+                      {s.title} · {s.account} · {s.cadence} · {s.nextDate} ·{" "}
+                      {money(s.amount)}
+                    </p>
+                  ))}
+                  {f.transactions.map((t) => (
+                    <p key={t.id}>
+                      <Link
+                        href={`/transactions?detail=${encodeURIComponent(t.id)}`}
+                      >
+                        View payment · {t.date} · {money(t.amount)}
+                      </Link>
+                    </p>
+                  ))}
+                  <p>
+                    Schedules:{" "}
+                    {f.scheduleIds
+                      .map(
+                        (id) =>
+                          costs.rows.find((row) => row.id === id)?.title ??
+                          "Saved schedule",
+                      )
+                      .join(" · ")}
+                  </p>
+                  <Link href="/recurring">Manage saved schedules</Link>
+                </article>
+              ))}
+            </details>
           ) : null}
           {costs.rows.map((row) => (
             <article key={row.id} className="report-v2-outlook-row">
@@ -156,6 +199,12 @@ export function ReportOutlook({
               </ul>
             </details>
           ) : null}
+          <ReportScenario
+            key={JSON.stringify(forecast)}
+            base={forecast}
+            currency={r.currency}
+            days={days}
+          />
           <h3>Upcoming cash movements</h3>
           {forecast.movements
             .filter((m) => m.date <= horizon.end)

@@ -80,6 +80,33 @@ export function buildReportExport(
           row.latestPayment?.previous ?? "N/A",
         ]),
       );
+      if (costs.findings?.length)
+        add(
+          "Recurring findings to check",
+          [
+            "Finding",
+            "Explanation",
+            "Due dates",
+            "Linked transactions",
+            "Evidence confidence",
+            "Schedule evidence",
+          ],
+          costs.findings.map((f) => [
+            f.title,
+            f.explanation,
+            f.dates.join("; "),
+            f.transactions
+              .map((t) => `${t.date}: ${t.amount} (${t.id})`)
+              .join("; "),
+            `${f.confidence}%`,
+            f.scheduleEvidence
+              ?.map(
+                (s) =>
+                  `${s.title}; ${s.account}; ${s.cadence}; ${s.nextDate}; ${s.amount}`,
+              )
+              .join(" | ") ?? "",
+          ]),
+        );
       result.notes.push(
         `${costs.from} to ${costs.to}. ${outlookScopeNote}`,
         recurringNote,

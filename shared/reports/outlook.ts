@@ -30,6 +30,23 @@ export type RecurringCosts = {
   outgoingYear: number;
   monthlyEquivalent: number;
   overdueCount: number;
+  findings?: {
+    id: string;
+    kind: "higher_payment" | "uncompleted" | "possible_duplicate";
+    title: string;
+    explanation: string;
+    confidence: number;
+    scheduleIds: string[];
+    scheduleEvidence?: {
+      title: string;
+      account: string;
+      cadence: string;
+      nextDate: string | null;
+      amount: number | null;
+    }[];
+    transactions: { id: string; date: string; amount: number }[];
+    dates: string[];
+  }[];
   rows: {
     id: string;
     title: string;

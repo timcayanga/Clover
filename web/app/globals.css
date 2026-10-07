@@ -66735,3 +66735,14 @@ input.transaction-inline-edit[aria-invalid="true"] { box-shadow: inset 0 -1px va
 .report-recovery-summary > div{display:flex;justify-content:space-between;gap:1rem;flex-wrap:wrap;padding:.4rem 0}.report-recovery-summary dd{margin:0;font-weight:600}.report-recovery-editor{display:grid;gap:1rem}.report-recovery-editor label{display:grid;gap:.5rem}.report-recovery-editor fieldset{min-width:0;display:grid;gap:.75rem;border:1px solid var(--stroke);border-radius:16px;padding:16px}.report-recovery-choices{max-height:320px;overflow:auto;display:grid;gap:.75rem}.report-recovery-choices label{display:flex;align-items:flex-start;gap:.75rem}.report-recovery-choices input{width:auto;flex-shrink:0}.report-recovery-choices span{min-width:0;overflow-wrap:anywhere}.report-recovery-choices small{display:block}.report-recovery-actions{display:flex;gap:1rem;flex-wrap:wrap}.report-recovery-link{border-top:1px solid var(--stroke);padding:1rem 0;overflow-wrap:anywhere}
 
 .report-v2-outlook-row { border-top: 1px solid var(--line); padding-top: 12px; min-width: 0; overflow-wrap: anywhere; }
+
+.report-v2-scenario,.report-v2-findings{border-top:1px solid var(--stroke);padding-top:16px;min-width:0;overflow-wrap:anywhere}
+.report-v2-scenario summary,.report-v2-findings summary{cursor:pointer;min-height:44px;font-weight:600}
+.report-v2-scenario-fields{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,220px),1fr));gap:16px;margin:16px 0}
+.report-v2-scenario-fields label{display:flex;flex-direction:column;gap:8px;min-width:0}
+.report-v2-scenario-fields input,.report-v2-scenario-fields select{min-width:0;width:100%;min-height:48px;border:1px solid var(--stroke);border-radius:12px;padding:10px 12px;background:var(--surface,#fff);color:var(--ink);font:inherit}
+.report-v2-scenario li{margin:12px 0}
+
+.report-v2-search select{width:100%;min-height:48px;border:1px solid var(--stroke);border-radius:12px;padding:10px 12px;color:var(--ink);background:var(--surface,#fff);font:inherit}
+.report-v2-panel h2{scroll-margin-top:100px}
+.report-v2-panel h2:focus-visible{outline:2px solid var(--accent);outline-offset:4px}

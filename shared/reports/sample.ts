@@ -21,7 +21,7 @@ for (const month of ["2026-07", "2026-08", "2026-09"])
     rows.push({
       id: month + i,
       date: month + "-05",
-      amount,
+      amount: month === "2026-09" && i === 1 ? 16000 : amount,
       type,
       currency: "PHP",
       category,
@@ -109,6 +109,33 @@ export const sampleReportsWorkspace: ReportsWorkspace = {
         outgoingYear: 197000,
         monthlyEquivalent: 197000 / 12,
         overdueCount: 1,
+        findings: [
+          {
+            id: "higher:rent",
+            kind: "higher_payment",
+            title: "Rent: higher linked payment",
+            explanation:
+              "The latest linked payment is higher than the previous one. Check both transactions before changing the schedule.",
+            confidence: 100,
+            scheduleIds: ["rent"],
+            transactions: [
+              { id: "2026-081", date: "2026-08-05", amount: 15000 },
+              { id: "2026-091", date: "2026-09-05", amount: 16000 },
+            ],
+            dates: [],
+          },
+          {
+            id: "uncompleted:utilities",
+            kind: "uncompleted",
+            title: "Utilities: not marked complete",
+            explanation:
+              "One due date in the past 30 days has no completion recorded. This does not prove a payment was missed.",
+            confidence: 100,
+            scheduleIds: ["utilities"],
+            transactions: [],
+            dates: ["2026-10-01"],
+          },
+        ],
         rows: [
           {
             id: "rent",
@@ -121,9 +148,9 @@ export const sampleReportsWorkspace: ReportsWorkspace = {
             costYear: 180000,
             excludedReason: null,
             latestPayment: {
-              date: "2026-09-10",
-              amount: 15000,
-              previous: 14000,
+              date: "2026-09-05",
+              amount: 16000,
+              previous: 15000,
             },
           },
           {

@@ -1,9 +1,10 @@
+import { ReportNavigation, ReportDirectory, ReportJumpTarget, ReportCurrencyScope } from "./report-navigation";
 import { ReportOutlook } from "./report-outlook";
 import { ReportRecoveries } from "./report-recoveries";
 import { ReportCoverageDetails, ReportSpendingDetails } from "./report-details";
 import { exportReport } from "./report-export";
 import { reportTransactionParams } from "../../shared/reports/drilldown";
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useState, useRef, type ReactNode } from "react";
 import { Alert, Pressable, ScrollView, View } from "react-native";
 import { router } from "expo-router";
 import { useSession } from "./session";
@@ -57,10 +58,10 @@ function ReportCard({
   children: ReactNode;
 }) {
   return (
-    <Card>
+    <ReportJumpTarget title={title}><Card>
       <SectionTitle>{title}</SectionTitle>
       {children}
-    </Card>
+    </Card></ReportJumpTarget>
   );
 }
 export function NativeReportsWorkspace() {
@@ -68,6 +69,7 @@ export function NativeReportsWorkspace() {
   return <ReportWorkspace key={session.profileId} />;
 }
 function ReportWorkspace() {
+  const scrollRef = useRef<ScrollView>(null), scrollOffset = useRef(0);
   const session = useSession(),
     { colors } = useTheme();
   const [view, setView] = useState<ReportView>(defaultReportView),
@@ -248,7 +250,7 @@ function ReportWorkspace() {
     );
   };
   return (
-    <Screen layout="dashboard" gap={20}>
+    <ReportNavigation controller={{ref:scrollRef,offset:scrollOffset}}><Screen layout="dashboard" gap={20} scrollController={{ref:scrollRef,offset:scrollOffset}}>
       <PlanHeader
         title="Reports"
         trailing={
@@ -281,6 +283,7 @@ function ReportWorkspace() {
           setView((v) => ({ ...v, section: sections[names.indexOf(name)] }))
         }
       />
+      <ReportDirectory />
       {data ? (
         <>
           <Body>
@@ -512,17 +515,16 @@ function ReportWorkspace() {
         <Body>Loading reports…</Body>
       ) : (
         data.reports.map((r) => (
-          <NativeReportPanels
-            key={r.currency}
+          <ReportCurrencyScope key={r.currency} currency={r.currency}><NativeReportPanels
             report={r}
             workspace={data}
             view={view}
             setView={setView}
             onChanged={reload}
-          />
+          /></ReportCurrencyScope>
         ))
       )}
-    </Screen>
+    </Screen></ReportNavigation>
   );
 }
 function NativeReportPanels({
@@ -800,7 +802,7 @@ function NativeReportPanels({
       ) : null}
       {view.section === "trends" ? (
         <>
-          <ReportOutlook report={r} section="trends" />
+          <ReportOutlook key={JSON.stringify(view)} report={r} section="trends" />
           <ReportCard title="Spending Pace">
             <ReportLineChart
               currency={c}
@@ -1060,7 +1062,7 @@ function NativeReportPanels({
       {view.section === "advanced" ? (
         w.paid ? (
           <>
-            <ReportOutlook report={r} section="advanced" />
+            <ReportOutlook key={JSON.stringify(view)} report={r} section="advanced" />
             <ReportCard title="Cash Flow">
               <ReportsCashFlow report={r} />
             </ReportCard>

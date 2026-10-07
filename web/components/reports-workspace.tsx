@@ -1,4 +1,5 @@
 "use client";
+import { ReportDirectory } from "./report-directory";
 import { ReportOutlook } from "./report-outlook";
 import { ReportRecoveries } from "./report-recoveries";
 import { ReportCoverageDetails, ReportSpendingDetails } from "./report-details";
@@ -574,16 +575,18 @@ export function ReportsWorkspaceView({
         ) : null}
         {busy ? <p role="status">Updating reports…</p> : null}
         <div aria-busy={busy}>
-          {data.reports.map((report) => (
-            <ReportPanels
-              key={report.currency}
-              report={report}
-              workspace={data}
-              view={view}
-              setView={setView}
-              onChanged={()=>apply(view)}
-            />
-          ))}
+          <ReportDirectory scope={JSON.stringify(view)}>
+            {data.reports.map((report) => (
+              <ReportPanels
+                key={report.currency}
+                report={report}
+                workspace={data}
+                view={view}
+                setView={setView}
+                onChanged={() => apply(view)}
+              />
+            ))}
+          </ReportDirectory>
         </div>
       </div>
     </CloverShell>
@@ -600,7 +603,7 @@ export function ReportPanels({
   workspace: ReportsWorkspace;
   view: ReportView;
   setView: (f: (v: ReportView) => ReportView) => void;
-  onChanged?:()=>void|Promise<unknown>;
+  onChanged?: () => void | Promise<unknown>;
 }) {
   const a = r.analysis,
     c = r.currency,
@@ -657,7 +660,7 @@ export function ReportPanels({
     </div>
   );
   return (
-    <div className="report-v2-currency">
+    <div className="report-v2-currency" data-report-currency={c}>
       {w.view.currency === "ALL" ? <h2>{c}</h2> : null}
       <ReportCoverageDetails
         report={r}
@@ -827,13 +830,25 @@ export function ReportPanels({
               : null}
             {!a.categories.length ? <p>No spending in this period.</p> : null}
           </Panel>
-          {r.recoveries?<ReportRecoveries key={w.workspaceId+ r.currency} report={r.recoveries} currency={r.currency} workspaceId={w.workspaceId} onChanged={onChanged}/>:null}
+          {r.recoveries ? (
+            <ReportRecoveries
+              key={w.workspaceId + r.currency}
+              report={r.recoveries}
+              currency={r.currency}
+              workspaceId={w.workspaceId}
+              onChanged={onChanged}
+            />
+          ) : null}
           <ReportSpendingDetails report={r} workspace={w} view={view} />
         </>
       ) : null}
       {view.section === "trends" ? (
         <>
-          <ReportOutlook report={r} section="trends" />
+          <ReportOutlook
+            key={JSON.stringify(view)}
+            report={r}
+            section="trends"
+          />
           <Panel title="Spending Pace">
             <ReportsComparisonChart
               currency={c}
@@ -1130,7 +1145,11 @@ export function ReportPanels({
       {view.section === "advanced" ? (
         w.paid ? (
           <>
-            <ReportOutlook report={r} section="advanced" />
+            <ReportOutlook
+              key={JSON.stringify(view)}
+              report={r}
+              section="advanced"
+            />
             <Panel title="Cash Flow">
               <ReportsCashFlowMap
                 currency={c}
@@ -1188,8 +1207,8 @@ export function ReportPanels({
         ) : (
           <Panel title="Insights">
             <p>
-              Cash-flow forecasts, net-worth changes, Cash Flow, Main Drivers, Next Steps, and Goal Check are available
-              with Clover Plus and Pro.
+              Cash-flow forecasts, net-worth changes, Cash Flow, Main Drivers,
+              Next Steps, and Goal Check are available with Clover Plus and Pro.
             </p>
             <Link href="/pricing">Explore Plus</Link>
           </Panel>

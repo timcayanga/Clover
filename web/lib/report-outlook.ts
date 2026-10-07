@@ -80,6 +80,15 @@ export function buildReportOutlook(
         .get(o.commitment.id)
         ?.has(recurringCompletionDate(o.commitment, o.dateKey)),
   );
+  const rowsById = new Map(rows.map((row) => [row.id, row]));
+  const scheduleById = new Map(schedule.map((c) => [c.id, c]));
+  const overdueById = new Map<string, string[]>();
+  for (const o of pending)
+    if (o.dateKey < today)
+      overdueById.set(o.commitment.id, [
+        ...(overdueById.get(o.commitment.id) ?? []),
+        o.dateKey,
+      ]);
   const upcoming = pending.filter((o) => o.dateKey >= today);
   const byCommitment = new Map<string, typeof upcoming>();
   for (const occurrence of upcoming)
@@ -87,6 +96,7 @@ export function buildReportOutlook(
       ...(byCommitment.get(occurrence.commitment.id) ?? []),
       occurrence,
     ]);
+  const findings: NonNullable<RecurringCosts["findings"]> = [];
   const costRows: RecurringCosts["rows"] = schedule.map((c) => {
     const dates = (byCommitment.get(c.id) ?? []).sort((a, b) =>
       a.dateKey.localeCompare(b.dateKey),
@@ -112,10 +122,13 @@ export function buildReportOutlook(
     const ids = new Set(
       [c.transactionId, ...c.evidenceTransactionIds].filter(Boolean),
     );
-    const payments = rows
+    const payments = [...ids]
+      .flatMap((id) => {
+        const row = rowsById.get(id!);
+        return row ? [row] : [];
+      })
       .filter(
         (r) =>
-          ids.has(r.id) &&
           r.type === (c.kind === "receivable" ? "income" : "expense") &&
           !r.needsReview &&
           r.date <= today,
@@ -123,6 +136,43 @@ export function buildReportOutlook(
       .sort((a, b) => a.date.localeCompare(b.date) || a.id.localeCompare(b.id));
     const latest = payments.at(-1),
       previous = payments.filter((p) => p.date !== latest?.date).at(-1);
+    // Two explicit links establish an amount difference, not a contractual price rise.
+    if (
+      latest &&
+      previous &&
+      latest.date >= earliest &&
+      latest.amount > previous.amount &&
+      previous.amount > 0 &&
+      Number.isFinite(latest.amount)
+    ) {
+      findings.push({
+        id: `higher:${c.id}`,
+        kind: "higher_payment",
+        title: `${c.title}: higher linked payment`,
+        explanation:
+          "The latest linked payment is higher than the previous one. It may include extra usage or a partial-period adjustment; check both transactions before changing the schedule.",
+        confidence: 100,
+        scheduleIds: [c.id],
+        transactions: [previous, latest].map((p) => ({
+          id: p.id,
+          date: p.date,
+          amount: p.amount,
+        })),
+        dates: [],
+      });
+    }
+    const overdue = overdueById.get(c.id) ?? [];
+    if (overdue.length)
+      findings.push({
+        id: `uncompleted:${c.id}`,
+        kind: "uncompleted",
+        title: `${c.title}: not marked complete`,
+        explanation: `${overdue.length} due date${overdue.length === 1 ? "" : "s"} in the past 30 days have no completion recorded. This does not prove a payment was missed.`,
+        confidence: 100,
+        scheduleIds: [c.id],
+        transactions: [],
+        dates: overdue,
+      });
     return {
       id: c.id,
       title: c.title,
@@ -148,6 +198,64 @@ export function buildReportOutlook(
         : null,
     };
   });
+  const duplicates = new Map<string, typeof costRows>();
+  for (const row of costRows) {
+    const commitment = scheduleById.get(row.id)!;
+    // Be conservative: same assigned account, normalized title, cadence, next date and amount.
+    if (
+      row.direction !== "out" ||
+      row.excludedReason ||
+      !row.nextDate ||
+      !row.nextAmount ||
+      !commitment.accountId ||
+      commitment.recurrence === "once"
+    )
+      continue;
+    const title = row.title
+      .normalize("NFKC")
+      .trim()
+      .toLowerCase()
+      .replace(/\s+/g, " ");
+    if (!title) continue;
+    const key = JSON.stringify([
+      title,
+      commitment.accountId,
+      row.cadence,
+      row.nextDate,
+      row.nextAmount,
+    ]);
+    duplicates.set(key, [...(duplicates.get(key) ?? []), row]);
+  }
+  for (const group of duplicates.values())
+    if (group.length > 1)
+      findings.push({
+        id: `duplicate:${group
+          .map((r) => r.id)
+          .sort()
+          .join(":")}`,
+        kind: "possible_duplicate",
+        title: `${group[0].title}: possible duplicate schedules`,
+        explanation: `${group.length} schedules share the same name, account, cadence, next date and amount. They may be separate obligations. Review them; nothing has been removed or deducted from totals.`,
+        confidence: 70,
+        scheduleIds: group.map((r) => r.id),
+        transactions: [],
+        dates: [group[0].nextDate!],
+      });
+  for (const finding of findings)
+    if (finding.kind === "possible_duplicate")
+      finding.scheduleEvidence = finding.scheduleIds.map((id) => {
+        const c = scheduleById.get(id)!,
+          cost = costRows.find((row) => row.id === id)!;
+        return {
+          title: c.title,
+          account:
+            accounts.find((a) => a.id === c.accountId)?.name ??
+            "Selected account",
+          cadence: c.recurrence,
+          nextDate: cost.nextDate,
+          amount: cost.nextAmount,
+        };
+      });
   const out = costRows.filter((r) => r.direction === "out"),
     cashMovements: ScheduledMovement[] = [],
     omitted = new Set<string>();
@@ -156,7 +264,9 @@ export function buildReportOutlook(
     const c = occurrence.commitment,
       cost = costById.get(c.id)!;
     const account = accounts.find((a) => a.id === c.accountId);
-    const nonCash = !!c.accountId && (!account || !spendableAccountTypes.includes(account.type));
+    const nonCash =
+      !!c.accountId &&
+      (!account || !spendableAccountTypes.includes(account.type));
     if (cost.excludedReason || nonCash) {
       omitted.add(
         `${c.title}: ${cost.excludedReason ?? "not assigned to a bank, wallet or cash account"}`,
@@ -195,6 +305,7 @@ export function buildReportOutlook(
       monthlyEquivalent: out.reduce((s, r) => s + r.costYear, 0) / 12,
       overdueCount: pending.filter((o) => o.dateKey < today).length,
       rows: costRows,
+      findings,
     } satisfies RecurringCosts,
     forecast: cashForecast(today, opening, cashMovements, missing, [
       ...omitted,
