@@ -1,3 +1,4 @@
+import { readAppMigration } from "@/lib/app-migration-import";
 import { getRegionalMerchantCategoryHint } from "@/lib/korea-indonesia-corpus";
 import { getIndonesianMerchantCategoryHint, getIndonesianIncomeCategoryHint, needsIndonesianPaymentCategoryReview } from "@/lib/indonesian-merchant-context";
 import { Prisma } from "@prisma/client";
@@ -32,7 +33,7 @@ import { deriveTravelEpisodes, resolveTransactionContext } from "@/lib/context-c
 import { coerceTransactionTypeFromCategoryName, toInternalTransactionType } from "@/lib/transaction-directions";
 
 export const DATA_ENGINE_VERSION = "v2";
-export const IMPORT_FILE_EXTRACTION_CACHE_VERSION = "v33";
+export const IMPORT_FILE_EXTRACTION_CACHE_VERSION = "v34";
 export const resolveImportFileExtractionCacheVersion = (fileName?: string | null) => {
   const normalizedFileName = String(fileName ?? "");
   if (/^BE\d{8}\.pdf$/i.test(normalizedFileName.trim())) {
@@ -3533,6 +3534,7 @@ export const resolveParsedTransactionCategoryName = (params: {
   description?: string | null;
   rawPayload?: unknown;
 }) => {
+  if (readAppMigration(params.rawPayload) && params.categoryName?.trim()) return params.categoryName.trim();
   const categoryName =
     mapImportedCategoryToCloverCategory(params.categoryName, params.type ?? "expense") ||
     defaultCategoryForType(params.type ?? "expense");
@@ -3579,7 +3581,7 @@ export const buildParsedTransactionInsertData = async (params: {
       payload &&
       typeof payload === "object" &&
       !Array.isArray(payload) &&
-      typeof (payload as Record<string, unknown>).worksheetName === "string"
+      (typeof (payload as Record<string, unknown>).worksheetName === "string" || Boolean(readAppMigration(payload)))
     );
   });
   // Travel inference performs corpus matching per transaction. A workbook can
@@ -3608,8 +3610,8 @@ export const buildParsedTransactionInsertData = async (params: {
       row.rawPayload && typeof row.rawPayload === "object" && !Array.isArray(row.rawPayload)
         ? (row.rawPayload as Record<string, unknown>)
         : null;
-    const isStructuredWorkbookRow = typeof rowRawPayload?.worksheetName === "string";
-    const currency =
+    const isStructuredWorkbookRow = typeof rowRawPayload?.worksheetName === "string" || Boolean(readAppMigration(rowRawPayload));
+    const currency = readAppMigration(row.rawPayload) && row.currency ? row.currency :
       normalizeInstitutionCurrency(
         params.metadata.institution,
         row.currency ?? params.metadata.currency ?? "PHP",
@@ -5560,6 +5562,28 @@ export const enrichParsedRowsWithTraining = async (params: {
   statementConfidence?: number;
   trainingContext?: Awaited<ReturnType<typeof loadImportEnrichmentTrainingContext>>;
 }) => {
+  // Structured app exports already contain user-chosen labels. Preserve them
+  // without loading training data or rerunning per-row merchant inference.
+  const preserveMigration = (row: ParsedImportRow): EnrichedParsedImportRow => {
+    const migration = readAppMigration(row.rawPayload)!;
+    const reason = row.rawPayload?.reviewRequired ? String(row.rawPayload.reviewReason ?? "Check the source transaction.")
+      : !migration.categoryPath.length && row.type !== "transfer" ? "Choose a category for this imported transaction." : null;
+    return {
+      ...row,
+      parserVersion: DATA_ENGINE_VERSION,
+      categoryReason: "source-app-preserved",
+      reviewStatus: reason ? "pending_review" : "suggested",
+      confidence: reason ? 55 : 100,
+      parserConfidence: reason ? 55 : 100,
+      categoryConfidence: reason ? 55 : 100,
+      accountMatchConfidence: 0,
+      duplicateConfidence: 0,
+      transferConfidence: row.type === "transfer" ? 100 : 0,
+      rawPayload: { ...row.rawPayload, ...(reason ? { reviewRequired: true, reviewReason: reason, reviewReasons: [reason] } : {}) },
+      normalizedPayload: { merchantClean: row.merchantClean ?? row.merchantRaw ?? null, categoryName: row.categoryName ?? null, type: row.type ?? null, accountName: row.accountName ?? null, sourcePreserved: true },
+    };
+  };
+  if (params.rows.length && params.rows.every(row => readAppMigration(row.rawPayload))) return params.rows.map(preserveMigration);
   const { merchantRules, accountRules, trainingSignals, negativeSignals } =
     params.trainingContext ?? (await loadImportEnrichmentTrainingContext(params.workspaceId));
   const rawStatementConfidence =
@@ -5621,6 +5645,7 @@ export const enrichParsedRowsWithTraining = async (params: {
   };
 
   return params.rows.map((row) => {
+    if (readAppMigration(row.rawPayload)) return preserveMigration(row);
     const rowWithInstitution = row as ParsedImportRow & {
       institution?: string | null;
       normalizedPayload?: Prisma.JsonValue | null;

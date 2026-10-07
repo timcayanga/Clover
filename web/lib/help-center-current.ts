@@ -1,3 +1,4 @@
+import { appMigrationHelpArticles } from "@/lib/help-app-migrations";
 import { connectedBankQuestions } from "@/lib/help-connected-banks";
 import type { HelpArticle, HelpSection } from "@/lib/help-center";
 
@@ -216,6 +217,7 @@ export const currentProductHelpSections: HelpSection[] = [
       "You can review uncertain results instead of accepting them blindly.",
     ],
     articles: [
+      ...appMigrationHelpArticles,
       article(
         "import-spreadsheets-and-multi-account-files",
         "Import spreadsheets and multi-account files",

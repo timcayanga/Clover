@@ -48,6 +48,8 @@ Clover is a personal finance app focused on statement import, transaction parsin
 41. `docs/korean-import-parser-rules.md` when working on Korean text, receipts, spreadsheets, or KRW amounts
 42. `docs/indonesian-import-parser-rules.md` when working on Indonesian text, receipts, spreadsheets, or IDR amounts
 
+43. `docs/app-migration-parser-rules.md` when working on source-app exports or migration templates
+
 If `docs/product-spec.md` is added later, it should become the primary product spec and supersede `docs/user-management-spec.md` for implementation guidance.
 
 ## Core Rules

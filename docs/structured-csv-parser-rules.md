@@ -141,3 +141,7 @@ Account Name through normalization; do not replace it with a guessed institution
 ## Indonesian documents
 
 Follow [Indonesian import rules](indonesian-import-parser-rules.md) for Bahasa Indonesia headers, Rupiah separators, statement columns, receipt reconciliation and investment valuations. Preserve source evidence and route unsupported layouts to backup/review.
+
+## Source-app transaction migrations
+
+Recognized app exports use the source-preserving adapter before generic column inference. See [app-migration-parser-rules.md](app-migration-parser-rules.md) for profiles, transfer semantics, reconciliation evidence and tests. Do not send these rows back through category/type inference or overwrite confirmed records on reimport.

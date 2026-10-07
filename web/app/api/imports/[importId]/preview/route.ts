@@ -1,3 +1,4 @@
+import { summarizeAppMigration } from "@/lib/app-migration-import";
 import { isLocalDevHost, requireAuth } from "@/lib/auth";
 import { assertWorkspaceAccess } from "@/lib/workspace-access";
 import { fetchImportFileCompat, fetchParsedTransactionRows, hasCompatibleTable } from "@/lib/data-engine";
@@ -31,6 +32,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ imp
     return NextResponse.json({
       importFile,
       parsedRows,
+      migrationSummary: summarizeAppMigration(parsedRows),
       statementCheckpoint,
     });
   } catch {
