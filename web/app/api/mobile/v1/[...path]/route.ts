@@ -249,6 +249,11 @@ async function handle(
       });
       return reply(await result.json(),result.status);
     }
+    // Exchange rates are authenticated global reference data, not Profile records.
+    if (operation === "fx-rate") {
+      const response = await (await import("@/app/api/fx-rate/route")).GET(request);
+      return reply(await response.json(), response.status);
+    }
     const url = new URL(request.url);
     const workspaceId = url.searchParams.get("workspaceId");
     if (!workspaceId) return reply({ error: "Choose a Profile first." }, 400);
@@ -364,10 +369,6 @@ async function handle(
         return request.method === "POST" ? handler.POST(request) : handler.GET(request);
       });
       return reply(await result.json(),result.status);
-    }
-    if (operation === "fx-rate") {
-      const response = await (await import("@/app/api/fx-rate/route")).GET(request);
-      return reply(await response.json(), response.status);
     }
     if (operation === "reports") {
       const requested = url.searchParams.get("currency") ?? undefined;
