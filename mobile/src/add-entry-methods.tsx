@@ -20,10 +20,12 @@ export function AddEntryMethods({
   onUpload,
   connect,
   initialMethod = "manual",
+  onboarding = false,
 }: {
   children: ReactNode;
   connect?: ReactNode;
   initialMethod?: "manual" | "connect";
+  onboarding?: boolean;
   kind: "account" | "investment" | "recurring" | "split" | "trade";
   disabled?: boolean;
   enabled?: boolean;
@@ -39,7 +41,7 @@ export function AddEntryMethods({
   if (!enabled) return <>{children}</>;
   return (
     <View style={{ gap: 16 }}>
-      <EntrySelector value={tab} items={connect ? ["manual", "ask", "upload", "connect"] : ["manual", "ask", "upload"]} disabled={disabled} onChange={method => { setTab(method); if (method === "ask") setVisited(true); }}/>
+      <EntrySelector value={tab} items={connect ? onboarding ? ["connect", "upload", "manual"] : ["manual", "ask", "upload", "connect"] : ["manual", "ask", "upload"]} disabled={disabled} onChange={method => { setTab(method); if (method === "ask") setVisited(true); }}/>
       <EntryTransition value={tab}>
       <View style={{ display: tab === "manual" ? "flex" : "none", gap: 16 }}>
         {children}

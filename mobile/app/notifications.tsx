@@ -1,3 +1,4 @@
+import { OnboardingMissions } from "../src/onboarding-missions";
 import { Text } from "../src/app-text";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { notificationDestination } from "../src/notification-destination";
@@ -110,6 +111,7 @@ export default function Notifications() {
           />
         ))}
       </View>
+      <OnboardingMissions key={session.profileId} />
       {loading ? <Body>Loading notifications…</Body> : null}
       {error ? (
         <>

@@ -65,9 +65,11 @@ export function AddEntryMethods({
   formContext,
   onReviewForm,
   initialMethod = "manual",
+  onboarding = false,
   onAccountsSynced,
 }: {
   initialMethod?: "manual" | "connect";
+  onboarding?: boolean;
   onAccountsSynced?: () => Promise<void> | void;
   kind: keyof typeof guidance;
   workspaceId?: string;
@@ -107,7 +109,7 @@ export function AddEntryMethods({
   }, []);
   if (!enabled) return <>{children}</>;
   const info = guidance[kind];
-  const methods = kind === "accounts" ? ["manual", "ask", "upload", "connect"] : ["manual", "ask", "upload"];
+  const methods = kind === "accounts" ? onboarding ? ["connect", "upload", "manual"] : ["manual", "ask", "upload", "connect"] : ["manual", "ask", "upload"];
   return (
     <div className="add-entry-methods">
       <div

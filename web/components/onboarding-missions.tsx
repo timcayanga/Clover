@@ -1,11 +1,12 @@
 "use client";
 
 import Link from "next/link";
+import { CloverMascot } from "@/components/clover-mascot";
 import { useEffect, useState } from "react";
 import { capturePostHogClientEvent } from "@/components/posthog-analytics";
 import type { OnboardingMissionSnapshot } from "@/lib/onboarding-missions";
 
-export function OnboardingMissions({ surface }: { surface: "home" | "notifications" }) {
+export function OnboardingMissions({ surface }: { surface: "notifications" | "popover" }) {
   const [snapshot, setSnapshot] = useState<OnboardingMissionSnapshot | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -43,36 +44,17 @@ export function OnboardingMissions({ surface }: { surface: "home" | "notificatio
   const next = snapshot.nextMission;
   const progress = Math.round((snapshot.completedCount / snapshot.totalCount) * 100);
 
-  if (surface === "home") {
-    return (
-      <article className="onboarding-missions onboarding-missions--home glass">
-        <div className="onboarding-missions__compact-copy">
-          <p className="eyebrow">Next step</p>
-          <strong>{next.title}</strong>
-          <span>{next.description}</span>
-        </div>
-        <div className="onboarding-missions__compact-actions">
-          <span>{snapshot.completedCount} of {snapshot.totalCount}</span>
-          <Link
-            className="button button-primary button-small"
-            href={next.href}
-            onClick={() => capturePostHogClientEvent("onboarding_mission_started", { mission_id: next.id, surface })}
-          >
-            {next.actionLabel}
-          </Link>
-        </div>
-      </article>
-    );
-  }
-
   return (
-    <section className="onboarding-missions onboarding-missions--notifications">
+    <section className="onboarding-missions onboarding-missions--notifications" aria-label="Getting started missions">
       <div className="onboarding-missions__head">
+        <CloverMascot pose={snapshot.completedCount === 0 ? "welcome" : snapshot.completedCount >= 4 ? "celebrating" : "thinking"} size={72} />
         <div>
-          <p className="eyebrow">Getting started</p>
-          <h3>See Clover turn records into useful guidance</h3>
-          <p>{snapshot.completedCount} of {snapshot.totalCount} complete</p>
+          <h3>Getting started</h3>
+          <p>A few simple steps to make Clover yours.</p>
         </div>
+      </div>
+      <div className="onboarding-missions__meta">
+        <span>{snapshot.completedCount} of {snapshot.totalCount} complete</span>
         <button type="button" className="onboarding-missions__dismiss" onClick={dismiss}>Dismiss</button>
       </div>
       <div
@@ -91,7 +73,7 @@ export function OnboardingMissions({ surface }: { surface: "home" | "notificatio
             <span className="onboarding-mission__status" aria-hidden="true">{mission.completed ? "✓" : ""}</span>
             <div>
               <strong>{mission.title}</strong>
-              <p>{mission.description}</p>
+
             </div>
             {!mission.completed && mission.id === next.id ? (
               <Link

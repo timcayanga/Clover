@@ -80,9 +80,10 @@ function AccountsContent() {
     void session.request<{pending:PendingBankConnection[]}>(`finverse/connections?view=picker&workspaceId=${encodeURIComponent(session.profileId)}`,{signal:controller.signal}).then(data=>{if(!controller.signal.aborted)setPendingBanks(data.pending);}).catch(()=>{});
     return()=>controller.abort();
   },[session.profileId,session.demo,adding]);
-  const { add, accountId, finverseConnection, finverseWorkspace } =
+  const { add, accountId, finverseConnection, finverseWorkspace, onboarding } =
     useLocalSearchParams<{
       add?: string;
+      onboarding?: string;
       finverseConnection?: string;
       finverseWorkspace?: string;
       accountId?: string;
@@ -232,11 +233,13 @@ function AccountsContent() {
         defaultCurrency={session.data?.defaultCurrency ?? "PHP"}
         callbackConnection={finverseConnection}
         connectInitially={add === "connect"}
+        onboarding={onboarding === "1"}
         initial={selected}
         onClose={() => {
           if (adding) setRevision(v => v + 1);
           router.setParams({
             add: undefined,
+            onboarding: undefined,
             finverseConnection: undefined,
             finverseWorkspace: undefined,
             finverse: undefined,
@@ -247,6 +250,7 @@ function AccountsContent() {
         onSaved={(record) => {
           router.setParams({
             add: undefined,
+            onboarding: undefined,
             finverseConnection: undefined,
             finverseWorkspace: undefined,
             finverse: undefined,

@@ -26,6 +26,7 @@ export function mobileOperation(method: string, segments: string[]) {
   if (path === "settings/profiles" && ["GET", "POST"].includes(method)) return "settings-profiles";
   if (segments.length === 3 && segments[0] === "settings" && segments[1] === "profiles" && ["PATCH", "DELETE"].includes(method)) return "settings-profile";
   if (path === "settings/categories" && ["GET", "POST", "PATCH", "DELETE"].includes(method)) return "settings-categories";
+  if (path === "missions" && ["GET", "POST"].includes(method)) return "missions";
   if (path === "onboarding" && method === "POST") return "onboarding";
   if (path === "settings/account" && ["GET", "PATCH"].includes(method)) return "settings-account";
   if (path === "settings/regional" && ["GET", "PATCH"].includes(method)) return "settings-regional";

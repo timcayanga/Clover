@@ -1,3 +1,4 @@
+import { EntrySelector } from "../src/entry-controls";
 import { CloverMascot } from "../src/clover-mascot";
 import { Text } from "../src/app-text";
 import { useEffect, useRef, useState } from "react";
@@ -18,6 +19,7 @@ export default function Onboarding() {
   const session = useSession();
   const { colors } = useTheme();
   const [step, setStep] = useState<"experience" | "upload">("experience");
+  const [accountMethod, setAccountMethod] = useState("connect");
   const saving = useRef(false);
   const enteredBeforeBootstrap = useRef(!session.data);
   const [experience, setExperience] = useState<
@@ -28,12 +30,14 @@ export default function Onboarding() {
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const [destination, setDestination] = useState<
-    "file" | "camera" | "library" | "skip" | null
+    "file" | "camera" | "library" | "skip" | "connect" | "manual" | null
   >(null);
   useEffect(() => {
     if (destination !== null && session.data && !session.data.needsOnboarding)
       router.replace(
-        destination !== "skip"
+        destination === "connect" || destination === "manual"
+          ? { pathname: "/(tabs)/accounts", params: { add: destination === "connect" ? "connect" : "1", onboarding: "1" } }
+          : destination !== "skip"
           ? {
               pathname: "/(tabs)/add",
               params: { entry: `upload-${destination}`, picker: destination },
@@ -47,7 +51,7 @@ export default function Onboarding() {
   const currencyName =
     session.data?.currencyChoices?.find((option) => option.code === currency)
       ?.name ?? "Philippine Peso";
-  const finish = async (upload: "file" | "camera" | "library" | "skip") => {
+  const finish = async (upload: "file" | "camera" | "library" | "skip" | "connect" | "manual") => {
     if (!experience || saving.current) return;
     if (!session.data) { setError(session.error || "Your account is connecting. Please try again in a moment."); return; }
     saving.current = true;
@@ -70,7 +74,7 @@ export default function Onboarding() {
   };
   return (
     <Screen>
-      <View style={{ alignItems: "center" }}><CloverMascot pose={step === "experience" ? "thinking" : "guiding"} size={128} /></View>
+      <View style={{ alignItems: "center" }}><CloverMascot pose={step === "experience" ? "thinking" : "welcome"} size={128} /></View>
       {step === "experience" ? (
         <>
           <Heading>How comfortable are you with financial management?</Heading>
@@ -168,12 +172,15 @@ export default function Onboarding() {
       ) : (
         <>
           <Card>
-            <Heading>Upload your first file</Heading>
-            <Body>
-              Add a statement, receipt, or financial screenshot. You can review
-              every detail.
-            </Body>
-            {(
+            <Heading>Add your accounts</Heading>
+            <Body>Connect, upload, or add manually.</Body>
+            <EntrySelector value={accountMethod} items={["connect", "upload", "manual"]} onChange={setAccountMethod} disabled={busy} />
+            {accountMethod !== "upload" ? <>
+              <Heading>{accountMethod === "connect" ? "Connect a supported bank" : "Add an account manually"}</Heading>
+              <Body>{accountMethod === "connect" ? "Choose your bank and securely link the accounts you want to see in Clover." : "Add a bank account, wallet, cash, or another account yourself."}</Body>
+              {accountMethod === "connect" ? <Body>Available with Plus and Pro</Body> : null}
+              <Button title={accountMethod === "connect" ? "Connect a bank" : "Add account"} disabled={busy} onPress={() => void finish(accountMethod === "connect" ? "connect" : "manual")} />
+            </> : (
               [
                 [
                   "file",

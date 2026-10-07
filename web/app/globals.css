@@ -66770,3 +66770,18 @@ input.transaction-inline-edit[aria-invalid="true"] { box-shadow: inset 0 -1px va
   flex: 0 0 32px !important;
   object-fit: contain;
 }
+
+/* Notification missions: compact titles, approved mascot, no review subtext. */
+.onboarding-missions__head { align-items:center; justify-content:flex-start; gap:12px; }
+.onboarding-missions__head .clover-mascot { flex:none; }
+.onboarding-missions__head h3 { font-size:15px; margin:0 0 4px; }
+.onboarding-missions__head p:not(.eyebrow) { font-size:13px; }
+.onboarding-missions__meta { display:flex; justify-content:space-between; align-items:center; gap:12px; color:var(--brand); font-size:12px; }
+.onboarding-mission { grid-template-columns:22px minmax(0,1fr); }
+.onboarding-mission > .button { grid-column:2; justify-self:start; }
+.onboarding-mission strong { font-size:15px; }
+.sidebar-popover--notifications { max-height:calc(100dvh - 100px); overflow-y:auto; }
+.sidebar-popover--notifications .onboarding-missions { margin:12px 0; box-shadow:none; }
+.onboarding-account-method { display:grid; gap:14px; text-align:left; }
+.onboarding-account-method h4 { margin:0; font-size:18px; }
+.onboarding-account-method .organize-upload-choices img { width:64px; height:64px; object-fit:contain; }

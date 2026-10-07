@@ -12,6 +12,7 @@ function harness(fail=false){
   if(name==='react/jsx-runtime')return {jsx:(type,props)=>({type,props}),jsxs:(type,props)=>({type,props}),Fragment:'Fragment'};
   if(name==='expo-router')return {router:{replace:v=>routes.push(v)}};
   if(name==='react-native')return {Image:'Image',Pressable:'Pressable',View:'View'};
+  if(name.endsWith('/entry-controls'))return {EntrySelector:'EntrySelector'};
   if(name.endsWith('/clover-mascot'))return {CloverMascot:'CloverMascot'};
   if(name.endsWith('/app-text'))return {Text:'Text'};
   if(name.endsWith('/session'))return {useSession:()=>session};
@@ -23,7 +24,7 @@ function harness(fail=false){
  return {render,requests,routes,session};
 }
 const tick=()=>new Promise(resolve=>setImmediate(resolve));
-for(const action of ['skip','file','camera','library']){
+for(const action of ['skip','connect','manual','file','camera','library']){
  const h=harness();let nodes=h.render();
  const mascots=nodes.filter(n=>n.type==='CloverMascot');
  assert.equal(mascots.length,1,'Use one mascot in the onboarding brand position');
@@ -33,17 +34,25 @@ for(const action of ['skip','file','camera','library']){
  assert.deepEqual(plants,['beginner.png','intermediate.png','advanced.png']);
  nodes.find(n=>n.props.accessibilityRole==='radio').props.onPress();nodes=h.render();
  nodes.find(n=>n.props.title==='Continue').props.onPress();nodes=h.render();
- assert.equal(nodes.find(n=>n.type==='CloverMascot').props.pose,'guiding');
- const title={skip:'Skip for now',file:'Choose Files',camera:'Take Photo',library:'Photo Library'}[action];
+ assert.equal(nodes.find(n=>n.type==='CloverMascot').props.pose,'welcome');
+ const selector=nodes.find(n=>n.type==='EntrySelector');
+ assert.equal(selector.props.value,'connect');
+ assert.deepEqual(Array.from(selector.props.items),['connect','upload','manual']);
+ assert.ok(!selector.props.items.some(item=>item==='Ask Clover'));
+ if(['file','camera','library'].includes(action))selector.props.onChange('upload');
+ if(action==='manual')selector.props.onChange('manual');
+ nodes=h.render();
+ const title={skip:'Skip for now',connect:'Connect a bank',manual:'Add account',file:'Choose Files',camera:'Take Photo',library:'Photo Library'}[action];
  const button=nodes.find(n=>n.props.title===title||n.props.accessibilityLabel===title);
  button.props.onPress();button.props.onPress();await tick();nodes=h.render();
  assert.equal(h.requests.length,1,'Double tap must not save twice');assert.deepEqual(Object.keys(h.requests[0].body).sort(),['currency','experience','locale','timeZone']);
  assert.equal(h.requests[0].body.experience,'beginner');
  assert.equal(h.routes.length,1);
  if(action==='skip')assert.equal(h.routes[0],'/(tabs)');
+ else if(['connect','manual'].includes(action)){assert.equal(h.routes[0].pathname,'/(tabs)/accounts');assert.equal(h.routes[0].params.onboarding,'1');assert.equal(h.routes[0].params.add,action==='connect'?'connect':'1');}
  else {assert.equal(h.routes[0].pathname,'/(tabs)/add');assert.equal(h.routes[0].params.picker,action);}
 }
 const h=harness(true);let n=h.render();n.find(x=>x.props.accessibilityRole==='radio').props.onPress();n=h.render();n.find(x=>x.props.title==='Continue').props.onPress();n=h.render();n.find(x=>x.props.title==='Skip for now').props.onPress();await tick();n=h.render();
 assert.equal(h.routes.length,0);assert.ok(n.some(x=>x.type==='Notice'&&x.props.children==='Setup unavailable'));
 assert.equal(n.find(x=>x.props.title==='Skip for now').props.disabled,false);
-console.log('PASS native onboarding: fixed artwork order, transparent mark, all four destinations, duplicate taps and retryable failure');
+console.log('PASS native onboarding: fixed artwork order, transparent mark, Connect-first selectors and all six destinations, duplicate taps and retryable failure');

@@ -49,7 +49,7 @@ import { installClientDiagnostics, recordClientDiagnostic } from "@/lib/client-d
 import { BugReportWidget } from "@/components/bug-report-widget";
 import { FEATURE_NAVIGATION } from "@/lib/feature-navigation";
 import { getNavigationIconSrc, type NavigationIconName } from "@/lib/navigation-icons";
-import { OnboardingMissionTracker } from "@/components/onboarding-mission-tracker";
+import { OnboardingMissions } from "@/components/onboarding-missions";
 import { RegionalPreferencesSync } from "@/components/regional-preferences-sync";
 import { AdviserHeaderLink } from "@/components/adviser-header-link";
 import {
@@ -1964,7 +1964,6 @@ export function CloverShell({
 
   return (
     <CloverChromeContext.Provider value={{ closeChrome, setMobileOverlayChrome }}>
-      <OnboardingMissionTracker />
       <RegionalPreferencesSync />
       <div className={`app-shell ${isSidebarOpen ? "is-sidebar-open" : ""}`} ref={shellRef}>
       <div
@@ -2271,7 +2270,8 @@ export function CloverShell({
           <div
             ref={notificationsPopoverRef}
             className="sidebar-popover sidebar-popover--notifications"
-            role="menu"
+            role="dialog"
+            aria-modal="false"
             aria-label="Notifications"
             style={{
               left: `${notificationsPopoverStyle.left}px`,
@@ -2289,6 +2289,7 @@ export function CloverShell({
                 Clear All
               </button>
             </div>
+            <OnboardingMissions key={searchWorkspaceId} surface="popover" />
             <div className="sidebar-popover__items">
               {notifications.length ? (
                 notifications.map((notification) => (

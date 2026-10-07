@@ -1475,7 +1475,7 @@ function AccountsPageContent() {
   const [planLimitNudge, setPlanLimitNudge] = useState<PlanLimitPayload | null>(null);
   const [addOpen, setAddOpen] = useState(false);
   useEffect(() => {
-    if (searchParams?.get("finverse")) {
+    if (searchParams?.get("finverse") || searchParams?.get("add") === "1") {
       const workspace = searchParams.get("finverseWorkspace");
       if (workspace) setSelectedWorkspaceId(workspace);
       setAddOpen(true);
@@ -5159,7 +5159,7 @@ function AccountsPageContent() {
               </button>
             </div>
 
-            <AddEntryMethods key={selectedWorkspaceId} kind="accounts" workspaceId={selectedWorkspaceId} accounts={accounts} onUploadFiles={(files) => openImportFiles(files)} initialMethod={searchParams?.get("finverse") ? "connect" : "manual"} onAccountsSynced={() => loadWorkspaceData(selectedWorkspaceId, { silent: true, awaitHydration: true })}>
+            <AddEntryMethods key={selectedWorkspaceId} kind="accounts" workspaceId={selectedWorkspaceId} accounts={accounts} onUploadFiles={(files) => openImportFiles(files)} onboarding={Boolean(searchParams?.get("onboarding"))} initialMethod={searchParams?.get("finverse") || searchParams?.get("onboarding") === "connect" ? "connect" : "manual"} onAccountsSynced={() => loadWorkspaceData(selectedWorkspaceId, { silent: true, awaitHydration: true })}>
             <div className="accounts-add-grid">
               <AccountCreationForm onSave={saveManualAccount}>
                 {(isSaving, createAnotherManualAccount) => (<>

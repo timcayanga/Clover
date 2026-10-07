@@ -99,6 +99,7 @@ export function AccountEditor({
   initial,
   callbackConnection,
   connectInitially = false,
+  onboarding = false,
   defaultType = "bank",
   defaultInstitution = "",
   defaultCurrency = "PHP",
@@ -108,6 +109,7 @@ export function AccountEditor({
   initial: AccountRecord | null;
   callbackConnection?: string;
   connectInitially?: boolean;
+  onboarding?: boolean;
   defaultType?: string;
   defaultInstitution?: string;
   defaultCurrency?: string;
@@ -312,6 +314,7 @@ export function AccountEditor({
       ) : editing ? (
         <AddEntryMethods
           connect={draft.type !== "investment" ? <FinverseConnect callbackConnection={callbackConnection} onSynced={() => {}} onDismiss={() => onSaved(null)} /> : undefined}
+          onboarding={onboarding}
           initialMethod={callbackConnection || connectInitially ? "connect" : "manual"}
           enabled={!record}
           key={record?.id || "new"}
