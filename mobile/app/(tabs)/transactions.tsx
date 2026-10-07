@@ -1,3 +1,4 @@
+import { reportTransactionFilters } from "../../src/report-drilldown";
 import { AdaptiveDetail, useDetailPane } from "../../src/adaptive-detail";
 import { useAdaptiveLayout } from "../../src/adaptive";
 import { registerScreenRefresh } from "../../src/screen-refresh";
@@ -39,7 +40,7 @@ export default function Transactions() {
   const { demo, rows: samples, profileId, request, cached } = useSession();
   const [summary, setSummary] = useState<TransactionPage["summary"]>();
   const [filters, setFilters] = useState(false);
-  const params = useLocalSearchParams<{ review?: string; query?: string }>();
+  const params = useLocalSearchParams<{ review?: string; query?: string; report?: string }>();
   const [filterValues, setFilterValues] = useState<TransactionFilters>(emptyTransactionFilters);
   const [filterOptions, setFilterOptions] = useState<FilterOptions>({accounts:[],categories:[],tags:[]});
   const [optionError, setOptionError] = useState("");
@@ -64,6 +65,11 @@ export default function Transactions() {
       setFilters(true);
     }
   }, [params.review]);
+  useEffect(() => {
+    if (!params.report) return;
+    const incoming = reportTransactionFilters(params.report);
+    if (incoming) { setFilterValues(incoming.filters); setQuery(""); setFilters(true); }
+  }, [params.report, profileId]);
   const [query, setQuery] = useState("");
   const [search, setSearch] = useState("");
   useEffect(() => { if (params.query !== undefined) setQuery(params.query); }, [params.query]);

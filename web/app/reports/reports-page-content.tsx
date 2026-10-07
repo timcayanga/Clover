@@ -1,3 +1,4 @@
+import ReportsWorkspacePage from "./reports-workspace-page";
 import { needsTransactionCategory } from "@/lib/transaction-category-status";
 import { finverseBalances } from "@/lib/finverse-balances";
 import { resolveReportCurrency } from "@/lib/report-currency";
@@ -2291,5 +2292,5 @@ async function ReportsPageStream({ searchParams }: { searchParams?: Promise<{ ra
 }
 
 export default function ReportsPage({ searchParams }: { searchParams?: Promise<{ range?: string; section?: string; filter?: string; from?: string; to?: string; currency?: string; accountId?: string; accounts?: string; categories?: string; review?: string; transfers?: string; compare?: string }> }) {
-  return <RouteSplash label="reports"><ReportsPageStream searchParams={searchParams} /></RouteSplash>;
+  return <RouteSplash label="reports"><ReportsWorkspacePage searchParams={searchParams} /></RouteSplash>;
 }

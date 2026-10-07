@@ -17,7 +17,7 @@ async function main() {
   assert.equal(parsedFilters.sourceFilter, "manual");
   assert.equal(parsedFilters.confidenceFilter, "high");
   const filteredWhere = JSON.stringify(buildTransactionQueryWhere("workspace", parsedFilters));
-  assert.match(filteredWhere, /"reviewStatus":"confirmed"/);
+  assert.match(filteredWhere, /"reviewStatus":\{"in":\["confirmed","edited"\]\}/);
   assert.match(filteredWhere, /"importFileId":null/);
   assert.match(filteredWhere, /"parserConfidence":\{"gte":85\}/);
   const toolbar = await readSource("components/transaction-selection-toolbar.tsx");

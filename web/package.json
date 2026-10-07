@@ -181,7 +181,7 @@
     "qa:smoke-defects": "tsx scripts/smoke-defects-regression.ts",
     "qa:offline": "tsx scripts/mobile-offline-regression.ts",
     "qa:migrations": "tsx scripts/migration-runner-regression.ts",
-    "qa:report-net-worth": "tsx scripts/report-net-worth-regression.ts && tsx scripts/report-filter-policy-regression.ts && tsx scripts/report-currency-regression.ts",
+    "qa:report-net-worth": "tsx scripts/report-net-worth-regression.ts && tsx scripts/report-filter-policy-regression.ts && tsx scripts/report-currency-regression.ts && tsx scripts/reports-workspace-regression.ts && tsx --require ./scripts/reports-api-fixture.cjs scripts/reports-api-regression.ts",
     "qa:shared-boundaries": "tsx scripts/shared-boundary-regression.ts",
     "qa:import-timing": "tsx scripts/import-timing-regression.ts",
     "qa:transaction-table": "tsx scripts/default-transaction-account-regression.ts && tsx scripts/transaction-table-regression.ts && tsx scripts/receipt-transaction-order-regression.ts",
@@ -226,7 +226,7 @@
     "pg": "^8.20.0",
     "react": "^19.1.1",
     "react-dom": "^19.1.1",
-    "sharp": "0.35.4",
+    "sharp": "0.35.5",
     "tesseract.js": "^7.0.0",
     "tsx": "^4.23.1",
     "xlsx": "https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz",
@@ -235,7 +235,7 @@
   "overrides": {
     "deepmerge-ts": "8.0.1",
     "postcss": "8.5.23",
-    "sharp": "0.35.4",
+    "sharp": "0.35.5",
     "nanoid": "3.3.18",
     "mysql2": "3.24.3"
   },

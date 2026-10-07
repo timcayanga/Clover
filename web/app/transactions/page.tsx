@@ -1285,7 +1285,7 @@ const matchesTransactionFilters = (
       .filter(Boolean)
   );
 
-  if (filters.reviewFilter === "confirmed" && transaction.reviewStatus !== "confirmed") return false;
+  if (filters.reviewFilter === "confirmed" && !["confirmed", "edited"].includes(transaction.reviewStatus ?? "")) return false;
   if (filters.reviewFilter === "pending" && !transactionNeedsReview(transaction)) return false;
   if (filters.sourceFilter === "manual" && transaction.importFileId) return false;
   if (filters.sourceFilter === "upload" && !transaction.importFileId) return false;

@@ -357,6 +357,14 @@ async function handle(
       return reply(result.body,result.status);
     }
 
+    if (operation === "reports-workspace" || operation === "reports-saved") {
+      const result=await withMobileRequestContext(userId,request,async()=>{
+        if(operation === "reports-workspace") return (await import("@/app/api/reports/workspace/route")).GET(request);
+        const handler=await import("@/app/api/reports/saved/route");
+        return request.method === "POST" ? handler.POST(request) : handler.GET(request);
+      });
+      return reply(await result.json(),result.status);
+    }
     if (operation === "reports") {
       const requested = url.searchParams.get("currency") ?? undefined;
       if (requested) z.string().regex(/^[A-Z]{3}$/).parse(requested);

@@ -305,7 +305,7 @@ export const buildTransactionQueryWhere = (
     ? buildVisibleWorkspaceTransactionWhere(workspaceId)
     : buildActiveWorkspaceTransactionWhere(workspaceId);
 
-  if (filters.reviewFilter === "confirmed") appendAndFilter(where, { reviewStatus: "confirmed" });
+  if (filters.reviewFilter === "confirmed") appendAndFilter(where, { reviewStatus: {in: ["confirmed", "edited"]} });
   if (filters.reviewFilter === "pending") appendAndFilter(where, { reviewStatus: { notIn: ["confirmed", "edited", "rejected", "duplicate_skipped"] } });
   if (filters.sourceFilter === "manual") appendAndFilter(where, { importFileId: null });
   if (filters.sourceFilter === "upload") appendAndFilter(where, { importFileId: { not: null } });
