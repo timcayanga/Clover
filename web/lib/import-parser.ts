@@ -1,3 +1,4 @@
+import { parseAppMigrationTable, readAppMigration } from "@/lib/app-migration-import";
 import { getRegionalMerchantCategoryHint } from "@/lib/korea-indonesia-corpus";
 import { parseRegionalJsonFinancialExport } from "@/lib/regional-json-financial-export";
 import { getIndonesianMerchantCategoryHint, getIndonesianIncomeCategoryHint, needsIndonesianPaymentCategoryReview } from "@/lib/indonesian-merchant-context";
@@ -1154,10 +1155,16 @@ export const parseStructuredTransactionCsv = (
   text: string,
   fileName: string,
   fileType: string,
-  context: ImportParseContext = {}
+  context: ImportParseContext = {},
+  skipMigrationAdapter = false
 ): ParsedImportRow[] | null => {
   const table = readStructuredDelimitedTable(text, fileName, fileType);
   if (!table) return null;
+  if (!skipMigrationAdapter) {
+    const migrationRows = parseAppMigrationTable(table, context, (canonical) =>
+      parseStructuredTransactionCsv(canonical, "migration.csv", "text/csv", context, true) ?? []);
+    if (migrationRows) return migrationRows;
+  }
   const headerScore = scoreStructuredHeaderRow(table.headers);
   if (!headerScore.hasDate || !headerScore.hasTransactionAmount || !headerScore.hasDescription || headerScore.transactionScore < 13) {
     return null;
@@ -2317,7 +2324,7 @@ const parseStructuredWorkbookWorksheet = (
             : null;
         return {
           ...row,
-          ...(isTransaction && !hasExplicitAccountColumn
+          ...(isTransaction && !hasExplicitAccountColumn && !readAppMigration(rawPayload)
             ? {
                 accountName: "Cash",
                 accountNumber: undefined,
@@ -2327,7 +2334,7 @@ const parseStructuredWorkbookWorksheet = (
             : {}),
           rawPayload: {
             ...rawPayload,
-            ...(isTransaction && !hasExplicitAccountColumn
+            ...(isTransaction && !hasExplicitAccountColumn && !readAppMigration(rawPayload)
               ? {
                   accountName: "Cash",
                   accountNumber: null,

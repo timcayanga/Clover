@@ -1,0 +1,5 @@
+Migration Source,Date,Description,Amount,Currency,Account,Type,Category,Subcategory,Tags,Excluded,Transaction ID
+spreadsheet,2026-09-01,Lunch,500,PHP,Cash,Expense,Food,Lunch,personal,false,example-1
+spreadsheet,2026-09-02,Monthly pay,30000,PHP,Payroll,Income,Salary,,,false,example-2
+spreadsheet,2026-09-03,Move to savings,-1000,PHP,Payroll,Transfer,Transfers,,,false,example-3-out
+spreadsheet,2026-09-03,Move to savings,+1000,PHP,Savings,Transfer,Transfers,,,false,example-3-in

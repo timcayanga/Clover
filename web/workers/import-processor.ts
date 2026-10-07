@@ -1,3 +1,5 @@
+import { readAppMigration, createMigrationOverlapMatcher, summarizeAppMigration } from "@/lib/app-migration-import";
+import { persistMigrationTags } from "@/lib/app-migration-persistence";
 import { encodeLocalReceiptOcr, readLocalReceiptOcrText } from "@/lib/local-receipt-ocr-envelope";
 import { applyReceiptDefaultCurrency, hasCompleteReceiptCore, hasReceiptPhotoEvidence, receiptSummaryReconciles, receiptCacheQualityPercent } from "@/lib/receipt-intake";
 import { normalizeRegionalPreferences } from "@/lib/regional-preferences";
@@ -1491,6 +1493,8 @@ const reconcileWorkspaceInternalTransfers = async (
   );
   const categoryUpdates = new Map<string, string[]>();
   for (const transaction of transactions) {
+    // A source app supplies its transfer classification explicitly.
+    if (readAppMigration(transaction.rawPayload)) continue;
     const currentCategoryName = transaction.category?.name ?? "Transfers";
     const resolvedCategoryName = resolveHsbcUkTransactionCategory({
       categoryName: currentCategoryName,
@@ -1513,6 +1517,8 @@ const reconcileWorkspaceInternalTransfers = async (
   const externalIncomeIds: string[] = [];
   const externalExpenseIds: string[] = [];
   for (const transaction of transactions) {
+    // A source app supplies its transfer classification explicitly.
+    if (readAppMigration(transaction.rawPayload)) continue;
     if (internalIds.has(transaction.id)) {
       if (
         transaction.type !== "transfer" ||
@@ -4823,6 +4829,7 @@ const accountGroupKeyForParsedRow = (
     fallbackAccountName?: string | null;
   }
 ) => {
+  if (readAppMigration(row.rawPayload)) return `migration:${readParsedRowAccountName(row)}:${readParsedRowAccountCurrency(row)}`;
   const accountNumber = readParsedRowAccountNumber(row) ?? params?.fallbackAccountNumber ?? null;
   if (accountNumber) {
     return `number:${accountNumber}`;
@@ -5626,6 +5633,29 @@ const resolveConfirmationAccount = async (params: {
 }) => {
   const workspaceId = String(params.importFile.workspaceId);
   const compatibleAccountColumns = await getCompatibleAccountColumns();
+  const migrationRow = params.parsedRows.length && params.parsedRows.every(row => readAppMigration(row.rawPayload)) ? params.parsedRows[0] : null;
+  if (migrationRow) {
+    const name = String(migrationRow.accountName ?? params.statementMetadata?.accountName ?? "Cash").trim();
+    const currency = String(readParsedRowAccountCurrency(migrationRow as Record<string, unknown>) ?? params.statementMetadata?.currency ?? "PHP").toUpperCase();
+    const institution = typeof migrationRow.institution === "string" ? migrationRow.institution : null;
+    const type = readParsedRowAccountType(migrationRow as Record<string, unknown>) ?? inferAccountTypeFromStatement(institution, name, "bank");
+    const limits = await getWorkspaceOwnerLimits(workspaceId);
+    const tombstone = await findDeletedAccountTombstoneMatch(workspaceId, { name, institution, type, currency, source: "upload" });
+    return prisma.$transaction(async tx => {
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`migration-accounts:${workspaceId}`}, 0))`;
+      const accounts = await tx.account.findMany({ where: { workspaceId }, select: getCompatibleAccountSelect(compatibleAccountColumns) });
+      const selected = params.accountId ? accounts.find(a => a.id === params.accountId) : null;
+      if (params.accountId && !selected) throw new Error("The selected migration account is not in this Profile.");
+      if (selected && selected.currency !== currency) throw new Error("The selected account uses a different currency. Choose the account matching your export.");
+      if (selected) return selected;
+      const matches = accounts.filter(a => a.currency === currency && [a.name, a.importIdentityName].some(v => String(v ?? "").trim().toLowerCase() === name.toLowerCase()));
+      if (matches.length > 1) throw new Error(`More than one ${name} account matches this export. Select the intended account before importing.`);
+      if (matches[0]) return matches[0];
+      if (tombstone && !params.allowDeletedAccountRecreation) throw new Error("This migration matches a deleted account. Confirm before recreating it.");
+      if (type !== "cash" && limits?.accountLimit != null && accounts.filter(a => a.type !== "cash").length >= limits.accountLimit) throw new Error(`Your plan allows ${limits.accountLimit} non-cash accounts. Choose existing accounts or change your plan before importing more.`);
+      return tx.account.create({ data: { workspaceId, name, type, currency, institution, source: "upload", ...(compatibleAccountColumns.has("importIdentityName") ? { importIdentityName: name } : {}) }, select: getCompatibleAccountSelect(compatibleAccountColumns) });
+    });
+  }
   const accountSnapshotInventory = parsedRowsAreAccountSnapshotInventory(
     params.parsedRows as Array<Record<string, unknown>>
   );
@@ -7470,7 +7500,7 @@ const strengthenEnrichmentRowForAttempt = (
   parsedRow: EnrichedParsedImportRow | undefined,
   attempt: number
 ): EnrichedParsedImportRow => {
-  if (attempt <= 1) {
+  if (attempt <= 1 || readAppMigration(row.rawPayload)) {
     return row;
   }
 
@@ -7542,6 +7572,7 @@ const applyMerchantRescueToEnrichedRow = (
   row: EnrichedParsedImportRow,
   parsedRow: EnrichedParsedImportRow | undefined
 ): EnrichedParsedImportRow => {
+  if (readAppMigration(row.rawPayload)) return row;
   const preserveParserCategory =
     typeof parsedRow?.categoryName === "string" &&
     Boolean(parsedRow.categoryName.trim()) &&
@@ -7884,7 +7915,8 @@ export const processImportEnrichmentJobs = async (options: {
               : null;
           const rowType =
             row.type === "income" || row.type === "expense" || row.type === "transfer" ? row.type : "expense";
-          const categoryName = resolveHsbcUkTransactionCategory({
+          const migration = readAppMigration(row.rawPayload);
+          const categoryName = migration && row.categoryName ? String(row.categoryName) : resolveHsbcUkTransactionCategory({
             categoryName:
               (typeof row.categoryName === "string" && row.categoryName.trim()) ||
               defaultCategoryForType(rowType),
@@ -7894,12 +7926,12 @@ export const processImportEnrichmentJobs = async (options: {
             rawPayload: row.rawPayload,
           });
           const unionBankDirection = resolveUnionBankExternalTransferDirection(row, parsedRow);
-          const canonicalType =
+          const canonicalType = migration ? rowType :
             unionBankDirection ??
             (parsedRowType && parsedRowType !== "transfer" && shouldPreserveParserTransferDirection(row, parsedRow)
               ? parsedRowType
               : coerceTransactionTypeFromCategoryName(categoryName, rowType));
-          const isTransfer = canonicalType === "transfer" || isTransferCategoryName(categoryName);
+          const isTransfer = migration ? canonicalType === "transfer" : canonicalType === "transfer" || isTransferCategoryName(categoryName);
           let categoryId = categoryByName.get(categoryName.toLowerCase());
           if (!categoryId) {
             const created = await prisma.category.create({
@@ -9723,7 +9755,7 @@ const processImportFileTextImpl = async (
         payload &&
         typeof payload === "object" &&
         !Array.isArray(payload) &&
-        typeof (payload as Record<string, unknown>).worksheetName === "string"
+        (typeof (payload as Record<string, unknown>).worksheetName === "string" || Boolean(readAppMigration(payload)))
       );
     });
   const hasFinancialExchangeRows =
@@ -12000,7 +12032,7 @@ const processImportFileTextImpl = async (
     return { imported: 0, duplicate: true, metadata: resolvedMetadata };
   }
   const rawRows =
-    importMode === "statement"
+    importMode === "statement" && !effectiveRows.every((row) => readAppMigration(row.rawPayload))
       ? reconcileStatementTransactionYears({
           rows: effectiveRows as EnrichedParsedImportRow[],
           sourceMetadata: metadata,
@@ -14773,6 +14805,7 @@ export const confirmImportFile = async (
         .join(" ")
     );
   const accountGroupKeyForRow = (row: Record<string, unknown>) => {
+    if (readAppMigration(row.rawPayload)) return `migration:${readParsedRowAccountName(row)}:${readParsedRowAccountCurrency(row)}`;
     const accountNumber = readRowAccountNumber(row);
     if (accountNumber) {
       return `number:${accountNumber}`;
@@ -14911,7 +14944,7 @@ export const confirmImportFile = async (
     const groupEndingBalance = getImportAccountBalanceFromParsedRows(groupRows);
     const groupIsSnapshotOnly = groupRows.length > 0 && groupRows.every(isSnapshotOnlyParsedRow);
     const groupCurrency = readRowAccountCurrency(firstGroupRow);
-    const groupLooksWiseAccount = rowLooksWiseAccount(firstGroupRow);
+    const groupLooksWiseAccount = !readAppMigration(firstGroupRow.rawPayload) && rowLooksWiseAccount(firstGroupRow);
     const groupHasDedicatedWisePdfIdentity = groupRows.length > 0 && groupRows.every(isDedicatedWisePdfStatementRow);
     const groupIsStructuredWorkbook =
       groupRows.length > 0 &&
@@ -15866,14 +15899,16 @@ export const confirmImportFile = async (
     select: { id: true, accountId: true, date: true, amount: true, currency: true, type: true, merchantRaw: true, merchantClean: true, description: true },
   });
   const matchBankOverlap = createBankImportOverlapMatcher(bankRows);
+  const matchMigrationOverlap = createMigrationOverlapMatcher(existingRowsForAccount as unknown as Array<Record<string, unknown>>);
 
   for (const [index, originalRow] of parsedRows.entries()) {
-    const row = normalizeLandbankImportedRow(originalRow as ImportInsightSourceRow, statementInstitution);
+    const row = readAppMigration(originalRow.rawPayload) ? originalRow : normalizeLandbankImportedRow(originalRow as ImportInsightSourceRow, statementInstitution);
+    const migration = readAppMigration(row.rawPayload);
     const rowAccount = rowAccountFor(row as Record<string, unknown>);
     const rowResolvedAccountId = rowAccount.id;
     const rowType =
       row.type === "income" || row.type === "expense" || row.type === "transfer" ? row.type : undefined;
-    const parsedCategoryName = resolveHsbcUkTransactionCategory({
+    const parsedCategoryName = migration && row.categoryName ? String(row.categoryName) : resolveHsbcUkTransactionCategory({
       categoryName:
         (typeof row.categoryName === "string" && row.categoryName.trim()) ||
         defaultCategoryForType((rowType as "income" | "expense" | "transfer") ?? "expense"),
@@ -15882,7 +15917,7 @@ export const confirmImportFile = async (
       description: typeof row.description === "string" ? row.description : null,
       rawPayload: row.rawPayload,
     });
-    const rowCurrency =
+    const rowCurrency = migration && typeof row.currency === "string" ? row.currency :
       normalizeInstitutionCurrency(
         statementInstitution,
         typeof row.currency === "string" && row.currency.trim() ? row.currency.trim().toUpperCase() : rowAccount.currency ?? "PHP",
@@ -15914,6 +15949,7 @@ export const confirmImportFile = async (
       atmCashAccount &&
         atmCashAccount.id !== rowResolvedAccountId &&
         !structuredExportExplicitlyNonCash &&
+        !migration &&
         isAtmCashWithdrawalCandidate({
           type: rowType ?? "expense",
           merchantRaw: typeof row.merchantRaw === "string" ? row.merchantRaw : null,
@@ -15945,7 +15981,7 @@ export const confirmImportFile = async (
             parsedCategoryName,
             (rowType ?? "expense") as "income" | "expense" | "transfer"
           ));
-    const canonicalType = shouldTransferAtmWithdrawalToCash
+    const canonicalType = migration && rowType ? rowType : shouldTransferAtmWithdrawalToCash
       ? "transfer"
       : resolveTransferTypeAgainstWorkspaceAccounts({
           row: {
@@ -15965,7 +16001,7 @@ export const confirmImportFile = async (
           currentAccountId: rowResolvedAccountId,
         });
     const categoryName = shouldTransferAtmWithdrawalToCash ? "Cash & ATM" : parsedCategoryName;
-    const rowIsTransfer = canonicalType === "transfer" || isTransferCategoryName(categoryName);
+    const rowIsTransfer = migration ? canonicalType === "transfer" : canonicalType === "transfer" || isTransferCategoryName(categoryName);
     const rowTransferConfidence =
       rowIsTransfer ? (typeof row.transferConfidence === "number" ? row.transferConfidence : 100) : 0;
     const rowIsOpeningBalance = Boolean(
@@ -16107,7 +16143,7 @@ export const confirmImportFile = async (
       transferConfidence: rowTransferConfidence,
       rawPayload: {
         ...(row.rawPayload && typeof row.rawPayload === "object" ? (row.rawPayload as Record<string, unknown>) : {}),
-        parsedDirectionType:
+        parsedDirectionType: migration ? migration.direction :
           rowType === "income" || rowType === "expense"
             ? rowType
             : canonicalType === "income" || canonicalType === "expense"
@@ -16153,10 +16189,11 @@ export const confirmImportFile = async (
       description: extractHumanReadableDescription(row.rawPayload ?? null),
       isTransfer: rowIsTransfer,
       isExcluded:
-        reviewOnlyRow ||
+        Boolean(migration?.excluded) || reviewOnlyRow ||
         (typeof row.rawPayload === "object" && row.rawPayload !== null && (row.rawPayload as Record<string, unknown>).kind === "opening_balance"),
     });
     const transactionId = String(insertRow.id ?? crypto.randomUUID());
+    if (migration) insertRow.id = transactionId;
     const prepareAtmCashDestination = (sourceTransactionId: string) => {
       if (
         !shouldTransferAtmWithdrawalToCash ||
@@ -16342,6 +16379,10 @@ export const confirmImportFile = async (
       continue;
     }
 
+    if (migration && matchMigrationOverlap({ ...insertRow, accountId: rowResolvedAccountId })) {
+      duplicateSkippedTransactionsCount += 1;
+      continue;
+    }
     const bankOverlap = matchBankOverlap({ ...insertRow, accountId: rowResolvedAccountId } as Parameters<typeof matchBankOverlap>[0]);
     if (bankOverlap === "matched") {
       duplicateSkippedTransactionsCount += 1;
@@ -16455,6 +16496,10 @@ export const confirmImportFile = async (
       });
     }
 
+    await persistMigrationTags(tx, String(importFile.workspaceId), preparedTransactions.map(entry => ({
+      id: String(entry.insertRow.id ?? entry.transactionId), rawPayload: entry.insertRow.rawPayload,
+    })));
+
     for (const batch of chunkArray(preparedAtmCashDestinations, highVolumeConfirmation ? 500 : 250)) {
       await tx.transaction.createMany({
         data: batch.map((entry) => {
@@ -16484,7 +16529,9 @@ export const confirmImportFile = async (
         confirmedAt: new Date(),
         status: "done",
         processingPhase: "complete",
-        processingMessage: "The file is imported and ready.",
+        processingMessage: summarizeAppMigration(parsedRows)
+          ? `${preparedTransactions.length} transactions imported; ${duplicateSkippedTransactionsCount} duplicates skipped; ${summarizeAppMigration(parsedRows)!.skippedRows.length} pending, void, summary or duplicate source rows skipped.`
+          : "The file is imported and ready.",
         confirmedTransactionsCount: visibleTransactionsCount,
       },
       compatibleImportFileColumns
