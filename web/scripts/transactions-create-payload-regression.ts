@@ -33,7 +33,7 @@ for (const type of ["debit", "credit"]) {
 console.log("Manual expense/income request preserves selected tags, amount and note");
 
 assert.ok(historyPredicate, "History must apply its client filters");
-const names = ["searchText", "currencyFilter", "categoryFilters", "tagFilters", "expandedAccountFilters", "typeFilters", "dateFilterMode", "dateFilterAnchor", "customStart", "customEnd", "amountMin", "amountMax", "reviewFilter", "sourceFilter", "confidenceFilter", "otherCategoryId", "categoryNameById", "accountNumberById"];
+const names = ["searchText", "currencyFilter", "categoryFilters", "tagFilters", "reportMerchants", "expandedAccountFilters", "typeFilters", "dateFilterMode", "dateFilterAnchor", "customStart", "customEnd", "amountMin", "amountMax", "reviewFilter", "sourceFilter", "confidenceFilter", "otherCategoryId", "categoryNameById", "accountNumberById"];
 const predicateFactory = new Function("matchesTransactionSearch", "matchesTransactionFilters", ...names, `return (${historyPredicate.getText(source)});`);
 for (const isExcluded of [false, true]) {
   assert.equal(predicateFactory(() => true, () => true)({ isExcluded }), true, "Exclusions stay visible in matching history");
@@ -41,3 +41,6 @@ for (const isExcluded of [false, true]) {
   assert.equal(predicateFactory(() => true, () => false)({ isExcluded }), false, "History must retain other filters");
 }
 console.log("Client history retains exclusions while applying search and filters");
+
+const reportValues = names.map(name => name === "reportMerchants" ? ["Cafe, Inc."] : undefined);
+assert.equal(predicateFactory(() => true, (_row: unknown, filters: { reportMerchants: string[] }) => filters.reportMerchants[0] === "Cafe, Inc.", ...reportValues)({}), true, "Report merchant selections reach the actual client history predicate");

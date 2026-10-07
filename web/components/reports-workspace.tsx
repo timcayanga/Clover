@@ -1,4 +1,6 @@
 "use client";
+import { ReportCoverageDetails, ReportSpendingDetails } from "./report-details";
+import { exportReport } from "@/lib/report-export-client";
 import { reportTransactionParams } from "../../shared/reports/drilldown";
 import {
   useCallback,
@@ -66,6 +68,7 @@ function Multi({
   options: { id: string; name: string }[];
   onChange: (v: string[]) => void;
 }) {
+  const [search, setSearch] = useState("");
   return (
     <details>
       <summary>
@@ -79,22 +82,36 @@ function Multi({
       >
         Select all
       </button>
-      {options.map((o) => (
-        <label key={o.id}>
-          <input
-            type="checkbox"
-            checked={!values.length || values.includes(o.id)}
-            onChange={() => {
-              const current = values.length ? values : options.map((x) => x.id);
-              const next = current.includes(o.id)
-                ? current.filter((x) => x !== o.id)
-                : [...current, o.id];
-              onChange(next.length ? next : ["__none__"]);
-            }}
-          />
-          {o.name}
-        </label>
-      ))}
+      {options.length > 100 ? (
+        <p className="muted">Showing up to 100 matches. Search to find more.</p>
+      ) : null}
+      {options.length > 12 ? (
+        <input
+          aria-label={`Search ${label}`}
+          placeholder={`Search ${label.toLowerCase()}`}
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+        />
+      ) : null}
+      {options
+        .filter((o) => o.name.toLowerCase().includes(search.toLowerCase()))
+        .slice(0, 100)
+        .map((o) => (
+          <label key={o.id}>
+            <input
+              type="checkbox"
+              checked={values.includes(o.id)}
+              onChange={() => {
+                const current = values;
+                const next = current.includes(o.id)
+                  ? current.filter((x) => x !== o.id)
+                  : [...current, o.id];
+                onChange(next.slice(0, 100));
+              }}
+            />
+            {o.name}
+          </label>
+        ))}
     </details>
   );
 }
@@ -115,7 +132,26 @@ export function ReportsWorkspaceView({
     [name, setName] = useState(""),
     [saving, setSaving] = useState(false),
     [saveError, setSaveError] = useState("");
+  const [exporting, setExporting] = useState(false);
   const sequence = useRef(0);
+  async function download(format: "csv" | "pdf") {
+    setExporting(true);
+    setError("");
+    try {
+      await exportReport(
+        {
+          ...data,
+          view: { ...data.view, trendCategories: view.trendCategories },
+        },
+        view.section,
+        format,
+      );
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setExporting(false);
+    }
+  }
   const api = `/api/reports/workspace?workspaceId=${encodeURIComponent(data.workspaceId)}`;
   async function apply(next: ReportView) {
     const seq = ++sequence.current;
@@ -262,6 +298,20 @@ export function ReportsWorkspaceView({
           >
             Saved reports
           </button>
+          <button
+            className="report-text-action"
+            disabled={busy || exporting}
+            onClick={() => void download("csv")}
+          >
+            Export CSV
+          </button>
+          <button
+            className="report-text-action"
+            disabled={busy || exporting}
+            onClick={() => void download("pdf")}
+          >
+            {exporting ? "Preparing export…" : "Print / PDF"}
+          </button>
         </div>
         {filters ? (
           <Panel title="Filter reports">
@@ -301,6 +351,21 @@ export function ReportsWorkspaceView({
                   </label>
                 </>
               ) : null}
+              <Multi
+                label="Merchants"
+                values={draft.merchants ?? []}
+                options={(data.merchants ?? []).map((name) => ({
+                  id: name,
+                  name,
+                }))}
+                onChange={(value) => change("merchants", value)}
+              />
+              <Multi
+                label="Tags (match any)"
+                values={draft.tags ?? []}
+                options={data.tags ?? []}
+                onChange={(value) => change("tags", value)}
+              />
               <label>
                 Currency
                 <select
@@ -589,6 +654,10 @@ export function ReportPanels({
   return (
     <div className="report-v2-currency">
       {w.view.currency === "ALL" ? <h2>{c}</h2> : null}
+      <ReportCoverageDetails
+        report={r}
+        href={href({ reviewFilter: "pending" })}
+      />
       {view.transfers !== "exclude" ? (
         <Panel title="Transfer activity">
           <p>
@@ -753,6 +822,7 @@ export function ReportPanels({
               : null}
             {!a.categories.length ? <p>No spending in this period.</p> : null}
           </Panel>
+          <ReportSpendingDetails report={r} workspace={w} view={view} />
         </>
       ) : null}
       {view.section === "trends" ? (

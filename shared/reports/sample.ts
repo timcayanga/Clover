@@ -4,6 +4,7 @@ import {
   reportPeriod,
   type ReportRow,
 } from "./analysis";
+import { reportCoverage, reportMerchants } from "./details";
 import type { ReportsWorkspace } from "./workspace";
 const rows: ReportRow[] = [];
 for (const month of ["2026-07", "2026-08", "2026-09"])
@@ -26,6 +27,7 @@ for (const month of ["2026-07", "2026-08", "2026-09"])
       accountId: "sample-bank",
       account: "Sample bank",
       reviewStatus: "confirmed",
+      tags: ["household"],
     });
 const view = {
   ...defaultReportView,
@@ -38,6 +40,9 @@ const period = reportPeriod(view, "2026-10-07");
 const analysis = analyzeReport(rows, period);
 export const sampleReportsWorkspace: ReportsWorkspace = {
   workspaceId: "sample",
+  profileName: "Demo household",
+  merchants: [...new Set(rows.map((r) => r.merchant))],
+  tags: [{ id: "household", name: "Household" }],
   paid: true,
   timeZone: "Asia/Manila",
   today: "2026-10-07",
@@ -53,6 +58,25 @@ export const sampleReportsWorkspace: ReportsWorkspace = {
     {
       currency: "PHP",
       analysis,
+      merchantAnalysis: reportMerchants(rows, period),
+      coverage: reportCoverage(rows, period, view, [], true),
+      budgets: ["2026-07", "2026-08", "2026-09"].map((month) => ({
+        id: "food",
+        name: "Dining",
+        categoryId: "Food & Dining",
+        categoryName: "Food & Dining",
+        accountId: null,
+        scope: "category",
+        cadence: "monthly",
+        month,
+        from: month + "-01",
+        to: month + (month === "2026-09" ? "-30" : "-31"),
+        target: 10000,
+        actual: 9500,
+        remaining: 500,
+        over: 0,
+        partial: false,
+      })),
       balances: [
         { date: "2026-07-01", balance: 125000 },
         { date: "2026-08-01", balance: 149800 },

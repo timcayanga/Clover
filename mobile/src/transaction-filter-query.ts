@@ -1,6 +1,7 @@
 import { transactionReviewReasons } from "./transaction-review";
 export type TransactionFilters = {
   merchants?: string[];
+  merchantMatch?: "exact";
   types: string[]; accounts: string[]; categories: string[]; tags: string[];
   currency: string; amountMin: string; amountMax: string;
   dateFilterMode: string; customStart: string; customEnd: string;
@@ -24,6 +25,7 @@ export function transactionFilterQuery(filters: TransactionFilters) {
     if (filters[key]) params.set(key, filters[key]);
   }
   filters.merchants?.forEach(merchant => params.append("merchant", merchant));
+  if(filters.merchantMatch === "exact") params.set("merchantMatch","exact");
   params.set("dateFilterAnchor", new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Manila", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date()));
   return params.toString();
 }
@@ -43,7 +45,7 @@ export function matchesDemoFilters(row: Transaction, filters: TransactionFilters
   if(filters.categories.length && !filters.categories.includes(row.categoryId??"")) return false;
   if(filters.tags.length && !row.tags?.some(t=>filters.tags.includes(t.id))) return false;
   if(filters.currency && row.currency !== filters.currency) return false;
-  if(filters.merchants?.length && !filters.merchants.some(m => `${row.merchantClean ?? ""}`.toLowerCase().includes(m.toLowerCase()))) return false;
+  if(filters.merchants?.length && !filters.merchants.some(m => filters.merchantMatch === "exact" ? (row.merchantClean || row.merchantRaw || "Other") === m : `${row.merchantClean ?? ""}`.toLowerCase().includes(m.toLowerCase()))) return false;
   const amount = Math.abs(Number(row.amount));
   if(filters.amountMin && amount < Number(filters.amountMin)) return false;
   if(filters.amountMax && amount > Number(filters.amountMax)) return false;

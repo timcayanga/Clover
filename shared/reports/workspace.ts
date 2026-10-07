@@ -6,6 +6,9 @@ export type SavedReport = {
   revision: number;
 };
 export type ReportCurrencyData = {
+  budgets?: BudgetReportRow[];
+  coverage?: ReportCoverage;
+  merchantAnalysis?: MerchantReportRow[];
   currency: string;
   analysis: ReportAnalysis;
   balances: { date: string; balance: number }[];
@@ -22,8 +25,43 @@ export type ReportCurrencyData = {
   }[];
   goal: { title: string; detail: string; progress: number | null } | null;
 };
+export type MerchantReportRow = {
+  name: string;
+  amount: number;
+  previous: number;
+  count: number;
+  change: number;
+};
+export type BudgetReportRow = {
+  id: string;
+  name: string;
+  categoryId: string | null;
+  categoryName: string | null;
+  accountId: string | null;
+  scope: string;
+  cadence: string;
+  month: string;
+  from: string;
+  to: string;
+  target: number;
+  actual: number;
+  remaining: number;
+  over: number;
+  partial: boolean;
+};
+export type ReportCoverage = {
+  transactionCount: number;
+  reviewCount: number;
+  uncategorizedCount: number;
+  firstTransaction: string | null;
+  lastTransaction: string | null;
+  missingBalanceAccounts: string[];
+  datedHistoryAvailable: boolean;
+  notes: string[];
+};
 export type ReportsWorkspace = {
   workspaceId: string;
+  profileName?: string;
   paid: boolean;
   timeZone: string;
   today: string;
@@ -32,6 +70,8 @@ export type ReportsWorkspace = {
   currencies: string[];
   accounts: { id: string; name: string }[];
   categories: { id: string; name: string }[];
+  merchants?: string[];
+  tags?: { id: string; name: string }[];
   reports: ReportCurrencyData[];
 };
 export function reportViewParams(view: ReportView) {

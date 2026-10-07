@@ -12,6 +12,7 @@ export type ReportRow = {
   account: string;
   reviewStatus?: string;
   needsReview?: boolean;
+  tags?: string[];
 };
 export type ReportView = {
   section: "overview" | "spending" | "trends" | "advanced";
@@ -26,6 +27,8 @@ export type ReportView = {
   compare: "previous" | "year";
   chart: "Donut" | "Bars" | "Table";
   trendCategories: string[];
+  merchants?: string[];
+  tags?: string[];
 };
 export const defaultReportView: ReportView = {
   section: "overview",
@@ -40,6 +43,8 @@ export const defaultReportView: ReportView = {
   compare: "previous",
   chart: "Donut",
   trendCategories: [],
+  merchants: [],
+  tags: [],
 };
 export const reportRanges = [
   { value: "7d", label: "Last 7 days" },
@@ -130,12 +135,15 @@ export function selectedReportRows(rows: ReportRow[], view: ReportView) {
     (r) =>
       (!view.accounts.length || view.accounts.includes(r.accountId)) &&
       (!view.categories.length || view.categories.includes(r.category)) &&
+      (!view.merchants?.length || view.merchants.includes(r.merchant)) &&
+      (!view.tags?.length || r.tags?.some((t) => view.tags!.includes(t))) &&
       (view.review === "all" ||
         (view.review === "confirmed"
           ? ["confirmed", "edited"].includes(r.reviewStatus ?? "")
-          : r.needsReview ?? !["confirmed", "edited", "rejected", "duplicate_skipped"].includes(
+          : (r.needsReview ??
+            !["confirmed", "edited", "rejected", "duplicate_skipped"].includes(
               r.reviewStatus ?? "",
-            ))) &&
+            )))) &&
       (view.transfers !== "only" || r.type === "transfer"),
   );
 }
@@ -150,7 +158,7 @@ export function analyzeReport(rows: ReportRow[], period: ReportPeriod) {
   const current = totals(currentRows),
     previous = totals(previousRows);
   const months: string[] = [];
-  for (let m = period.from.slice(0, 7); m <= period.to.slice(0, 7); ) {
+  for (let m = period.from.slice(0, 7); m <= period.to.slice(0, 7);) {
     months.push(m);
     const [y, n] = m.split("-").map(Number);
     m = `${n === 12 ? y + 1 : y}-${String(n === 12 ? 1 : n + 1).padStart(2, "0")}`;
@@ -386,7 +394,9 @@ export function analyzeReport(rows: ReportRow[], period: ReportPeriod) {
       recurringTotal: sum(repeats.map((m) => m.amount)),
     },
     reviewCount: currentRows.filter(
-      (r) => r.needsReview ?? !["confirmed", "edited"].includes(r.reviewStatus ?? ""),
+      (r) =>
+        r.needsReview ??
+        !["confirmed", "edited"].includes(r.reviewStatus ?? ""),
     ).length,
   };
 }

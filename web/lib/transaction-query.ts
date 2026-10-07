@@ -12,6 +12,7 @@ export type TransactionQueryFilters = {
   tagIds?: string[];
   typeFilters?: Array<"debit" | "credit" | "transfer">;
   merchantFilters?: string[];
+  merchantMatch?: "exact";
   dateFilterMode?: DateFilterMode;
   dateFilterAnchor?: string;
   customStart?: string;
@@ -174,7 +175,7 @@ export const parseTransactionQueryFilters = (searchParams: Pick<URLSearchParams,
     .flatMap((entry) => splitFilterValues(entry))
     .map((entry) => entry.trim().toLowerCase())
     .filter((entry): entry is "debit" | "credit" | "transfer" => entry === "debit" || entry === "credit" || entry === "transfer");
-  const merchantFilters = [
+  const merchantFilters = searchParams.get("merchantMatch") === "exact" ? searchParams.getAll("merchant").slice(0,100) : [
     ...searchParams.getAll("merchant"),
     ...splitFilterValues(searchParams.get("merchants") ?? ""),
   ]
@@ -202,6 +203,7 @@ export const parseTransactionQueryFilters = (searchParams: Pick<URLSearchParams,
     tagIds: searchParams.getAll("tag").filter(Boolean),
     typeFilters,
     merchantFilters,
+    merchantMatch: searchParams.get("merchantMatch") === "exact" ? "exact" : undefined,
     dateFilterMode,
     dateFilterAnchor,
     customStart,
@@ -237,6 +239,7 @@ export const buildTransactionQuerySearchParams = (
   filters.tagIds?.filter(Boolean).forEach((value) => params.append("tag", value));
   filters.typeFilters?.forEach((value) => params.append("type", value));
   filters.merchantFilters?.map((value) => value.trim()).filter(Boolean).forEach((value) => params.append("merchant", value));
+  if(filters.merchantMatch === "exact") params.set("merchantMatch","exact");
 
   if (filters.dateFilterMode && filters.dateFilterMode !== "ltd") {
     params.set("dateFilterMode", filters.dateFilterMode);
@@ -383,7 +386,7 @@ export const buildTransactionQueryWhere = (
   }
 
   if (merchantFilters.length > 0) {
-    appendAndFilter(where, { OR: buildMerchantFilters(merchantFilters) });
+    appendAndFilter(where, { OR: filters.merchantMatch === "exact" ? merchantFilters.map(name=>({OR:[{merchantClean:{equals:name}},{AND:[{OR:[{merchantClean:null},{merchantClean:""}]},{merchantRaw:{equals:name}}]}]})) : buildMerchantFilters(merchantFilters) });
   }
 
   if (dateFilterMode !== "ltd") {

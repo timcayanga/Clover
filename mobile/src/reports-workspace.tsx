@@ -1,3 +1,5 @@
+import { ReportCoverageDetails, ReportSpendingDetails } from "./report-details";
+import { exportReport } from "./report-export";
 import { reportTransactionParams } from "../../shared/reports/drilldown";
 import { useEffect, useState, type ReactNode } from "react";
 import { Alert, Pressable, ScrollView, View } from "react-native";
@@ -81,6 +83,28 @@ function ReportWorkspace() {
     [name, setName] = useState(""),
     [saveError, setSaveError] = useState(""),
     [saving, setSaving] = useState(false);
+  const [exporting, setExporting] = useState(false),
+    [exportError, setExportError] = useState("");
+  const [optionSearch, setOptionSearch] = useState<Record<string, string>>({});
+  async function download(format: "csv" | "pdf") {
+    if (!data) return;
+    setExporting(true);
+    setExportError("");
+    try {
+      await exportReport(
+        {
+          ...data,
+          view: { ...data.view, trendCategories: view.trendCategories },
+        },
+        view.section,
+        format,
+      );
+    } catch (e) {
+      setExportError((e as Error).message);
+    } finally {
+      setExporting(false);
+    }
+  }
   const savedPath = `reports/saved?workspaceId=${encodeURIComponent(session.profileId)}`;
   async function reloadSaved() {
     if (session.demo) return;
@@ -152,10 +176,10 @@ function ReportWorkspace() {
   }
   const multi = (
     label: string,
-    key: "accounts" | "categories",
+    key: "accounts" | "categories" | "merchants" | "tags",
     options: { id: string; name: string }[],
   ) => {
-    const values = draft[key];
+    const values = draft[key] ?? [];
     return (
       <FilterRow
         label={label}
@@ -165,42 +189,59 @@ function ReportWorkspace() {
           title="Select all"
           onPress={() => setDraft((v) => ({ ...v, [key]: [] }))}
         />
-        {options.map((o) => (
-          <Pressable
-            key={o.id}
-            accessibilityRole="checkbox"
-            accessibilityState={{
-              checked: !values.length || values.includes(o.id),
-            }}
-            style={{
-              minHeight: 44,
-              paddingVertical: 10,
-              flexDirection: "row",
-              gap: 8,
-              alignItems: "center",
-            }}
-            onPress={() =>
-              setDraft((v) => {
-                const current = v[key].length
-                  ? v[key]
-                  : options.map((o) => o.id);
-                const next = current.includes(o.id)
-                  ? current.filter((x) => x !== o.id)
-                  : [...current, o.id];
-                return { ...v, [key]: next.length ? next : ["__none__"] };
-              })
+        {options.length > 100 ? (
+          <Body>Showing up to 100 matches. Search to find more.</Body>
+        ) : null}
+        {options.length > 12 ? (
+          <Field
+            label={`Search ${label}`}
+            value={optionSearch[key] ?? ""}
+            onChangeText={(text) =>
+              setOptionSearch((v) => ({ ...v, [key]: text }))
             }
-          >
-            <Icon
-              name={
-                !values.length || values.includes(o.id)
-                  ? "checkbox-outline"
-                  : "square-outline"
+          />
+        ) : null}
+        {options
+          .filter((o) =>
+            o.name
+              .toLocaleLowerCase()
+              .includes((optionSearch[key] ?? "").toLocaleLowerCase()),
+          )
+          .slice(0, 100)
+          .map((o) => (
+            <Pressable
+              key={o.id}
+              accessibilityRole="checkbox"
+              accessibilityLabel={o.name}
+              aria-checked={values.includes(o.id)}
+              accessibilityState={{
+                checked: values.includes(o.id),
+              }}
+              style={{
+                minHeight: 44,
+                paddingVertical: 10,
+                flexDirection: "row",
+                gap: 8,
+                alignItems: "center",
+              }}
+              onPress={() =>
+                setDraft((v) => {
+                  const current = v[key] ?? [];
+                  const next = current.includes(o.id)
+                    ? current.filter((x) => x !== o.id)
+                    : [...current, o.id];
+                  return { ...v, [key]: next.slice(0, 100) };
+                })
               }
-            />
-            <Text style={{ color: colors.ink, flex: 1 }}>{o.name}</Text>
-          </Pressable>
-        ))}
+            >
+              <Icon
+                name={
+                  values.includes(o.id) ? "checkbox-outline" : "square-outline"
+                }
+              />
+              <Text style={{ color: colors.ink, flex: 1 }}>{o.name}</Text>
+            </Pressable>
+          ))}
       </FilterRow>
     );
   };
@@ -247,6 +288,17 @@ function ReportWorkspace() {
             title="Saved reports"
             onPress={() => setSavedOpen(!savedOpen)}
           />
+          <PlanAction
+            title={exporting ? "Preparing export…" : "Export CSV"}
+            disabled={exporting}
+            onPress={() => void download("csv")}
+          />
+          <PlanAction
+            title="Export PDF"
+            disabled={exporting}
+            onPress={() => void download("pdf")}
+          />
+          {exportError ? <Notice>{exportError}</Notice> : null}
         </>
       ) : null}
       {filters && data ? (
@@ -297,6 +349,12 @@ function ReportWorkspace() {
             }
           />
           {multi("Accounts", "accounts", data.accounts)}
+          {multi(
+            "Merchants",
+            "merchants",
+            (data.merchants ?? []).map((name) => ({ id: name, name })),
+          )}
+          {multi("Tags (match any)", "tags", data.tags ?? [])}
           {multi("Categories", "categories", [
             { id: "Uncategorized", name: "Uncategorized" },
             ...data.categories.map((c) => ({ id: c.name, name: c.name })),
@@ -555,6 +613,10 @@ function NativeReportPanels({
   return (
     <View style={{ gap: 20 }}>
       {w.view.currency === "ALL" ? <SectionTitle>{c}</SectionTitle> : null}
+      <ReportCoverageDetails
+        report={r}
+        onReview={() => open({ reviewFilter: "pending" })}
+      />
       {view.transfers !== "exclude" ? (
         <ReportCard title="Transfer activity">
           <Body>
@@ -727,6 +789,7 @@ function NativeReportPanels({
               <Body>No spending in this period.</Body>
             ) : null}
           </ReportCard>
+          <ReportSpendingDetails report={r} workspace={w} view={view} />
         </>
       ) : null}
       {view.section === "trends" ? (

@@ -97,7 +97,7 @@ import { getAccountBrand } from "@/lib/account-brand";
 import { guessCategoryName, inferAccountTypeFromStatement } from "@/lib/financial-classification";
 import { summarizeMerchantText } from "@/lib/merchant-labels";
 import { getTransactionReviewReason, getTransactionReviewReasons, transactionNeedsReview } from "@/lib/transaction-review-reasons";
-import { buildTransactionQuerySearchParams } from "@/lib/transaction-query";
+import { buildTransactionQuerySearchParams, parseTransactionQueryFilters } from "@/lib/transaction-query";
 import {
   getKnownMobileTransactionTotal,
   getNextMobileTransactionPage,
@@ -1265,6 +1265,7 @@ const matchesTransactionFilters = (
     currencyFilter: string;
     categoryFilters: string[];
     tagFilters: string[];
+    reportMerchants: string[];
     accountFilters: string[];
     typeFilters: TransactionTypeFilter[];
     dateFilterMode: DateFilterMode;
@@ -1293,6 +1294,7 @@ const matchesTransactionFilters = (
   if (filters.confidenceFilter === "high" && recordedConfidence < 85) return false;
   if (filters.confidenceFilter === "medium" && (recordedConfidence < 65 || recordedConfidence >= 85)) return false;
   if (filters.confidenceFilter === "low" && recordedConfidence >= 65) return false;
+  if (filters.reportMerchants.length && !filters.reportMerchants.includes(transaction.merchantClean || transaction.merchantRaw || "Other")) return false;
   if (filters.tagFilters.length && !transaction.tags?.some((tag) => filters.tagFilters.includes(tag.id))) return false;
 
   if (filters.currencyFilter && formatCurrencyCode(transaction.currency) !== formatCurrencyCode(filters.currencyFilter)) {
@@ -2283,6 +2285,7 @@ function TransactionsPageContent() {
   const [reviewFilter, setReviewFilter] = useState("");
   const [sourceFilter, setSourceFilter] = useState("");
   const [confidenceFilter, setConfidenceFilter] = useState("");
+  const [reportMerchants, setReportMerchants] = useState<string[]>([]);
   const [tagFilters, setTagFilters] = useState<string[]>([]);
   const [filterTags, setFilterTags] = useState<Array<{ id: string; name: string }>>([]);
   const [categoryFilters, setCategoryFilters] = useState<string[]>([]);
@@ -2418,10 +2421,10 @@ function TransactionsPageContent() {
   const selectionActionsMenuRef = useRef<HTMLDivElement | null>(null);
   const transactionsLoadRequestRef = useRef(0);
   const requestGateRef = useRef(createTransactionRequestGate());
-  const hasActiveTransactionFilters = Boolean(query.trim() || currencyFilter || categoryFilters.length || tagFilters.length ||
+  const hasActiveTransactionFilters = Boolean(reportMerchants.length || query.trim() || currencyFilter || categoryFilters.length || tagFilters.length ||
     accountFilters.length || typeFilters.length || dateFilterMode !== "ltd" || customStart || customEnd || amountMin || amountMax || reviewFilter || sourceFilter || confidenceFilter);
   const transactionQueryKey = JSON.stringify([
-    selectedWorkspaceId, query, currencyFilter, categoryFilters, tagFilters,
+    selectedWorkspaceId, query, currencyFilter, categoryFilters, tagFilters, reportMerchants,
     accountFilters, typeFilters, dateFilterMode, dateFilterAnchor, customStart,
     customEnd, sortField, sortDirection, amountMin, amountMax, reviewFilter, sourceFilter, confidenceFilter, transactionsPage, transactionsPageSize, summaryOpen,
   ]);
@@ -2892,7 +2895,7 @@ function TransactionsPageContent() {
     // requests pass their smaller batch explicitly through pageSizeOverride.
     const requestPageSize = options?.includeAll ? "all" : options?.pageSizeOverride ?? transactionsPageSize;
     const hasServerSideFilters = Boolean(
-      query.trim() ||
+      reportMerchants.length || query.trim() ||
         currencyFilter.trim() ||
         categoryFilters.length > 0 || tagFilters.length > 0 ||
         expandedAccountFilters.length > 0 ||
@@ -2910,6 +2913,7 @@ function TransactionsPageContent() {
         currencyFilter,
         categoryIds: categoryFilters,
         tagIds: tagFilters,
+        merchantFilters: reportMerchants, merchantMatch: "exact",
         accountIds: expandedAccountFilters,
         typeFilters,
         dateFilterMode,
@@ -2934,6 +2938,7 @@ function TransactionsPageContent() {
         currencyFilter,
         categoryIds: categoryFilters,
         tagIds: tagFilters,
+        merchantFilters: reportMerchants, merchantMatch: "exact",
         accountIds: expandedAccountFilters,
         typeFilters,
         dateFilterMode,
@@ -3730,6 +3735,7 @@ function TransactionsPageContent() {
     setQuery(saved?.query ?? "");
     setCategoryFilters(saved?.categoryFilters ?? []);
     setTagFilters(saved?.tagFilters ?? []);
+    setReportMerchants([]);
     setAccountFilters(saved?.accountFilters ?? []);
     setTypeFilters(saved?.typeFilters ?? []);
     setDateFilterMode(saved?.dateFilterMode ?? "ltd");
@@ -3871,7 +3877,7 @@ function TransactionsPageContent() {
     query,
     currencyFilter,
     categoryFilters,
-    tagFilters,
+    tagFilters, reportMerchants,
     accountFilters,
     typeFilters,
     dateFilterMode,
@@ -3937,7 +3943,7 @@ function TransactionsPageContent() {
     query,
     currencyFilter,
     categoryFilters,
-    tagFilters,
+    tagFilters, reportMerchants,
     accountFilters,
     typeFilters,
     dateFilterMode,
@@ -4177,6 +4183,24 @@ function TransactionsPageContent() {
       return;
     }
 
+    if (urlSearchParams.get("report") === "1") {
+      const signature = selectedWorkspaceId + ":" + urlSearchParams.toString();
+      if(drilldownParamRef.current === signature) return;
+      drilldownParamRef.current = signature;
+      const filters = parseTransactionQueryFilters(urlSearchParams);
+      setQuery(filters.query ?? "");
+      setCurrencyFilter(filters.currencyFilter ?? "");
+      setCategoryFilters(filters.categoryIds.map(value=>findMatchingId(value,categories)||value));
+      setAccountFilters(filters.accountIds);
+      setTagFilters(filters.tagIds);
+      setReportMerchants(filters.merchantFilters);
+      setTypeFilters(filters.typeFilters);
+      setDateFilterMode(filters.dateFilterMode);
+      setCustomStart(filters.customStart); setCustomEnd(filters.customEnd);
+      setReviewFilter(filters.reviewFilter); setSourceFilter(""); setConfidenceFilter("");
+      setAmountMin(""); setAmountMax(""); setTransactionsPage(1); setFilterOpen(false);
+      return;
+    }
     const drilldownSignature = [
       urlSearchParams.get("q") ?? "",
       urlSearchParams.get("month") ?? "",
@@ -4209,6 +4233,8 @@ function TransactionsPageContent() {
 
       drilldownParamRef.current = drilldownSignature;
       setQuery("");
+      setReportMerchants([]);
+      setTagFilters([]);
       setCurrencyFilter(readSelectedCurrency(selectedWorkspaceId) ?? defaultCurrency);
       setCategoryFilters([]);
       setAccountFilters([]);
@@ -4233,6 +4259,8 @@ function TransactionsPageContent() {
       .filter(Boolean);
 
     setQuery(q);
+    setReportMerchants([]);
+    setTagFilters([]);
     setCurrencyFilter(currencyFromUrl ? formatCurrencyCode(currencyFromUrl) : "");
     setCategoryFilters(nextCategoryFilters);
     setAccountFilters(nextAccountFilters);
@@ -4313,7 +4341,7 @@ function TransactionsPageContent() {
         matchesTransactionFilters(transaction, {
           currencyFilter,
           categoryFilters,
-    tagFilters,
+    tagFilters, reportMerchants,
           accountFilters: expandedAccountFilters,
           typeFilters,
           dateFilterMode,
@@ -4370,7 +4398,7 @@ function TransactionsPageContent() {
     categoryNameById,
     currencyFilter,
     categoryFilters,
-    tagFilters,
+    tagFilters, reportMerchants,
     expandedAccountFilters,
     typeFilters,
     dateFilterMode,
@@ -4875,7 +4903,7 @@ function TransactionsPageContent() {
     query,
     currencyFilter,
     categoryFilters,
-    tagFilters,
+    tagFilters, reportMerchants,
     accountFilters,
     typeFilters,
     dateFilterMode,
@@ -6832,6 +6860,7 @@ function TransactionsPageContent() {
         currencyFilter,
         categoryIds: categoryFilters,
         tagIds: tagFilters,
+        merchantFilters: reportMerchants, merchantMatch: "exact",
         accountIds: accountFilters,
         typeFilters,
         dateFilterMode,
@@ -7515,6 +7544,7 @@ function TransactionsPageContent() {
   const showTransactionsLoadingState =
     !isCanceledImport && (isTableLoading || shouldShowSyncingInsteadOfEmpty || hasKnownTransactionsAwaitingRows);
   const clearTransactionFilters = () => {
+    setReportMerchants([]);
     setQuery(""); setCurrencyFilter(""); persistSelectedCurrency(selectedWorkspaceId, "");
     setCategoryFilters([]); setAccountFilters([]); setTypeFilters([]); setTagFilters([]);
     setDateFilterMode("ltd"); setDateFilterAnchor(todayIso); setCustomStart(""); setCustomEnd("");
@@ -7530,6 +7560,7 @@ function TransactionsPageContent() {
     ...(sourceFilter ? [{ label: sourceFilter === "upload" ? "Imported" : "Manual", clear: () => setSourceFilter("") }] : []),
     ...(confidenceFilter ? [{ label: `${confidenceFilter} extraction confidence`, clear: () => setConfidenceFilter("") }] : []),
     ...(amountMin || amountMax ? [{ label: "Amount range", clear: () => { setAmountMin(""); setAmountMax(""); } }] : []),
+    ...reportMerchants.map(name=>({label: name, clear:()=>setReportMerchants(current=>current.filter(n=>n!==name))})),
     ...tagFilters.map(id => ({ label: filterTags.find(tag => tag.id === id)?.name ?? "Tag", clear: () => setTagFilters(current => current.filter(value => value !== id)) })),
   ];
   const transactionsNoResults = <div className="empty-state transactions-empty-state transactions-empty-state--table" role="status">

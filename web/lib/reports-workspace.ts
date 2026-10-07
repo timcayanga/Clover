@@ -1,5 +1,5 @@
-import {hasTransactionUserEdits} from "./transaction-user-edits";
-import {transactionNeedsReview} from "./transaction-review-reasons";
+import { hasTransactionUserEdits } from "./transaction-user-edits";
+import { transactionNeedsReview } from "./transaction-review-reasons";
 import { prisma } from "./prisma";
 import { buildActiveWorkspaceTransactionWhere } from "./transaction-query";
 import { getEffectiveTransactionCategoryName } from "./transaction-display";
@@ -34,6 +34,8 @@ import {
   type ReportRow,
 } from "../../shared/reports/analysis";
 import type { ReportsWorkspace } from "../../shared/reports/workspace";
+import { reportMerchants, reportCoverage } from "../../shared/reports/details";
+import { buildReportBudgets } from "./report-budget";
 
 /** All report reads are scoped to a Profile authorized by the caller. No financial writes. */
 export async function loadReportsWorkspace(
@@ -97,7 +99,17 @@ export async function loadReportsWorkspace(
           isTransfer: true,
           importFileId: true,
           reviewStatus: true,
-          normalizedPayload:true,parserConfidence:true,categoryConfidence:true,accountMatchConfidence:true,duplicateConfidence:true,isExcluded:true,categoryId:true,
+          transactionTags: {
+            where: { tag: { workspaceId } },
+            select: { tagId: true },
+          },
+          normalizedPayload: true,
+          parserConfidence: true,
+          categoryConfidence: true,
+          accountMatchConfidence: true,
+          duplicateConfidence: true,
+          isExcluded: true,
+          categoryId: true,
           merchantRaw: true,
           merchantClean: true,
           description: true,
@@ -126,8 +138,29 @@ export async function loadReportsWorkspace(
     ),
     today = reportDay(now, timeZone);
   const paid = hasFullFeatureAccess(access.planTier);
+  // Keep the second read batch small enough for the shared database pool.
+  const [budgets, tags, profile] = await Promise.all([
+    paid
+      ? prisma.budget.findMany({
+          where: { workspaceId, isActive: true, kind: "spend_limit" },
+          include: { category: { select: { name: true } } },
+        })
+      : [],
+    prisma.tag.findMany({
+      where: { workspaceId },
+      select: { id: true, name: true },
+      orderBy: { name: "asc" },
+    }),
+    prisma.workspace.findUnique({
+      where: { id: workspaceId },
+      select: { name: true },
+    }),
+  ]);
   const currencySelection = resolveReportCurrency(
-    [...accounts.map((a) => a.currency), ...transactions.map(t=>t.currency)],
+    [
+      ...accounts.map((a) => a.currency),
+      ...transactions.map((t) => t.currency),
+    ],
     baseCurrency,
     view.currency || undefined,
   );
@@ -135,16 +168,18 @@ export async function loadReportsWorkspace(
   const resolvedCategories = new Map(
     transactions.map((t) => [
       t.id,
-      hasTransactionUserEdits(t) ? t.category?.name ?? "Other" : getEffectiveTransactionCategoryName({
-        categoryName: t.category?.name ?? null,
-        rawPayload: t.rawPayload as never,
-        merchantRaw: t.merchantRaw,
-        merchantClean: t.merchantClean,
-        description: t.description,
-        institution: t.account.institution,
-        source: t.importFileId ? "upload" : "manual",
-        type: t.type,
-      }) ?? "Uncategorized",
+      hasTransactionUserEdits(t)
+        ? (t.category?.name ?? "Other")
+        : (getEffectiveTransactionCategoryName({
+            categoryName: t.category?.name ?? null,
+            rawPayload: t.rawPayload as never,
+            merchantRaw: t.merchantRaw,
+            merchantClean: t.merchantClean,
+            description: t.description,
+            institution: t.account.institution,
+            source: t.importFileId ? "upload" : "manual",
+            type: t.type,
+          }) ?? "Uncategorized"),
     ]),
   );
   const overrides = getTransactionSummaryTypeOverrides(
@@ -159,20 +194,25 @@ export async function loadReportsWorkspace(
     date: reportDay(t.date, timeZone),
     amount: Math.abs(Number(t.amount)),
     currency: t.currency,
-    type: hasTransactionUserEdits(t) ? t.type :
-      overrides.get(t.id) ??
-      resolveFinancialTransactionType({
-        ...t,
-        categoryName: resolvedCategories.get(t.id),
-        institution: t.account.institution,
-      }),
+    type: hasTransactionUserEdits(t)
+      ? t.type
+      : (overrides.get(t.id) ??
+        resolveFinancialTransactionType({
+          ...t,
+          categoryName: resolvedCategories.get(t.id),
+          institution: t.account.institution,
+        })),
     category: resolvedCategories.get(t.id)!,
     categoryId: t.category?.id,
     merchant: t.merchantClean || t.merchantRaw || "Other",
     accountId: t.accountId,
     account: t.account.name,
     reviewStatus: t.reviewStatus,
-    needsReview: transactionNeedsReview({...t,categoryName:resolvedCategories.get(t.id)}),
+    needsReview: transactionNeedsReview({
+      ...t,
+      categoryName: resolvedCategories.get(t.id),
+    }),
+    tags: t.transactionTags.map((tag) => tag.tagId),
   }));
   const selected = selectedReportRows(rows, view);
   const earliest =
@@ -349,6 +389,29 @@ export async function loadReportsWorkspace(
     }
     return {
       currency,
+      budgets: paid
+        ? buildReportBudgets(
+            budgets,
+            selected,
+            period,
+            view,
+            currency,
+            timeZone,
+          )
+        : [],
+      merchantAnalysis: reportMerchants(
+        selected.filter((t) => t.currency === currency),
+        period,
+      ),
+      coverage: reportCoverage(
+        selected.filter((t) => t.currency === currency),
+        period,
+        view,
+        scopedAccounts
+          .filter((a) => !known.some((k) => k.id === a.id))
+          .map((a) => a.name),
+        history.points.length > 0,
+      ),
       analysis,
       balances,
       netWorth: history.points,
@@ -367,6 +430,7 @@ export async function loadReportsWorkspace(
   });
   return {
     workspaceId,
+    profileName: profile?.name ?? "Profile",
     paid,
     timeZone,
     today,
@@ -374,6 +438,8 @@ export async function loadReportsWorkspace(
     period,
     currencies: currencySelection.currencies,
     accounts: accounts.map((a) => ({ id: a.id, name: a.name })),
+    merchants: [...new Set(rows.map((r) => r.merchant))].sort(),
+    tags,
     categories: [...new Set(rows.map((r) => r.category))]
       .sort()
       .map((name) => ({

@@ -32,7 +32,9 @@ export function reportTransactionFilters(
       )
         ? p.get("reviewFilter")!
         : "",
-      merchants: list("merchant"),
+      merchants: p.getAll("merchant").slice(0, 100),
+      merchantMatch: p.get("merchantMatch") === "exact" ? "exact" : undefined,
+      tags: p.getAll("tag").slice(0, 100),
     },
     merchant: p.get("merchant") ?? "",
   };

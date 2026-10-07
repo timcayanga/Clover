@@ -256,7 +256,7 @@ const getPeriodStart = (cadence: BudgetCadence, offset: number, now: Date) => {
   return addMonths(startOfMonth(now), -offset);
 };
 
-const getPeriodEnd = (cadence: BudgetCadence, start: Date) => {
+export const getPeriodEnd = (cadence: BudgetCadence, start: Date) => {
   if (cadence === "daily") {
     return addDays(start, 1);
   }
@@ -377,7 +377,7 @@ const getBudgetStatus = (kind: BudgetKind, stage: BudgetAlertStage) => {
   return { label: "Room left", detail: "There is still room in this budget.", tone: "positive" as const };
 };
 
-const matchesBudgetScope = (budget: BudgetRecord, transaction: BudgetTransaction) => {
+export const matchesBudgetScope = (budget: BudgetRecord, transaction: BudgetTransaction) => {
   if (transaction.currency?.trim().toUpperCase() !== budget.currency.trim().toUpperCase()) return false;
   if (budget.scope === "account") {
     return transaction.accountId === budget.accountId;

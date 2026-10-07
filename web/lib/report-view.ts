@@ -25,6 +25,8 @@ export const reportViewSchema = z
     compare: z.enum(["previous", "year"]).default("previous"),
     chart: z.enum(["Donut", "Bars", "Table"]).default("Donut"),
     trendCategories: z.array(z.string().max(160)).max(6).default([]),
+    merchants: z.array(z.string().min(1).max(500)).max(100).default([]),
+    tags: z.array(z.string().min(1).max(128)).max(100).default([]),
   })
   .strict()
   .refine(
@@ -62,5 +64,7 @@ export function reportViewFromParams(p: URLSearchParams): ReportView {
     accounts: p.get("accountId") ? [p.get("accountId")!] : list("accounts"),
     categories: list("categories"),
     trendCategories: list("trendCategories"),
+    merchants: list("merchants"),
+    tags: list("tags"),
   });
 }

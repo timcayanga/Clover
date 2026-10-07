@@ -8,11 +8,17 @@ export function reportTransactionParams(
   categories: { id: string; name: string }[],
   extra: Record<string, string> = {},
 ) {
-  const { category, categoryName, type, reportType, ...rest } = extra;
+  const { category, categoryName, type, reportType, merchant, ...rest } = extra;
   const name = category ?? categoryName;
   const chosen = name ? [name] : view.categories;
-  const ids = chosen.flatMap(name => {const matches=categories.filter(c=>c.name===name && c.id).map(c=>c.id);return matches.length ? matches : [name];});
+  const ids = chosen.flatMap((name) => {
+    const matches = categories
+      .filter((c) => c.name === name && c.id)
+      .map((c) => c.id);
+    return matches.length ? matches : [name];
+  });
   const params = new URLSearchParams({
+    report: "1",
     currency,
     dateFilterMode: "custom",
     customStart: from,
@@ -20,6 +26,10 @@ export function reportTransactionParams(
     types: view.transfers === "only" ? "transfer" : "credit,debit",
     ...rest,
   });
+  const merchants = merchant ? [merchant] : (view.merchants ?? []);
+  merchants.forEach((m) => params.append("merchant", m));
+  if (merchants.length) params.set("merchantMatch", "exact");
+  view.tags?.forEach((t) => params.append("tag", t));
   if (chosen.length)
     params.set(
       "categories",

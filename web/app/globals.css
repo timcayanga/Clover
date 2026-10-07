@@ -66723,3 +66723,11 @@ input.transaction-inline-edit[aria-invalid="true"] { box-shadow: inset 0 -1px va
 @media(max-width:380px){.report-v2-summary{grid-template-columns:1fr}.report-v2-filter>label{align-items:flex-start;flex-direction:column}.report-v2-filter select,.report-v2-filter input[type=date]{max-width:100%;width:100%}}
 
 .report-comparison-chart {min-width:0;display:grid;gap:12px}.report-comparison-chart>svg{width:100%;height:auto;color:var(--muted)}
+
+/* Reports detail panels keep wide financial tables inside their own scroll area. */
+.report-v2-coverage{padding:16px 20px;border:1px solid var(--stroke);border-radius:16px;margin:16px 0;overflow-wrap:anywhere}
+.report-v2-coverage summary{cursor:pointer;font-weight:500;min-height:24px}
+.report-v2-coverage li{margin:10px 0;line-height:1.6}
+.report-v2-search{display:flex;flex-direction:column;gap:8px;margin:16px 0;max-width:420px}
+.report-v2-search input{width:100%;min-height:44px;border:1px solid var(--stroke);border-radius:12px;padding:10px 14px;color:var(--ink);background:var(--surface,#fff)}
+.report-v2-table th small{display:block;font-weight:400;color:var(--muted);margin-top:4px}
