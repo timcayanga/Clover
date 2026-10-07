@@ -26,6 +26,16 @@ for (const bank of ["BDO", "UnionBank", "RCBC", "Security Bank", "Chinabank", "L
   assert(searchKnowledge(philippineBankGuideSeeds, bank).length > 0, `${bank}: guide must be searchable`);
 }
 
+for (const slug of ["import-from-realbyte", "import-from-money-lover", "import-from-wallet", "import-from-bluecoins", "use-clover-migration-template"]) {
+  const entry = knowledgeSeeds.find(item => item.path === `/help/modern-imports/${slug}`)!;
+  assert(entry, slug);
+  assert.equal(entry.content.downloads?.[0]?.path, "/templates/clover-migration.csv", `${slug}: template must reach the current renderer`);
+  assert(existsSync(`public${entry.content.downloads![0].path}`));
+  if (slug !== "use-clover-migration-template") assert(entry.content.sources.length > 0, `${slug}: official instructions must be visible`);
+}
+assert(!contentSchema.safeParse({ ...knowledgeSeeds[0].content, downloads: [{ label: "Unsafe download", path: "//example.com/payload.csv" }] }).success);
+assert(!contentSchema.safeParse({ ...knowledgeSeeds[0].content, downloads: [{ label: "Private data", path: "/api/account/export" }] }).success);
+
 assert.equal(
   new Set(knowledgeSeeds.map((entry) => entry.path)).size,
   knowledgeSeeds.length,
