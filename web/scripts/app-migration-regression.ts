@@ -52,7 +52,7 @@ const main = async () => {
  const unique = parse(repeated);assert.equal(unique.length, 1);
  assert.equal((unique[0].rawPayload?.migrationSummary as any).inputRows, 3);
  assert.equal((unique[0].rawPayload?.migrationSummary as any).skippedRows.length, 2);
- assert.throws(() => parse(repeated.replace('Food,posted,a\nspreadsheet', 'Food,posted,c\nspreadsheet').replace('2026-09-02,Lunch,500', 'not-a-date,Lunch,500').replace('Food,pending,b', 'Food,posted,b')), /row 4.*date or amount/);
+ assert.throws(() => parse(repeated.replace('Food,posted,a\nspreadsheet', 'Food,posted,c\nspreadsheet').replace('2026-09-02,Lunch,500', 'not-a-date,Lunch,500').replace('Food,pending,b', 'Food,posted,b')), /row 4.*date/);
  assert.throws(() => parse(repeated.replace('2026-09-01,Lunch,500,PHP,Cash,Expense,Food,posted,a\nspreadsheet', '2026-09-01,Lunch,501,PHP,Cash,Expense,Food,posted,a\nspreadsheet')), /conflicting values/);
  assert.throws(() => parse('Date,Wallet,Category,Amount,Note\n2026-09-01,Cash,Food,500,Lunch'), /unsigned amount/);
  assert.throws(() => parse(templateText.replace('500,PHP', 'oops,PHP')), /row 2/);
@@ -63,6 +63,54 @@ const main = async () => {
  assert.equal(match({ ...noIds[0], accountId: 'cash' }), true);
  assert.equal(match({ ...noIds[0], accountId: 'cash' }), true);
  assert.equal(match({ ...noIds[0], accountId: 'cash' }), false, 'Preserve occurrence count');
+ // Re-import identity must come from the immutable export, including legacy
+ // rows written before this change, never the user's corrected fields.
+ const corrected = {...noIds[0], accountId:'cash', date:'2026-08-01', amount:'99.00', merchantRaw:'Corrected merchant', description:'My correction'};
+ assert.equal(createMigrationOverlapMatcher([corrected])({...noIds[0], accountId:'cash'}), true);
+ for (const profile of [
+   ['Date,Account,Category,Subcategory,Note,Amount,Income/Expense', '2026-09-01,Cash,Food,Lunch,Receipt,25,Expense'],
+   ['Date,Wallet,Category,Amount,Note,Type,Currency', '2026-09-01,Cash,Food,25,Receipt,Expense,PHP'],
+   ['Date,Account,Category,Amount,Payment Type,Type,Currency', '2026-09-01,Cash,Food,25,Cash,Expense,PHP'],
+   ['Type,Date,Item or Payee,Amount,Category,Account,Split,Currency', 'e,2026-09-01,Receipt,25,Food,Cash,,PHP'],
+   ['Migration Source,Date,Description,Amount,Currency,Account,Type,Category', 'spreadsheet,2026-09-01,Receipt,25,PHP,Cash,Expense,Food'],
+ ]) {
+   const input=profile.join('\n');
+   assert.throws(()=>parse(input.replace('2026-09-01','2026-02-30')),/date/i,profile[0]);
+   assert.throws(()=>parse(input.replace(',25,',',fee 25,')),/numeric amount/,profile[0]);
+   assert.equal(parse(input.replace(',25,',',"12,5",'))[0].amount,'12.50');
+ }
+ const transferHeader='Date,Account,Category,Subcategory,Note,Amount,Income/Expense,Currency';
+ const pairedTransfers=transferHeader+'\n2026-09-01,BPI,Savings,,Transfer,"1,000.00",Transfer out,PHP\n09/01/2026,Savings,BPI,,Transfer,1000,Transfer in,PHP';
+ assert.equal(parse(pairedTransfers).length,2,'Equivalent amount/date formatting must not create an extra receiving leg');
+ const repeatedTransfers=pairedTransfers+'\n2026-09-01,BPI,Savings,,Transfer,1000,Transfer out,PHP';
+ assert.equal(parse(repeatedTransfers).length,4,'One incoming occurrence cannot satisfy two outgoing transfers');
+ assert.throws(()=>parse(pairedTransfers.replace('Transfer in,PHP','Transfer in,USD')),/cross-currency/);
+ assert.equal(parse('Date,Wallet,Category,Amount,Note,Type,Currency\n2026-09-01,Cash,Pay,-25,Refund,Income,PHP')[0].type,'income','An explicit source type remains authoritative');
+ assert.equal(readAppMigration(parse('Date,Wallet,Category,Amount,Note,Type,Currency\n2026-09-01,Cash,Pay,-25,Refund,Income,PHP')[0].rawPayload)?.direction,'income');
+ assert.throws(()=>parse('Date,Wallet,Category,Amount,Note,Type,Currency\n03/04/2026,Cash,Food,25,Lunch,Expense,PHP'),/ambiguous/);
+ const declaredMixed=parse('Date,Wallet,Category,Amount,Note,Type,Currency,Date Format\n13/04/2026,Cash,Food,25,Lunch,Expense,PHP,DMY\n04/13/2026,Cash,Food,25,Lunch,Expense,PHP,MDY');
+ assert(declaredMixed.every(r=>r.date==='2026-04-13'));
+ const skipAmbiguous=parse('Date,Wallet,Category,Amount,Note,Type,Currency,Status\n13/04/2026,Cash,Food,25,Lunch,Expense,PHP,posted\n04/13/2026,Cash,Food,25,Lunch,Expense,PHP,pending');
+ assert.equal(skipAmbiguous.length,1);
+ const negativeIncome=parse('Date,Wallet,Category,Amount,Note,Type,Currency\n2026-09-01,Cash,Pay,-25,Refund,Income,PHP')[0];
+ const legacyDirection={...negativeIncome,accountId:'cash',rawPayload:{...negativeIncome.rawPayload,appMigration:{...readAppMigration(negativeIncome.rawPayload)!,direction:'expense'}}};
+ assert.equal(createMigrationOverlapMatcher([legacyDirection])({...negativeIncome,accountId:'cash'}),true,'Legacy magnitude-based income evidence must still match');
+ const categoriesOnly=parse('Date,Wallet,Category,Amount,Note,Type,Currency\n2026-09-01,Cash,Food,25,,Expense,PHP\n2026-09-01,Cash,Rent,25,,Expense,PHP');
+ assert.equal(createMigrationOverlapMatcher([{...categoriesOnly[0],accountId:'cash'}])({...categoriesOnly[1],accountId:'cash'}),false,'Source category is identity when it is the only description');
+ const transferStart=performance.now();
+ const manyTransfers=parse(transferHeader+'\n'+Array.from({length:5000},(_,i)=>`2026-09-01,From,To,,Transfer ${i},1000,Transfer out,PHP\n09/01/2026,To,From,,Transfer ${i},1000,Transfer in,PHP`).join('\n'));
+ const transferMs=Math.round(performance.now()-transferStart);
+ assert.equal(manyTransfers.length,10000);assert(!manyTransfers.some(r=>readAppMigration(r.rawPayload)?.derivedTransferLeg));
+ assert(transferMs<10000,`10,000 transfer rows exceeded 10s: ${transferMs}`);
+ console.log('Realbyte 10,000 transfer rows:',transferMs,'ms');
+ for (const source of ['spendee','toshl']) {
+   const mapped=parse(readFileSync(`scripts/fixtures/app-migrations/${source}-mapped-synthetic.csv`,'utf8'));
+   assert.equal(mapped.length,4);assert(mapped.every(r=>readAppMigration(r.rawPayload)?.source==='spreadsheet'));
+   assert.deepEqual(mapped.map(r=>r.type),['expense','income','transfer','transfer']);
+   assert.deepEqual(mapped.map(r=>readAppMigration(r.rawPayload)?.direction),['expense','income','expense','income']);
+   assert.equal(mapped[0].amount,source==='spendee'?'125.50':'50000.00');
+   assert.deepEqual(readAppMigration(mapped[0].rawPayload)?.tags,['travel','work']);
+ }
  // Persistence contract uses only the provided new transaction IDs, batches
  // tags and scopes every lookup to the current Profile.
  const calls:any[]=[];

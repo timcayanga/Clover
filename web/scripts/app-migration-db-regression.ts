@@ -51,6 +51,11 @@ async function main() {
   assert.equal(saved.length, fixture.count, fixture.name + JSON.stringify(run.result));
   if (fixture.name === "realbyte.csv") assert.equal(saved.filter(r => r.isTransfer).length, 2);
   if (fixture.name === "money-lover.csv") { assert.equal(saved[0].currency, "IDR"); assert.equal(Number(saved[0].amount), 5000000); assert.equal(saved[0].account.name, "BCA"); }
+  const corrected = await prisma.transaction.update({where:{id:saved[0].id},data:{reviewStatus:"confirmed",merchantRaw:"Corrected",description:"Updated note",amount:1,date:new Date("2025-01-01")}});
+  const repeat = await upload(fixture.text, `repeat-${fixture.name}`);
+  await drain();
+  assert.equal(await prisma.transaction.count({where:{importFileId:repeat.id}}),0,JSON.stringify(repeat.result));
+  assert.deepEqual(await prisma.transaction.findUnique({where:{id:corrected.id}}),corrected);
  }
  // Exercise the new profiles through the real worker, including post-save
  // enrichment and duplicate checks, with all external calls forbidden.
@@ -73,16 +78,35 @@ async function main() {
     assert.equal(saved.find(r=>r.merchantRaw==="POS REFUND")?.type,"income");
     assert.equal(saved.find(r=>r.merchantRaw==="POS HOTEL")?.isExcluded,true);
   }
-  const protectedRow=await prisma.transaction.update({where:{id:saved[0].id},data:{reviewStatus:"confirmed",merchantClean:"My corrected name"}});
+  const protectedRow=await prisma.transaction.update({where:{id:saved[0].id},data:{reviewStatus:"confirmed",merchantClean:"My corrected name",merchantRaw:"My corrected source",description:"My corrected memo",date:new Date("2025-01-01"),amount:9.99}});
   const repeated=await upload(content,`${source}-repeated.csv`);
   await drain();
   assert.equal(await prisma.transaction.count({where:{importFileId:repeated.id}}),0,JSON.stringify(repeated.result));
   assert.deepEqual(await prisma.transaction.findUnique({where:{id:protectedRow.id}}),protectedRow);
  }
+ for(const source of ['spendee','toshl']) {
+   const mapped=readFileSync(`scripts/fixtures/app-migrations/${source}-mapped-synthetic.csv`,'utf8');
+   const imported=await upload(mapped,`${source}-mapped.csv`);
+   const saved=await prisma.transaction.findMany({where:{importFileId:imported.id},include:{transactionTags:{include:{tag:true}}}});
+   assert.equal(saved.length,4,JSON.stringify(imported.result));
+   const meal=saved.find(r=>r.merchantRaw==='Lunch')!;
+   assert.equal(Number(meal.amount),source==='spendee'?125.5:50000);
+   assert.deepEqual(meal.transactionTags.map(t=>t.tag.name).sort(),['travel','work']);
+   assert.equal(saved.filter(r=>r.isTransfer).length,2);
+ }
  const countBeforeInvalid=await prisma.transaction.count({where:{workspaceId:w.id}});
  const invalid=readFileSync("scripts/fixtures/app-migrations/ynab-register-synthetic.csv","utf8").replace("45.25,0,Cleared", "45.25,8,Cleared");
  const invalidRun=await upload(invalid,"invalid-ynab.csv").catch(error=>({error:String(error)}));
  assert.equal(await prisma.transaction.count({where:{workspaceId:w.id}}),countBeforeInvalid,JSON.stringify(invalidRun));
+ for (const invalid of [
+   "Date,Wallet,Category,Amount,Note,Type,Currency\n2026-09-01,BCA,Food,25,Lunch,Expense,IDR\n2026-02-30,BCA,Food,25,Lunch,Expense,IDR",
+   "Date,Account,Category,Amount,Payment Type,Type,Currency\n2026-09-01,BPI,Food,25,Cash,Expense,PHP\n2026-09-02,BPI,Food,fee 25,Cash,Expense,PHP",
+ ]) {
+   const run=await upload(invalid,"invalid-legacy-profile.csv").catch(error=>({error:String(error)}));
+   assert.equal(await prisma.transaction.count({where:{workspaceId:w.id}}),countBeforeInvalid,JSON.stringify(run));
+ }
+ const paired=await upload('Date,Account,Category,Subcategory,Note,Amount,Income/Expense,Currency\n2026-09-01,Transfer Bank,Transfer Savings,,Transfer,"1,000.00",Transfer out,PHP\n09/01/2026,Transfer Savings,Transfer Bank,,Transfer,1000,Transfer in,PHP',"paired-realbyte.csv");
+ assert.equal(await prisma.transaction.count({where:{importFileId:paired.id}}),2,JSON.stringify(paired.result));
  const mixed = await upload("Migration Source,Date,Description,Amount,Currency,Account,Type,Category\nspreadsheet,2026-09-06,US dollars,100,USD,Travel,Income,Salary\nspreadsheet,2026-09-06,Philippine pesos,200,PHP,Travel,Income,Salary", "mixed.csv");
  const mixedRows = await prisma.transaction.findMany({ where: { importFileId: mixed.id }, include: { account: true } });
  assert.equal(mixedRows.length, 2); assert.notEqual(mixedRows[0].accountId, mixedRows[1].accountId);

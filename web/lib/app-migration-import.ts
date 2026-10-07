@@ -88,7 +88,15 @@ export const parseAppMigrationTable = (
   const get = (row: string[], ...names: string[]) => names.map(n => row[indexes.get(n) ?? -1]?.trim() ?? "").find(Boolean) ?? "";
   const fail = (row: number, message: string): never => { throw new Error(`Migration row ${row}: ${message} Nothing was added. Correct the file and upload again.`); };
   const strictSource = source === "ynab" || source === "monarch";
-  const inferredDateOrder = strictSource ? dateOrderFrom(table.rows.map(cells => get(cells, "date"))) : null;
+  const skipStatus = (cells: string[]) => {
+    const status = get(cells, "status", "state").toLowerCase();
+    return /^(?:v|void|voided|pending|processing|scheduled|failed|declined|cancelled|canceled|reversed)$/.test(status)
+      ? status : /^(?:true|1|yes)$/i.test(get(cells, "pending")) ? "pending" : null;
+  };
+  const inferredDateOrder = dateOrderFrom(table.rows.filter(cells => !get(cells, "date_format") && !skipStatus(cells) && !(source === "ynab" && /^starting balance$/i.test(get(cells, "payee")))).map(cells => get(cells, "date", "period", "datetime", "transaction_date")));
+  // These two published templates specify month-first dates. Other sources
+  // must supply unambiguous evidence or an explicit Date Format column.
+  const defaultDateOrder = source === "realbyte" || source === "bluecoins" ? "MDY" : null;
   const readSourceAmount = (value: string, currency: string, row: number) => {
     // A stray word, second number or formula must not become a plausible amount
     // merely because a tolerant document parser discards nonnumeric characters.
@@ -125,10 +133,8 @@ export const parseAppMigrationTable = (
     if (cells.length > table.headers.length && cells.slice(table.headers.length).some(c => c.trim())) fail(sourceRow, "There are more values than column headings.");
     const declared = get(cells, "migration_source").toLowerCase();
     if (source === "spreadsheet" && declared !== "spreadsheet") fail(sourceRow, 'Set Migration Source to "spreadsheet" when using the Clover template.');
-    const status = get(cells, "status", "state").toLowerCase();
-    if (/^(?:v|void|voided|pending|processing|scheduled|failed|declined|cancelled|canceled|reversed)$/.test(status) || /^(?:true|1|yes)$/i.test(get(cells, "pending"))) {
-      skipped.push({ row: sourceRow, reason: status || "pending" }); return;
-    }
+    const skippedStatus = skipStatus(cells);
+    if (skippedStatus) { skipped.push({ row: sourceRow, reason: skippedStatus }); return; }
     const category = get(cells, "category", "main_category");
     const subcategory = get(cells, "subcategory", "sub_category");
     const parent = get(cells, "parent_category", "category_group");
@@ -141,11 +147,11 @@ export const parseAppMigrationTable = (
     if (source === "ynab" && /^starting balance$/i.test(name)) { skipped.push({ row: sourceRow, reason: "starting balance (not income)" }); return; }
     if (!date && /^(?:total|subtotal|opening balance|closing balance)$/i.test(label)) { skipped.push({ row: sourceRow, reason: "summary" }); return; }
     if (!date) fail(sourceRow, "A transaction date is required.");
-    if (strictSource) {
+    {
       const declaredOrder = get(cells, "date_format").toUpperCase();
       if (declaredOrder && !["DMY", "MDY", "YYYY-MM-DD"].includes(declaredOrder)) fail(sourceRow, "Date Format must be DMY, MDY or YYYY-MM-DD.");
       if (declaredOrder === "YYYY-MM-DD" && !/^\d{4}-\d{2}-\d{2}$/.test(date)) fail(sourceRow, "Use YYYY-MM-DD dates.");
-      const order = declaredOrder === "DMY" || declaredOrder === "MDY" ? declaredOrder : inferredDateOrder;
+      const order = declaredOrder === "DMY" || declaredOrder === "MDY" ? declaredOrder : inferredDateOrder ?? defaultDateOrder;
       const normalized = migrationDate(date, order);
       if (!normalized) fail(sourceRow, "The date is invalid or ambiguous. Use YYYY-MM-DD, or add a Date Format column containing DMY or MDY.");
       date = normalized!;
@@ -179,10 +185,16 @@ export const parseAppMigrationTable = (
     else if (/^\s*[-(]/.test(amount)) type = "expense";
     else if (/^\s*\+/.test(amount)) type = "income";
     else fail(sourceRow, "Choose Income or Expense in the Type column for an unsigned amount.");
-    const direction = /\b(?:in|from)\b/.test(rawType) ? "income" : /\b(?:out|to)\b/.test(rawType) ? "expense" : /^\s*-/.test(amount) ? "expense" : type === "income" || type === "transfer" ? "income" : "expense";
+    const direction = type === "income" ? "income" : type === "expense" ? "expense" : /\b(?:in|from)\b/.test(rawType) ? "income" : /\b(?:out|to)\b/.test(rawType) ? "expense" : /^\s*[-(]/.test(amount) ? "expense" : "income";
     if (source === "monarch" && ((type === "income" && Number(amount) < 0) || (type === "expense" && Number(amount) > 0) ||
       (type === "transfer" && (direction === "income") !== (Number(amount) > 0)))) fail(sourceRow, "The Type conflicts with Monarch's signed amount. Positive is incoming and negative is outgoing.");
     if (type === "transfer" && source !== "bluecoins" && !/[+-]/.test(amount[0] ?? "") && !/\b(?:in|out|from|to)\b/.test(rawType)) fail(sourceRow, "Use a signed amount or Transfer In/Transfer Out to identify the transfer direction.");
+    const numericAmount = readSourceAmount(amount, currency, sourceRow);
+    // Keep the resolved direction explicit; a positive magnitude alone loses
+    // transfer-out intent in the downstream canonical parser.
+    amount = String(direction === "expense" ? -Math.abs(numericAmount) : Math.abs(numericAmount));
+    const balanceText = get(cells, "balance");
+    const balance = balanceText ? String(readSourceAmount(balanceText, currency, sourceRow)) : "";
     const account = get(cells, "account", "accounts", "wallet", "account_name") || context.accountName || "Cash";
     if (strictSource && !get(cells, "account")) fail(sourceRow, "An Account name is required for every source transaction.");
     const excludedText = get(cells, "excluded", "exclude_from_reports", "is_excluded", "hidden").toLowerCase();
@@ -200,20 +212,33 @@ export const parseAppMigrationTable = (
     const sourceId = get(cells, "id", "transaction_id", "reference");
     const destinationAccount = source === "realbyte" && type === "transfer" && direction === "expense" ? category : "";
     if (destinationAccount) categoryPath.splice(0, categoryPath.length, "Transfers");
-    const canonical = [date, label, amount, currency.toUpperCase(), account, categoryPath.join(" / "), type, `migration-${prepared.length}`, get(cells, "account_type"), get(cells, "balance"), get(cells, "institution", "bank"), get(cells, "account_number")];
+    const canonical = [date, label, amount, currency.toUpperCase(), account, categoryPath.join(" / "), type, `migration-${prepared.length}`, get(cells, "account_type"), balance, get(cells, "institution", "bank"), get(cells, "account_number")];
     const line = csv(canonical);
     prepared.push({ cells, sourceRow, name: name || label, originalStatement: get(cells, "original_statement"), note, categoryPath, tags: cleanTags, excluded: /^(?:true|yes|1)$/.test(excludedText), type, direction, sourceId, splitGroup, line, canonical, destinationAccount });
   });
   // Realbyte's documented template encodes a transfer-out destination in
   // Category. Materialize the other leg only when it is absent from the file.
   const originalPrepared = [...prepared];
-  const pairedIncoming = new Set<number>();
+  const transferKey = (row: typeof prepared[number], account: string) => JSON.stringify([account, row.canonical[0], Math.abs(Number(row.canonical[2])).toFixed(2), row.canonical[3]]);
+  const incomingCounts = new Map<string, number>();
+  const accountCurrencies = new Map<string, Set<string>>();
+  for (const row of originalPrepared) {
+    const currencies = accountCurrencies.get(row.canonical[4]) ?? new Set<string>();
+    currencies.add(row.canonical[3]);
+    accountCurrencies.set(row.canonical[4], currencies);
+    if (row.type === "transfer" && row.direction === "income") {
+      const k = transferKey(row, row.canonical[4]);
+      incomingCounts.set(k, (incomingCounts.get(k) ?? 0) + 1);
+    }
+  }
   for (const outgoing of originalPrepared) {
     if (!outgoing.destinationAccount) continue;
     if (outgoing.destinationAccount === outgoing.canonical[4]) fail(outgoing.sourceRow, "A transfer must use two different accounts.");
-    const counterpart = originalPrepared.findIndex((r, index) => !pairedIncoming.has(index) && r.type === "transfer" && r.direction === "income" && r.canonical[4] === outgoing.destinationAccount && r.canonical[0] === outgoing.canonical[0] && r.canonical[2].replace(/^[+-]/, "") === outgoing.canonical[2].replace(/^[+-]/, "") && r.canonical[3] === outgoing.canonical[3]);
-    if (counterpart !== -1) { pairedIncoming.add(counterpart); continue; }
-    if (originalPrepared.some(r => r.canonical[4] === outgoing.destinationAccount && r.canonical[3] !== outgoing.canonical[3])) fail(outgoing.sourceRow, "Use two explicit transfer legs with their own amounts and currencies for a cross-currency transfer.");
+    const k = transferKey(outgoing, outgoing.destinationAccount);
+    const available = incomingCounts.get(k) ?? 0;
+    if (available) { incomingCounts.set(k, available - 1); continue; }
+    const currencies = accountCurrencies.get(outgoing.destinationAccount);
+    if (currencies && [...currencies].some(currency => currency !== outgoing.canonical[3])) fail(outgoing.sourceRow, "Use two explicit transfer legs with their own amounts and currencies for a cross-currency transfer.");
     const canonical = [...outgoing.canonical];
     canonical[2] = canonical[2].replace(/^-/, "+");
     canonical[4] = outgoing.destinationAccount;
@@ -261,9 +286,33 @@ export const createMigrationOverlapMatcher = (existing: Array<Record<string, unk
   const identity = (row: Record<string, unknown>) => {
     const migration = readAppMigration(row.rawPayload);
     if (!migration) return null;
+    const raw = object(row.rawPayload);
+    const currency = raw?.accountCurrency ?? row.currency;
+    if (migration.sourceId) return JSON.stringify([row.accountId, currency, migration.source, migration.sourceId]);
+    const headers = raw?.originalHeaders;
+    const cells = raw?.sourceCells;
+    if (Array.isArray(headers) && headers.every(h => typeof h === "string") && Array.isArray(cells) && cells.every(c => typeof c === "string")) {
+      const sourceValues = new Map(headers.map((header, index) => [key(header), cells[index]?.trim() ?? ""]));
+      const get = (...names: string[]) => names.map(name => sourceValues.get(name)).find(Boolean) ?? "";
+      const sourceType = get("type", "income_expense", "direction", "record_type").toLowerCase();
+      // Older rows could record the amount sign as direction even when an
+      // explicit income/expense type overrode it. Keep those reimports stable.
+      const direction = /^(?:i|income|credit|pemasukan)$/.test(sourceType) ? "income"
+        : /^(?:e|expense|expenses|debit|pengeluaran)$/.test(sourceType) ? "expense" : migration.direction;
+      // The same raw evidence exists on older migration rows. Comparing it on
+      // both sides protects confirmed corrections without a destructive backfill.
+      // Metadata such as categories, tags and row positions is not identity.
+      return JSON.stringify([row.accountId, currency, migration.source, direction,
+        get("date", "period", "datetime", "transaction_date"), get("date_format"),
+        get("amount"), get("outflow"), get("inflow"),
+        get("item_or_payee", "payee", "merchant", "name", "contents"),
+        get("note", "notes", "memo"), get("description", "details"), get("original_statement"),
+        get("item_or_payee", "payee", "merchant", "name", "contents", "note", "notes", "memo", "description", "details")
+          ? "" : get("subcategory", "sub_category", "category", "main_category", "parent_category", "category_group")]);
+    }
+    // Very early payloads without source cells retain conservative exact matching.
     const date = row.date instanceof Date ? row.date.toISOString().slice(0, 10) : String(row.date ?? "").slice(0, 10);
-    if (migration.sourceId) return JSON.stringify([row.accountId, row.currency, migration.source, migration.sourceId]);
-    return JSON.stringify([row.accountId, date, Number(row.amount).toFixed(2), row.currency, migration.direction, migration.source,
+    return JSON.stringify([row.accountId, date, Number(row.amount).toFixed(2), currency, migration.direction, migration.source,
       [row.merchantRaw, row.description].map(v => String(v ?? "").trim()).join("\u0000")]);
   };
   const counts = new Map<string, number>();

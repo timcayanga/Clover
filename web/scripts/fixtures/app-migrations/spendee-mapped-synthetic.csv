@@ -1,0 +1,5 @@
+Migration Source,Date,Description,Amount,Currency,Account,Type,Category,Subcategory,Tags,Excluded,Transaction ID
+spreadsheet,2026-09-01,Lunch,125.50,PHP,Spendee Wallet,Expense,Food,Lunch,travel;work,false,spendee-1
+spreadsheet,2026-09-02,Salary,100000,PHP,Spendee Wallet,Income,Work,,monthly,false,spendee-2
+spreadsheet,2026-09-03,Transfer,500,PHP,Spendee Wallet,Transfer Out,Transfers,,,false,spendee-3
+spreadsheet,2026-09-03,Transfer,500,PHP,Spendee Savings,Transfer In,Transfers,,,false,spendee-4
