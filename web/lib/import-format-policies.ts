@@ -43,6 +43,10 @@ export const PUBLIC_IMPORT_CONTENT_TYPES = new Set([
   ...IMAGE_IMPORT_CONTENT_TYPES,
 ]);
 
+// File-picker capability is broader than the concise format examples shown in
+// Upload. Keep every general picker aligned with the server's format policy.
+export const PUBLIC_IMPORT_ACCEPT = [...PUBLIC_IMPORT_EXTENSIONS, ...PUBLIC_IMPORT_CONTENT_TYPES].join(",");
+
 export const TRAINING_IMAGE_EXTENSIONS = [...IMAGE_IMPORT_EXTENSIONS, ".pdf"] as const;
 export const TRAINING_IMAGE_CONTENT_TYPES = new Set([
   "application/pdf",

@@ -4,6 +4,7 @@ import { ReceiptDraftEditor } from "./receipt-draft-editor";
 import { publishWorkspaceDataChange } from "@/lib/workspace-data-sync";
 import { requestAiConsent } from "./ai-consent";
 import { UploadSourceButtons } from "@/components/upload-source-buttons";
+import { PUBLIC_IMPORT_ACCEPT } from "@/lib/import-format-policies";
 
 import { InterfaceIcon } from "@/components/interface-icon";
 
@@ -8540,7 +8541,7 @@ export function ImportFilesModal({
             ref={fileInputRef}
             className="hidden-file-input"
             type="file"
-            accept=".csv,.tsv,.ofx,.qfx,.qif,.mt940,.sta,.xml,.json,.xlsx,.xls,.xlsm,.xlsb,.ods,.pdf,.jpg,.jpeg,.png,.webp,.heic,.heif"
+            accept={PUBLIC_IMPORT_ACCEPT}
             multiple
             onChange={handleInputChange}
           />

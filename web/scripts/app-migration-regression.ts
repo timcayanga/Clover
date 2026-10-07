@@ -1,4 +1,5 @@
 import { runQifMigrationRegression } from "./qif-migration-regression";
+import { runUploadFormatCoverageRegression } from "./upload-format-coverage-regression";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { performance } from "node:perf_hooks";
@@ -10,6 +11,7 @@ import { readAppMigration, createMigrationOverlapMatcher } from "@/lib/app-migra
 import { persistMigrationTags } from "@/lib/app-migration-persistence";
 const parse = (text: string) => parseImportText(text, "export.csv", "text/csv", { currency: "PHP" });
 const main = async () => {
+ await runUploadFormatCoverageRegression();
  await runQifMigrationRegression();
  const actualText=readFileSync('scripts/fixtures/app-migrations/actual-query-synthetic.csv','utf8');
  const actual=parse(actualText);

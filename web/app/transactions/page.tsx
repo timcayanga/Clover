@@ -12,6 +12,7 @@ import { TransactionTableEntry } from "@/components/transaction-table-entry";
 import { TransactionDetailLabel } from "@/components/transaction-detail-label";
 import { addTransactionCurrencyAmount, withTransactionCurrencyDelta } from "@/lib/transaction-currency-summary";
 import { UploadSourceButtons, UploadSecurityCopy } from "@/components/upload-source-buttons";
+import { PUBLIC_IMPORT_ACCEPT } from "@/lib/import-format-policies";
 import { TransactionColumns, TransactionTagPreview, useTransactionColumns } from "@/components/transaction-columns";
 import { organizeAccountLabels } from "@/lib/organize-account-label";
 import { InterfaceIcon } from "@/components/interface-icon";
@@ -7711,7 +7712,7 @@ function TransactionsPageContent() {
         ref={addFileInputRef}
         className="hidden-file-input"
         type="file"
-        accept=".csv,.tsv,.pdf,.jpg,.jpeg,.png,.webp,.heic,.heif"
+        accept={PUBLIC_IMPORT_ACCEPT}
         multiple
         onFiles={handleMobileFiles}
         aria-hidden="true"

@@ -1,5 +1,6 @@
 "use client";
 import { useRef, useState } from "react";
+import { PUBLIC_IMPORT_ACCEPT } from "@/lib/import-format-policies";
 
 export function UploadSourceButtons({
   onFiles,
@@ -71,7 +72,7 @@ export function UploadSourcePicker({
         hidden
         type="file"
         multiple
-        accept=".pdf,.png,.jpg,.jpeg,.xls,.xlsx,.csv,.heic"
+        accept={PUBLIC_IMPORT_ACCEPT}
         onChange={(e) => selected(e.currentTarget)}
       />
       <input

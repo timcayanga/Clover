@@ -3,6 +3,7 @@
 import dynamic from "next/dynamic";
 import type { ChangeEvent, CSSProperties } from "react";
 import { UploadSourceButtons } from "@/components/upload-source-buttons";
+import { PUBLIC_IMPORT_ACCEPT } from "@/lib/import-format-policies";
 import { useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { PageFileDropZone } from "@/components/page-file-drop-zone";
@@ -75,8 +76,6 @@ type OnboardingFormProps = {
   completionUrl?: string;
   regionalDefaults: RegionalPreferences;
 };
-
-const acceptedImportFiles = ".csv,.tsv,.pdf,.jpg,.jpeg,.png,.webp,.heic,.heif";
 
 const jsonHeaders = { "Content-Type": "application/json" };
 
@@ -314,7 +313,7 @@ export function OnboardingForm({
           <UploadSourceButtons onFiles={() => fileInputRef.current?.click()} onCamera={() => photoInputRef.current?.click()} onLibrary={() => libraryInputRef.current?.click()} />
           <input ref={photoInputRef} className="sr-only" type="file" accept="image/*" capture="environment" onChange={handleFilePickerChange} />
           <input ref={libraryInputRef} className="sr-only" type="file" accept="image/*" multiple onChange={handleFilePickerChange} />
-          <input ref={fileInputRef} className="sr-only" type="file" accept={acceptedImportFiles} multiple onChange={handleFilePickerChange} />
+          <input ref={fileInputRef} className="sr-only" type="file" accept={PUBLIC_IMPORT_ACCEPT} multiple onChange={handleFilePickerChange} />
         </> : <>
           <h4>{accountMethod === "connect" ? "Connect a supported bank" : "Add an account manually"}</h4>
           <p className="onboarding-card__copy">{accountMethod === "connect" ? "Choose your bank and securely link the accounts you want to see in Clover." : "Add a bank account, wallet, cash, or another account yourself."}</p>

@@ -1,4 +1,5 @@
 "use client";
+import { PUBLIC_IMPORT_ACCEPT } from "@/lib/import-format-policies";
 
 import {
   createContext,
@@ -2395,6 +2396,7 @@ export function CloverShell({
         ref={quickAddFileInputRef}
         className="hidden-file-input"
         type="file"
+        accept={PUBLIC_IMPORT_ACCEPT}
         multiple
         onChange={handleQuickAddFileChange}
         aria-hidden="true"
