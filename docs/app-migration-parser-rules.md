@@ -1,8 +1,10 @@
-# App migration imports, batch 1
+# App migration imports
 
 ## Supported profiles
 
 The adapter recognizes Realbyte's Date/Account/Category/Subcategory/Note/Amount/Income-Expense profile; Money Lover's Wallet/Category/Amount/Note profile; Wallet by BudgetBakers' Account/Category/Amount plus reference-currency or payment-type profile; Bluecoins' numbered standard/advanced template columns; and Clover's explicit Migration Source spreadsheet template.
+
+Batch 2 adds YNAB register and Monarch transaction profiles, described below.
 
 Recognition is by columns, not filename. CSV, TSV and compatible workbook tables share the adapter. This is transaction-history migration, not a complete app backup restore. ZIP, SQLite, app settings, budgets, recurring rules, attachments and historical opening balances are outside this batch. Unknown layouts continue through the existing generic parser; they do not receive source-preservation guarantees. Money Lover and Wallet profiles use constructed fixtures, not authentic user exports, so do not advertise exhaustive version/language compatibility.
 
@@ -53,3 +55,6 @@ YNAB register detection requires Account, Payee, Memo, Outflow, Inflow, and Cate
 - Two new Help Center guides include official export instructions, the Clover template, original-currency/date preparation and limits. No source login or AI parsing is required. Server extraction cache version advances to v35; existing confirmed history is never reprocessed.
 
 Verification uses synthetic YNAB/Monarch fixtures, documented source columns, public Bluecoins sample, all seven existing/new profiles, CSV/TSV and XLSX/XLS/ODS parity, reconciliation totals, invalid rows, refunds, transfers, exclusions, notes and source descriptions. Real worker tests run against disposable PostgreSQL with all outbound calls prohibited, check new-source persistence, repeat imports, confirmed-edit preservation, invalid-file atomicity and a 1,000-row Monarch import. This does not certify all app versions or translated headings. Authentic export coverage remains a follow-up; source currency, custom transfer category type and missing exclusion flags sometimes require user preparation.
+
+
+Batch 2 local verification results: seven-profile parser and Help Center regressions passed. YNAB and Monarch each parsed and enriched 10,000 rows in approximately 1.6–2.0 seconds. Real worker/PostgreSQL verification saved 1,036 synthetic transactions across the suite, including a 1,000-row Monarch import in 1.7 seconds, with zero network/AI calls. Repeat uploads, original/edited merchants, flags/tags, source categories, refunds, transfer directions, exclusions, invalid-file non-persistence and confirmed-edit preservation passed. Standard exports without a Currency column use the explicitly supplied account currency; no supplied currency fails safely. These timings exclude phone upload/network transport and are not production latency guarantees.

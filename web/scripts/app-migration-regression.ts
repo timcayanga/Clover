@@ -84,6 +84,12 @@ const main = async () => {
  assert.equal(monarch.filter(r => r.type === "transfer").length, 3);
  assert.equal(readAppMigration(monarch[6].rawPayload)?.excluded, true);
  assert.deepEqual(readAppMigration(monarch[0].rawPayload)?.tags, ["household", "food"]);
+ const monarchStandard="Date,Merchant,Category,Account,Original Statement,Notes,Amount,Tags\n2026-09-01,Shop,Groceries,Card,POS FOOD,Refund,25,food";
+ assert.equal(parseImportText(monarchStandard,"monarch.csv","text/csv",{currency:"CAD"})[0].currency,"CAD");
+ assert.throws(()=>parseImportText(monarchStandard,"monarch.csv","text/csv"),/Currency/);
+ const ynabStandard="Account,Flag,Date,Payee,Category Group/Category,Category Group,Category,Memo,Outflow,Inflow,Cleared\nChecking,,2026-09-01,Shop,Living: Food,Living,Food,Receipt,25,0,Cleared";
+ assert.equal(parseImportText(ynabStandard,"ynab.csv","text/csv",{currency:"SGD"})[0].currency,"SGD");
+ assert.throws(()=>parseImportText(ynabStandard,"ynab.csv","text/csv"),/Currency/);
  const newEnriched = await enrichParsedRowsWithTraining({workspaceId:"offline-new-profiles", rows:[...ynab, ...monarch]});
  assert.deepEqual(newEnriched.map(r=>[r.merchantRaw,r.merchantClean,r.categoryName,r.type,r.currency,r.amount]), [...ynab,...monarch].map(r=>[r.merchantRaw,r.merchantClean,r.categoryName,r.type,r.currency,r.amount]));
  const yh = "Account,Flag,Date,Payee,Category Group,Category,Memo,Outflow,Inflow,Cleared,Currency";
