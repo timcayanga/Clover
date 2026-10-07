@@ -74,6 +74,14 @@ export function KnowledgeArticle({
               <Link href="/pricing">See the current pricing comparison →</Link>
             </aside>
           ) : null}
+          {content.downloads?.length ? (
+            <aside className={styles.callout}>
+              {content.downloads.map(download => (
+                <p key={download.path}><a href={download.path} download>{download.label} ↓</a></p>
+              ))}
+              <p>Keep the headings and replace all example rows with your own transactions.</p>
+            </aside>
+          ) : null}
           {content.sections.map((section, index) => (
             <section key={index} id={`section-${index}`}>
               <h2>{section.heading}</h2>

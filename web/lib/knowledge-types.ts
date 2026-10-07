@@ -41,6 +41,10 @@ export const contentSchema = z
       )
       .max(20)
       .default([]),
+    downloads: z.array(z.object({
+      label: z.string().min(2).max(180),
+      path: z.string().max(250).regex(/^\/templates\/[a-z0-9-]+\.csv$/),
+    })).max(5).optional(),
     screenshot: localPath.optional(),
     screenshotAlt: z.string().max(300).optional(),
     reviewedAt: z

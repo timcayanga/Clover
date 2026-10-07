@@ -69,6 +69,7 @@ for (const section of allSections) {
                   : /how recurring detection/i.test(article.title)
                     ? "recurring"
                     : undefined;
+    const migrationArticle = article.links.some(link => link.href === "/templates/clover-migration.csv");
     const content: KnowledgeContent = {
       title: clean(article.title),
       summary: clean(article.summary),
@@ -90,7 +91,8 @@ for (const section of allSections) {
             answer: clean(q.answer),
           }))
         : [],
-      sources: [],
+      sources: migrationArticle ? article.links.filter(link => link.href.startsWith("https://")).map(link => ({ label: link.label, url: link.href })) : [],
+      ...(migrationArticle ? { downloads: article.links.filter(link => link.href.startsWith("/templates/")).map(link => ({ label: link.label, path: link.href })) } : {}),
       ...(screen
         ? {
             screenshot: `/assets/landing-screens/${screen}-ph.webp`,
