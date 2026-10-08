@@ -16,6 +16,7 @@ assert.equal(recoverableSession({...client([active('a'),active('b')]),signUp:{st
 assert.equal(recoverableSession({...client([{id:'old',status:'ended'},active('new')],'old'),signIn:{status:'complete',createdSessionId:'new'}}),'new','Completed sign-in takes priority over a prior ended identity');
 assert.equal(recoverableSession({...client([active('a'),active('b')],'b'),signIn:{status:'complete',createdSessionId:'a'}}),'b','Prefer last active identity over an old completed attempt');
 assert.equal(recoverableSession({...client([active('a'),{id:'b',status:'pending'}],'b'),signIn:{status:'complete',createdSessionId:'a'}}),null,'Pending verification must not restore an older identity');
+assert.equal(recoverableSession(client([active('old'),{id:'new',status:'pending'}])),null,'Without a last-active identity, incomplete verification must not restore a different user');
 assert(alreadySignedIn({errors:[{code:'session_exists'}]}));
 assert(alreadySignedIn({errors:[{longMessage:"You're already signed in."}]}));
 assert(!alreadySignedIn({errors:[{code:'form_password_incorrect'}]}));

@@ -17,7 +17,7 @@ export function recoverableSession(client: Client): string | null {
   const active = client.sessions.filter(session => session.status === 'active' && !session.currentTask);
   const preferred = client.sessions.find(session => session.id === client.lastActiveSessionId);
   if (preferred?.status === 'active' && !preferred.currentTask) return preferred.id;
-  if (preferred?.status === 'pending' || preferred?.currentTask) return null;
+  if (client.sessions.some(session => session.status === 'pending' || session.currentTask)) return null;
   const completedIds = new Set([client.signIn, client.signUp]
     .filter(attempt => attempt?.status === 'complete' && attempt.createdSessionId)
     .map(attempt => attempt!.createdSessionId));
