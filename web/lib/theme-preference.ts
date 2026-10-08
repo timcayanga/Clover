@@ -9,6 +9,7 @@ export const THEME_COLORS: Record<ThemeMode, string> = {
 export const LIGHT_ONLY_THEME_ROUTES = [
   "/",
   "/landing-motion",
+  "/landing-showcase",
   "/contact-us",
   "/features",
   "/install",
