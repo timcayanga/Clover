@@ -15,7 +15,7 @@ import {
   plannedProPrices,
   type PricingMarket,
 } from "@/lib/public-plan-comparison";
-import { BrandStage } from "./brand-stage";
+import { ProductStory } from "./product-story";
 import s from "./showcase.module.css";
 
 const chapters = [
@@ -146,9 +146,9 @@ function Category({ name }: { name: string }) {
     />
   );
 }
-function Receipt({ mini = false }: { mini?: boolean }) {
+function Receipt() {
   return (
-    <div className={`${s.receipt} ${mini ? s.miniReceipt : ""}`}>
+    <div className={s.receipt}>
       <div className={s.receiptBrand}>A LITTLE EVERYDAY</div>
       <strong>
         Good food.
@@ -463,7 +463,6 @@ function PlanScene({ initialMarket }: { initialMarket: PricingMarket }) {
 
 export function Showcase({ initialMarket }: { initialMarket: PricingMarket }) {
   const root = useRef<HTMLDivElement>(null);
-  const heroProgress = useRef(0);
   const [paused, setPaused] = useState(false);
   const [reduced, setReduced] = useState(true);
   const [chapter, setChapter] = useState(0);
@@ -506,7 +505,6 @@ export function Showcase({ initialMarket }: { initialMarket: PricingMarket }) {
         const enter = clamp((height - box.top) / (height * 0.85));
         section.style.setProperty("--scene", String(animated ? p : 0.5));
         section.style.setProperty("--enter", String(animated ? enter : 1));
-        if (i === 0) heroProgress.current = p;
       });
       visuals.forEach((visual, i) =>
         visual.style.setProperty(
@@ -626,6 +624,11 @@ export function Showcase({ initialMarket }: { initialMarket: PricingMarket }) {
                   add details manually. Bring your money together. Make room for
                   what matters.
                 </p>
+              </div>
+              <div className={s.heroVisual}>
+                <ProductStory animated={animated} />
+              </div>
+              <div className={s.heroActionCluster}>
                 <div className={s.heroActions}>
                   <Action>Organize my finances for free</Action>
                   <a href="#your-way" className={s.explore}>
@@ -637,37 +640,9 @@ export function Showcase({ initialMarket }: { initialMarket: PricingMarket }) {
                   Made for your everyday.<span>Web · iOS · Android</span>
                 </div>
               </div>
-              <div className={s.heroVisual}>
-                <div className={s.orbitRing} />
-                <div className={s.orbitRingTwo} />
-                <BrandStage animated={animated} progress={heroProgress} />
-                <div className={s.heroBank}>
-                  <BankLogo file="bpi.png" />
-                  <div>
-                    <span>A bank statement</span>
-                    <strong>One part of your story.</strong>
-                  </div>
-                </div>
-                <div className={s.heroReceipt}>
-                  <Receipt mini />
-                </div>
-                <div className={s.heroWallet}>
-                  <BankLogo file="gcash.png" />
-                  <div>
-                    <span>Your everyday wallet</span>
-                    <strong>Another piece, connected.</strong>
-                  </div>
-                </div>
-                <div className={s.heroCaption}>
-                  <img src="/clover-mark.svg" alt="" width={20} height={20} />
-                  <span>Your money. Coming together.</span>
-                </div>
-                <span className={s.orbitDot} />
-                <span className={s.orbitDotTwo} />
-              </div>
             </div>
             <a href="#your-way" className={s.scrollCue}>
-              <span>Scroll to bring it all together</span>
+              <span>There’s more to your money. Scroll to explore.</span>
               <i>
                 <Icon kind="down" />
               </i>

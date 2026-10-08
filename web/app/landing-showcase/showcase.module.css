@@ -328,134 +328,11 @@
   font-size: 10px;
   letter-spacing: 0.06em;
 }
-.heroVisual {
-  position: relative;
-  min-width: 0;
-  height: 620px;
-  perspective: 1100px;
-  transform-style: preserve-3d;
-}
-.brandStage {
-  position: absolute;
-  inset: 40px -20px 0;
-}
-.canvasHost {
-  position: absolute;
-  inset: 0;
-}
-.canvasHost canvas {
-  display: block;
-  width: 100%;
-  height: 100%;
-}
-.brandFallback {
-  position: absolute;
-  width: 54%;
-  height: auto;
-  left: 23%;
-  top: 24%;
-  transform: rotate(-9deg) rotateY(-15deg);
-  filter: drop-shadow(8px 20px 0 #007d951c) drop-shadow(8px 38px 28px #126b7a26);
-  transition: opacity 0.3s;
-}
-.brandFallback[data-hidden="true"] {
-  opacity: 0;
-}
-.brandShadow {
-  width: 50%;
-  height: 10%;
-  border-radius: 50%;
-  position: absolute;
-  bottom: 17%;
-  left: 25%;
-  background: #208c9829;
-  filter: blur(28px);
-  transform: rotate(-14deg);
-}
-.orbitRing,
-.orbitRingTwo {
-  position: absolute;
-  width: 94%;
-  aspect-ratio: 1;
-  border: 1px solid #6ac6c840;
-  border-radius: 50%;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%) rotateX(57deg) rotateZ(-28deg);
-}
-.orbitRingTwo {
-  width: 118%;
-  transform: translate(-50%, -50%) rotateX(50deg) rotateZ(31deg);
-  border-color: #75cdc326;
-}
-.heroBank,
-.heroWallet {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  position: absolute;
-  z-index: 2;
-  padding: 16px 22px 16px 16px;
-  border-radius: 19px;
-  border: 1px solid #fff;
-  background: #fffffff2;
-  box-shadow:
-    0 18px 45px #194c5720,
-    0 3px 3px #fff inset;
-  transform: translate3d(
-      calc(var(--scene) * -28px),
-      calc(var(--scene) * 48px),
-      30px
-    )
-    rotate(-7deg);
-}
-.heroBank {
-  right: 2%;
-  top: 50px;
-}
-.heroBank > div,
-.heroWallet > div {
-  display: grid;
-  gap: 4px;
-}
-.heroBank span,
-.heroWallet span {
-  font-size: 10px;
-  color: var(--muted);
-}
-.heroBank strong,
-.heroWallet strong {
-  font-size: 12px;
-  font-weight: 500;
-}
-.heroWallet {
-  bottom: 76px;
-  right: -5px;
-  transform: translate3d(
-      calc(var(--scene) * -20px),
-      calc(var(--scene) * -25px),
-      10px
-    )
-    rotate(7deg);
-}
 .bankLogo {
   border-radius: 11px;
   object-fit: contain;
   flex-shrink: 0;
   background: white;
-}
-.heroReceipt {
-  position: absolute;
-  bottom: 63px;
-  left: -4%;
-  width: 172px;
-  transform: translate3d(
-      calc(var(--scene) * 28px),
-      calc(var(--scene) * -40px),
-      80px
-    )
-    rotate(-14deg);
-  z-index: 2;
 }
 .receipt {
   padding: 22px 20px;
@@ -525,48 +402,6 @@
   text-align: center;
   font-size: 7px;
   display: block;
-}
-.miniReceipt {
-  padding: 18px;
-}
-.miniReceipt > strong {
-  font-size: 20px;
-}
-.miniReceipt .receiptBrand {
-  font-size: 6px;
-}
-.heroCaption {
-  display: flex;
-  align-items: center;
-  gap: 9px;
-  position: absolute;
-  bottom: 10px;
-  left: 50%;
-  transform: translateX(-50%);
-  white-space: nowrap;
-  color: #466a72;
-  font-size: 10px;
-  letter-spacing: 0.04em;
-}
-.orbitDot,
-.orbitDotTwo {
-  position: absolute;
-  width: 16px;
-  height: 16px;
-  border-radius: 50%;
-  background: radial-gradient(circle at 25% 25%, #9dffe0, #39c7b2 60%, #159384);
-  box-shadow: 0 8px 15px #1e7e7e20;
-  top: 125px;
-  left: 40px;
-  transform: translateY(calc(var(--scene) * 100px));
-}
-.orbitDotTwo {
-  top: auto;
-  left: auto;
-  right: 5px;
-  bottom: 250px;
-  width: 25px;
-  height: 25px;
 }
 .scrollCue {
   position: absolute;
@@ -1951,24 +1786,6 @@
   .heroInner {
     width: 1440px;
   }
-  .heroVisual {
-    height: 740px;
-  }
-  .brandStage {
-    inset: 35px -45px;
-  }
-  .heroBank {
-    top: 85px;
-    right: 50px;
-  }
-  .heroReceipt {
-    bottom: 110px;
-    left: 0;
-  }
-  .heroWallet {
-    bottom: 100px;
-    right: 25px;
-  }
 }
 @media (max-width: 1190px) {
   .nav {
@@ -1980,44 +1797,6 @@
   }
   .site h1 {
     font-size: 59px;
-  }
-  .heroVisual {
-    height: 550px;
-  }
-  .heroReceipt {
-    width: 145px;
-    left: -2%;
-    bottom: 62px;
-  }
-  .heroBank {
-    right: -4px;
-    top: 10px;
-  }
-  .heroWallet {
-    right: -8px;
-    bottom: 70px;
-  }
-  .heroBank,
-  .heroWallet {
-    padding: 12px;
-    gap: 8px;
-  }
-  .heroBank strong,
-  .heroWallet strong {
-    font-size: 10px;
-  }
-  .heroBank span,
-  .heroWallet span {
-    font-size: 9px;
-  }
-  .heroBank img,
-  .heroWallet img {
-    width: 34px;
-    height: 34px;
-  }
-  .heroCaption {
-    bottom: 15px;
-    font-size: 9px;
   }
   .lead {
     max-width: 370px;
@@ -2181,56 +1960,6 @@
   }
   .site h1 {
     font-size: 50px;
-  }
-  .heroVisual {
-    height: 480px;
-  }
-  .heroReceipt {
-    left: 8%;
-    bottom: 58px;
-    width: 125px;
-  }
-  .heroBank {
-    right: -10px;
-    top: -6px;
-  }
-  .heroWallet {
-    right: -5px;
-    bottom: 25px;
-  }
-  .heroCaption {
-    display: none;
-  }
-  .heroVisual .receipt > strong {
-    font-size: 16px;
-  }
-  .heroVisual .receipt > span {
-    font-size: 7px;
-  }
-  .heroVisual .barcode,
-  .heroVisual .receipt > small {
-    display: none;
-  }
-  .heroVisual .miniReceipt {
-    padding: 14px;
-  }
-  .heroBank strong,
-  .heroWallet strong {
-    font-size: 9px;
-  }
-  .heroBank > div,
-  .heroWallet > div {
-    max-width: 142px;
-  }
-  .heroBank span,
-  .heroWallet span {
-    font-size: 8px;
-  }
-  .brandStage {
-    inset: 10px -45px 0;
-  }
-  .orbitRingTwo {
-    width: 105%;
   }
   .splitLayout {
     width: calc(100% - 100px);
@@ -2565,65 +2294,6 @@
   }
   .deviceNote {
     display: none;
-  }
-  .heroVisual {
-    width: min(100%, 450px);
-    height: 425px;
-    margin: 0 auto;
-  }
-  .brandStage {
-    inset: 0 -25px;
-  }
-  .heroBank {
-    top: 6px;
-    right: 2px;
-    padding: 10px 13px 10px 10px;
-    transform: rotate(-6deg);
-  }
-  .heroBank strong,
-  .heroWallet strong {
-    font-size: 9px;
-  }
-  .heroBank span,
-  .heroWallet span {
-    font-size: 8px;
-  }
-  .heroWallet {
-    bottom: 12px;
-    right: -1px;
-    padding: 10px;
-  }
-  .heroReceipt {
-    left: 0;
-    width: 127px;
-    bottom: 35px;
-  }
-  .heroVisual .receipt > strong {
-    font-size: 18px;
-  }
-  .heroVisual .receiptRule {
-    margin: 9px 0;
-  }
-  .heroVisual .receiptLine b {
-    font-size: 13px;
-  }
-  .orbitDot {
-    left: 12px;
-    top: 87px;
-    width: 12px;
-    height: 12px;
-  }
-  .orbitDotTwo {
-    right: 5px;
-    bottom: 140px;
-    width: 18px;
-    height: 18px;
-  }
-  .orbitRing {
-    width: 105%;
-  }
-  .orbitRingTwo {
-    width: 120%;
   }
   .scrollCue {
     bottom: 22px;
@@ -3232,25 +2902,6 @@
   .site h1 {
     font-size: 43px;
   }
-  .heroVisual {
-    height: 390px;
-  }
-  .heroWallet {
-    right: -4px;
-    bottom: 4px;
-  }
-  .heroReceipt {
-    width: 114px;
-  }
-  .heroBank strong,
-  .heroWallet strong {
-    font-size: 8px;
-  }
-  .heroBank img,
-  .heroWallet img {
-    width: 30px;
-    height: 30px;
-  }
   .splitLayout,
   .controlInner,
   .sharedInner,
@@ -3445,15 +3096,6 @@
   .copy > p:not(.eyebrow) {
     font-size: 14px;
   }
-  .heroBank {
-    top: 10px;
-  }
-  .heroReceipt {
-    bottom: 67px;
-  }
-  .heroWallet {
-    bottom: -6px;
-  }
   .intakePanel {
     --scene: var(--visual, 1);
     transform: translateY(calc((1 - var(--scene)) * 35px))
@@ -3628,5 +3270,183 @@
 @media (max-width: 700px) {
   .sourceChipTwo {
     bottom: 0;
+  }
+}
+
+/* The opening shows a product story immediately, with no pinned-scroll wait. */
+.hero {
+  height: auto;
+  min-height: 100svh;
+  background:
+    radial-gradient(
+      ellipse at 80% 39%,
+      #d9f5ed 0%,
+      #eef9f6 27%,
+      transparent 61%
+    ),
+    linear-gradient(160deg, #fcfdfd, #f4f9fa);
+}
+.heroSticky {
+  position: relative;
+  height: auto;
+  min-height: 100svh;
+  display: flex;
+}
+.heroInner {
+  width: min(1400px, calc(100% - 144px));
+  grid-template-columns: minmax(0, 0.92fr) minmax(0, 1.08fr);
+  grid-template-areas: "copy visual" "actions visual";
+  gap: 0 52px;
+  padding: 152px 0 125px;
+}
+.heroCopy {
+  grid-area: copy;
+  align-self: end;
+}
+.heroActionCluster {
+  grid-area: actions;
+  align-self: start;
+}
+.heroVisual {
+  grid-area: visual;
+  position: relative;
+  min-width: 0;
+  width: 100%;
+  height: auto;
+  align-self: center;
+}
+.heroCopy h1 {
+  font-size: clamp(51px, 5vw, 76px);
+}
+.heroCopy .lead {
+  margin: 25px 0 27px !important;
+  max-width: 450px;
+  font-size: 15px;
+}
+.heroActions {
+  gap: 11px 18px;
+}
+.heroActions .action {
+  font-size: 13px;
+  padding: 17px 23px;
+}
+.hero .scrollCue {
+  bottom: 33px;
+}
+@media (min-width: 1700px) {
+  .heroInner {
+    width: min(1500px, calc(100% - 200px));
+    gap: 0 80px;
+  }
+  .heroCopy h1 {
+    font-size: 82px;
+  }
+  .heroCopy .lead {
+    max-width: 460px;
+    font-size: 16px;
+  }
+}
+@media (max-width: 1190px) {
+  .heroInner {
+    width: calc(100% - 90px);
+    gap: 0 35px;
+  }
+  .heroCopy h1 {
+    font-size: 53px;
+  }
+  .heroCopy .lead {
+    font-size: 14px;
+  }
+}
+@media (max-width: 1050px) {
+  .heroSticky {
+    display: block;
+    min-height: 0;
+  }
+  .heroInner {
+    width: min(640px, calc(100% - 90px));
+    display: flex;
+    flex-direction: column;
+    padding: 140px 0 110px;
+    gap: 32px;
+  }
+  .heroCopy {
+    text-align: center;
+    align-self: center;
+    max-width: 620px;
+  }
+  .heroCopy h1 {
+    font-size: 62px;
+  }
+  .desktopBreak {
+    display: none;
+  }
+  .introLabel {
+    justify-content: center;
+  }
+  .heroCopy .lead {
+    max-width: 520px;
+    margin: 22px auto 0 !important;
+  }
+  .heroActionCluster {
+    align-self: center;
+  }
+  .heroActions {
+    justify-content: center;
+    flex-direction: row;
+  }
+  .deviceNote {
+    text-align: center;
+  }
+}
+@media (max-width: 700px) {
+  .heroInner {
+    width: calc(100% - 40px);
+    padding: 115px 0 95px;
+    gap: 25px;
+  }
+  .heroCopy {
+    width: 100%;
+  }
+  .heroCopy h1 {
+    font-size: clamp(40px, 10.3vw, 62px);
+    line-height: 1.08;
+  }
+  .heroCopy .introLabel {
+    margin-bottom: 18px !important;
+    font-size: 9px;
+  }
+  .heroCopy .lead {
+    margin: 18px auto 0 !important;
+    max-width: 390px;
+    font-size: 12px;
+    line-height: 1.85;
+  }
+  .heroVisual {
+    max-width: 460px;
+  }
+  .heroActions {
+    flex-direction: column;
+    gap: 8px;
+  }
+  .heroActions .action {
+    min-height: 49px;
+    font-size: 12px;
+    padding: 15px 22px;
+  }
+  .hero .scrollCue {
+    bottom: 24px;
+    font-size: 8px;
+  }
+}
+@media (max-width: 360px) {
+  .heroInner {
+    width: calc(100% - 30px);
+  }
+  .heroCopy h1 {
+    font-size: 39px;
+  }
+  .heroCopy .lead {
+    font-size: 11px;
   }
 }
