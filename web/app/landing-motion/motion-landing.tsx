@@ -4,6 +4,7 @@ import { useEffect, useRef, useState, type CSSProperties } from "react";
 import Link from "next/link";
 import { CloverMascot } from "@/components/clover-mascot";
 import { BloomMark } from "./bloom-mark";
+import { CinematicOpening } from "./cinematic-opening";
 import s from "./motion-landing.module.css";
 
 const banks = [
@@ -207,6 +208,28 @@ function Donut({
     </svg>
   );
 }
+function DimensionalDonut({ values }: { values: number[] }) {
+  return (
+    <div className={s.donutPerspective}>
+      <div className={s.donutSolid}>
+        {Array.from({ length: 10 }, (_, index) => (
+          <div
+            className={s.donutDepth}
+            key={index}
+            aria-hidden="true"
+            style={{ "--layer": index } as CSSProperties}
+          >
+            <Donut values={values} />
+          </div>
+        ))}
+        <div className={s.donutFace}>
+          <Donut values={values} />
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function AccountCard({
   bank,
   index,
@@ -259,6 +282,7 @@ export function MotionLanding() {
     ];
     const reveals = [...node.querySelectorAll<HTMLElement>("[data-reveal]")];
     const fans = [...node.querySelectorAll<HTMLElement>("[data-fan]")];
+    const depths = [...node.querySelectorAll<HTMLElement>("[data-depth]")];
     node.dataset.enhanced = "true";
     const observer = new IntersectionObserver(
       (entries) =>
@@ -271,6 +295,39 @@ export function MotionLanding() {
       { threshold: 0.12 },
     );
     reveals.forEach((el) => observer.observe(el));
+    const finePointer = window.matchMedia("(hover: hover) and (pointer: fine)");
+    let pointerFrame = 0;
+    let tilted: HTMLElement | null = null;
+    const resetTilt = () => {
+      tilted?.style.setProperty("--mx", "0");
+      tilted?.style.setProperty("--my", "0");
+      tilted = null;
+    };
+    const movePointer = (event: PointerEvent) => {
+      if (!motion || !finePointer.matches) return;
+      const target =
+        event.target instanceof Element
+          ? event.target.closest<HTMLElement>("[data-tilt]")
+          : null;
+      if (target !== tilted) resetTilt();
+      tilted = target;
+      cancelAnimationFrame(pointerFrame);
+      if (!target) return;
+      const { clientX, clientY } = event;
+      pointerFrame = requestAnimationFrame(() => {
+        const rect = target.getBoundingClientRect();
+        target.style.setProperty(
+          "--mx",
+          String((clientX - rect.left) / rect.width - 0.5),
+        );
+        target.style.setProperty(
+          "--my",
+          String((clientY - rect.top) / rect.height - 0.5),
+        );
+      });
+    };
+    node.addEventListener("pointermove", movePointer, { passive: true });
+    node.addEventListener("pointerleave", resetTilt);
     let frame = 0;
     const draw = () => {
       frame = 0;
@@ -281,18 +338,31 @@ export function MotionLanding() {
           ? clamp(-rect.top / Math.max(1, rect.height - height))
           : 1;
         scene.style.setProperty("--p", String(p));
+        scene.style.setProperty("--intro", String(clamp(p / 0.3)));
+        scene.style.setProperty("--focus", String(clamp((p - 0.3) / 0.24)));
         scene.style.setProperty("--gather", String(clamp(p / 0.52)));
         scene.style.setProperty(
           "--organized",
           String(clamp((p - 0.34) / 0.22)),
         );
         scene.dataset.step = p < 0.48 ? "before" : "after";
+        const intro = scene.querySelector<HTMLElement>("[data-hero-intro]");
+        if (intro) intro.inert = motion && p > 0.25;
       });
       fans.forEach((fan) => {
         const top = fan.getBoundingClientRect().top;
         fan.style.setProperty(
           "--spread",
           String(motion ? clamp((height * 0.92 - top) / (height * 0.5)) : 1),
+        );
+      });
+      depths.forEach((el) => {
+        const rect = el.getBoundingClientRect();
+        el.style.setProperty(
+          "--depth",
+          String(
+            motion ? clamp((height - rect.top) / (height + rect.height)) : 0.5,
+          ),
         );
       });
       const scrollable = document.documentElement.scrollHeight - height;
@@ -309,6 +379,10 @@ export function MotionLanding() {
     window.addEventListener("resize", queue);
     return () => {
       observer.disconnect();
+      node.removeEventListener("pointermove", movePointer);
+      node.removeEventListener("pointerleave", resetTilt);
+      cancelAnimationFrame(pointerFrame);
+      resetTilt();
       window.removeEventListener("scroll", queue);
       window.removeEventListener("resize", queue);
       cancelAnimationFrame(frame);
@@ -369,111 +443,7 @@ export function MotionLanding() {
         <div className={s.readProgress} aria-hidden="true" />
       </header>
       <main id="main-content">
-        <section
-          className={s.hero}
-          aria-labelledby="hero-title"
-          data-scroll-scene
-        >
-          <div className={s.heroOrb} aria-hidden="true" />
-          <div className={s.heroGrid} aria-hidden="true" />
-          <div className={s.heroCopy}>
-            <span className={s.eyebrow}>
-              <span /> A CLEARER KIND OF PERSONAL FINANCE
-            </span>
-            <h1 id="hero-title">
-              Months of <br />
-              finances.
-              <br />
-              <em>
-                Organized <br />
-                in minutes.
-              </em>
-            </h1>
-            <p>
-              Your money has a story.
-              <br />
-              Let’s bring it all together.
-            </p>
-            <a href="#story" className={s.darkCta}>
-              Find your clarity <Arrow />
-            </a>
-            <div className={s.heroPlatforms}>
-              Made for your phone. At home on your desktop.
-            </div>
-          </div>
-          <div
-            className={s.heroStage}
-            aria-label="Illustrative preview of financial records organized in Clover"
-          >
-            <div className={s.orbitRing} />
-            <div className={s.orbitRingTwo} />
-            <div className={s.heroMainCard}>
-              <div className={s.appChrome}>
-                <img src="/clover-mark.svg" alt="" width={22} height={22} />
-                <span>Your money, together</span>
-                <span>•••</span>
-              </div>
-              <div className={s.heroBalance}>
-                <small>A little more perspective</small>
-                <strong>₱55,090</strong>
-                <span>Bank + wallet balances</span>
-              </div>
-              <div className={s.heroAccounts}>
-                {banks.slice(0, 2).map((bank) => (
-                  <div key={bank.name}>
-                    <BankLogo file={bank.file} />
-                    <span>
-                      {bank.name}
-                      <small>{bank.type}</small>
-                    </span>
-                    <b>{bank.amount}</b>
-                  </div>
-                ))}
-              </div>
-              <div className={s.sparkline}>
-                <svg viewBox="0 0 400 90" aria-hidden="true">
-                  <path
-                    d="M0 85C25 85 34 55 65 60S105 85 145 51 180 79 212 42 248 55 280 29 322 55 357 15 380 30 400 4"
-                    fill="none"
-                    stroke="#03a8c0"
-                    strokeWidth="3"
-                  />
-                </svg>
-                <span>Your bigger picture starts here</span>
-              </div>
-            </div>
-            <div className={s.heroReceipt}>
-              <Receipt mini />
-            </div>
-            <div className={s.heroTransaction}>
-              <img
-                src="/figma-icons/categories/food-dining.svg"
-                alt=""
-                width={32}
-                height={32}
-              />
-              <span>
-                Lunch, sorted.<small>Food & Dining</small>
-              </span>
-              <b>₱500</b>
-              <i>✓</i>
-            </div>
-            <div className={s.heroMascot}>
-              <CloverMascot pose="welcome" size={200} />
-            </div>
-            <span className={s.heroAnnotation}>
-              less catching up. more living.
-            </span>
-            <span className={s.demoLabel}>Illustrative data</span>
-          </div>
-          <a className={s.scrollCue} href="#story">
-            <span>THERE’S A SIMPLER WAY</span>
-            <Arrow down />
-          </a>
-          <div className={s.heroWatermark} aria-hidden="true">
-            breathe.
-          </div>
-        </section>
+        <CinematicOpening />
 
         <section
           id="story"
@@ -572,7 +542,12 @@ export function MotionLanding() {
           </div>
         </section>
 
-        <section className={s.accountsSection} id="together" data-reveal>
+        <section
+          className={s.accountsSection}
+          id="together"
+          data-reveal
+          data-depth
+        >
           <div className={s.sectionIntro}>
             <span className={s.eyebrow}>02 / ONE FINANCIAL PICTURE</span>
             <h2>
@@ -589,7 +564,7 @@ export function MotionLanding() {
               See how they fit into your life.
             </p>
           </div>
-          <div className={s.accountFan} data-fan>
+          <div className={s.accountFan} data-fan data-tilt>
             {banks.map((bank, index) => (
               <AccountCard key={bank.name} bank={bank} index={index} />
             ))}
@@ -618,7 +593,12 @@ export function MotionLanding() {
           </p>
         </section>
 
-        <section id="clarity" className={s.insightSection} data-reveal>
+        <section
+          id="clarity"
+          className={s.insightSection}
+          data-reveal
+          data-depth
+        >
           <div className={s.insightCopy}>
             <span className={s.eyebrow}>03 / MAKE SENSE OF IT</span>
             <h2>
@@ -636,7 +616,7 @@ export function MotionLanding() {
               Explore your bigger picture <Arrow />
             </Link>
           </div>
-          <div className={s.reportScene}>
+          <div className={s.reportScene} data-tilt>
             <div className={s.reportCard}>
               <div className={s.panelHeading}>
                 <span>Where It Went</span>
@@ -654,7 +634,7 @@ export function MotionLanding() {
                 ))}
               </div>
               <div className={s.chartWrap}>
-                <Donut
+                <DimensionalDonut
                   values={
                     month === "October" ? [40, 27, 20, 13] : [49, 21, 18, 12]
                   }
@@ -897,10 +877,23 @@ export function MotionLanding() {
           </div>
         </section>
 
-        <section className={s.finale} id="start" data-reveal>
+        <section className={s.finale} id="start" data-reveal data-depth>
           <div className={s.finaleHalo} />
           <div className={s.bloom}>
-            <BloomMark />
+            <div className={s.bloomSolid}>
+              {Array.from({ length: 12 }, (_, index) => (
+                <img
+                  src="/clover-mark.svg"
+                  alt=""
+                  aria-hidden="true"
+                  key={index}
+                  style={{ "--layer": index } as CSSProperties}
+                  width={124}
+                  height={124}
+                />
+              ))}
+              <BloomMark />
+            </div>
           </div>
           <span className={s.eyebrow}>YOUR NEXT CHAPTER</span>
           <h2>
