@@ -29,6 +29,7 @@ import { FinancialAccountCard } from "@/components/financial-account-card";
 import { InstitutionAutocomplete } from "@/components/institution-autocomplete";
 import { PlanLimitNudge } from "@/components/plan-limit-nudge";
 import { PageFileDropZone } from "@/components/page-file-drop-zone";
+import { AccountWallet } from "@/components/account-wallet";
 import { MobileSwipeDelete } from "@/components/mobile-swipe-delete";
 import { formatCurrencyAmount, formatCurrencyCode, formatCurrencySymbol } from "@/lib/currency-format";
 import { deriveReconciledBalance, normalizeAccountBalanceSign } from "@/lib/account-balance";
@@ -72,7 +73,7 @@ import {
   workspaceCacheUpdatedEventName,
   type WorkspaceCacheUpdatedEventDetail,
 } from "@/lib/workspace-cache";
-import { getAccountBrand } from "@/lib/account-brand";
+import { getAccountWalletBrand as getAccountBrand } from "@/lib/account-brand";
 import { getLuxuryAccountCardClass } from "@/lib/account-card-luxury";
 import { inferAccountTypeFromStatement } from "@/lib/financial-classification";
 import { getEffectiveTransactionMerchantName } from "@/lib/transaction-display";
@@ -3908,7 +3909,7 @@ function AccountsPageContent() {
           <button
             type="button"
             className="accounts-mobile-list-row"
-            style={{ background: accountBrand.background.match(/#[0-9a-f]{6}|rgba?\([^)]+\)/i)?.[0] ?? accountBrand.background, color: accountBrand.foreground }}
+            style={{ background: accountBrand.background, color: accountBrand.foreground, ["--account-row-background" as string]: accountBrand.background, ["--account-row-foreground" as string]: accountBrand.foreground }}
             data-account-icon={accountBrand.fallbackIconSrc.split("/").pop()?.replace(".png", "")}
             aria-expanded={isExpanded}
             aria-hidden={isExpanded}
@@ -3955,9 +3956,8 @@ function AccountsPageContent() {
       logoUrl: row.logoUrl,
     });
     const accountDisplayName = getAccountDisplayName(row);
-    const accountEyebrow = getAccountCardEyebrow(row);
-    const showAccountEyebrow =
-      !areEquivalentAccountCardLabels(accountDisplayName, accountEyebrow);
+    const accountDigits = String(row.accountNumber ?? "").replace(/\D/g, "").slice(-4);
+    const accountIdentifier = accountDigits ? `•••• ${accountDigits}` : getAccountCardEyebrow(row);
     const loadingContext = getUploadAccountLoadingContext(row);
 
     return (
@@ -3973,7 +3973,7 @@ function AccountsPageContent() {
         <button
           type="button"
           className="accounts-mobile-list-row"
-            style={{ background: accountBrand.background.match(/#[0-9a-f]{6}|rgba?\([^)]+\)/i)?.[0] ?? accountBrand.background, color: accountBrand.foreground }}
+            style={{ background: accountBrand.background, color: accountBrand.foreground, ["--account-row-background" as string]: accountBrand.background, ["--account-row-foreground" as string]: accountBrand.foreground }}
             data-account-icon={accountBrand.fallbackIconSrc.split("/").pop()?.replace(".png", "")}
           aria-expanded={isExpanded}
           aria-hidden={isExpanded}
@@ -3984,7 +3984,7 @@ function AccountsPageContent() {
             <AccountBrandMark accountBrand={accountBrand} label="" />
             <span>
               <strong>{accountDisplayName}</strong>
-              {showAccountEyebrow ? <small>{accountEyebrow}</small> : null}
+              <small>{accountIdentifier}</small>
             </span>
           </span>
           <span className="accounts-mobile-list-row__end">
@@ -4664,9 +4664,9 @@ function AccountsPageContent() {
                         <div className="accounts-group__empty-drop-hint">Move account here</div>
                       ) : null}
                     </div>
-                    <div className="accounts-mobile-list accounts-mobile-list--mobile" aria-label={`${group.title} account list`}>
+                    <AccountWallet label={`${group.title} account list`}>
                       {group.rows.map((row) => renderMobileListRow(row, `${group.title}-mobile-${row.id}`))}
-                    </div>
+                    </AccountWallet>
                     </article>
                 ))
               ) : (

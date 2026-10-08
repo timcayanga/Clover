@@ -5,13 +5,15 @@ import { useTheme } from "./ui";
 import { useAccessibilityPreferences } from "./accessibility-preferences";
 
 const WIDTH = 88;
-export function SwipeDeleteRow({ children, label, message, onDelete, onOpen, disabled = false }: {
+export function SwipeDeleteRow({ children, label, message, onDelete, onOpen, disabled = false, wallet = false, expanded = false }: {
   children: ReactNode;
   label: string;
   message?: string;
   onDelete: () => Promise<void>;
   onOpen?: () => void;
   disabled?: boolean;
+  wallet?: boolean;
+  expanded?: boolean;
 }) {
   const { colors } = useTheme();
   const { reduceMotion } = useAccessibilityPreferences();
@@ -46,13 +48,13 @@ export function SwipeDeleteRow({ children, label, message, onDelete, onOpen, dis
     catch (cause) { setError(cause instanceof Error ? cause.message : "Unable to delete. Please try again."); }
     finally { pending.current = false; setBusy(false); }
   }
-  return <View style={{ minWidth: 0 }}>
-    <View style={{ overflow: "hidden", borderRadius: 12 }} {...responder.panHandlers}
+  return <View style={{ minWidth: 0, marginBottom: wallet ? (expanded || confirming ? 8 : -16) : 0 }}>
+    <View style={{ overflow: "hidden", borderTopLeftRadius: wallet ? 16 : 12, borderTopRightRadius: wallet ? 16 : 12, borderBottomLeftRadius: wallet ? 0 : 12, borderBottomRightRadius: wallet ? 0 : 12 }} {...responder.panHandlers}
       accessible={!disabled && !confirming} accessibilityLabel={label}
       accessibilityActions={[...(onOpen ? [{ name: "activate", label: "Open details" }] : []), { name: "delete", label: `Delete ${label}` }]}
       onAccessibilityAction={event => { if (event.nativeEvent.actionName === "delete") confirm(); else if (event.nativeEvent.actionName === "activate") onOpen?.(); }}>
       {!disabled ? <Pressable accessibilityRole="button" accessibilityLabel={`Delete ${label}`} accessibilityElementsHidden={!open} importantForAccessibility={open ? "yes" : "no-hide-descendants"} onPress={confirm} disabled={busy || confirming} style={{ position: "absolute", right: 0, top: 0, bottom: 0, width: WIDTH, backgroundColor: "#C92B37", justifyContent: "center", alignItems: "center", padding: 8 }}><Text style={{ color: "white", fontFamily: "Poppins-SemiBold", fontSize: 13 }}>Delete</Text></Pressable> : null}
-      <Animated.View style={{ backgroundColor: colors.white, transform: [{ translateX: x }] }}>
+      <Animated.View style={{ backgroundColor: wallet ? "transparent" : colors.white, transform: [{ translateX: x }] }}>
         <View accessibilityElementsHidden={open || confirming} importantForAccessibility={open || confirming ? "no-hide-descendants" : "auto"} pointerEvents={open || confirming ? "none" : "auto"}>{children}</View>
         {open ? <Pressable accessibilityLabel="Close delete action" onPress={() => settle(0)} style={{ position: "absolute", inset: 0 }} /> : null}
       </Animated.View>

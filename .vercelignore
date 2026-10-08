@@ -12,3 +12,9 @@ tmp
 
 # Keep this file in the deployment graph so prod rebuilds when landing assets change.
 # Redeploy marker for production.
+# Native signing and generated bundles never belong in a web deployment.
+mobile/credentials.json
+mobile/node_modules
+mobile/dist
+mobile/.expo
+mascot-figma-upload.json

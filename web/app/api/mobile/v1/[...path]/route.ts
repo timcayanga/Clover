@@ -881,7 +881,7 @@ async function handle(
       const rows = operation === "accounts" ? responseData.accounts : [responseData.account];
       const { mobileAccountBalances } = await import("@/lib/mobile-account-balances");
       const balances = await mobileAccountBalances(workspaceId, rows.map((row: { id: string }) => row.id));
-      const { getAccountBrand } = await import("@/lib/account-brand");
+      const { getAccountWalletBrand: getAccountBrand } = await import("@/lib/account-brand");
       for (const row of rows) {
         row.displayBalance = balances.has(row.id) ? balances.get(row.id) : row.balance;
         const brand = getAccountBrand(row);

@@ -7,9 +7,11 @@ import type { AccountRecord } from "./account-editor";
 export function AccountBrandLogo({
   account,
   size = 32,
+  radius,
 }: {
   account: Pick<AccountRecord, "brandLogoUrl" | "institution" | "name" | "type"> & Partial<AccountRecord>;
   size?: number;
+  radius?: number;
 }) {
   const [failed, setFailed] = useState<string | null>(null);
   const path = account.brandLogoUrl?.includes("/assets/account-types/") ? null : account.brandLogoUrl;
@@ -23,7 +25,7 @@ export function AccountBrandLogo({
       style={{
         width: size,
         height: size,
-        borderRadius: size / 2,
+        borderRadius: radius ?? size / 2,
         overflow: "hidden",
         alignItems: "center",
         justifyContent: "center",

@@ -1,3 +1,5 @@
+import { genericAccountColors, institutionAccountPalettes } from "../../shared/account-wallet";
+import { accountTypeIcon } from "../../shared/visual-identity";
 import { sanitizeBankNameLabel } from "@/lib/data-qa-banks";
 import { findAdditionalBankLogo, normalizeLogoName } from "@/lib/bank-logo-catalog";
 import { getCurrentBuiltInAccountLogoUrl } from "@/lib/account-logo";
@@ -1220,4 +1222,16 @@ export const getAccountBrand = (params: AccountBrandInput): AccountBrand => {
     logoFit: isCustomImage ? "cover" : "contain",
     logoPadding: isCustomImage ? undefined : "4px",
   };
+};
+
+/** Accounts presentation only. Identity resolution and persisted data stay unchanged. */
+export const getAccountWalletBrand = (params: AccountBrandInput): AccountBrand => {
+  const brand = getAccountBrand(params);
+  const genericMatch = brand.logoSrc?.match(/\/assets\/(?:account-types|banks)\/(bank|cash|wallet|credit(?:%20| )card|investment|others?)\.png/i);
+  const generic = !brand.logoSrc || Boolean(genericMatch);
+  const key = genericMatch?.[1]?.replace(/%20| /g, "_").replace(/^others?$/, "other") || accountTypeIcon(params.type || "other");
+  const logoName = brand.logoSrc?.split("/").pop()?.split(".")[0].toLowerCase() || "";
+  const palette = generic ? { colors: genericAccountColors[key] || genericAccountColors.other, foreground: "#12383D" } : institutionAccountPalettes[logoName];
+  if (!palette) return brand;
+  return { ...brand, background: `linear-gradient(120deg, ${palette.colors[0]} 0%, ${palette.colors[1]} 50%, ${palette.colors[2]} 100%)`, foreground: palette.foreground };
 };

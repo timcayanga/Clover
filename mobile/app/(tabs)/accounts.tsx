@@ -2,7 +2,7 @@ import { SwipeDeleteRow } from "../../src/swipe-delete-row";
 import { recordedSummary } from "../../src/recorded-summary";
 import { Modal } from "../../src/adaptive-modal";
 import { AdaptiveDetail } from "../../src/adaptive-detail";
-import { AdaptiveGrid } from "../../src/adaptive";
+import { AccountWallet } from "../../src/account-wallet";
 import { useLiveInvestmentValues } from "../../src/use-live-investment-values";
 import { CloverEmptyState } from "../../src/clover-mascot";
 import { institutionGroups } from "../../src/institution-groups";
@@ -22,7 +22,6 @@ import {
   useLocalSearchParams,
   useNavigation,
 } from "expo-router";
-import { SummaryCard } from "../../src/plan-ui";
 import { LinearGradient } from "expo-linear-gradient";
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Pressable, ScrollView, View } from "react-native";
@@ -308,9 +307,12 @@ function AccountsContent() {
       </Modal>
       <View style={{ gap: 8 }}>
         {displayedCurrency === "ALL" ? <Body>{summary.estimated ? "Estimated in" : "All balances in"} {summaryCurrency}</Body> : null}
-        <AdaptiveGrid minItemWidth={140} maxColumns={4} gap={8}>
-          {["Net worth", "Spendable", "Assets", "Liabilities"].map((title, i) => <View key={title} style={{ flex: 1 }}><SummaryCard title={title} value={summary.values[i] === null ? "—" : money(String(summary.values[i]), summaryCurrency)} color={i === 3 || (summary.values[i] ?? 0) < 0 ? colors.danger : colors.positive} /></View>)}
-        </AdaptiveGrid>
+        <View style={{ flexDirection: "row", flexWrap: "wrap", borderWidth: 1, borderColor: dark ? "#29384A" : "#D8E7E3", borderRadius: 22, overflow: "hidden", backgroundColor: dark ? "#0E1725" : "#FCFEFC" }}>
+          {["Net worth", "Spendable", "Assets", "Liabilities"].map((title, i) => <View key={title} style={{ width: "50%", minHeight: 81, padding: 16, gap: 5, borderRightWidth: i % 2 === 0 ? 1 : 0, borderTopWidth: i > 1 ? 1 : 0, borderColor: dark ? "#29384A" : "#E1ECE8", backgroundColor: i === 0 ? (dark ? "#15382F" : "#E9F8EF") : "transparent" }}>
+            <Text style={{ fontSize: 11, fontFamily: "Poppins-Medium", color: colors.muted }}>{title}</Text>
+            <Text style={{ fontSize: 18, fontFamily: "Poppins-SemiBold", color: i === 3 || (summary.values[i] ?? 0) < 0 ? colors.danger : i === 0 ? (dark ? "#86E9D1" : "#12614E") : colors.ink }}>{summary.values[i] === null ? "—" : money(String(summary.values[i]), summaryCurrency)}</Text>
+          </View>)}
+        </View>
         {summary.estimated && exchangeRates.asOf ? <Body>Estimated using exchange rates dated {exchangeRates.asOf}. Accounts keep their original currencies.</Body> : null}
         {summary.missingCurrencies.length ? <><Body>{exchangeRates.loading ? "Loading exchange rates…" : `Unable to estimate all balances. Exchange rate unavailable: ${summary.missingCurrencies.join(", ")}.`}</Body>{!exchangeRates.loading ? <Button secondary title="Retry rates" onPress={exchangeRates.retry} /> : null}</> : null}
         {summary.unknown ? <Body>{summary.unknown} account{summary.unknown === 1 ? " has" : "s have"} no recorded balance. A complete total is unavailable.</Body> : null}
@@ -329,13 +331,13 @@ function AccountsContent() {
             <View key={key} style={{ gap: 12 }}>
               <View
                 style={{
-                  gap: 6,
+                  gap: 12, flexDirection: "row", alignItems: "center", justifyContent: "space-between",
                 }}
               >
                 <Text
                   style={{
                     fontFamily: "Poppins-SemiBold",
-                    fontSize: 16,
+                    fontSize: 14,
                     color: colors.ink,
                   }}
                 >
@@ -365,17 +367,15 @@ function AccountsContent() {
                       )}
                 </Text>
               </View>
-              <AdaptiveGrid minItemWidth={340} maxColumns={2}>
+              <AccountWallet>
               {group.title === "Investments" ? institutionGroups(group.rows).map(institution => {
                 const representative = institution.assets[0];
                 const palette = accountCardPalette(representative);
                 const value = recordedSummary(institution.assets.map(accountDisplayBalance));
-                return <Pressable key={institution.id} accessibilityRole="button" accessibilityLabel={`View ${institution.name} investments`} onPress={() => setInstitutionId(institution.id)}>
-                  <LinearGradient colors={palette.colors} locations={palette.locations} style={{ borderRadius: 14, padding: 14, minHeight: 72, flexDirection: "row", alignItems: "center", gap: 10 }}>
-                    <AccountBrandLogo account={representative} size={36} />
-                    <View style={{ flex: 1 }}><Text style={{ color: palette.foreground, fontFamily: "Poppins-SemiBold" }}>{institution.name}</Text><Text style={{ color: palette.foreground, fontSize: 12 }}>{institution.assets.length} {institution.assets.length === 1 ? "asset" : "assets"}</Text></View>
-                    <Text style={{ color: palette.foreground, fontFamily: "Poppins-SemiBold", maxWidth: "40%" }}>{value.value === null ? "Not recorded" : money(String(value.value), institution.currency)}{value.missing > 0 && value.known > 0 ? "*" : ""}</Text>
-                    <Icon line name="chevron-forward" size={16} color={palette.foreground} />
+                return <Pressable key={institution.id} style={{ marginBottom: -16 }} accessibilityRole="button" accessibilityLabel={`View ${institution.name} investments`} onPress={() => setInstitutionId(institution.id)}>
+                  <LinearGradient colors={palette.colors} locations={palette.locations} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={{ borderTopLeftRadius: 16, borderTopRightRadius: 16, paddingHorizontal: 12, paddingTop: 10, paddingBottom: 18, minHeight: 80, gap: 4 }}>
+                    <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}><AccountBrandLogo account={representative} size={24} radius={7} /><Text style={{ flex: 1, color: palette.foreground, fontFamily: "Poppins-SemiBold", fontSize: 13 }}>{institution.name}</Text><Icon line name="chevron-forward" size={16} color={palette.foreground} /></View>
+                    <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 10 }}><Text style={{ color: palette.foreground, fontSize: 10 }}>{institution.assets.length} {institution.assets.length === 1 ? "asset" : "assets"}</Text><Text style={{ color: palette.foreground, fontSize: 15, fontFamily: "Poppins-SemiBold", maxWidth: "70%", textAlign: "right" }}>{value.value === null ? "Not recorded" : money(String(value.value), institution.currency)}{value.missing > 0 && value.known > 0 ? "*" : ""}</Text></View>
                   </LinearGradient>
                 </Pressable>;
               }) : [...group.rows]
@@ -391,7 +391,7 @@ function AccountsContent() {
                   const expanded = expandedAccount === account.id;
                   const balance = accountDisplayBalance(account);
                   return (
-                    <SwipeDeleteRow key={account.id} label={label(account)} disabled={session.demo || account.id.startsWith("fallback-cash-")} message={`Delete "${label(account)}" and its linked transactions? This cannot be undone.`} onOpen={() => setSelected(account)} onDelete={() => deleteRow(account)}>
+                    <SwipeDeleteRow wallet expanded={expanded} key={account.id} label={label(account)} disabled={session.demo || account.id.startsWith("fallback-cash-")} message={`Delete "${label(account)}" and its linked transactions? This cannot be undone.`} onOpen={() => setSelected(account)} onDelete={() => deleteRow(account)}>
                       <Pressable
                         accessibilityRole="button"
                         accessibilityLabel={
@@ -407,15 +407,15 @@ function AccountsContent() {
                         }
                       >
                         <LinearGradient
-                          colors={expanded ? palette.colors : [palette.colors[0], palette.colors[0]]}
-                          locations={expanded ? palette.locations : undefined}
+                          colors={palette.colors}
+                          locations={palette.locations}
                           start={{ x: 0, y: 0 }}
                           end={{ x: 1, y: 1 }}
                           style={{
-                            borderRadius: expanded ? 28 : 14,
-                            minHeight: expanded ? 190 : 60,
-                            padding: expanded ? 24 : 10,
-                            gap: 16,
+                            borderTopLeftRadius: 16, borderTopRightRadius: 16, borderBottomLeftRadius: expanded ? 16 : 0, borderBottomRightRadius: expanded ? 16 : 0,
+                            minHeight: expanded ? 190 : 80,
+                            paddingHorizontal: expanded ? 20 : 12, paddingTop: expanded ? 20 : 10, paddingBottom: expanded ? 20 : 18,
+                            gap: expanded ? 16 : 4,
                           }}
                         >
                           <View
@@ -427,7 +427,8 @@ function AccountsContent() {
                           >
                             <AccountBrandLogo
                               account={account}
-                              size={expanded ? 42 : 32}
+                              size={expanded ? 32 : 24}
+                              radius={expanded ? 9 : 7}
                             />
                             <View style={{ flex: 1, minWidth: 0 }}>
                               <Text
@@ -441,28 +442,7 @@ function AccountsContent() {
                                   ? account.institution || account.name
                                   : label(account)}
                               </Text>
-                              {!expanded && account.institution ? (
-                                <Text
-                                  style={{ fontSize: 10, color: foreground }}
-                                >
-                                  {account.institution}
-                                </Text>
-                              ) : null}
                             </View>
-                            {!expanded ? (
-                              <Text
-                                style={{
-                                  fontFamily: "Poppins-SemiBold",
-                                  fontSize: 13,
-                                  maxWidth: "38%",
-                                  color: foreground,
-                                }}
-                              >
-                                {balance === null
-                                  ? "Not recorded"
-                                  : money(balance, account.currency)}
-                              </Text>
-                            ) : null}
                             <Icon
                               line
                               name={
@@ -472,24 +452,10 @@ function AccountsContent() {
                               color={foreground}
                             />
                           </View>
-                          {expanded ? (
-                            <>
-                              <Text style={{ color: foreground, fontSize: 13 }}>
-                                •••• {account.lastFour || "••••"}
-                              </Text>
-                              <Text
-                                style={{
-                                  fontFamily: "Poppins-Bold",
-                                  fontSize: 24,
-                                  color: foreground,
-                                }}
-                              >
-                                {balance === null
-                                  ? "Not recorded"
-                                  : money(balance, account.currency)}
-                              </Text>
-                            </>
-                          ) : null}
+                          <View style={{ flexDirection: expanded ? "column" : "row", justifyContent: "space-between", alignItems: expanded ? "flex-start" : "center", gap: expanded ? 20 : 10 }}>
+                            <Text style={{ color: foreground, fontSize: expanded ? 11 : 10 }}>{account.lastFour ? `•••• ${account.lastFour}` : account.type === "cash" ? "Cash on hand" : account.type.replaceAll("_", " ")}</Text>
+                            <Text style={{ fontFamily: "Poppins-SemiBold", fontSize: expanded ? 22 : 15, color: foreground, maxWidth: expanded ? "100%" : "70%", textAlign: expanded ? "left" : "right" }}>{balance === null ? "Not recorded" : money(balance, account.currency)}</Text>
+                          </View>
                         </LinearGradient>
                       </Pressable>
                       {expanded ? (
@@ -511,7 +477,7 @@ function AccountsContent() {
                     </SwipeDeleteRow>
                   );
                 })}
-              </AdaptiveGrid>
+              </AccountWallet>
             </View>
           ))
       )}

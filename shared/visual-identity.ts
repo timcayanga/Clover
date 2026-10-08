@@ -1,3 +1,4 @@
+import { genericAccountColors, institutionAccountPalettes } from "./account-wallet";
 // Clover Screens, 14 September 2026. Presentation only; never classify balances.
 export const avatarGradients = [
   ["#0BAFC1", "#67DFB3"],
@@ -43,22 +44,15 @@ export type AccountCardPalette = {
 };
 export function accountCardPalette(account: {
   type: string;
+  institution?: string | null;
+  name?: string | null;
   brandPalette?: AccountCardPalette | null;
 }): AccountCardPalette {
   if (account.brandPalette?.colors.length && account.brandPalette.colors.length >= 2)
     return account.brandPalette;
+  const institution = (account.institution || account.name || "").toLowerCase().replace(/[^a-z]/g, "");
+  if (institutionAccountPalettes[institution]) return institutionAccountPalettes[institution];
   const type = accountTypeIcon(account.type);
-  const palettes: Record<string, [string, string, ...string[]]> = {
-    bank: ["#203C54", "#376786"],
-    cash: ["#0B6E42", "#10A760", "#0E8A51"],
-    wallet: ["#0750B8", "#1085F5", "#0C67D8"],
-    investment: ["#312E81", "#4F46E5", "#6D5CFF"],
-    receivable: ["#0F5F5F", "#118A87", "#15B9A4"],
-    prepaid: ["#0B4D6A", "#0F7494", "#10A5C6"],
-    insurance: ["#2D3A8C", "#4152B8", "#6C7CF2"],
-  };
-  const colors = ["credit_card", "loan", "mortgage", "line_of_credit", "payable", "bnpl"].includes(type)
-    ? ["#7F1734", "#B12752", "#D3566E"] as [string, string, string]
-    : palettes[type] ?? palettes.bank;
-  return { colors, foreground: "#f8fafc" };
+  const colors = genericAccountColors[type] ?? genericAccountColors.other;
+  return { colors, foreground: "#12383D" };
 }
