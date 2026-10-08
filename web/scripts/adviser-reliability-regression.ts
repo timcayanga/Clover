@@ -85,8 +85,10 @@ for (const question of ["How much can I put towards my next trip?", "How much ca
 }
 assert.equal(classifyAdviserScope("How much can I put in my luggage for the trip?").allowed, false);
 const tripReply = spendingRoomReply(room, "How much can I put towards my next trip?");
-assert.match(tripReply, /estimated \*\*₱25,000.00\*\*/);
-assert.match(tripReply, /next \*\*30 days/);
+assert.match(tripReply, /estimated ₱25,000.00/);
+assert.match(tripReply, /next 30 days/);
 assert.match(tripReply, /Some debt installments are missing/);
 assert.match(tripReply, /planning ceiling/);
 assert.match(spendingRoomReply({...room, safeToSpend:0, roomAfterProtection:-1000}, "How much can I put towards my next trip?"), /hold off.*₱1,000.00/);
+
+assert.doesNotMatch(tripReply, /\*\*/, "The chat displays plain text, so template replies must not include Markdown emphasis markers.");
