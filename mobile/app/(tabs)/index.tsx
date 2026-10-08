@@ -14,6 +14,7 @@ import * as SecureStore from "expo-secure-store";
 import { useCallback, useEffect, useLayoutEffect, useState } from "react";
 import { ScrollView, Platform, Pressable, View } from "react-native";
 import { useSession } from "../../src/session";
+import { ApiError } from "../../src/api";
 import {
   AppHeader,
   Heading,
@@ -72,12 +73,20 @@ const hiddenKey = "clover.home.hide-balances";
 export default function Home() {
   const { colors, styles } = useTheme();
   const session = useSession();
-  const [data, setData] = useState<HomeData | null>(() => session.cached<HomeData>(`home?workspaceId=${encodeURIComponent(session.profileId)}&currency=${session.data?.defaultCurrency ?? "PHP"}&section=overview`));
   const [error, setError] = useState("");
   const [detailsError, setDetailsError] = useState(false);
   const [hidden, setHidden] = useState(true);
   const profileCurrency = session.data?.defaultCurrency ?? "PHP";
   const [currency, setCurrency] = useState(profileCurrency);
+  const basePath = `home?workspaceId=${encodeURIComponent(session.profileId)}&currency=${currency}`;
+  const readSnapshot = () => {
+    const overview = session.cached<HomeData>(`${basePath}&section=overview`);
+    return overview ? mergeHomeDetails(overview, session.cached<HomeDetails>(`${basePath}&section=details`)) : null;
+  };
+  const [snapshot, setSnapshot] = useState(() => ({ path: basePath, value: readSnapshot() }));
+  // Never paint another currency/Profile's balances while the focus effect catches up.
+  const data = snapshot.path === basePath ? snapshot.value : readSnapshot();
+  const setData = useCallback((value: HomeData | null) => setSnapshot({ path: basePath, value }), [basePath]);
   const [currencyOpen, setCurrencyOpen] = useState(false);
   const [currencyOptions, setCurrencyOptions] = useState<string[]>([profileCurrency]);
   const navigation = useNavigation();
@@ -147,7 +156,6 @@ export default function Home() {
   useFocusEffect(
     useCallback(() => {
       let active = true, generation = 0;
-      const basePath = `home?workspaceId=${encodeURIComponent(session.profileId)}&currency=${currency}`;
       const cachedOverview = session.cached<HomeData>(`${basePath}&section=overview`);
       setData(cachedOverview ? mergeHomeDetails(cachedOverview, session.cached<HomeDetails>(`${basePath}&section=details`)) : null);
       setError(""); setDetailsError(false);
@@ -172,7 +180,10 @@ export default function Home() {
             return false;
           }
         } catch (e) {
-          if (active && run === generation) setError((e as Error).message);
+          if (active && run === generation) {
+            if (e instanceof ApiError && (e.status === 401 || e.status === 403)) setData(null);
+            setError((e as Error).message);
+          }
           return false;
         }
       };
@@ -181,7 +192,7 @@ export default function Home() {
       return () => {
         active = false; unregister();
       };
-    }, [load]),
+    }, [load, basePath, session.cached, session.request, session.demo, session.profileId, setData]),
   );
   const amount = (value: number | string | null, code = data?.currency ?? profileCurrency) =>
     hidden
@@ -202,9 +213,8 @@ export default function Home() {
           </View>
         </View>
       </Modal>
-      {error ? (
-        <Notice>{error}</Notice>
-      ) : !data ? (
+      {error ? <Notice>{error}</Notice> : null}
+      {!data ? (
         <>
           <LinearGradient colors={["#03A8C0", "#34D3D0"]} style={{ borderRadius: 20, padding: 24, gap: 16 }}>
             <Text style={{ color: "white", textAlign: "center" }}>My Balance</Text>

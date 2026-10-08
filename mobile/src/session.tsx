@@ -88,7 +88,7 @@ export function SessionProvider({
     demo ? sampleBootstrap.profiles[0].id : "",
   );
   const pageCache = useRef(new PageCache());
-  const cached = useCallback(<T,>(path: string) => pageCache.current.peek<T>(path), []);
+  const cached = useCallback(<T,>(path: string) => /^home\?/.test(path) ? pageCache.current.home<T>(path) : pageCache.current.peek<T>(path), []);
   const preferredProfile = useRef("");
   const [error, setError] = useState("");
   const [rows, setRows] = useState(sampleTransactions);

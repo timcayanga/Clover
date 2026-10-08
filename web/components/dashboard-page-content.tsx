@@ -741,10 +741,48 @@ async function DashboardStream({
       })
     : Promise.resolve([] as DashboardTransaction[]);
 
-  const [latestImport, recentTransactions, dashboardAccounts] = await Promise.all([
+  // These reads depend only on the authorized Profile/currency, not the
+  // account totals or FX result. Start them alongside the primary queries.
+  const secondaryData = Promise.all([
+    getPlannedPaymentSuggestions(workspaceSummary.id).catch(() => []),
+    prisma.transaction.count({ where: { AND: [buildReviewQueueWhere(workspaceSummary.id), ...(allCurrencies ? [] : [{ currency: selectedCurrency }])] } }),
+    prisma.financialCommitment.findMany({
+      where: {
+        workspaceId: workspaceSummary.id,
+        status: "active",
+        kind: { in: ["planned_payment", "reminder"] },
+        ...(allCurrencies ? {} : { currency: selectedCurrency }),
+        OR: [
+          { dueDate: { not: null } },
+          { nextDueDate: { not: null } },
+        ],
+      },
+      orderBy: [{ nextDueDate: "asc" }, { dueDate: "asc" }, { createdAt: "desc" }],
+      select: {
+        id: true,
+        title: true,
+        amount: true,
+        currency: true,
+        dueDate: true,
+        nextDueDate: true,
+        recurrence: true,
+        tracking: true,
+      },
+      take: 30,
+    }).catch(() => []),
+  ]);
+
+  const [
+    latestImport, recentTransactions, dashboardAccounts, bankSnapshots,
+    [allPlannedPaymentSuggestions, outstandingReviewCount, recurringCommitments],
+    hasCommitmentOccurrenceTable,
+  ] = await Promise.all([
     latestImportPromise,
     transactionsPromise,
     dashboardAccountsPromise,
+    finverseBalances(workspaceSummary.id),
+    secondaryData,
+    hasCompatibleTable("FinancialCommitmentOccurrence").catch(() => false),
   ]);
 
   const transactionCurrency = (transaction: DashboardTransaction) => formatCurrencyCode(transaction.currency || transaction.account?.currency || defaultCurrency);
@@ -757,7 +795,6 @@ async function DashboardStream({
   const formatSignedCurrency = (value: number, currency: string | null = displayCurrency) =>
     `${value < 0 ? "-" : ""}${formatCurrencyAmount(Math.abs(value), currency)}`;
 
-  const bankSnapshots = await finverseBalances(workspaceSummary.id);
   const reconcileAccountBalance = (account: (typeof dashboardAccounts)[number]) => {
     const latestCheckpoint = selectLatestAccountCheckpoint(account.statementCheckpoints);
     const accountTransactions = account.type === "cash"
@@ -856,34 +893,6 @@ async function DashboardStream({
       : null;
   const nextSevenDays = new Date(now);
   nextSevenDays.setDate(nextSevenDays.getDate() + 7);
-  const [allPlannedPaymentSuggestions, outstandingReviewCount, recurringCommitments] = await Promise.all([
-    getPlannedPaymentSuggestions(workspaceSummary.id).catch(() => []),
-    prisma.transaction.count({ where: { AND: [buildReviewQueueWhere(workspaceSummary.id), ...(allCurrencies ? [] : [{ currency: selectedCurrency }])] } }),
-    prisma.financialCommitment.findMany({
-      where: {
-        workspaceId: workspaceSummary.id,
-        status: "active",
-        kind: { in: ["planned_payment", "reminder"] },
-        ...(allCurrencies ? {} : { currency: selectedCurrency }),
-        OR: [
-          { dueDate: { not: null } },
-          { nextDueDate: { not: null } },
-        ],
-      },
-      orderBy: [{ nextDueDate: "asc" }, { dueDate: "asc" }, { createdAt: "desc" }],
-      select: {
-        id: true,
-        title: true,
-        amount: true,
-        currency: true,
-        dueDate: true,
-        nextDueDate: true,
-        recurrence: true,
-        tracking: true,
-      },
-      take: 30,
-    }).catch(() => []),
-  ]);
   const plannedPaymentSuggestions = allPlannedPaymentSuggestions.filter(s => allCurrencies || s.currency === selectedCurrency);
   const plannedPaymentsDueSoon = plannedPaymentSuggestions.filter(
     (suggestion) => suggestion.dueDate && new Date(suggestion.dueDate) <= nextSevenDays
@@ -907,7 +916,6 @@ async function DashboardStream({
     .filter(({ commitment, dueDate }) => isWithinRecurringTerm({ recurrence: commitment.recurrence, tracking: parseRecurringTracking(commitment.tracking) }, dueDate, commitment.dueDate ?? commitment.nextDueDate ?? dueDate))
     .sort((left, right) => left.dueDate.getTime() - right.dueDate.getTime())
     .slice(0, 4);
-  const hasCommitmentOccurrenceTable = await hasCompatibleTable("FinancialCommitmentOccurrence").catch(() => false);
   const completedOccurrences = hasCommitmentOccurrenceTable && recurringPaymentOccurrences.length > 0
     ? await prisma.financialCommitmentOccurrence.findMany({
         where: {

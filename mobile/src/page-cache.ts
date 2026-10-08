@@ -12,12 +12,19 @@ export class PageCache {
     const params = new URLSearchParams(query); params.sort();
     return route + (params.size ? `?${params}` : '');
   }
-  peek<T>(path: string): T | null {
+  peek<T>(path: string, maxAge = this.maxAge): T | null {
     const key = this.key(path), entry = this.entries.get(key);
-    if (!entry || this.now() < entry.savedAt || this.now() - entry.savedAt > this.maxAge) {
+    if (!entry || this.now() < entry.savedAt || this.now() - entry.savedAt > maxAge) {
       this.entries.delete(key); return null;
     }
     return entry.value as T;
+  }
+  // Home is a read-only snapshot while every visit revalidates in the background.
+  // Keep it longer than picker/list caches, but never beyond the current day.
+  home<T>(path: string): T | null {
+    const entry = this.entries.get(this.key(path));
+    if (!entry || new Date(entry.savedAt).toDateString() !== new Date(this.now()).toDateString()) return null;
+    return this.peek<T>(path, 30 * 60_000);
   }
   seed(path: string, value: unknown, savedAt: number) { this.entries.set(this.key(path), { value, savedAt }); }
   async read<T>(path: string, load: () => Promise<T>): Promise<T> {

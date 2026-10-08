@@ -71,3 +71,34 @@ console.log('PASS original-store management, shared in-flight reads and invalida
 
 assert.equal(catalogStorePrice('pro','P1M'),'US$7.99 USD / month');
 assert.equal(catalogStorePrice('premium','P1Y'),'US$99.99 USD / year');
+
+// Home's display snapshot lasts beyond the short picker cache, but every read
+// still revalidates. Mutation/auth invalidation remains a hard boundary.
+let homeNow = new Date(2026, 9, 8, 12).getTime();
+const homeCache = new PageCache(() => homeNow);
+const homePath = 'home?workspaceId=one&currency=PHP&section=overview';
+const homeSnapshot = { balance: 1200, currency: 'PHP' };
+await homeCache.read(homePath, async () => homeSnapshot);
+homeNow += 6 * 60_000;
+assert.equal(homeCache.home(homePath), homeSnapshot, 'Revisiting Home after five minutes must not blank its content');
+assert.equal(homeCache.home('home?workspaceId=two&currency=PHP&section=overview'), null);
+assert.equal(homeCache.home('home?workspaceId=one&currency=USD&section=overview'), null);
+let resolveHome;
+const homeRefresh = homeCache.read(homePath, () => new Promise(resolve => { resolveHome = resolve; }));
+await Promise.resolve();
+assert.equal(homeCache.home(homePath), homeSnapshot, 'Slow background refresh keeps cached content available');
+resolveHome({ balance: 900, currency: 'PHP' });
+await homeRefresh;
+assert.equal(homeCache.home(homePath).balance, 900);
+await assert.rejects(homeCache.read(homePath, async () => { throw Error('Network unavailable'); }));
+assert.equal(homeCache.home(homePath).balance, 900, 'A temporary network failure must not discard the last snapshot');
+homeCache.clear();
+assert.equal(homeCache.home(homePath), null, 'Deletion/import/auth invalidation must clear Home too');
+await homeCache.read(homePath, async () => homeSnapshot);
+homeNow += 30 * 60_000 + 1;
+assert.equal(homeCache.home(homePath), null, 'Home snapshots are bounded');
+homeNow = new Date(2026, 9, 8, 23, 59).getTime();
+await homeCache.read(homePath, async () => homeSnapshot);
+homeNow += 2 * 60_000;
+assert.equal(homeCache.home(homePath), null, 'Yesterday’s periods must not appear as today’s reports');
+console.log('PASS Home immediate revisit snapshots, background refresh/failure, scope isolation, mutation invalidation and day rollover');
