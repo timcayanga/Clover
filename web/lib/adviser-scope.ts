@@ -1,3 +1,5 @@
+import { isTripContributionQuestion } from "@/lib/adviser-everyday";
+
 export type AdviserScopeDecision = {
   allowed: boolean;
   reason: "financial" | "clover" | "financial_follow_up" | "out_of_scope";
@@ -16,6 +18,7 @@ const normalize = (value: string) => value.replace(/\s+/g, " ").trim();
 const isFinancialMessage = (message: string) => {
   const normalized = normalize(message);
   if (!normalized) return false;
+  if (isTripContributionQuestion(normalized)) return true;
   if (/\bclover\b/i.test(normalized) && /\b(?:account|adviser|app|import|page|report|transaction|upload)\b/i.test(normalized)) return true;
   if (CLOVER_ACTION_TERMS.test(normalized)) return true;
   if (FINANCIAL_EDUCATION.test(normalized)) return true;

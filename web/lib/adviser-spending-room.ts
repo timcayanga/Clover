@@ -1,3 +1,4 @@
+import { isTripContributionQuestion } from "@/lib/adviser-everyday";
 import { formatCurrencyAmount } from "@/lib/currency-format";
 
 /** Parse only explicit planning inputs. Unrecognized amounts/dates need clarification. */
@@ -26,8 +27,14 @@ type SpendingRoom = {
   confidence: { label: string; score: number }; caveats: string[];
 };
 
-export function spendingRoomReply(s: SpendingRoom) {
+export function spendingRoomReply(s: SpendingRoom, question = "") {
   const money = (n: number) => formatCurrencyAmount(n, s.currency);
+  if (isTripContributionQuestion(question)) {
+    const headline = s.roomAfterProtection >= 0
+      ? `For your next trip, there’s an estimated **${money(s.safeToSpend)}** available after the amounts below.`
+      : `I’d hold off on setting money aside for the trip for now. Your protected amounts exceed available cash by **${money(-s.roomAfterProtection)}**.`;
+    return `${headline}\n\nHere’s the breakdown for the next **${s.horizonDays} days**:\n• Cash available: ${money(s.availableCash)}\n• Expected income included: ${money(s.expectedIncome)}\n• Set aside for bills and shared payments: ${money(s.knownObligations)}\n• Everyday spending reserve: ${money(s.everydaySpendingBuffer)}\n• Goal contributions: ${money(s.goalContribution)}\n• Extra buffer: ${money(s.additionalBuffer)}\n\nThat’s a planning ceiling, not a suggestion to use it all. It covers the next ${s.horizonDays} days, not necessarily the whole time until your trip. Tell me when you’re going and how much you want to keep untouched, and we can refine it.\n\nConfidence: ${s.confidence.label} (${s.confidence.score}/100). Credit limits and investments are excluded.\n\nBefore relying on it:\n${s.caveats.map(c => `• ${c}`).join("\n")}\n• Check current balances and any missing bills or emergency savings. Historical spending reserves can overlap with bills. Already-paid trip costs should not be deducted again; unpaid trip costs must fit within the remaining room.`;
+  }
   const headline = s.roomAfterProtection >= 0
     ? `Estimated spending room: ${money(s.safeToSpend)} over the next ${s.horizonDays} days.`
     : `No spending room is left in this estimate for the next ${s.horizonDays} days. The protected amounts exceed available cash by ${money(-s.roomAfterProtection)}.`;

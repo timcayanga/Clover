@@ -76,3 +76,17 @@ const room = {currency:"PHP",horizonDays:30,availableCash:50000,expectedIncome:0
 assert.match(spendingRoomReply(room), /Estimated spending room: ₱25,000.00/);
 assert.match(spendingRoomReply(room), /Some debt installments are missing/);
 assert.match(spendingRoomReply({...room,safeToSpend:0,roomAfterProtection:-1000}), /No spending room.*exceed available cash by ₱1,000.00/);
+
+for (const question of ["How much can I put towards my next trip?", "How much can we set aside for our vacation?", "How much can I realistically allocate toward travel?"]) {
+  assert(classifyAdviserScope(question).allowed, question);
+  assert.equal(classifyEverydayQuestion(question), null, question);
+  assert.deepEqual(selectAdviserToolNames({question}), ["calculate_safe_to_spend"], question);
+  assert.deepEqual(spendingRoomOptions(question), {horizonDays:undefined, additionalBuffer:undefined});
+}
+assert.equal(classifyAdviserScope("How much can I put in my luggage for the trip?").allowed, false);
+const tripReply = spendingRoomReply(room, "How much can I put towards my next trip?");
+assert.match(tripReply, /estimated \*\*₱25,000.00\*\*/);
+assert.match(tripReply, /next \*\*30 days/);
+assert.match(tripReply, /Some debt installments are missing/);
+assert.match(tripReply, /planning ceiling/);
+assert.match(spendingRoomReply({...room, safeToSpend:0, roomAfterProtection:-1000}, "How much can I put towards my next trip?"), /hold off.*₱1,000.00/);

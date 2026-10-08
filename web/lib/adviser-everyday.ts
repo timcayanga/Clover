@@ -20,10 +20,15 @@ export const isFinancialDefinitionQuestion = (question: string): boolean =>
 export const isEverydayFollowUp = (question: string): boolean =>
   /^(?:(?:yes|no|okay|ok|please|go ahead|tell me more|continue)[.!?]?|(?:₱|php|usd|\$)?\s*[\d,.]+(?:\s*(?:k|m|pesos|dollars|per month|months?|years?))?[.!?]?)$/i.test(question.trim());
 
+// A contribution ceiling asks what existing finances can support, not what a trip costs.
+// Keep the purpose narrow so quantities such as luggage weight are not money questions.
+export const isTripContributionQuestion = (question: string): boolean =>
+  /\bhow much can (?:i|we) (?:(?:safely|actually|realistically) )?(?:put|set aside|allocate) (?:towards?|for) (?:(?:my|our|a|the|next|upcoming)\s+)*(?:trip|holiday|vacation|travel)\b/i.test(question);
+
 // A spending ceiling is different from a target price to save toward. Keep this
 // distinction before purchase keywords such as trip, travel, laptop or phone.
 export const isSpendingRoomQuestion = (question: string): boolean =>
-  /\b(?:how much can (?:i|we) (?:safely |actually )?spend|safe to spend|spending room|spendable|how much room|spend until payday|spend before payday|left until payday)\b/i.test(question);
+  isTripContributionQuestion(question) || /\b(?:how much can (?:i|we) (?:safely |actually )?spend|safe to spend|spending room|spendable|how much room|spend until payday|spend before payday|left until payday)\b/i.test(question);
 
 export const classifyEverydayQuestion = (question: string): AdviserEverydayIntent | null => {
   const normalized = question.trim().toLowerCase();
