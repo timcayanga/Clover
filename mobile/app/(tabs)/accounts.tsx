@@ -509,7 +509,7 @@ function AccountsContent() {
           ))
       )}
       {!loading && !error && !accounts.length ? (
-        <CloverEmptyState>No accounts yet. Use Add account above to get started.</CloverEmptyState>
+        <CloverEmptyState pose="accounts">No accounts yet. Use Add account above to get started.</CloverEmptyState>
       ) : null}
     </Screen>
   )} />;

@@ -1,3 +1,4 @@
+import { ResourceUpgradeNotice } from "./contextual-upgrade";
 import { useEntryNavigation } from "./entry-navigation";
 import { EntrySelector, EntryTransition, UploadTiles } from "./entry-controls";
 import { Text } from "./app-text";
@@ -42,6 +43,7 @@ export function AddEntryMethods({
   return (
     <View style={{ gap: 16 }}>
       <EntrySelector value={tab} items={connect ? onboarding ? ["connect", "upload", "manual"] : ["manual", "ask", "upload", "connect"] : ["manual", "ask", "upload"]} disabled={disabled} onChange={method => { setTab(method); if (method === "ask") setVisited(true); }}/>
+      {(kind === "account" || kind === "investment") && tab !== "connect" ? <ResourceUpgradeNotice key={tab} resource="accounts" /> : null}
       <EntryTransition value={tab}>
       <View style={{ display: tab === "manual" ? "flex" : "none", gap: 16 }}>
         {children}

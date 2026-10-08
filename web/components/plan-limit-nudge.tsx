@@ -1,5 +1,6 @@
 "use client";
 
+import { ContextualUpgrade } from "./contextual-upgrade";
 import Link from "next/link";
 import { getPlanLimitNudgeCopy, type PlanLimitPayload } from "@/lib/plan-limit-nudges";
 import { analyticsOnceKey, PostHogEvent, capturePostHogClientEvent } from "@/components/posthog-analytics";
@@ -14,6 +15,7 @@ export function PlanLimitNudge({ payload, onDismiss }: PlanLimitNudgeProps) {
     return null;
   }
 
+  if (payload.limitType === "account_limit") return <ContextualUpgrade context="accounts" tier={payload.planTier} currentLimit={payload.limitValue} onDismiss={onDismiss} />;
   const copy = getPlanLimitNudgeCopy(payload);
 
   return (

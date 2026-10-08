@@ -1,4 +1,5 @@
 "use client";
+import { ResourceUpgradeNotice } from "./contextual-upgrade";
 import { CloverMascot } from "@/components/clover-mascot";
 import { registerPullRefresh } from "@/lib/pull-refresh";
 import { MobileSheetHandle } from "@/components/mobile-sheet-handle";
@@ -210,7 +211,7 @@ export function BudgetingWorkspace({
           {!selectedBudget ? (
             <>
               {!budgets.length ? (
-                <section className="plan-presets mascot-empty-state"><CloverMascot pose="savings" />
+                <section className="plan-presets mascot-empty-state"><CloverMascot pose="budget" />
                   <h2>Start with a budget that fits your life</h2>
                   <p>Set an amount and start planning your spending.</p>
                   <div className="mascot-empty-state__actions"><button className="button button-primary" onClick={() => { setPreset(null); selectEditor("new"); }}>Create custom budget</button><a className="button button-secondary" href="/adviser?prompt=Help%20me%20plan%20a%20budget">Plan with Clover</a></div>
@@ -842,6 +843,7 @@ function BudgetEditor({
         aria-label={budget ? "Edit budget" : "Create Budget"}
         onClick={(event) => event.stopPropagation()}
       >
+        {!budget ? <ResourceUpgradeNotice resource="budgets" /> : null}
         <MobileSheetHandle onClose={onClose} disabled={saving} />
         <div className="budget-editor__head">
           <h2>{budget ? "Edit budget" : "Create Budget"}</h2>

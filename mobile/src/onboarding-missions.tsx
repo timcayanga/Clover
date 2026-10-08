@@ -1,4 +1,5 @@
 import { useCallback, useState } from "react";
+import { missionMascotPoses } from "../../shared/onboarding-missions";
 import { useFocusEffect, router, type Href } from "expo-router";
 import { Pressable, View } from "react-native";
 import { Text } from "./app-text";
@@ -22,11 +23,11 @@ export function OnboardingMissions() {
       .then(data => { if (active) setSnapshot(data.missions); }).catch(() => {});
     return () => { active = false; };
   }, [session.profileId, session.demo, session.request]));
-  if (!snapshot || snapshot.dismissed || snapshot.complete) return null;
+  if (!snapshot || snapshot.dismissed || snapshot.complete || !snapshot.nextMission) return null;
   const next = snapshot.nextMission;
   return <Card>
     <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
-      <CloverMascot size={72} pose={snapshot.completedCount === 0 ? "welcome" : snapshot.completedCount >= 4 ? "celebrating" : "thinking"} />
+      <CloverMascot size={72} pose={missionMascotPoses[snapshot.nextMission.id]} />
       <View style={{ flex: 1 }}><Text style={{ color: colors.ink, fontFamily: "Poppins-SemiBold", fontSize: 15 }}>Getting started</Text><Body>A few simple steps to make Clover yours.</Body></View>
     </View>
     <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>

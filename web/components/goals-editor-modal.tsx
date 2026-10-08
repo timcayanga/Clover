@@ -1,4 +1,5 @@
 "use client";
+import { ResourceUpgradeNotice } from "./contextual-upgrade";
 import { useMobileCreationRoute } from "@/lib/use-mobile-creation-route";
 
 import { useEffect, useLayoutEffect, useMemo, useState } from "react";
@@ -309,6 +310,7 @@ export function GoalsEditor({
               aria-describedby="goals-editor-modal-copy"
               onClick={(event) => event.stopPropagation()}
             >
+              {!currentGoal ? <ResourceUpgradeNotice resource="goals" /> : null}
               <div className="modal-head goals-editor__modal-head">
                 <div>
                   <p className="eyebrow">{currentGoal ? "Change goal" : "Set goal"}</p>
@@ -560,7 +562,8 @@ export function GoalsEditor({
             aria-describedby="goals-editor-modal-copy"
             onClick={(event) => event.stopPropagation()}
           >
-            <div className="modal-head goals-editor__modal-head">
+            {!currentGoal ? <ResourceUpgradeNotice resource="goals" /> : null}
+              <div className="modal-head goals-editor__modal-head">
               <div>
                 <p className="eyebrow">{currentGoal ? "Change goal" : "Set goal"}</p>
                 <h4 id="goals-editor-modal-title">Pick the lane that feels right today</h4>

@@ -1,4 +1,5 @@
 "use client";
+import { missionMascotPoses } from "../../shared/onboarding-missions";
 
 import Link from "next/link";
 import { CloverMascot } from "@/components/clover-mascot";
@@ -47,7 +48,7 @@ export function OnboardingMissions({ surface }: { surface: "notifications" | "po
   return (
     <section className="onboarding-missions onboarding-missions--notifications" aria-label="Getting started missions">
       <div className="onboarding-missions__head">
-        <CloverMascot pose={snapshot.completedCount === 0 ? "welcome" : snapshot.completedCount >= 4 ? "celebrating" : "thinking"} size={72} />
+        <CloverMascot pose={missionMascotPoses[snapshot.nextMission.id]} size={72} />
         <div>
           <h3>Getting started</h3>
           <p>A few simple steps to make Clover yours.</p>

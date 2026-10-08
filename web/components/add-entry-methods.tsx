@@ -1,4 +1,5 @@
 "use client";
+import { ResourceUpgradeNotice } from "./contextual-upgrade";
 import { FinverseConnectButton } from "./finverse-connect-button";
 import { getNavigationIconSrc } from "@/lib/navigation-icons";
 import type { EntryFormContext } from "@/lib/adviser-entry-types";
@@ -162,6 +163,7 @@ export function AddEntryMethods({
           </button>
         ))}
       </div>
+      {(kind === "accounts" || kind === "investments") && tab !== "connect" ? <ResourceUpgradeNotice key={tab} resource="accounts" /> : null}
       <div
         role="tabpanel"
         id={`${id}-manual-panel`}

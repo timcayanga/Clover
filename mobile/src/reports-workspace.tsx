@@ -1,3 +1,4 @@
+import { ContextualUpgrade } from "./contextual-upgrade";
 import { ReportNavigation, ReportDirectory, ReportJumpTarget, ReportCurrencyScope } from "./report-navigation";
 import { ReportOutlook } from "./report-outlook";
 import { ReportRecoveries } from "./report-recoveries";
@@ -1046,16 +1047,7 @@ function NativeReportPanels({
               </ReportCard>
             </>
           ) : (
-            <ReportCard title="Deeper comparisons">
-              <Body>
-                Income and expense statements and category trends are available
-                with Clover Plus and Pro.
-              </Body>
-              <PlanAction
-                title="Explore Plus"
-                onPress={() => router.push("/settings?section=plan")}
-              />
-            </ReportCard>
+            <ContextualUpgrade context="trends" tier="free" />
           )}
         </>
       ) : null}
@@ -1112,16 +1104,7 @@ function NativeReportPanels({
             </ReportCard>
           </>
         ) : (
-          <ReportCard title="Insights">
-            <Body>
-              Cash-flow forecasts, net-worth changes, Cash Flow, Main Drivers, Next Steps, and Goal Check are available
-              with Clover Plus and Pro.
-            </Body>
-            <PlanAction
-              title="Explore Plus"
-              onPress={() => router.push("/settings?section=plan")}
-            />
-          </ReportCard>
+          <ContextualUpgrade context="insights" tier="free" />
         )
       ) : null}
     </View>

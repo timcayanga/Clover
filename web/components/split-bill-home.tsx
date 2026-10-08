@@ -389,7 +389,7 @@ export function SplitBillHome({
           ) : null}
           {isBlankState ? (
             <section className="split-bill-empty-cta">
-              <CloverMascot /><h2>No bills yet</h2>
+              <CloverMascot pose="circles" /><h2>No bills yet</h2>
               <p>Upload a receipt or add a split bill.</p>
               <SplitBillActionButtons
                 onAddBill={() =>

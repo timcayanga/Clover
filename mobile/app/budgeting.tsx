@@ -1,3 +1,4 @@
+import { ResourceUpgradeNotice } from "../src/contextual-upgrade";
 import { AdaptiveGrid } from "../src/adaptive";
 import { CloverEmptyState } from "../src/clover-mascot";
 import { EntryOverlay } from "../src/entry-overlay";
@@ -298,7 +299,7 @@ export default function Budgeting() {
         <>
           {!data.budgets.length ? (
             <>
-              <CloverEmptyState pose="savings">Start with a budget that fits your life. Set an amount and start planning your spending.</CloverEmptyState>
+              <CloverEmptyState pose="budget">Start with a budget that fits your life. Set an amount and start planning your spending.</CloverEmptyState>
             </>
           ) : (
             <AdaptiveGrid>{data.budgets.map((budget) => (
@@ -501,6 +502,7 @@ function BudgetEditor({
   };
   return (
     <Screen sheet onDismiss={() => { if (!saving) onClose(); }}>
+      { !budget ? <ResourceUpgradeNotice resource="budgets" /> : null}
       <PlanHeader
         title={budget ? "Edit Budget" : "Add Budget"}
         back={() => {

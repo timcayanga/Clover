@@ -296,7 +296,6 @@ export function OnboardingForm({
   const uploadStep = (
     <>
       <h3>Add your accounts</h3>
-      <p className="onboarding-card__copy">Connect, upload, or add manually.</p>
       <div className="transaction-creation-tabs" role="tablist" aria-label="Add your accounts"
         style={{ "--entry-tab-index": ["connect", "upload", "manual"].indexOf(accountMethod), "--entry-tab-count": 3 } as CSSProperties}>
         {(["connect", "upload", "manual"] as const).map((method, index, methods) => <button type="button" role="tab" key={method}
@@ -310,7 +309,8 @@ export function OnboardingForm({
         {accountMethod === "upload" ? <>
           <h4>Add a statement or receipt</h4>
           <PageFileDropZone enabled={!importOpen} title="Add a statement or receipt" subtitle="Drop a file to get started." onFilesDropped={openImportFiles} />
-          <UploadSourceButtons onFiles={() => fileInputRef.current?.click()} onCamera={() => photoInputRef.current?.click()} onLibrary={() => libraryInputRef.current?.click()} />
+          <button type="button" className="onboarding-desktop-drop" onClick={() => fileInputRef.current?.click()} onDragOver={event => event.preventDefault()} onDrop={event => { event.preventDefault(); openImportFiles(Array.from(event.dataTransfer.files)); }}>Drop files here or choose files</button>
+          <div className="onboarding-mobile-sources"><UploadSourceButtons onFiles={() => fileInputRef.current?.click()} onCamera={() => photoInputRef.current?.click()} onLibrary={() => libraryInputRef.current?.click()} /></div>
           <input ref={photoInputRef} className="sr-only" type="file" accept="image/*" capture="environment" onChange={handleFilePickerChange} />
           <input ref={libraryInputRef} className="sr-only" type="file" accept="image/*" multiple onChange={handleFilePickerChange} />
           <input ref={fileInputRef} className="sr-only" type="file" accept={PUBLIC_IMPORT_ACCEPT} multiple onChange={handleFilePickerChange} />
@@ -414,7 +414,7 @@ export function OnboardingForm({
           ))}
         </div>
         <div className="onboarding-card__brand" aria-label="Clover">
-          <img className="onboarding-card__mark" src={step === "experience" ? "/assets/mascots/velvet-thinking.webp" : step === "upload" ? "/assets/mascots/velvet-welcome.webp" : "/assets/mascots/velvet-welcome.webp"} alt="" aria-hidden="true" loading="eager" fetchPriority="high" />
+          <img className="onboarding-card__mark" src={step === "experience" ? "/assets/mascots/velvet-chat.webp" : accountMethod === "connect" ? "/assets/mascots/velvet-banks.webp" : accountMethod === "upload" ? "/assets/mascots/velvet-receipt.webp" : "/assets/mascots/velvet-manual.webp"} alt="" aria-hidden="true" loading="eager" fetchPriority="high" />
         </div>
 
         {step === "upgrade" ? upgradeStep : step === "experience" ? experienceStep : uploadStep}

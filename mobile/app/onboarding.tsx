@@ -74,7 +74,7 @@ export default function Onboarding() {
   };
   return (
     <Screen>
-      <View style={{ alignItems: "center" }}><CloverMascot pose={step === "experience" ? "thinking" : "welcome"} size={128} /></View>
+      <View style={{ alignItems: "center" }}><CloverMascot pose={step === "experience" ? "chat" : accountMethod === "connect" ? "banks" : accountMethod === "upload" ? "receipt" : "manual"} size={128} /></View>
       {step === "experience" ? (
         <>
           <Heading>How comfortable are you with financial management?</Heading>
@@ -173,7 +173,6 @@ export default function Onboarding() {
         <>
           <Card>
             <Heading>Add your accounts</Heading>
-            <Body>Connect, upload, or add manually.</Body>
             <EntrySelector value={accountMethod} items={["connect", "upload", "manual"]} onChange={setAccountMethod} disabled={busy} />
             {accountMethod !== "upload" ? <>
               <Heading>{accountMethod === "connect" ? "Connect a supported bank" : "Add an account manually"}</Heading>

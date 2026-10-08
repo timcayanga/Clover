@@ -66785,3 +66785,7 @@ input.transaction-inline-edit[aria-invalid="true"] { box-shadow: inset 0 -1px va
 .onboarding-account-method { display:grid; gap:14px; text-align:left; }
 .onboarding-account-method h4 { margin:0; font-size:18px; }
 .onboarding-account-method .organize-upload-choices img { width:64px; height:64px; object-fit:contain; }
+
+.onboarding-desktop-drop { width:100%; min-height:152px; padding:24px; border:1px dashed var(--brand,#03a8c0); border-radius:18px; background:var(--surface,#fff); color:var(--text,#21323d); cursor:pointer; font:inherit; }
+.onboarding-mobile-sources { display:none; }
+@media(max-width:767px) { .onboarding-desktop-drop {display:none} .onboarding-mobile-sources {display:block} }

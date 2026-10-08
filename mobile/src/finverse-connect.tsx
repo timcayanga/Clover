@@ -1,3 +1,4 @@
+import { ResourceUpgradeNotice } from "./contextual-upgrade";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { FinverseBankOption } from "../../shared/finverse-bank-options";
 import { FinversePendingChip, confirmCancelBankLink } from "./finverse-pending-chip";
@@ -154,14 +155,13 @@ export function FinverseConnect({ onSynced, callbackConnection, mode = "connect"
   if (mode === "sync" && accountId && !connectionsLoaded) return <Body>Checking bank connection…</Body>;
   if (mode === "sync" && accountId && !linked.some(a => a.id === accountId)) return null;
   if (access?.profileId === session.profileId && access.upgradeRequired && !linked.length) return <View style={{ gap: 16 }}>
-    <Heading>Unlock bank connections</Heading>
-    <Body>Upgrade to Clover Plus or Pro to securely connect your banks through Finverse.</Body>
-    <Button title="Upgrade plan" fullWidth onPress={() => router.push("/settings?section=plan")} />
+    <ResourceUpgradeNotice resource="linkedBanks" />
     <Body muted>You can still add accounts with Manual or Upload on Free.</Body>
   </View>;
   if (!connectionsLoaded && !session.demo) return <View style={{ gap: 12 }}><Notice>{connectionsError || "Loading linked accounts…"}</Notice>{connectionsError ? <Button secondary title="Try again" onPress={() => setRevision(v => v + 1)} /> : null}</View>;
   const syncAccounts=linked.filter(a=>!accountId||a.id===accountId);
   return <View style={{gap:16}}>
+    {mode === "connect" ? <ResourceUpgradeNotice resource="linkedBanks" /> : null}
 
     {pending.map(c=><FinversePendingChip key={c.id} connection={c} busy={busy} resumeDisabled={!allowed} onResume={()=>void sync(c.id)} onCancel={()=>void cancelSetup(c.id)}/>)}
     {mode === "connect" ? <>{test ? <Notice>Test mode · Only test banks are shown.</Notice> : null}{banksLoaded&&allowed ? <FinverseBankPicker banks={banks} busy={busy} onConnect={bank=>void connect(bank)}/> : <Notice>{bankMessage}</Notice>}</> : null}

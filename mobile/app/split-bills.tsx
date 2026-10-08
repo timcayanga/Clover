@@ -498,7 +498,7 @@ export default function SplitBills() {
                       >
                         No bills yet
                       </Text>
-                      <CloverEmptyState>Upload a receipt or add a split bill.</CloverEmptyState>
+                      <CloverEmptyState pose="circles">Upload a receipt or add a split bill.</CloverEmptyState>
                       <View style={{ flexDirection: "row", gap: 12 }}>
                         <Pressable
                           accessibilityRole="button"
@@ -622,7 +622,7 @@ export default function SplitBills() {
                   </Pressable>
                 ))}</AdaptiveGrid>
               ) : (
-                <CloverEmptyState>No groups yet.</CloverEmptyState>
+                <CloverEmptyState pose="circles">No groups yet.</CloverEmptyState>
               )}
             </>
           ) : tab === "People" ? (
@@ -650,7 +650,7 @@ export default function SplitBills() {
                   </Card>
                 ))
               ) : (
-                <CloverEmptyState>No people saved yet.</CloverEmptyState>
+                <CloverEmptyState pose="circles">No people saved yet.</CloverEmptyState>
               )}
             </>
           ) : (

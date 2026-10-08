@@ -4,13 +4,14 @@ import { Image, Pressable, ScrollView, StyleSheet, View, useWindowDimensions } f
 import { LinearGradient } from "expo-linear-gradient";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAccess } from "../src/access";
+import { OpeningSpendingPreview, OpeningChatPreview } from "../src/opening-previews";
 import { CloverMascot } from "../src/clover-mascot";
 
 const slides = [
-  { title: "Your money, together\nin Clover.", accent: "in Clover.", image: require("../assets/tutorial/accounts-v2.png"), mascot: "welcome" as const, cropTop: 0, description: "BPI savings, UnionBank credit card and GCash wallet account previews." },
-  { title: "Connect, upload,\nor add manually.", accent: "or add manually.", image: require("../assets/tutorial/connect-v2.png"), mascot: "guiding" as const, cropTop: 0, description: "Clover connection preview with Philippine banks." },
-  { title: "See where your\nmoney goes.", accent: "money goes.", image: require("../assets/tutorial/spending-v2.png"), mascot: "thinking" as const, cropTop: 0, description: "Where It Went report with Housing, Food and Dining, Groceries and Transport." },
-  { title: "Ask Clover.\nTake your next step.", accent: "Take your next step.", image: require("../assets/tutorial/adviser-v2.png"), mascot: "celebrating" as const, cropTop: 0, description: "A sample Ask Clover conversation showing a spending report and a transaction ready for review." },
+  { title: "Your money, together\nin Clover.", accent: "in Clover.", image: require("../assets/tutorial/accounts-v2.png"), mascot: "accounts" as const, cropTop: 0, description: "BPI savings, UnionBank credit card and GCash wallet account previews." },
+  { title: "Bring your accounts\ninto Clover.", accent: "into Clover.", image: require("../assets/tutorial/connect-v2.png"), mascot: "receipt" as const, cropTop: 0, description: "Clover connection preview with Philippine banks." },
+  { title: "See where your\nmoney goes.", accent: "money goes.", image: require("../assets/tutorial/spending-v2.png"), mascot: "reports" as const, cropTop: 0, description: "Where It Went report with Housing, Food and Dining, Groceries and Transport." },
+  { title: "Ask Clover.\nTake your next step.", accent: "Take your next step.", image: require("../assets/tutorial/adviser-v2.png"), mascot: "chat" as const, cropTop: 0, description: "A sample Ask Clover conversation showing a spending report and a transaction ready for review." },
 ];
 
 export default function Welcome() {
@@ -55,12 +56,11 @@ export default function Welcome() {
             <Text accessibilityRole="header" style={[s.title, compact && { fontSize: 23, lineHeight: 29 }]}>
               {slide.title.slice(0, start)}<Text style={{ color: "#00aabe" }}>{slide.accent}</Text>{slide.title.slice(start + slide.accent.length)}
             </Text>
-            <View style={{ width: artworkWidth, height: artworkHeight + 46, alignSelf: "center" }}>
-              <View style={[s.preview, { width: artworkWidth, height: artworkHeight }]}>
-                <Image source={slide.image} accessibilityLabel={slide.description} resizeMode="contain"
-                  style={{ width: artworkWidth, height: artworkHeight, transform: [{ translateY: -slide.cropTop * artworkWidth / 342 }] }} />
+            <View style={{ width: artworkWidth, alignItems: "center", gap: 12 }}>
+              <View style={[s.preview, { width: artworkWidth, minHeight: artworkHeight }]}>
+                {i === 2 ? <OpeningSpendingPreview /> : i === 3 ? <OpeningChatPreview /> : <Image source={slide.image} accessibilityLabel={slide.description} resizeMode="contain" style={{ width: artworkWidth, height: artworkHeight }} />}
               </View>
-              <View style={{ position: "absolute", right: -10, bottom: 0 }}><CloverMascot pose={slide.mascot} size={120} /></View>
+              <CloverMascot pose={slide.mascot} size={landscape ? 128 : 216} />
             </View>
           </ScrollView>;
         })}

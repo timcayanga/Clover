@@ -4,7 +4,7 @@ import { CloverMascot } from "@/components/clover-mascot";
 export default function NotFound() {
   return <main className="error-screen">
     <section className="error-screen__card" aria-labelledby="not-found-title">
-      <CloverMascot pose="thinking" size={240} />
+      <CloverMascot pose="notfound" size={240} />
       <div className="error-screen__copy">
         <p className="eyebrow">Page not found</p>
         <h1 id="not-found-title">Let’s get you back on track.</h1>

@@ -1,4 +1,5 @@
 "use client";
+import { PremiumPreview } from "./contextual-upgrade";
 import { ReportDirectory } from "./report-directory";
 import { ReportOutlook } from "./report-outlook";
 import { ReportRecoveries } from "./report-recoveries";
@@ -1132,13 +1133,7 @@ export function ReportPanels({
               </Panel>
             </>
           ) : (
-            <Panel title="Deeper comparisons">
-              <p>
-                Income and expense statements and category trends are available
-                with Clover Plus and Pro.
-              </p>
-              <Link href="/pricing">Explore Plus</Link>
-            </Panel>
+            <PremiumPreview context="trends" />
           )}
         </>
       ) : null}
@@ -1205,13 +1200,7 @@ export function ReportPanels({
             </Panel>
           </>
         ) : (
-          <Panel title="Insights">
-            <p>
-              Cash-flow forecasts, net-worth changes, Cash Flow, Main Drivers,
-              Next Steps, and Goal Check are available with Clover Plus and Pro.
-            </p>
-            <Link href="/pricing">Explore Plus</Link>
-          </Panel>
+          <PremiumPreview context="insights" />
         )
       ) : null}
     </div>

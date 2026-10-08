@@ -1,3 +1,4 @@
+import { ResourceUpgradeNotice } from "../src/contextual-upgrade";
 import { AdaptiveGrid } from "../src/adaptive";
 import { CloverEmptyState } from "../src/clover-mascot";
 import { EntryOverlay } from "../src/entry-overlay";
@@ -398,7 +399,7 @@ export default function Circles() {
                   </Card>
                 ))
               ) : (
-                <CloverEmptyState>No shared expenses yet.</CloverEmptyState>
+                <CloverEmptyState pose="circles">No shared expenses yet.</CloverEmptyState>
               )}
             </>
           ) : tab === "Commitments" || tab === "Contributions" ? (
@@ -517,7 +518,7 @@ export default function Circles() {
                   ),
                 )
               ) : (
-                <CloverEmptyState>No shared {tab.toLowerCase()} yet.</CloverEmptyState>
+                <CloverEmptyState pose="circles">No shared {tab.toLowerCase()} yet.</CloverEmptyState>
               )}
             </>
           ) : tab === "Activity" ? (
@@ -740,6 +741,7 @@ function CircleEditor({
   };
   return (
     <Screen sheet onDismiss={() => { if (!busy) onClose(); }}>
+      { !initial ? <ResourceUpgradeNotice resource="circles" /> : null}
       <PlanHeader
         title={initial ? "Edit Circle" : "Create Circle"}
         back={() => {

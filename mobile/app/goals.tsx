@@ -1,3 +1,4 @@
+import { ResourceUpgradeNotice } from "../src/contextual-upgrade";
 import { AdaptiveGrid } from "../src/adaptive";
 import { CloverEmptyState } from "../src/clover-mascot";
 import { EntryOverlay } from "../src/entry-overlay";
@@ -540,6 +541,7 @@ function GoalEditor({
   };
   return (
     <Screen sheet onDismiss={() => { if (!saving) onClose(); }}>
+      { !goal ? <ResourceUpgradeNotice resource="goals" /> : null}
       <PlanHeader
         title={goal ? "Edit Goal" : "Add Goal"}
         back={() => {

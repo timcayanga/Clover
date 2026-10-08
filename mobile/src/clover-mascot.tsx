@@ -3,6 +3,19 @@ import type { ReactNode } from "react";
 import { Body, useTheme } from "./ui";
 
 const poses = {
+  reports: require("../assets/mascots/velvet-reports.png"),
+  investments: require("../assets/mascots/velvet-investments.png"),
+  accounts: require("../assets/mascots/velvet-accounts.png"),
+  banks: require("../assets/mascots/velvet-banks.png"),
+  circles: require("../assets/mascots/velvet-circles.png"),
+  receipt: require("../assets/mascots/velvet-receipt.png"),
+  calendar: require("../assets/mascots/velvet-calendar.png"),
+  budget: require("../assets/mascots/velvet-budget.png"),
+  chat: require("../assets/mascots/velvet-chat.png"),
+  manual: require("../assets/mascots/velvet-manual.png"),
+  notfound: require("../assets/mascots/velvet-notfound.png"),
+  error: require("../assets/mascots/velvet-error.png"),
+
   savings: require("../assets/mascots/velvet-savings.png"),
   compact: require("../assets/mascots/velvet-compact.png"),
   welcome: require("../assets/mascots/velvet-welcome.png"),

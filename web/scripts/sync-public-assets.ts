@@ -38,7 +38,7 @@ const main = async () => {
   await mkdir(destinationRoot, { recursive: true });
   await cp(sourceRoot, destinationRoot, { recursive: true, force: true });
   // Preserve approved originals; serve appropriately sized transparent web artwork.
-  for (const pose of ["compact", "welcome", "statement", "thinking", "wave", "savings"]) {
+  for (const pose of ["compact", "welcome", "statement", "thinking", "wave", "savings", "accounts", "banks", "budget", "calendar", "chat", "circles", "error", "investments", "manual", "notfound", "receipt", "reports"]) {
     await sharp(`${sourceRoot}mascots/velvet-${pose}.png`)
       .resize({ width: 512, height: 512, fit: "inside", withoutEnlargement: true })
       .webp({ quality: 90, alphaQuality: 100, effort: 5 })

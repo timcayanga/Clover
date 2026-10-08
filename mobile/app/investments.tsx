@@ -1,3 +1,4 @@
+import { ContextualUpgrade } from "../src/contextual-upgrade";
 import { AdaptiveGrid } from "../src/adaptive";
 import { investmentTypeLabel } from "../../shared/investment-entry";
 import { useLiveInvestmentValues } from "../src/use-live-investment-values";
@@ -274,7 +275,7 @@ export default function Investments() {
       ) : !data ? (
         <Body>Loading investments…</Body>
       ) : tab.includes("Plus") && !pro ? (
-        <Notice>This section is available with Clover Plus and Pro.</Notice>
+        <ContextualUpgrade tier="free" context={tab.startsWith("Planner") ? "planner" : tab.startsWith("Markets") ? "markets" : "analysis"} />
       ) : tab === "Overview" ? (
         <>
           <AdaptiveGrid minItemWidth={100} maxColumns={3} gap={8}>
@@ -418,7 +419,7 @@ export default function Investments() {
                 );
               })}
           {!visibleHoldings.length ? (
-            <CloverEmptyState pose="thinking">No matching holdings.</CloverEmptyState>
+            <CloverEmptyState pose="investments">No matching holdings.</CloverEmptyState>
           ) : null}
         </>
       ) : tab.startsWith("Planner") ? (

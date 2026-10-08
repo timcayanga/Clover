@@ -17,7 +17,8 @@ import { EmptyDataCta } from "@/components/empty-data-cta";
 import { AccountBrandMark } from "@/components/account-brand-mark";
 import { AnimatedTabs } from "@/components/animated-tabs";
 import { AdviserChat } from "@/components/adviser-chat";
-import { PlanUpgradeCallout } from "@/components/plan-upgrade-callout";
+import { PremiumPreview } from "@/components/contextual-upgrade";
+import { CloverMascot } from "@/components/clover-mascot";
 import { CurrencySelector } from "@/components/currency-selector";
 import { InfoTooltip } from "@/components/info-tooltip";
 import { InstitutionAutocomplete } from "@/components/institution-autocomplete";
@@ -3012,16 +3013,7 @@ export default function InvestmentsPage() {
         {!loading && message ? <p className="panel-muted">{message}</p> : null}
 
         {!canAccessSelectedTab ? (
-          <PlanUpgradeCallout
-            planTier="free"
-            title={`Unlock ${selectedTab === "market" ? "Markets" : selectedTab === "planner" ? "Growth Planner" : "Analysis"}`}
-            copy="Upgrade to Plus to unlock the full investment workspace, including growth scenarios, market context, and portfolio analysis."
-            ctaHref="/settings?upgrade=pro&interval=annual"
-            ctaLabel="Upgrade to Plus"
-            secondaryHref="/pricing"
-            secondaryLabel="Compare plans"
-            className="investments-pro-gate"
-          />
+          <PremiumPreview context={selectedTab === "market" ? "markets" : selectedTab === "planner" ? "planner" : "analysis"} />
         ) : selectedTab === "overview" ? (
           <>
             <section className="investments-overview-metrics" aria-label="Portfolio totals">
@@ -3068,7 +3060,7 @@ export default function InvestmentsPage() {
                 </div>
               </div>
               <InvestmentPortfolioGrowthChart assets={growthAssets} currency={growthDisplayCurrency} />
-              {!growthAssets.length ? <div className="investment-history-empty-action">{renderAddInvestmentButton()}</div> : null}
+              {!growthAssets.length ? <div className="investment-history-empty-action"><CloverMascot pose="investments" />{renderAddInvestmentButton()}</div> : null}
             </section>
             {portfolioAllocation.length > 0 || portfolioEstimateUnavailable || (usesPortfolioFxEstimates && portfolioExchangeRates.loading) ? <section className="investments-allocation investments-allocation--overview glass">
               {usesPortfolioFxEstimates && portfolioExchangeRates.loading ? (

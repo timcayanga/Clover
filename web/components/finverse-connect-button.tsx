@@ -1,4 +1,5 @@
 "use client";
+import { ResourceUpgradeNotice } from "./contextual-upgrade";
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { FinverseBankOption } from "../../shared/finverse-bank-options";
@@ -257,9 +258,7 @@ export function FinverseConnectButton({
   if (mode === "sync" && accountId && (!connectionsLoaded || !linked.some(a=>a.id===accountId))) return null;
   if (access?.workspaceId === workspaceId && access.upgradeRequired && !linked.length) return (
     <div className="finverse-connect finverse-connect--upgrade">
-      <h4>Unlock bank connections</h4>
-      <p>Upgrade to Clover Plus or Pro to securely connect your banks through Finverse.</p>
-      <Link className="button button-primary" href="/settings/plan">Upgrade plan</Link>
+      <ResourceUpgradeNotice resource="linkedBanks" />
       <p>You can still add accounts with Manual or Upload on Free.</p>
     </div>
   );
@@ -269,6 +268,7 @@ export function FinverseConnectButton({
   if (mode === "sync" && accountId && !syncAccounts.length) return null;
   return (
     <div className="finverse-connect finverse-connect--picker">
+      {mode === "connect" ? <ResourceUpgradeNotice resource="linkedBanks" /> : null}
 
 
       {pending.length ? <section className="finverse-pending" aria-label="Finish linking">{pending.map(c=><FinversePendingChip key={c.id} connection={c} busy={action!==null} resumeDisabled={!allowed} onResume={()=>void sync(c.id)} onCancel={()=>void cancelSetup(c.id)}/>)}</section> : null}

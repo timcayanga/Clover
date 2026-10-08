@@ -7565,7 +7565,7 @@ function TransactionsPageContent() {
     ...tagFilters.map(id => ({ label: filterTags.find(tag => tag.id === id)?.name ?? "Tag", clear: () => setTagFilters(current => current.filter(value => value !== id)) })),
   ];
   const transactionsNoResults = <div className="empty-state transactions-empty-state transactions-empty-state--table" role="status">
-    <CloverMascot pose="thinking" size={144} />
+    <CloverMascot pose="receipt" size={144} />
     <strong className="transactions-empty-state__title">No matching transactions</strong>
     <p>Try a different search or remove a filter.</p>
     <button type="button" className="button button-secondary" onClick={clearTransactionFilters}>Clear filters</button>

@@ -482,7 +482,7 @@ export default function Recurring() {
                     />
                   ))
                 ) : (
-                  <CloverEmptyState compact pose="resting">No bills due.</CloverEmptyState>
+                  <CloverEmptyState compact pose="calendar">No bills due.</CloverEmptyState>
                 )}
               </View>
             ) : null}
@@ -551,7 +551,7 @@ export default function Recurring() {
                 </Pressable>
               ))
             ) : (
-              <CloverEmptyState>No recurring items yet. Add a bill or regular payment to get started.</CloverEmptyState>
+              <CloverEmptyState pose="calendar">No recurring items yet. Add a bill or regular payment to get started.</CloverEmptyState>
             )}
           </Card>
         </>

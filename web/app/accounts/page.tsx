@@ -3582,15 +3582,6 @@ function AccountsPageContent() {
       closeChrome();
     });
 
-    if (!isLocalDevBrowser && planLimits?.accountLimit != null && accountLimitUsageCount >= planLimits.accountLimit) {
-      showPlanLimitNudge({
-        planTier,
-        limitType: "account_limit",
-        limitValue: planLimits.accountLimit,
-      });
-      setMessage("You’ve reached the current account limit for this plan.");
-      return;
-    }
 
     flushSync(() => {
       setAddAccountError(null);
@@ -3610,11 +3601,7 @@ function AccountsPageContent() {
     }
 
     if (!isLocalDevBrowser && planLimits?.accountLimit != null && accountLimitUsageCount >= planLimits.accountLimit) {
-      showPlanLimitNudge({
-        planTier,
-        limitType: "account_limit",
-        limitValue: planLimits.accountLimit,
-      });
+      setAddOpen(true);
       setMessage("You’ve reached the current account limit for this plan.");
       return;
     }

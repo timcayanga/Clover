@@ -1,0 +1,14 @@
+import assert from "node:assert/strict";
+import { contextualUpgradeOptions } from "../../shared/contextual-upgrades";
+import { buildOnboardingMissions, missionMascotPoses } from "../../shared/onboarding-missions";
+assert.deepEqual(contextualUpgradeOptions("linkedBanks", "free").map(x => [x.name,x.benefit]), [["Plus","2 connected accounts"],["Pro","5 connected accounts"]]);
+assert.deepEqual(contextualUpgradeOptions("goals", "pro").map(x => x.benefit), ["10 goals"]);
+assert.deepEqual(contextualUpgradeOptions("insights", "free").map(x=>x.benefit), ["Advanced Reports","Advanced Reports"]);
+assert.equal(contextualUpgradeOptions("accounts", "premium").length,0);
+assert.equal(contextualUpgradeOptions("accounts", "unknown").length,0);
+assert.equal(contextualUpgradeOptions("accounts", "free", null).length,0);
+assert.deepEqual(contextualUpgradeOptions("accounts", "free", 25).map(x=>x.name),["Pro"]);
+const progress=buildOnboardingMissions({add_account:false,add_transaction:true,set_budget:true,create_goal:true,ask_clover:true});
+assert.equal(progress.completedCount,4);
+assert.equal(missionMascotPoses[progress.nextMission!.id],"accounts");
+console.log("Contextual upgrade eligibility and out-of-order mission artwork passed.");

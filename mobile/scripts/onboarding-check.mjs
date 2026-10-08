@@ -28,13 +28,13 @@ for(const action of ['skip','connect','manual','file','camera','library']){
  const h=harness();let nodes=h.render();
  const mascots=nodes.filter(n=>n.type==='CloverMascot');
  assert.equal(mascots.length,1,'Use one mascot in the onboarding brand position');
- assert.equal(mascots[0].props.pose,'thinking');
+ assert.equal(mascots[0].props.pose,'chat');
  assert.equal(mascots[0].props.size,128);
  const plants=nodes.filter(n=>n.type==='Image'&&n.props.source.includes('/onboarding/')).map(n=>n.props.source.split('/').pop());
  assert.deepEqual(plants,['beginner.png','intermediate.png','advanced.png']);
  nodes.find(n=>n.props.accessibilityRole==='radio').props.onPress();nodes=h.render();
  nodes.find(n=>n.props.title==='Continue').props.onPress();nodes=h.render();
- assert.equal(nodes.find(n=>n.type==='CloverMascot').props.pose,'welcome');
+ assert.equal(nodes.find(n=>n.type==='CloverMascot').props.pose,'banks');
  const selector=nodes.find(n=>n.type==='EntrySelector');
  assert.equal(selector.props.value,'connect');
  assert.deepEqual(Array.from(selector.props.items),['connect','upload','manual']);

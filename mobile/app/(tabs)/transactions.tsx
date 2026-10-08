@@ -275,7 +275,7 @@ export default function Transactions() {
         )}
         ListEmptyComponent={
           !busy ? (
-            <CloverEmptyState pose={error ? "reassuring" : "thinking"}>
+            <CloverEmptyState pose={error ? "error" : "receipt"}>
               {error ? "Pull down to retry." : hasTransactionFilters(filterValues, search) ? "No matching transactions. Try another search or filter." : "Add your first transaction. Upload a receipt or add one manually."}
             </CloverEmptyState>
           ) : (

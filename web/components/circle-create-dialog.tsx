@@ -1,4 +1,5 @@
 "use client";
+import { ResourceUpgradeNotice } from "./contextual-upgrade";
 import { MobileSheetHandle } from "@/components/mobile-sheet-handle";
 
 import { InterfaceIcon } from "@/components/interface-icon";
@@ -155,6 +156,7 @@ export function CircleCreateDialog({
         aria-modal={creationPage ? undefined : true}
         aria-labelledby="circle-create-title"
       >
+        <ResourceUpgradeNotice resource="circles" />
         <MobileSheetHandle onClose={close} disabled={isSaving} />
         <div className="circles-dialog__head">
           <div>

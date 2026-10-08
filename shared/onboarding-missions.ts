@@ -16,3 +16,9 @@ export function buildOnboardingMissions(completion: Record<OnboardingMissionId, 
   const completedCount = missions.filter(mission => mission.completed).length;
   return { dismissed, missions, completedCount, totalCount: missions.length, complete: completedCount === missions.length, nextMission: missions.find(mission => !mission.completed) ?? null };
 }
+
+/** Choose artwork by the next unfinished mission, including out-of-order progress. */
+export const missionMascotPoses = {
+  add_account: "accounts", add_transaction: "receipt", set_budget: "budget",
+  create_goal: "savings", ask_clover: "chat",
+} as const satisfies Record<OnboardingMissionId, string>;
