@@ -16,6 +16,7 @@ import {
 import Link from "next/link";
 import { ReportsComparisonChart } from "./reports-comparison-chart";
 import { CloverShell } from "./clover-shell";
+import { CategoryBrandMark } from "./category-brand-mark";
 import { AnimatedTabs } from "./animated-tabs";
 import { ReportsTabIcon } from "./reports-tabs";
 import { ReportsMoneyOverTimeChart } from "./reports-money-over-time-chart";
@@ -262,30 +263,21 @@ export function ReportsWorkspaceView({
       titleAddon={tabBar}
       mobileSubheader={tabBar}
       mobileLeadingAction={<AdviserHeaderLink />}
-      mobileTrailingAction={
-        <button
-          className="button button-secondary"
-          onClick={() => {
-            setDraft(view);
-            setFilters(!filters);
-          }}
-          aria-expanded={filters}
-        >
-          Filters
-        </button>
-      }
       actions={
         <>
           <AdviserHeaderLink />
           <button
-            className="button button-secondary"
+            type="button"
+            className="button button-secondary reports-workspace-filter"
+            aria-label="Filter reports"
             onClick={() => {
               setDraft(view);
               setFilters(!filters);
             }}
             aria-expanded={filters}
           >
-            Filters
+            <img src="/assets/organize/filter.svg" alt="" width={20} height={20} />
+            <span>Filters</span>
           </button>
         </>
       }
@@ -646,6 +638,7 @@ export function ReportPanels({
                 : href({ merchant: x.name, type })
             }
           >
+            {kind === "category" ? <CategoryBrandMark categoryName={x.name} /> : null}
             <span>
               {x.name}
               {x.count !== undefined ? (
@@ -794,7 +787,7 @@ export function ReportPanels({
                     {a.categories.map((x) => (
                       <tr key={x.name}>
                         <th>
-                          <Link href={categoryHref(x.name)}>{x.name}</Link>
+                          <Link className="report-category-label" href={categoryHref(x.name)}><CategoryBrandMark categoryName={x.name} /><span>{x.name}</span></Link>
                         </th>
                         <td>{money(x.amount)}</td>
                         <td>
@@ -814,7 +807,7 @@ export function ReportPanels({
             {view.chart !== "Table"
               ? a.categories.map((x) => (
                   <div key={x.name} className="report-v2-category">
-                    <Link href={categoryHref(x.name)}>{x.name}</Link>
+                    <Link className="report-category-label" href={categoryHref(x.name)}><CategoryBrandMark categoryName={x.name} /><span>{x.name}</span></Link>
                     <strong>
                       {money(x.amount)} ·{" "}
                       {(
@@ -1117,7 +1110,7 @@ export function ReportPanels({
                   .map((t) => (
                     <div key={t.name}>
                       <h3>
-                        <Link href={categoryHref(t.name)}>{t.name}</Link>
+                        <Link className="report-category-label" href={categoryHref(t.name)}><CategoryBrandMark categoryName={t.name} /><span>{t.name}</span></Link>
                       </h3>
 
                       <p>
@@ -1232,7 +1225,7 @@ function StatementRows({
         .filter((r) => r.type === type)
         .map((row) => (
           <tr key={row.name}>
-            <th>{row.name}</th>
+            <th><span className="report-category-label"><CategoryBrandMark categoryName={row.name} /><span>{row.name}</span></span></th>
             {row.values.map((v, i) => (
               <td key={a.months[i]}>
                 <Link href={link(row.name, type, a.months[i])}>{money(v)}</Link>

@@ -66702,6 +66702,23 @@ input.transaction-inline-edit[aria-invalid="true"] { box-shadow: inset 0 -1px va
 }
 
 /* Shared Reports release: contained tables and stacked filters at narrow widths. */
+/* Reports use one responsive filter control; reserve space for both header actions. */
+.reports-workspace-filter { display: inline-flex; align-items: center; justify-content: center; gap: 8px; }
+.reports-workspace-filter img { flex: 0 0 20px; }
+.report-category-label { display: inline-flex; align-items: center; gap: 8px; min-width: 0; color: inherit; text-decoration: none; }
+.report-category-label > span:last-child { min-width: 0; overflow-wrap: anywhere; }
+.report-category-label .category-brand-mark, .report-v2-list > a > .category-brand-mark { flex: 0 0 24px; }
+.report-v2-category > .report-category-label { flex: 1 1 120px; }
+@media (max-width: 1100px) {
+  .content.content.content--reports > :is(.topbar, .shell-compact-bar) { grid-template-columns: 88px minmax(0, 1fr) 88px !important; align-items: center !important; }
+  .content.content.content--reports > :is(.topbar, .shell-compact-bar) :is(.topbar__title-wrap, .shell-compact-bar__copy) { display: flex !important; align-items: center !important; justify-content: center !important; align-self: center !important; min-height: 44px; }
+  .content.content.content--reports > :is(.topbar, .shell-compact-bar) .topbar__title-row { display: flex !important; align-items: center !important; min-height: 44px; }
+  .content.content.content--reports > :is(.topbar, .shell-compact-bar) .topbar__title-row h1 { margin: 0 !important; }
+  .content.content.content--reports > :is(.topbar, .shell-compact-bar) :is(.topbar-actions, .shell-compact-bar__actions) { justify-content: flex-end; min-width: 0; }
+  .content.content.content--reports > :is(.topbar, .shell-compact-bar) .reports-workspace-filter { width: 44px; min-width: 44px; height: 44px; padding: 0; border-radius: 50%; }
+  .reports-workspace-filter > span { display: none; }
+  .report-v2-category > strong { max-width: 55%; text-align: right; }
+}
 .report-v2 {display:grid;gap:20px;min-width:0;padding-bottom:32px}
 .report-v2-currency {display:grid;gap:20px;min-width:0}
 .report-v2-panel {display:grid;gap:14px;min-width:0;padding:24px}
