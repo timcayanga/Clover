@@ -1227,9 +1227,9 @@ export const getAccountBrand = (params: AccountBrandInput): AccountBrand => {
 /** Accounts presentation only. Identity resolution and persisted data stay unchanged. */
 export const getAccountWalletBrand = (params: AccountBrandInput): AccountBrand => {
   const brand = getAccountBrand(params);
-  const genericMatch = brand.logoSrc?.match(/\/assets\/(?:account-types|banks)\/(bank|cash|wallet|credit(?:%20| )card|investment|others?)\.png/i);
+  const genericMatch = brand.logoSrc?.match(/\/assets\/(?:account-types|banks)\/(bank|cash|wallet|credit(?:%20|_| )card|investment|others?|loan|mortgage|line_of_credit|receivable|payable|bnpl|prepaid|insurance)\.png/i);
   const generic = !brand.logoSrc || Boolean(genericMatch);
-  const key = genericMatch?.[1]?.replace(/%20| /g, "_").replace(/^others?$/, "other") || accountTypeIcon(params.type || "other");
+  const key = genericMatch?.[1]?.toLowerCase().replace(/%20| /g, "_").replace(/^others?$/, "other") || accountTypeIcon(params.type || "other");
   const logoName = brand.logoSrc?.split("/").pop()?.split(".")[0].toLowerCase() || "";
   const palette = generic ? { colors: genericAccountColors[key] || genericAccountColors.other, foreground: "#12383D" } : institutionAccountPalettes[logoName];
   if (!palette) return brand;
