@@ -150,6 +150,17 @@ export default function Investments() {
   ) : null;
   // A live estimate must never become the initial recorded value of an edit.
   const openHolding = (item: PortfolioHolding) => setHolding(recordedHoldings.find(row => row.id === item.id) ?? item);
+  async function deleteHolding(item: PortfolioHolding) {
+    const resource = item.source === "snapshot" || item.positionId ? `investment-holdings/${item.positionId ?? item.id}` : `accounts/${item.accountId}`;
+    await session.request(`${resource}?workspaceId=${encodeURIComponent(session.profileId)}`, {
+      method: "DELETE", body: JSON.stringify({ workspaceId: session.profileId }),
+    });
+    setData(current => current ? { ...current,
+      holdings: current.holdings?.filter(row => row.id !== item.id),
+      accounts: resource.startsWith("accounts/") ? current.accounts.filter(row => row.id !== item.accountId) : current.accounts,
+    } : current);
+    reload();
+  }
   if (holding)
     return (
       <SnapshotHoldingDetails
@@ -179,6 +190,7 @@ export default function Investments() {
         history={data?.history ?? []}
         onBack={() => setInstitution(null)}
         onHolding={openHolding}
+        onDelete={session.demo ? undefined : deleteHolding}
         onChanged={session.demo ? undefined : reload}
         onAdd={() => setEditor({ account: null })}
       />
@@ -379,6 +391,7 @@ export default function Investments() {
                 <HoldingRow
                   key={h.id}
                   holding={h}
+                  onDelete={session.demo ? undefined : () => deleteHolding(h)}
                   onPress={() => openHolding(h)}
                 />
               ))
@@ -479,6 +492,7 @@ export default function Investments() {
               <HoldingRow
                 key={h.id}
                 holding={h}
+                onDelete={session.demo ? undefined : () => deleteHolding(h)}
                 onPress={() => openHolding(h)}
               />
             ))}

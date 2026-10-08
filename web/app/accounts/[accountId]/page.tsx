@@ -3384,7 +3384,7 @@ function AccountDetailPageContent() {
   };
 
   const deleteTransactionFromMobileRow = async (transaction: Transaction) => {
-    if (!account || !window.confirm("Delete this transaction? This cannot be undone.")) {
+    if (!account) {
       return;
     }
 

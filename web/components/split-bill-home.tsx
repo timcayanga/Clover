@@ -403,6 +403,18 @@ export function SplitBillHome({
             </section>
           ) : (
             <div className="split-bill-table-scroll">
+              <div className="split-bill-swipe-list">
+                {recentBills.map(bill => {
+                  const balance = bill.settlement.transfers.reduce((sum, t) => sum + (isSamePersonName(t.toParticipantName, currentUserName) ? t.amount : 0) - (isSamePersonName(t.fromParticipantName, currentUserName) ? t.amount : 0), 0);
+                  return <MobileSwipeDelete key={bill.id} deleteLabel={`Delete ${bill.title}`} confirmationMessage={`Delete "${bill.title}" and its split and payment records? This cannot be undone.`} onDelete={() => onDeleteBill(bill.id)}>
+                  <button type="button" className="split-bill-swipe-row" onClick={() => onOpenBill(bill.id)}>
+                    <CategoryBrandMark categoryName={bill.transaction?.category?.name ?? "Uncategorized"} size={32} />
+                    <span><strong>{bill.title}</strong><small>{formatDate(bill.billDate)} · {bill.resolved ? "Resolved" : formatSplitBillSettlementStatus(bill.settlementStatus)}</small>{sharedWith(bill)}<small>Your balance: {formatSplitBillAmount(balance, bill.currency)}</small></span>
+                    <strong>{bill.total ? formatSplitBillAmount(Number(bill.total), bill.currency) : "—"}</strong><span aria-hidden="true">›</span>
+                  </button>
+                </MobileSwipeDelete>; })}
+                {!recentBills.length ? <p>No bills match these filters.</p> : null}
+              </div>
               <table className="split-bill-bills-table" aria-label="Split bills">
                 <thead>
                   <tr>

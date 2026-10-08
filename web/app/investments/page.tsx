@@ -493,6 +493,7 @@ type InvestmentAllocationRow = InvestmentGroup & {
 };
 
 type PortfolioDisplayRow = {
+  positionId?: string;
   key: string;
   accountId: string;
   assetId: string;
@@ -1474,6 +1475,7 @@ export default function InvestmentsPage() {
               key: `holding:${holding.id}`,
               accountId: matchingPositionAccount?.id ?? matchingSnapshot.account?.id ?? account.id,
               assetId: holding.id,
+              positionId: holding.positionId,
               source: "holding",
               name: holding.assetName,
               institution: account.institution ?? matchingSnapshot.documentImport?.institution ?? null,
@@ -2721,7 +2723,7 @@ export default function InvestmentsPage() {
     }
   };
 
-  const deletePortfolioRow = async (row: PortfolioDisplayRow) => {
+  const deletePortfolioRow = async (row: PortfolioDisplayRow, confirmed = false) => {
     if (row.source === "derived" || !selectedWorkspaceId) {
       return;
     }
@@ -2733,10 +2735,10 @@ export default function InvestmentsPage() {
       accounts.find((account) => account.id === row.accountId) ??
       null;
     const confirmationMessage = isImportedHolding
-      ? `Delete asset "${assetName}"? Its source import and trading history will stay in Clover.`
+      ? row.positionId ? `Delete asset "${assetName}" and its trading and valuation history? Its source import stays in Clover.` : `Delete asset "${assetName}"? Its source import and trading history will stay in Clover.`
       : `Delete asset "${assetName}"? This also removes its investment account and linked transactions.`;
 
-    if (!window.confirm(confirmationMessage)) {
+    if (!confirmed && !window.confirm(confirmationMessage)) {
       return;
     }
 
@@ -2769,10 +2771,6 @@ export default function InvestmentsPage() {
           throw new Error("Investment account not found.");
         }
 
-        clearDeletingWorkspaceAccount(selectedWorkspaceId, investmentAsset.id);
-        markDeletedWorkspaceAccount(selectedWorkspaceId, investmentAsset.id);
-        applyOptimisticWorkspaceAccountDeletion(selectedWorkspaceId, investmentAsset.id);
-
         const response = await fetch(`/api/accounts/${investmentAsset.id}`, {
           method: "DELETE",
           keepalive: true,
@@ -2781,6 +2779,10 @@ export default function InvestmentsPage() {
         if (!response.ok) {
           throw new Error("Unable to delete asset.");
         }
+
+        clearDeletingWorkspaceAccount(selectedWorkspaceId, investmentAsset.id);
+        markDeletedWorkspaceAccount(selectedWorkspaceId, investmentAsset.id);
+        applyOptimisticWorkspaceAccountDeletion(selectedWorkspaceId, investmentAsset.id);
 
         setAccounts((current) => current.filter((account) => account.id !== investmentAsset.id));
       }
@@ -2793,6 +2795,7 @@ export default function InvestmentsPage() {
         clearDeletingWorkspaceAccount(selectedWorkspaceId, investmentAsset.id);
       }
       setMessage(error instanceof Error ? error.message : "Unable to delete asset.");
+      if (confirmed) throw error;
     } finally {
       setIsDeleting(null);
     }
@@ -3195,7 +3198,8 @@ export default function InvestmentsPage() {
                         key={row.key}
                         deleteLabel={`Delete ${row.name}`}
                         disabled={row.source === "derived" || isDeleting === row.assetId || isDeleting === row.accountId}
-                        onDelete={() => deletePortfolioRow(row)}
+                        confirmationMessage={row.positionId ? `Delete "${row.name}" and its trading and valuation history? The institution account and other assets stay unchanged.` : row.source === "holding" ? `Delete asset "${row.name}"? Its source import stays in Clover.` : `Delete asset "${row.name}" and its investment account and linked transactions?`}
+                        onDelete={() => deletePortfolioRow(row, true)}
                       >
                       <div className="investments-portfolio-table__row" role="row">
                         <div className="investments-portfolio-table__cell investments-portfolio-table__cell--asset">

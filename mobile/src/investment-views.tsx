@@ -1,3 +1,4 @@
+import { SwipeDeleteRow } from "./swipe-delete-row";
 import { useLiveInvestmentValues } from "./use-live-investment-values";
 import { investmentTypeLabel } from "../../shared/investment-entry";
 import { PositionEditor } from "./position-editor";
@@ -24,12 +25,15 @@ import { AccountHistory } from "./account-history";
 export function HoldingRow({
   holding,
   onPress,
+  onDelete,
 }: {
   holding: PortfolioHolding;
   onPress: () => void;
+  onDelete?: () => Promise<void>;
 }) {
   const { colors } = useTheme();
   return (
+    <SwipeDeleteRow label={holding.name} disabled={!onDelete} onOpen={onPress} onDelete={onDelete ?? (async () => {})} message={holding.positionId ? `Delete "${holding.name}" and its trading and valuation history? The institution account and other assets stay unchanged.` : holding.source === "snapshot" ? `Delete "${holding.name}"? Its source import stays in Clover.` : `Delete "${holding.name}" and its investment account and linked transactions?`}>
     <Pressable
       accessibilityRole="button"
       accessibilityLabel={`View ${holding.name}`}
@@ -70,6 +74,7 @@ export function HoldingRow({
         ›
       </Text>
     </Pressable>
+    </SwipeDeleteRow>
   );
 }
 export function ValuationHistory({
@@ -181,6 +186,7 @@ export function InstitutionDetails({
   onHolding,
   onAdd,
   onChanged,
+  onDelete,
 }: {
   name: string;
   currency: string;
@@ -190,6 +196,7 @@ export function InstitutionDetails({
   onHolding: (h: PortfolioHolding) => void;
   onAdd: () => void;
   onChanged?: () => void;
+  onDelete?: (holding: PortfolioHolding) => Promise<void>;
 }) {
   const { colors } = useTheme();
   const { width } = useWindowDimensions();
@@ -270,7 +277,7 @@ export function InstitutionDetails({
         <PlanAction title="+ Add Holding" tone="primary" onPress={()=>historyAccount?setAddingHolding(true):onAdd()} />
       </View>
       {holdings.map((h) => (
-        <HoldingRow key={h.id} holding={h} onPress={() => onHolding(h)} />
+        <HoldingRow key={h.id} holding={h} onPress={() => onHolding(h)} onDelete={onDelete ? () => onDelete(h) : undefined} />
       ))}
       <ValuationHistory
         history={history}

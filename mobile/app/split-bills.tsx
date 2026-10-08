@@ -1,3 +1,4 @@
+import { SwipeDeleteRow } from "../src/swipe-delete-row";
 import { AdaptiveGrid } from "../src/adaptive";
 import { CloverEmptyState } from "../src/clover-mascot";
 import { EntryOverlay } from "../src/entry-overlay";
@@ -183,7 +184,7 @@ export default function SplitBills() {
         key={session.profileId}
         {...entity}
         onClose={() => setEntity(null)}
-        onChanged={() => options.reload()}
+        onChanged={() => { options.reload(); reload(); }}
         onBill={(id) => {
           setEntity(null);
           setSelected({
@@ -401,8 +402,12 @@ export default function SplitBills() {
                                   b.settlementStatus !== "settled"))),
                       )
                       .map((bill) => (
+                        <SwipeDeleteRow key={bill.id} label={bill.title} disabled={session.demo} message={`Delete "${bill.title}" and its split and payment records? This cannot be undone.`} onOpen={() => setSelected(bill)} onDelete={async () => {
+                          await session.request(`split-bills/${bill.id}?workspaceId=${encodeURIComponent(session.profileId)}`, { method: "DELETE" });
+                          setData(current => current ? { ...current, bills: current.bills.filter(row => row.id !== bill.id) } : current);
+                          reload();
+                        }}>
                         <Pressable
-                          key={bill.id}
                           accessibilityRole="button"
                           accessibilityLabel={`View ${bill.title}`}
                           onPress={() => setSelected(bill)}
@@ -480,6 +485,7 @@ export default function SplitBills() {
                             ›
                           </Text>
                         </Pressable>
+                        </SwipeDeleteRow>
                       ))
                   ) : (
                     <View

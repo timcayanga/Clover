@@ -1,3 +1,4 @@
+import { SwipeDeleteRow } from "../../src/swipe-delete-row";
 import { AdaptiveGrid } from "../../src/adaptive";
 import { CloverEmptyState } from "../../src/clover-mascot";
 import { createScreenDataLoader, registerScreenRefresh } from "../../src/screen-refresh";
@@ -125,6 +126,11 @@ export default function Recurring() {
     setMonth(
       (value) => new Date(value.getFullYear(), value.getMonth() + offset, 1),
     );
+  async function deleteRow(id: string) {
+    await session.request(`recurring/${id}?workspaceId=${encodeURIComponent(session.profileId)}`, { method: "DELETE" });
+    setData(current => current ? { ...current, items: current.items.filter(item => item.id !== id) } : current);
+    setRevision(v => v + 1);
+  }
   const mutate = async (path: string, method: string, body?: unknown) => {
     setBusy(true);
     setError("");
@@ -470,8 +476,8 @@ export default function Recurring() {
                 <Body muted={false}>{day} · All bills due</Body>
                 {due.length ? (
                   due.map((item) => (
+                    <SwipeDeleteRow key={item.id} label={item.title} disabled={session.demo} message={`Delete "${item.title}" and its completion history? Existing transactions stay unchanged.`} onOpen={() => setSelected(items.find(row => row.id === item.id) ?? null)} onDelete={() => deleteRow(item.id)}>
                     <Button
-                      key={item.id}
                       title={`${item.title} · ${amount(item)}`}
                       secondary
                       onPress={() =>
@@ -480,6 +486,7 @@ export default function Recurring() {
                         )
                       }
                     />
+                    </SwipeDeleteRow>
                   ))
                 ) : (
                   <CloverEmptyState compact pose="calendar">No bills due.</CloverEmptyState>
@@ -540,7 +547,7 @@ export default function Recurring() {
             </Text>
             {items.length ? (
               items.map((item) => (
-                <Pressable key={item.id} accessibilityRole="button" onPress={() => setSelected(item)} style={{ minHeight: 72, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: colors.line, flexDirection: "row", alignItems: "center", gap: 12 }}>
+                <SwipeDeleteRow key={item.id} label={item.title} disabled={session.demo} message={`Delete "${item.title}" and its completion history? Existing transactions stay unchanged.`} onOpen={() => setSelected(item)} onDelete={() => deleteRow(item.id)}><Pressable accessibilityRole="button" onPress={() => setSelected(item)} style={{ minHeight: 72, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: colors.line, flexDirection: "row", alignItems: "center", gap: 12 }}>
                   <View style={{ flex: 1, minWidth: 0, gap: 4 }}>
                     <Text style={{ color: colors.ink, fontFamily: "Poppins-Medium", fontSize: 14 }}>{item.title}</Text>
                     <Text style={{ color: colors.teal, fontSize: 12 }}>{kinds.find(option => option.value === item.kind)?.label ?? "Recurring"}</Text>
@@ -548,7 +555,7 @@ export default function Recurring() {
                   </View>
                   <Text style={{ color: colors.ink, fontSize: 13, maxWidth: "40%", textAlign: "right" }}>{amount(item)}</Text>
                   <Icon line name="chevron-forward" size={14} />
-                </Pressable>
+                </Pressable></SwipeDeleteRow>
               ))
             ) : (
               <CloverEmptyState pose="calendar">No recurring items yet. Add a bill or regular payment to get started.</CloverEmptyState>

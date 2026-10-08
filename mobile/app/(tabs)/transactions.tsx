@@ -1,3 +1,4 @@
+import { SwipeDeleteRow } from "../../src/swipe-delete-row";
 import { reportTransactionFilters } from "../../src/report-drilldown";
 import { AdaptiveDetail, useDetailPane } from "../../src/adaptive-detail";
 import { useAdaptiveLayout } from "../../src/adaptive";
@@ -210,6 +211,13 @@ export default function Transactions() {
           alignSelf: "center",
         }}
         renderItem={({ item }) => (
+          <SwipeDeleteRow label={item.merchantClean ?? item.merchantRaw ?? "Transaction"} disabled={demo} onOpen={() => openDetails(item.id)} onDelete={async () => {
+            await request(`transactions/${item.id}?workspaceId=${encodeURIComponent(profileId)}`, { method: "DELETE" });
+            setRows(current => current.filter(row => row.id !== item.id));
+            setTotal(current => Math.max(0, current - 1));
+            if (selectedId === item.id) setSelectedId(null);
+            void load(1, true);
+          }}>
           <Pressable
             accessibilityRole="button"
             accessibilityLabel={`${item.merchantClean ?? item.merchantRaw}, ${item.type === "income" ? "+" : item.type === "expense" ? "−" : ""}${money(item.amount.replace(/^-/, ""), item.currency)}, ${dateLabel(item.date)}.${transactionReviewReasons(item).length ? ` ${transactionReviewReasons(item).join(". ")}.` : ""} Open transaction.`}
@@ -272,6 +280,7 @@ export default function Transactions() {
             </Text>
             <Icon line name="chevron-forward" size={14} color={colors.muted} />
           </Pressable>
+          </SwipeDeleteRow>
         )}
         ListEmptyComponent={
           !busy ? (

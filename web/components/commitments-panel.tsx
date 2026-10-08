@@ -254,8 +254,8 @@ export function CommitmentsPanel({
     window.dispatchEvent(new CustomEvent("clover:open-recurring-add", { detail: { kind: addKindForActiveTab } }));
   };
 
-  const handleDelete = async (commitmentId: string) => {
-    if (!window.confirm("Delete this recurring item?")) {
+  const handleDelete = async (commitmentId: string, confirmed = false) => {
+    if (!confirmed && !window.confirm("Delete this recurring item?")) {
       return;
     }
 
@@ -271,6 +271,7 @@ export function CommitmentsPanel({
       router.refresh();
     } catch (error) {
       const message = error instanceof Error ? error.message : "Unable to delete commitment";
+      if (confirmed) throw error;
       window.alert(message);
     }
   };
@@ -568,7 +569,7 @@ export function CommitmentsPanel({
         reviewCount={actionablePlannedPaymentSuggestions.length + suggestedRecurringPatterns.length}
         onOpen={(item, date) => setCalendarDetail({ commitmentId: item.id, occurrenceDate: date })}
         onAdd={openRecurringAdd}
-        onDelete={(id) => void handleDelete(id)}
+        onDelete={(id) => handleDelete(id, true)}
         review={<>        <article className="panel recurring-overview-card recurring-overview-card--list recurring-overview-card--review">
           <div className="recurring-overview-card__heading">
             <div>

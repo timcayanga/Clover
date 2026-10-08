@@ -3966,10 +3966,8 @@ function AccountsPageContent() {
         className={`accounts-mobile-swipe${isExpanded ? " is-expanded" : ""}`}
         deleteLabel={`Delete ${accountDisplayName}`}
         disabled={accountDeleteBusy || deletingAccountIdsSet.has(row.id) || isCashFallbackAccount(row)}
-        onDelete={() => {
-          if (!window.confirm(`Delete account "${accountDisplayName}" and its linked transactions?`)) return;
-          return deleteAccount(row);
-        }}
+        confirmationMessage={`Delete account "${accountDisplayName}" and its linked transactions? This cannot be undone.`}
+        onDelete={() => deleteAccount(row, true)}
       >
       <div className={`accounts-mobile-list-item${isExpanded ? " is-expanded" : ""}`}>
         <button
@@ -4168,7 +4166,7 @@ function AccountsPageContent() {
     }
   };
 
-  const deleteAccount = async (accountOverride?: Account) => {
+  const deleteAccount = async (accountOverride?: Account, fromRow = false) => {
     const accountToDelete = accountOverride ?? selectedAccount;
     if (!selectedWorkspaceId || !accountToDelete) return;
 
@@ -4177,6 +4175,11 @@ function AccountsPageContent() {
       clearDeletingWorkspaceAccount(selectedWorkspaceId, accountToDelete.id);
       deletingAccountIdsRef.current.delete(accountToDelete.id);
       setDeletingAccountIds(Array.from(deletingAccountIdsRef.current));
+      // Keep a swipe row mounted until the server accepts deletion, so failures remain retryable.
+      if (fromRow) {
+        const response = await fetch(`/api/accounts/${accountToDelete.id}`, { method: "DELETE" });
+        if (!response.ok) throw new Error(`Unable to delete account "${accountToDelete.name}".`);
+      }
       markDeletedWorkspaceAccount(selectedWorkspaceId, accountToDelete.id);
       deletedAccountIdsRef.current.add(accountToDelete.id);
       applyOptimisticWorkspaceAccountDeletion(selectedWorkspaceId, accountToDelete.id);
@@ -4189,11 +4192,11 @@ function AccountsPageContent() {
         setMessage(`Account "${accountToDelete.name}" deleted.`);
       });
 
-      const response = await fetch(`/api/accounts/${accountToDelete.id}`, {
+      const response = fromRow ? null : await fetch(`/api/accounts/${accountToDelete.id}`, {
         method: "DELETE",
       });
 
-      if (!response.ok) {
+      if (response && !response.ok) {
         throw new Error(`Unable to delete account "${accountToDelete.name}".`);
       }
     } catch (error) {
@@ -4204,6 +4207,7 @@ function AccountsPageContent() {
       setDeletingAccountIds(Array.from(deletingAccountIdsRef.current));
       await loadWorkspaceData(selectedWorkspaceId, { silent: true });
       setMessage(error instanceof Error ? error.message : `Unable to delete account "${accountToDelete.name}".`);
+      if (fromRow) throw error;
     } finally {
       setAccountDeleteBusy(false);
     }

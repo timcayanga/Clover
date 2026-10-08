@@ -1,3 +1,5 @@
+import { runSwipeDeleteApi } from "./swipe-delete-api-regression";
+import { runSwipeDeleteInteractions } from "./swipe-delete-interaction-regression";
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
@@ -77,17 +79,14 @@ async function main() {
   ] as const) {
     assert.match(
       source,
-      /MobileSwipeDelete/,
+      /<MobileSwipeDelete[\s>]/,
       `${name} mobile rows must support swipe deletion.`,
     );
   }
 
-  assert.match(accounts, /window\.confirm\([\s\S]{0,80}`Delete account/);
-  assert.match(accountDetails, /window\.confirm\("Delete this transaction\?/);
-  assert.match(
-    transactions,
-    /window\.confirm\([\s\S]{0,80}`Delete transaction/,
-  );
+  assert.match(accounts, /confirmationMessage=.*linked transactions/);
+  assert.match(component, /Confirm deletion/);
+  assert.match(component, /role="alert"/);
   assert.match(recurring, /window\.confirm\("Delete this recurring item\?"\)/);
   assert.match(investments, /const confirmationMessage/);
   assert.match(
@@ -96,9 +95,11 @@ async function main() {
   );
   assert.match(
     splitBillWorkspace,
-    /onDeleteBill=\{removeBill\}[\s\S]*?onDeleteGroup=\{removeGroup\}[\s\S]*?onDeletePerson=\{removePerson\}/,
+    /onDeleteBill=\{\(id\) => removeBill\(id, true\)\}/,
   );
 
+  await runSwipeDeleteInteractions();
+  await runSwipeDeleteApi();
   console.log("Mobile swipe deletion regression passed.");
 }
 

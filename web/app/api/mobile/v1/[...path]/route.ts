@@ -258,6 +258,12 @@ async function handle(
     const workspaceId = url.searchParams.get("workspaceId");
     if (!workspaceId) return reply({ error: "Choose a Profile first." }, 400);
     await assertWorkspaceAccess(userId, workspaceId);
+    if (operation === "investment-holding-delete") {
+      const forwarded = new Request(request.url, { method: "DELETE", headers: request.headers, body: JSON.stringify({ workspaceId }) });
+      const response = await withMobileRequestContext(userId, forwarded, async () => (await import("@/app/api/investment-holdings/[holdingId]/route")).DELETE(forwarded, { params: Promise.resolve({ holdingId: path[1] }) }));
+      return reply(await response.json(), response.status);
+    }
+
     if (operation === "imports") {
       const { listImportFileSummariesCompat } = await import("@/lib/data-engine");
       return reply(mobileApiResponse("imports", { importFiles: await listImportFileSummariesCompat(workspaceId) }));

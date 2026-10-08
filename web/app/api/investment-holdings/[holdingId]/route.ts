@@ -175,7 +175,28 @@ export async function DELETE(request: Request, { params }: { params: Promise<{ h
   try {
     const userId = await resolveUserId();
     const { holdingId } = await params;
+    assertTrustedRequestOrigin(request);
     const payload = z.object({ workspaceId: z.string().min(1) }).parse(await request.json());
+    await assertWorkspaceAccess(userId, payload.workspaceId);
+    // Positions have their own IDs; never fall back to deleting the whole account.
+    const deletedPosition = await prisma.$transaction(async tx => {
+      const [position] = await tx.$queryRaw<{ id: string; assetName: string; sourceHoldingId: string | null }[]>`
+        SELECT p."id",p."assetName",p."sourceHoldingId" FROM "InvestmentPosition" p
+        JOIN "Account" a ON a."id"=p."accountId"
+        WHERE p."id"=${holdingId} AND a."workspaceId"=${payload.workspaceId} FOR UPDATE OF p`;
+      if (!position) return null;
+      const [paired] = await tx.$queryRaw<{ count: bigint }[]>`SELECT COUNT(*) AS count FROM "InvestmentTrade" WHERE "positionId"=${position.id} AND "transferPairId" IS NOT NULL AND "deletedAt" IS NULL`;
+      if (Number(paired.count) > 0) throw new Error("Remove this asset’s linked transfers in trading history before deleting it, so the other asset stays consistent.");
+      // Keep raw imports intact, but do not resurface a converted source holding.
+      if (position.sourceHoldingId) await tx.investmentHolding.deleteMany({ where: { id: position.sourceHoldingId, workspaceId: payload.workspaceId } });
+      await tx.$executeRaw`DELETE FROM "InvestmentPosition" WHERE "id"=${position.id}`;
+      return { id: position.id, assetName: position.assetName };
+    });
+    if (deletedPosition) {
+      (await import("@/lib/workspace-summary-cache")).invalidateWorkspaceSummaryCache(payload.workspaceId);
+      return NextResponse.json({ holding: deletedPosition });
+    }
+
     const existing = await prisma.investmentHolding.findUnique({
       where: { id: holdingId },
       select: {
@@ -191,6 +212,7 @@ export async function DELETE(request: Request, { params }: { params: Promise<{ h
 
     await assertWorkspaceAccess(userId, existing.workspaceId);
     await prisma.investmentHolding.delete({ where: { id: existing.id } });
+    (await import("@/lib/workspace-summary-cache")).invalidateWorkspaceSummaryCache(payload.workspaceId);
 
     return NextResponse.json({
       holding: {

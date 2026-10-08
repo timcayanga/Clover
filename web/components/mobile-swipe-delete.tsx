@@ -26,6 +26,7 @@ type GestureState = {
 type MobileSwipeDeleteProps = {
   children: ReactNode;
   deleteLabel: string;
+  confirmationMessage?: string;
   onDelete: () => void | Promise<void>;
   disabled?: boolean;
   className?: string;
@@ -44,6 +45,7 @@ export function MobileSwipeDelete({
   children,
   deleteLabel,
   onDelete,
+  confirmationMessage,
   disabled = false,
   className = "",
 }: MobileSwipeDeleteProps) {
@@ -54,6 +56,9 @@ export function MobileSwipeDelete({
   const [offset, setOffset] = useState(0);
   const [isDragging, setIsDragging] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+  const deletingRef = useRef(false);
+  const [confirming, setConfirming] = useState(false);
+  const [error, setError] = useState("");
 
   const isMobileLayout = () =>
     typeof window !== "undefined" &&
@@ -65,12 +70,15 @@ export function MobileSwipeDelete({
   };
 
   const close = () => {
+    if (deletingRef.current) return;
+    setConfirming(false);
+    setError("");
     updateOffset(0);
     setIsDragging(false);
   };
 
   useEffect(() => {
-    if (offset === 0) return;
+    if (offset === 0 && !confirming) return;
 
     const handleOutsidePointer = (event: PointerEvent) => {
       if (rootRef.current?.contains(event.target as Node)) return;
@@ -86,12 +94,12 @@ export function MobileSwipeDelete({
       document.removeEventListener("pointerdown", handleOutsidePointer);
       document.removeEventListener("keydown", handleKeyDown);
     };
-  }, [offset]);
+  }, [offset, confirming]);
 
   const beginGesture = (event: ReactPointerEvent<HTMLDivElement>) => {
     if (
       disabled ||
-      isDeleting ||
+      isDeleting || confirming ||
       event.pointerType !== "touch" ||
       !isMobileLayout()
     )
@@ -115,7 +123,8 @@ export function MobileSwipeDelete({
     if (gesture.horizontal === null) {
       if (Math.max(Math.abs(deltaX), Math.abs(deltaY)) < DIRECTION_THRESHOLD)
         return;
-      gesture.horizontal = Math.abs(deltaX) > Math.abs(deltaY);
+      if (gesture.startOffset === 0 && deltaX > 0) { gesture.active = false; return; }
+      gesture.horizontal = Math.abs(deltaX) > Math.abs(deltaY) * 1.4;
       if (!gesture.horizontal) {
         gesture.active = false;
         event.currentTarget.releasePointerCapture(event.pointerId);
@@ -154,13 +163,19 @@ export function MobileSwipeDelete({
   };
 
   const handleDelete = async () => {
-    if (disabled || isDeleting) return;
+    if (disabled || deletingRef.current || !confirming) return;
+    deletingRef.current = true;
     setIsDeleting(true);
+    setError("");
     try {
       await onDelete();
+      setConfirming(false);
+      updateOffset(0);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Unable to delete. Please try again.");
     } finally {
+      deletingRef.current = false;
       setIsDeleting(false);
-      close();
     }
   };
 
@@ -177,9 +192,11 @@ export function MobileSwipeDelete({
         className="mobile-swipe-delete__action"
         type="button"
         aria-label={deleteLabel}
-        tabIndex={offset < 0 ? 0 : -1}
+        style={{ visibility: confirming || disabled ? "hidden" : undefined }}
+        tabIndex={disabled || confirming ? -1 : 0}
+        onFocus={() => { if (!confirming) updateOffset(-ACTION_WIDTH); }}
         disabled={disabled || isDeleting}
-        onClick={() => void handleDelete()}
+        onClick={() => { setConfirming(true); updateOffset(0); }}
       >
         <svg
           viewBox="0 0 24 24"
@@ -205,7 +222,7 @@ export function MobileSwipeDelete({
         onPointerUp={finishGesture}
         onPointerCancel={cancelGesture}
         onClickCapture={(event) => {
-          if (!suppressClickRef.current && offset === 0) return;
+          if (!confirming && !suppressClickRef.current && offset === 0) return;
           event.preventDefault();
           event.stopPropagation();
           close();
@@ -213,6 +230,14 @@ export function MobileSwipeDelete({
       >
         {children}
       </div>
+      {confirming ? <div className="mobile-swipe-delete__confirmation" role="group" aria-label={deleteLabel}>
+        <p>{confirmationMessage ?? `${deleteLabel}? This cannot be undone.`}</p>
+        {error ? <p role="alert">{error}</p> : null}
+        <div>
+          <button type="button" className="mobile-swipe-delete__confirm" disabled={isDeleting} onClick={() => void handleDelete()}>{isDeleting ? "Deleting…" : "Confirm deletion"}</button>
+          <button type="button" disabled={isDeleting} onClick={close}>Cancel</button>
+        </div>
+      </div> : null}
     </div>
   );
 }

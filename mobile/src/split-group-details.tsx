@@ -1,3 +1,4 @@
+import { SwipeDeleteRow } from "./swipe-delete-row";
 import { Text } from "./app-text";
 import { PersonAvatar } from "./person-avatar";
 import { useState } from "react";
@@ -46,6 +47,7 @@ export function SplitGroupDetails({
   const [confirm, setConfirm] = useState(false);
   const {
     data,
+    setData,
     error: loadError,
     reload,
   } = usePlanData(
@@ -142,8 +144,12 @@ export function SplitGroupDetails({
             <Body>Total</Body>
           </View>
           {data?.bills.map((bill) => (
+            <SwipeDeleteRow key={bill.id} label={bill.title} disabled={session.demo} message={`Delete "${bill.title}" and its split and payment records? This cannot be undone.`} onOpen={() => onBill(bill.id)} onDelete={async () => {
+              await session.request(`split-bills/${bill.id}?workspaceId=${encodeURIComponent(session.profileId)}`, { method: "DELETE" });
+              setData(current => current ? { ...current, bills: current.bills.filter(row => row.id !== bill.id) } : current);
+              reload(); onChanged();
+            }}>
             <Pressable
-              key={bill.id}
               accessibilityRole="button"
               accessibilityLabel={`View ${bill.title}`}
               onPress={() => onBill(bill.id)}
@@ -160,7 +166,7 @@ export function SplitGroupDetails({
                 <Body>{bill.billDate.slice(0, 10)}</Body>
               </View>
               <Body>{money(bill.total, bill.currency)}</Body>
-            </Pressable>
+            </Pressable></SwipeDeleteRow>
           ))}
           {data && !data.bills.length ? (
             <Notice>No bills here yet.</Notice>

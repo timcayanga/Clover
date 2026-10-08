@@ -1,3 +1,4 @@
+import { SwipeDeleteRow } from "./swipe-delete-row";
 import { Text } from "./app-text";
 import { TradeLedger } from "./trade-ledger";
 import { useCallback, useState } from "react";
@@ -359,8 +360,13 @@ export function AccountHistory({
         <Body>No {kind === "activity" ? "transactions" : kind} recorded.</Body>
       ) : (
         items.map((item) => (
+          <SwipeDeleteRow key={item.id} label={item.label} disabled={session.demo || !item.transactionId} onOpen={item.transactionId ? () => router.push(`/transaction/${item.transactionId}`) : undefined} onDelete={async () => {
+            if (!item.transactionId) return;
+            await session.request(`transactions/${item.transactionId}?workspaceId=${encodeURIComponent(session.profileId)}`, { method: "DELETE" });
+            setItems(current => current.filter(row => row.id !== item.id));
+            setPage(1); setRevision(v => v + 1); onChanged?.();
+          }}>
           <View
-            key={item.id}
             style={{
               borderBottomWidth: 1,
               borderBottomColor: colors.line,
@@ -442,6 +448,7 @@ export function AccountHistory({
               </Notice>
             ) : null}
           </View>
+          </SwipeDeleteRow>
         ))
       )}
       {total > 30 ? (

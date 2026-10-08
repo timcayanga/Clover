@@ -8268,10 +8268,7 @@ function TransactionsPageContent() {
                             key={transaction.id}
                             disabled={hasSelectedTransactions}
                             deleteLabel={`Delete ${merchantSummary}`}
-                            onDelete={() => {
-                              if (!window.confirm(`Delete transaction "${merchantSummary}"?`)) return;
-                              return deleteWarningTransaction(transaction);
-                            }}
+                            onDelete={async () => { await deleteTransaction(transaction.id); refreshTransactionsSummary(); }}
                           >
                           <article
                             ref={(node) => {

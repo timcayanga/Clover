@@ -1,3 +1,4 @@
+import { SwipeDeleteRow } from "../../src/swipe-delete-row";
 import { recordedSummary } from "../../src/recorded-summary";
 import { Modal } from "../../src/adaptive-modal";
 import { AdaptiveDetail } from "../../src/adaptive-detail";
@@ -52,6 +53,12 @@ export default function Accounts() {
 function AccountsContent() {
   const { colors, styles, dark } = useTheme();
   const session = useSession();
+  async function deleteRow(account: Account) {
+    await session.request(`accounts/${account.id}?workspaceId=${encodeURIComponent(session.profileId)}`, { method: "DELETE" });
+    setAccounts(current => current.filter(row => row.id !== account.id));
+    setExpandedAccount(null);
+    session.refresh();
+  }
   const [currencyFilter, setCurrencyFilter] = useState("");
   const [currencyOpen, setCurrencyOpen] = useState(false);
   const [recordedAccounts, setAccounts] = useState<Account[]>([]);
@@ -273,14 +280,14 @@ function AccountsContent() {
     <Button title="All accounts" secondary onPress={() => setInstitutionId(null)} />
     <Heading>{institution.name}</Heading>
     <Body>{institution.assets.length} assets · {institution.currency}</Body>
-    {institution.assets.map(asset => <Pressable key={asset.id} accessibilityRole="button" accessibilityLabel={`View ${asset.name}`} onPress={() => setSelected(asset)}>
+    {institution.assets.map(asset => <SwipeDeleteRow key={asset.id} label={asset.name} disabled={session.demo} message={`Delete "${asset.name}" and its linked transactions? This cannot be undone.`} onOpen={() => setSelected(asset)} onDelete={() => deleteRow(asset)}><Pressable accessibilityRole="button" accessibilityLabel={`View ${asset.name}`} onPress={() => setSelected(asset)}>
       <Card><View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
         <AccountBrandLogo account={asset} size={36} />
         <View style={{ flex: 1 }}><Text style={{ color: colors.ink, fontFamily: "Poppins-SemiBold" }}>{asset.name}</Text><Body>{asset.investmentSymbol ?? "Investment"}</Body></View>
         <Text style={{ color: colors.ink }}>{accountDisplayBalance(asset) === null ? "Not recorded" : money(accountDisplayBalance(asset)!, asset.currency)}</Text>
         <Icon line name="chevron-forward" size={16} />
       </View></Card>
-    </Pressable>)}
+    </Pressable></SwipeDeleteRow>)}
   </Screen> : <Screen><Body>Select an investment institution to see its assets here.</Body></Screen>;
   return <AdaptiveDetail selected={Boolean(institution)} detailOnlyOnCompact detail={institutionDetail} list={(
     <Screen layout="dashboard" gap={24}>
@@ -384,7 +391,7 @@ function AccountsContent() {
                   const expanded = expandedAccount === account.id;
                   const balance = accountDisplayBalance(account);
                   return (
-                    <View key={account.id}>
+                    <SwipeDeleteRow key={account.id} label={label(account)} disabled={session.demo || account.id.startsWith("fallback-cash-")} message={`Delete "${label(account)}" and its linked transactions? This cannot be undone.`} onOpen={() => setSelected(account)} onDelete={() => deleteRow(account)}>
                       <Pressable
                         accessibilityRole="button"
                         accessibilityLabel={
@@ -501,7 +508,7 @@ function AccountsContent() {
                           </Text>
                         </Pressable>
                       ) : null}
-                    </View>
+                    </SwipeDeleteRow>
                   );
                 })}
               </AdaptiveGrid>

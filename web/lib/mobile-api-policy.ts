@@ -33,6 +33,7 @@ export function mobileOperation(method: string, segments: string[]) {
   if (path === "split-bill-receipts/preview" && method === "POST") return "split-receipt-preview";
   if (["investments", "investment-quote", "market-history", "market-news", "together-options", "reports"].includes(path) && method === "GET") return path;
   if (segments.length === 3 && segments[0] === "investment-positions" && segments[2] === "history" && method === "GET") return "investment-position-history";
+  if (segments.length === 2 && segments[0] === "investment-holdings" && method === "DELETE") return "investment-holding-delete";
   if (path === "investment-positions" && method === "GET") return "investment-positions";
   if (segments.length === 3 && segments[0] === "accounts" && segments[2] === "positions" && method === "POST") return "investment-position-save";
   if (segments.length === 3 && segments[0] === "accounts" && segments[2] === "trades" && ["GET","POST","DELETE"].includes(method)) return "investment-trades";
