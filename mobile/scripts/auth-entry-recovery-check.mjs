@@ -4,7 +4,7 @@ import vm from 'node:vm';
 import ts from 'typescript';
 const code = ts.transpileModule(`${fs.readFileSync(new URL('../app/auth.tsx', import.meta.url), 'utf8')}\nexport { AuthForm };`, { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, jsx: ts.JsxEmit.ReactJSX } }).outputText;
 const tick = () => new Promise(resolve => setImmediate(resolve));
-function harness(active, fails = false, bootstrapError = active, mode = "sign-in") {
+function harness(active, fails = false, bootstrapError = active, mode = "sign-in", recovery) {
   const calls = [], states = [], exports = {}; let index = 0;
   const session = { error: bootstrapError ? 'Unable to load your account.' : '', refresh: () => calls.push('retry'), signOut: async () => { calls.push('sign-out'); if (fails) throw new Error('Offline'); } };
   vm.runInNewContext(code, { exports, Error, require: name => {
@@ -13,10 +13,13 @@ function harness(active, fails = false, bootstrapError = active, mode = "sign-in
     if (name === 'react-native') return { Platform: { OS: 'ios' }, ...Object.fromEntries(['ActivityIndicator', 'Image', 'View', 'KeyboardAvoidingView', 'Pressable', 'Switch'].map(n => [n,n])) };
     if (name === 'react-native-safe-area-context') return { useSafeAreaInsets: () => ({ top: 50, bottom: 34 }) };
     if (name === 'expo-router') return { useLocalSearchParams: () => ({ mode }) };
-    if (name === '@clerk/expo') return { useSignIn: () => ({ signIn: {} }), useSignUp: () => ({ signUp: {} }) };
+    if (name === '@clerk/expo') return { useSignIn: () => ({ signIn: { password: async () => ({error:{errors:[{code:'session_exists',message:'Already signed in'}]}}) } }), useSignUp: () => ({ signUp: {} }) };
     if (name === '@clerk/expo/apple') return { useSignInWithApple: () => ({}) };
     if (name === '@clerk/expo/experimental') return { useSSO: () => ({}) };
-    if (name === '../src/access') return { useAccess: () => ({ active, welcomeAllowed: !active, beginAuthEntry() {} }) };
+    if (name === '../src/access') return { useAccess: () => ({ active, welcomeAllowed: !active, beginAuthEntry() {}, recoverSession: async () => { calls.push('recover'); return recovery; } }) };
+    if (name === '../src/session-recovery') return {alreadySignedIn: error => error?.errors?.[0]?.code === 'session_exists'};
+    if (name === '../../shared/analytics') return {beginTelemetry: () => () => {}};
+    if (name === '../src/auth-token-cache') return {setRememberSession: async () => {}};
     if (name === '../src/session') return { useSession: () => session };
     if (name === '../src/ui') return { ...Object.fromEntries(['Body','Button','Card','Field','Heading','Icon','Notice','Screen'].map(n => [n,n])), useTheme: () => ({ colors: {} }) };
     return {};
@@ -42,3 +45,17 @@ for (const fails of [false, true]) {
   if (fails) assert(nodes.some(n => n.type === 'Notice' && n.props.children === 'Unable to sign out. Please try again.'));
 }
 console.log('PASS auth bootstrap recovery: retry and sign out remain available, active session hides login actions, failed sign-out can retry');
+
+for (const succeeds of [true, false]) {
+  const h = harness(false, false, false, 'sign-in', succeeds);
+  h.render().find(n => n.props.label === 'Email address').props.onChangeText('fixture@example.test');
+  h.render().find(n => n.props.label === 'Password').props.onChangeText('fixture-password');
+  const button = h.render().find(n => n.type === 'Button' && n.props.title === 'Sign In');
+  assert(button, 'Password submit exists');
+  button.props.onPress(); await tick(); await tick();
+  assert.deepEqual(h.calls, ['recover']);
+  const notices = h.render().filter(n => n.type === 'Notice').map(n => n.props.children);
+  if (succeeds) assert(!notices.some(message => /already signed in/i.test(String(message))));
+  else assert(notices.some(message => /could not resume/.test(String(message))));
+}
+console.log('PASS actual sign-in submit recovers an existing session and gives a retryable connection error if verification fails');

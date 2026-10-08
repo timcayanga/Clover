@@ -10,7 +10,7 @@ import { Text } from "../src/app-text";
 import { resourceCache } from "@clerk/expo/resource-cache";
 import { disconnectStoreAccount } from "../src/store-billing";
 import { DisplayPreferences } from "../src/display-preferences";
-import { ClerkProvider, useAuth } from "@clerk/expo";
+import { ClerkProvider, useAuth, useClerk } from "@clerk/expo";
 import * as SecureStore from "expo-secure-store";
 import { hasVisitedClover, rememberCloverVisit, launchDestination, nativeEntryAccess, type LaunchStorage } from "../src/launch-history";
 import { authTokenCache } from "../src/auth-token-cache";
@@ -19,10 +19,11 @@ import { useFonts } from "expo-font";
 import { allowLayoutPreview } from "../src/layout-preview";
 import { StatusBar } from "expo-status-bar";
 import { useRef, useState, type ReactNode } from "react";
-import { AppState, Platform, StyleSheet, View } from "react-native";
+import { ActivityIndicator, AppState, Platform, StyleSheet, View } from "react-native";
 import { useEffect } from "react";
 import { SafeAreaProvider, SafeAreaView } from "react-native-safe-area-context";
 import { AccessContext, useAccess } from "../src/access";
+import { useSessionRecovery } from "../src/use-session-recovery";
 import { SessionProvider, useSession } from "../src/session";
 import { ImportActivity } from "../src/import-activity";
 import { useTheme, AppHeader, Button, Notice } from "../src/ui";
@@ -68,7 +69,7 @@ function PrivacyShield({ children }: { children: ReactNode }) {
 function Routes() {
   const { reduceMotion } = useAccessibilityPreferences();
   const { colors, styles, dark } = useTheme();
-  const { active, authEntry, accountDeleted } = useAccess();
+  const { active, authEntry, accountDeleted, recovering } = useAccess();
   const path = usePathname();
   const session = useSession();
   const entry = nativeEntryAccess(active, session.data?.needsOnboarding, authEntry, accountDeleted);
@@ -96,6 +97,7 @@ function Routes() {
     <RouteReveal><PrivacyShield>
       <GlassNavigationProvider>
         <StatusBar style={active && dark ? "light" : "dark"} />
+          <View style={{ flex: 1 }} accessibilityElementsHidden={!active && recovering} importantForAccessibility={!active && recovering ? "no-hide-descendants" : "auto"}>
           <Stack
             screenOptions={{
               animation: reduceMotion ? "none" : "slide_from_right",
@@ -174,6 +176,10 @@ function Routes() {
             </Stack.Protected>
           </Stack>
           {entry.app ? <ImportActivity /> : null}
+          </View>
+          {!active && recovering ? <View accessibilityViewIsModal style={[StyleSheet.absoluteFill, { backgroundColor: colors.bg, justifyContent: "center", alignItems: "center", zIndex: 200 }]}>
+            <ActivityIndicator color={colors.teal} accessibilityLabel="Finishing sign-in" />
+          </View> : null}
       </GlassNavigationProvider>
     </PrivacyShield></RouteReveal>
   );
@@ -191,11 +197,15 @@ function AppSession({
   loaded,
   userId,
   getToken = noToken,
+  recovering = false,
+  recoverSession = async () => false,
   login,
   logout,
 }: {
   configured: boolean;
   loaded: boolean;
+  recovering?: boolean;
+  recoverSession?: () => Promise<boolean>;
   userId?: string | null;
   getToken?: () => Promise<string | null>;
   login: (mode?: "sign-in" | "sign-up") => Promise<void>;
@@ -229,6 +239,8 @@ function AppSession({
         active,
         configured,
         loaded,
+        recovering,
+        recoverSession,
         welcomeAllowed: !active,
         authEntry,
         beginAuthEntry: setAuthEntry,
@@ -268,6 +280,8 @@ function AppSession({
 }
 function AuthenticatedApp() {
   const { isLoaded, userId, getToken, signOut } = useAuth();
+  const clerk = useClerk();
+  const recovery = useSessionRecovery(clerk, isLoaded, userId);
   useEffect(() => {
     if (isLoaded) identifyNativeAnalytics(userId ?? null);
   }, [isLoaded, userId]);
@@ -275,16 +289,18 @@ function AuthenticatedApp() {
     <AppSession
       configured
       loaded={isLoaded}
+      recovering={recovery.recovering}
+      recoverSession={recovery.recoverSession}
       userId={userId}
       getToken={getToken}
       login={async (mode = "sign-in") => {
         router.push({ pathname: "/auth", params: { mode } });
       }}
-      logout={async () => {
+      logout={() => recovery.duringSignOut(async () => {
         // Billing cleanup is best effort; only an auth failure means sign-out failed.
         await disconnectStoreAccount().catch(() => {});
         await signOut();
-      }}
+      })}
     />
   );
 }

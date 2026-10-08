@@ -8,6 +8,7 @@ import { useSignInWithApple } from "@clerk/expo/apple";
 import { Ionicons } from "@expo/vector-icons";
 import { useSSO } from "@clerk/expo/experimental";
 import { AuthVerification } from "../src/auth-verification";
+import { alreadySignedIn } from "../src/session-recovery";
 import { useAccess } from "../src/access";
 import { useSession } from "../src/session";
 import { setRememberSession } from "../src/auth-token-cache";
@@ -36,7 +37,7 @@ export default function Authentication() {
   );
 }
 function AuthForm() {
-  const { active, welcomeAllowed, beginAuthEntry } = useAccess();
+  const { active, welcomeAllowed, beginAuthEntry, recoverSession } = useAccess();
   const session = useSession();
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
@@ -80,12 +81,17 @@ function AuthForm() {
       await action();
       finish("completed");
     } catch (e) {
+      if (alreadySignedIn(e) && await recoverSession()) {
+        finish("completed");
+        return;
+      }
       finish("failed", { reason: "authentication_error" });
       const problem = e as {
         message?: string;
         errors?: { longMessage?: string; message?: string }[];
       };
       setError(
+        alreadySignedIn(e) ? "Clover could not resume your sign-in. Check your connection and try again." :
         problem.errors?.[0]?.longMessage ??
           problem.errors?.[0]?.message ??
           problem.message ??

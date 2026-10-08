@@ -69,7 +69,7 @@
     "build:ios": "expo run:ios",
     "build:android": "expo run:android",
     "check:toolchains": "node scripts/check-toolchains.mjs",
-    "check:auth": "node --experimental-strip-types scripts/native-auth-check.mjs && node scripts/adaptive-icon-check.mjs && node scripts/onboarding-check.mjs && node scripts/account-deletion-flow-check.mjs && node scripts/auth-entry-recovery-check.mjs && node scripts/upload-navigation-check.mjs && node --experimental-strip-types scripts/onboarding-persistence-check.mjs && node scripts/navigation-surface-check.mjs && node scripts/upload-file-check.mjs && node scripts/import-completion-check.mjs",
+    "check:auth": "node --experimental-strip-types scripts/native-auth-check.mjs && node scripts/adaptive-icon-check.mjs && node scripts/onboarding-check.mjs && node scripts/account-deletion-flow-check.mjs && node scripts/auth-entry-recovery-check.mjs && node --experimental-strip-types scripts/session-recovery-check.mjs && node scripts/upload-navigation-check.mjs && node --experimental-strip-types scripts/onboarding-persistence-check.mjs && node scripts/navigation-surface-check.mjs && node scripts/upload-file-check.mjs && node scripts/import-completion-check.mjs",
     "check:charts": "node --experimental-strip-types scripts/report-chart-check.mjs && node --experimental-strip-types scripts/home-period-label-check.mjs && node --experimental-strip-types scripts/native-presentation-check.mjs && node --experimental-strip-types scripts/native-navigation-check.mjs && node scripts/store-management-check.mjs && node scripts/store-plan-change-check.mjs",
     "check:recurring-summary": "node --experimental-strip-types scripts/recurring-summary-check.mjs",
     "check:android-release": "node scripts/android-release-check.mjs",
