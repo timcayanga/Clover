@@ -7,7 +7,11 @@ import {
   INSTITUTION_ACCOUNT_LOGO_OPTIONS,
   isValidAccountLogoUrl,
 } from "@/lib/account-logo";
-import { getAccountBrand } from "@/lib/account-brand";
+import { getAccountBrand, getAccountWalletBrand } from "@/lib/account-brand";
+import { genericAccountColors, institutionAccountPalettes } from "../../shared/account-wallet";
+import { accountCardPalette } from "../../shared/visual-identity";
+import { mobileApiResponse } from "@/lib/mobile-api-response";
+import bundledLogoColors from "../lib/account-logo-colors.json";
 import { ADDITIONAL_BANK_LOGOS, findAdditionalBankLogo } from "@/lib/bank-logo-catalog";
 import { getInstitutionSuggestionGroups } from "@/lib/institution-suggestions";
 import { suggestAccountInstitution, suggestedDraftInstitution } from "../../shared/account-institution";
@@ -60,6 +64,36 @@ const main = async () => {
   assert.equal(overriddenBrand.logoFit, "cover");
   const builtInBrand = getAccountBrand({ institution: "BPI", logoUrl: "/assets/banks/philippines/gotyme.png" });
   assert.equal(builtInBrand.logoFit, "contain");
+
+  // The wallet finish must retain every selected logo, and its color must not
+  // depend on an old institution value after the user changes that logo.
+  for (const option of ACCOUNT_LOGO_OPTIONS) {
+    const input = Object.freeze({ institution: "BPI", name: "Saved account", type: "bank", logoUrl: option.src });
+    const selected = getAccountWalletBrand(input);
+    const independent = getAccountWalletBrand({ type: "bank", logoUrl: option.src });
+    assert.equal(selected.logoSrc, getAccountBrand(input).logoSrc, `Wallet must retain ${option.src}`);
+    assert.deepEqual(selected.logoSrcs, [selected.logoSrc]);
+    assert.equal(selected.background, independent.background, `Saved institution cannot override chosen logo colors: ${option.src}`);
+    assert.equal(selected.accent, independent.accent, `Logo borders and accents must follow the selected logo: ${option.src}`);
+    assert.equal(selected.foreground, independent.foreground, `Selected logo must use matching text contrast: ${option.src}`);
+    if (option.kind === "institution") assert.ok((bundledLogoColors as Record<string,string>)[decodeURIComponent(option.src.split("?")[0])], `Missing bundled logo color: ${option.src}`);
+    const colors = selected.background.match(/#[0-9a-f]{6}/gi)! as [string, string, ...string[]];
+    const brandPalette = { colors, foreground: selected.foreground };
+    const row = { id: option.id, type: "bank", institution: "BPI", brandLogoUrl: selected.logoSrc, brandPalette };
+    const native = mobileApiResponse("accounts", { accounts: [row] }).accounts[0];
+    assert.equal(native.brandLogoUrl, selected.logoSrc, "Native API retains the selected logo");
+    assert.deepEqual(accountCardPalette(native), brandPalette, "Native renders the same resolved colors as web");
+  }
+  for (const [institution, palette] of Object.entries(institutionAccountPalettes)) {
+    const brand = getAccountWalletBrand({ institution, type: "bank" });
+    assert.deepEqual(brand.background.match(/#[0-9a-f]{6}/gi), palette.colors, `Approved ${institution} color retained`);
+  }
+  for (const [type, colors] of Object.entries(genericAccountColors)) {
+    assert.deepEqual(getAccountWalletBrand({ type }).background.match(/#[0-9a-f]{6}/gi), colors, `${type} keeps its generic icon color`);
+  }
+  assert.equal(getAccountWalletBrand({ institution: "BPI", type: "bank", logoUrl: "/assets/banks/philippines/gotyme.png" }).background,
+    getAccountWalletBrand({ institution: "GoTyme", type: "bank" }).background, "Selected GoTyme logo must have GoTyme colors, not BPI red");
+  assert.equal(getAccountWalletBrand({ institution: "BPI", logoUrl: tinyPng }).logoSrc, tinyPng, "Custom image remains intact");
 
   let originalBytes = 0, optimizedBytes = 0;
   for (const logo of ADDITIONAL_BANK_LOGOS) {

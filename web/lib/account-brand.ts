@@ -3,6 +3,7 @@ import { accountTypeIcon } from "../../shared/visual-identity";
 import { sanitizeBankNameLabel } from "@/lib/data-qa-banks";
 import { findAdditionalBankLogo, normalizeLogoName } from "@/lib/bank-logo-catalog";
 import { getCurrentBuiltInAccountLogoUrl } from "@/lib/account-logo";
+import bundledLogoColors from "./account-logo-colors.json";
 import { inferBankNameFromText, normalizeBankName } from "@/lib/data-qa-banks";
 
 type AccountBrandInput = {
@@ -1232,6 +1233,18 @@ export const getAccountWalletBrand = (params: AccountBrandInput): AccountBrand =
   const key = genericMatch?.[1]?.toLowerCase().replace(/%20| /g, "_").replace(/^others?$/, "other") || accountTypeIcon(params.type || "other");
   const logoName = brand.logoSrc?.split("/").pop()?.split(".")[0].toLowerCase() || "";
   const palette = generic ? { colors: genericAccountColors[key] || genericAccountColors.other, foreground: "#12383D" } : institutionAccountPalettes[logoName];
-  if (!palette) return brand;
-  return { ...brand, background: `linear-gradient(120deg, ${palette.colors[0]} 0%, ${palette.colors[1]} 50%, ${palette.colors[2]} 100%)`, foreground: palette.foreground };
+  if (palette) return { ...brand, accent: palette.colors[1], background: `linear-gradient(120deg, ${palette.colors[0]} 0%, ${palette.colors[1]} 50%, ${palette.colors[2]} 100%)`, foreground: palette.foreground };
+
+  // A saved logo choice controls the visual identity, even if the account's
+  // institution still names another bank. Preserve the logo and financial data.
+  const logoPath = decodeURIComponent(brand.logoSrc?.split("?")[0] || "");
+  const logoStem = logoPath.replace(/\.[^/.]+$/, "");
+  const selectedBrand = BANK_BRANDS.find(entry => entry.brand.logoSrcs.some(src =>
+    decodeURIComponent(src.split("?")[0]).replace(/\.[^/.]+$/, "") === logoStem,
+  ))?.brand;
+  if (selectedBrand) return { ...brand, accent: selectedBrand.accent, background: selectedBrand.background, foreground: selectedBrand.foreground };
+  const logoAccent = (bundledLogoColors as Record<string, string>)[logoPath];
+  if (!logoAccent) return brand; // Uploaded custom images retain the account's established palette.
+  const background = buildMetallicBackground(logoAccent);
+  return { ...brand, accent: logoAccent, background, foreground: inferForeground(logoAccent, background) };
 };
