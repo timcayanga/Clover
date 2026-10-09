@@ -29,7 +29,7 @@ import { FinancialAccountCard } from "@/components/financial-account-card";
 import { InstitutionAutocomplete } from "@/components/institution-autocomplete";
 import { PlanLimitNudge } from "@/components/plan-limit-nudge";
 import { PageFileDropZone } from "@/components/page-file-drop-zone";
-import { AccountWallet } from "@/components/account-wallet";
+import { AccountWallet, AccountWalletPocket } from "@/components/account-wallet";
 import { MobileSwipeDelete } from "@/components/mobile-swipe-delete";
 import { formatCurrencyAmount, formatCurrencyCode, formatCurrencySymbol } from "@/lib/currency-format";
 import { deriveReconciledBalance, normalizeAccountBalanceSign } from "@/lib/account-balance";
@@ -1494,8 +1494,6 @@ function AccountsPageContent() {
   const [importBackgroundOnly, setImportBackgroundOnly] = useState(false);
   const [drawerAccountId, setDrawerAccountId] = useState<string | null>(null);
   const [mobileExpandedAccountKey, setMobileExpandedAccountKey] = useState<string | null>(null);
-  const [mobileClosingAccountKey, setMobileClosingAccountKey] = useState<string | null>(null);
-  const mobileDrawerCloseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [manualType, setManualType] = useState<Account["type"]>("bank");
   const [manualName, setManualName] = useState("");
   const [manualInstitution, setManualInstitution] = useState("");
@@ -3302,23 +3300,9 @@ function AccountsPageContent() {
     if (resolvedKey !== mobileExpandedAccountKey) setMobileExpandedAccountKey(resolvedKey);
   }, [mobileAccountRows, mobileExpandedAccountKey, selectedCurrency, selectedWorkspaceId]);
 
-  useEffect(() => () => {
-    if (mobileDrawerCloseTimerRef.current) {
-      clearTimeout(mobileDrawerCloseTimerRef.current);
-    }
-  }, []);
-
   const setExpandedMobileAccount = (rowKey: string) => {
     const nextKey = mobileExpandedAccountKey === rowKey ? null : rowKey;
-    if (mobileDrawerCloseTimerRef.current) {
-      clearTimeout(mobileDrawerCloseTimerRef.current);
-    }
-    setMobileClosingAccountKey(mobileExpandedAccountKey);
     setMobileExpandedAccountKey(nextKey);
-    mobileDrawerCloseTimerRef.current = setTimeout(() => {
-      setMobileClosingAccountKey(null);
-      mobileDrawerCloseTimerRef.current = null;
-    }, 280);
 
     const storageKey = `${MOBILE_EXPANDED_ACCOUNT_STORAGE_KEY}:${selectedWorkspaceId}:${selectedCurrency || "all"}`;
     try {
@@ -3893,131 +3877,18 @@ function AccountsPageContent() {
   };
 
   const renderMobileListRow = (row: Account | InvestmentInstitutionCard, key: string) => {
-    const rowKey = row.id;
-    const isExpanded = mobileExpandedAccountKey === rowKey;
-    const shouldRenderCard = isExpanded || mobileClosingAccountKey === rowKey;
-
-    if (isInvestmentInstitutionCard(row)) {
-      const accountBrand = getAccountBrand({
-        institution: row.institution,
-        name: row.institution,
-        type: "investment",
-      });
-
-      return (
-        <div key={key} className={`accounts-mobile-list-item${isExpanded ? " is-expanded" : ""}`}>
-          <button
-            type="button"
-            className="accounts-mobile-list-row"
-            style={{ background: accountBrand.background, color: accountBrand.foreground, ["--account-row-background" as string]: accountBrand.background, ["--account-row-foreground" as string]: accountBrand.foreground }}
-            data-account-icon={accountBrand.fallbackIconSrc.split("/").pop()?.replace(".png", "")}
-            aria-expanded={isExpanded}
-            aria-hidden={isExpanded}
-            tabIndex={isExpanded ? -1 : 0}
-            onClick={() => setExpandedMobileAccount(rowKey)}
-          >
-            <span className="accounts-mobile-list-row__brand">
-              <AccountBrandMark accountBrand={accountBrand} label="" />
-              <span>
-                <strong>{row.institution}</strong>
-                <small>{row.assetCount ? `${row.assetCount} asset${row.assetCount === 1 ? "" : "s"}` : getInvestmentInstitutionPreview(row.accounts)}</small>
-              </span>
-            </span>
-            <span className="accounts-mobile-list-row__end">
-              <strong>{formatAccountAmount(Math.abs(parseAmount(row.balance)), row.currency)}</strong>
-              <span className="accounts-mobile-list-row__chevron" aria-hidden="true">
-                ⌄
-              </span>
-            </span>
-          </button>
-          <div className="accounts-mobile-list-item__reveal" aria-hidden={!isExpanded} inert={!isExpanded}>
-            <div className="accounts-mobile-list-item__reveal-inner">
-              <div className="accounts-mobile-list-item__card">
-                {shouldRenderCard ? renderAccountCard(row, `${key}-card`) : null}
-              </div>
-              <button
-                className="accounts-mobile-list-item__collapse"
-                type="button"
-                tabIndex={isExpanded ? 0 : -1}
-                onClick={() => setExpandedMobileAccount(rowKey)}
-              >
-                Hide card <span aria-hidden="true">⌃</span>
-              </button>
-            </div>
-          </div>
-        </div>
-      );
-    }
-
-    const accountBrand = getAccountBrand({
-      institution: row.institution,
-      name: row.name,
-      type: getEffectiveAccountType(row),
-      logoUrl: row.logoUrl,
-    });
-    const accountDisplayName = getAccountDisplayName(row);
-    const accountDigits = String(row.accountNumber ?? "").replace(/\D/g, "").slice(-4);
-    const accountIdentifier = accountDigits ? `•••• ${accountDigits}` : getAccountCardEyebrow(row);
-    const loadingContext = getUploadAccountLoadingContext(row);
-
-    return (
-      <MobileSwipeDelete
-        key={key}
-        className={`accounts-mobile-swipe${isExpanded ? " is-expanded" : ""}`}
-        deleteLabel={`Delete ${accountDisplayName}`}
-        disabled={accountDeleteBusy || deletingAccountIdsSet.has(row.id) || isCashFallbackAccount(row)}
-        confirmationMessage={`Delete account "${accountDisplayName}" and its linked transactions? This cannot be undone.`}
-        onDelete={() => deleteAccount(row, true)}
-      >
-      <div className={`accounts-mobile-list-item${isExpanded ? " is-expanded" : ""}`}>
-        <button
-          type="button"
-          className="accounts-mobile-list-row"
-            style={{ background: accountBrand.background, color: accountBrand.foreground, ["--account-row-background" as string]: accountBrand.background, ["--account-row-foreground" as string]: accountBrand.foreground }}
-            data-account-icon={accountBrand.fallbackIconSrc.split("/").pop()?.replace(".png", "")}
-          aria-expanded={isExpanded}
-          aria-hidden={isExpanded}
-          tabIndex={isExpanded ? -1 : 0}
-          onClick={() => setExpandedMobileAccount(rowKey)}
-        >
-          <span className="accounts-mobile-list-row__brand">
-            <AccountBrandMark accountBrand={accountBrand} label="" />
-            <span>
-              <strong>{accountDisplayName}</strong>
-              <small>{accountIdentifier}</small>
-            </span>
-          </span>
-          <span className="accounts-mobile-list-row__end">
-            <strong>
-              {loadingContext.isLoading
-                ? "Loading..."
-                : loadingContext.isTimedOut
-                  ? "Pending review"
-                  : formatAccountAmount(Math.abs(parseAmount(loadingContext.displayedBalance ?? row.balance)), row.currency)}
-            </strong>
-            <span className="accounts-mobile-list-row__chevron" aria-hidden="true">
-              ⌄
-            </span>
-          </span>
-        </button>
-        <div className="accounts-mobile-list-item__reveal" aria-hidden={!isExpanded} inert={!isExpanded}>
-          <div className="accounts-mobile-list-item__reveal-inner">
-            <div className="accounts-mobile-list-item__card">
-              {shouldRenderCard ? renderAccountCard(row, `${key}-card`) : null}
-            </div>
-            <button
-              className="accounts-mobile-list-item__collapse"
-              type="button"
-              tabIndex={isExpanded ? 0 : -1}
-              onClick={() => setExpandedMobileAccount(rowKey)}
-            >
-              Hide card <span aria-hidden="true">⌃</span>
-            </button>
-          </div>
-        </div>
-      </div>
-      </MobileSwipeDelete>
-    );
+    const isExpanded = mobileExpandedAccountKey === row.id;
+    const investment = isInvestmentInstitutionCard(row);
+    const name = investment ? row.institution : getAccountDisplayName(row);
+    const brand = getAccountBrand({ institution: row.institution, name, type: investment ? "investment" : getEffectiveAccountType(row), logoUrl: investment ? undefined : row.logoUrl });
+    const pocket = <AccountWalletPocket expanded={isExpanded} label={name} foreground={brand.foreground} onToggle={() => setExpandedMobileAccount(row.id)}>
+      {renderAccountCard(row, `${key}-card`)}
+    </AccountWalletPocket>;
+    if (investment) return <div key={key}>{pocket}</div>;
+    return <MobileSwipeDelete key={key} className={`accounts-mobile-swipe${isExpanded ? " is-expanded" : ""}`}
+      deleteLabel={`Delete ${name}`} disabled={accountDeleteBusy || deletingAccountIdsSet.has(row.id) || isCashFallbackAccount(row)}
+      confirmationMessage={`Delete account "${name}" and its linked transactions? This cannot be undone.`}
+      onDelete={() => deleteAccount(row, true)}>{pocket}</MobileSwipeDelete>;
   };
 
   useEffect(() => {

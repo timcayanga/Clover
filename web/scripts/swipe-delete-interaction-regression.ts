@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import vm from "node:vm";
 import ts from "typescript";
+import { walletFinish } from "../../shared/account-wallet";
 
 type Node = { type: unknown; props: Record<string, any> };
 function harness(native: boolean, props: Record<string, any>) {
@@ -14,6 +15,7 @@ function harness(native: boolean, props: Record<string, any>) {
   };
   class AnimatedValue { constructor(public value: number) {} setValue(v: number) { this.value = v; } stopAnimation() {} }
   const dependencies: Record<string, unknown> = {
+    "../../shared/account-wallet": { walletFinish },
     react, "react/jsx-runtime": { jsx, jsxs: jsx },
     "@/lib/responsive-layout": { MOBILE_LAYOUT_MEDIA_QUERY: "(max-width:1100px)" },
     "react-native": { View: "View", Pressable: "Pressable", Animated: { Value: AnimatedValue, View: "AnimatedView", timing: (v: AnimatedValue, options: any) => ({ start: () => v.setValue(options.toValue) }) }, PanResponder: { create: (panHandlers: any) => ({ panHandlers }) } },

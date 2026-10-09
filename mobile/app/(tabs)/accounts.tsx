@@ -2,7 +2,7 @@ import { SwipeDeleteRow } from "../../src/swipe-delete-row";
 import { recordedSummary } from "../../src/recorded-summary";
 import { Modal } from "../../src/adaptive-modal";
 import { AdaptiveDetail } from "../../src/adaptive-detail";
-import { AccountWallet } from "../../src/account-wallet";
+import { AccountWallet, AccountWalletCard } from "../../src/account-wallet";
 import { useLiveInvestmentValues } from "../../src/use-live-investment-values";
 import { CloverEmptyState } from "../../src/clover-mascot";
 import { institutionGroups } from "../../src/institution-groups";
@@ -372,12 +372,11 @@ function AccountsContent() {
                 const representative = institution.assets[0];
                 const palette = accountCardPalette(representative);
                 const value = recordedSummary(institution.assets.map(accountDisplayBalance));
-                return <Pressable key={institution.id} style={{ marginBottom: -16 }} accessibilityRole="button" accessibilityLabel={`View ${institution.name} investments`} onPress={() => setInstitutionId(institution.id)}>
-                  <LinearGradient colors={palette.colors} locations={palette.locations} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={{ borderTopLeftRadius: 16, borderTopRightRadius: 16, paddingHorizontal: 12, paddingTop: 10, paddingBottom: 18, minHeight: 80, gap: 4 }}>
-                    <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}><AccountBrandLogo account={representative} size={24} radius={7} /><Text style={{ flex: 1, color: palette.foreground, fontFamily: "Poppins-SemiBold", fontSize: 13 }}>{institution.name}</Text><Icon line name="chevron-forward" size={16} color={palette.foreground} /></View>
-                    <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 10 }}><Text style={{ color: palette.foreground, fontSize: 10 }}>{institution.assets.length} {institution.assets.length === 1 ? "asset" : "assets"}</Text><Text style={{ color: palette.foreground, fontSize: 15, fontFamily: "Poppins-SemiBold", maxWidth: "70%", textAlign: "right" }}>{value.value === null ? "Not recorded" : money(String(value.value), institution.currency)}{value.missing > 0 && value.known > 0 ? "*" : ""}</Text></View>
-                  </LinearGradient>
-                </Pressable>;
+                return <AccountWalletCard key={institution.id} expanded={expandedAccount === institution.id} name={institution.name}
+                  identifier={`${institution.assets.length} ${institution.assets.length === 1 ? "asset" : "assets"}`}
+                  amount={(value.value === null ? "Not recorded" : money(String(value.value), institution.currency)) + (value.missing > 0 && value.known > 0 ? "*" : "")}
+                  palette={palette} logo={<AccountBrandLogo account={representative} size={32} radius={7} />}
+                  onToggle={() => setExpandedAccount(current => current === institution.id ? null : institution.id)} onOpen={() => setInstitutionId(institution.id)} />;
               }) : [...group.rows]
                 .sort(
                   (a, b) =>
@@ -387,93 +386,15 @@ function AccountsContent() {
                 )
                 .map((account) => {
                   const palette = accountCardPalette(account);
-                  const { foreground } = palette;
                   const expanded = expandedAccount === account.id;
                   const balance = accountDisplayBalance(account);
                   return (
                     <SwipeDeleteRow wallet expanded={expanded} key={account.id} label={label(account)} disabled={session.demo || account.id.startsWith("fallback-cash-")} message={`Delete "${label(account)}" and its linked transactions? This cannot be undone.`} onOpen={() => setSelected(account)} onDelete={() => deleteRow(account)}>
-                      <Pressable
-                        accessibilityRole="button"
-                        accessibilityLabel={
-                          expanded
-                            ? `Open ${label(account)} details`
-                            : `Show ${label(account)} card`
-                        }
-                        accessibilityState={{ expanded }}
-                        onPress={() =>
-                          expanded
-                            ? setSelected(account)
-                            : setExpandedAccount(account.id)
-                        }
-                      >
-                        <LinearGradient
-                          colors={palette.colors}
-                          locations={palette.locations}
-                          start={{ x: 0, y: 0 }}
-                          end={{ x: 1, y: 1 }}
-                          style={{
-                            borderTopLeftRadius: 16, borderTopRightRadius: 16, borderBottomLeftRadius: expanded ? 16 : 0, borderBottomRightRadius: expanded ? 16 : 0,
-                            minHeight: expanded ? 190 : 80,
-                            paddingHorizontal: expanded ? 20 : 12, paddingTop: expanded ? 20 : 10, paddingBottom: expanded ? 20 : 18,
-                            gap: expanded ? 16 : 4,
-                          }}
-                        >
-                          <View
-                            style={{
-                              flexDirection: "row",
-                              alignItems: "center",
-                              gap: 10,
-                            }}
-                          >
-                            <AccountBrandLogo
-                              account={account}
-                              size={expanded ? 32 : 24}
-                              radius={expanded ? 9 : 7}
-                            />
-                            <View style={{ flex: 1, minWidth: 0 }}>
-                              <Text
-                                style={{
-                                  fontFamily: "Poppins-SemiBold",
-                                  fontSize: expanded ? 16 : 13,
-                                  color: foreground,
-                                }}
-                              >
-                                {expanded
-                                  ? account.institution || account.name
-                                  : label(account)}
-                              </Text>
-                            </View>
-                            <Icon
-                              line
-                              name={
-                                expanded ? "chevron-forward" : "chevron-down"
-                              }
-                              size={16}
-                              color={foreground}
-                            />
-                          </View>
-                          <View style={{ flexDirection: expanded ? "column" : "row", justifyContent: "space-between", alignItems: expanded ? "flex-start" : "center", gap: expanded ? 20 : 10 }}>
-                            <Text style={{ color: foreground, fontSize: expanded ? 11 : 10 }}>{account.lastFour ? `•••• ${account.lastFour}` : account.type === "cash" ? "Cash on hand" : account.type.replaceAll("_", " ")}</Text>
-                            <Text style={{ fontFamily: "Poppins-SemiBold", fontSize: expanded ? 22 : 15, color: foreground, maxWidth: expanded ? "100%" : "70%", textAlign: expanded ? "left" : "right" }}>{balance === null ? "Not recorded" : money(balance, account.currency)}</Text>
-                          </View>
-                        </LinearGradient>
-                      </Pressable>
-                      {expanded ? (
-                        <Pressable
-                          accessibilityRole="button"
-                          accessibilityLabel={`Hide ${label(account)} card`}
-                          onPress={() => setExpandedAccount(null)}
-                          style={{
-                            minHeight: 44,
-                            alignItems: "center",
-                            justifyContent: "center",
-                          }}
-                        >
-                          <Text style={{ color: colors.teal, fontSize: 12 }}>
-                            Hide card ⌃
-                          </Text>
-                        </Pressable>
-                      ) : null}
+                      <AccountWalletCard expanded={expanded} name={label(account)}
+                        identifier={account.lastFour ? `•••• ${account.lastFour}` : account.type === "cash" ? "Cash on hand" : account.type.replaceAll("_", " ")}
+                        amount={balance === null ? "Not recorded" : money(balance, account.currency)} palette={palette}
+                        logo={<AccountBrandLogo account={account} size={32} radius={7} />}
+                        onToggle={() => setExpandedAccount(current => current === account.id ? null : account.id)} onOpen={() => setSelected(account)} />
                     </SwipeDeleteRow>
                   );
                 })}
