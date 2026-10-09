@@ -1,50 +1,43 @@
 # Clover scroll showcase preview
 
-Preview: `/landing-showcase`. This is a separate concept; `/` and `/landing-motion` are unchanged.
+Preview: `/landing-showcase`. The production homepage and the older `/landing-motion` concept are unchanged.
 
 ## Story and visual direction
 
-The eight chapters preserve the progression on the production landing page:
+Each scene has one headline and one short supporting paragraph. Eyebrows, numbered chapters, demo instructions, side rails, and extra captions are removed. The sequence follows the production homepage's progression from organizing records to understanding and sharing money:
 
-1. Months of finances. Organized in minutes. A readable interactive product story follows a ₱500 Mendokoro receipt through extracted details, categorized transactions, and a monthly spending chart. All three scenes use the same example. Visitors can choose a step or pause/play the walkthrough. The opening is in normal document flow, and the demo appears before the primary CTA on mobile.
-2. Start your way. Connect, Upload, and Add manually controls switch an illustrated feature demonstration. Scroll unfolds the transaction panel.
-3. Stay in control. A dimensional lock illustrates review, export, and deletion capabilities.
-4. See the bigger picture. A current public Accounts screen is framed by sample account and spending views. The composition unfolds from perspective into a more readable view.
-5. Ask Clover. A current public Ask Clover screen and the approved mascot accompany three interactive sample questions, with a chart, a goal, and a transaction example.
-6. Share the load. The current public Split Bills screen anchors a scene about shared expenses and Circles.
-7. Grow at your own pace. Free, Plus, and Pro pricing uses the shared market pricing configuration, with working monthly/yearly and PHP/USD controls. The existing campaign component only appears when the offer is open.
-8. Your next chapter. A final invitation to start free.
+1. **Months of finances. Organized in minutes.** A dimensional Clover transaction window, receipt, and bank card immediately show what the product does.
+2. **A little less admin. A lot more clarity.** Statements, a receipt, and wallet activity converge into categorized transactions as the visitor scrolls.
+3. **Your money. Your say.** A glass shield and edit/export controls accompany the private, reviewable, traceable data message.
+4. **Your money. All together.** BPI, UnionBank, Maya, and GStocks cards move from a dimensional fan into a readable account overview.
+5. **Less guessing. More understanding.** An extruded spending donut turns toward the visitor while category totals settle beside it.
+6. **Big questions. Meet your little helper.** Clover's approved mascot accompanies a sample question, answer, and spending report that appear with scroll progress.
+7. **Life is shared. Money can be, too.** The public production Split Bills screen rotates into view with shared-payment cards and the Circles mascot.
+8. **A little clarity. At every stage.** Free, Plus, and Pro use the shared market pricing configuration, working monthly/yearly and PHP/USD controls, and the existing campaign component.
+9. **Money looks better from here.** One final invitation to start free.
 
-Typography uses Raleway for marketing headlines and Poppins for supporting text. Teal, light teal, mint, white, and neutral surfaces follow the Foundations and category design libraries at Figma nodes `472:11812` and `472:12117` in file `ihPDxUM9SiMdssYw6XsOho`. Headline/link teal is darkened for legibility.
+Typography uses Raleway for headlines and Poppins for supporting text. Teal, light teal, mint, white, and neutral surfaces follow the Figma Foundations and category libraries at nodes `472:11812` and `472:12117` in file `ihPDxUM9SiMdssYw6XsOho`. Headline teal is darkened for legibility. Bank cards retain their institution colors.
 
-## Production screen references
+## Assets and example data
 
-Verified against the live `https://clover.ph` DOM on 2026-10-09:
+The public production homepage at `https://clover.ph` was inspected on 2026-10-09. The showcase's Split Bills phone uses `/assets/marketing-screens/split-20260928.png`, which that homepage serves. It is a public sample screen, not a private user's account.
 
-- `/assets/marketing-screens/accounts-20260928.png`
-- `/assets/marketing-screens/adviser-20261007.png`
-- `/assets/marketing-screens/split-20260928.png`
+Other product compositions are HTML/CSS illustrations using Clover's production wordmark, bank logos, category icons, and approved mascots. Example spending categories sum to ₱24,800; the four account balances sum to ₱84,250. The footer identifies the data as illustrative. This route does not read private financial records, import files, or create transactions.
 
-These are the public sample screens served by production, not screenshots of a private user account. The opening walkthrough is an HTML/SVG product illustration with sample data, not a screenshot or live upload. It uses Clover’s production wordmark, bank logos, category assets, and mascot. The route does not access financial records or perform transactions.
+## Scroll and accessibility behavior
 
-## Motion and performance
-
-- The opening uses lightweight HTML/CSS/SVG animation. The previous Three.js logo renderer and its dependencies have been removed.
-- The walkthrough advances every 6.5 seconds only while visible, the browser tab is active, and animation is enabled. Hover and focus pause automatic playback; manually selecting a step stops autoplay until Play is chosen.
-- Reduced-motion preferences and the page-wide pause control disable automatic progression and decorative animation. All three steps remain available through keyboard-accessible tabs, including arrow, Home, and End navigation.
-- Timers, visibility listeners, and intersection observers are cleaned up on unmount.
-- Scroll updates use passive listeners and one requestAnimationFrame batch. Transient progress stays in refs and CSS properties.
-- The page uses native scrolling, not wheel interception. Short landscape windows and mobile layouts use natural-flow scenes rather than tall sticky viewports.
-- Motion can be paused from the header or footer. Keyboard navigation and a skip link are provided.
+- Seven full-screen scenes use longer native scroll tracks. Scroll position directly controls perspective, rotation, depth, translation, opacity, and chart growth. There is no autoplay, timer-driven slideshow, wheel interception, or forced scroll snapping.
+- Each scene ends in a readable state before the next one arrives. The header includes a page-progress line and an accessible animation toggle.
+- CSS creates the dimensional cards, glass shield, layered donut, and device frame. No animation library, WebGL runtime, or video download is needed.
+- Geometry reads are batched before style writes; passive scroll events schedule one requestAnimationFrame update. Progress remains in CSS variables instead of React state.
+- Short landscape/compact tablet windows use natural document flow and settled illustrations so content cannot become trapped inside a pinned viewport.
+- Reduced-motion preferences collapse the long scroll tracks and show settled illustrations. The header pause control also settles all visuals while retaining the current page position.
+- A skip link, visible keyboard focus, labeled controls, meaningful image alternatives, and grouped pricing controls are provided. Decorative elements are hidden from assistive technology.
 
 ## Verification
 
-- Chromium: 320×740, 390×844, 430×932, 768×1024, 844×390, 1024×768, 1440×1000, 1920×1080.
-- WebKit: 390×844 and 1024×1366. Firefox: 1440×900.
-- Reduced-motion, keyboard step navigation, play/pause, automatic progression, offscreen suspension, and hidden-tab suspension.
-- All three product scenes checked for readable controls and content containment at small phone, tablet, and desktop widths.
-- Eighteen product-scene containment checks at widths 320, 390, 768, 1100, 1440, and 1920 pixels.
-- Working input-mode choices, all three sample chats, monthly/yearly pricing, PHP/USD currency selection, and pause controls.
-- No page exceptions, broken loaded images, horizontal page overflow, or detected main-copy occlusion in the tested browser matrix.
+Browser screenshots and scroll-state checks cover narrow phones, phones, tablets, laptop windows, desktop windows, and short landscape windows in Chromium, WebKit, and Firefox. Checks include horizontal overflow, heading/navigation clearance, scene bounds, image loading, browser exceptions, and beginning/middle/end scroll states.
 
-Local campaign API responses were stubbed because the local development database was unavailable. The deployment must also be smoke-tested against staging with the real campaign response. Physical-device GPU performance is not implied by browser emulation.
+Interaction checks cover changing transforms with scroll, settled visuals while paused, reduced-motion natural flow, keyboard pricing selection, monthly/yearly prices, and PHP/USD switching. Local campaign responses are stubbed because the development database is unavailable; the staging smoke test must use the real campaign endpoint.
+
+Physical-device GPU performance is not implied by browser emulation. The repository's complete `qa:prepush` gate is required before publishing this preview to staging.

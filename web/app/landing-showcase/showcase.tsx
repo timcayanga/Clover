@@ -8,85 +8,111 @@ import {
   type ReactNode,
 } from "react";
 import Link from "next/link";
-import { CloverMascot } from "@/components/clover-mascot";
 import { SwitchOfferNotice } from "@/components/switch-campaign";
 import {
   plannedPremiumPrices,
   plannedProPrices,
   type PricingMarket,
 } from "@/lib/public-plan-comparison";
-import { ProductStory } from "./product-story";
 import s from "./showcase.module.css";
 
-const chapters = [
-  ["together", "Come together"],
-  ["your-way", "Start your way"],
-  ["your-control", "Stay in control"],
-  ["your-picture", "See your money"],
-  ["ask-clover", "Ask Clover"],
-  ["shared", "Share the load"],
-  ["plans", "Find your plan"],
-  ["begin", "A clearer tomorrow"],
-] as const;
-const sources = [
+const clamp = (value: number) => Math.max(0, Math.min(1, value));
+const ease = (value: number) => {
+  const p = clamp(value);
+  return p * p * (3 - 2 * p);
+};
+const rows = [
+  ["food-dining", "Lunch at Mendokoro", "BPI · Food & Dining", "−₱500.00"],
+  ["salary", "Payday", "BPI · Income", "+₱45,000.00"],
+  ["groceries", "Weekend groceries", "Maya · Groceries", "−₱1,280.00"],
+];
+const accounts = [
   {
-    label: "BPI Savings",
-    kind: "Bank statement",
+    name: "BPI Savings",
+    type: "Bank",
     logo: "bpi.png",
-    amount: "₱60,000",
+    amount: "₱46,000",
+    color: "#a9182c",
   },
   {
-    label: "GCash",
-    kind: "Wallet activity",
+    name: "UnionBank",
+    type: "Bank",
+    logo: "unionbank.jpg",
+    amount: "₱21,250",
+    color: "#bf5103",
+  },
+  {
+    name: "Maya",
+    type: "Wallet",
+    logo: "maya.png",
+    amount: "₱5,000",
+    color: "#102920",
+  },
+  {
+    name: "GStocks",
+    type: "Investment",
     logo: "gcash.png",
-    amount: "₱24,250",
+    amount: "₱12,000",
+    color: "#125995",
   },
 ];
-const modes = ["Connect", "Upload", "Add manually"] as const;
-const questions = [
-  "Where did my money go?",
-  "Help me save for a trip",
-  "Add lunch, ₱500",
+const spending = [
+  {
+    name: "Food & Dining",
+    icon: "food-dining",
+    amount: "₱9,424",
+    percent: "38%",
+    color: "#03a8c0",
+  },
+  {
+    name: "Housing",
+    icon: "housing",
+    amount: "₱6,696",
+    percent: "27%",
+    color: "#6bd2ae",
+  },
+  {
+    name: "Travel",
+    icon: "travel-lifestyle",
+    amount: "₱5,208",
+    percent: "21%",
+    color: "#f2b276",
+  },
+  {
+    name: "Shopping",
+    icon: "shopping",
+    amount: "₱3,472",
+    percent: "14%",
+    color: "#a68bcc",
+  },
 ];
-const bankNames = [
-  ["BDO", "bdo.png"],
-  ["BPI", "bpi.png"],
-  ["Landbank", "landbank.png"],
-  ["Metrobank", "metrobank.png"],
-  ["RCBC", "rcbc.png"],
-  ["Security Bank", "security bank.png"],
-];
-const clamp = (n: number) => Math.max(0, Math.min(1, n));
-
 function Icon({
   kind = "arrow",
 }: {
   kind?:
     | "arrow"
-    | "down"
-    | "link"
-    | "upload"
-    | "edit"
+    | "pause"
+    | "play"
     | "check"
     | "lock"
-    | "pause"
-    | "play";
+    | "edit"
+    | "export"
+    | "chevron";
 }) {
-  const paths = {
+  const path = {
     arrow: "M4 12h15m-6-6 6 6-6 6",
-    down: "M12 4v15m-6-6 6 6 6-6",
-    link: "m9 15 6-6M8 16l-1 1a4 4 0 0 1-6-6l4-4a4 4 0 0 1 6 0m2 1 1-1a4 4 0 0 1 6 6l-4 4a4 4 0 0 1-6 0",
-    upload: "M12 16V3m-5 5 5-5 5 5M4 16v5h16v-5",
-    edit: "m16 3 5 5L8 21H3v-5ZM13 6l5 5",
-    check: "m5 12 4 4L19 6",
-    lock: "M7 11V7a5 5 0 0 1 10 0v4M5 11h14v10H5ZM12 15v2",
     pause: "M8 5v14M16 5v14",
     play: "m7 4 13 8-13 8Z",
-  };
+    check: "m5 12 4 4L19 6",
+    lock: "M7 11V7a5 5 0 0 1 10 0v4M5 11h14v10H5ZM12 15v2",
+    edit: "m16 3 5 5L8 21H3v-5ZM13 6l5 5",
+    export: "M12 16V3m-5 5 5-5 5 5M4 16v5h16v-5",
+    chevron: "m7 9 5 5 5-5",
+  }[kind];
   return (
     <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
       <path
-        d={paths[kind]}
+        d={path}
         stroke="currentColor"
         strokeWidth="1.7"
         strokeLinecap="round"
@@ -95,272 +121,297 @@ function Icon({
     </svg>
   );
 }
-function Eyebrow({ n, children }: { n: number; children: ReactNode }) {
+function Brand() {
   return (
-    <p className={s.eyebrow}>
-      <span>{String(n).padStart(2, "0")}</span>
-      {children}
-    </p>
+    <span className={s.brand}>
+      <img src="/clover-mark.svg" width="28" height="28" alt="" />
+      <img src="/clover-name-teal.svg" width="100" height="28" alt="Clover" />
+    </span>
   );
 }
 function Action({
-  children = "Start with Clover",
-  secondary = false,
+  children = "Start free",
   href = "/sign-up",
 }: {
   children?: ReactNode;
-  secondary?: boolean;
   href?: string;
 }) {
   return (
-    <Link
-      prefetch={false}
-      href={href}
-      className={secondary ? s.textLink : s.action}
-    >
+    <Link prefetch={false} className={s.action} href={href}>
       {children}
       <Icon />
     </Link>
   );
 }
-function BankLogo({ file, size = 42 }: { file: string; size?: number }) {
-  return (
-    <img
-      className={s.bankLogo}
-      src={`/assets/banks/philippines/${file}`}
-      alt=""
-      width={size}
-      height={size}
-      loading="lazy"
-    />
-  );
-}
-function Category({ name }: { name: string }) {
+function Category({ name, size = 42 }: { name: string; size?: number }) {
   return (
     <img
       src={`/figma-icons/categories/${name}.svg`}
+      width={size}
+      height={size}
       alt=""
-      width={40}
-      height={40}
       loading="lazy"
     />
   );
 }
-function Receipt() {
+function Bank({ file, size = 40 }: { file: string; size?: number }) {
   return (
-    <div className={s.receipt}>
-      <div className={s.receiptBrand}>A LITTLE EVERYDAY</div>
-      <strong>
-        Good food.
-        <br />
-        Good company.
-      </strong>
-      <div className={s.receiptRule} />
-      <span>Lunch with a friend</span>
-      <div className={s.receiptLine}>
-        <span>Total</span>
-        <b>₱500.00</b>
-      </div>
-      <div className={s.barcode} />
-      <small>A moment worth keeping.</small>
+    <img
+      className={s.bank}
+      src={`/assets/banks/philippines/${file}`}
+      width={size}
+      height={size}
+      alt=""
+      loading="lazy"
+    />
+  );
+}
+function Mascot({ pose, size = 160 }: { pose: string; size?: number }) {
+  return (
+    <img
+      className={s.mascot}
+      src={`/assets/mascots/velvet-${pose}.webp`}
+      width={size}
+      height={size}
+      alt=""
+      loading="lazy"
+    />
+  );
+}
+function Heading({
+  children,
+  text,
+  hero = false,
+}: {
+  children: ReactNode;
+  text: string;
+  hero?: boolean;
+}) {
+  return (
+    <div className={s.heading}>
+      {hero ? <h1>{children}</h1> : <h2>{children}</h2>}
+      <p>{text}</p>
     </div>
   );
 }
-function Phone({
-  screen,
-  caption,
+function ScrollScene({
+  id,
+  className,
+  children,
 }: {
-  screen: "accounts" | "ask" | "split";
-  caption: string;
+  id: string;
+  className: string;
+  children: ReactNode;
 }) {
-  // These exact public sample screens are currently served by clover.ph.
-  const image = {
-    accounts: "accounts-20260928.png",
-    ask: "adviser-20261007.png",
-    split: "split-20260928.png",
-  }[screen];
   return (
-    <figure className={s.phoneFigure}>
-      <div className={s.phone}>
-        <div className={s.phoneTop}>
-          <span>9:41</span>
-          <i />
-          <span>••• ▰</span>
-        </div>
-        <img
-          className={s.phoneScreen}
-          src={`/assets/marketing-screens/${image}`}
-          alt={`Clover ${caption}, as shown on the live Clover website, with sample data`}
-          width={1560}
-          height={3024}
-          loading="lazy"
-        />
-        <div className={s.homeIndicator} />
-      </div>
-      <figcaption>{caption} in Clover</figcaption>
-    </figure>
+    <section id={id} className={`${s.scene} ${className}`} data-scroll-scene>
+      <div className={s.pin}>{children}</div>
+    </section>
   );
 }
-function Donut({ compact = false }: { compact?: boolean }) {
+
+function Receipt({ statement = false }: { statement?: boolean }) {
   return (
-    <div className={`${s.donut} ${compact ? s.donutCompact : ""}`}>
-      <svg
-        viewBox="0 0 300 300"
-        role="img"
-        aria-label="Example spending: food 38%, home 27%, travel 21%, other 14%"
-      >
-        <circle
-          cx="150"
-          cy="150"
-          r="111"
-          fill="none"
-          stroke="#edf3f5"
-          strokeWidth="43"
-        />
-        {[
-          { color: "#03a8c0", value: 38, offset: 0 },
-          { color: "#6ee7b7", value: 27, offset: 38 },
-          { color: "#fdba74", value: 21, offset: 65 },
-          { color: "#bba6e4", value: 14, offset: 86 },
-        ].map(({ color, value, offset }) => (
-          <circle
-            key={color}
-            className={s.donutArc}
-            cx="150"
-            cy="150"
-            r="111"
-            fill="none"
-            stroke={color}
-            strokeWidth="43"
-            pathLength="100"
-            strokeDasharray={`${value - 0.8} ${100.8 - value}`}
-            strokeDashoffset={-offset}
-            transform="rotate(-90 150 150)"
+    <div className={`${s.paper} ${statement ? s.statement : ""}`}>
+      {statement ? (
+        <>
+          <Bank file="bpi.png" size={36} />
+          <strong>Statement of account</strong>
+          <small>September 2026</small>
+          <div className={s.paperRule} />
+          <div className={s.paperItem}>
+            <span>Payday</span>
+            <b>₱45,000</b>
+          </div>
+          <div className={s.paperItem}>
+            <span>Groceries</span>
+            <b>₱1,280</b>
+          </div>
+          <div className={s.paperItem}>
+            <span>Lunch</span>
+            <b>₱500</b>
+          </div>
+          <div className={s.paperLines}>
+            <i />
+            <i />
+            <i />
+          </div>
+        </>
+      ) : (
+        <>
+          <strong>MENDOKORO</strong>
+          <small>October 5, 2026</small>
+          <div className={s.paperRule} />
+          <div className={s.paperItem}>
+            <span>Lunch</span>
+            <b>₱500.00</b>
+          </div>
+          <div className={s.paperTotal}>
+            <span>Total</span>
+            <b>₱500.00</b>
+          </div>
+          <div className={s.barcode} />
+        </>
+      )}
+    </div>
+  );
+}
+function Ledger() {
+  return (
+    <div className={s.ledger}>
+      <div className={s.appToolbar}>
+        <Brand />
+        <span className={s.avatar}>J</span>
+      </div>
+      <div className={s.ledgerBody}>
+        <div className={s.appTitle}>
+          <strong>Transactions</strong>
+          <span>PHP</span>
+        </div>
+        {rows.map(([icon, name, category, amount], i) => (
+          <div
+            className={s.transaction}
+            key={name}
+            style={{ "--row": i } as CSSProperties}
+          >
+            <Category name={icon} />
+            <div>
+              <strong>{name}</strong>
+              <span>{category}</span>
+            </div>
+            <b className={i === 1 ? s.income : ""}>{amount}</b>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+function AccountCard({ index }: { index: number }) {
+  const account = accounts[index];
+  return (
+    <div
+      className={s.accountCard}
+      style={
+        { "--card": index, "--bank-color": account.color } as CSSProperties
+      }
+    >
+      <div>
+        <Bank file={account.logo} size={44} />
+        <span>{account.type}</span>
+      </div>
+      <strong>{account.name}</strong>
+      <b>{account.amount}</b>
+    </div>
+  );
+}
+function SpendingRing() {
+  return (
+    <div
+      className={s.ringStage}
+      role="img"
+      aria-label="Example monthly spending: ₱24,800. Food and Dining 38 percent, Housing 27 percent, Travel 21 percent, Shopping 14 percent."
+    >
+      <div className={s.ringObject}>
+        {Array.from({ length: 12 }, (_, i) => (
+          <div
+            key={i}
+            className={s.ringLayer}
+            style={{ "--depth": i } as CSSProperties}
+            aria-hidden="true"
           />
         ))}
-      </svg>
-      <div>
-        <span>This month</span>
-        <strong>₱24,800</strong>
-        <small>Where it went</small>
+        <div className={s.ringTop} aria-hidden="true" />
+        <div className={s.ringCenter}>
+          <span>Total spending</span>
+          <strong>₱24,800</strong>
+          <small>This month</small>
+        </div>
       </div>
     </div>
   );
 }
-function ChatDemo() {
-  const [question, setQuestion] = useState(0);
+function Phone({ screen }: { screen: "accounts" | "split" }) {
+  const image =
+    screen === "accounts" ? "accounts-20260928.png" : "split-20260928.png";
   return (
-    <div className={s.chatDemo}>
+    <div className={s.phone}>
+      <div className={s.phoneStatus}>
+        <span>9:41</span>
+        <i />
+        <span>••• ▰</span>
+      </div>
+      <img
+        src={`/assets/marketing-screens/${image}`}
+        alt={`Clover ${screen === "accounts" ? "Accounts" : "Split Bills"}, from the current public production website`}
+        width="1560"
+        height="3024"
+        loading="lazy"
+      />
+      <div className={s.phoneHome} />
+    </div>
+  );
+}
+function Chat() {
+  return (
+    <div className={s.chatCard}>
       <div className={s.chatHeader}>
-        <CloverMascot pose="chat" size={52} />
+        <Mascot pose="compact" size={38} />
+        <strong>Ask Clover</strong>
+      </div>
+      <div className={s.question}>Where did my money go this month?</div>
+      <div className={s.reply}>
+        <Mascot pose="compact" size={28} />
         <div>
-          <strong>Ask Clover</strong>
-          <span>A little clarity. A helpful next step.</span>
+          <strong>Clover</strong>
+          <p>
+            Food &amp; Dining was your biggest category. Here’s your spending at
+            a glance.
+          </p>
         </div>
-        <span className={s.liveDot} />
       </div>
-      <div className={s.chatBody} key={question} aria-live="polite">
-        <div className={s.userBubble}>{questions[question]}</div>
-        <div className={s.cloverReply}>
-          <CloverMascot pose="compact" size={32} />
-          <div>
-            <strong>Clover</strong>
-            <p>
+      <div className={s.chatReport}>
+        {spending.map((item, i) => (
+          <div
+            key={item.name}
+            style={
               {
-                [
-                  "Food & Dining is your biggest spending category this month. Here’s your spending at a glance.",
-                  "Let’s make room for something to look forward to. How much would you like to save for your trip?",
-                  "Lunch, ₱500, Food & Dining. Which account did you pay from?",
-                ][question]
-              }
-            </p>
-          </div>
-        </div>
-        {question === 0 ? (
-          <div className={s.chatChart}>
-            <Donut compact />
-            <div>
-              <span>
-                <i style={{ background: "#03a8c0" }} />
-                Food & Dining
-              </span>
-              <span>
-                <i style={{ background: "#6ee7b7" }} />
-                Home
-              </span>
-              <span>
-                <i style={{ background: "#fdba74" }} />
-                Travel
-              </span>
-              <span>
-                <i style={{ background: "#bba6e4" }} />
-                Other
-              </span>
-            </div>
-          </div>
-        ) : question === 1 ? (
-          <div className={s.goalPreview}>
-            <CloverMascot pose="savings" size={90} />
-            <div>
-              <small>Your next adventure</small>
-              <strong>Japan trip</strong>
-              <span>A goal to build together.</span>
-            </div>
-          </div>
-        ) : (
-          <div className={s.transactionPreview}>
-            <Category name="food-dining" />
-            <div>
-              <strong>Lunch</strong>
-              <span>Food & Dining · Account to confirm</span>
-            </div>
-            <b>−₱500</b>
-          </div>
-        )}
-      </div>
-      <div className={s.questionChoices} aria-label="Try an example question">
-        {questions.map((q, i) => (
-          <button
-            key={q}
-            type="button"
-            aria-pressed={question === i}
-            onClick={() => setQuestion(i)}
+                "--row": i,
+                "--bar-color": item.color,
+                "--bar-size": parseInt(item.percent) / 38,
+              } as CSSProperties
+            }
           >
-            {q}
-            <Icon />
-          </button>
+            <span>{item.name}</span>
+            <div>
+              <i />
+            </div>
+            <b>{item.amount}</b>
+          </div>
         ))}
       </div>
-      <small className={s.demoNote}>
-        Interactive example with sample data.
-      </small>
+      <div className={s.chatInput}>
+        <span>Ask about your money</span>
+        <span>↑</span>
+      </div>
     </div>
   );
 }
-function PlanScene({ initialMarket }: { initialMarket: PricingMarket }) {
+function Plans({ initialMarket }: { initialMarket: PricingMarket }) {
   const [annual, setAnnual] = useState(false);
   const [market, setMarket] = useState(initialMarket);
   const prices = [null, plannedProPrices(market), plannedPremiumPrices(market)];
   const plans = [
     {
       name: "Free",
-      tag: "A clearer everyday.",
-      description:
-        "Bring your records together and start seeing the bigger picture.",
       features: [
         "Statement & receipt uploads",
         "10 financial accounts",
-        "Essential reports",
-        "Basic Ask Clover",
+        "Essential reports & Ask Clover",
       ],
     },
     {
       name: "Plus",
-      tag: "Room to grow.",
-      description:
-        "Connect your accounts and go deeper into your financial life.",
       features: [
-        "Everything in Free",
         "20 financial accounts",
         "2 linked bank accounts",
         "Advanced reports & Ask Clover",
@@ -368,21 +419,17 @@ function PlanScene({ initialMarket }: { initialMarket: PricingMarket }) {
     },
     {
       name: "Pro",
-      tag: "More possibility.",
-      description:
-        "More connections, higher limits, and more help along the way.",
       features: [
-        "Everything in Plus",
         "40 financial accounts",
         "5 linked bank accounts",
-        "A larger AI allowance",
+        "Higher limits for Ask Clover",
       ],
     },
   ];
   return (
     <div className={s.pricing}>
       <div className={s.priceControls}>
-        <div className={s.billingToggle} aria-label="Billing period">
+        <div role="group" aria-label="Billing period">
           <button
             type="button"
             aria-pressed={!annual}
@@ -398,38 +445,25 @@ function PlanScene({ initialMarket }: { initialMarket: PricingMarket }) {
             Yearly
           </button>
         </div>
-        <label>
-          Prices in{" "}
-          <select
-            value={market}
-            onChange={(e) => setMarket(e.target.value as PricingMarket)}
-          >
-            <option value="ph">PHP</option>
-            <option value="global">USD</option>
-          </select>
-        </label>
+        <select
+          aria-label="Pricing currency"
+          value={market}
+          onChange={(e) => setMarket(e.target.value as PricingMarket)}
+        >
+          <option value="ph">PHP</option>
+          <option value="global">USD</option>
+        </select>
       </div>
       <div className={s.planCards}>
         {plans.map((plan, i) => (
           <article
             key={plan.name}
-            className={`${s.planCard} ${i === 1 ? s.plusPlan : i === 2 ? s.proPlan : ""}`}
+            className={s.planCard}
+            data-tier={plan.name}
+            style={{ "--card": i } as CSSProperties}
           >
-            <div className={s.planSymbol} aria-hidden="true">
-              {Array.from({ length: i + 1 }, (_, n) => (
-                <img
-                  key={n}
-                  src="/clover-mark.svg"
-                  alt=""
-                  width={32}
-                  height={32}
-                />
-              ))}
-            </div>
-            <span className={s.planTag}>{plan.tag}</span>
             <h3>{plan.name}</h3>
-            <p>{plan.description}</p>
-            <div className={s.planPrice} aria-live="polite">
+            <div className={s.price} aria-live="polite">
               <strong>
                 {i === 0 ? "Free" : prices[i]![annual ? "annual" : "monthly"]}
               </strong>
@@ -444,18 +478,14 @@ function PlanScene({ initialMarket }: { initialMarket: PricingMarket }) {
               ))}
             </ul>
             <Action href={i === 0 ? "/sign-up" : "/pricing"}>
-              {i === 0 ? "Start for free" : `Explore ${plan.name}`}
+              {i === 0 ? "Start free" : `Explore ${plan.name}`}
             </Action>
           </article>
         ))}
       </div>
-      <p className={s.priceNote}>
-        Web pricing. Features and usage limits vary by plan.{" "}
-        <Link href="/pricing">
-          Compare everything included
-          <Icon />
-        </Link>
-      </p>
+      <Link className={s.compare} href="/pricing">
+        Compare all features <Icon />
+      </Link>
       <SwitchOfferNotice compact />
     </div>
   );
@@ -464,590 +494,322 @@ function PlanScene({ initialMarket }: { initialMarket: PricingMarket }) {
 export function Showcase({ initialMarket }: { initialMarket: PricingMarket }) {
   const root = useRef<HTMLDivElement>(null);
   const [paused, setPaused] = useState(false);
-  const [reduced, setReduced] = useState(true);
-  const [chapter, setChapter] = useState(0);
-  const [mode, setMode] = useState<(typeof modes)[number]>("Upload");
-  const active = useRef(0);
-  const animated = !paused && !reduced;
+  const [reduced, setReduced] = useState(false);
   useEffect(() => {
-    const query = matchMedia("(prefers-reduced-motion: reduce)");
-    const change = () => setReduced(query.matches);
+    const media = matchMedia("(prefers-reduced-motion: reduce)");
+    const change = () => setReduced(media.matches);
     change();
-    query.addEventListener("change", change);
-    return () => query.removeEventListener("change", change);
+    media.addEventListener("change", change);
+    return () => media.removeEventListener("change", change);
   }, []);
+  const animated = !paused && !reduced;
   useEffect(() => {
     const el = root.current;
     if (!el) return;
-    const visuals = [...el.querySelectorAll<HTMLElement>("[data-visual]")];
-    const sections = [...el.querySelectorAll<HTMLElement>("[data-chapter]")];
+    const scenes = [...el.querySelectorAll<HTMLElement>("[data-scroll-scene]")];
     let frame = 0;
-    const update = () => {
+    const draw = () => {
       frame = 0;
-      const height = window.innerHeight;
-      const max = document.documentElement.scrollHeight - height;
-      const bounds = sections.map((section) => section.getBoundingClientRect());
-      const visualBounds = visuals.map((visual) =>
-        visual.getBoundingClientRect(),
-      );
-      let current = 0;
-      bounds.forEach((box, i) => {
-        if (box.top < height * 0.45) current = i;
-      });
-      if (active.current !== current) {
-        active.current = current;
-        setChapter(current);
-      }
-      sections.forEach((section, i) => {
-        const box = bounds[i];
+      const height = innerHeight;
+      // Read geometry before writing styles. Compact/reduced-motion layouts
+      // have no pinned scroll track, so they show each illustration settled.
+      const layouts = scenes.map((scene) => ({
+        box: scene.getBoundingClientRect(),
+        pinned:
+          scene.firstElementChild?.classList.contains(s.pin) &&
+          getComputedStyle(scene.firstElementChild).position === "sticky",
+      }));
+      scenes.forEach((scene, index) => {
+        const { box, pinned } = layouts[index];
         if (box.bottom < -height || box.top > height * 2) return;
-        const p = clamp(-box.top / Math.max(1, box.height - height));
-        const enter = clamp((height - box.top) / (height * 0.85));
-        section.style.setProperty("--scene", String(animated ? p : 0.5));
-        section.style.setProperty("--enter", String(animated ? enter : 1));
+        const raw = clamp(-box.top / Math.max(1, box.height - height));
+        const p = animated && pinned ? raw : 1;
+        scene.style.setProperty("--p", String(p));
+        scene.style.setProperty("--a", String(ease((p - 0.05) / 0.75)));
+        scene.style.setProperty("--b", String(ease((p - 0.25) / 0.65)));
+        scene.style.setProperty("--c", String(ease((p - 0.5) / 0.35)));
+        scene.style.setProperty(
+          "--enter",
+          String(animated ? ease((height - box.top) / (height * 0.8)) : 1),
+        );
       });
-      visuals.forEach((visual, i) =>
-        visual.style.setProperty(
-          "--visual",
-          String(
-            animated
-              ? clamp(
-                  (height - visualBounds[i].top) /
-                    (height + visualBounds[i].height * 0.3),
-                )
-              : 1,
-          ),
-        ),
-      );
+      const max = document.documentElement.scrollHeight - height;
       el.style.setProperty(
         "--page-travel",
-        String(max > 0 ? clamp(window.scrollY / max) : 0),
+        String(max > 0 ? clamp(scrollY / max) : 0),
       );
     };
     const schedule = () => {
-      if (!frame) frame = requestAnimationFrame(update);
+      if (!frame) frame = requestAnimationFrame(draw);
     };
-    update();
-    window.addEventListener("scroll", schedule, { passive: true });
-    window.addEventListener("resize", schedule);
+    draw();
+    addEventListener("scroll", schedule, { passive: true });
+    addEventListener("resize", schedule);
     const resize = new ResizeObserver(schedule);
     resize.observe(el);
     return () => {
       cancelAnimationFrame(frame);
+      removeEventListener("scroll", schedule);
+      removeEventListener("resize", schedule);
       resize.disconnect();
-      window.removeEventListener("scroll", schedule);
-      window.removeEventListener("resize", schedule);
     };
   }, [animated]);
-
   return (
-    <div ref={root} className={s.site} data-motion={animated ? "on" : "off"}>
+    <div
+      ref={root}
+      className={s.site}
+      data-motion={animated ? "on" : "off"}
+      data-reduced={reduced}
+    >
       <a href="#showcase-main" className={s.skip}>
         Skip to content
       </a>
       <header className={s.nav}>
-        <a
-          href="#together"
-          className={s.logo}
-          aria-label="Clover, back to the beginning"
-        >
-          <img src="/clover-mark.svg" alt="" width={30} height={30} />
-          <img
-            src="/clover-name-teal.svg"
-            alt="Clover"
-            width={108}
-            height={30}
-          />
+        <a href="#together" aria-label="Clover, back to top">
+          <Brand />
         </a>
         <nav aria-label="Main navigation">
-          <a href="#your-way">How it works</a>
-          <a href="#your-picture">Your money</a>
+          <a href="#your-way">Features</a>
           <a href="#plans">Plans</a>
         </nav>
         <div className={s.navActions}>
           <button
-            className={s.motionToggle}
+            className={s.motionButton}
             type="button"
             onClick={() => setPaused((p) => !p)}
             aria-label={paused ? "Enable animation" : "Pause animation"}
             aria-pressed={paused}
-            title={paused ? "Enable animation" : "Pause animation"}
           >
             <Icon kind={paused ? "play" : "pause"} />
           </button>
-          <Link prefetch={false} href="/sign-in" className={s.login}>
+          <Link className={s.login} prefetch={false} href="/sign-in">
             Log in
           </Link>
-          <Action>Start free</Action>
+          <Action />
         </div>
         <div className={s.pageProgress} />
       </header>
-      <aside className={s.journeyRail} aria-label="Page chapters">
-        {chapters.map(([id, label], i) => (
-          <a
-            key={id}
-            href={`#${id}`}
-            aria-label={label}
-            aria-current={chapter === i ? "step" : undefined}
-          >
-            <span>{label}</span>
-            <i />
-          </a>
-        ))}
-        <button
-          type="button"
-          onClick={() => setPaused((p) => !p)}
-          aria-label={paused ? "Enable animation" : "Pause animation"}
-          title={paused ? "Enable animation" : "Pause animation"}
-        >
-          <Icon kind={paused ? "play" : "pause"} />
-        </button>
-      </aside>
       <main id="showcase-main">
-        <section id="together" data-chapter className={s.hero}>
-          <div className={s.heroSticky}>
-            <div className={s.heroInner}>
-              <div className={s.heroCopy}>
-                <p className={s.introLabel}>
-                  <span /> A little clarity changes everything.
-                </p>
-                <h1>
-                  Months of finances.
-                  <br />
-                  <em>
-                    Organized
-                    <br className={s.desktopBreak} /> in minutes.
-                  </em>
-                </h1>
-                <p className={s.lead}>
-                  Connect supported banks, upload statements and receipts, or
-                  add details manually. Bring your money together. Make room for
-                  what matters.
-                </p>
-              </div>
-              <div className={s.heroVisual}>
-                <ProductStory animated={animated} />
-              </div>
-              <div className={s.heroActionCluster}>
-                <div className={s.heroActions}>
-                  <Action>Organize my finances for free</Action>
-                  <a href="#your-way" className={s.explore}>
-                    Explore Clover
-                    <Icon kind="down" />
-                  </a>
-                </div>
-                <div className={s.deviceNote}>
-                  Made for your everyday.<span>Web · iOS · Android</span>
-                </div>
-              </div>
+        <ScrollScene id="together" className={s.hero}>
+          <Heading
+            hero
+            text="Connect supported banks, bring your records, and see your money clearly. All in Clover."
+          >
+            Months of finances.
+            <br />
+            <em>Organized in minutes.</em>
+          </Heading>
+          <Action>Organize my finances for free</Action>
+          <div
+            className={s.heroStage}
+            role="img"
+            aria-label="Illustration of statements and receipts coming together as organized Clover transactions"
+          >
+            <div className={s.heroShadow} />
+            <div className={s.heroPaper}>
+              <Receipt />
             </div>
-            <a href="#your-way" className={s.scrollCue}>
-              <span>There’s more to your money. Scroll to explore.</span>
-              <i>
-                <Icon kind="down" />
-              </i>
-            </a>
-          </div>
-        </section>
-
-        <section id="your-way" data-chapter className={s.intake}>
-          <div className={s.stickyScene}>
-            <div className={s.splitLayout}>
-              <div className={s.copy}>
-                <Eyebrow n={2}>Start your way</Eyebrow>
-                <h2>
-                  Your financial life.
-                  <br />
-                  <em>Already in progress.</em>
-                </h2>
-                <p>
-                  No need to start from scratch. Bring the statements, receipts,
-                  screenshots, and spreadsheets you already have.
-                </p>
-                <p>
-                  Or connect a supported bank and bring your accounts into view.
-                  A quick manual entry works, too.
-                </p>
-                <div
-                  className={s.modeTabs}
-                  aria-label="Ways to add your records"
-                >
-                  {modes.map((m, i) => (
-                    <button
-                      type="button"
-                      key={m}
-                      aria-pressed={mode === m}
-                      onClick={() => setMode(m)}
-                    >
-                      <Icon
-                        kind={i === 0 ? "link" : i === 1 ? "upload" : "edit"}
-                      />
-                      {m}
-                    </button>
-                  ))}
-                </div>
-                <div className={s.modeDescription} aria-live="polite">
-                  {mode === "Connect"
-                    ? "Choose a supported bank, then select the accounts you want to link. Bank availability varies by country."
-                    : mode === "Upload"
-                      ? "Clover finds the transactions. You review the details, make corrections, and keep moving."
-                      : "A coffee, a payday, a cash expense. Add the details of everyday life as they happen."}
-                </div>
-                <Action secondary href="/features/manage-money">
-                  A simpler way to get organized
-                </Action>
-              </div>
-              <div className={s.intakeVisual} data-visual data-mode={mode}>
-                <div className={s.intakeOrbit} />
-                <div className={s.intakePaper}>
-                  <Receipt />
-                </div>
-                <div className={s.sourceChip}>
-                  <BankLogo file="bpi.png" />
-                  <span>Statements</span>
-                </div>
-                <div className={s.sourceChipTwo}>
-                  <Category name="shopping" />
-                  <span>Screenshots</span>
-                </div>
-                <div className={s.intakePanel} key={mode}>
-                  <div className={s.panelHeader}>
-                    <img src="/clover-mark.svg" alt="" width={26} height={26} />
-                    <strong>
-                      {mode === "Connect"
-                        ? "Your bank. Your choice."
-                        : mode === "Upload"
-                          ? "Everything, falling into place."
-                          : "One little moment, recorded."}
-                    </strong>
-                  </div>
-                  {mode === "Connect" ? (
-                    <div className={s.bankGrid}>
-                      {bankNames.map(([name, logo]) => (
-                        <div key={name}>
-                          <BankLogo file={logo} />
-                          <span>{name}</span>
-                        </div>
-                      ))}
-                    </div>
-                  ) : mode === "Upload" ? (
-                    <div className={s.ledger}>
-                      {[
-                        [
-                          "food-dining",
-                          "Lunch with a friend",
-                          "Food & Dining",
-                          "−₱500",
-                        ],
-                        ["salary", "Payday", "Income", "+₱45,000"],
-                        [
-                          "groceries",
-                          "Weekend groceries",
-                          "Groceries",
-                          "−₱1,280",
-                        ],
-                      ].map(([icon, title, category, amount], i) => (
-                        <div
-                          key={title}
-                          className={s.ledgerRow}
-                          style={{ "--row": i } as CSSProperties}
-                        >
-                          <Category name={icon} />
-                          <div>
-                            <strong>{title}</strong>
-                            <span>{category}</span>
-                          </div>
-                          <b>{amount}</b>
-                        </div>
-                      ))}
-                    </div>
-                  ) : (
-                    <div className={s.manualExample}>
-                      <span>What was it for?</span>
-                      <strong>Lunch with a friend</strong>
-                      <div>
-                        <span>Amount</span>
-                        <b>₱500.00</b>
-                      </div>
-                      <div>
-                        <span>Category</span>
-                        <b>
-                          <Category name="food-dining" />
-                          Food & Dining
-                        </b>
-                      </div>
-                    </div>
-                  )}
-                  <div className={s.panelFooter}>
-                    <Icon kind="check" />
-                    You review. Clover learns.
-                  </div>
-                </div>
-                <span className={s.sampleLabel}>An illustrated example</span>
-              </div>
+            <div className={s.heroWindow}>
+              <Ledger />
+            </div>
+            <div className={s.heroBank}>
+              <AccountCard index={0} />
+            </div>
+            <div className={s.heroCategory}>
+              <Category name="groceries" size={76} />
+            </div>
+            <div className={s.heroCategoryTwo}>
+              <Category name="salary" size={66} />
             </div>
           </div>
-        </section>
+          <a
+            className={s.scrollArrow}
+            href="#your-way"
+            aria-label="Explore Clover"
+          >
+            <Icon kind="chevron" />
+          </a>
+        </ScrollScene>
 
-        <section id="your-control" data-chapter className={s.control}>
-          <div className={s.controlInner}>
-            <div className={s.controlArt} data-visual aria-hidden="true">
-              <div className={s.vaultRing} />
-              <div className={s.vaultRingTwo} />
-              <div className={s.vaultGlass}>
-                <Icon kind="lock" />
-                <span>Yours.</span>
+        <ScrollScene id="your-way" className={s.intake}>
+          <Heading text="Connect supported banks. Upload statements, receipts, or spreadsheets. Add details manually. Start your way.">
+            A little less admin.
+            <br />
+            <em>A lot more clarity.</em>
+          </Heading>
+          <div
+            className={s.intakeStage}
+            role="img"
+            aria-label="Example receipts and bank statements assembling into a categorized transaction list"
+          >
+            <div className={s.intakeGlow} />
+            <div className={s.fileOne}>
+              <Receipt statement />
+            </div>
+            <div className={s.fileTwo}>
+              <Receipt />
+            </div>
+            <div className={s.fileThree}>
+              <Bank file="maya.png" size={40} />
+              <strong>Maya</strong>
+              <span>Wallet activity</span>
+              <b>₱5,000.00</b>
+            </div>
+            <div className={s.intakeLedger}>
+              <Ledger />
+            </div>
+            <div className={s.intakeCheck}>
+              <Icon kind="check" />
+            </div>
+          </div>
+        </ScrollScene>
+
+        <ScrollScene id="your-control" className={s.control}>
+          <div className={s.splitLayout}>
+            <Heading text="Your records are private, reviewable, and traceable. Edit, export, or delete your data. You stay in control.">
+              Your money.
+              <br />
+              <em>Your say.</em>
+            </Heading>
+            <div className={s.controlStage} aria-hidden="true">
+              <div className={s.shield}>
+                <div>
+                  <Icon kind="lock" />
+                </div>
               </div>
-              <div className={s.controlToken}>
+              <div className={s.controlTile}>
+                <Icon kind="edit" />
+              </div>
+              <div className={s.controlTileTwo}>
+                <Icon kind="export" />
+              </div>
+              <div className={s.controlTileThree}>
                 <Icon kind="check" />
-                You decide.
               </div>
-              <CloverMascot pose="welcome" size={120} />
-            </div>
-            <div className={s.copy}>
-              <Eyebrow n={3}>Stay in control</Eyebrow>
-              <h2>
-                Your money is personal.
-                <br />
-                <em>Let’s keep it that way.</em>
-              </h2>
-              <p>
-                Your records are private, reviewable, and traceable. Clover
-                helps you organize them. You stay in control of the details.
-              </p>
-              <div className={s.controlList}>
-                {[
-                  "Review and edit your records",
-                  "Export your data when you need it",
-                  "Delete your data through your account",
-                ].map((text) => (
-                  <div key={text}>
-                    <Icon kind="check" />
-                    <span>{text}</span>
-                  </div>
-                ))}
-              </div>
-              <Action secondary href="/privacy-policy">
-                How Clover protects your data
-              </Action>
             </div>
           </div>
-        </section>
+        </ScrollScene>
 
-        <section id="your-picture" data-chapter className={s.picture}>
-          <div className={s.stickyScene}>
-            <div className={s.pictureHeading}>
-              <Eyebrow n={4}>See the bigger picture</Eyebrow>
-              <h2>
-                Less piecing it together.
-                <br />
-                <em>More seeing what’s possible.</em>
-              </h2>
-              <p>
-                Accounts, spending, recurring bills, and investments.
-                <br className={s.desktopBreak} /> One connected view of your
-                financial life.
-              </p>
-            </div>
-            <div className={s.pictureStage} data-visual>
-              <div className={s.accountFloat}>
-                <span className={s.smallLabel}>Your money, together</span>
-                {sources.map((account) => (
-                  <div key={account.label}>
-                    <BankLogo file={account.logo} />
-                    <div>
-                      <strong>{account.label}</strong>
-                      <span>{account.kind}</span>
-                    </div>
-                    <b>{account.amount}</b>
-                  </div>
+        <ScrollScene id="your-picture" className={s.accounts}>
+          <div className={s.splitLayout}>
+            <Heading text="Bank accounts, wallets, and investments. One connected picture of your financial life.">
+              Your money.
+              <br />
+              <em>All together.</em>
+            </Heading>
+            <div
+              className={s.accountsStage}
+              role="img"
+              aria-label="Example Clover accounts: BPI ₱46,000, UnionBank ₱21,250, Maya ₱5,000, GStocks ₱12,000. Total ₱84,250."
+            >
+              <div className={s.accountHalo} />
+              <div className={s.accountTotal}>
+                <span>Net worth</span>
+                <strong>
+                  ₱84,250<span>.00</span>
+                </strong>
+              </div>
+              <div className={s.accountDeck}>
+                {accounts.map((account, i) => (
+                  <AccountCard key={account.name} index={i} />
                 ))}
-                <div className={s.accountFloatTotal}>
-                  <span>Tracked balance</span>
-                  <strong>₱84,250</strong>
-                </div>
-              </div>
-              <div className={s.overviewPhone}>
-                <Phone screen="accounts" caption="Your accounts" />
-              </div>
-              <div className={s.reportFloat}>
-                <div className={s.reportTop}>
-                  <span className={s.smallLabel}>Where it went</span>
-                  <span>October</span>
-                </div>
-                <Donut />
-                <div className={s.reportLegend}>
-                  <span>
-                    <i style={{ background: "#03a8c0" }} />
-                    Food
-                  </span>
-                  <span>
-                    <i style={{ background: "#6ee7b7" }} />
-                    Home
-                  </span>
-                  <span>
-                    <i style={{ background: "#fdba74" }} />
-                    Travel
-                  </span>
-                  <span>
-                    <i style={{ background: "#bba6e4" }} />
-                    Other
-                  </span>
-                </div>
               </div>
             </div>
-            <p className={s.pictureFoot}>
-              See what changed. Understand your patterns. Build better habits.
-              <span>
-                Product screen from the live Clover site. Surrounding visuals
-                use sample data.
-              </span>
-            </p>
           </div>
-        </section>
+        </ScrollScene>
 
-        <section id="ask-clover" data-chapter className={s.ask}>
-          <div className={s.askHeading}>
-            <Eyebrow n={5}>A little help along the way</Eyebrow>
-            <h2>
+        <ScrollScene id="your-spending" className={s.reports}>
+          <Heading text="See where your money goes, spot patterns, and understand what changed.">
+            Less guessing.
+            <br />
+            <em>More understanding.</em>
+          </Heading>
+          <div className={s.reportsStage}>
+            <SpendingRing />
+            <div className={s.categoryList}>
+              {spending.map((item, i) => (
+                <div key={item.name} style={{ "--row": i } as CSSProperties}>
+                  <Category name={item.icon} />
+                  <div>
+                    <strong>{item.name}</strong>
+                    <span>{item.percent}</span>
+                  </div>
+                  <b>{item.amount}</b>
+                </div>
+              ))}
+            </div>
+          </div>
+        </ScrollScene>
+
+        <ScrollScene id="ask-clover" className={s.ask}>
+          <div className={s.splitLayout}>
+            <Heading text="Ask what changed, plan a goal, or add a transaction. Get a little help with your next step.">
               Big questions.
               <br />
               <em>Meet your little helper.</em>
-            </h2>
-            <p>
-              Ask what changed this month. Plan a goal. Add a transaction.
-              <br className={s.desktopBreak} /> Ask Clover helps turn your
-              records into a clearer next step.
-            </p>
-          </div>
-          <div className={s.askStage}>
-            <div className={s.askPhone}>
-              <Phone screen="ask" caption="Ask Clover" />
-            </div>
-            <div className={s.mascotStage}>
-              <div className={s.mascotGlow} />
-              <CloverMascot pose="chat" size={300} />
-              <span>
-                A friendly perspective
-                <br />
-                on your everyday money.
-              </span>
-            </div>
-            <ChatDemo />
-          </div>
-        </section>
-
-        <section id="shared" data-chapter className={s.shared}>
-          <div className={s.sharedInner}>
-            <div className={s.copy}>
-              <Eyebrow n={6}>Share the load</Eyebrow>
-              <h2>
-                Life is shared.
-                <br />
-                <em>Money can be, too.</em>
-              </h2>
-              <p>
-                Dinner with friends. A home with your partner. The plans you’re
-                making together.
-              </p>
-              <div className={s.sharedFeatures}>
-                <div>
-                  <span>01</span>
-                  <div>
-                    <h3>Split the bill. Keep the good feeling.</h3>
-                    <p>See who paid and who still owes, all in one place.</p>
-                  </div>
-                </div>
-                <div>
-                  <span>02</span>
-                  <div>
-                    <h3>A little more in sync.</h3>
-                    <p>
-                      Create a Circle for shared expenses, budgets, and goals.
-                    </p>
-                  </div>
-                </div>
+            </Heading>
+            <div className={s.askStage}>
+              <div className={s.mascotFigure}>
+                <Mascot pose="chat" size={260} />
               </div>
-              <Action secondary href="/features/manage-money-together">
-                Make shared money simpler
-              </Action>
+              <Chat />
             </div>
-            <div className={s.sharedVisual} data-visual>
-              <div className={s.sharedOrbit} />
+          </div>
+        </ScrollScene>
+
+        <ScrollScene id="shared" className={s.shared}>
+          <div className={s.splitLayout}>
+            <Heading text="Split bills with friends. Bring household expenses, budgets, and goals together in a Circle.">
+              Life is shared.
+              <br />
+              <em>Money can be, too.</em>
+            </Heading>
+            <div className={s.sharedStage}>
               <div className={s.sharedPhone}>
-                <Phone screen="split" caption="Split Bills" />
+                <Phone screen="split" />
               </div>
-              <div className={s.sharedBadge}>
-                <div className={s.avatars}>
-                  <span>J</span>
-                  <span>M</span>
-                  <span>A</span>
-                </div>
-                <strong>Dinner, sorted.</strong>
-                <span>More time for the good part.</span>
+              <div className={s.personOne}>
+                <span>J</span>
+                <strong>₱1,250</strong>
               </div>
-              <div className={s.circleBadge}>
-                <CloverMascot pose="circles" size={108} />
-                <div>
-                  <strong>In your Circle.</strong>
-                  <span>Your household. Your goals.</span>
-                </div>
+              <div className={s.personTwo}>
+                <span>M</span>
+                <strong>₱1,250</strong>
+              </div>
+              <div className={s.personThree}>
+                <span>A</span>
+                <strong>₱1,250</strong>
+              </div>
+              <div className={s.sharedMascot}>
+                <Mascot pose="circles" size={130} />
               </div>
             </div>
           </div>
-        </section>
+        </ScrollScene>
 
-        <section id="plans" data-chapter className={s.plans}>
-          <div className={s.centerHeading}>
-            <Eyebrow n={7}>Grow at your own pace</Eyebrow>
-            <h2>
-              Start with a little clarity.
-              <br />
-              <em>Make room for more.</em>
-            </h2>
-            <p>
-              Start free. Choose Plus or Pro as your financial life gets more
-              complex.
-            </p>
-          </div>
-          <PlanScene initialMarket={initialMarket} />
+        <section id="plans" className={s.plans} data-scroll-scene>
+          <Heading text="Start free. Choose Plus or Pro when you need more connections, insights, and room to grow.">
+            A little clarity.
+            <br />
+            <em>At every stage.</em>
+          </Heading>
+          <Plans initialMarket={initialMarket} />
         </section>
-
-        <section id="begin" data-chapter className={s.finale}>
-          <div className={s.finaleRings} aria-hidden="true">
-            <i />
-            <i />
-            <i />
+        <section id="begin" className={s.finale} data-scroll-scene>
+          <div className={s.finalMascot}>
+            <Mascot pose="welcome" size={190} />
           </div>
-          <div className={s.finaleContent}>
-            <CloverMascot pose="welcome" size={170} />
-            <Eyebrow n={8}>Your next chapter</Eyebrow>
-            <h2>
-              Money looks
-              <br />
-              <em>better from here.</em>
-            </h2>
-            <p>
-              Feel clearer about your money.
-              <br />
-              More confident about what comes next.
-            </p>
-            <Action>Organize my finances for free</Action>
-            <span className={s.finaleNote}>
-              A little clarity. A lot more possibility.
-            </span>
-          </div>
+          <Heading text="Feel clearer about your money. More confident about what comes next.">
+            Money looks
+            <br />
+            <em>better from here.</em>
+          </Heading>
+          <Action>Organize my finances for free</Action>
         </section>
       </main>
       <footer className={s.footer}>
-        <a href="#together" className={s.logo}>
-          <img src="/clover-mark.svg" alt="" width={28} height={28} />
-          <img
-            src="/clover-name-teal.svg"
-            alt="Clover"
-            width={108}
-            height={30}
-          />
+        <a href="#together" aria-label="Clover, back to top">
+          <Brand />
         </a>
         <div>
           <Link href="/help">Help</Link>
@@ -1055,12 +817,9 @@ export function Showcase({ initialMarket }: { initialMarket: PricingMarket }) {
           <Link href="/privacy-policy">Privacy</Link>
           <Link href="/terms-of-service">Terms</Link>
         </div>
-        <button type="button" onClick={() => setPaused((p) => !p)}>
-          <Icon kind={paused ? "play" : "pause"} />
-          {paused ? "Enable motion" : "Pause motion"}
-        </button>
         <small>
-          © {new Date().getFullYear()} Clover. Money looks better from here.
+          Product illustrations use sample data. © {new Date().getFullYear()}{" "}
+          Clover.
         </small>
       </footer>
     </div>
