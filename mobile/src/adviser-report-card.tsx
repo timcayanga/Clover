@@ -1,3 +1,4 @@
+import { AdviserSpendingCard } from "./adviser-spending-card";
 import { Text } from "./app-text";
 import { View, Pressable } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
@@ -6,6 +7,7 @@ import type { AdviserChart } from "../../shared/adviser-chart";
 import { money, useTheme } from "./ui";
 export function AdviserReportCard({chart}:{chart:AdviserChart}) {
   const {colors}=useTheme();
+  if(chart.spendingPlan) return <AdviserSpendingCard chart={chart}/>;
   const max=Math.max(...chart.bars.map(bar=>bar.amount),1);
   return <View style={{gap:12,padding:12,borderWidth:1,borderColor:colors.line,borderRadius:16}}>
     <Text style={{fontFamily:"Poppins-SemiBold",fontSize:16,color:colors.ink}}>{chart.title}</Text>
