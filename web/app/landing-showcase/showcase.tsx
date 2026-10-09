@@ -17,71 +17,6 @@ import {
 } from "@/lib/public-plan-comparison";
 import s from "./showcase.module.css";
 
-const rows = [
-  ["food-dining", "Lunch at Mendokoro", "BPI · Food & Dining", "−₱500.00"],
-  ["salary", "Payday", "BPI · Income", "+₱45,000.00"],
-  ["groceries", "Weekend groceries", "Maya · Groceries", "−₱1,280.00"],
-];
-const accounts = [
-  {
-    name: "BPI Savings",
-    type: "Bank",
-    logo: "bpi.png",
-    amount: "₱46,000",
-    color: "#a9182c",
-  },
-  {
-    name: "UnionBank",
-    type: "Bank",
-    logo: "unionbank.jpg",
-    amount: "₱21,250",
-    color: "#bf5103",
-  },
-  {
-    name: "Maya",
-    type: "Wallet",
-    logo: "maya.png",
-    amount: "₱5,000",
-    color: "#102920",
-  },
-  {
-    name: "GStocks",
-    type: "Investment",
-    logo: "gcash.png",
-    amount: "₱12,000",
-    color: "#125995",
-  },
-];
-const spending = [
-  {
-    name: "Food & Dining",
-    icon: "food-dining",
-    amount: "₱9,424",
-    percent: "38%",
-    color: "#03a8c0",
-  },
-  {
-    name: "Housing",
-    icon: "housing",
-    amount: "₱6,696",
-    percent: "27%",
-    color: "#6bd2ae",
-  },
-  {
-    name: "Travel",
-    icon: "travel-lifestyle",
-    amount: "₱5,208",
-    percent: "21%",
-    color: "#f2b276",
-  },
-  {
-    name: "Groceries",
-    icon: "groceries",
-    amount: "₱3,472",
-    percent: "14%",
-    color: "#a68bcc",
-  },
-];
 function Icon({
   kind = "arrow",
 }: {
@@ -145,29 +80,6 @@ function Action({
     </Link>
   );
 }
-function Category({ name, size = 42 }: { name: string; size?: number }) {
-  return (
-    <img
-      src={`/figma-icons/categories/${name}.svg`}
-      width={size}
-      height={size}
-      alt=""
-      loading="lazy"
-    />
-  );
-}
-function Bank({ file, size = 40 }: { file: string; size?: number }) {
-  return (
-    <img
-      className={s.bank}
-      src={`/assets/landing-showcase/${file.split(".")[0]}.webp`}
-      width={size}
-      height={size}
-      alt=""
-      loading="lazy"
-    />
-  );
-}
 function Mascot({ pose, size = 160 }: { pose: string; size?: number }) {
   return (
     <img
@@ -212,253 +124,59 @@ function ScrollScene({
   );
 }
 
-function CloverToken() {
+// Reuse the people and locations from Clover's production story. These are
+// marketing images, not screenshots or customer records.
+function StoryPhoto({
+  desktop,
+  mobile,
+  alt,
+  eager = false,
+}: {
+  desktop: string;
+  mobile: string;
+  alt: string;
+  eager?: boolean;
+}) {
   return (
-    <span className={s.cloverToken}>
-      <img src="/clover-mark.svg" width="64" height="64" alt="" />
-    </span>
+    <picture className={s.photo}>
+      <source
+        media="(max-width: 900px), (max-width: 1100px) and (min-height: 1000px)"
+        srcSet={`/assets/${mobile}.webp`}
+      />
+      <img
+        src={`/assets/${desktop}.webp`}
+        alt={alt}
+        width={1672}
+        height={941}
+        loading={eager ? "eager" : "lazy"}
+        fetchPriority={eager ? "high" : "auto"}
+        decoding="async"
+      />
+    </picture>
   );
 }
 
-function Receipt({ statement = false }: { statement?: boolean }) {
+function PaperTrail() {
   return (
-    <div className={`${s.paper} ${statement ? s.statement : ""}`}>
-      {statement ? (
-        <>
-          <Bank file="bpi.png" size={36} />
-          <strong>Statement of account</strong>
-          <small>October 2026</small>
-          <div className={s.paperRule} />
-          <div className={s.paperItem}>
-            <span>Payday</span>
-            <b>₱45,000</b>
-          </div>
-          <div className={s.paperItem}>
-            <span>Housing</span>
-            <b>₱6,696</b>
-          </div>
-          <div className={s.paperItem}>
-            <span>Lunch</span>
-            <b>₱500</b>
-          </div>
-          <div className={s.paperLines}>
-            <i />
-            <i />
-            <i />
-          </div>
-        </>
-      ) : (
-        <>
-          <strong>MENDOKORO</strong>
-          <small>October 5, 2026</small>
-          <div className={s.paperRule} />
-          <div className={s.paperItem}>
-            <span>Lunch</span>
-            <b>₱500.00</b>
-          </div>
-          <div className={s.paperTotal}>
-            <span>Total</span>
-            <b>₱500.00</b>
-          </div>
-          <div className={s.barcode} />
-        </>
-      )}
-    </div>
-  );
-}
-function Ledger() {
-  return (
-    <div className={s.ledger}>
-      <div className={s.appToolbar}>
-        <Brand />
-        <span className={s.avatar}>J</span>
-      </div>
-      <div className={s.ledgerBody}>
-        <div className={s.appTitle}>
-          <strong>Transactions</strong>
-          <span>PHP</span>
-        </div>
-        {rows.map(([icon, name, category, amount], i) => (
-          <div
-            className={s.transaction}
-            key={name}
-            style={{ "--row": i } as CSSProperties}
-          >
-            <Category name={icon} />
-            <div>
-              <strong>{name}</strong>
-              <span>{category}</span>
-            </div>
-            <b className={i === 1 ? s.income : ""}>{amount}</b>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
-function AccountCard({ index }: { index: number }) {
-  const account = accounts[index];
-  return (
-    <div
-      className={s.accountCard}
-      style={
-        { "--card": index, "--bank-color": account.color } as CSSProperties
-      }
-    >
-      <div>
-        <Bank file={account.logo} size={44} />
-        <span>{account.type}</span>
-      </div>
-      <strong>{account.name}</strong>
-      <b>{account.amount}</b>
-    </div>
-  );
-}
-function SpendingRing() {
-  return (
-    <div
-      className={s.ringStage}
-      role="img"
-      aria-label="Example monthly spending: ₱24,800. Food and Dining 38 percent, Housing 27 percent, Travel 21 percent, Groceries 14 percent."
-    >
-      <div className={s.ringObject}>
-        {Array.from({ length: 12 }, (_, i) => (
-          <div
-            key={i}
-            className={s.ringLayer}
-            style={{ "--depth": i } as CSSProperties}
-            aria-hidden="true"
-          />
-        ))}
-        <div className={s.ringTop} aria-hidden="true" />
-        <div className={s.ringCenter}>
-          <span>Total spending</span>
-          <strong>₱24,800</strong>
-          <small>This month</small>
-        </div>
-      </div>
-    </div>
-  );
-}
-function LunchMoment() {
-  return (
-    <div className={s.lunchMoment}>
-      <Category name="food-dining" size={36} />
-      <div>
-        <strong>Lunch at Mendokoro</strong>
-        <span>BPI · October 5</span>
-      </div>
-      <b>₱500</b>
-    </div>
-  );
-}
-
-function ReviewStory() {
-  return (
-    <div className={s.reviewStage} data-depth-stage>
-      <div className={s.reviewReceipt}>
-        <Receipt />
-      </div>
-      <svg className={s.sourceTrail} viewBox="0 0 550 390" aria-hidden="true">
-        <path d="M115 180 C115 360 465 355 410 235" />
-      </svg>
-      <div className={s.reviewCard}>
-        <div className={s.reviewTop}>
-          <Icon kind="lock" />
-          <span>Only you decide</span>
-        </div>
-        <LunchMoment />
-        <div className={s.reviewCategory}>
-          <span>Category</span>
-          <strong>Food &amp; Dining</strong>
-          <Icon kind="edit" />
-        </div>
-        <div className={s.confirmed}>
-          <Icon kind="check" /> Confirmed by you
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function GoalCard({ shared = false }: { shared?: boolean }) {
-  return (
-    <div className={s.goalCard} data-shared={shared}>
-      <div className={s.goalIcon}>
-        <Category name="travel-lifestyle" size={42} />
-      </div>
-      <div>
-        <strong>Weekend away</strong>
-        <span>{shared ? "Our shared goal" : "Goal plan"}</span>
-      </div>
-      <b>₱8,000</b>
-      <div
-        className={s.goalSteps}
-        role="img"
-        aria-label="Four monthly steps of 2,000 pesos to a goal of 8,000 pesos"
-      >
-        {[1, 2, 3, 4].map((step) => (
-          <span key={step} style={{ "--step": step } as CSSProperties}>
-            <i />₱{step * 2},000
-          </span>
-        ))}
-      </div>
-      <small>₱2,000 a month · 4 months</small>
-    </div>
-  );
-}
-
-function Chat() {
-  return (
-    <div className={s.chatCard}>
-      <div className={s.chatHeader}>
-        <Mascot pose="compact" size={38} />
-        <strong>Ask Clover</strong>
-      </div>
-      <div className={s.question}>Could we make room for a weekend away?</div>
-      <div className={s.reply}>
-        <Mascot pose="compact" size={28} />
-        <div>
-          <strong>Clover</strong>
-          <p>
-            Food &amp; Dining came to ₱9,424 this month. Want to explore a little
-            less dining out and plan ₱2,000 a month for your trip?
-          </p>
-        </div>
-      </div>
-      <GoalCard />
-    </div>
-  );
-}
-
-function SharedDream() {
-  return (
-    <div className={s.dreamStage} data-depth-stage>
-      <div className={s.dreamWorld} aria-hidden="true">
-        <div className={s.dreamSun} />
-        <div className={s.dreamHillBack} />
-        <div className={s.dreamSea} />
-        <div className={s.dreamHillFront} />
-        <div className={s.dreamSail}>
+    <div className={s.paperTrail} aria-hidden="true">
+      {["Statement", "Receipt", "Notes"].map((label, index) => (
+        <div
+          className={s.paper}
+          key={label}
+          style={{ "--sheet": index } as CSSProperties}
+        >
+          <img src="/clover-mark.svg" width="24" height="24" alt="" />
+          <span>{label}</span>
+          <i />
+          <i />
+          <i />
           <i />
         </div>
-      </div>
-      <div className={s.sharedGoal}>
-        <GoalCard shared />
-      </div>
-      <div className={s.sharedLunch}>
-        <LunchMoment />
-        <div className={s.splitPeople}>
-          <span><i>J</i>Jo <b>₱250</b></span>
-          <span><i>M</i>Mika <b>₱250</b></span>
-        </div>
-      </div>
-      <div className={s.dreamMascot}>
-        <Mascot pose="circles" size={130} />
-      </div>
+      ))}
     </div>
   );
 }
+
 function Plans({ initialMarket }: { initialMarket: PricingMarket }) {
   const [annual, setAnnual] = useState(false);
   const [market, setMarket] = useState(initialMarket);
@@ -594,7 +312,7 @@ export function Showcase({ initialMarket }: { initialMarket: PricingMarket }) {
           <Brand />
         </a>
         <nav aria-label="Main navigation">
-          <a href="#your-way">Discover Clover</a>
+          <a href="#breathing-room">Discover Clover</a>
           <a href="#plans">Plans</a>
         </nav>
         <div className={s.navActions}>
@@ -676,197 +394,138 @@ export function Showcase({ initialMarket }: { initialMarket: PricingMarket }) {
       </header>
       <main id="showcase-main">
         <ScrollScene id="together" className={s.hero}>
-          <Heading
-            hero
-            text="Less time piecing your finances together. More room for what matters to you."
-          >
-            Months of finances.
-            <br />
-            <em>Organized in minutes.</em>
-          </Heading>
-          <Action>Organize my finances for free</Action>
-          <div
-            className={s.heroStage}
-            data-depth-stage
-            role="img"
-            aria-label="Illustration of statements and receipts coming together as organized Clover transactions"
-          >
-            <div className={s.heroShadow} />
-            <div className={s.heroOrbit} aria-hidden="true">
-              <i />
-              <i />
-            </div>
-            <div className={s.heroToken} aria-hidden="true">
-              <CloverToken />
-            </div>
-            <div className={s.heroPaper}>
-              <Receipt />
-            </div>
-            <div className={s.heroWindow}>
-              <Ledger />
-            </div>
-            <div className={s.heroBank}>
-              <AccountCard index={0} />
-            </div>
-            <div className={s.heroCategory}>
-              <Category name="groceries" size={76} />
-            </div>
-            <div className={s.heroCategoryTwo}>
-              <Category name="salary" size={66} />
-            </div>
+          <div className={s.heroArt}>
+            <StoryPhoto
+              eager
+              desktop="landing-story-v3/01-organize"
+              mobile="landing-story-v3/01-organize-mobile"
+              alt="Friends making travel plans at home while one person brings her receipts and statements together."
+            />
           </div>
+          <div className={s.heroVeil} aria-hidden="true" />
+          <div className={s.heroCopy}>
+            <Heading
+              hero
+              text="Less time piecing your finances together. More room for what matters to you."
+            >
+              Months of finances.
+              <br />
+              <em>Organized in minutes.</em>
+            </Heading>
+            <Action>Start free</Action>
+          </div>
+          <PaperTrail />
           <a
             className={s.scrollArrow}
-            href="#your-way"
+            href="#breathing-room"
             aria-label="Explore Clover"
           >
             <Icon kind="chevron" />
           </a>
         </ScrollScene>
 
-        <ScrollScene id="your-way" className={s.intake}>
-          <Heading text="A bank connection, a receipt, a few words. Start with what you have. Clover helps bring it together.">
-            Start with<br /><em>what suits you.</em>
-          </Heading>
-          <div
-            className={s.intakeStage}
-            data-depth-stage
-            role="img"
-            aria-label="Example receipts and bank statements assembling into a categorized transaction list"
-          >
-            <div className={s.intakeGlow} />
-            <div className={s.scanBeam} aria-hidden="true" />
-            <div className={s.fileOne}>
-              <Receipt statement />
-            </div>
-            <div className={s.fileTwo}>
-              <Receipt />
-            </div>
-            <div className={s.fileThree}>
-              <Bank file="maya.png" size={40} />
-              <strong>Groceries</strong>
-              <span>Added by you · Maya</span>
-              <b>₱1,280.00</b>
-            </div>
-            <div className={s.intakeLedger}>
-              <Ledger />
-            </div>
-            <div className={s.intakeCheck}>
-              <Icon kind="check" />
-            </div>
-          </div>
-        </ScrollScene>
-
-        <ScrollScene id="your-control" className={s.control}>
-          <div className={s.splitLayout}>
-            <Heading text="Your records stay private. Check the details, make changes, and keep the final say.">
-              A little help.<br /><em>Still your say.</em>
+        <ScrollScene id="breathing-room" className={s.evening}>
+          <div className={s.storyGrid}>
+            <Heading text="Connect a bank, upload your records, or add a few words. Clover helps with the sorting. You keep the final say.">
+              Your evening.
+              <br />
+              <em>Back to you.</em>
             </Heading>
-            <ReviewStory />
+            <div className={s.memoryStage}>
+              <div className={s.memoryBack} aria-hidden="true" />
+              <div className={s.memory}>
+                <StoryPhoto
+                  desktop="landing-story-v3/07-records-away"
+                  mobile="landing-story-v3/07-records-away-mobile"
+                  alt="The paperwork put away and the laptop closed at the end of the day."
+                />
+              </div>
+              <PaperTrail />
+              <div className={s.quietCheck} aria-hidden="true">
+                <img src="/clover-mark.svg" width="34" height="34" alt="" />
+                <Icon kind="check" />
+              </div>
+            </div>
           </div>
         </ScrollScene>
 
-        <ScrollScene id="your-picture" className={s.accounts}>
-          <div className={s.splitLayout}>
-            <Heading text="The everyday spending, the savings, the future plans. See how it all fits into your life.">
-              One less thing<br /><em>to piece together.</em>
+        <ScrollScene id="a-little-clarity" className={s.clarity}>
+          <div className={s.storyGrid}>
+            <div className={s.memoryStage}>
+              <div className={s.clarityOrbit} aria-hidden="true" />
+              <div className={s.memory}>
+                <StoryPhoto
+                  desktop="marketing-photos-v4/understand-desktop"
+                  mobile="marketing-photos-v4/understand-mobile"
+                  alt="A couple sitting together at home, looking through their finances with a laptop and coffee."
+                />
+              </div>
+              <div className={s.thought}>
+                <Mascot pose="compact" size={52} />
+                <span>“Could we make room for a trip?”</span>
+              </div>
+            </div>
+            <Heading text="See where your money goes, understand the changes, and talk through your next step with Clover.">
+              Less wondering.
+              <br />
+              <em>More knowing.</em>
             </Heading>
-            <div
-              className={s.accountsStage}
-              data-depth-stage
-              role="img"
-              aria-label="Example Clover accounts: BPI ₱46,000, UnionBank ₱21,250, Maya ₱5,000, GStocks ₱12,000. Total ₱84,250."
-            >
-              <div className={s.accountHalo} />
-              <div className={s.accountOrbit} aria-hidden="true">
-                <i />
-                <i />
-                <i />
-              </div>
-              <div className={s.accountTotal}>
-                <span>Net worth</span>
-                <strong>
-                  ₱84,250<span>.00</span>
-                </strong>
-              </div>
-              <div className={s.accountDeck}>
-                {accounts.map((account, i) => (
-                  <AccountCard key={account.name} index={i} />
-                ))}
-              </div>
-            </div>
           </div>
         </ScrollScene>
 
-        <ScrollScene id="your-spending" className={s.reports}>
-          <Heading text="A lunch here. Groceries there. The little things become a picture you can understand, and habits you can shape.">
-            It starts to<br /><em>make sense.</em>
-          </Heading>
-          <div className={s.reportsStage} data-depth-stage>
-            <div className={s.spendingJourney}>
-              <SpendingRing />
-              <div className={s.receiptToCategory}>
-                <LunchMoment />
-                <span>Part of your Food &amp; Dining</span>
-              </div>
-            </div>
-            <div className={s.reportSpark} aria-hidden="true">
-              <CloverToken />
-            </div>
-            <div className={s.categoryList}>
-              {spending.map((item, i) => (
-                <div key={item.name} style={{ "--row": i } as CSSProperties}>
-                  <Category name={item.icon} />
-                  <div>
-                    <strong>{item.name}</strong>
-                    <span>{item.percent}</span>
-                  </div>
-                  <b>{item.amount}</b>
-                </div>
-              ))}
-            </div>
+        <ScrollScene id="looking-forward" className={s.possibility}>
+          <div className={s.possibilityArt}>
+            <StoryPhoto
+              desktop="marketing-photos-v4/together-desktop"
+              mobile="marketing-photos-v4/together-mobile"
+              alt="The same friends at the airport, ready to head out on their trip together."
+            />
           </div>
-        </ScrollScene>
-
-        <ScrollScene id="ask-clover" className={s.ask}>
-          <div className={s.splitLayout}>
-            <Heading text="Turn “where did it go?” into “what could we do next?” Talk it through with Clover, one small step at a time.">
-              Make room for<br /><em>a little possibility.</em>
+          <div className={s.possibilityVeil} aria-hidden="true" />
+          <div className={s.possibilityCopy}>
+            <Heading text="A weekend away. A place of your own. Set a goal, make a plan, and share the money side with the people in it.">
+              Something to
+              <br />
+              <em>look forward to.</em>
             </Heading>
-            <div className={s.askStage} data-depth-stage>
-              <div className={s.mascotFigure}>
-                <Mascot pose="chat" size={260} />
-              </div>
-              <Chat />
-            </div>
+          </div>
+          <div className={s.postcard} aria-hidden="true">
+            <StoryPhoto
+              desktop="landing-story-v2/06-life"
+              mobile="landing-story-v3/06-life-mobile-clear"
+              alt=""
+            />
           </div>
         </ScrollScene>
 
-        <ScrollScene id="shared" className={s.shared}>
-          <div className={s.splitLayout}>
-            <Heading text="From splitting today’s lunch to planning your next adventure. Share the expenses, the goals, and the things you’re looking forward to.">
-              A little easier.<br /><em>Together.</em>
+        <ScrollScene id="more-living" className={s.living}>
+          <div className={s.livingCopy}>
+            <Heading text="Feel clearer about your money. More confident about what comes next.">
+              A little clarity.
+              <br />
+              <em>A little more living.</em>
             </Heading>
-            <SharedDream />
+            <Action>Find my clarity</Action>
+          </div>
+          <div className={s.lifeWindow}>
+            <StoryPhoto
+              desktop="landing-story-v2/06-life"
+              mobile="landing-story-v3/06-life-mobile-clear"
+              alt="The friends enjoying their trip, walking together beneath the trees."
+            />
+          </div>
+          <div className={s.lifeMascot} aria-hidden="true">
+            <Mascot pose="welcome" size={130} />
           </div>
         </ScrollScene>
 
         <section id="plans" className={s.plans} data-scroll-scene>
-          <Heading text="Start free. Choose Plus or Pro when you need more connections, insights, and room to grow.">
-            A little clarity.
+          <Heading text="Start free. Choose Plus or Pro when your finances need a little more room.">
+            At your pace.
             <br />
             <em>At every stage.</em>
           </Heading>
           <Plans initialMarket={initialMarket} />
-        </section>
-        <section id="begin" className={s.finale} data-scroll-scene>
-          <div className={s.finalMascot}>
-            <Mascot pose="welcome" size={190} />
-          </div>
-          <Heading text="Feel clearer about your money. More confident about what comes next.">
-            A little clarity.<br /><em>A little more living.</em>
-          </Heading>
-          <Action>Organize my finances for free</Action>
         </section>
       </main>
       <footer className={s.footer}>
@@ -880,7 +539,7 @@ export function Showcase({ initialMarket }: { initialMarket: PricingMarket }) {
           <Link href="/terms-of-service">Terms</Link>
         </div>
         <small>
-          Product illustrations use sample data. © {new Date().getFullYear()}{" "}
+          Lifestyle imagery is illustrative. © {new Date().getFullYear()}{" "}
           Clover.
         </small>
       </footer>

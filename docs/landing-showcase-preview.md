@@ -1,43 +1,35 @@
-# Clover story showcase preview
+# Clover lifestyle story preview
 
-Preview: `/landing-showcase`. This experiment is separate from the production homepage and mobile applications.
+Preview: `/landing-showcase`. This experiment remains separate from the production homepage and mobile applications.
 
-## Narrative
+## Narrative and visual structure
 
-The production landing page's personal journey is the backbone: start comfortably, stay in control, understand your money, see what becomes possible, and share life with others. Each scene has a main title and one short supporting paragraph. There are no numbered chapters or explanatory marketing captions.
+The page now follows people through a change in their day, rather than presenting a sequence of Clover features. It reuses the existing production landing page's lifestyle photography, including recurring people, home, airport, and travel scenes. Each moment has a headline and one short paragraph.
 
-A recurring example gives the scenes continuity. Jo's ₱500 Mendokoro receipt becomes a Clover transaction, appears in the monthly spending picture, and is later split with Mika. The same account names, categories, and amounts recur. Understanding the month leads to a conversation about a weekend away, then a shared goal. Product illustrations support these moments rather than introducing unrelated feature demonstrations.
+1. **Months of finances. Organized in minutes.** A home scene places financial admin alongside friends planning a trip. Small receipt and statement layers move out of the way as the visitor scrolls.
+2. **Your evening. Back to you.** Paperwork clears away to a photograph of the laptop and records being put away. The supporting paragraph explains connecting, uploading, or adding manually and retaining the final say.
+3. **Less wondering. More knowing.** A couple looks at their finances together. One small question about making room for a trip connects understanding money with deciding what to do next.
+4. **Something to look forward to.** The friends reach the airport. A dimensional travel photograph appears in the foreground. The copy connects goals and shared plans with that moment.
+5. **A little clarity. A little more living.** The trip photograph expands into the main scene, with a clear invitation to start.
+6. **At your pace. At every stage.** Free, Plus, and Pro pricing, billing period/currency controls, and the existing Switch to Clover offer remain available.
 
-1. **Months of finances. Organized in minutes.** Receipts, a bank card, and recognizable transactions introduce the promise of less time piecing finances together.
-2. **Start with what suits you.** A statement, receipt, and manually entered wallet purchase converge into the same set of records.
-3. **A little help. Still your say.** The original receipt connects to the transaction's category and confirmation. This replaces the abstract security shield with a concrete moment of control.
-4. **One less thing to piece together.** BPI, UnionBank, Maya, and GStocks settle into a clear picture of the everyday and longer-term finances.
-5. **It starts to make sense.** A dimensional spending chart reveals the month. The lunch transaction sits alongside its Food & Dining category so the connection remains visible.
-6. **Make room for a little possibility.** Jo asks Clover about a weekend away. Clover relates the question to Food & Dining spending and suggests exploring a ₱2,000 monthly goal. Four steps lead to an illustrative ₱8,000 target.
-7. **A little easier. Together.** The same goal opens into a dimensional coastal scene. The original lunch is split ₱250 each between Jo and Mika. The visual focuses on what they are planning and sharing.
-8. **A little clarity. At every stage.** Existing Free, Plus, and Pro pricing and the Switch to Clover offer remain available.
-9. **A little clarity. A little more living.** A calm closing invitation to start free.
+The previous transaction-window assembly, account-card fan, spending-chart stage, chat-window stage, and illustrated split-bill stage have been removed. Photography carries the narrative. Product references explain how Clover helps within it.
 
-## Branding and sample data
+## Brand and imagery
 
-Raleway headlines, Poppins supporting text, teal/mint/light-neutral surfaces, existing institution logos, category icons, and approved Clover mascots are retained. Headline teal is darkened for legibility. The source brand references are Figma Foundations and Categories, nodes `472:11812` and `472:12117`, in file `ihPDxUM9SiMdssYw6XsOho`.
+Raleway headlines, Poppins body text, readable dark teal, mint surfaces, the Clover wordmark, and approved mascots remain. Photographs are existing marketing assets used without modifying their pixels. Responsive `picture` sources provide portrait compositions on phones. The footer identifies lifestyle imagery as illustrative. No private customer records are accessed or displayed.
 
-The sample account balances sum to ₱84,250. Monthly category totals sum to ₱24,800: Food & Dining ₱9,424 (38%), Housing ₱6,696 (27%), Travel ₱5,208 (21%), and Groceries ₱3,472 (14%). The ledger shows selected transactions, not the entire month's data. The ₱500 lunch is part of Food & Dining; it is not added to that total a second time. Goal steps describe a plan, not deposited funds or a guaranteed outcome.
+## Motion and performance
 
-All scenes now use HTML/CSS illustrations, a small SVG source connector, and existing branding. The unrelated Split Bills screenshot from the prior concept is no longer loaded. The footer identifies the data as illustrative. No private account data is accessed and no financial records are created or changed.
-
-## Motion, accessibility, and performance
-
-- Native scroll position controls perspective, depth, translation, opacity, chart rotation, source-connector drawing, and goal progression. Scroll backward reverses the illustration. There is no forced scrolling or timed slideshow.
-- The coastal scene uses CSS layers for hills, sea, sun, and sailboat, with the same goal card carried over from the conversation. No video, WebGL renderer, animation library, or new raster download is added.
-- The header retains Full, Gentle, and Off motion settings and previous/restart/next scene navigation. Preferences persist locally. Device reduced-motion preferences override them; Data Saver defaults to Gentle.
-- Geometry is measured on layout changes. Passive scroll events schedule requestAnimationFrame updates; progress is held in CSS properties rather than React state. Ambient animations pause offscreen and when the document is hidden.
-- Short viewports use natural flow when the whole composition cannot fit. Reduced motion uses natural flow and settled illustrations. Off keeps settled visuals without changing the visitor's current scroll position.
-- Headings and financial amounts remain stable and readable. Decorative elements are positioned away from amounts and controls. The page includes a skip link, keyboard focus styles, labeled controls, semantic headings, and sample-data disclosure.
-- Bank logo WebP variants are 1.9–2.7 KB. Below-the-fold images are lazy-loaded. Obsolete shield, phone, and independent chat-chart CSS has been removed.
+- Native scrolling controls photographic camera movement, perspective, paper displacement, postcard rotation, and depth. Scrolling backward reverses these transformations.
+- The header retains Full, Gentle, and Off motion controls and previous/restart/next navigation. Device reduced-motion preferences override the animation preference. Data Saver defaults to Gentle.
+- Transform and opacity changes use the existing cached-geometry animation hook. No video, WebGL, animation library, or continuous idle JavaScript animation loop is added.
+- Only the hero photograph has high loading priority. Later photographs and mascots use lazy loading. Existing compressed WebP assets are reused.
+- Text sits on a stable reading surface. Phone layouts allocate real space for text above photographs instead of placing both in competing absolute positions. Narrow and short screens use natural document flow; reduced motion also removes pinned scroll tracks.
+- A skip link, visible focus states, semantic headings, meaningful photo descriptions, labeled controls, and keyboard-dismissable motion settings remain.
 
 ## Verification
 
-Browser verification covers phone, tablet, short landscape, and desktop layouts in Chromium, WebKit, and Firefox. Checks cover clipping, horizontal overflow, image loading, browser errors, and beginning/middle/end scroll states. Targeted checks cover the source-to-transaction connection, reversible goal and coastal motion, motion controls, reduced motion, and shared pricing/campaign behavior. Physical-device GPU performance is not implied by browser emulation.
+Browser checks cover beginning, middle, and end scroll positions on phones, tablets, desktop, and short landscape viewports in Chromium, WebKit, and Firefox. Interaction checks cover motion preferences, reverse scrolling, scene navigation, reduced motion, and pricing controls. Performance measurements use a cold cache and a throttled mobile browser. These are browser/emulator checks, not physical-device performance claims.
 
-The repository's full `npm run qa:prepush` gate must pass before the staging update. Live staging verification confirms the deployed commit and the public preview after publishing.
+The full repository `npm run qa:prepush` gate is required before staging deployment. Live verification checks the deployed SHA and the public preview.
