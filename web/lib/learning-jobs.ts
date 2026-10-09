@@ -74,7 +74,7 @@ export async function processLearningJob(id: string, options: { maxItems?: numbe
     await db.learningJobAttempt.create({ data: { jobId: id, attempt: job.attempts, status: "running", startIndex: job.nextIndex, endIndex: job.nextIndex } });
     return job;
   });
-  if (!claimed) return prisma.learningJob.findUnique({ where: { id } });
+  if (!claimed) return prisma.learningJob.findUnique({ where: { id }, omit: { payload: true } });
   const stopAt = Date.now() + Math.min(45_000, options.deadlineMs ?? 20_000);
   let processed = 0;
   try {
@@ -83,37 +83,38 @@ export async function processLearningJob(id: string, options: { maxItems?: numbe
       const state = await prisma.$transaction(async db => {
         // Row lock plus token fence ties each observation and its checkpoint to one commit.
         await db.$queryRaw`SELECT "id" FROM "LearningJob" WHERE "id" = ${id} FOR UPDATE`;
-        const job = await db.learningJob.findUniqueOrThrow({ where: { id } });
+        const job = await db.learningJob.findUniqueOrThrow({ where: { id }, omit: { payload: true } });
         if (job.leaseToken !== token || job.status !== "running") return "lost";
         if (job.version !== LEARNING_JOB_VERSION) throw new LearningInputError("UNSUPPORTED_VERSION", "This job requires a different learning worker version. Keep its input and deploy the matching worker.");
         if (job.nextIndex >= job.totalItems) return "done";
         const workspace = await db.workspace.findUniqueOrThrow({ where: { id: job.workspaceId }, select: { user: { select: { appPreferences: true } } } });
         if (!parseAppPreferences(workspace.user.appPreferences).privacy.improveSuggestions) {
-          await db.learningJob.update({ where: { id }, data: { status: "cancelled", leaseToken: null, lockedUntil: null, errorCode: "LEARNING_DISABLED", errorMessage: "Learning is disabled in this account’s privacy settings.", completedAt: new Date() } });
+          await db.learningJob.update({ where: { id }, select: { id: true }, data: { status: "cancelled", leaseToken: null, lockedUntil: null, errorCode: "LEARNING_DISABLED", errorMessage: "Learning is disabled in this account’s privacy settings.", completedAt: new Date() } });
           await db.learningJobAttempt.update({ where: { jobId_attempt: { jobId: id, attempt: job.attempts } }, data: { status: "cancelled", endIndex: job.nextIndex, finishedAt: new Date(), errorCode: "LEARNING_DISABLED" } });
           return "lost";
         }
-        const action = (job.payload as unknown as LearningAction[])[job.nextIndex];
+        // The claimed input is immutable: read the batch once per slice, not once per item.
+        const action = (claimed.payload as unknown as LearningAction[])[job.nextIndex];
         if (!action || action.input.workspaceId !== job.workspaceId) throw new LearningInputError("INVALID_INPUT", "The saved learning input is invalid for this Profile.");
         // Serialize rule updates within a Profile, including distinct overlapping batches.
         await db.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended(${job.workspaceId}, 0))::text`;
         const applied = await applyLearningAction(action, { db, observedAt: job.createdAt, observationKey: learningDigest(action) });
-        await db.learningJob.update({ where: { id }, data: {
+        await db.learningJob.update({ where: { id }, select: { id: true }, data: {
           nextIndex: { increment: 1 }, appliedItems: { increment: applied ? 1 : 0 }, skippedItems: { increment: applied ? 0 : 1 },
           lockedUntil: new Date(Date.now() + LEASE_MS),
         } });
         return "next";
       }, { timeout: 20_000, maxWait: 10_000 });
-      if (state === "lost") return prisma.learningJob.findUnique({ where: { id } });
+      if (state === "lost") return prisma.learningJob.findUnique({ where: { id }, omit: { payload: true } });
       if (state === "done") break;
       processed++;
     }
     await prisma.$transaction(async db => {
       await db.$queryRaw`SELECT "id" FROM "LearningJob" WHERE "id" = ${id} FOR UPDATE`;
-      const job = await db.learningJob.findUniqueOrThrow({ where: { id } });
+      const job = await db.learningJob.findUniqueOrThrow({ where: { id }, omit: { payload: true } });
       if (job.leaseToken !== token) return;
       const done = job.nextIndex === job.totalItems;
-      await db.learningJob.update({ where: { id }, data: { status: done ? "completed" : "queued", leaseToken: null, lockedUntil: null, completedAt: done ? new Date() : null, nextAttemptAt: new Date(), errorCode: null, errorMessage: null } });
+      await db.learningJob.update({ where: { id }, select: { id: true }, data: { status: done ? "completed" : "queued", leaseToken: null, lockedUntil: null, completedAt: done ? new Date() : null, nextAttemptAt: new Date(), errorCode: null, errorMessage: null } });
       await db.learningJobAttempt.update({ where: { jobId_attempt: { jobId: id, attempt: job.attempts } }, data: { status: done ? "completed" : "yielded", endIndex: job.nextIndex, finishedAt: new Date() } });
     });
   } catch (error) {
@@ -125,12 +126,12 @@ export async function processLearningJob(id: string, options: { maxItems?: numbe
         ...failure, nextAttemptAt: new Date(Date.now() + 60_000 * 2 ** claimed.failureCount),
       } });
       if (changed.count) {
-        const job = await db.learningJob.findUniqueOrThrow({ where: { id } });
+        const job = await db.learningJob.findUniqueOrThrow({ where: { id }, omit: { payload: true } });
         await db.learningJobAttempt.update({ where: { jobId_attempt: { jobId: id, attempt: job.attempts } }, data: { status: waiting ? "waiting" : "failed", endIndex: job.nextIndex, finishedAt: new Date(), ...failure } });
       }
     });
   }
-  return prisma.learningJob.findUnique({ where: { id } });
+  return prisma.learningJob.findUnique({ where: { id }, omit: { payload: true } });
 }
 
 export async function retryLearningJob(id: string, workspaceId: string) {

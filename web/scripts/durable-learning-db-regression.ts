@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { createRequire } from "node:module";
 import { randomUUID } from "node:crypto";
+import { Client } from "pg";
 import type { LearningAction } from "../lib/learning-jobs";
 const url = new URL(process.env.DATABASE_URL ?? "http://invalid");
 assert.equal(url.hostname, "127.0.0.1"); assert.equal(url.port, "55441"); assert.equal(url.pathname, "/clover_migration_qa"); assert(process.argv.includes("--execute"));
@@ -66,7 +67,26 @@ async function main() {
     const resumed = await db.learningJob.findUniqueOrThrow({ where: { id: interrupted.id }, include: { runs: true } });
     assert.equal(resumed.nextIndex, 3); assert.equal(resumed.appliedItems, 3); assert(resumed.runs.some(run => run.errorCode === "LEASE_EXPIRED"));
     const many = await make("large-import", Array.from({ length: 205 }, (_, i) => action(`Distinct retailer ${i}`)));
-    for (let i = 0; i < 5; i++) await processJob(many.id, { maxItems: 50 });
+    // Measure real PostgreSQL result payloads, including UPDATE RETURNING. A
+    // large immutable batch must not be transferred again for every item.
+    const originalQuery = Client.prototype.query;
+    let payloadReads = 0, payloadBytes = 0;
+    Client.prototype.query = function (...args: unknown[]) {
+      const result = (originalQuery as (...args: unknown[]) => unknown).apply(this, args);
+      if (!result || typeof (result as Promise<unknown>).then !== "function") return result;
+      return (result as Promise<{ fields?: { name: string }[]; rows?: unknown[][] }>).then(response => {
+        const index = response.fields?.findIndex(field => field.name === "payload") ?? -1;
+        if (index >= 0) for (const row of response.rows ?? []) {
+          payloadReads++; payloadBytes += Buffer.byteLength(JSON.stringify(row[index]));
+        }
+        return response;
+      });
+    } as typeof originalQuery;
+    try { for (let i = 0; i < 5; i++) await processJob(many.id, { maxItems: 50 }); }
+    finally { Client.prototype.query = originalQuery; }
+    assert(payloadReads >= 5 && payloadReads <= 10, `Expected bounded payload reads across five slices, got ${payloadReads}`);
+    assert(payloadBytes <= Buffer.byteLength(JSON.stringify(many.payload)) * 10, "Payload traffic must scale with slices, not squared with batch size");
+    console.log(`PASS learning payload budget: ${payloadReads} batch reads, ${payloadBytes} bytes for 205 observations in five resumable slices.`);
     assert.equal((await db.learningJob.findUniqueOrThrow({ where: { id: many.id } })).nextIndex, 205);
     assert.deepEqual(json(await db.trainingSignal.findUnique({ where: { id: historical.id } })), json(historical));
 
