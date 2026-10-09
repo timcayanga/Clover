@@ -156,23 +156,228 @@ function StoryPhoto({
   );
 }
 
-function PaperTrail() {
+// Screens are captured from the production UI with fictional data. The layered
+// cards are lightweight editorial illustrations, never a live financial account.
+function AppScreen({
+  page,
+  eager = false,
+}: {
+  page: "accounts" | "transactions";
+  eager?: boolean;
+}) {
   return (
-    <div className={s.paperTrail} aria-hidden="true">
-      {["Statement", "Receipt", "Notes"].map((label, index) => (
-        <div
-          className={s.paper}
-          key={label}
-          style={{ "--sheet": index } as CSSProperties}
-        >
-          <img src="/clover-mark.svg" width="24" height="24" alt="" />
-          <span>{label}</span>
-          <i />
-          <i />
-          <i />
-          <i />
+    <div className={s.phone}>
+      <div className={s.phoneCamera} aria-hidden="true" />
+      <img
+        src={`/assets/landing-showcase/${page}-production-20261009.webp`}
+        alt={
+          page === "accounts"
+            ? "Clover Accounts showing bank, wallet and investment balances with sample data."
+            : "Clover Transactions showing categorized purchases, dates, amounts and bank logos with sample data."
+        }
+        width={402}
+        height={820}
+        loading={eager ? "eager" : "lazy"}
+        fetchPriority={eager ? "high" : "auto"}
+        decoding="async"
+      />
+    </div>
+  );
+}
+function Receipt({ small = false }: { small?: boolean }) {
+  return (
+    <div
+      className={`${s.receipt} ${small ? s.smallReceipt : ""}`}
+      aria-hidden="true"
+    >
+      <span className={s.receiptLogo}>m.</span>
+      <strong>MENDOKORO</strong>
+      <span>October 5, 2026</span>
+      <div>
+        <span>Lunch</span>
+        <span>500.00</span>
+      </div>
+      <div className={s.receiptTotal}>
+        <span>Total</span>
+        <strong>₱500.00</strong>
+      </div>
+      <div className={s.barcode} />
+      <span>Thank you. See you again.</span>
+    </div>
+  );
+}
+function TransactionMoment() {
+  return (
+    <div className={s.transactionMoment}>
+      <img
+        src="/figma-icons/categories/food-dining.svg"
+        width={44}
+        height={44}
+        alt=""
+      />
+      <div>
+        <strong>Lunch at Mendokoro</strong>
+        <span>Food & dining · BPI</span>
+      </div>
+      <b>−₱500.00</b>
+    </div>
+  );
+}
+const spending = [
+  {
+    name: "Food & dining",
+    amount: "₱6,000",
+    percent: 40,
+    color: "#04acc0",
+    icon: "food-dining",
+  },
+  {
+    name: "Groceries",
+    amount: "₱4,500",
+    percent: 30,
+    color: "#68d4b6",
+    icon: "groceries",
+  },
+  {
+    name: "Transport",
+    amount: "₱3,000",
+    percent: 20,
+    color: "#8b72bb",
+    icon: "transport",
+  },
+  {
+    name: "Shopping",
+    amount: "₱1,500",
+    percent: 10,
+    color: "#e6af55",
+    icon: "shopping",
+  },
+];
+function SpendingStory() {
+  return (
+    <div className={s.spendingStory}>
+      <div className={s.reportCard}>
+        <div className={s.miniHeader}>
+          <span>Where it went</span>
+          <span>October</span>
         </div>
-      ))}
+        <div
+          className={s.donut}
+          role="img"
+          aria-label="Sample October spending: 15,000 pesos. Food and dining 40%, groceries 30%, transport 20%, shopping 10%."
+        >
+          <svg viewBox="0 0 240 240" aria-hidden="true">
+            <circle className={s.donutTrack} cx="120" cy="120" r="94" />
+            {spending.map((item, i) => (
+              <circle
+                key={item.name}
+                cx="120"
+                cy="120"
+                r="94"
+                pathLength="100"
+                stroke={item.color}
+                style={
+                  {
+                    "--ring-x": `${[22, -25, -22, 22][i]}px`,
+                    "--ring-y": `${[-22, -22, 22, 22][i]}px`,
+                  } as CSSProperties
+                }
+                strokeDasharray={`${item.percent - 0.8} ${100 - item.percent + 0.8}`}
+                strokeDashoffset={
+                  -spending.slice(0, i).reduce((n, x) => n + x.percent, 0)
+                }
+              />
+            ))}
+          </svg>
+          <div>
+            <span>Total spending</span>
+            <strong>₱15,000</strong>
+          </div>
+        </div>
+        <div className={s.spendingRows}>
+          {spending.map((item) => (
+            <div key={item.name}>
+              <img
+                src={`/figma-icons/categories/${item.icon}.svg`}
+                alt=""
+                width={26}
+                height={26}
+              />
+              <span>{item.name}</span>
+              <strong>{item.amount}</strong>
+              <i style={{ background: item.color }} />
+            </div>
+          ))}
+        </div>
+      </div>
+      <div className={s.reportMascot}>
+        <Mascot pose="reports" size={150} />
+      </div>
+    </div>
+  );
+}
+function Conversation() {
+  return (
+    <div className={s.conversation}>
+      <div className={s.chatTop}>
+        <Mascot pose="compact" size={36} />
+        <strong>Ask Clover</strong>
+      </div>
+      <div className={s.question}>Why did I spend more on food?</div>
+      <div className={s.answer}>
+        <div className={s.cloverSpeaker}>
+          <Mascot pose="compact" size={28} />
+          <strong>Clover</strong>
+        </div>
+        <p>
+          Dining out is ₱1,500 higher than last month. Your grocery spending
+          stayed the same.
+        </p>
+        <div
+          className={s.chatChart}
+          role="img"
+          aria-label="Food and dining spending increased from 4,500 pesos in September to 6,000 pesos in October."
+        >
+          <div>
+            <span>Sep</span>
+            <i />
+            <strong>₱4,500</strong>
+          </div>
+          <div>
+            <span>Oct</span>
+            <i />
+            <strong>₱6,000</strong>
+          </div>
+        </div>
+      </div>
+      <div className={s.chatInput}>
+        <span>Ask about your money…</span>
+        <Icon />
+      </div>
+    </div>
+  );
+}
+function GoalMoment() {
+  return (
+    <div className={s.goalMoment}>
+      <div className={s.goalTitle}>
+        <Mascot pose="savings" size={70} />
+        <div>
+          <span>A little peace of mind</span>
+          <strong>Emergency fund</strong>
+        </div>
+      </div>
+      <div className={s.goalAmount}>
+        <strong>₱45,000</strong>
+        <span>of ₱60,000</span>
+      </div>
+      <div className={s.goalTrack}>
+        <i />
+      </div>
+      <div className={s.goalFooter}>
+        <span>75% of the way there</span>
+        <Icon kind="check" />
+      </div>
     </div>
   );
 }
@@ -394,27 +599,35 @@ export function Showcase({ initialMarket }: { initialMarket: PricingMarket }) {
       </header>
       <main id="showcase-main">
         <ScrollScene id="together" className={s.hero}>
-          <div className={s.heroArt}>
-            <StoryPhoto
-              eager
-              desktop="landing-story-v3/01-organize"
-              mobile="landing-story-v3/01-organize-mobile"
-              alt="Friends making travel plans at home while one person brings her receipts and statements together."
-            />
+          <div className={s.storyGrid}>
+            <div className={s.copy}>
+              <Heading
+                hero
+                text="Your banks, receipts, and everyday spending. A clearer picture of your money, with Clover."
+              >
+                Months of finances.
+                <br />
+                <em>Organized in minutes.</em>
+              </Heading>
+              <Action />
+            </div>
+            <div className={`${s.stage} ${s.heroStage}`}>
+              <div className={s.orbit} aria-hidden="true" />
+              <div className={s.orbitInner} aria-hidden="true" />
+              <div className={s.heroPhone}>
+                <AppScreen page="accounts" eager />
+              </div>
+              <div className={s.heroReceipt}>
+                <Receipt small />
+              </div>
+              <div className={s.heroTransaction}>
+                <TransactionMoment />
+              </div>
+              <div className={s.heroMascot}>
+                <Mascot pose="welcome" size={124} />
+              </div>
+            </div>
           </div>
-          <div className={s.heroVeil} aria-hidden="true" />
-          <div className={s.heroCopy}>
-            <Heading
-              hero
-              text="Less time piecing your finances together. More room for what matters to you."
-            >
-              Months of finances.
-              <br />
-              <em>Organized in minutes.</em>
-            </Heading>
-            <Action>Start free</Action>
-          </div>
-          <PaperTrail />
           <a
             className={s.scrollArrow}
             href="#breathing-room"
@@ -426,96 +639,96 @@ export function Showcase({ initialMarket }: { initialMarket: PricingMarket }) {
 
         <ScrollScene id="breathing-room" className={s.evening}>
           <div className={s.storyGrid}>
-            <Heading text="Connect a bank, upload your records, or add a few words. Clover helps with the sorting. You keep the final say.">
-              Your evening.
-              <br />
-              <em>Back to you.</em>
-            </Heading>
-            <div className={s.memoryStage}>
-              <div className={s.memoryBack} aria-hidden="true" />
-              <div className={s.memory}>
-                <StoryPhoto
-                  desktop="landing-story-v3/07-records-away"
-                  mobile="landing-story-v3/07-records-away-mobile"
-                  alt="The paperwork put away and the laptop closed at the end of the day."
+            <div className={s.copy}>
+              <Heading text="Bring the records you already have. Clover finds and organizes the transactions, ready for your confirmation.">
+                Less sorting.
+                <br />
+                <em>More living.</em>
+              </Heading>
+            </div>
+            <div className={`${s.stage} ${s.importStage}`}>
+              <div className={s.paperStatement} aria-hidden="true">
+                <img
+                  src="/assets/landing-showcase/bpi.webp"
+                  width={36}
+                  height={36}
+                  alt=""
                 />
+                <strong>Account statement</strong>
+                <span>September 2026</span>
+                <div />
+                <div />
+                <div />
+                <div />
               </div>
-              <PaperTrail />
-              <div className={s.quietCheck} aria-hidden="true">
-                <img src="/clover-mark.svg" width="34" height="34" alt="" />
-                <Icon kind="check" />
+              <div className={s.importReceipt}>
+                <Receipt />
               </div>
+              <div className={s.importPhone}>
+                <AppScreen page="transactions" />
+              </div>
+              <div className={s.importTransaction}>
+                <TransactionMoment />
+              </div>
+              <div className={s.scanLine} aria-hidden="true" />
             </div>
           </div>
         </ScrollScene>
 
         <ScrollScene id="a-little-clarity" className={s.clarity}>
-          <div className={s.storyGrid}>
-            <div className={s.memoryStage}>
-              <div className={s.clarityOrbit} aria-hidden="true" />
-              <div className={s.memory}>
-                <StoryPhoto
-                  desktop="marketing-photos-v4/understand-desktop"
-                  mobile="marketing-photos-v4/understand-mobile"
-                  alt="A couple sitting together at home, looking through their finances with a laptop and coffee."
-                />
-              </div>
-              <div className={s.thought}>
-                <Mascot pose="compact" size={52} />
-                <span>“Could we make room for a trip?”</span>
-              </div>
+          <div className={`${s.storyGrid} ${s.reverse}`}>
+            <div className={s.copy}>
+              <Heading text="The little purchases. The regular bills. See the patterns behind your spending, and understand what changed.">
+                Less wondering.
+                <br />
+                <em>More knowing.</em>
+              </Heading>
             </div>
-            <Heading text="See where your money goes, understand the changes, and talk through your next step with Clover.">
-              Less wondering.
-              <br />
-              <em>More knowing.</em>
-            </Heading>
+            <div className={`${s.stage} ${s.reportStage}`}>
+              <SpendingStory />
+            </div>
           </div>
         </ScrollScene>
 
-        <ScrollScene id="looking-forward" className={s.possibility}>
-          <div className={s.possibilityArt}>
-            <StoryPhoto
-              desktop="marketing-photos-v4/together-desktop"
-              mobile="marketing-photos-v4/together-mobile"
-              alt="The same friends at the airport, ready to head out on their trip together."
-            />
-          </div>
-          <div className={s.possibilityVeil} aria-hidden="true" />
-          <div className={s.possibilityCopy}>
-            <Heading text="A weekend away. A place of your own. Set a goal, make a plan, and share the money side with the people in it.">
-              Something to
-              <br />
-              <em>look forward to.</em>
-            </Heading>
-          </div>
-          <div className={s.postcard} aria-hidden="true">
-            <StoryPhoto
-              desktop="landing-story-v2/06-life"
-              mobile="landing-story-v3/06-life-mobile-clear"
-              alt=""
-            />
+        <ScrollScene id="looking-forward" className={s.ask}>
+          <div className={s.storyGrid}>
+            <div className={s.copy}>
+              <Heading text="Ask the question on your mind. Clover brings your own records into the conversation, so the numbers make sense.">
+                Your money.
+                <br />
+                <em>Let’s talk about it.</em>
+              </Heading>
+            </div>
+            <div className={`${s.stage} ${s.chatStage}`}>
+              <div className={s.chatHalo} aria-hidden="true" />
+              <Conversation />
+              <div className={s.chatMascot}>
+                <Mascot pose="chat" size={190} />
+              </div>
+            </div>
           </div>
         </ScrollScene>
 
         <ScrollScene id="more-living" className={s.living}>
-          <div className={s.livingCopy}>
-            <Heading text="Feel clearer about your money. More confident about what comes next.">
-              A little clarity.
-              <br />
-              <em>A little more living.</em>
-            </Heading>
-            <Action>Find my clarity</Action>
-          </div>
-          <div className={s.lifeWindow}>
-            <StoryPhoto
-              desktop="landing-story-v2/06-life"
-              mobile="landing-story-v3/06-life-mobile-clear"
-              alt="The friends enjoying their trip, walking together beneath the trees."
-            />
-          </div>
-          <div className={s.lifeMascot} aria-hidden="true">
-            <Mascot pose="welcome" size={130} />
+          <div className={s.storyGrid}>
+            <div className={s.copy}>
+              <Heading text="A buffer for the unexpected. A little more freedom every month. Give your plans a place to grow.">
+                Make room.
+                <br />
+                <em>For what matters.</em>
+              </Heading>
+              <Action>Start my story</Action>
+            </div>
+            <div className={`${s.stage} ${s.lifeStage}`}>
+              <div className={s.lifePhoto}>
+                <StoryPhoto
+                  desktop="landing-story-v3/07-records-away"
+                  mobile="landing-story-v3/07-records-away-mobile"
+                  alt="Putting the paperwork away and closing the laptop at home."
+                />
+              </div>
+              <GoalMoment />
+            </div>
           </div>
         </ScrollScene>
 
@@ -539,8 +752,8 @@ export function Showcase({ initialMarket }: { initialMarket: PricingMarket }) {
           <Link href="/terms-of-service">Terms</Link>
         </div>
         <small>
-          Lifestyle imagery is illustrative. © {new Date().getFullYear()}{" "}
-          Clover.
+          Product screens use fictional data. Other visuals are illustrative. ©{" "}
+          {new Date().getFullYear()} Clover.
         </small>
       </footer>
     </div>
