@@ -1,49 +1,43 @@
-# Clover scroll showcase preview
+# Clover story showcase preview
 
-Preview: `/landing-showcase`. The production homepage and the older `/landing-motion` concept are unchanged.
+Preview: `/landing-showcase`. This experiment is separate from the production homepage and mobile applications.
 
-## Story and visual direction
+## Narrative
 
-Each scene has one headline and one short supporting paragraph. Eyebrows, numbered chapters, demo instructions, side rails, and extra captions are removed. The sequence follows the production homepage's progression from organizing records to understanding and sharing money:
+The production landing page's personal journey is the backbone: start comfortably, stay in control, understand your money, see what becomes possible, and share life with others. Each scene has a main title and one short supporting paragraph. There are no numbered chapters or explanatory marketing captions.
 
-1. **Months of finances. Organized in minutes.** A dimensional Clover transaction window, receipt, and bank card immediately show what the product does.
-2. **A little less admin. A lot more clarity.** Statements, a receipt, and wallet activity converge into categorized transactions as the visitor scrolls.
-3. **Your money. Your say.** A glass shield and edit/export controls accompany the private, reviewable, traceable data message.
-4. **Your money. All together.** BPI, UnionBank, Maya, and GStocks cards move from a dimensional fan into a readable account overview.
-5. **Less guessing. More understanding.** An extruded spending donut turns toward the visitor while category totals settle beside it.
-6. **Big questions. Meet your little helper.** Clover's approved mascot accompanies a sample question, answer, and spending report that appear with scroll progress.
-7. **Life is shared. Money can be, too.** The public production Split Bills screen rotates into view with shared-payment cards and the Circles mascot.
-8. **A little clarity. At every stage.** Free, Plus, and Pro use the shared market pricing configuration, working monthly/yearly and PHP/USD controls, and the existing campaign component.
-9. **Money looks better from here.** One final invitation to start free.
+A recurring example gives the scenes continuity. Jo's ₱500 Mendokoro receipt becomes a Clover transaction, appears in the monthly spending picture, and is later split with Mika. The same account names, categories, and amounts recur. Understanding the month leads to a conversation about a weekend away, then a shared goal. Product illustrations support these moments rather than introducing unrelated feature demonstrations.
 
-Typography uses Raleway for headlines and Poppins for supporting text. Teal, light teal, mint, white, and neutral surfaces follow the Figma Foundations and category libraries at nodes `472:11812` and `472:12117` in file `ihPDxUM9SiMdssYw6XsOho`. Headline teal is darkened for legibility. Bank cards retain their institution colors.
+1. **Months of finances. Organized in minutes.** Receipts, a bank card, and recognizable transactions introduce the promise of less time piecing finances together.
+2. **Start with what suits you.** A statement, receipt, and manually entered wallet purchase converge into the same set of records.
+3. **A little help. Still your say.** The original receipt connects to the transaction's category and confirmation. This replaces the abstract security shield with a concrete moment of control.
+4. **One less thing to piece together.** BPI, UnionBank, Maya, and GStocks settle into a clear picture of the everyday and longer-term finances.
+5. **It starts to make sense.** A dimensional spending chart reveals the month. The lunch transaction sits alongside its Food & Dining category so the connection remains visible.
+6. **Make room for a little possibility.** Jo asks Clover about a weekend away. Clover relates the question to Food & Dining spending and suggests exploring a ₱2,000 monthly goal. Four steps lead to an illustrative ₱8,000 target.
+7. **A little easier. Together.** The same goal opens into a dimensional coastal scene. The original lunch is split ₱250 each between Jo and Mika. The visual focuses on what they are planning and sharing.
+8. **A little clarity. At every stage.** Existing Free, Plus, and Pro pricing and the Switch to Clover offer remain available.
+9. **A little clarity. A little more living.** A calm closing invitation to start free.
 
-## Assets and example data
+## Branding and sample data
 
-The public production homepage at `https://clover.ph` was inspected on 2026-10-09. The showcase's Split Bills phone uses a 780-pixel WebP rendition of `/assets/marketing-screens/split-20260928.png`, which that homepage serves. The original is unchanged. Optimized preview-only images are stored in `assets/landing-showcase/` and copied into public assets by the existing build script. It is a public sample screen, not a private user's account.
+Raleway headlines, Poppins supporting text, teal/mint/light-neutral surfaces, existing institution logos, category icons, and approved Clover mascots are retained. Headline teal is darkened for legibility. The source brand references are Figma Foundations and Categories, nodes `472:11812` and `472:12117`, in file `ihPDxUM9SiMdssYw6XsOho`.
 
-Other product compositions are HTML/CSS illustrations using Clover's production wordmark, bank logos, category icons, and approved mascots. Example spending categories sum to ₱24,800; the four account balances sum to ₱84,250. The footer identifies the data as illustrative. This route does not read private financial records, import files, or create transactions.
+The sample account balances sum to ₱84,250. Monthly category totals sum to ₱24,800: Food & Dining ₱9,424 (38%), Housing ₱6,696 (27%), Travel ₱5,208 (21%), and Groceries ₱3,472 (14%). The ledger shows selected transactions, not the entire month's data. The ₱500 lunch is part of Food & Dining; it is not added to that total a second time. Goal steps describe a plan, not deposited funds or a guaranteed outcome.
 
-## Scroll and accessibility behavior
+All scenes now use HTML/CSS illustrations, a small SVG source connector, and existing branding. The unrelated Split Bills screenshot from the prior concept is no longer loaded. The footer identifies the data as illustrative. No private account data is accessed and no financial records are created or changed.
 
-- Seven full-screen scenes use longer native scroll tracks. Scroll position directly controls perspective, rotation, depth, translation, opacity, and chart growth. There is no timer-driven slideshow, wheel interception, or forced scroll snapping.
-- Each scene ends in a readable state before the next one arrives. The header includes a page-progress line and a motion panel with Full, Gentle, and Off settings, plus previous/restart/next scene controls. Preferences persist locally. Reduced-motion settings take precedence; Data Saver defaults to Gentle.
-- CSS creates the dimensional cards, glass shield, layered donut, device frame, Clover medallions, and orbital elements. Full mode adds subtle ambient floating, pointer depth, and scroll inertia on ornaments. Headings and financial amounts do not shake. No animation library, WebGL runtime, or video download is needed.
-- Scene geometry is cached on layout/viewport changes. Passive scroll events schedule requestAnimationFrame updates; geometry is not repeatedly queried during scrolling. Progress remains in CSS variables instead of React state. Ambient CSS animations pause when their scene leaves the viewport or the document is hidden. JavaScript stops scheduling frames after scroll inertia settles.
-- Short landscape/compact tablet windows use natural document flow and settled illustrations so content cannot become trapped inside a pinned viewport.
-- Reduced-motion preferences collapse the long scroll tracks and show settled illustrations. Off also settles all visuals while retaining the current page position. Gentle retains small scroll reveals without ambient animation or pointer tilt.
-- A skip link, visible keyboard focus, labeled controls, meaningful image alternatives, and grouped pricing controls are provided. Decorative elements are hidden from assistive technology.
+## Motion, accessibility, and performance
+
+- Native scroll position controls perspective, depth, translation, opacity, chart rotation, source-connector drawing, and goal progression. Scroll backward reverses the illustration. There is no forced scrolling or timed slideshow.
+- The coastal scene uses CSS layers for hills, sea, sun, and sailboat, with the same goal card carried over from the conversation. No video, WebGL renderer, animation library, or new raster download is added.
+- The header retains Full, Gentle, and Off motion settings and previous/restart/next scene navigation. Preferences persist locally. Device reduced-motion preferences override them; Data Saver defaults to Gentle.
+- Geometry is measured on layout changes. Passive scroll events schedule requestAnimationFrame updates; progress is held in CSS properties rather than React state. Ambient animations pause offscreen and when the document is hidden.
+- Short viewports use natural flow when the whole composition cannot fit. Reduced motion uses natural flow and settled illustrations. Off keeps settled visuals without changing the visitor's current scroll position.
+- Headings and financial amounts remain stable and readable. Decorative elements are positioned away from amounts and controls. The page includes a skip link, keyboard focus styles, labeled controls, semantic headings, and sample-data disclosure.
+- Bank logo WebP variants are 1.9–2.7 KB. Below-the-fold images are lazy-loaded. Obsolete shield, phone, and independent chat-chart CSS has been removed.
 
 ## Verification
 
-Browser screenshots and scroll-state checks cover 17 browser/viewport combinations, from 320-pixel phones through 1920-pixel desktops, including short landscape windows in Chromium, WebKit, and Firefox. Checks include horizontal overflow, heading/navigation clearance, scene bounds, image loading, browser exceptions, and beginning/middle/end scroll states.
+Browser verification covers phone, tablet, short landscape, and desktop layouts in Chromium, WebKit, and Firefox. Checks cover clipping, horizontal overflow, image loading, browser errors, and beginning/middle/end scroll states. Targeted checks cover the source-to-transaction connection, reversible goal and coastal motion, motion controls, reduced motion, and shared pricing/campaign behavior. Physical-device GPU performance is not implied by browser emulation.
 
-Interaction checks cover reversible scroll transforms, all three motion settings, Escape/focus return and outside-click dismissal, previous/next scene navigation, reduced-motion natural flow, monthly/yearly prices, and PHP/USD switching. Local campaign responses are stubbed because the development database is unavailable; the staging smoke test must use the real campaign endpoint.
-
-Physical-device GPU performance is not implied by browser emulation. The repository's complete `qa:prepush` gate is required before publishing this preview to staging.
-
-## Viewport and loading refinement, 2026-10-09
-
-The opening composition keeps its headline, short description, CTA, and recognizable transaction window in the initial phone or desktop screen. The chat illustration is constrained to the phone content width; short phone windows use natural flow for that scene. Small transaction, category, and chat text is enlarged. Decorative orbital planes are positioned behind product surfaces to avoid crossing text. The motion control has a 44-pixel touch target.
-
-Bank logo variants are 1.9–2.7 KB each. The production Split Bills screen is served as a 42 KB WebP instead of the 320 KB PNG. Images below the opening scene remain lazy-loaded; no animation dependency, video, or WebGL renderer was added. Public pricing and the Switch to Clover offer use the existing shared components and configuration.
+The repository's full `npm run qa:prepush` gate must pass before the staging update. Live staging verification confirms the deployed commit and the public preview after publishing.

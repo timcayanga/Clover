@@ -75,8 +75,8 @@ const spending = [
     color: "#f2b276",
   },
   {
-    name: "Shopping",
-    icon: "shopping",
+    name: "Groceries",
+    icon: "groceries",
     amount: "₱3,472",
     percent: "14%",
     color: "#a68bcc",
@@ -227,15 +227,15 @@ function Receipt({ statement = false }: { statement?: boolean }) {
         <>
           <Bank file="bpi.png" size={36} />
           <strong>Statement of account</strong>
-          <small>September 2026</small>
+          <small>October 2026</small>
           <div className={s.paperRule} />
           <div className={s.paperItem}>
             <span>Payday</span>
             <b>₱45,000</b>
           </div>
           <div className={s.paperItem}>
-            <span>Groceries</span>
-            <b>₱1,280</b>
+            <span>Housing</span>
+            <b>₱6,696</b>
           </div>
           <div className={s.paperItem}>
             <span>Lunch</span>
@@ -319,7 +319,7 @@ function SpendingRing() {
     <div
       className={s.ringStage}
       role="img"
-      aria-label="Example monthly spending: ₱24,800. Food and Dining 38 percent, Housing 27 percent, Travel 21 percent, Shopping 14 percent."
+      aria-label="Example monthly spending: ₱24,800. Food and Dining 38 percent, Housing 27 percent, Travel 21 percent, Groceries 14 percent."
     >
       <div className={s.ringObject}>
         {Array.from({ length: 12 }, (_, i) => (
@@ -340,31 +340,74 @@ function SpendingRing() {
     </div>
   );
 }
-function Phone({ screen }: { screen: "accounts" | "split" }) {
-  const image =
-    screen === "accounts" ? "accounts-20260928.png" : "split-20260928.png";
+function LunchMoment() {
   return (
-    <div className={s.phone}>
-      <div className={s.phoneStatus}>
-        <span>9:41</span>
-        <i />
-        <span>••• ▰</span>
+    <div className={s.lunchMoment}>
+      <Category name="food-dining" size={36} />
+      <div>
+        <strong>Lunch at Mendokoro</strong>
+        <span>BPI · October 5</span>
       </div>
-      <img
-        src={
-          screen === "split"
-            ? "/assets/landing-showcase/split.webp"
-            : `/assets/marketing-screens/${image}`
-        }
-        alt={`Clover ${screen === "accounts" ? "Accounts" : "Split Bills"}, from the current public production website`}
-        width="1560"
-        height="3024"
-        loading="lazy"
-      />
-      <div className={s.phoneHome} />
+      <b>₱500</b>
     </div>
   );
 }
+
+function ReviewStory() {
+  return (
+    <div className={s.reviewStage} data-depth-stage>
+      <div className={s.reviewReceipt}>
+        <Receipt />
+      </div>
+      <svg className={s.sourceTrail} viewBox="0 0 550 390" aria-hidden="true">
+        <path d="M115 180 C115 360 465 355 410 235" />
+      </svg>
+      <div className={s.reviewCard}>
+        <div className={s.reviewTop}>
+          <Icon kind="lock" />
+          <span>Only you decide</span>
+        </div>
+        <LunchMoment />
+        <div className={s.reviewCategory}>
+          <span>Category</span>
+          <strong>Food &amp; Dining</strong>
+          <Icon kind="edit" />
+        </div>
+        <div className={s.confirmed}>
+          <Icon kind="check" /> Confirmed by you
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function GoalCard({ shared = false }: { shared?: boolean }) {
+  return (
+    <div className={s.goalCard} data-shared={shared}>
+      <div className={s.goalIcon}>
+        <Category name="travel-lifestyle" size={42} />
+      </div>
+      <div>
+        <strong>Weekend away</strong>
+        <span>{shared ? "Our shared goal" : "Goal plan"}</span>
+      </div>
+      <b>₱8,000</b>
+      <div
+        className={s.goalSteps}
+        role="img"
+        aria-label="Four monthly steps of 2,000 pesos to a goal of 8,000 pesos"
+      >
+        {[1, 2, 3, 4].map((step) => (
+          <span key={step} style={{ "--step": step } as CSSProperties}>
+            <i />₱{step * 2},000
+          </span>
+        ))}
+      </div>
+      <small>₱2,000 a month · 4 months</small>
+    </div>
+  );
+}
+
 function Chat() {
   return (
     <div className={s.chatCard}>
@@ -372,40 +415,46 @@ function Chat() {
         <Mascot pose="compact" size={38} />
         <strong>Ask Clover</strong>
       </div>
-      <div className={s.question}>Where did my money go this month?</div>
+      <div className={s.question}>Could we make room for a weekend away?</div>
       <div className={s.reply}>
         <Mascot pose="compact" size={28} />
         <div>
           <strong>Clover</strong>
           <p>
-            Food &amp; Dining was your biggest category. Here’s your spending at
-            a glance.
+            Food &amp; Dining came to ₱9,424 this month. Want to explore a little
+            less dining out and plan ₱2,000 a month for your trip?
           </p>
         </div>
       </div>
-      <div className={s.chatReport}>
-        {spending.map((item, i) => (
-          <div
-            key={item.name}
-            style={
-              {
-                "--row": i,
-                "--bar-color": item.color,
-                "--bar-size": parseInt(item.percent) / 38,
-              } as CSSProperties
-            }
-          >
-            <span>{item.name}</span>
-            <div>
-              <i />
-            </div>
-            <b>{item.amount}</b>
-          </div>
-        ))}
+      <GoalCard />
+    </div>
+  );
+}
+
+function SharedDream() {
+  return (
+    <div className={s.dreamStage} data-depth-stage>
+      <div className={s.dreamWorld} aria-hidden="true">
+        <div className={s.dreamSun} />
+        <div className={s.dreamHillBack} />
+        <div className={s.dreamSea} />
+        <div className={s.dreamHillFront} />
+        <div className={s.dreamSail}>
+          <i />
+        </div>
       </div>
-      <div className={s.chatInput}>
-        <span>Ask about your money</span>
-        <span>↑</span>
+      <div className={s.sharedGoal}>
+        <GoalCard shared />
+      </div>
+      <div className={s.sharedLunch}>
+        <LunchMoment />
+        <div className={s.splitPeople}>
+          <span><i>J</i>Jo <b>₱250</b></span>
+          <span><i>M</i>Mika <b>₱250</b></span>
+        </div>
+      </div>
+      <div className={s.dreamMascot}>
+        <Mascot pose="circles" size={130} />
       </div>
     </div>
   );
@@ -545,7 +594,7 @@ export function Showcase({ initialMarket }: { initialMarket: PricingMarket }) {
           <Brand />
         </a>
         <nav aria-label="Main navigation">
-          <a href="#your-way">Features</a>
+          <a href="#your-way">Discover Clover</a>
           <a href="#plans">Plans</a>
         </nav>
         <div className={s.navActions}>
@@ -629,7 +678,7 @@ export function Showcase({ initialMarket }: { initialMarket: PricingMarket }) {
         <ScrollScene id="together" className={s.hero}>
           <Heading
             hero
-            text="Connect supported banks, bring your records, and see your money clearly. All in Clover."
+            text="Less time piecing your finances together. More room for what matters to you."
           >
             Months of finances.
             <br />
@@ -676,10 +725,8 @@ export function Showcase({ initialMarket }: { initialMarket: PricingMarket }) {
         </ScrollScene>
 
         <ScrollScene id="your-way" className={s.intake}>
-          <Heading text="Connect supported banks. Upload statements, receipts, or spreadsheets. Add details manually. Start your way.">
-            A little less admin.
-            <br />
-            <em>A lot more clarity.</em>
+          <Heading text="A bank connection, a receipt, a few words. Start with what you have. Clover helps bring it together.">
+            Start with<br /><em>what suits you.</em>
           </Heading>
           <div
             className={s.intakeStage}
@@ -697,9 +744,9 @@ export function Showcase({ initialMarket }: { initialMarket: PricingMarket }) {
             </div>
             <div className={s.fileThree}>
               <Bank file="maya.png" size={40} />
-              <strong>Maya</strong>
-              <span>Wallet activity</span>
-              <b>₱5,000.00</b>
+              <strong>Groceries</strong>
+              <span>Added by you · Maya</span>
+              <b>₱1,280.00</b>
             </div>
             <div className={s.intakeLedger}>
               <Ledger />
@@ -712,37 +759,17 @@ export function Showcase({ initialMarket }: { initialMarket: PricingMarket }) {
 
         <ScrollScene id="your-control" className={s.control}>
           <div className={s.splitLayout}>
-            <Heading text="Your records are private, reviewable, and traceable. Edit, export, or delete your data. You stay in control.">
-              Your money.
-              <br />
-              <em>Your say.</em>
+            <Heading text="Your records stay private. Check the details, make changes, and keep the final say.">
+              A little help.<br /><em>Still your say.</em>
             </Heading>
-            <div className={s.controlStage} data-depth-stage aria-hidden="true">
-              <div className={s.controlOrbit} aria-hidden="true" />
-              <div className={s.shield}>
-                <div>
-                  <Icon kind="lock" />
-                </div>
-              </div>
-              <div className={s.controlTile}>
-                <Icon kind="edit" />
-              </div>
-              <div className={s.controlTileTwo}>
-                <Icon kind="export" />
-              </div>
-              <div className={s.controlTileThree}>
-                <Icon kind="check" />
-              </div>
-            </div>
+            <ReviewStory />
           </div>
         </ScrollScene>
 
         <ScrollScene id="your-picture" className={s.accounts}>
           <div className={s.splitLayout}>
-            <Heading text="Bank accounts, wallets, and investments. One connected picture of your financial life.">
-              Your money.
-              <br />
-              <em>All together.</em>
+            <Heading text="The everyday spending, the savings, the future plans. See how it all fits into your life.">
+              One less thing<br /><em>to piece together.</em>
             </Heading>
             <div
               className={s.accountsStage}
@@ -772,13 +799,17 @@ export function Showcase({ initialMarket }: { initialMarket: PricingMarket }) {
         </ScrollScene>
 
         <ScrollScene id="your-spending" className={s.reports}>
-          <Heading text="See where your money goes, spot patterns, and understand what changed.">
-            Less guessing.
-            <br />
-            <em>More understanding.</em>
+          <Heading text="A lunch here. Groceries there. The little things become a picture you can understand, and habits you can shape.">
+            It starts to<br /><em>make sense.</em>
           </Heading>
           <div className={s.reportsStage} data-depth-stage>
-            <SpendingRing />
+            <div className={s.spendingJourney}>
+              <SpendingRing />
+              <div className={s.receiptToCategory}>
+                <LunchMoment />
+                <span>Part of your Food &amp; Dining</span>
+              </div>
+            </div>
             <div className={s.reportSpark} aria-hidden="true">
               <CloverToken />
             </div>
@@ -799,10 +830,8 @@ export function Showcase({ initialMarket }: { initialMarket: PricingMarket }) {
 
         <ScrollScene id="ask-clover" className={s.ask}>
           <div className={s.splitLayout}>
-            <Heading text="Ask what changed, plan a goal, or add a transaction. Get a little help with your next step.">
-              Big questions.
-              <br />
-              <em>Meet your little helper.</em>
+            <Heading text="Turn “where did it go?” into “what could we do next?” Talk it through with Clover, one small step at a time.">
+              Make room for<br /><em>a little possibility.</em>
             </Heading>
             <div className={s.askStage} data-depth-stage>
               <div className={s.mascotFigure}>
@@ -815,32 +844,10 @@ export function Showcase({ initialMarket }: { initialMarket: PricingMarket }) {
 
         <ScrollScene id="shared" className={s.shared}>
           <div className={s.splitLayout}>
-            <Heading text="Split bills with friends. Bring household expenses, budgets, and goals together in a Circle.">
-              Life is shared.
-              <br />
-              <em>Money can be, too.</em>
+            <Heading text="From splitting today’s lunch to planning your next adventure. Share the expenses, the goals, and the things you’re looking forward to.">
+              A little easier.<br /><em>Together.</em>
             </Heading>
-            <div className={s.sharedStage} data-depth-stage>
-              <div className={s.sharedOrbit} aria-hidden="true" />
-              <div className={s.sharedPhone}>
-                <Phone screen="split" />
-              </div>
-              <div className={s.personOne}>
-                <span>J</span>
-                <strong>₱1,250</strong>
-              </div>
-              <div className={s.personTwo}>
-                <span>M</span>
-                <strong>₱1,250</strong>
-              </div>
-              <div className={s.personThree}>
-                <span>A</span>
-                <strong>₱1,250</strong>
-              </div>
-              <div className={s.sharedMascot}>
-                <Mascot pose="circles" size={130} />
-              </div>
-            </div>
+            <SharedDream />
           </div>
         </ScrollScene>
 
@@ -857,9 +864,7 @@ export function Showcase({ initialMarket }: { initialMarket: PricingMarket }) {
             <Mascot pose="welcome" size={190} />
           </div>
           <Heading text="Feel clearer about your money. More confident about what comes next.">
-            Money looks
-            <br />
-            <em>better from here.</em>
+            A little clarity.<br /><em>A little more living.</em>
           </Heading>
           <Action>Organize my finances for free</Action>
         </section>
