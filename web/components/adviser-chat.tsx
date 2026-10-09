@@ -656,7 +656,7 @@ function ScopedAdviserChat({ prompts, storageKey = adviserChatStorageKey, initia
               className={`adviser-chat__message adviser-chat__message--${message.role}`}
             >
               {message.role === "assistant" ? <div className="adviser-chat__author"><Image src="/assets/mascots/velvet-compact.webp" alt="" width={28} height={28} /><span>Clover</span></div> : null}
-              <p>{message.content}</p>
+              {!message.visualization?.spendingPlan ? <p>{message.content}</p> : null}
               {message.visualization ? <AdviserReportCard chart={message.visualization} /> : null}
               {message.role === "assistant" && message.content.trim() ? (
                 <div className="adviser-chat__feedback" aria-label="Rate this answer">
