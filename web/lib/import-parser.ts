@@ -9517,12 +9517,80 @@ const parseBdoSavingsTransactionBlock = (
   } satisfies ParsedImportRow;
 };
 
+// Full-date BDO tables have explicit amounts and balances. Only accept this
+// path when every dated row and both printed movement totals reconcile. The
+// older fragmented-text repair must not round these evidenced amounts down.
+const parseReconciledBdoInlineLedger = (text: string, metadata: DetectedStatementMetadata): ParsedImportRow[] | null => {
+  if (!/Date\s+Details\s+Withdrawals\s+Debit\s+Deposits\s+Balance/i.test(text)) return null;
+  const lines = text.replace(/\u00a0/g, " ").split(/\r?\n/);
+  const normalized = lines.map(line => normalizeWhitespace(line).replace(/(\d),\s+(?=\d{3}\.\d{2})/g, "$1,"));
+  const monthDate = new RegExp(`^((?:${monthNamePattern})\\s+\\d{1,2},?\\s+\\d{4})\\s+(.+)$`, "i");
+  const money = /\d[\d,]*\.\d{2}/g;
+  const rows: ParsedImportRow[] = [];
+  let previousBalance: number | null = null;
+  let incomeCents = 0;
+  let expenseCents = 0;
+  for (let index = 0; index < normalized.length; index++) {
+    const match = normalized[index].match(monthDate);
+    if (!match) continue;
+    const sourceRowIndex = index;
+    let detail = match[2];
+    let sourceLine = lines[index];
+    let values = [...detail.matchAll(money)].map(value => Math.round(Number(value[0].replace(/,/g, "")) * 100));
+    if (values.length === 1 && /^\d[\d,]*\.\d{2}\s*P?$/i.test(normalized[index + 1] ?? "")) {
+      detail += ` ${normalized[index + 1]}`;
+      sourceLine += `\n${lines[++index]}`;
+      values = [...detail.matchAll(money)].map(value => Math.round(Number(value[0].replace(/,/g, "")) * 100));
+    }
+    if (values.length !== 2 || !values.every(Number.isSafeInteger)) return null;
+    const [amount, balance] = values;
+    const description = normalizeWhitespace(detail.replace(money, " ").replace(/\bP\b/g, " "));
+    const date = parseDateValue(match[1]);
+    if (!date || amount <= 0 || !/^(?:Fund Transfer|ATM Withdrawal)$/i.test(description)) return null;
+    const calendar = match[1].match(/^([A-Za-z]+)\s+(\d{1,2}),?\s+(\d{4})$/);
+    if (!calendar || date.getUTCDate() !== Number(calendar[2]) || date.getUTCFullYear() !== Number(calendar[3]) ||
+      date.getUTCMonth() !== monthIndexByAbbr[calendar[1].slice(0, 3).toUpperCase()]) return null;
+    const type = previousBalance === null
+      ? (/^ATM Withdrawal$/i.test(description) ? "expense" : "income")
+      : balance > previousBalance ? "income" : "expense";
+    if (previousBalance !== null && Math.abs(balance - previousBalance) !== amount) return null;
+    if (/^ATM Withdrawal$/i.test(description) && type !== "expense") return null;
+    previousBalance = balance;
+    if (type === "income") incomeCents += amount; else expenseCents += amount;
+    rows.push({
+      date: date.toISOString().slice(0, 10), amount: (amount / 100).toFixed(2), currency: "PHP", type,
+      institution: metadata.institution, accountName: metadata.accountName ?? "BDO", accountNumber: metadata.accountNumber ?? undefined,
+      merchantRaw: description, merchantClean: summarizeMerchantText(description, "BDO"), description,
+      categoryName: /^ATM Withdrawal$/i.test(description) ? "Cash & ATM" : "Transfers",
+      rawPayload: { source: "bdo_reconciled_inline_ledger", bank: "BDO", line: sourceLine, sourceRowIndex,
+        balance: balance / 100, amountText: (amount / 100).toFixed(2), balanceText: (balance / 100).toFixed(2), parserConfidence: 98 },
+    });
+  }
+  const fullText = normalized.join("\n");
+  const summaryCents = (label: string) => {
+    const match = fullText.match(new RegExp(`\\b${label}\\s+P\\s*([\\d,]+\\.\\d{2})`, "i"));
+    return match ? Math.round(Number(match[1].replace(/,/g, "")) * 100) : null;
+  };
+  if (!rows.length || summaryCents("Deposits") !== incomeCents || summaryCents("Withdrawals") !== expenseCents ||
+    metadata.endingBalance === null || Math.round(metadata.endingBalance * 100) !== previousBalance) return null;
+  return rows;
+};
+
+export const hasReconciledBdoInlineLedger = (text: string) => {
+  if (!/BDO/i.test(text) || !/Withdrawals\s+Debit\s+Deposits/i.test(text)) return false;
+  const metadata = bdoStatementMetadata(text);
+  return metadata !== null && parseReconciledBdoInlineLedger(text, metadata) !== null;
+};
+
 const parseBdoSavingsImportText = (text: string) => {
   const normalizedText = normalizeBdoText(text);
   const metadata = bdoStatementMetadata(text);
   if (!metadata) {
     return null;
   }
+
+  const reconciledInlineRows = parseReconciledBdoInlineLedger(text, metadata);
+  if (reconciledInlineRows) return { metadata, rows: reconciledInlineRows };
 
   const coverageMatch = text.match(
     new RegExp(`covering\\s+the\\s+period\\s+from\\s+(${monthNamePattern})\\s+(\\d{4})\\s+to\\s+(${monthNamePattern})\\s+(\\d{4})`, "i")
@@ -19832,6 +19900,9 @@ const parseChinaBankImportText = (text: string, context: ImportParseContext = {}
   const accountNumber =
     preserveAccountNumberDisplayCandidate(context.accountNumber) ??
     normalizeAccountNumberCandidate(context.accountNumber) ??
+    // Stop at the labeled, formatted identifier; adjacent summary balances
+    // must not become extra account digits in a flattened PDF/OCR line.
+    normalized.match(/\bAccount\s+(?:No\.?|Number)\s*:\s*(\d{4}-\d{2}-\d{5}-\d)(?!\d)/i)?.[1] ??
     extractFormattedAccountNumberFromLines(lines) ??
     detectAccountNumberFromText(normalized);
   const contextAccountName = cleanAccountHolderDisplayName(context.accountName);
@@ -20231,7 +20302,7 @@ const extractEastWestOcrDateCandidates = (value: string) => {
     .sort((left, right) => left.getTime() - right.getTime());
 };
 
-const buildEastWestTemplateSampleRows = (accountName: string, institution = "EastWest Bank") => {
+const buildEastWestTemplateSampleRows = (accountName: string, accountNumber: string | null, sourceText: string, institution = "EastWest Bank") => {
   const transactionSpecs: Array<{
     date: string;
     amount: number;
@@ -20306,25 +20377,30 @@ const buildEastWestTemplateSampleRows = (accountName: string, institution = "Eas
     merchantRaw: spec.description,
     merchantClean: summarizeMerchantText(spec.description, institution),
     description: spec.chequeNo
-      ? `${spec.description}; Reference ${spec.reference}; Cheque No. ${spec.chequeNo}; closing balance ${spec.closingBalance.toFixed(2)}`
-      : `${spec.description}; Reference ${spec.reference}; closing balance ${spec.closingBalance.toFixed(2)}`,
+      ? `${spec.description}; Reference ${spec.reference}; Cheque No. ${spec.chequeNo}`
+      : `${spec.description}; Reference ${spec.reference}`,
     categoryName: spec.categoryName,
     accountName,
-    accountNumber: "205050623445",
+    accountNumber: accountNumber ?? undefined,
     institution,
     type: spec.type,
-    confidence: spec.confidence ?? 90,
+    // The published variants disagree on balances/directions. Retain the learned
+    // row suggestions, but require review instead of asserting invented facts.
+    confidence: 45,
+    parserConfidence: 45,
     rawPayload: {
       bank: institution,
       kind: "eastwest_template_sample_transaction",
       reference: spec.reference,
       chequeNo: spec.chequeNo ?? null,
-      balance: spec.closingBalance,
+      templateBalanceHint: spec.closingBalance,
+      sourceText,
+      reviewReason: "published_template_requires_source_review",
     },
   } satisfies ParsedImportRow));
 };
 
-const parseEastWestTemplateSampleStatement = (text: string, accountName: string) => {
+const parseEastWestTemplateSampleStatement = (text: string, accountName: string, accountNumber: string | null) => {
   const normalized = normalizeWhitespace(text);
   const compact = compactWhitespace(normalized).toLowerCase();
   const looksLikePublishedSample =
@@ -20342,11 +20418,11 @@ const parseEastWestTemplateSampleStatement = (text: string, accountName: string)
   }
 
   const institution = "EastWest Bank";
-  const rows = buildEastWestTemplateSampleRows(accountName, institution);
+  const rows = buildEastWestTemplateSampleRows(accountName, accountNumber, text, institution);
   return {
     metadata: {
       institution,
-      accountNumber: "205050623445",
+      accountNumber,
       accountName,
       accountType: "bank",
       currency: "PHP",
@@ -20354,7 +20430,7 @@ const parseEastWestTemplateSampleStatement = (text: string, accountName: string)
       endingBalance: 9000,
       startDate: "2022-01-20T12:00:00.000Z",
       endDate: "2022-02-24T12:00:00.000Z",
-      confidence: 88,
+      confidence: 45,
     } satisfies DetectedStatementMetadata,
     rows,
   };
@@ -20374,6 +20450,7 @@ const parseGenericEastWestTemplateStatement = (
   const accountNumber =
     preserveAccountNumberDisplayCandidate(context.accountNumber) ??
     normalizeAccountNumberCandidate(context.accountNumber) ??
+    preserveAccountNumberDisplayCandidate(lines.find(line => /^Account\s*[:.]\s*\d/i.test(line))?.match(/^Account\s*[:.]\s*(\d[\d -]{6,}\d)\s*$/i)?.[1] ?? null) ??
     preserveAccountNumberDisplayCandidate(lines.find((line) => /^Account\s*:/i.test(line))?.match(/Account\s*:\s*((?:\d[\d\s-]{6,}\d))/i)?.[1] ?? null) ??
     normalizeAccountNumberCandidate(lines.find((line) => /^Account\s*:/i.test(line))?.match(/Account\s*:\s*((?:\d[\d\s-]{6,}\d))/i)?.[1] ?? null) ??
     preserveAccountNumberDisplayCandidate(normalizedText.match(/\bAccount\s*:\s*((?:\d[\d\s-]{6,}\d))/i)?.[1] ?? null) ??
@@ -20395,7 +20472,7 @@ const parseGenericEastWestTemplateStatement = (
       lines.find((line) => /\bCustomer|Customet|Cusbornes\b/i.test(line))?.match(/\b([A-Z]{3,}\s+[A-Z]{3,}(?:\s+[A-Z]{3,})*)\b/i)?.[1] ?? null
     ) ??
     "EastWest Bank";
-  const templateSampleParsed = parseEastWestTemplateSampleStatement(normalizedText, accountName);
+  const templateSampleParsed = parseEastWestTemplateSampleStatement(normalizedText, accountName, accountNumber);
   if (templateSampleParsed) {
     return templateSampleParsed;
   }

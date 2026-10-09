@@ -45,3 +45,8 @@ This document captures the current China Bank parsing guidance for Clover.
 
 - Rows with ambiguous debit versus credit direction should go to review instead of being auto-confirmed.
 - If OCR output is too fragmented to reconstruct the running balance reliably, fall back to the OpenAI OCR path rather than inventing rows.
+
+## Release regression protection
+
+- A numeric-only native PDF layer is incomplete even when dates and amounts survive; recover the image header and transaction descriptions using the existing local OCR path. Keep table rows intact rather than merging unordered OCR fragments.
+- A labeled `4-2-5-1` formatted account identifier ends before adjacent summary balances. Never append summary digits to the account identity. The portable corpus includes a synthetic leading-zero example across two periods and repeated transactions.

@@ -1,0 +1,8 @@
+REVIEW CAFE
+Jan 12, 2026
+2 x Sandwich 50.00 100.00
+Coffee 30.00
+3 x Cookie 10.00 30.00
+Subtotal 160.00
+Tax 12.80
+Total PHP 172.80

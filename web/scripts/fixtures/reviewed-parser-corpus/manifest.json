@@ -1,0 +1,1662 @@
+{
+  "schemaVersion": 1,
+  "baselineCommit": "901b242f1bce74ebf73fabdff3608c30ead6e03a",
+  "cases": [
+    {
+      "id": "bdo-full-month-ledger",
+      "source": "bdo-full-month-ledger.txt",
+      "sha256": "a87866f65e442740d56570acbfcc5a54aac0910f59e5241cdf51c54e26f7ffe6",
+      "kind": "statement",
+      "representation": "synthetic PDF text-layer transcription",
+      "provenance": {
+        "origin": "synthetic",
+        "reviewer": "Codex",
+        "reviewedAt": "2026-10-09",
+        "status": "reviewed",
+        "basis": "Synthetic amounts and identity; layout independently checked against the historical BDO PDF. Four 1000 deposits minus four 900 withdrawals = closing 400. Full source years, split balance line and spaced thousands must survive."
+      },
+      "expected": [
+        {
+          "date": "2023-09-10",
+          "amount": "1000.00",
+          "currency": "PHP",
+          "type": "income",
+          "accountNumber": "001-0000-000-01",
+          "rawPayload": {
+            "source": "bdo_reconciled_inline_ledger",
+            "balance": 1000
+          }
+        },
+        {
+          "date": "2023-09-10",
+          "amount": "900.00",
+          "currency": "PHP",
+          "type": "expense",
+          "accountNumber": "001-0000-000-01",
+          "rawPayload": {
+            "source": "bdo_reconciled_inline_ledger",
+            "balance": 100
+          }
+        },
+        {
+          "date": "2023-09-25",
+          "amount": "1000.00",
+          "currency": "PHP",
+          "type": "income",
+          "accountNumber": "001-0000-000-01",
+          "rawPayload": {
+            "source": "bdo_reconciled_inline_ledger",
+            "balance": 1100
+          }
+        },
+        {
+          "date": "2023-09-25",
+          "amount": "900.00",
+          "currency": "PHP",
+          "type": "expense",
+          "accountNumber": "001-0000-000-01",
+          "rawPayload": {
+            "source": "bdo_reconciled_inline_ledger",
+            "balance": 200
+          }
+        },
+        {
+          "date": "2023-10-10",
+          "amount": "1000.00",
+          "currency": "PHP",
+          "type": "income",
+          "accountNumber": "001-0000-000-01",
+          "rawPayload": {
+            "source": "bdo_reconciled_inline_ledger",
+            "balance": 1200
+          }
+        },
+        {
+          "date": "2023-10-10",
+          "amount": "900.00",
+          "currency": "PHP",
+          "type": "expense",
+          "accountNumber": "001-0000-000-01",
+          "rawPayload": {
+            "source": "bdo_reconciled_inline_ledger",
+            "balance": 300
+          }
+        },
+        {
+          "date": "2023-10-25",
+          "amount": "1000.00",
+          "currency": "PHP",
+          "type": "income",
+          "accountNumber": "001-0000-000-01",
+          "rawPayload": {
+            "source": "bdo_reconciled_inline_ledger",
+            "balance": 1300
+          }
+        },
+        {
+          "date": "2023-10-25",
+          "amount": "900.00",
+          "currency": "PHP",
+          "type": "expense",
+          "accountNumber": "001-0000-000-01",
+          "rawPayload": {
+            "source": "bdo_reconciled_inline_ledger",
+            "balance": 400
+          }
+        }
+      ]
+    },
+    {
+      "id": "repeated-and-multicurrency",
+      "source": "repeated-and-multicurrency.csv",
+      "sha256": "91987759a8ccfcbff3a037abb87178d91da5976f2e4a530731045b5153c8ff1b",
+      "kind": "statement",
+      "representation": "source text",
+      "provenance": {
+        "origin": "synthetic",
+        "reviewer": "Codex",
+        "reviewedAt": "2026-10-09",
+        "status": "reviewed",
+        "basis": "Two identical purchases have no duplicate reference. Preserve both and keep leading-zero account IDs and the original PHP/USD currencies."
+      },
+      "expected": [
+        {
+          "date": "2026-09-15",
+          "amount": "25.00",
+          "currency": "PHP",
+          "type": "expense",
+          "accountNumber": "0001",
+          "rawPayload": {
+            "originalHeaders": [
+              "Date",
+              "Description",
+              "Amount",
+              "Currency",
+              "Account Name",
+              "Account Number",
+              "Institution"
+            ],
+            "signedAmount": -25,
+            "directionEvidence": "amount_sign"
+          }
+        },
+        {
+          "date": "2026-09-15",
+          "amount": "25.00",
+          "currency": "PHP",
+          "type": "expense",
+          "accountNumber": "0001",
+          "rawPayload": {
+            "originalHeaders": [
+              "Date",
+              "Description",
+              "Amount",
+              "Currency",
+              "Account Name",
+              "Account Number",
+              "Institution"
+            ],
+            "signedAmount": -25,
+            "directionEvidence": "amount_sign"
+          }
+        },
+        {
+          "date": "2026-09-15",
+          "amount": "100.00",
+          "currency": "USD",
+          "type": "income",
+          "accountNumber": "0002",
+          "rawPayload": {
+            "originalHeaders": [
+              "Date",
+              "Description",
+              "Amount",
+              "Currency",
+              "Account Name",
+              "Account Number",
+              "Institution"
+            ],
+            "signedAmount": 100,
+            "directionEvidence": "amount_sign"
+          }
+        }
+      ]
+    },
+    {
+      "id": "repeated-and-multicurrency-tsv",
+      "source": "repeated-and-multicurrency-tsv.tsv",
+      "sha256": "e60013d005c0959149a89adf9e7233ae09b8564cca7e6276c4d04d62714daed1",
+      "kind": "statement",
+      "representation": "source text",
+      "provenance": {
+        "origin": "synthetic",
+        "reviewer": "Codex",
+        "reviewedAt": "2026-10-09",
+        "status": "reviewed",
+        "basis": "Same independently specified ledger, tab-delimited encoding."
+      },
+      "expected": [
+        {
+          "date": "2026-09-15",
+          "amount": "25.00",
+          "currency": "PHP",
+          "type": "expense",
+          "accountNumber": "0001",
+          "rawPayload": {
+            "originalHeaders": [
+              "Date",
+              "Description",
+              "Amount",
+              "Currency",
+              "Account Name",
+              "Account Number",
+              "Institution"
+            ],
+            "signedAmount": -25,
+            "directionEvidence": "amount_sign"
+          }
+        },
+        {
+          "date": "2026-09-15",
+          "amount": "25.00",
+          "currency": "PHP",
+          "type": "expense",
+          "accountNumber": "0001",
+          "rawPayload": {
+            "originalHeaders": [
+              "Date",
+              "Description",
+              "Amount",
+              "Currency",
+              "Account Name",
+              "Account Number",
+              "Institution"
+            ],
+            "signedAmount": -25,
+            "directionEvidence": "amount_sign"
+          }
+        },
+        {
+          "date": "2026-09-15",
+          "amount": "100.00",
+          "currency": "USD",
+          "type": "income",
+          "accountNumber": "0002",
+          "rawPayload": {
+            "originalHeaders": [
+              "Date",
+              "Description",
+              "Amount",
+              "Currency",
+              "Account Name",
+              "Account Number",
+              "Institution"
+            ],
+            "signedAmount": 100,
+            "directionEvidence": "amount_sign"
+          }
+        }
+      ]
+    },
+    {
+      "id": "qif-split-and-repeat",
+      "source": "qif-split-and-repeat.qif",
+      "sha256": "05d27c90e13abab41d5cf9b6e0b690d5a7da9dcf107298dc5025b53e0eabfdf7",
+      "kind": "statement",
+      "representation": "source text",
+      "provenance": {
+        "origin": "synthetic",
+        "reviewer": "Codex",
+        "reviewedAt": "2026-10-09",
+        "status": "reviewed",
+        "basis": "Two parts sum to the 50 parent. The separate 20 purchase survives. Currency comes only from explicit import context."
+      },
+      "expected": [
+        {
+          "date": "2026-09-15",
+          "amount": "20.00",
+          "currency": "CAD",
+          "type": "expense",
+          "accountName": "Review Checking",
+          "rawPayload": {
+            "currencyEvidence": "import_context",
+            "qifRecord": {
+              "parentAmount": -50,
+              "splitIndex": 1,
+              "splitCount": 2,
+              "lines": [
+                "D2026-09-15",
+                "T-50.00",
+                "PCorner Shop",
+                "MShared basket",
+                "SFood",
+                "EApples",
+                "$-20.00",
+                "SHousehold",
+                "ESoap",
+                "$-30.00"
+              ]
+            }
+          }
+        },
+        {
+          "date": "2026-09-15",
+          "amount": "30.00",
+          "currency": "CAD",
+          "type": "expense",
+          "accountName": "Review Checking",
+          "rawPayload": {
+            "currencyEvidence": "import_context",
+            "qifRecord": {
+              "parentAmount": -50,
+              "splitIndex": 2,
+              "splitCount": 2,
+              "lines": [
+                "D2026-09-15",
+                "T-50.00",
+                "PCorner Shop",
+                "MShared basket",
+                "SFood",
+                "EApples",
+                "$-20.00",
+                "SHousehold",
+                "ESoap",
+                "$-30.00"
+              ]
+            }
+          }
+        },
+        {
+          "date": "2026-09-15",
+          "amount": "20.00",
+          "currency": "CAD",
+          "type": "expense",
+          "accountName": "Review Checking"
+        }
+      ],
+      "context": {
+        "currency": "CAD"
+      }
+    },
+    {
+      "id": "ofx-distinct-references",
+      "source": "ofx-distinct-references.ofx",
+      "sha256": "2b21e6c12f6cb37934ef02009246bd58a941a99031734876be6c1bb18f141321",
+      "kind": "statement",
+      "representation": "source text",
+      "provenance": {
+        "origin": "synthetic",
+        "reviewer": "Codex",
+        "reviewedAt": "2026-10-09",
+        "status": "reviewed",
+        "basis": "Different provider IDs prove two equal purchases; neither account leading zeros nor FITIDs may be lost."
+      },
+      "expected": [
+        {
+          "date": "2026-09-15",
+          "amount": "25.00",
+          "currency": "USD",
+          "type": "expense",
+          "accountNumber": "000123",
+          "rawPayload": {
+            "fitId": "purchase-1"
+          }
+        },
+        {
+          "date": "2026-09-15",
+          "amount": "25.00",
+          "currency": "USD",
+          "type": "expense",
+          "accountNumber": "000123",
+          "rawPayload": {
+            "fitId": "purchase-2"
+          }
+        }
+      ]
+    },
+    {
+      "id": "mt940-original-currencies",
+      "source": "mt940-original-currencies.mt940",
+      "sha256": "46745f70b0119a82a361493b8d76e9f57186218dfc2b1d04d649da86290e5c37",
+      "kind": "statement",
+      "representation": "source text",
+      "provenance": {
+        "origin": "synthetic",
+        "reviewer": "Codex",
+        "reviewedAt": "2026-10-09",
+        "status": "reviewed",
+        "basis": "Two statement sections have distinct currencies and accounts. Decimal comma amounts are 12.50 and 20, not 1250 or 2000."
+      },
+      "expected": [
+        {
+          "date": "2026-09-02",
+          "amount": "12.50",
+          "currency": "EUR",
+          "type": "expense",
+          "accountNumber": "DE00000000000000000001",
+          "rawPayload": {
+            "directionCode": "D",
+            "rawAmount": -12.5
+          }
+        },
+        {
+          "date": "2026-09-02",
+          "amount": "20.00",
+          "currency": "GBP",
+          "type": "expense",
+          "accountNumber": "GB00000000000000000002",
+          "rawPayload": {
+            "directionCode": "D",
+            "rawAmount": -20
+          }
+        }
+      ]
+    },
+    {
+      "id": "camt-debit-credit",
+      "source": "camt-debit-credit.xml",
+      "sha256": "274cdaabf3d4eb8bb8a470b745806ea1c41b8d4788a45be79b2f498f278dbf95",
+      "kind": "statement",
+      "representation": "source text",
+      "provenance": {
+        "origin": "synthetic",
+        "reviewer": "Codex",
+        "reviewedAt": "2026-10-09",
+        "status": "reviewed",
+        "basis": "Explicit DBIT/CRDT determine direction; preserve account and EUR, 850-24.90 = 825.10 movement."
+      },
+      "expected": [
+        {
+          "date": "2026-09-02",
+          "amount": "24.90",
+          "currency": "EUR",
+          "type": "expense",
+          "accountNumber": "DE00000000000000000001",
+          "rawPayload": {
+            "creditDebitIndicator": "DBIT",
+            "rawAmount": -24.9
+          }
+        },
+        {
+          "date": "2026-09-03",
+          "amount": "850.00",
+          "currency": "EUR",
+          "type": "income",
+          "accountNumber": "DE00000000000000000001",
+          "rawPayload": {
+            "creditDebitIndicator": "CRDT",
+            "rawAmount": 850
+          }
+        }
+      ]
+    },
+    {
+      "id": "json-original-currency",
+      "source": "json-original-currency.json",
+      "sha256": "80a417a2be28313653bb7df160d79f71c67d02f98ab4f3c375bdc7cbbbc8d7b9",
+      "kind": "statement",
+      "representation": "source text",
+      "provenance": {
+        "origin": "synthetic",
+        "reviewer": "Codex",
+        "reviewedAt": "2026-10-09",
+        "status": "reviewed",
+        "basis": "Structured debit and credit fields, SGD and leading zeros are explicit in source."
+      },
+      "expected": [
+        {
+          "date": "2026-09-02",
+          "amount": "6.25",
+          "currency": "SGD",
+          "type": "expense",
+          "accountNumber": "000123",
+          "rawPayload": {
+            "sourceRecord": {
+              "transaction_date": "2026-09-02",
+              "transactionName": "Coffee",
+              "debit_amount": "6.25"
+            }
+          }
+        },
+        {
+          "date": "2026-09-03",
+          "amount": "1000.00",
+          "currency": "SGD",
+          "type": "income",
+          "accountNumber": "000123",
+          "rawPayload": {
+            "sourceRecord": {
+              "transaction_date": "2026-09-03",
+              "transactionName": "Salary",
+              "credit_amount": "1000"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "timestamped-screenshot",
+      "source": "timestamped-screenshot.txt",
+      "sha256": "ea9e987d67db991561d5d3919879fdce4651112e6d52bcec193e17e5c8acb1ef",
+      "kind": "screenshot",
+      "representation": "synthetic screenshot OCR transcription",
+      "provenance": {
+        "origin": "synthetic",
+        "reviewer": "Codex",
+        "reviewedAt": "2026-10-09",
+        "status": "reviewed",
+        "basis": "Three timestamps identify three purchases. Generic OCR must preserve source and require review."
+      },
+      "expected": [
+        {
+          "date": "2026-09-15",
+          "amount": "25.00",
+          "currency": "PHP",
+          "type": "expense",
+          "rawPayload": {
+            "reviewRequired": true
+          }
+        },
+        {
+          "date": "2026-09-15",
+          "amount": "25.00",
+          "currency": "PHP",
+          "type": "expense",
+          "rawPayload": {
+            "reviewRequired": true
+          }
+        },
+        {
+          "date": "2026-09-15",
+          "amount": "25.00",
+          "currency": "PHP",
+          "type": "expense",
+          "rawPayload": {
+            "reviewRequired": true
+          }
+        }
+      ]
+    },
+    {
+      "id": "receipt-php-items",
+      "source": "receipt-php-items.txt",
+      "sha256": "4616a17c8048af59a6eeec5b1aeb01df2a5f6d0dec5de37ebc8e33811dec6492",
+      "kind": "receipt",
+      "representation": "synthetic receipt transcription",
+      "provenance": {
+        "origin": "synthetic",
+        "reviewer": "Codex",
+        "reviewedAt": "2026-10-09",
+        "status": "reviewed",
+        "basis": "Manual arithmetic: 2x50 + 30 + 3x10 = 160; tax12.80 gives172.80, explicitly PHP. Item-name cleanup is outside this arithmetic contract; the current quantity marker may remain in the displayed item name."
+      },
+      "expected": {
+        "total": "172.80",
+        "currency": "PHP",
+        "billDate": "2026-01-12T00:00:00.000Z",
+        "items": [
+          {
+            "amount": "100.00",
+            "quantity": 2
+          },
+          {
+            "amount": "30.00"
+          },
+          {
+            "amount": "30.00",
+            "quantity": 3
+          }
+        ]
+      }
+    },
+    {
+      "id": "receipt-currency-unresolved",
+      "source": "receipt-currency-unresolved.txt",
+      "sha256": "3c1a31a5ce1cb642cb53487693ffc9d76d021e36f196fb7243fee6455fba37bf",
+      "kind": "receipt",
+      "representation": "synthetic receipt transcription",
+      "provenance": {
+        "origin": "synthetic",
+        "reviewer": "Codex",
+        "reviewedAt": "2026-10-09",
+        "status": "reviewed",
+        "basis": "No currency evidence: total55 remains useful but currency must stay unresolved with a warning and capped confidence."
+      },
+      "expected": {
+        "total": "55.00",
+        "currency": "MIXED",
+        "maxConfidence": 45,
+        "requiresCurrencyWarning": true,
+        "items": [
+          {
+            "description": "Coffee",
+            "amount": "25.00"
+          },
+          {
+            "description": "Sandwich",
+            "amount": "30.00"
+          }
+        ]
+      }
+    },
+    {
+      "id": "receipt-idr",
+      "source": "receipt-idr.txt",
+      "sha256": "6c8726aaeaa6a18185df96d86ec368c9560df97de9f90e904ceabe1f8f2a2c36",
+      "kind": "receipt",
+      "representation": "synthetic receipt transcription",
+      "provenance": {
+        "origin": "synthetic",
+        "reviewer": "Codex",
+        "reviewedAt": "2026-10-09",
+        "status": "reviewed",
+        "basis": "Explicit Rp and tender minus change confirm 10000 rupiah, not10."
+      },
+      "expected": {
+        "total": "10000.00",
+        "currency": "IDR"
+      }
+    },
+    {
+      "id": "migration-confirmation-is-not-review",
+      "source": "migration-confirmation-is-not-review.csv",
+      "sha256": "04afc0b73ec3de7c13def134d063331c9019bb3be477a3c0f924462eb79a6db6",
+      "kind": "statement",
+      "representation": "source text",
+      "provenance": {
+        "origin": "synthetic",
+        "reviewer": "Codex",
+        "reviewedAt": "2026-10-09",
+        "status": "reviewed",
+        "basis": "YNAB opening balance is not income; Cleared/Reconciled is source evidence, never Clover user confirmation. Category and memo checks also run through the worker."
+      },
+      "expected": [
+        {
+          "date": "2026-09-02",
+          "amount": "45.25",
+          "currency": "USD",
+          "type": "expense",
+          "accountName": "QA Checking"
+        },
+        {
+          "date": "2026-09-03",
+          "amount": "2500.00",
+          "currency": "USD",
+          "type": "income",
+          "accountName": "QA Checking"
+        }
+      ]
+    },
+    {
+      "id": "workbook-xlsx",
+      "source": "workbook-xlsx.xlsx",
+      "sha256": "0bf108283286f885893e1d6cc052ae42ffefba892038b8c900bb963e323e33e1",
+      "kind": "statement",
+      "representation": "synthetic workbook bytes",
+      "provenance": {
+        "origin": "synthetic",
+        "reviewer": "Codex",
+        "reviewedAt": "2026-10-09",
+        "status": "reviewed",
+        "basis": "Manually specified 25 PHP, 25 PHP, 100 USD ledger encoded as xlsx. Preserve both repeated purchases, account leading zeros, and original currencies through workbook decoding."
+      },
+      "expected": [
+        {
+          "date": "2026-09-15",
+          "amount": "25.00",
+          "currency": "PHP",
+          "type": "expense",
+          "accountNumber": "0001",
+          "rawPayload": {
+            "originalHeaders": [
+              "Date",
+              "Description",
+              "Amount",
+              "Currency",
+              "Account Name",
+              "Account Number",
+              "Institution"
+            ],
+            "signedAmount": -25,
+            "directionEvidence": "amount_sign"
+          }
+        },
+        {
+          "date": "2026-09-15",
+          "amount": "25.00",
+          "currency": "PHP",
+          "type": "expense",
+          "accountNumber": "0001",
+          "rawPayload": {
+            "originalHeaders": [
+              "Date",
+              "Description",
+              "Amount",
+              "Currency",
+              "Account Name",
+              "Account Number",
+              "Institution"
+            ],
+            "signedAmount": -25,
+            "directionEvidence": "amount_sign"
+          }
+        },
+        {
+          "date": "2026-09-15",
+          "amount": "100.00",
+          "currency": "USD",
+          "type": "income",
+          "accountNumber": "0002",
+          "rawPayload": {
+            "originalHeaders": [
+              "Date",
+              "Description",
+              "Amount",
+              "Currency",
+              "Account Name",
+              "Account Number",
+              "Institution"
+            ],
+            "signedAmount": 100,
+            "directionEvidence": "amount_sign"
+          }
+        }
+      ]
+    },
+    {
+      "id": "workbook-xls",
+      "source": "workbook-xls.xls",
+      "sha256": "5f0fef909b32e383864b2732f54f61864b847c691ca1291ada9afeed425c8d0c",
+      "kind": "statement",
+      "representation": "synthetic workbook bytes",
+      "provenance": {
+        "origin": "synthetic",
+        "reviewer": "Codex",
+        "reviewedAt": "2026-10-09",
+        "status": "reviewed",
+        "basis": "Manually specified 25 PHP, 25 PHP, 100 USD ledger encoded as xls. Preserve both repeated purchases, account leading zeros, and original currencies through workbook decoding."
+      },
+      "expected": [
+        {
+          "date": "2026-09-15",
+          "amount": "25.00",
+          "currency": "PHP",
+          "type": "expense",
+          "accountNumber": "0001",
+          "rawPayload": {
+            "originalHeaders": [
+              "Date",
+              "Description",
+              "Amount",
+              "Currency",
+              "Account Name",
+              "Account Number",
+              "Institution"
+            ],
+            "signedAmount": -25,
+            "directionEvidence": "amount_sign"
+          }
+        },
+        {
+          "date": "2026-09-15",
+          "amount": "25.00",
+          "currency": "PHP",
+          "type": "expense",
+          "accountNumber": "0001",
+          "rawPayload": {
+            "originalHeaders": [
+              "Date",
+              "Description",
+              "Amount",
+              "Currency",
+              "Account Name",
+              "Account Number",
+              "Institution"
+            ],
+            "signedAmount": -25,
+            "directionEvidence": "amount_sign"
+          }
+        },
+        {
+          "date": "2026-09-15",
+          "amount": "100.00",
+          "currency": "USD",
+          "type": "income",
+          "accountNumber": "0002",
+          "rawPayload": {
+            "originalHeaders": [
+              "Date",
+              "Description",
+              "Amount",
+              "Currency",
+              "Account Name",
+              "Account Number",
+              "Institution"
+            ],
+            "signedAmount": 100,
+            "directionEvidence": "amount_sign"
+          }
+        }
+      ]
+    },
+    {
+      "id": "workbook-xlsm",
+      "source": "workbook-xlsm.xlsm",
+      "sha256": "bb1a4208f99b4b2bc0bb454f67773be8739636fee14a6866b7edccd5c3b4256e",
+      "kind": "statement",
+      "representation": "synthetic workbook bytes",
+      "provenance": {
+        "origin": "synthetic",
+        "reviewer": "Codex",
+        "reviewedAt": "2026-10-09",
+        "status": "reviewed",
+        "basis": "Manually specified 25 PHP, 25 PHP, 100 USD ledger encoded as xlsm. Preserve both repeated purchases, account leading zeros, and original currencies through workbook decoding."
+      },
+      "expected": [
+        {
+          "date": "2026-09-15",
+          "amount": "25.00",
+          "currency": "PHP",
+          "type": "expense",
+          "accountNumber": "0001",
+          "rawPayload": {
+            "originalHeaders": [
+              "Date",
+              "Description",
+              "Amount",
+              "Currency",
+              "Account Name",
+              "Account Number",
+              "Institution"
+            ],
+            "signedAmount": -25,
+            "directionEvidence": "amount_sign"
+          }
+        },
+        {
+          "date": "2026-09-15",
+          "amount": "25.00",
+          "currency": "PHP",
+          "type": "expense",
+          "accountNumber": "0001",
+          "rawPayload": {
+            "originalHeaders": [
+              "Date",
+              "Description",
+              "Amount",
+              "Currency",
+              "Account Name",
+              "Account Number",
+              "Institution"
+            ],
+            "signedAmount": -25,
+            "directionEvidence": "amount_sign"
+          }
+        },
+        {
+          "date": "2026-09-15",
+          "amount": "100.00",
+          "currency": "USD",
+          "type": "income",
+          "accountNumber": "0002",
+          "rawPayload": {
+            "originalHeaders": [
+              "Date",
+              "Description",
+              "Amount",
+              "Currency",
+              "Account Name",
+              "Account Number",
+              "Institution"
+            ],
+            "signedAmount": 100,
+            "directionEvidence": "amount_sign"
+          }
+        }
+      ]
+    },
+    {
+      "id": "workbook-xlsb",
+      "source": "workbook-xlsb.xlsb",
+      "sha256": "ed22e4a9aaf9515aca37cfbca18447e583057e1c3cae5dfccbf39f869988cb54",
+      "kind": "statement",
+      "representation": "synthetic workbook bytes",
+      "provenance": {
+        "origin": "synthetic",
+        "reviewer": "Codex",
+        "reviewedAt": "2026-10-09",
+        "status": "reviewed",
+        "basis": "Manually specified 25 PHP, 25 PHP, 100 USD ledger encoded as xlsb. Preserve both repeated purchases, account leading zeros, and original currencies through workbook decoding."
+      },
+      "expected": [
+        {
+          "date": "2026-09-15",
+          "amount": "25.00",
+          "currency": "PHP",
+          "type": "expense",
+          "accountNumber": "0001",
+          "rawPayload": {
+            "originalHeaders": [
+              "Date",
+              "Description",
+              "Amount",
+              "Currency",
+              "Account Name",
+              "Account Number",
+              "Institution"
+            ],
+            "signedAmount": -25,
+            "directionEvidence": "amount_sign"
+          }
+        },
+        {
+          "date": "2026-09-15",
+          "amount": "25.00",
+          "currency": "PHP",
+          "type": "expense",
+          "accountNumber": "0001",
+          "rawPayload": {
+            "originalHeaders": [
+              "Date",
+              "Description",
+              "Amount",
+              "Currency",
+              "Account Name",
+              "Account Number",
+              "Institution"
+            ],
+            "signedAmount": -25,
+            "directionEvidence": "amount_sign"
+          }
+        },
+        {
+          "date": "2026-09-15",
+          "amount": "100.00",
+          "currency": "USD",
+          "type": "income",
+          "accountNumber": "0002",
+          "rawPayload": {
+            "originalHeaders": [
+              "Date",
+              "Description",
+              "Amount",
+              "Currency",
+              "Account Name",
+              "Account Number",
+              "Institution"
+            ],
+            "signedAmount": 100,
+            "directionEvidence": "amount_sign"
+          }
+        }
+      ]
+    },
+    {
+      "id": "workbook-ods",
+      "source": "workbook-ods.ods",
+      "sha256": "ff5b0db5e18e8363d9331df45dc3a4f54f3907ccf7074211be36a69826061797",
+      "kind": "statement",
+      "representation": "synthetic workbook bytes",
+      "provenance": {
+        "origin": "synthetic",
+        "reviewer": "Codex",
+        "reviewedAt": "2026-10-09",
+        "status": "reviewed",
+        "basis": "Manually specified 25 PHP, 25 PHP, 100 USD ledger encoded as ods. Preserve both repeated purchases, account leading zeros, and original currencies through workbook decoding."
+      },
+      "expected": [
+        {
+          "date": "2026-09-15",
+          "amount": "25.00",
+          "currency": "PHP",
+          "type": "expense",
+          "accountNumber": "0001",
+          "rawPayload": {
+            "originalHeaders": [
+              "Date",
+              "Description",
+              "Amount",
+              "Currency",
+              "Account Name",
+              "Account Number",
+              "Institution"
+            ],
+            "signedAmount": -25,
+            "directionEvidence": "amount_sign"
+          }
+        },
+        {
+          "date": "2026-09-15",
+          "amount": "25.00",
+          "currency": "PHP",
+          "type": "expense",
+          "accountNumber": "0001",
+          "rawPayload": {
+            "originalHeaders": [
+              "Date",
+              "Description",
+              "Amount",
+              "Currency",
+              "Account Name",
+              "Account Number",
+              "Institution"
+            ],
+            "signedAmount": -25,
+            "directionEvidence": "amount_sign"
+          }
+        },
+        {
+          "date": "2026-09-15",
+          "amount": "100.00",
+          "currency": "USD",
+          "type": "income",
+          "accountNumber": "0002",
+          "rawPayload": {
+            "originalHeaders": [
+              "Date",
+              "Description",
+              "Amount",
+              "Currency",
+              "Account Name",
+              "Account Number",
+              "Institution"
+            ],
+            "signedAmount": 100,
+            "directionEvidence": "amount_sign"
+          }
+        }
+      ]
+    },
+    {
+      "id": "receipt-decimal-bill-amount",
+      "source": "receipt-decimal-bill-amount.txt",
+      "sha256": "8c1beaaece9ebc771005d93f1d51707cc2ce7158c7218de4e6d73fdcfd713519",
+      "kind": "receipt",
+      "representation": "synthetic receipt transcription",
+      "provenance": {
+        "origin": "synthetic",
+        "reviewer": "Codex",
+        "reviewedAt": "2026-10-09",
+        "status": "reviewed",
+        "basis": "25 + 30 = 55 decimal units. Bill Amount is the financial summary; Total Qty is not. Preserve the dated receipt while requiring review of its absent currency."
+      },
+      "expected": {
+        "total": "55.00",
+        "currency": "MIXED",
+        "billDate": "2026-01-12T00:00:00.000Z",
+        "maxConfidence": 45,
+        "requiresCurrencyWarning": true,
+        "items": [
+          {
+            "amount": "25.00"
+          },
+          {
+            "amount": "30.00"
+          }
+        ]
+      }
+    },
+    {
+      "id": "receipt-decimal-total-amount",
+      "source": "receipt-decimal-total-amount.txt",
+      "sha256": "bc28a560510bd99ba3ecfd47aea7bb00b074fb665d1c60ab404a31c1c5bae0b6",
+      "kind": "receipt",
+      "representation": "synthetic receipt transcription",
+      "provenance": {
+        "origin": "synthetic",
+        "reviewer": "Codex",
+        "reviewedAt": "2026-10-09",
+        "status": "reviewed",
+        "basis": "25 + 30 = 55 decimal units. Total Amount is the financial summary; Total Qty is not. Preserve the dated receipt while requiring review of its absent currency."
+      },
+      "expected": {
+        "total": "55.00",
+        "currency": "MIXED",
+        "billDate": "2026-01-12T00:00:00.000Z",
+        "maxConfidence": 45,
+        "requiresCurrencyWarning": true,
+        "items": [
+          {
+            "amount": "25.00"
+          },
+          {
+            "amount": "30.00"
+          }
+        ]
+      }
+    },
+    {
+      "id": "chinabank-adjacent-account-balances",
+      "source": "chinabank-adjacent-account-balances.txt",
+      "sha256": "03e3848e8fddef45724088088e21db267fc123341ead0171497db04a11f27b5d",
+      "kind": "statement",
+      "representation": "synthetic complete OCR table transcription",
+      "provenance": {
+        "origin": "synthetic",
+        "reviewer": "Codex",
+        "reviewedAt": "2026-10-09",
+        "status": "reviewed",
+        "basis": "Synthetic leading-zero 4-2-5-1 account sits beside summary balances. Twenty explicit 100 credits take 1000 to 3000 across two monthly periods. Two identical date/amount occurrences per month are legitimate. Expectations come from these source cells and arithmetic."
+      },
+      "expected": [
+        {
+          "date": "2026-07-01",
+          "amount": "100.00",
+          "type": "income",
+          "accountNumber": "0123-00-00042-1",
+          "institution": "China Bank",
+          "rawPayload": {
+            "line": "Jul 01 Cash Deposit 0.00 100.00 1,100.00",
+            "balance": 1100
+          }
+        },
+        {
+          "date": "2026-07-01",
+          "amount": "100.00",
+          "type": "income",
+          "accountNumber": "0123-00-00042-1",
+          "institution": "China Bank",
+          "rawPayload": {
+            "line": "Jul 01 Cash Deposit 0.00 100.00 1,200.00",
+            "balance": 1200
+          }
+        },
+        {
+          "date": "2026-07-02",
+          "amount": "100.00",
+          "type": "income",
+          "accountNumber": "0123-00-00042-1",
+          "institution": "China Bank",
+          "rawPayload": {
+            "line": "Jul 02 Cash Deposit 0.00 100.00 1,300.00",
+            "balance": 1300
+          }
+        },
+        {
+          "date": "2026-07-03",
+          "amount": "100.00",
+          "type": "income",
+          "accountNumber": "0123-00-00042-1",
+          "institution": "China Bank",
+          "rawPayload": {
+            "line": "Jul 03 Cash Deposit 0.00 100.00 1,400.00",
+            "balance": 1400
+          }
+        },
+        {
+          "date": "2026-07-04",
+          "amount": "100.00",
+          "type": "income",
+          "accountNumber": "0123-00-00042-1",
+          "institution": "China Bank",
+          "rawPayload": {
+            "line": "Jul 04 Cash Deposit 0.00 100.00 1,500.00",
+            "balance": 1500
+          }
+        },
+        {
+          "date": "2026-07-05",
+          "amount": "100.00",
+          "type": "income",
+          "accountNumber": "0123-00-00042-1",
+          "institution": "China Bank",
+          "rawPayload": {
+            "line": "Jul 05 Cash Deposit 0.00 100.00 1,600.00",
+            "balance": 1600
+          }
+        },
+        {
+          "date": "2026-07-06",
+          "amount": "100.00",
+          "type": "income",
+          "accountNumber": "0123-00-00042-1",
+          "institution": "China Bank",
+          "rawPayload": {
+            "line": "Jul 06 Cash Deposit 0.00 100.00 1,700.00",
+            "balance": 1700
+          }
+        },
+        {
+          "date": "2026-07-07",
+          "amount": "100.00",
+          "type": "income",
+          "accountNumber": "0123-00-00042-1",
+          "institution": "China Bank",
+          "rawPayload": {
+            "line": "Jul 07 Cash Deposit 0.00 100.00 1,800.00",
+            "balance": 1800
+          }
+        },
+        {
+          "date": "2026-07-08",
+          "amount": "100.00",
+          "type": "income",
+          "accountNumber": "0123-00-00042-1",
+          "institution": "China Bank",
+          "rawPayload": {
+            "line": "Jul 08 Cash Deposit 0.00 100.00 1,900.00",
+            "balance": 1900
+          }
+        },
+        {
+          "date": "2026-07-09",
+          "amount": "100.00",
+          "type": "income",
+          "accountNumber": "0123-00-00042-1",
+          "institution": "China Bank",
+          "rawPayload": {
+            "line": "Jul 09 Cash Deposit 0.00 100.00 2,000.00",
+            "balance": 2000
+          }
+        },
+        {
+          "date": "2026-08-01",
+          "amount": "100.00",
+          "type": "income",
+          "accountNumber": "0123-00-00042-1",
+          "institution": "China Bank",
+          "rawPayload": {
+            "line": "Aug 01 Cash Deposit 0.00 100.00 2,100.00",
+            "balance": 2100
+          }
+        },
+        {
+          "date": "2026-08-01",
+          "amount": "100.00",
+          "type": "income",
+          "accountNumber": "0123-00-00042-1",
+          "institution": "China Bank",
+          "rawPayload": {
+            "line": "Aug 01 Cash Deposit 0.00 100.00 2,200.00",
+            "balance": 2200
+          }
+        },
+        {
+          "date": "2026-08-02",
+          "amount": "100.00",
+          "type": "income",
+          "accountNumber": "0123-00-00042-1",
+          "institution": "China Bank",
+          "rawPayload": {
+            "line": "Aug 02 Cash Deposit 0.00 100.00 2,300.00",
+            "balance": 2300
+          }
+        },
+        {
+          "date": "2026-08-03",
+          "amount": "100.00",
+          "type": "income",
+          "accountNumber": "0123-00-00042-1",
+          "institution": "China Bank",
+          "rawPayload": {
+            "line": "Aug 03 Cash Deposit 0.00 100.00 2,400.00",
+            "balance": 2400
+          }
+        },
+        {
+          "date": "2026-08-04",
+          "amount": "100.00",
+          "type": "income",
+          "accountNumber": "0123-00-00042-1",
+          "institution": "China Bank",
+          "rawPayload": {
+            "line": "Aug 04 Cash Deposit 0.00 100.00 2,500.00",
+            "balance": 2500
+          }
+        },
+        {
+          "date": "2026-08-05",
+          "amount": "100.00",
+          "type": "income",
+          "accountNumber": "0123-00-00042-1",
+          "institution": "China Bank",
+          "rawPayload": {
+            "line": "Aug 05 Cash Deposit 0.00 100.00 2,600.00",
+            "balance": 2600
+          }
+        },
+        {
+          "date": "2026-08-06",
+          "amount": "100.00",
+          "type": "income",
+          "accountNumber": "0123-00-00042-1",
+          "institution": "China Bank",
+          "rawPayload": {
+            "line": "Aug 06 Cash Deposit 0.00 100.00 2,700.00",
+            "balance": 2700
+          }
+        },
+        {
+          "date": "2026-08-07",
+          "amount": "100.00",
+          "type": "income",
+          "accountNumber": "0123-00-00042-1",
+          "institution": "China Bank",
+          "rawPayload": {
+            "line": "Aug 07 Cash Deposit 0.00 100.00 2,800.00",
+            "balance": 2800
+          }
+        },
+        {
+          "date": "2026-08-08",
+          "amount": "100.00",
+          "type": "income",
+          "accountNumber": "0123-00-00042-1",
+          "institution": "China Bank",
+          "rawPayload": {
+            "line": "Aug 08 Cash Deposit 0.00 100.00 2,900.00",
+            "balance": 2900
+          }
+        },
+        {
+          "date": "2026-08-09",
+          "amount": "100.00",
+          "type": "income",
+          "accountNumber": "0123-00-00042-1",
+          "institution": "China Bank",
+          "rawPayload": {
+            "line": "Aug 09 Cash Deposit 0.00 100.00 3,000.00",
+            "balance": 3000
+          }
+        }
+      ],
+      "expectedMetadata": {
+        "institution": "China Bank",
+        "accountNumber": "0123-00-00042-1",
+        "openingBalance": 1000,
+        "endingBalance": 3000
+      }
+    },
+    {
+      "id": "eastwest-template-blank-account",
+      "source": "eastwest-template-blank-account.txt",
+      "sha256": "f551ac1ddad0831f9c3684dad97861ebb72bd1e9560cee48cf982a5048f46204",
+      "kind": "statement",
+      "representation": "synthetic OCR template reproduction; suggestions must remain under review",
+      "provenance": {
+        "origin": "synthetic",
+        "reviewer": "Codex",
+        "reviewedAt": "2026-10-09",
+        "status": "reviewed",
+        "basis": "Synthetic identifier and reference cells. Retains fifteen learned template suggestions while testing blank versus explicit account identity, original source evidence and mandatory low confidence. Final Cash Deposit label contradicts its debit/balance: these suggestions are not certified financial labels or human confirmations."
+      },
+      "expected": [
+        {
+          "date": "2022-01-20",
+          "amount": "5000.00",
+          "maxConfidence": 45,
+          "rawPayload": {
+            "sourceText": "EastWest Bank\n25 February 2022\nAccount Statement\nAccount: \nCustomer: 3434504 JOHN CITIZEN\nCurrency: PHP\nBook Date Reference Description Value Date Cheque No. Debit Credit Closing Balance\nBalance at Period Start 0.00\n20 Jan 22 TT220224YCCF Cash Deposit 20 Jan 22 0.00 5000.00 5000.00\n24 Jan 22 SYNTHETIC1 Cash Deposit 24 Jan 22 0.00 1000.00 6000.00\n31 Jan 22 SYNTHETIC2 Cash Deposit 31 Jan 22 0.00 30000.00 36000.00\n02 Feb 22 SYNTHETIC3 Outward Cheque Dr 02 Feb 22 4500.00 0.00 31500.00\n02 Feb 22 SYNTHETIC4 Transfer SUCCESSFUL 02 Feb 22 24000.00 0.00 7500.00\n04 Feb 22 SYNTHETIC5 Cash Deposit 04 Feb 22 0.00 500.00 8000.00\n07 Feb 22 SYNTHETIC6 Cash Deposit 07 Feb 22 0.00 1000.00 9000.00\n09 Feb 22 SYNTHETIC7 Cash Deposit 09 Feb 22 0.00 1000.00 10000.00\n10 Feb 22 SYNTHETIC8 Cash Deposit 10 Feb 22 0.00 1000.00 11000.00\n14 Feb 22 SYNTHETIC9 Cash Deposit 14 Feb 22 0.00 3000.00 14000.00\n17 Feb 22 SYNTHETIC10 Cash Deposit 17 Feb 22 0.00 5000.00 19000.00\n21 Feb 22 SYNTHETIC11 Transfer SUCCESSFUL 21 Feb 22 5000.00 0.00 14000.00\n22 Feb 22 SYNTHETIC12 Cash Deposit 22 Feb 22 0.00 1000.00 15000.00\n22 Feb 22 SYNTHETIC13 Outward Cheque 22 Feb 22 5000.00 0.00 10000.00\n24 Feb 22 SYNTHETIC14 Cash Deposit 24 Feb 22 1000.00 0.00 9000.00\n",
+            "reviewReason": "published_template_requires_source_review"
+          }
+        },
+        {
+          "date": "2022-01-24",
+          "amount": "1000.00",
+          "maxConfidence": 45,
+          "rawPayload": {
+            "sourceText": "EastWest Bank\n25 February 2022\nAccount Statement\nAccount: \nCustomer: 3434504 JOHN CITIZEN\nCurrency: PHP\nBook Date Reference Description Value Date Cheque No. Debit Credit Closing Balance\nBalance at Period Start 0.00\n20 Jan 22 TT220224YCCF Cash Deposit 20 Jan 22 0.00 5000.00 5000.00\n24 Jan 22 SYNTHETIC1 Cash Deposit 24 Jan 22 0.00 1000.00 6000.00\n31 Jan 22 SYNTHETIC2 Cash Deposit 31 Jan 22 0.00 30000.00 36000.00\n02 Feb 22 SYNTHETIC3 Outward Cheque Dr 02 Feb 22 4500.00 0.00 31500.00\n02 Feb 22 SYNTHETIC4 Transfer SUCCESSFUL 02 Feb 22 24000.00 0.00 7500.00\n04 Feb 22 SYNTHETIC5 Cash Deposit 04 Feb 22 0.00 500.00 8000.00\n07 Feb 22 SYNTHETIC6 Cash Deposit 07 Feb 22 0.00 1000.00 9000.00\n09 Feb 22 SYNTHETIC7 Cash Deposit 09 Feb 22 0.00 1000.00 10000.00\n10 Feb 22 SYNTHETIC8 Cash Deposit 10 Feb 22 0.00 1000.00 11000.00\n14 Feb 22 SYNTHETIC9 Cash Deposit 14 Feb 22 0.00 3000.00 14000.00\n17 Feb 22 SYNTHETIC10 Cash Deposit 17 Feb 22 0.00 5000.00 19000.00\n21 Feb 22 SYNTHETIC11 Transfer SUCCESSFUL 21 Feb 22 5000.00 0.00 14000.00\n22 Feb 22 SYNTHETIC12 Cash Deposit 22 Feb 22 0.00 1000.00 15000.00\n22 Feb 22 SYNTHETIC13 Outward Cheque 22 Feb 22 5000.00 0.00 10000.00\n24 Feb 22 SYNTHETIC14 Cash Deposit 24 Feb 22 1000.00 0.00 9000.00\n",
+            "reviewReason": "published_template_requires_source_review"
+          }
+        },
+        {
+          "date": "2022-01-31",
+          "amount": "30000.00",
+          "maxConfidence": 45,
+          "rawPayload": {
+            "sourceText": "EastWest Bank\n25 February 2022\nAccount Statement\nAccount: \nCustomer: 3434504 JOHN CITIZEN\nCurrency: PHP\nBook Date Reference Description Value Date Cheque No. Debit Credit Closing Balance\nBalance at Period Start 0.00\n20 Jan 22 TT220224YCCF Cash Deposit 20 Jan 22 0.00 5000.00 5000.00\n24 Jan 22 SYNTHETIC1 Cash Deposit 24 Jan 22 0.00 1000.00 6000.00\n31 Jan 22 SYNTHETIC2 Cash Deposit 31 Jan 22 0.00 30000.00 36000.00\n02 Feb 22 SYNTHETIC3 Outward Cheque Dr 02 Feb 22 4500.00 0.00 31500.00\n02 Feb 22 SYNTHETIC4 Transfer SUCCESSFUL 02 Feb 22 24000.00 0.00 7500.00\n04 Feb 22 SYNTHETIC5 Cash Deposit 04 Feb 22 0.00 500.00 8000.00\n07 Feb 22 SYNTHETIC6 Cash Deposit 07 Feb 22 0.00 1000.00 9000.00\n09 Feb 22 SYNTHETIC7 Cash Deposit 09 Feb 22 0.00 1000.00 10000.00\n10 Feb 22 SYNTHETIC8 Cash Deposit 10 Feb 22 0.00 1000.00 11000.00\n14 Feb 22 SYNTHETIC9 Cash Deposit 14 Feb 22 0.00 3000.00 14000.00\n17 Feb 22 SYNTHETIC10 Cash Deposit 17 Feb 22 0.00 5000.00 19000.00\n21 Feb 22 SYNTHETIC11 Transfer SUCCESSFUL 21 Feb 22 5000.00 0.00 14000.00\n22 Feb 22 SYNTHETIC12 Cash Deposit 22 Feb 22 0.00 1000.00 15000.00\n22 Feb 22 SYNTHETIC13 Outward Cheque 22 Feb 22 5000.00 0.00 10000.00\n24 Feb 22 SYNTHETIC14 Cash Deposit 24 Feb 22 1000.00 0.00 9000.00\n",
+            "reviewReason": "published_template_requires_source_review"
+          }
+        },
+        {
+          "date": "2022-02-02",
+          "amount": "4500.00",
+          "maxConfidence": 45,
+          "rawPayload": {
+            "sourceText": "EastWest Bank\n25 February 2022\nAccount Statement\nAccount: \nCustomer: 3434504 JOHN CITIZEN\nCurrency: PHP\nBook Date Reference Description Value Date Cheque No. Debit Credit Closing Balance\nBalance at Period Start 0.00\n20 Jan 22 TT220224YCCF Cash Deposit 20 Jan 22 0.00 5000.00 5000.00\n24 Jan 22 SYNTHETIC1 Cash Deposit 24 Jan 22 0.00 1000.00 6000.00\n31 Jan 22 SYNTHETIC2 Cash Deposit 31 Jan 22 0.00 30000.00 36000.00\n02 Feb 22 SYNTHETIC3 Outward Cheque Dr 02 Feb 22 4500.00 0.00 31500.00\n02 Feb 22 SYNTHETIC4 Transfer SUCCESSFUL 02 Feb 22 24000.00 0.00 7500.00\n04 Feb 22 SYNTHETIC5 Cash Deposit 04 Feb 22 0.00 500.00 8000.00\n07 Feb 22 SYNTHETIC6 Cash Deposit 07 Feb 22 0.00 1000.00 9000.00\n09 Feb 22 SYNTHETIC7 Cash Deposit 09 Feb 22 0.00 1000.00 10000.00\n10 Feb 22 SYNTHETIC8 Cash Deposit 10 Feb 22 0.00 1000.00 11000.00\n14 Feb 22 SYNTHETIC9 Cash Deposit 14 Feb 22 0.00 3000.00 14000.00\n17 Feb 22 SYNTHETIC10 Cash Deposit 17 Feb 22 0.00 5000.00 19000.00\n21 Feb 22 SYNTHETIC11 Transfer SUCCESSFUL 21 Feb 22 5000.00 0.00 14000.00\n22 Feb 22 SYNTHETIC12 Cash Deposit 22 Feb 22 0.00 1000.00 15000.00\n22 Feb 22 SYNTHETIC13 Outward Cheque 22 Feb 22 5000.00 0.00 10000.00\n24 Feb 22 SYNTHETIC14 Cash Deposit 24 Feb 22 1000.00 0.00 9000.00\n",
+            "reviewReason": "published_template_requires_source_review"
+          }
+        },
+        {
+          "date": "2022-02-02",
+          "amount": "24000.00",
+          "maxConfidence": 45,
+          "rawPayload": {
+            "sourceText": "EastWest Bank\n25 February 2022\nAccount Statement\nAccount: \nCustomer: 3434504 JOHN CITIZEN\nCurrency: PHP\nBook Date Reference Description Value Date Cheque No. Debit Credit Closing Balance\nBalance at Period Start 0.00\n20 Jan 22 TT220224YCCF Cash Deposit 20 Jan 22 0.00 5000.00 5000.00\n24 Jan 22 SYNTHETIC1 Cash Deposit 24 Jan 22 0.00 1000.00 6000.00\n31 Jan 22 SYNTHETIC2 Cash Deposit 31 Jan 22 0.00 30000.00 36000.00\n02 Feb 22 SYNTHETIC3 Outward Cheque Dr 02 Feb 22 4500.00 0.00 31500.00\n02 Feb 22 SYNTHETIC4 Transfer SUCCESSFUL 02 Feb 22 24000.00 0.00 7500.00\n04 Feb 22 SYNTHETIC5 Cash Deposit 04 Feb 22 0.00 500.00 8000.00\n07 Feb 22 SYNTHETIC6 Cash Deposit 07 Feb 22 0.00 1000.00 9000.00\n09 Feb 22 SYNTHETIC7 Cash Deposit 09 Feb 22 0.00 1000.00 10000.00\n10 Feb 22 SYNTHETIC8 Cash Deposit 10 Feb 22 0.00 1000.00 11000.00\n14 Feb 22 SYNTHETIC9 Cash Deposit 14 Feb 22 0.00 3000.00 14000.00\n17 Feb 22 SYNTHETIC10 Cash Deposit 17 Feb 22 0.00 5000.00 19000.00\n21 Feb 22 SYNTHETIC11 Transfer SUCCESSFUL 21 Feb 22 5000.00 0.00 14000.00\n22 Feb 22 SYNTHETIC12 Cash Deposit 22 Feb 22 0.00 1000.00 15000.00\n22 Feb 22 SYNTHETIC13 Outward Cheque 22 Feb 22 5000.00 0.00 10000.00\n24 Feb 22 SYNTHETIC14 Cash Deposit 24 Feb 22 1000.00 0.00 9000.00\n",
+            "reviewReason": "published_template_requires_source_review"
+          }
+        },
+        {
+          "date": "2022-02-04",
+          "amount": "500.00",
+          "maxConfidence": 45,
+          "rawPayload": {
+            "sourceText": "EastWest Bank\n25 February 2022\nAccount Statement\nAccount: \nCustomer: 3434504 JOHN CITIZEN\nCurrency: PHP\nBook Date Reference Description Value Date Cheque No. Debit Credit Closing Balance\nBalance at Period Start 0.00\n20 Jan 22 TT220224YCCF Cash Deposit 20 Jan 22 0.00 5000.00 5000.00\n24 Jan 22 SYNTHETIC1 Cash Deposit 24 Jan 22 0.00 1000.00 6000.00\n31 Jan 22 SYNTHETIC2 Cash Deposit 31 Jan 22 0.00 30000.00 36000.00\n02 Feb 22 SYNTHETIC3 Outward Cheque Dr 02 Feb 22 4500.00 0.00 31500.00\n02 Feb 22 SYNTHETIC4 Transfer SUCCESSFUL 02 Feb 22 24000.00 0.00 7500.00\n04 Feb 22 SYNTHETIC5 Cash Deposit 04 Feb 22 0.00 500.00 8000.00\n07 Feb 22 SYNTHETIC6 Cash Deposit 07 Feb 22 0.00 1000.00 9000.00\n09 Feb 22 SYNTHETIC7 Cash Deposit 09 Feb 22 0.00 1000.00 10000.00\n10 Feb 22 SYNTHETIC8 Cash Deposit 10 Feb 22 0.00 1000.00 11000.00\n14 Feb 22 SYNTHETIC9 Cash Deposit 14 Feb 22 0.00 3000.00 14000.00\n17 Feb 22 SYNTHETIC10 Cash Deposit 17 Feb 22 0.00 5000.00 19000.00\n21 Feb 22 SYNTHETIC11 Transfer SUCCESSFUL 21 Feb 22 5000.00 0.00 14000.00\n22 Feb 22 SYNTHETIC12 Cash Deposit 22 Feb 22 0.00 1000.00 15000.00\n22 Feb 22 SYNTHETIC13 Outward Cheque 22 Feb 22 5000.00 0.00 10000.00\n24 Feb 22 SYNTHETIC14 Cash Deposit 24 Feb 22 1000.00 0.00 9000.00\n",
+            "reviewReason": "published_template_requires_source_review"
+          }
+        },
+        {
+          "date": "2022-02-07",
+          "amount": "1000.00",
+          "maxConfidence": 45,
+          "rawPayload": {
+            "sourceText": "EastWest Bank\n25 February 2022\nAccount Statement\nAccount: \nCustomer: 3434504 JOHN CITIZEN\nCurrency: PHP\nBook Date Reference Description Value Date Cheque No. Debit Credit Closing Balance\nBalance at Period Start 0.00\n20 Jan 22 TT220224YCCF Cash Deposit 20 Jan 22 0.00 5000.00 5000.00\n24 Jan 22 SYNTHETIC1 Cash Deposit 24 Jan 22 0.00 1000.00 6000.00\n31 Jan 22 SYNTHETIC2 Cash Deposit 31 Jan 22 0.00 30000.00 36000.00\n02 Feb 22 SYNTHETIC3 Outward Cheque Dr 02 Feb 22 4500.00 0.00 31500.00\n02 Feb 22 SYNTHETIC4 Transfer SUCCESSFUL 02 Feb 22 24000.00 0.00 7500.00\n04 Feb 22 SYNTHETIC5 Cash Deposit 04 Feb 22 0.00 500.00 8000.00\n07 Feb 22 SYNTHETIC6 Cash Deposit 07 Feb 22 0.00 1000.00 9000.00\n09 Feb 22 SYNTHETIC7 Cash Deposit 09 Feb 22 0.00 1000.00 10000.00\n10 Feb 22 SYNTHETIC8 Cash Deposit 10 Feb 22 0.00 1000.00 11000.00\n14 Feb 22 SYNTHETIC9 Cash Deposit 14 Feb 22 0.00 3000.00 14000.00\n17 Feb 22 SYNTHETIC10 Cash Deposit 17 Feb 22 0.00 5000.00 19000.00\n21 Feb 22 SYNTHETIC11 Transfer SUCCESSFUL 21 Feb 22 5000.00 0.00 14000.00\n22 Feb 22 SYNTHETIC12 Cash Deposit 22 Feb 22 0.00 1000.00 15000.00\n22 Feb 22 SYNTHETIC13 Outward Cheque 22 Feb 22 5000.00 0.00 10000.00\n24 Feb 22 SYNTHETIC14 Cash Deposit 24 Feb 22 1000.00 0.00 9000.00\n",
+            "reviewReason": "published_template_requires_source_review"
+          }
+        },
+        {
+          "date": "2022-02-09",
+          "amount": "1000.00",
+          "maxConfidence": 45,
+          "rawPayload": {
+            "sourceText": "EastWest Bank\n25 February 2022\nAccount Statement\nAccount: \nCustomer: 3434504 JOHN CITIZEN\nCurrency: PHP\nBook Date Reference Description Value Date Cheque No. Debit Credit Closing Balance\nBalance at Period Start 0.00\n20 Jan 22 TT220224YCCF Cash Deposit 20 Jan 22 0.00 5000.00 5000.00\n24 Jan 22 SYNTHETIC1 Cash Deposit 24 Jan 22 0.00 1000.00 6000.00\n31 Jan 22 SYNTHETIC2 Cash Deposit 31 Jan 22 0.00 30000.00 36000.00\n02 Feb 22 SYNTHETIC3 Outward Cheque Dr 02 Feb 22 4500.00 0.00 31500.00\n02 Feb 22 SYNTHETIC4 Transfer SUCCESSFUL 02 Feb 22 24000.00 0.00 7500.00\n04 Feb 22 SYNTHETIC5 Cash Deposit 04 Feb 22 0.00 500.00 8000.00\n07 Feb 22 SYNTHETIC6 Cash Deposit 07 Feb 22 0.00 1000.00 9000.00\n09 Feb 22 SYNTHETIC7 Cash Deposit 09 Feb 22 0.00 1000.00 10000.00\n10 Feb 22 SYNTHETIC8 Cash Deposit 10 Feb 22 0.00 1000.00 11000.00\n14 Feb 22 SYNTHETIC9 Cash Deposit 14 Feb 22 0.00 3000.00 14000.00\n17 Feb 22 SYNTHETIC10 Cash Deposit 17 Feb 22 0.00 5000.00 19000.00\n21 Feb 22 SYNTHETIC11 Transfer SUCCESSFUL 21 Feb 22 5000.00 0.00 14000.00\n22 Feb 22 SYNTHETIC12 Cash Deposit 22 Feb 22 0.00 1000.00 15000.00\n22 Feb 22 SYNTHETIC13 Outward Cheque 22 Feb 22 5000.00 0.00 10000.00\n24 Feb 22 SYNTHETIC14 Cash Deposit 24 Feb 22 1000.00 0.00 9000.00\n",
+            "reviewReason": "published_template_requires_source_review"
+          }
+        },
+        {
+          "date": "2022-02-10",
+          "amount": "1000.00",
+          "maxConfidence": 45,
+          "rawPayload": {
+            "sourceText": "EastWest Bank\n25 February 2022\nAccount Statement\nAccount: \nCustomer: 3434504 JOHN CITIZEN\nCurrency: PHP\nBook Date Reference Description Value Date Cheque No. Debit Credit Closing Balance\nBalance at Period Start 0.00\n20 Jan 22 TT220224YCCF Cash Deposit 20 Jan 22 0.00 5000.00 5000.00\n24 Jan 22 SYNTHETIC1 Cash Deposit 24 Jan 22 0.00 1000.00 6000.00\n31 Jan 22 SYNTHETIC2 Cash Deposit 31 Jan 22 0.00 30000.00 36000.00\n02 Feb 22 SYNTHETIC3 Outward Cheque Dr 02 Feb 22 4500.00 0.00 31500.00\n02 Feb 22 SYNTHETIC4 Transfer SUCCESSFUL 02 Feb 22 24000.00 0.00 7500.00\n04 Feb 22 SYNTHETIC5 Cash Deposit 04 Feb 22 0.00 500.00 8000.00\n07 Feb 22 SYNTHETIC6 Cash Deposit 07 Feb 22 0.00 1000.00 9000.00\n09 Feb 22 SYNTHETIC7 Cash Deposit 09 Feb 22 0.00 1000.00 10000.00\n10 Feb 22 SYNTHETIC8 Cash Deposit 10 Feb 22 0.00 1000.00 11000.00\n14 Feb 22 SYNTHETIC9 Cash Deposit 14 Feb 22 0.00 3000.00 14000.00\n17 Feb 22 SYNTHETIC10 Cash Deposit 17 Feb 22 0.00 5000.00 19000.00\n21 Feb 22 SYNTHETIC11 Transfer SUCCESSFUL 21 Feb 22 5000.00 0.00 14000.00\n22 Feb 22 SYNTHETIC12 Cash Deposit 22 Feb 22 0.00 1000.00 15000.00\n22 Feb 22 SYNTHETIC13 Outward Cheque 22 Feb 22 5000.00 0.00 10000.00\n24 Feb 22 SYNTHETIC14 Cash Deposit 24 Feb 22 1000.00 0.00 9000.00\n",
+            "reviewReason": "published_template_requires_source_review"
+          }
+        },
+        {
+          "date": "2022-02-14",
+          "amount": "3000.00",
+          "maxConfidence": 45,
+          "rawPayload": {
+            "sourceText": "EastWest Bank\n25 February 2022\nAccount Statement\nAccount: \nCustomer: 3434504 JOHN CITIZEN\nCurrency: PHP\nBook Date Reference Description Value Date Cheque No. Debit Credit Closing Balance\nBalance at Period Start 0.00\n20 Jan 22 TT220224YCCF Cash Deposit 20 Jan 22 0.00 5000.00 5000.00\n24 Jan 22 SYNTHETIC1 Cash Deposit 24 Jan 22 0.00 1000.00 6000.00\n31 Jan 22 SYNTHETIC2 Cash Deposit 31 Jan 22 0.00 30000.00 36000.00\n02 Feb 22 SYNTHETIC3 Outward Cheque Dr 02 Feb 22 4500.00 0.00 31500.00\n02 Feb 22 SYNTHETIC4 Transfer SUCCESSFUL 02 Feb 22 24000.00 0.00 7500.00\n04 Feb 22 SYNTHETIC5 Cash Deposit 04 Feb 22 0.00 500.00 8000.00\n07 Feb 22 SYNTHETIC6 Cash Deposit 07 Feb 22 0.00 1000.00 9000.00\n09 Feb 22 SYNTHETIC7 Cash Deposit 09 Feb 22 0.00 1000.00 10000.00\n10 Feb 22 SYNTHETIC8 Cash Deposit 10 Feb 22 0.00 1000.00 11000.00\n14 Feb 22 SYNTHETIC9 Cash Deposit 14 Feb 22 0.00 3000.00 14000.00\n17 Feb 22 SYNTHETIC10 Cash Deposit 17 Feb 22 0.00 5000.00 19000.00\n21 Feb 22 SYNTHETIC11 Transfer SUCCESSFUL 21 Feb 22 5000.00 0.00 14000.00\n22 Feb 22 SYNTHETIC12 Cash Deposit 22 Feb 22 0.00 1000.00 15000.00\n22 Feb 22 SYNTHETIC13 Outward Cheque 22 Feb 22 5000.00 0.00 10000.00\n24 Feb 22 SYNTHETIC14 Cash Deposit 24 Feb 22 1000.00 0.00 9000.00\n",
+            "reviewReason": "published_template_requires_source_review"
+          }
+        },
+        {
+          "date": "2022-02-17",
+          "amount": "5000.00",
+          "maxConfidence": 45,
+          "rawPayload": {
+            "sourceText": "EastWest Bank\n25 February 2022\nAccount Statement\nAccount: \nCustomer: 3434504 JOHN CITIZEN\nCurrency: PHP\nBook Date Reference Description Value Date Cheque No. Debit Credit Closing Balance\nBalance at Period Start 0.00\n20 Jan 22 TT220224YCCF Cash Deposit 20 Jan 22 0.00 5000.00 5000.00\n24 Jan 22 SYNTHETIC1 Cash Deposit 24 Jan 22 0.00 1000.00 6000.00\n31 Jan 22 SYNTHETIC2 Cash Deposit 31 Jan 22 0.00 30000.00 36000.00\n02 Feb 22 SYNTHETIC3 Outward Cheque Dr 02 Feb 22 4500.00 0.00 31500.00\n02 Feb 22 SYNTHETIC4 Transfer SUCCESSFUL 02 Feb 22 24000.00 0.00 7500.00\n04 Feb 22 SYNTHETIC5 Cash Deposit 04 Feb 22 0.00 500.00 8000.00\n07 Feb 22 SYNTHETIC6 Cash Deposit 07 Feb 22 0.00 1000.00 9000.00\n09 Feb 22 SYNTHETIC7 Cash Deposit 09 Feb 22 0.00 1000.00 10000.00\n10 Feb 22 SYNTHETIC8 Cash Deposit 10 Feb 22 0.00 1000.00 11000.00\n14 Feb 22 SYNTHETIC9 Cash Deposit 14 Feb 22 0.00 3000.00 14000.00\n17 Feb 22 SYNTHETIC10 Cash Deposit 17 Feb 22 0.00 5000.00 19000.00\n21 Feb 22 SYNTHETIC11 Transfer SUCCESSFUL 21 Feb 22 5000.00 0.00 14000.00\n22 Feb 22 SYNTHETIC12 Cash Deposit 22 Feb 22 0.00 1000.00 15000.00\n22 Feb 22 SYNTHETIC13 Outward Cheque 22 Feb 22 5000.00 0.00 10000.00\n24 Feb 22 SYNTHETIC14 Cash Deposit 24 Feb 22 1000.00 0.00 9000.00\n",
+            "reviewReason": "published_template_requires_source_review"
+          }
+        },
+        {
+          "date": "2022-02-21",
+          "amount": "5000.00",
+          "maxConfidence": 45,
+          "rawPayload": {
+            "sourceText": "EastWest Bank\n25 February 2022\nAccount Statement\nAccount: \nCustomer: 3434504 JOHN CITIZEN\nCurrency: PHP\nBook Date Reference Description Value Date Cheque No. Debit Credit Closing Balance\nBalance at Period Start 0.00\n20 Jan 22 TT220224YCCF Cash Deposit 20 Jan 22 0.00 5000.00 5000.00\n24 Jan 22 SYNTHETIC1 Cash Deposit 24 Jan 22 0.00 1000.00 6000.00\n31 Jan 22 SYNTHETIC2 Cash Deposit 31 Jan 22 0.00 30000.00 36000.00\n02 Feb 22 SYNTHETIC3 Outward Cheque Dr 02 Feb 22 4500.00 0.00 31500.00\n02 Feb 22 SYNTHETIC4 Transfer SUCCESSFUL 02 Feb 22 24000.00 0.00 7500.00\n04 Feb 22 SYNTHETIC5 Cash Deposit 04 Feb 22 0.00 500.00 8000.00\n07 Feb 22 SYNTHETIC6 Cash Deposit 07 Feb 22 0.00 1000.00 9000.00\n09 Feb 22 SYNTHETIC7 Cash Deposit 09 Feb 22 0.00 1000.00 10000.00\n10 Feb 22 SYNTHETIC8 Cash Deposit 10 Feb 22 0.00 1000.00 11000.00\n14 Feb 22 SYNTHETIC9 Cash Deposit 14 Feb 22 0.00 3000.00 14000.00\n17 Feb 22 SYNTHETIC10 Cash Deposit 17 Feb 22 0.00 5000.00 19000.00\n21 Feb 22 SYNTHETIC11 Transfer SUCCESSFUL 21 Feb 22 5000.00 0.00 14000.00\n22 Feb 22 SYNTHETIC12 Cash Deposit 22 Feb 22 0.00 1000.00 15000.00\n22 Feb 22 SYNTHETIC13 Outward Cheque 22 Feb 22 5000.00 0.00 10000.00\n24 Feb 22 SYNTHETIC14 Cash Deposit 24 Feb 22 1000.00 0.00 9000.00\n",
+            "reviewReason": "published_template_requires_source_review"
+          }
+        },
+        {
+          "date": "2022-02-22",
+          "amount": "1000.00",
+          "maxConfidence": 45,
+          "rawPayload": {
+            "sourceText": "EastWest Bank\n25 February 2022\nAccount Statement\nAccount: \nCustomer: 3434504 JOHN CITIZEN\nCurrency: PHP\nBook Date Reference Description Value Date Cheque No. Debit Credit Closing Balance\nBalance at Period Start 0.00\n20 Jan 22 TT220224YCCF Cash Deposit 20 Jan 22 0.00 5000.00 5000.00\n24 Jan 22 SYNTHETIC1 Cash Deposit 24 Jan 22 0.00 1000.00 6000.00\n31 Jan 22 SYNTHETIC2 Cash Deposit 31 Jan 22 0.00 30000.00 36000.00\n02 Feb 22 SYNTHETIC3 Outward Cheque Dr 02 Feb 22 4500.00 0.00 31500.00\n02 Feb 22 SYNTHETIC4 Transfer SUCCESSFUL 02 Feb 22 24000.00 0.00 7500.00\n04 Feb 22 SYNTHETIC5 Cash Deposit 04 Feb 22 0.00 500.00 8000.00\n07 Feb 22 SYNTHETIC6 Cash Deposit 07 Feb 22 0.00 1000.00 9000.00\n09 Feb 22 SYNTHETIC7 Cash Deposit 09 Feb 22 0.00 1000.00 10000.00\n10 Feb 22 SYNTHETIC8 Cash Deposit 10 Feb 22 0.00 1000.00 11000.00\n14 Feb 22 SYNTHETIC9 Cash Deposit 14 Feb 22 0.00 3000.00 14000.00\n17 Feb 22 SYNTHETIC10 Cash Deposit 17 Feb 22 0.00 5000.00 19000.00\n21 Feb 22 SYNTHETIC11 Transfer SUCCESSFUL 21 Feb 22 5000.00 0.00 14000.00\n22 Feb 22 SYNTHETIC12 Cash Deposit 22 Feb 22 0.00 1000.00 15000.00\n22 Feb 22 SYNTHETIC13 Outward Cheque 22 Feb 22 5000.00 0.00 10000.00\n24 Feb 22 SYNTHETIC14 Cash Deposit 24 Feb 22 1000.00 0.00 9000.00\n",
+            "reviewReason": "published_template_requires_source_review"
+          }
+        },
+        {
+          "date": "2022-02-22",
+          "amount": "5000.00",
+          "maxConfidence": 45,
+          "rawPayload": {
+            "sourceText": "EastWest Bank\n25 February 2022\nAccount Statement\nAccount: \nCustomer: 3434504 JOHN CITIZEN\nCurrency: PHP\nBook Date Reference Description Value Date Cheque No. Debit Credit Closing Balance\nBalance at Period Start 0.00\n20 Jan 22 TT220224YCCF Cash Deposit 20 Jan 22 0.00 5000.00 5000.00\n24 Jan 22 SYNTHETIC1 Cash Deposit 24 Jan 22 0.00 1000.00 6000.00\n31 Jan 22 SYNTHETIC2 Cash Deposit 31 Jan 22 0.00 30000.00 36000.00\n02 Feb 22 SYNTHETIC3 Outward Cheque Dr 02 Feb 22 4500.00 0.00 31500.00\n02 Feb 22 SYNTHETIC4 Transfer SUCCESSFUL 02 Feb 22 24000.00 0.00 7500.00\n04 Feb 22 SYNTHETIC5 Cash Deposit 04 Feb 22 0.00 500.00 8000.00\n07 Feb 22 SYNTHETIC6 Cash Deposit 07 Feb 22 0.00 1000.00 9000.00\n09 Feb 22 SYNTHETIC7 Cash Deposit 09 Feb 22 0.00 1000.00 10000.00\n10 Feb 22 SYNTHETIC8 Cash Deposit 10 Feb 22 0.00 1000.00 11000.00\n14 Feb 22 SYNTHETIC9 Cash Deposit 14 Feb 22 0.00 3000.00 14000.00\n17 Feb 22 SYNTHETIC10 Cash Deposit 17 Feb 22 0.00 5000.00 19000.00\n21 Feb 22 SYNTHETIC11 Transfer SUCCESSFUL 21 Feb 22 5000.00 0.00 14000.00\n22 Feb 22 SYNTHETIC12 Cash Deposit 22 Feb 22 0.00 1000.00 15000.00\n22 Feb 22 SYNTHETIC13 Outward Cheque 22 Feb 22 5000.00 0.00 10000.00\n24 Feb 22 SYNTHETIC14 Cash Deposit 24 Feb 22 1000.00 0.00 9000.00\n",
+            "reviewReason": "published_template_requires_source_review"
+          }
+        },
+        {
+          "date": "2022-02-24",
+          "amount": "1000.00",
+          "maxConfidence": 45,
+          "rawPayload": {
+            "sourceText": "EastWest Bank\n25 February 2022\nAccount Statement\nAccount: \nCustomer: 3434504 JOHN CITIZEN\nCurrency: PHP\nBook Date Reference Description Value Date Cheque No. Debit Credit Closing Balance\nBalance at Period Start 0.00\n20 Jan 22 TT220224YCCF Cash Deposit 20 Jan 22 0.00 5000.00 5000.00\n24 Jan 22 SYNTHETIC1 Cash Deposit 24 Jan 22 0.00 1000.00 6000.00\n31 Jan 22 SYNTHETIC2 Cash Deposit 31 Jan 22 0.00 30000.00 36000.00\n02 Feb 22 SYNTHETIC3 Outward Cheque Dr 02 Feb 22 4500.00 0.00 31500.00\n02 Feb 22 SYNTHETIC4 Transfer SUCCESSFUL 02 Feb 22 24000.00 0.00 7500.00\n04 Feb 22 SYNTHETIC5 Cash Deposit 04 Feb 22 0.00 500.00 8000.00\n07 Feb 22 SYNTHETIC6 Cash Deposit 07 Feb 22 0.00 1000.00 9000.00\n09 Feb 22 SYNTHETIC7 Cash Deposit 09 Feb 22 0.00 1000.00 10000.00\n10 Feb 22 SYNTHETIC8 Cash Deposit 10 Feb 22 0.00 1000.00 11000.00\n14 Feb 22 SYNTHETIC9 Cash Deposit 14 Feb 22 0.00 3000.00 14000.00\n17 Feb 22 SYNTHETIC10 Cash Deposit 17 Feb 22 0.00 5000.00 19000.00\n21 Feb 22 SYNTHETIC11 Transfer SUCCESSFUL 21 Feb 22 5000.00 0.00 14000.00\n22 Feb 22 SYNTHETIC12 Cash Deposit 22 Feb 22 0.00 1000.00 15000.00\n22 Feb 22 SYNTHETIC13 Outward Cheque 22 Feb 22 5000.00 0.00 10000.00\n24 Feb 22 SYNTHETIC14 Cash Deposit 24 Feb 22 1000.00 0.00 9000.00\n",
+            "reviewReason": "published_template_requires_source_review"
+          }
+        }
+      ],
+      "expectedMetadata": {
+        "institution": "EastWest Bank",
+        "accountNumber": null,
+        "openingBalance": 0,
+        "endingBalance": 9000,
+        "maxConfidence": 45
+      }
+    },
+    {
+      "id": "eastwest-template-explicit-account",
+      "source": "eastwest-template-explicit-account.txt",
+      "sha256": "8764fbf0652605f6d3296c00ef8099f4b46b4977997c04c6f6fe9201905377cf",
+      "kind": "statement",
+      "representation": "synthetic OCR template reproduction; suggestions must remain under review",
+      "provenance": {
+        "origin": "synthetic",
+        "reviewer": "Codex",
+        "reviewedAt": "2026-10-09",
+        "status": "reviewed",
+        "basis": "Synthetic identifier and reference cells. Retains fifteen learned template suggestions while testing blank versus explicit account identity, original source evidence and mandatory low confidence. Final Cash Deposit label contradicts its debit/balance: these suggestions are not certified financial labels or human confirmations."
+      },
+      "expected": [
+        {
+          "date": "2022-01-20",
+          "amount": "5000.00",
+          "maxConfidence": 45,
+          "rawPayload": {
+            "sourceText": "EastWest Bank\n25 February 2022\nAccount Statement\nAccount: 000000000042\nCustomer: 3434504 JOHN CITIZEN\nCurrency: PHP\nBook Date Reference Description Value Date Cheque No. Debit Credit Closing Balance\nBalance at Period Start 0.00\n20 Jan 22 TT220224YCCF Cash Deposit 20 Jan 22 0.00 5000.00 5000.00\n24 Jan 22 SYNTHETIC1 Cash Deposit 24 Jan 22 0.00 1000.00 6000.00\n31 Jan 22 SYNTHETIC2 Cash Deposit 31 Jan 22 0.00 30000.00 36000.00\n02 Feb 22 SYNTHETIC3 Outward Cheque Dr 02 Feb 22 4500.00 0.00 31500.00\n02 Feb 22 SYNTHETIC4 Transfer SUCCESSFUL 02 Feb 22 24000.00 0.00 7500.00\n04 Feb 22 SYNTHETIC5 Cash Deposit 04 Feb 22 0.00 500.00 8000.00\n07 Feb 22 SYNTHETIC6 Cash Deposit 07 Feb 22 0.00 1000.00 9000.00\n09 Feb 22 SYNTHETIC7 Cash Deposit 09 Feb 22 0.00 1000.00 10000.00\n10 Feb 22 SYNTHETIC8 Cash Deposit 10 Feb 22 0.00 1000.00 11000.00\n14 Feb 22 SYNTHETIC9 Cash Deposit 14 Feb 22 0.00 3000.00 14000.00\n17 Feb 22 SYNTHETIC10 Cash Deposit 17 Feb 22 0.00 5000.00 19000.00\n21 Feb 22 SYNTHETIC11 Transfer SUCCESSFUL 21 Feb 22 5000.00 0.00 14000.00\n22 Feb 22 SYNTHETIC12 Cash Deposit 22 Feb 22 0.00 1000.00 15000.00\n22 Feb 22 SYNTHETIC13 Outward Cheque 22 Feb 22 5000.00 0.00 10000.00\n24 Feb 22 SYNTHETIC14 Cash Deposit 24 Feb 22 1000.00 0.00 9000.00\n",
+            "reviewReason": "published_template_requires_source_review"
+          },
+          "accountNumber": "000000000042"
+        },
+        {
+          "date": "2022-01-24",
+          "amount": "1000.00",
+          "maxConfidence": 45,
+          "rawPayload": {
+            "sourceText": "EastWest Bank\n25 February 2022\nAccount Statement\nAccount: 000000000042\nCustomer: 3434504 JOHN CITIZEN\nCurrency: PHP\nBook Date Reference Description Value Date Cheque No. Debit Credit Closing Balance\nBalance at Period Start 0.00\n20 Jan 22 TT220224YCCF Cash Deposit 20 Jan 22 0.00 5000.00 5000.00\n24 Jan 22 SYNTHETIC1 Cash Deposit 24 Jan 22 0.00 1000.00 6000.00\n31 Jan 22 SYNTHETIC2 Cash Deposit 31 Jan 22 0.00 30000.00 36000.00\n02 Feb 22 SYNTHETIC3 Outward Cheque Dr 02 Feb 22 4500.00 0.00 31500.00\n02 Feb 22 SYNTHETIC4 Transfer SUCCESSFUL 02 Feb 22 24000.00 0.00 7500.00\n04 Feb 22 SYNTHETIC5 Cash Deposit 04 Feb 22 0.00 500.00 8000.00\n07 Feb 22 SYNTHETIC6 Cash Deposit 07 Feb 22 0.00 1000.00 9000.00\n09 Feb 22 SYNTHETIC7 Cash Deposit 09 Feb 22 0.00 1000.00 10000.00\n10 Feb 22 SYNTHETIC8 Cash Deposit 10 Feb 22 0.00 1000.00 11000.00\n14 Feb 22 SYNTHETIC9 Cash Deposit 14 Feb 22 0.00 3000.00 14000.00\n17 Feb 22 SYNTHETIC10 Cash Deposit 17 Feb 22 0.00 5000.00 19000.00\n21 Feb 22 SYNTHETIC11 Transfer SUCCESSFUL 21 Feb 22 5000.00 0.00 14000.00\n22 Feb 22 SYNTHETIC12 Cash Deposit 22 Feb 22 0.00 1000.00 15000.00\n22 Feb 22 SYNTHETIC13 Outward Cheque 22 Feb 22 5000.00 0.00 10000.00\n24 Feb 22 SYNTHETIC14 Cash Deposit 24 Feb 22 1000.00 0.00 9000.00\n",
+            "reviewReason": "published_template_requires_source_review"
+          },
+          "accountNumber": "000000000042"
+        },
+        {
+          "date": "2022-01-31",
+          "amount": "30000.00",
+          "maxConfidence": 45,
+          "rawPayload": {
+            "sourceText": "EastWest Bank\n25 February 2022\nAccount Statement\nAccount: 000000000042\nCustomer: 3434504 JOHN CITIZEN\nCurrency: PHP\nBook Date Reference Description Value Date Cheque No. Debit Credit Closing Balance\nBalance at Period Start 0.00\n20 Jan 22 TT220224YCCF Cash Deposit 20 Jan 22 0.00 5000.00 5000.00\n24 Jan 22 SYNTHETIC1 Cash Deposit 24 Jan 22 0.00 1000.00 6000.00\n31 Jan 22 SYNTHETIC2 Cash Deposit 31 Jan 22 0.00 30000.00 36000.00\n02 Feb 22 SYNTHETIC3 Outward Cheque Dr 02 Feb 22 4500.00 0.00 31500.00\n02 Feb 22 SYNTHETIC4 Transfer SUCCESSFUL 02 Feb 22 24000.00 0.00 7500.00\n04 Feb 22 SYNTHETIC5 Cash Deposit 04 Feb 22 0.00 500.00 8000.00\n07 Feb 22 SYNTHETIC6 Cash Deposit 07 Feb 22 0.00 1000.00 9000.00\n09 Feb 22 SYNTHETIC7 Cash Deposit 09 Feb 22 0.00 1000.00 10000.00\n10 Feb 22 SYNTHETIC8 Cash Deposit 10 Feb 22 0.00 1000.00 11000.00\n14 Feb 22 SYNTHETIC9 Cash Deposit 14 Feb 22 0.00 3000.00 14000.00\n17 Feb 22 SYNTHETIC10 Cash Deposit 17 Feb 22 0.00 5000.00 19000.00\n21 Feb 22 SYNTHETIC11 Transfer SUCCESSFUL 21 Feb 22 5000.00 0.00 14000.00\n22 Feb 22 SYNTHETIC12 Cash Deposit 22 Feb 22 0.00 1000.00 15000.00\n22 Feb 22 SYNTHETIC13 Outward Cheque 22 Feb 22 5000.00 0.00 10000.00\n24 Feb 22 SYNTHETIC14 Cash Deposit 24 Feb 22 1000.00 0.00 9000.00\n",
+            "reviewReason": "published_template_requires_source_review"
+          },
+          "accountNumber": "000000000042"
+        },
+        {
+          "date": "2022-02-02",
+          "amount": "4500.00",
+          "maxConfidence": 45,
+          "rawPayload": {
+            "sourceText": "EastWest Bank\n25 February 2022\nAccount Statement\nAccount: 000000000042\nCustomer: 3434504 JOHN CITIZEN\nCurrency: PHP\nBook Date Reference Description Value Date Cheque No. Debit Credit Closing Balance\nBalance at Period Start 0.00\n20 Jan 22 TT220224YCCF Cash Deposit 20 Jan 22 0.00 5000.00 5000.00\n24 Jan 22 SYNTHETIC1 Cash Deposit 24 Jan 22 0.00 1000.00 6000.00\n31 Jan 22 SYNTHETIC2 Cash Deposit 31 Jan 22 0.00 30000.00 36000.00\n02 Feb 22 SYNTHETIC3 Outward Cheque Dr 02 Feb 22 4500.00 0.00 31500.00\n02 Feb 22 SYNTHETIC4 Transfer SUCCESSFUL 02 Feb 22 24000.00 0.00 7500.00\n04 Feb 22 SYNTHETIC5 Cash Deposit 04 Feb 22 0.00 500.00 8000.00\n07 Feb 22 SYNTHETIC6 Cash Deposit 07 Feb 22 0.00 1000.00 9000.00\n09 Feb 22 SYNTHETIC7 Cash Deposit 09 Feb 22 0.00 1000.00 10000.00\n10 Feb 22 SYNTHETIC8 Cash Deposit 10 Feb 22 0.00 1000.00 11000.00\n14 Feb 22 SYNTHETIC9 Cash Deposit 14 Feb 22 0.00 3000.00 14000.00\n17 Feb 22 SYNTHETIC10 Cash Deposit 17 Feb 22 0.00 5000.00 19000.00\n21 Feb 22 SYNTHETIC11 Transfer SUCCESSFUL 21 Feb 22 5000.00 0.00 14000.00\n22 Feb 22 SYNTHETIC12 Cash Deposit 22 Feb 22 0.00 1000.00 15000.00\n22 Feb 22 SYNTHETIC13 Outward Cheque 22 Feb 22 5000.00 0.00 10000.00\n24 Feb 22 SYNTHETIC14 Cash Deposit 24 Feb 22 1000.00 0.00 9000.00\n",
+            "reviewReason": "published_template_requires_source_review"
+          },
+          "accountNumber": "000000000042"
+        },
+        {
+          "date": "2022-02-02",
+          "amount": "24000.00",
+          "maxConfidence": 45,
+          "rawPayload": {
+            "sourceText": "EastWest Bank\n25 February 2022\nAccount Statement\nAccount: 000000000042\nCustomer: 3434504 JOHN CITIZEN\nCurrency: PHP\nBook Date Reference Description Value Date Cheque No. Debit Credit Closing Balance\nBalance at Period Start 0.00\n20 Jan 22 TT220224YCCF Cash Deposit 20 Jan 22 0.00 5000.00 5000.00\n24 Jan 22 SYNTHETIC1 Cash Deposit 24 Jan 22 0.00 1000.00 6000.00\n31 Jan 22 SYNTHETIC2 Cash Deposit 31 Jan 22 0.00 30000.00 36000.00\n02 Feb 22 SYNTHETIC3 Outward Cheque Dr 02 Feb 22 4500.00 0.00 31500.00\n02 Feb 22 SYNTHETIC4 Transfer SUCCESSFUL 02 Feb 22 24000.00 0.00 7500.00\n04 Feb 22 SYNTHETIC5 Cash Deposit 04 Feb 22 0.00 500.00 8000.00\n07 Feb 22 SYNTHETIC6 Cash Deposit 07 Feb 22 0.00 1000.00 9000.00\n09 Feb 22 SYNTHETIC7 Cash Deposit 09 Feb 22 0.00 1000.00 10000.00\n10 Feb 22 SYNTHETIC8 Cash Deposit 10 Feb 22 0.00 1000.00 11000.00\n14 Feb 22 SYNTHETIC9 Cash Deposit 14 Feb 22 0.00 3000.00 14000.00\n17 Feb 22 SYNTHETIC10 Cash Deposit 17 Feb 22 0.00 5000.00 19000.00\n21 Feb 22 SYNTHETIC11 Transfer SUCCESSFUL 21 Feb 22 5000.00 0.00 14000.00\n22 Feb 22 SYNTHETIC12 Cash Deposit 22 Feb 22 0.00 1000.00 15000.00\n22 Feb 22 SYNTHETIC13 Outward Cheque 22 Feb 22 5000.00 0.00 10000.00\n24 Feb 22 SYNTHETIC14 Cash Deposit 24 Feb 22 1000.00 0.00 9000.00\n",
+            "reviewReason": "published_template_requires_source_review"
+          },
+          "accountNumber": "000000000042"
+        },
+        {
+          "date": "2022-02-04",
+          "amount": "500.00",
+          "maxConfidence": 45,
+          "rawPayload": {
+            "sourceText": "EastWest Bank\n25 February 2022\nAccount Statement\nAccount: 000000000042\nCustomer: 3434504 JOHN CITIZEN\nCurrency: PHP\nBook Date Reference Description Value Date Cheque No. Debit Credit Closing Balance\nBalance at Period Start 0.00\n20 Jan 22 TT220224YCCF Cash Deposit 20 Jan 22 0.00 5000.00 5000.00\n24 Jan 22 SYNTHETIC1 Cash Deposit 24 Jan 22 0.00 1000.00 6000.00\n31 Jan 22 SYNTHETIC2 Cash Deposit 31 Jan 22 0.00 30000.00 36000.00\n02 Feb 22 SYNTHETIC3 Outward Cheque Dr 02 Feb 22 4500.00 0.00 31500.00\n02 Feb 22 SYNTHETIC4 Transfer SUCCESSFUL 02 Feb 22 24000.00 0.00 7500.00\n04 Feb 22 SYNTHETIC5 Cash Deposit 04 Feb 22 0.00 500.00 8000.00\n07 Feb 22 SYNTHETIC6 Cash Deposit 07 Feb 22 0.00 1000.00 9000.00\n09 Feb 22 SYNTHETIC7 Cash Deposit 09 Feb 22 0.00 1000.00 10000.00\n10 Feb 22 SYNTHETIC8 Cash Deposit 10 Feb 22 0.00 1000.00 11000.00\n14 Feb 22 SYNTHETIC9 Cash Deposit 14 Feb 22 0.00 3000.00 14000.00\n17 Feb 22 SYNTHETIC10 Cash Deposit 17 Feb 22 0.00 5000.00 19000.00\n21 Feb 22 SYNTHETIC11 Transfer SUCCESSFUL 21 Feb 22 5000.00 0.00 14000.00\n22 Feb 22 SYNTHETIC12 Cash Deposit 22 Feb 22 0.00 1000.00 15000.00\n22 Feb 22 SYNTHETIC13 Outward Cheque 22 Feb 22 5000.00 0.00 10000.00\n24 Feb 22 SYNTHETIC14 Cash Deposit 24 Feb 22 1000.00 0.00 9000.00\n",
+            "reviewReason": "published_template_requires_source_review"
+          },
+          "accountNumber": "000000000042"
+        },
+        {
+          "date": "2022-02-07",
+          "amount": "1000.00",
+          "maxConfidence": 45,
+          "rawPayload": {
+            "sourceText": "EastWest Bank\n25 February 2022\nAccount Statement\nAccount: 000000000042\nCustomer: 3434504 JOHN CITIZEN\nCurrency: PHP\nBook Date Reference Description Value Date Cheque No. Debit Credit Closing Balance\nBalance at Period Start 0.00\n20 Jan 22 TT220224YCCF Cash Deposit 20 Jan 22 0.00 5000.00 5000.00\n24 Jan 22 SYNTHETIC1 Cash Deposit 24 Jan 22 0.00 1000.00 6000.00\n31 Jan 22 SYNTHETIC2 Cash Deposit 31 Jan 22 0.00 30000.00 36000.00\n02 Feb 22 SYNTHETIC3 Outward Cheque Dr 02 Feb 22 4500.00 0.00 31500.00\n02 Feb 22 SYNTHETIC4 Transfer SUCCESSFUL 02 Feb 22 24000.00 0.00 7500.00\n04 Feb 22 SYNTHETIC5 Cash Deposit 04 Feb 22 0.00 500.00 8000.00\n07 Feb 22 SYNTHETIC6 Cash Deposit 07 Feb 22 0.00 1000.00 9000.00\n09 Feb 22 SYNTHETIC7 Cash Deposit 09 Feb 22 0.00 1000.00 10000.00\n10 Feb 22 SYNTHETIC8 Cash Deposit 10 Feb 22 0.00 1000.00 11000.00\n14 Feb 22 SYNTHETIC9 Cash Deposit 14 Feb 22 0.00 3000.00 14000.00\n17 Feb 22 SYNTHETIC10 Cash Deposit 17 Feb 22 0.00 5000.00 19000.00\n21 Feb 22 SYNTHETIC11 Transfer SUCCESSFUL 21 Feb 22 5000.00 0.00 14000.00\n22 Feb 22 SYNTHETIC12 Cash Deposit 22 Feb 22 0.00 1000.00 15000.00\n22 Feb 22 SYNTHETIC13 Outward Cheque 22 Feb 22 5000.00 0.00 10000.00\n24 Feb 22 SYNTHETIC14 Cash Deposit 24 Feb 22 1000.00 0.00 9000.00\n",
+            "reviewReason": "published_template_requires_source_review"
+          },
+          "accountNumber": "000000000042"
+        },
+        {
+          "date": "2022-02-09",
+          "amount": "1000.00",
+          "maxConfidence": 45,
+          "rawPayload": {
+            "sourceText": "EastWest Bank\n25 February 2022\nAccount Statement\nAccount: 000000000042\nCustomer: 3434504 JOHN CITIZEN\nCurrency: PHP\nBook Date Reference Description Value Date Cheque No. Debit Credit Closing Balance\nBalance at Period Start 0.00\n20 Jan 22 TT220224YCCF Cash Deposit 20 Jan 22 0.00 5000.00 5000.00\n24 Jan 22 SYNTHETIC1 Cash Deposit 24 Jan 22 0.00 1000.00 6000.00\n31 Jan 22 SYNTHETIC2 Cash Deposit 31 Jan 22 0.00 30000.00 36000.00\n02 Feb 22 SYNTHETIC3 Outward Cheque Dr 02 Feb 22 4500.00 0.00 31500.00\n02 Feb 22 SYNTHETIC4 Transfer SUCCESSFUL 02 Feb 22 24000.00 0.00 7500.00\n04 Feb 22 SYNTHETIC5 Cash Deposit 04 Feb 22 0.00 500.00 8000.00\n07 Feb 22 SYNTHETIC6 Cash Deposit 07 Feb 22 0.00 1000.00 9000.00\n09 Feb 22 SYNTHETIC7 Cash Deposit 09 Feb 22 0.00 1000.00 10000.00\n10 Feb 22 SYNTHETIC8 Cash Deposit 10 Feb 22 0.00 1000.00 11000.00\n14 Feb 22 SYNTHETIC9 Cash Deposit 14 Feb 22 0.00 3000.00 14000.00\n17 Feb 22 SYNTHETIC10 Cash Deposit 17 Feb 22 0.00 5000.00 19000.00\n21 Feb 22 SYNTHETIC11 Transfer SUCCESSFUL 21 Feb 22 5000.00 0.00 14000.00\n22 Feb 22 SYNTHETIC12 Cash Deposit 22 Feb 22 0.00 1000.00 15000.00\n22 Feb 22 SYNTHETIC13 Outward Cheque 22 Feb 22 5000.00 0.00 10000.00\n24 Feb 22 SYNTHETIC14 Cash Deposit 24 Feb 22 1000.00 0.00 9000.00\n",
+            "reviewReason": "published_template_requires_source_review"
+          },
+          "accountNumber": "000000000042"
+        },
+        {
+          "date": "2022-02-10",
+          "amount": "1000.00",
+          "maxConfidence": 45,
+          "rawPayload": {
+            "sourceText": "EastWest Bank\n25 February 2022\nAccount Statement\nAccount: 000000000042\nCustomer: 3434504 JOHN CITIZEN\nCurrency: PHP\nBook Date Reference Description Value Date Cheque No. Debit Credit Closing Balance\nBalance at Period Start 0.00\n20 Jan 22 TT220224YCCF Cash Deposit 20 Jan 22 0.00 5000.00 5000.00\n24 Jan 22 SYNTHETIC1 Cash Deposit 24 Jan 22 0.00 1000.00 6000.00\n31 Jan 22 SYNTHETIC2 Cash Deposit 31 Jan 22 0.00 30000.00 36000.00\n02 Feb 22 SYNTHETIC3 Outward Cheque Dr 02 Feb 22 4500.00 0.00 31500.00\n02 Feb 22 SYNTHETIC4 Transfer SUCCESSFUL 02 Feb 22 24000.00 0.00 7500.00\n04 Feb 22 SYNTHETIC5 Cash Deposit 04 Feb 22 0.00 500.00 8000.00\n07 Feb 22 SYNTHETIC6 Cash Deposit 07 Feb 22 0.00 1000.00 9000.00\n09 Feb 22 SYNTHETIC7 Cash Deposit 09 Feb 22 0.00 1000.00 10000.00\n10 Feb 22 SYNTHETIC8 Cash Deposit 10 Feb 22 0.00 1000.00 11000.00\n14 Feb 22 SYNTHETIC9 Cash Deposit 14 Feb 22 0.00 3000.00 14000.00\n17 Feb 22 SYNTHETIC10 Cash Deposit 17 Feb 22 0.00 5000.00 19000.00\n21 Feb 22 SYNTHETIC11 Transfer SUCCESSFUL 21 Feb 22 5000.00 0.00 14000.00\n22 Feb 22 SYNTHETIC12 Cash Deposit 22 Feb 22 0.00 1000.00 15000.00\n22 Feb 22 SYNTHETIC13 Outward Cheque 22 Feb 22 5000.00 0.00 10000.00\n24 Feb 22 SYNTHETIC14 Cash Deposit 24 Feb 22 1000.00 0.00 9000.00\n",
+            "reviewReason": "published_template_requires_source_review"
+          },
+          "accountNumber": "000000000042"
+        },
+        {
+          "date": "2022-02-14",
+          "amount": "3000.00",
+          "maxConfidence": 45,
+          "rawPayload": {
+            "sourceText": "EastWest Bank\n25 February 2022\nAccount Statement\nAccount: 000000000042\nCustomer: 3434504 JOHN CITIZEN\nCurrency: PHP\nBook Date Reference Description Value Date Cheque No. Debit Credit Closing Balance\nBalance at Period Start 0.00\n20 Jan 22 TT220224YCCF Cash Deposit 20 Jan 22 0.00 5000.00 5000.00\n24 Jan 22 SYNTHETIC1 Cash Deposit 24 Jan 22 0.00 1000.00 6000.00\n31 Jan 22 SYNTHETIC2 Cash Deposit 31 Jan 22 0.00 30000.00 36000.00\n02 Feb 22 SYNTHETIC3 Outward Cheque Dr 02 Feb 22 4500.00 0.00 31500.00\n02 Feb 22 SYNTHETIC4 Transfer SUCCESSFUL 02 Feb 22 24000.00 0.00 7500.00\n04 Feb 22 SYNTHETIC5 Cash Deposit 04 Feb 22 0.00 500.00 8000.00\n07 Feb 22 SYNTHETIC6 Cash Deposit 07 Feb 22 0.00 1000.00 9000.00\n09 Feb 22 SYNTHETIC7 Cash Deposit 09 Feb 22 0.00 1000.00 10000.00\n10 Feb 22 SYNTHETIC8 Cash Deposit 10 Feb 22 0.00 1000.00 11000.00\n14 Feb 22 SYNTHETIC9 Cash Deposit 14 Feb 22 0.00 3000.00 14000.00\n17 Feb 22 SYNTHETIC10 Cash Deposit 17 Feb 22 0.00 5000.00 19000.00\n21 Feb 22 SYNTHETIC11 Transfer SUCCESSFUL 21 Feb 22 5000.00 0.00 14000.00\n22 Feb 22 SYNTHETIC12 Cash Deposit 22 Feb 22 0.00 1000.00 15000.00\n22 Feb 22 SYNTHETIC13 Outward Cheque 22 Feb 22 5000.00 0.00 10000.00\n24 Feb 22 SYNTHETIC14 Cash Deposit 24 Feb 22 1000.00 0.00 9000.00\n",
+            "reviewReason": "published_template_requires_source_review"
+          },
+          "accountNumber": "000000000042"
+        },
+        {
+          "date": "2022-02-17",
+          "amount": "5000.00",
+          "maxConfidence": 45,
+          "rawPayload": {
+            "sourceText": "EastWest Bank\n25 February 2022\nAccount Statement\nAccount: 000000000042\nCustomer: 3434504 JOHN CITIZEN\nCurrency: PHP\nBook Date Reference Description Value Date Cheque No. Debit Credit Closing Balance\nBalance at Period Start 0.00\n20 Jan 22 TT220224YCCF Cash Deposit 20 Jan 22 0.00 5000.00 5000.00\n24 Jan 22 SYNTHETIC1 Cash Deposit 24 Jan 22 0.00 1000.00 6000.00\n31 Jan 22 SYNTHETIC2 Cash Deposit 31 Jan 22 0.00 30000.00 36000.00\n02 Feb 22 SYNTHETIC3 Outward Cheque Dr 02 Feb 22 4500.00 0.00 31500.00\n02 Feb 22 SYNTHETIC4 Transfer SUCCESSFUL 02 Feb 22 24000.00 0.00 7500.00\n04 Feb 22 SYNTHETIC5 Cash Deposit 04 Feb 22 0.00 500.00 8000.00\n07 Feb 22 SYNTHETIC6 Cash Deposit 07 Feb 22 0.00 1000.00 9000.00\n09 Feb 22 SYNTHETIC7 Cash Deposit 09 Feb 22 0.00 1000.00 10000.00\n10 Feb 22 SYNTHETIC8 Cash Deposit 10 Feb 22 0.00 1000.00 11000.00\n14 Feb 22 SYNTHETIC9 Cash Deposit 14 Feb 22 0.00 3000.00 14000.00\n17 Feb 22 SYNTHETIC10 Cash Deposit 17 Feb 22 0.00 5000.00 19000.00\n21 Feb 22 SYNTHETIC11 Transfer SUCCESSFUL 21 Feb 22 5000.00 0.00 14000.00\n22 Feb 22 SYNTHETIC12 Cash Deposit 22 Feb 22 0.00 1000.00 15000.00\n22 Feb 22 SYNTHETIC13 Outward Cheque 22 Feb 22 5000.00 0.00 10000.00\n24 Feb 22 SYNTHETIC14 Cash Deposit 24 Feb 22 1000.00 0.00 9000.00\n",
+            "reviewReason": "published_template_requires_source_review"
+          },
+          "accountNumber": "000000000042"
+        },
+        {
+          "date": "2022-02-21",
+          "amount": "5000.00",
+          "maxConfidence": 45,
+          "rawPayload": {
+            "sourceText": "EastWest Bank\n25 February 2022\nAccount Statement\nAccount: 000000000042\nCustomer: 3434504 JOHN CITIZEN\nCurrency: PHP\nBook Date Reference Description Value Date Cheque No. Debit Credit Closing Balance\nBalance at Period Start 0.00\n20 Jan 22 TT220224YCCF Cash Deposit 20 Jan 22 0.00 5000.00 5000.00\n24 Jan 22 SYNTHETIC1 Cash Deposit 24 Jan 22 0.00 1000.00 6000.00\n31 Jan 22 SYNTHETIC2 Cash Deposit 31 Jan 22 0.00 30000.00 36000.00\n02 Feb 22 SYNTHETIC3 Outward Cheque Dr 02 Feb 22 4500.00 0.00 31500.00\n02 Feb 22 SYNTHETIC4 Transfer SUCCESSFUL 02 Feb 22 24000.00 0.00 7500.00\n04 Feb 22 SYNTHETIC5 Cash Deposit 04 Feb 22 0.00 500.00 8000.00\n07 Feb 22 SYNTHETIC6 Cash Deposit 07 Feb 22 0.00 1000.00 9000.00\n09 Feb 22 SYNTHETIC7 Cash Deposit 09 Feb 22 0.00 1000.00 10000.00\n10 Feb 22 SYNTHETIC8 Cash Deposit 10 Feb 22 0.00 1000.00 11000.00\n14 Feb 22 SYNTHETIC9 Cash Deposit 14 Feb 22 0.00 3000.00 14000.00\n17 Feb 22 SYNTHETIC10 Cash Deposit 17 Feb 22 0.00 5000.00 19000.00\n21 Feb 22 SYNTHETIC11 Transfer SUCCESSFUL 21 Feb 22 5000.00 0.00 14000.00\n22 Feb 22 SYNTHETIC12 Cash Deposit 22 Feb 22 0.00 1000.00 15000.00\n22 Feb 22 SYNTHETIC13 Outward Cheque 22 Feb 22 5000.00 0.00 10000.00\n24 Feb 22 SYNTHETIC14 Cash Deposit 24 Feb 22 1000.00 0.00 9000.00\n",
+            "reviewReason": "published_template_requires_source_review"
+          },
+          "accountNumber": "000000000042"
+        },
+        {
+          "date": "2022-02-22",
+          "amount": "1000.00",
+          "maxConfidence": 45,
+          "rawPayload": {
+            "sourceText": "EastWest Bank\n25 February 2022\nAccount Statement\nAccount: 000000000042\nCustomer: 3434504 JOHN CITIZEN\nCurrency: PHP\nBook Date Reference Description Value Date Cheque No. Debit Credit Closing Balance\nBalance at Period Start 0.00\n20 Jan 22 TT220224YCCF Cash Deposit 20 Jan 22 0.00 5000.00 5000.00\n24 Jan 22 SYNTHETIC1 Cash Deposit 24 Jan 22 0.00 1000.00 6000.00\n31 Jan 22 SYNTHETIC2 Cash Deposit 31 Jan 22 0.00 30000.00 36000.00\n02 Feb 22 SYNTHETIC3 Outward Cheque Dr 02 Feb 22 4500.00 0.00 31500.00\n02 Feb 22 SYNTHETIC4 Transfer SUCCESSFUL 02 Feb 22 24000.00 0.00 7500.00\n04 Feb 22 SYNTHETIC5 Cash Deposit 04 Feb 22 0.00 500.00 8000.00\n07 Feb 22 SYNTHETIC6 Cash Deposit 07 Feb 22 0.00 1000.00 9000.00\n09 Feb 22 SYNTHETIC7 Cash Deposit 09 Feb 22 0.00 1000.00 10000.00\n10 Feb 22 SYNTHETIC8 Cash Deposit 10 Feb 22 0.00 1000.00 11000.00\n14 Feb 22 SYNTHETIC9 Cash Deposit 14 Feb 22 0.00 3000.00 14000.00\n17 Feb 22 SYNTHETIC10 Cash Deposit 17 Feb 22 0.00 5000.00 19000.00\n21 Feb 22 SYNTHETIC11 Transfer SUCCESSFUL 21 Feb 22 5000.00 0.00 14000.00\n22 Feb 22 SYNTHETIC12 Cash Deposit 22 Feb 22 0.00 1000.00 15000.00\n22 Feb 22 SYNTHETIC13 Outward Cheque 22 Feb 22 5000.00 0.00 10000.00\n24 Feb 22 SYNTHETIC14 Cash Deposit 24 Feb 22 1000.00 0.00 9000.00\n",
+            "reviewReason": "published_template_requires_source_review"
+          },
+          "accountNumber": "000000000042"
+        },
+        {
+          "date": "2022-02-22",
+          "amount": "5000.00",
+          "maxConfidence": 45,
+          "rawPayload": {
+            "sourceText": "EastWest Bank\n25 February 2022\nAccount Statement\nAccount: 000000000042\nCustomer: 3434504 JOHN CITIZEN\nCurrency: PHP\nBook Date Reference Description Value Date Cheque No. Debit Credit Closing Balance\nBalance at Period Start 0.00\n20 Jan 22 TT220224YCCF Cash Deposit 20 Jan 22 0.00 5000.00 5000.00\n24 Jan 22 SYNTHETIC1 Cash Deposit 24 Jan 22 0.00 1000.00 6000.00\n31 Jan 22 SYNTHETIC2 Cash Deposit 31 Jan 22 0.00 30000.00 36000.00\n02 Feb 22 SYNTHETIC3 Outward Cheque Dr 02 Feb 22 4500.00 0.00 31500.00\n02 Feb 22 SYNTHETIC4 Transfer SUCCESSFUL 02 Feb 22 24000.00 0.00 7500.00\n04 Feb 22 SYNTHETIC5 Cash Deposit 04 Feb 22 0.00 500.00 8000.00\n07 Feb 22 SYNTHETIC6 Cash Deposit 07 Feb 22 0.00 1000.00 9000.00\n09 Feb 22 SYNTHETIC7 Cash Deposit 09 Feb 22 0.00 1000.00 10000.00\n10 Feb 22 SYNTHETIC8 Cash Deposit 10 Feb 22 0.00 1000.00 11000.00\n14 Feb 22 SYNTHETIC9 Cash Deposit 14 Feb 22 0.00 3000.00 14000.00\n17 Feb 22 SYNTHETIC10 Cash Deposit 17 Feb 22 0.00 5000.00 19000.00\n21 Feb 22 SYNTHETIC11 Transfer SUCCESSFUL 21 Feb 22 5000.00 0.00 14000.00\n22 Feb 22 SYNTHETIC12 Cash Deposit 22 Feb 22 0.00 1000.00 15000.00\n22 Feb 22 SYNTHETIC13 Outward Cheque 22 Feb 22 5000.00 0.00 10000.00\n24 Feb 22 SYNTHETIC14 Cash Deposit 24 Feb 22 1000.00 0.00 9000.00\n",
+            "reviewReason": "published_template_requires_source_review"
+          },
+          "accountNumber": "000000000042"
+        },
+        {
+          "date": "2022-02-24",
+          "amount": "1000.00",
+          "maxConfidence": 45,
+          "rawPayload": {
+            "sourceText": "EastWest Bank\n25 February 2022\nAccount Statement\nAccount: 000000000042\nCustomer: 3434504 JOHN CITIZEN\nCurrency: PHP\nBook Date Reference Description Value Date Cheque No. Debit Credit Closing Balance\nBalance at Period Start 0.00\n20 Jan 22 TT220224YCCF Cash Deposit 20 Jan 22 0.00 5000.00 5000.00\n24 Jan 22 SYNTHETIC1 Cash Deposit 24 Jan 22 0.00 1000.00 6000.00\n31 Jan 22 SYNTHETIC2 Cash Deposit 31 Jan 22 0.00 30000.00 36000.00\n02 Feb 22 SYNTHETIC3 Outward Cheque Dr 02 Feb 22 4500.00 0.00 31500.00\n02 Feb 22 SYNTHETIC4 Transfer SUCCESSFUL 02 Feb 22 24000.00 0.00 7500.00\n04 Feb 22 SYNTHETIC5 Cash Deposit 04 Feb 22 0.00 500.00 8000.00\n07 Feb 22 SYNTHETIC6 Cash Deposit 07 Feb 22 0.00 1000.00 9000.00\n09 Feb 22 SYNTHETIC7 Cash Deposit 09 Feb 22 0.00 1000.00 10000.00\n10 Feb 22 SYNTHETIC8 Cash Deposit 10 Feb 22 0.00 1000.00 11000.00\n14 Feb 22 SYNTHETIC9 Cash Deposit 14 Feb 22 0.00 3000.00 14000.00\n17 Feb 22 SYNTHETIC10 Cash Deposit 17 Feb 22 0.00 5000.00 19000.00\n21 Feb 22 SYNTHETIC11 Transfer SUCCESSFUL 21 Feb 22 5000.00 0.00 14000.00\n22 Feb 22 SYNTHETIC12 Cash Deposit 22 Feb 22 0.00 1000.00 15000.00\n22 Feb 22 SYNTHETIC13 Outward Cheque 22 Feb 22 5000.00 0.00 10000.00\n24 Feb 22 SYNTHETIC14 Cash Deposit 24 Feb 22 1000.00 0.00 9000.00\n",
+            "reviewReason": "published_template_requires_source_review"
+          },
+          "accountNumber": "000000000042"
+        }
+      ],
+      "expectedMetadata": {
+        "institution": "EastWest Bank",
+        "accountNumber": "000000000042",
+        "openingBalance": 0,
+        "endingBalance": 9000,
+        "maxConfidence": 45
+      }
+    }
+  ]
+}

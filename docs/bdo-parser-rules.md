@@ -73,3 +73,9 @@ This document captures the BDO parsing rules learned from the synthetic training
 - Unexpected `Other` categories or statement-housekeeping rows should be treated as parser review candidates.
 - If a BDO row looks like statement metadata rather than a transaction, drop it from the transaction stream and keep it only as audit/context text.
 - Rows that collapse to ambiguous system text should retain the raw description for review.
+
+## Reconciled full-date native tables
+
+For the `Date Details Withdrawals Debit Deposits Balance` layout, prefer intact native PDF rows when their full month-name dates, amounts, running balances, printed deposit/withdrawal totals and closing balance all reconcile. A balance may wrap onto the next line; spaces after a thousands comma are typography, not a smaller amount. Keep the explicit source year and account number. Preserve the original line in evidence. Never apply the fragmented-text paired-amount rounding repair to these complete rows. Other BDO layouts continue through their existing parsers.
+
+The reviewed synthetic release case `bdo-full-month-ledger` mirrors this layout without customer identities or amounts. The private historical example visibly contains eight transactions; the old two-row regression expectation was incorrect.

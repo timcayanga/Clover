@@ -1,3 +1,4 @@
+import { hasReconciledBdoInlineLedger } from "@/lib/import-parser";
 import { readLocalReceiptImage, shutdownLocalReceiptOcr } from "./local-receipt-ocr.server";
 import { hasHangul, hasKoreanFinancialHeaders } from "@/lib/korean-financial-text";
 import { koreanStatementLineEvidence } from "@/lib/korean-statement-evidence";
@@ -936,7 +937,9 @@ const renderPdfPagesToOcrText = async (
   password?: string,
   baseUrl?: string | null,
   maxPages = 6,
-  scale = 3.2
+  scale = 3.2,
+  preserveTableRows = false,
+  recoverHeader = false
 ) => {
   const pageImages = await renderPdfPageImagesFromBytes(data, password, maxPages, scale, true);
   const ocrPages: string[] = [];
@@ -947,7 +950,21 @@ const renderPdfPagesToOcrText = async (
     }
 
     try {
-      const ocrText = await extractTextFromImageBufferWithOcrBestEffort(page.dataUrl);
+      let ocrText = preserveTableRows
+        ? await extractTextFromImageBufferWithOcr(page.dataUrl, "6", "eng")
+        : await extractTextFromImageBufferWithOcrBestEffort(page.dataUrl);
+      if (recoverHeader && page.page === 1) {
+        const sharp = (await import("sharp")).default;
+        // Preserve small identifier glyphs: JPEG sharpening can turn 6 into 8.
+        const headerPages = await renderPdfPageImagesFromBytes(data, password, 1, scale, false, true);
+        const bytes = Buffer.from((headerPages[0]?.dataUrl ?? page.dataUrl).split(",")[1], "base64");
+        const size = await sharp(bytes).metadata();
+        if (size.width && size.height) {
+          const header = await sharp(bytes).extract({ left: 0, top: 0, width: size.width, height: Math.ceil(size.height * 0.16) }).resize({ width: 2400 }).png().toBuffer();
+          const headerText = await extractTextFromImageBufferWithOcr(header, "11", "eng");
+          ocrText = `${headerText}\n${ocrText}`;
+        }
+      }
       if (ocrText.trim()) {
         ocrPages.push(ocrText.trim());
       }
@@ -987,6 +1004,13 @@ const shouldAvoidPdfRenderForServerless = (fileName?: string | null) => {
     lower.includes("chinabank")
   );
 };
+
+// These hybrid PDFs can expose only dates/numbers while the header and
+// descriptions live in the page image. A filename must not bypass OCR for an
+// empty or incomplete layer and silently discard the account/transaction text.
+export const knownStatementNativeTextIsComplete = (text: string, fileName?: string | null) =>
+  /\b(?:statement|account|deposit|withdrawal|encashment|inclearing|cheque)\b/i.test(text) &&
+  pdfTextLayerLooksSufficientForParsing(text, fileName);
 
 export const shouldPreferPdfTextLayerWithoutStatementGate = (
   fileName?: string | null,
@@ -1138,6 +1162,7 @@ const scoreStatementTextCandidate = (text: string) => {
 
 export const pdfTextLayerLooksSufficientForParsing = (text: string, fileName?: string | null) => {
   const normalized = text.trim();
+  if (hasReconciledBdoInlineLedger(normalized)) return true;
   // A complete labeled proof is one payment, not a multi-row bank statement.
   // Keep its native field boundaries instead of re-OCRing and stitching labels.
   if (!/[\uFFFD\uE000-\uF8FF]/u.test(normalized) && parseIndonesianPaymentProof(normalized)?.length === 1) return true;
@@ -1839,7 +1864,7 @@ const extractTextFromPdfBytesWithRenderFirstFallback = async (
   const maxPages = profile === "aggressive" ? 8 : 6;
   const renderScale = profile === "aggressive" ? 3.8 : 3.2;
   try {
-    const ocrText = await renderPdfPagesToOcrText(data, password, baseUrl, maxPages, renderScale);
+    const ocrText = await renderPdfPagesToOcrText(data, password, baseUrl, maxPages, renderScale, /china[\s_-]*bank|eastwest/i.test(fileName ?? ""), /eastwest/i.test(fileName ?? ""));
     if (ocrText.trim().length > 0) {
       return ocrText;
     }
@@ -2442,6 +2467,9 @@ const pickBetterPdfTextLayerCandidate = (simpleText: string, layoutAwareText: st
     return simple;
   }
 
+  // Column grouping is preferable when all BDO movements and balances reconcile.
+  if (hasReconciledBdoInlineLedger(layout)) return layout;
+
   const simpleScore = scoreStatementTextCandidate(simple);
   const layoutScore = scoreStatementTextCandidate(layout);
 
@@ -2672,7 +2700,8 @@ const renderPdfPageImagesFromBytes = async (
   password?: string,
   maxPages = 2,
   scale = 1.1,
-  enhanceForOcr = false
+  enhanceForOcr = false,
+  lossless = false
 ) => {
   const canvasModule = getCanvasModule() ?? (await loadCanvasModule());
   if (!canvasModule?.createCanvas) {
@@ -2699,11 +2728,11 @@ const renderPdfPageImagesFromBytes = async (
         const canvas = createCanvas(Math.ceil(viewport.width), Math.ceil(viewport.height));
         const context = canvas.getContext("2d", { willReadFrequently: true });
         await page.render({ canvasContext: context as any, viewport }).promise;
-        const buffer = enhanceForOcr ? await enhancePageImageBufferForOcr(canvas.toBuffer("image/jpeg", 65)) : canvas.toBuffer("image/jpeg", 65);
+        const buffer = lossless ? canvas.toBuffer("image/png") : enhanceForOcr ? await enhancePageImageBufferForOcr(canvas.toBuffer("image/jpeg", 65)) : canvas.toBuffer("image/jpeg", 65);
         pageImages.push({
           page: pageNumber,
           totalPages: pdf.numPages,
-          dataUrl: `data:image/jpeg;base64,${buffer.toString("base64")}`,
+          dataUrl: `data:image/${lossless ? "png" : "jpeg"};base64,${buffer.toString("base64")}`,
         });
       } catch (error) {
         console.warn("PDF page render failed; continuing with remaining pages", {
@@ -2818,7 +2847,8 @@ export const readUploadedFileText = async (
       return knownStatementPdfText;
     }
     if (shouldAvoidPdfRenderForServerless(file.name)) {
-      return extractTextFromPdfBytes(data, password, null);
+      const nativeText = await extractTextFromPdfBytes(data, password, null);
+      if (knownStatementNativeTextIsComplete(nativeText, file.name)) return nativeText;
     }
     const aggressiveProfile = shouldUseAggressivePdfOcrProfile(file.name) ? "aggressive" : "standard";
     if (shouldPreferPdfOcrFirst(file.name)) {
@@ -3069,7 +3099,10 @@ export const readImportedFileTextWithCacheInfo = async (
         // contain repeated transaction rows, so that gate incorrectly sends a
         // complete text layer through a 30-60 second rendered OCR pass. Keep
         // the OCR fallback for scanned PDFs whose text layer is actually empty.
-        if (textLayer.trim()) {
+        if (textLayer.trim() && (
+          shouldPreferPdfTextLayerWithoutStatementGate(params.fileName, params.importMode) ||
+          knownStatementNativeTextIsComplete(textLayer, params.fileName)
+        )) {
           return textLayer;
         }
       }

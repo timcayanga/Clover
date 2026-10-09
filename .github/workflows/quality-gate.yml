@@ -46,6 +46,14 @@ jobs:
       - name: Generate Prisma Client
         run: npm --prefix web exec -- prisma generate --schema web/prisma/schema.prisma
 
+      - name: Ensure disposable PostgreSQL is available for parser preservation checks
+        run: |
+          if [ ! -x /usr/lib/postgresql/16/bin/initdb ]; then
+            sudo apt-get update
+            sudo apt-get install -y postgresql-16
+          fi
+          echo "CLOVER_QA_PG_BIN=/usr/lib/postgresql/16/bin" >> "$GITHUB_ENV"
+
       # qa:prepush includes both production dependency audits; keep one gate
       # entry point so a passing local push cannot skip GitHub's security checks.
       # Mobile verifies the pinned node-forge backport and braces depth guards

@@ -49,6 +49,7 @@ Clover is a personal finance app focused on statement import, transaction parsin
 42. `docs/indonesian-import-parser-rules.md` when working on Indonesian text, receipts, spreadsheets, or IDR amounts
 
 43. `docs/app-migration-parser-rules.md` when working on source-app exports or migration templates
+44. `docs/parser-release-corpus.md` when changing parsing, extraction, enrichment, import persistence, or regression expectations
 
 If `docs/product-spec.md` is added later, it should become the primary product spec and supersede `docs/user-management-spec.md` for implementation guidance.
 
@@ -105,3 +106,4 @@ If `docs/product-spec.md` is added later, it should become the primary product s
 - Run `npm run qa:prepush` from the repository root before every push to `staging` or `main`.
 - Do not push if the command fails. Fix the failing regression, rerun the complete command, and only push after it passes.
 - Keep `.github/workflows/quality-gate.yml` aligned with `qa:prepush` so local and GitHub validation cannot drift.
+- Keep the reviewed parser corpus and real-worker preservation checks in `qa:release`. Do not regenerate expected financial labels from parser output or remove failing cases to make a refactor pass. For parser/extraction changes, also replay the retained private corpus using the existing originals; preserve any missing-source inventory instead of requesting wholesale reuploads.
