@@ -1,3 +1,5 @@
+import { after } from "next/server";
+import { enqueueLearningJob, processPendingLearningJobs } from "@/lib/learning-jobs";
 import { newManualAccountBalance, isInvalidManualAccountBalance } from "../../../../shared/investment-entry";
 import { planName } from "../../../../shared/plan-catalog";
 import { finverseBalances } from "@/lib/finverse-balances";
@@ -8,7 +10,7 @@ import { prisma } from "@/lib/prisma";
 import { isLocalDevHost, requireAuth } from "@/lib/auth";
 import { assertWorkspaceAccess } from "@/lib/workspace-access";
 import { NextResponse } from "next/server";
-import { hasCompatibleTable, loadAccountRules, normalizeAccountRuleKey, upsertAccountRule } from "@/lib/data-engine";
+import { hasCompatibleTable, loadAccountRules, normalizeAccountRuleKey } from "@/lib/data-engine";
 import { INVESTMENT_SUBTYPES, isFixedIncomeInvestmentSubtype, type InvestmentSubtype } from "@/lib/investments";
 import { countWorkspaceOwnerPlanLimitedAccounts } from "@/lib/plan-access";
 import { ensureWorkspaceCashAccount, seedWorkspaceDefaults } from "@/lib/starter-data";
@@ -4110,21 +4112,24 @@ export async function POST(request: Request) {
       favorite: false,
     };
 
+    const saveAccount = (data: Parameters<typeof prisma.account.create>[0]["data"]) => prisma.$transaction(async tx => {
+      const saved = await tx.account.create({
+        data, select: getCompatibleAccountSelect(compatibleColumns),
+      });
+      await enqueueLearningJob({ workspaceId: saved.workspaceId, source: "manual_account_creation", sourceId: saved.id, actions: [{ kind: "account", input: {
+        workspaceId: saved.workspaceId, accountId: saved.id, accountName: saved.name, institution: saved.institution, accountType: saved.type, source: "manual_account_creation", confidence: 100,
+      } }] }, tx);
+      return saved;
+    });
     let account;
     try {
-      account = await prisma.account.create({
-        data: accountCreateData,
-        select: getCompatibleAccountSelect(compatibleColumns),
-      });
+      account = await saveAccount(accountCreateData);
     } catch (error) {
       if (!isMissingAccountNumberColumnError(error)) {
         throw error;
       }
 
-      account = await prisma.account.create({
-        data: omitAccountNumberField(accountCreateData),
-        select: getCompatibleAccountSelect(compatibleColumns),
-      });
+      account = await saveAccount(omitAccountNumberField(accountCreateData));
     }
 
     if (normalizedCurrency) {
@@ -4144,15 +4149,7 @@ export async function POST(request: Request) {
       is_cash: account.type === "cash",
     });
 
-    void upsertAccountRule({
-      workspaceId,
-      accountId: account.id,
-      accountName: account.name,
-      institution: account.institution,
-      accountType: account.type,
-      source: "manual_account_creation",
-      confidence: 100,
-    }).catch(() => null);
+    after(async () => { await processPendingLearningJobs({ workspaceId: account.workspaceId, limit: 1 }); });
 
     invalidateWorkspaceSummaryCache(workspaceId);
     return NextResponse.json({ account: serializeAccount(account) });

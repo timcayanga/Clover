@@ -1,11 +1,12 @@
+import { enqueueLearningJob, processPendingLearningJobs } from "@/lib/learning-jobs";
 import { getTransactionReviewReason } from "@/lib/transaction-review-reasons";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { isLocalDevHost, requireAuth } from "@/lib/auth";
 import { assertWorkspaceAccess } from "@/lib/workspace-access";
-import { NextResponse } from "next/server";
+import { after, NextResponse } from "next/server";
 import { z } from "zod";
-import { recordTrainingSignal, upsertAccountRule } from "@/lib/data-engine";
+import { recordTrainingSignal } from "@/lib/data-engine";
 import { capturePostHogServerEvent } from "@/lib/analytics-server";
 import { hasCompatibleTable } from "@/lib/data-engine";
 import { coerceTransactionTypeFromCategoryName } from "@/lib/transaction-directions";
@@ -256,160 +257,166 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ tr
       payload.receiptLineItems !== undefined ||
       payload.tags !== undefined;
 
-    const updated = await prisma.transaction.update({
-      where: { id: transactionId },
-      data: {
-        categoryId: payload.categoryId === undefined ? undefined : payload.categoryId,
-        accountId: payload.accountId,
-        isExcluded: payload.isExcluded ?? ((payload.reviewStatus === "confirmed" || payload.reviewStatus === "edited") && Array.isArray(transaction.reviewReasons) && transaction.reviewReasons.includes("finverse_possible_duplicate") ? false : undefined),
-        isTransfer: resolvedIsTransfer,
-        type: resolvedType,
-        merchantRaw: payload.merchantRaw,
-        merchantClean: payload.merchantClean,
-        description: payload.description === undefined ? undefined : payload.description,
-        date: payload.date ? new Date(payload.date) : undefined,
-        amount: payload.amount === undefined ? undefined : payload.amount.toString(),
-        currency: payload.currency ? payload.currency.toUpperCase() : undefined,
-        rawPayload: payload.rawPayload === undefined ? undefined : (payload.rawPayload as Prisma.InputJsonValue),
-        reviewStatus: payload.reviewStatus ?? (editedFields ? "edited" : undefined),
-        reviewPriority: editedFields && payload.reviewStatus !== "pending_review" ? "none" : undefined,
-        reviewReasons: editedFields && payload.reviewStatus !== "pending_review" ? Prisma.DbNull : undefined,
-        parserConfidence: transaction.parserConfidence,
-        categoryConfidence: payload.categoryId ? 100 : transaction.categoryConfidence,
-        accountMatchConfidence: payload.accountId ? 100 : transaction.accountMatchConfidence,
-        duplicateConfidence: transaction.duplicateConfidence,
-        transferConfidence: resolvedType === "transfer" ? 100 : 0,
-        normalizedPayload: editedFields
-          ? {
-              ...(transaction.normalizedPayload && typeof transaction.normalizedPayload === "object" && !Array.isArray(transaction.normalizedPayload)
-                ? transaction.normalizedPayload
-                : {}),
-              ...(payload.receiptLineItems !== undefined ? {receiptLineItems:payload.receiptLineItems} : {}),
-              source: "manual_edit",
-              merchantRaw: payload.merchantRaw ?? transaction.merchantRaw,
-              merchantClean: payload.merchantClean ?? transaction.merchantClean ?? payload.merchantRaw ?? transaction.merchantRaw,
-              description: payload.description ?? transaction.description,
-              userNote:
-                payload.userNote === undefined
-                  ? (
-                      transaction.normalizedPayload && typeof transaction.normalizedPayload === "object" && !Array.isArray(transaction.normalizedPayload)
-                        ? (transaction.normalizedPayload as Record<string, Prisma.JsonValue>).userNote ?? null
-                        : null
-                    )
-                  : payload.userNote,
-              categoryId: payload.categoryId === undefined ? transaction.categoryId : payload.categoryId,
-              accountId: payload.accountId ?? transaction.accountId,
-              type: resolvedType,
-              date: payload.date ? new Date(payload.date).toISOString() : transaction.date.toISOString(),
-              amount: payload.amount === undefined ? transaction.amount.toString() : payload.amount.toString(),
-              currency: payload.currency ? payload.currency.toUpperCase() : transaction.currency,
-              rawPayload: payload.rawPayload === undefined ? transaction.rawPayload : (payload.rawPayload as Prisma.JsonValue),
-              isTransfer: resolvedIsTransfer,
-              isExcluded: payload.isExcluded ?? transaction.isExcluded,
-              tags: nextTagNames,
-              reviewStatus: payload.reviewStatus ?? (editedFields ? "edited" : transaction.reviewStatus),
-              editedAt: new Date().toISOString(),
-            }
-          : undefined,
-        learnedRuleIdsApplied: editedFields ? appendManualEditMarker(transaction.learnedRuleIdsApplied) : undefined,
-        transactionTags:
-          payload.tags === undefined
-            ? undefined
-            : payload.tagAction === "add"
-              ? { create: buildTransactionTagWrites(transaction.workspaceId, (nextTagNames ?? []).filter((name) => !existingTagKeys.has(normalizeTransactionTagKey(name)))) }
-            : payload.tagAction === "remove"
-              ? { deleteMany: { tagId: { in: removedTagIds } } }
-            : {
-                deleteMany: {},
-                create: buildTransactionTagWrites(transaction.workspaceId, payload.tags),
-              },
-      },
-      include: {
-        splitBill: {
-          select: {
-            id: true,
-            title: true,
-          },
+    const { updated, account } = await prisma.$transaction(async db => {
+      const updated = await db.transaction.update({
+        where: { id: transactionId },
+        data: {
+          categoryId: payload.categoryId === undefined ? undefined : payload.categoryId,
+          accountId: payload.accountId,
+          isExcluded: payload.isExcluded ?? ((payload.reviewStatus === "confirmed" || payload.reviewStatus === "edited") && Array.isArray(transaction.reviewReasons) && transaction.reviewReasons.includes("finverse_possible_duplicate") ? false : undefined),
+          isTransfer: resolvedIsTransfer,
+          type: resolvedType,
+          merchantRaw: payload.merchantRaw,
+          merchantClean: payload.merchantClean,
+          description: payload.description === undefined ? undefined : payload.description,
+          date: payload.date ? new Date(payload.date) : undefined,
+          amount: payload.amount === undefined ? undefined : payload.amount.toString(),
+          currency: payload.currency ? payload.currency.toUpperCase() : undefined,
+          rawPayload: payload.rawPayload === undefined ? undefined : (payload.rawPayload as Prisma.InputJsonValue),
+          reviewStatus: payload.reviewStatus ?? (editedFields ? "edited" : undefined),
+          reviewPriority: editedFields && payload.reviewStatus !== "pending_review" ? "none" : undefined,
+          reviewReasons: editedFields && payload.reviewStatus !== "pending_review" ? Prisma.DbNull : undefined,
+          parserConfidence: transaction.parserConfidence,
+          categoryConfidence: payload.categoryId ? 100 : transaction.categoryConfidence,
+          accountMatchConfidence: payload.accountId ? 100 : transaction.accountMatchConfidence,
+          duplicateConfidence: transaction.duplicateConfidence,
+          transferConfidence: resolvedType === "transfer" ? 100 : 0,
+          normalizedPayload: editedFields
+            ? {
+                ...(transaction.normalizedPayload && typeof transaction.normalizedPayload === "object" && !Array.isArray(transaction.normalizedPayload)
+                  ? transaction.normalizedPayload
+                  : {}),
+                ...(payload.receiptLineItems !== undefined ? {receiptLineItems:payload.receiptLineItems} : {}),
+                source: "manual_edit",
+                merchantRaw: payload.merchantRaw ?? transaction.merchantRaw,
+                merchantClean: payload.merchantClean ?? transaction.merchantClean ?? payload.merchantRaw ?? transaction.merchantRaw,
+                description: payload.description ?? transaction.description,
+                userNote:
+                  payload.userNote === undefined
+                    ? (
+                        transaction.normalizedPayload && typeof transaction.normalizedPayload === "object" && !Array.isArray(transaction.normalizedPayload)
+                          ? (transaction.normalizedPayload as Record<string, Prisma.JsonValue>).userNote ?? null
+                          : null
+                      )
+                    : payload.userNote,
+                categoryId: payload.categoryId === undefined ? transaction.categoryId : payload.categoryId,
+                accountId: payload.accountId ?? transaction.accountId,
+                type: resolvedType,
+                date: payload.date ? new Date(payload.date).toISOString() : transaction.date.toISOString(),
+                amount: payload.amount === undefined ? transaction.amount.toString() : payload.amount.toString(),
+                currency: payload.currency ? payload.currency.toUpperCase() : transaction.currency,
+                rawPayload: payload.rawPayload === undefined ? transaction.rawPayload : (payload.rawPayload as Prisma.JsonValue),
+                isTransfer: resolvedIsTransfer,
+                isExcluded: payload.isExcluded ?? transaction.isExcluded,
+                tags: nextTagNames,
+                reviewStatus: payload.reviewStatus ?? (editedFields ? "edited" : transaction.reviewStatus),
+                editedAt: new Date().toISOString(),
+              }
+            : undefined,
+          learnedRuleIdsApplied: editedFields ? appendManualEditMarker(transaction.learnedRuleIdsApplied) : undefined,
+          transactionTags:
+            payload.tags === undefined
+              ? undefined
+              : payload.tagAction === "add"
+                ? { create: buildTransactionTagWrites(transaction.workspaceId, (nextTagNames ?? []).filter((name) => !existingTagKeys.has(normalizeTransactionTagKey(name)))) }
+              : payload.tagAction === "remove"
+                ? { deleteMany: { tagId: { in: removedTagIds } } }
+              : {
+                  deleteMany: {},
+                  create: buildTransactionTagWrites(transaction.workspaceId, payload.tags),
+                },
         },
-        transactionTags: {
-          select: {
-            tag: {
-              select: {
-                id: true,
-                name: true,
+        include: {
+          splitBill: {
+            select: {
+              id: true,
+              title: true,
+            },
+          },
+          transactionTags: {
+            select: {
+              tag: {
+                select: {
+                  id: true,
+                  name: true,
+                },
               },
             },
           },
         },
-      },
-    });
+      });
 
-    const account = await prisma.account.findUnique({
-      where: { id: updated.accountId },
-    });
+      const account = await db.account.findUnique({
+        where: { id: updated.accountId },
+      });
 
-    const categoryForRule = updated.categoryId
-      ? await prisma.category.findUnique({
-          where: { id: updated.categoryId },
-        })
-      : null;
+      const categoryForRule = updated.categoryId
+        ? await db.category.findUnique({
+            where: { id: updated.categoryId },
+          })
+        : null;
 
-    if (payload.merchantRaw || payload.merchantClean || payload.categoryId !== undefined || payload.type !== undefined || payload.isTransfer !== undefined) {
-      const rawMerchantText = payload.merchantRaw || updated.merchantRaw || transaction.merchantRaw;
-      const normalizedMerchantName = payload.merchantClean || updated.merchantClean || rawMerchantText;
-      const merchantText = rawMerchantText || normalizedMerchantName;
+      if (payload.merchantRaw || payload.merchantClean || payload.categoryId !== undefined || payload.type !== undefined || payload.isTransfer !== undefined) {
+        const rawMerchantText = payload.merchantRaw || updated.merchantRaw || transaction.merchantRaw;
+        const normalizedMerchantName = payload.merchantClean || updated.merchantClean || rawMerchantText;
+        const merchantText = rawMerchantText || normalizedMerchantName;
 
-      if (merchantText && categoryForRule) {
-        // Await durable workspace learning before returning. Fire-and-forget
-        // writes can be terminated when a serverless request completes.
-        await recordTrainingSignal({
-          workspaceId: transaction.workspaceId,
-          transactionId: transaction.id,
-          merchantText,
-          normalizedName: normalizedMerchantName,
-          institution: account?.institution ?? null,
-          categoryId: categoryForRule.id,
-          categoryName: categoryForRule.name,
-          type: resolvedType,
-          source: "manual_recategorization",
-          confidence: 100,
-          notes: payload.categoryId ? "Manual transaction edit from the transaction editor." : "Manual merchant label edit from the transaction editor.",
-          actorUserId: userId,
-          fieldName:
-            payload.categoryId !== undefined
-              ? "category"
-              : payload.merchantClean !== undefined || payload.merchantRaw !== undefined
-                ? "merchant"
-                : payload.type !== undefined || payload.isTransfer !== undefined
-                  ? "type"
-                  : null,
-          previousValue:
-            payload.categoryId !== undefined
-              ? transaction.categoryId
-              : payload.merchantClean !== undefined || payload.merchantRaw !== undefined
-                ? transaction.merchantClean ?? transaction.merchantRaw
-                : transaction.type,
-          correctedValue:
-            payload.categoryId !== undefined
-              ? updated.categoryId
-              : payload.merchantClean !== undefined || payload.merchantRaw !== undefined
-                ? updated.merchantClean ?? updated.merchantRaw
-                : updated.type,
-        });
+        if (merchantText && categoryForRule) {
+          // Await durable workspace learning before returning. Fire-and-forget
+          // writes can be terminated when a serverless request completes.
+          await recordTrainingSignal({
+            workspaceId: transaction.workspaceId,
+            transactionId: transaction.id,
+            merchantText,
+            observationId: updated.updatedAt.toISOString(),
+            normalizedName: normalizedMerchantName,
+            institution: account?.institution ?? null,
+            categoryId: categoryForRule.id,
+            categoryName: categoryForRule.name,
+            type: resolvedType,
+            source: "manual_recategorization",
+            confidence: 100,
+            notes: payload.categoryId ? "Manual transaction edit from the transaction editor." : "Manual merchant label edit from the transaction editor.",
+            actorUserId: userId,
+            fieldName:
+              payload.categoryId !== undefined
+                ? "category"
+                : payload.merchantClean !== undefined || payload.merchantRaw !== undefined
+                  ? "merchant"
+                  : payload.type !== undefined || payload.isTransfer !== undefined
+                    ? "type"
+                    : null,
+            previousValue:
+              payload.categoryId !== undefined
+                ? transaction.categoryId
+                : payload.merchantClean !== undefined || payload.merchantRaw !== undefined
+                  ? transaction.merchantClean ?? transaction.merchantRaw
+                  : transaction.type,
+            correctedValue:
+              payload.categoryId !== undefined
+                ? updated.categoryId
+                : payload.merchantClean !== undefined || payload.merchantRaw !== undefined
+                  ? updated.merchantClean ?? updated.merchantRaw
+                  : updated.type,
+          }, db);
+        }
       }
-    }
 
-    if (payload.accountId) {
-      void upsertAccountRule({
-        workspaceId: transaction.workspaceId,
-        accountId: updated.accountId,
-        accountName: account?.name ?? "",
-        institution: account?.institution ?? null,
-        accountType: account?.type ?? "bank",
-        source: "manual_transaction_reassignment",
-        confidence: 100,
-      }).catch(() => null);
-    }
+      if (payload.accountId) {
+        await enqueueLearningJob({ workspaceId: transaction.workspaceId, source: "manual_transaction_reassignment", sourceId: transaction.id, actions: [{ kind: "account", input: {
+          workspaceId: transaction.workspaceId,
+          accountId: updated.accountId,
+          accountName: account?.name ?? "",
+          institution: account?.institution ?? null,
+          accountType: account?.type ?? "bank",
+          source: "manual_transaction_reassignment",
+          confidence: 100,
+        } }] }, db);
+      }
+
+      return { updated, account };
+    });
+    after(async () => { await processPendingLearningJobs({ workspaceId: transaction.workspaceId, limit: 1 }); });
 
     await prisma.auditLog.create({
       data: {

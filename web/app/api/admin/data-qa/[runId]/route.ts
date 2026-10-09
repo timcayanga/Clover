@@ -1,5 +1,6 @@
 import { assertTrustedRequestOrigin } from "@/lib/request-security";
-import { NextResponse } from "next/server";
+import { after, NextResponse } from "next/server";
+import { processLearningJob } from "@/lib/learning-jobs";
 import { z } from "zod";
 import { Prisma } from "@prisma/client";
 import { getAdminDataEnvironment, requireAdminAuth } from "@/lib/admin";
@@ -482,7 +483,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ runI
 export async function PATCH(request: Request, { params }: { params: Promise<{ runId: string }> }) {
   try {
     assertTrustedRequestOrigin(request);
-    await requireAdminAuth("operate");
+    const admin = await requireAdminAuth("operate");
     const { runId } = await params;
     const pdfJsBaseUrl = new URL(request.url).origin;
     const payload = updateSchema.parse(await request.json());
@@ -515,22 +516,18 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ ru
       fieldReviewAuthorId?: string | null;
     } = {};
 
-    if (payload.manualFeedback !== undefined) {
+    if (payload.manualFeedback !== undefined && payload.manualFeedback !== existingRun.manualFeedback) {
       updateData.manualFeedback = payload.manualFeedback;
       updateData.manualFeedbackUpdatedAt = new Date();
-      updateData.manualFeedbackAuthorId = "local-admin";
+      updateData.manualFeedbackAuthorId = admin.userId;
     }
 
-    if (payload.fieldReviewPayload !== undefined) {
+    if (payload.fieldReviewPayload !== undefined && JSON.stringify(payload.fieldReviewPayload) !== JSON.stringify(existingRun.fieldReviewPayload)) {
       updateData.fieldReviewPayload = payload.fieldReviewPayload as Prisma.InputJsonValue;
       updateData.fieldReviewUpdatedAt = new Date();
-      updateData.fieldReviewAuthorId = "local-admin";
+      updateData.fieldReviewAuthorId = admin.userId;
     }
 
-    const run = await prisma.dataQaRun.update({
-      where: { id: runId },
-      data: updateData,
-    });
 
     const parsedRows = existingRun.importFileId ? await fetchParsedTransactionRows(existingRun.importFileId) : [];
     const statementCheckpoint =
@@ -578,83 +575,91 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ ru
         : null,
     });
 
-    if (payload.manualFeedback !== undefined || payload.fieldReviewPayload !== undefined) {
-      void applyDataQaReviewLearning({
-        workspaceId: existingRun.workspaceId,
-        importFileId: existingRun.importFileId,
-        accountId: account?.id ?? null,
-        fileName: String(importFile.fileName ?? "imported-file"),
-        fileType: String(importFile.fileType ?? "unknown"),
-        metadata: {
-          institution:
-            (statementCheckpoint?.sourceMetadata &&
-            typeof statementCheckpoint.sourceMetadata === "object" &&
-            !Array.isArray(statementCheckpoint.sourceMetadata) &&
-            typeof (statementCheckpoint.sourceMetadata as Record<string, unknown>).institution === "string")
-              ? String((statementCheckpoint.sourceMetadata as Record<string, unknown>).institution)
-              : account?.institution ?? null,
-          accountNumber:
-            (statementCheckpoint?.sourceMetadata &&
-            typeof statementCheckpoint.sourceMetadata === "object" &&
-            !Array.isArray(statementCheckpoint.sourceMetadata) &&
-            typeof (statementCheckpoint.sourceMetadata as Record<string, unknown>).accountNumber === "string")
-              ? String((statementCheckpoint.sourceMetadata as Record<string, unknown>).accountNumber)
-              : null,
-          accountName:
-            (statementCheckpoint?.sourceMetadata &&
-            typeof statementCheckpoint.sourceMetadata === "object" &&
-            !Array.isArray(statementCheckpoint.sourceMetadata) &&
-            typeof (statementCheckpoint.sourceMetadata as Record<string, unknown>).accountName === "string")
-              ? String((statementCheckpoint.sourceMetadata as Record<string, unknown>).accountName)
-              : account?.name ?? null,
-          accountType: account?.type ?? null,
-          openingBalance:
-            statementCheckpoint?.openingBalance !== null && statementCheckpoint?.openingBalance !== undefined
-              ? Number(statementCheckpoint.openingBalance)
-              : null,
-          endingBalance:
-            statementCheckpoint?.endingBalance !== null && statementCheckpoint?.endingBalance !== undefined
-              ? Number(statementCheckpoint.endingBalance)
-              : null,
-          paymentDueDate:
-            statementCheckpoint?.sourceMetadata &&
-            typeof statementCheckpoint.sourceMetadata === "object" &&
-            !Array.isArray(statementCheckpoint.sourceMetadata) &&
-            typeof (statementCheckpoint.sourceMetadata as Record<string, unknown>).paymentDueDate === "string"
-              ? String((statementCheckpoint.sourceMetadata as Record<string, unknown>).paymentDueDate)
-              : null,
-          totalAmountDue:
-            statementCheckpoint?.sourceMetadata &&
-            typeof statementCheckpoint.sourceMetadata === "object" &&
-            !Array.isArray(statementCheckpoint.sourceMetadata) &&
-            typeof (statementCheckpoint.sourceMetadata as Record<string, unknown>).totalAmountDue === "number"
-              ? Number((statementCheckpoint.sourceMetadata as Record<string, unknown>).totalAmountDue)
-              : null,
-          startDate: statementCheckpoint?.statementStartDate?.toISOString() ?? null,
-          endDate: statementCheckpoint?.statementEndDate?.toISOString() ?? null,
-          confidence:
-            statementCheckpoint?.sourceMetadata &&
-            typeof statementCheckpoint.sourceMetadata === "object" &&
-            !Array.isArray(statementCheckpoint.sourceMetadata) &&
-            typeof (statementCheckpoint.sourceMetadata as Record<string, unknown>).confidence === "number"
-              ? Number((statementCheckpoint.sourceMetadata as Record<string, unknown>).confidence)
-              : 0,
-        },
-        parsedRows,
-        fieldReviewPayload: (payload.fieldReviewPayload ?? null) as Prisma.JsonValue,
-        manualFeedback: payload.manualFeedback ?? null,
-        actorUserId: "local-admin",
-        statementFingerprint,
-        statementMetadataOverride,
-      }).catch((error) => {
-        console.warn("Data QA learning failed after feedback save", {
-          runId,
-          error,
-        });
+    const { run, learning } = await prisma.$transaction(async db => {
+      const run = await db.dataQaRun.update({
+        where: { id: runId },
+        data: updateData,
       });
-    }
+
+      let learning = null;
+      if (payload.manualFeedback !== undefined || payload.fieldReviewPayload !== undefined) {
+        learning = await applyDataQaReviewLearning({
+          observationId: new Date(Math.max(run.fieldReviewUpdatedAt?.getTime() ?? 0, run.manualFeedbackUpdatedAt?.getTime() ?? 0)).toISOString(),
+          workspaceId: existingRun.workspaceId,
+          importFileId: existingRun.importFileId,
+          accountId: account?.id ?? null,
+          fileName: String(importFile.fileName ?? "imported-file"),
+          fileType: String(importFile.fileType ?? "unknown"),
+          metadata: {
+            institution:
+              (statementCheckpoint?.sourceMetadata &&
+              typeof statementCheckpoint.sourceMetadata === "object" &&
+              !Array.isArray(statementCheckpoint.sourceMetadata) &&
+              typeof (statementCheckpoint.sourceMetadata as Record<string, unknown>).institution === "string")
+                ? String((statementCheckpoint.sourceMetadata as Record<string, unknown>).institution)
+                : account?.institution ?? null,
+            accountNumber:
+              (statementCheckpoint?.sourceMetadata &&
+              typeof statementCheckpoint.sourceMetadata === "object" &&
+              !Array.isArray(statementCheckpoint.sourceMetadata) &&
+              typeof (statementCheckpoint.sourceMetadata as Record<string, unknown>).accountNumber === "string")
+                ? String((statementCheckpoint.sourceMetadata as Record<string, unknown>).accountNumber)
+                : null,
+            accountName:
+              (statementCheckpoint?.sourceMetadata &&
+              typeof statementCheckpoint.sourceMetadata === "object" &&
+              !Array.isArray(statementCheckpoint.sourceMetadata) &&
+              typeof (statementCheckpoint.sourceMetadata as Record<string, unknown>).accountName === "string")
+                ? String((statementCheckpoint.sourceMetadata as Record<string, unknown>).accountName)
+                : account?.name ?? null,
+            accountType: account?.type ?? null,
+            openingBalance:
+              statementCheckpoint?.openingBalance !== null && statementCheckpoint?.openingBalance !== undefined
+                ? Number(statementCheckpoint.openingBalance)
+                : null,
+            endingBalance:
+              statementCheckpoint?.endingBalance !== null && statementCheckpoint?.endingBalance !== undefined
+                ? Number(statementCheckpoint.endingBalance)
+                : null,
+            paymentDueDate:
+              statementCheckpoint?.sourceMetadata &&
+              typeof statementCheckpoint.sourceMetadata === "object" &&
+              !Array.isArray(statementCheckpoint.sourceMetadata) &&
+              typeof (statementCheckpoint.sourceMetadata as Record<string, unknown>).paymentDueDate === "string"
+                ? String((statementCheckpoint.sourceMetadata as Record<string, unknown>).paymentDueDate)
+                : null,
+            totalAmountDue:
+              statementCheckpoint?.sourceMetadata &&
+              typeof statementCheckpoint.sourceMetadata === "object" &&
+              !Array.isArray(statementCheckpoint.sourceMetadata) &&
+              typeof (statementCheckpoint.sourceMetadata as Record<string, unknown>).totalAmountDue === "number"
+                ? Number((statementCheckpoint.sourceMetadata as Record<string, unknown>).totalAmountDue)
+                : null,
+            startDate: statementCheckpoint?.statementStartDate?.toISOString() ?? null,
+            endDate: statementCheckpoint?.statementEndDate?.toISOString() ?? null,
+            confidence:
+              statementCheckpoint?.sourceMetadata &&
+              typeof statementCheckpoint.sourceMetadata === "object" &&
+              !Array.isArray(statementCheckpoint.sourceMetadata) &&
+              typeof (statementCheckpoint.sourceMetadata as Record<string, unknown>).confidence === "number"
+                ? Number((statementCheckpoint.sourceMetadata as Record<string, unknown>).confidence)
+                : 0,
+          },
+          parsedRows,
+          fieldReviewPayload: run.fieldReviewPayload,
+          manualFeedback: run.manualFeedback,
+          actorUserId: admin.userId,
+          statementFingerprint,
+          statementMetadataOverride,
+        }, db);
+      }
+
+      return { run, learning };
+    });
+    if (learning?.learningJobId) after(async () => { await processLearningJob(learning.learningJobId!); });
 
     return NextResponse.json({
+      learning,
       run: {
         id: run.id,
         manualFeedback: run.manualFeedback,

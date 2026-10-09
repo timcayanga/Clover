@@ -1,3 +1,4 @@
+import { recordTrainingSignal } from "@/lib/data-engine";
 import {
   normalizeTransactionTagKey,
   sanitizeTransactionTagNames,
@@ -272,6 +273,9 @@ export async function applyMobileOfflineMutation(
         },
       },
     });
+    if (row.categoryId && operation.kind === "create") {
+      await recordTrainingSignal({ workspaceId, transactionId: row.id, observationId: row.updatedAt.toISOString(), merchantText: row.merchantRaw, normalizedName: row.merchantClean, categoryId: row.categoryId, categoryName: row.category?.name, type: row.type, source: "manual_transaction_creation", confidence: 100, actorUserId: userId }, tx);
+    }
     const body = {
       transaction: {
         ...row,

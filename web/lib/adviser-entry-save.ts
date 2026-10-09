@@ -1,3 +1,5 @@
+import { after } from "next/server";
+import { processPendingLearningJobs } from "@/lib/learning-jobs";
 import { getEffectiveUserLimits } from "./user-limits";
 import { countNonCashAccounts } from "./account-limit-count";
 import { createHash } from "node:crypto";
@@ -218,9 +220,10 @@ export async function commitAdviserEntries(
             },
             learnedRuleIdsApplied: [],
           },
-          select: { id: true, merchantClean: true },
+          select: { id: true, merchantClean: true, updatedAt: true },
         });
-        transactionResults.push(created);
+        if (row.categoryId) await recordTrainingSignal({ workspaceId: draft.workspaceId, transactionId: created.id, observationId: created.updatedAt.toISOString(), merchantText: row.merchant.trim(), normalizedName: row.merchant.trim(), categoryId: row.categoryId, type: row.type, source: "manual_transaction_creation", confidence: 100, notes: "User confirmed an Ask Clover entry draft.", actorUserId }, tx);
+        transactionResults.push({ id: created.id, merchantClean: created.merchantClean });
       }
       const receiptResults = [];
       const seen = new Set<string>();
@@ -343,47 +346,9 @@ export async function saveAdviserEntries(
   const result = await commitAdviserEntries(prisma, draft, actorUserId);
   invalidateWorkspaceSummaryCache(draft.workspaceId);
   if (!("alreadyCompleted" in result)) {
-    // Reuse Clover's confirmed-edit learning; never train on a proposal.
-    try {
-      const audit = await prisma.auditLog.findFirst({
-        where: {
-          workspaceId: draft.workspaceId,
-          actorUserId,
-          action: "adviser.entries_confirmed",
-          entityId: draft.id,
-        },
-        select: { metadata: true },
-      });
-      const saved = object(object(audit?.metadata).result);
-      const ids = Array.isArray(saved.transactions)
-        ? saved.transactions.map((row) => String(object(row).id))
-        : [];
-      const transactions = await prisma.transaction.findMany({
-        where: {
-          workspaceId: draft.workspaceId,
-          id: { in: ids },
-          categoryId: { not: null },
-        },
-        include: { category: true },
-      });
-      for (const transaction of transactions)
-        if (transaction.category)
-          void recordTrainingSignal({
-            workspaceId: draft.workspaceId,
-            transactionId: transaction.id,
-            merchantText: transaction.merchantClean || transaction.merchantRaw,
-            categoryId: transaction.category.id,
-            categoryName: transaction.category.name,
-            type: transaction.type,
-            source: "manual_transaction_creation",
-            confidence: 100,
-            notes: "User confirmed an Ask Clover entry draft.",
-            actorUserId,
-          }).catch(() => {});
-      void syncWorkspaceRecurringPatterns(draft.workspaceId).catch(() => {});
-    } catch {
-      /* Saving succeeded; learning can be retried independently. */
-    }
+    // The outbox already committed with the entries. A stopped worker resumes independently.
+    after(async () => { await processPendingLearningJobs({ workspaceId: draft.workspaceId, limit: 1 }); });
+    void syncWorkspaceRecurringPatterns(draft.workspaceId).catch(() => {});
   }
   return result;
 }

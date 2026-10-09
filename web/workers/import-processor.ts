@@ -1,3 +1,4 @@
+import { enqueueLearningJob, processLearningJob, type LearningAction } from "@/lib/learning-jobs";
 import { readAppMigration, createMigrationOverlapMatcher, summarizeAppMigration } from "@/lib/app-migration-import";
 import { persistMigrationTags } from "@/lib/app-migration-persistence";
 import { encodeLocalReceiptOcr, readLocalReceiptOcrText } from "@/lib/local-receipt-ocr-envelope";
@@ -104,8 +105,6 @@ import {
   loadScoredStatementTemplatesForInstitution,
   mergeStatementMetadataWithTemplate,
   recordStatementTemplateOutcome,
-  promoteUnsupervisedLearningClustersForWorkspace,
-  recordUnsupervisedLearningAuditForTemplate,
   resolveImportFileExtractionCacheVersion,
   updateImportFileCompat,
   normalizeAccountRuleKey,
@@ -7786,7 +7785,7 @@ export const processImportEnrichmentJobs = async (options: {
           where: { workspaceId: String(importFile.workspaceId) },
           select: { id: true, name: true },
         }),
-        loadImportEnrichmentTrainingContext(String(importFile.workspaceId)),
+        loadImportEnrichmentTrainingContext(String(importFile.workspaceId), parsedRows as ParsedImportRow[]),
       ]);
       const enrichmentSetupCompletedAt = Date.now();
       const statementConfidence =
@@ -12664,21 +12663,17 @@ const processImportFileTextImpl = async (
       resolvedImportMode: "receipt", confirmedTransactionsCount: 0, status: "error" };
   }
 
-  const runTemplateLearning = async () => {
-    if (await getImportUserControl(importFileId, String(importFile.workspaceId)) !== "running") return;
-    const learningState = await prisma.importFile.findUnique({
-      where: { id: importFileId },
-      select: { status: true, transactions: { select: { reviewStatus: true, deletedAt: true } } },
-    });
-    if (learningState?.status !== "done") return;
-    if (effectiveImportMode === "receipt" && (!learningState.transactions.length ||
-      learningState.transactions.some(row => row.deletedAt || row.reviewStatus === "pending_review"))) return;
-    const template = await upsertStatementTemplate({
+  // Save the request before deferring execution. If confirmation or the worker
+  // is interrupted, the job waits for its source and can resume independently.
+  const templateLearningJob = await enqueueLearningJob({
+    workspaceId: importFile.workspaceId, source: "import_template", sourceId: importFileId,
+    actions: [{ kind: "template", sourceImportFileId: importFileId, requireCompletedSource: true, requireReviewedTransactions: effectiveImportMode === "receipt", learnCandidates: true, input: {
       workspaceId: importFile.workspaceId,
       fingerprint: statementFingerprint,
       metadata: resolvedMetadata,
       fileType: importFile.fileType,
       parserConfig: {
+        importFileId,
         parserSource: useOpenAiParse ? "backup_parser" : "local_parser",
         backupParserModel: useOpenAiParse ? openAiParsed?.model ?? null : null,
         backupParserPromptVersion: useOpenAiParse ? openAiParsed?.promptVersion ?? null : null,
@@ -12716,48 +12711,10 @@ const processImportFileTextImpl = async (
               ? rows.at(-1)?.merchantRaw
               : null,
       } as Prisma.InputJsonValue,
-    });
-    if (!template || unsupervisedLearningSnapshot.clusterCount <= 0) {
-      return;
-    }
-
-    const result = await promoteUnsupervisedLearningClustersForWorkspace({
-      workspaceId: importFile.workspaceId,
-    });
-    await recordUnsupervisedLearningAuditForTemplate({
-      workspaceId: importFile.workspaceId,
-      fingerprint: template.fingerprint,
-      importFileId,
-      audit: result.audit,
-    }).catch((error) => {
-      console.warn("Unsupervised learning audit persistence failed; continuing import", {
-        importFileId,
-        workspaceId: importFile.workspaceId,
-        error,
-      });
-    });
-    if (result.audit.candidateCount > 0 || result.audit.promotedCount > 0 || result.audit.suspendedCount > 0) {
-      console.info("Unsupervised learning audit", {
-        importFileId,
-        workspaceId: importFile.workspaceId,
-        audit: result.audit,
-      });
-    }
-  };
-
-  // Template promotion scans recent statement memory and may perform many rule
-  // upserts. It is valuable durable learning, but never belongs on the path
-  // that makes the current statement visible. Running it immediately can
-  // consume one of the small serverless database pool's connections while
-  // parsed rows, checkpoints, and account balances are being committed.
-  schedulePostVisibleImportWork(`template-learning:${importFileId}`, async () => {
-    await runTemplateLearning().catch((error) => {
-      console.warn("Deferred statement template learning failed; continuing import", {
-        importFileId,
-        workspaceId: importFile.workspaceId,
-        error,
-      });
-    });
+    } }],
+  });
+  if (templateLearningJob) schedulePostVisibleImportWork(`template-learning:${importFileId}`, async () => {
+    await processLearningJob(templateLearningJob.id);
   }, 10_000);
 
   if (await hasCompatibleTable("AccountStatementCheckpoint")) {
@@ -13455,6 +13412,7 @@ const processImportFileTextImpl = async (
       });
 
       await applyDataQaReviewLearning({
+        reviewAuthority: "automated",
         workspaceId: String(importFile.workspaceId),
         importFileId,
         accountId: importFile.account?.id ?? null,
@@ -15238,6 +15196,7 @@ export const confirmImportFile = async (
     notes: string | null;
   }> = [];
   const preparedTransactions: PreparedImportTransaction[] = [];
+  let learningJobId: string | null = null;
   const preparedAtmCashDestinations: PreparedAtmCashDestination[] = [];
   let duplicateSkippedTransactionsCount = 0;
   let qaMetadataForRun: {
@@ -16591,6 +16550,40 @@ export const confirmImportFile = async (
     };
   }
 
+  const backupParserRows = parsedRows.filter((row) => {
+    const rawPayload = row.rawPayload;
+    return (
+      rawPayload &&
+      typeof rawPayload === "object" &&
+      !Array.isArray(rawPayload) &&
+      (rawPayload as Record<string, unknown>).source === "openai"
+    );
+  }) as EnrichedParsedImportRow[];
+  // Persist every observation before scheduling work. Identity comes from the
+  // source transaction, so legitimate repeats are retained and retries dedupe.
+  const learningActions: LearningAction[] = trainingSignals.map(entry => ({ kind: "signal", input: {
+    workspaceId: importFile.workspaceId, importFileId, transactionId: entry.transactionId,
+    institution: importFile.account?.institution ?? null, merchantText: entry.merchantText,
+    categoryId: entry.categoryId, categoryName: entry.categoryName, type: entry.type,
+    source: "import_confirmation", confidence: entry.confidence, teachabilityScore: entry.teachabilityScore, notes: entry.notes,
+  } }));
+  if (pendingAccountRule) learningActions.push({ kind: "account", input: pendingAccountRule });
+  if (backupParserRows.length > 0) {
+    const categories = await tx.category.findMany({ where: { workspaceId: importFile.workspaceId }, select: { id: true, name: true } });
+    const categoryIdsByName = new Map(categories.map(category => [category.name.trim().toLowerCase(), category.id]));
+    for (const signal of extractBackupParserLearningSignals(backupParserRows)) {
+      const categoryId = categoryIdsByName.get(signal.categoryName.trim().toLowerCase());
+      if (categoryId) learningActions.push({ kind: "signal", input: {
+        workspaceId: importFile.workspaceId, importFileId,
+        // This is a source-level suggestion, not a fabricated Transaction FK.
+        institution: importFile.account?.institution ?? null, merchantText: signal.merchantText, normalizedName: signal.normalizedName,
+        categoryId, categoryName: signal.categoryName, type: signal.type, source: "import_confirmation",
+        confidence: signal.confidence, teachabilityScore: signal.teachabilityScore, notes: signal.notes,
+      } });
+    }
+  }
+  learningJobId = (await enqueueLearningJob({ workspaceId: importFile.workspaceId, source: "import_confirmation", sourceId: importFileId, actions: learningActions }, tx))?.id ?? null;
+
   const insightSummary = buildImportInsightSummary(transactions);
 
   qaMetadataForRun = {
@@ -16874,111 +16867,21 @@ export const confirmImportFile = async (
 
   }
 
-  const backupParserRows = parsedRows.filter((row) => {
-    const rawPayload = row.rawPayload;
-    return (
-      rawPayload &&
-      typeof rawPayload === "object" &&
-      !Array.isArray(rawPayload) &&
-      (rawPayload as Record<string, unknown>).source === "openai"
-    );
-  }) as EnrichedParsedImportRow[];
-  // Large workbooks can contain hundreds of repeated ledger descriptions.
-  // Learning one durable signal per merchant/category/direction is sufficient
-  // and avoids flooding the database pool immediately after rows become
-  // visible. User-confirmed edits still create their own authoritative signals.
-  const postVisibleTrainingSignals = Array.from(
-    trainingSignals.reduce((signals, entry) => {
-      const key = [
-        entry.merchantText.trim().toLowerCase(),
-        entry.categoryName.trim().toLowerCase(),
-        entry.type,
-      ].join(":");
-      const existing = signals.get(key);
-      if (
-        !existing ||
-        entry.teachabilityScore > existing.teachabilityScore ||
-        (entry.teachabilityScore === existing.teachabilityScore && entry.confidence > existing.confidence)
-      ) {
-        signals.set(key, entry);
-      }
-      return signals;
-    }, new Map<string, (typeof trainingSignals)[number]>()).values()
-  ).slice(0, highVolumeConfirmation ? 50 : 200);
   // Per-row analytics is useful for small statements, but hundreds of network
   // calls from a workbook compete with the first UI refresh. Keep a bounded
   // representative sample; aggregate import metrics are emitted separately.
   const postVisibleAnalyticsTransactions = preparedTransactions.slice(0, highVolumeConfirmation ? 25 : 100);
   const analyticsDistinctId = String(importFile.workspaceId ?? "import-worker");
   schedulePostVisibleImportWork(`finalize:${importFileId}`, async () => {
-    await prisma.trainingSignal.deleteMany({
-      where: {
-        importFileId,
-        source: "import_confirmation",
-      },
-    }).catch(() => null);
+    if (learningJobId) await processLearningJob(learningJobId, { maxItems: 5000, deadlineMs: 45_000 });
 
     await collapseDuplicateTransactionsForImport(importFileId).catch((error) => {
       console.warn("Unable to collapse duplicate transactions after confirmation", { importFileId, error });
     });
 
-    if (pendingAccountRule) {
-      await upsertAccountRule(pendingAccountRule).catch(() => null);
-    }
-
     await syncWorkspaceRecurringPatterns(String(importFile.workspaceId)).catch((error) => {
       console.warn("Unable to sync recurring patterns after import confirmation", { importFileId, error });
     });
-
-    await runWithConcurrency(postVisibleTrainingSignals, 4, async (entry) => {
-      await recordTrainingSignal({
-        workspaceId: importFile.workspaceId,
-        importFileId,
-        transactionId: entry.transactionId,
-        institution: importFile.account?.institution ?? null,
-        merchantText: entry.merchantText,
-        categoryId: entry.categoryId,
-        categoryName: entry.categoryName,
-        type: entry.type,
-        source: "import_confirmation",
-        confidence: entry.confidence,
-        teachabilityScore: entry.teachabilityScore,
-        notes: entry.notes,
-      }).catch(() => null);
-    });
-
-    if (backupParserRows.length > 0) {
-      const backupLearningSignals = extractBackupParserLearningSignals(backupParserRows);
-      if (backupLearningSignals.length > 0) {
-        const categories = await prisma.category.findMany({
-          where: { workspaceId: importFile.workspaceId },
-          select: { id: true, name: true },
-        }).catch(() => []);
-        const categoryIdsByName = new Map(
-          categories.map((category) => [category.name.trim().toLowerCase(), category.id] as const)
-        );
-
-        await runWithConcurrency(backupLearningSignals, 4, async (signal, index) => {
-          const categoryId = categoryIdsByName.get(signal.categoryName.trim().toLowerCase());
-          if (!categoryId) return;
-          await recordTrainingSignal({
-            workspaceId: importFile.workspaceId,
-            importFileId,
-            transactionId: `${importFileId}:backup:${index + 1}`,
-            institution: importFile.account?.institution ?? null,
-            merchantText: signal.merchantText,
-            normalizedName: signal.normalizedName,
-            categoryId,
-            categoryName: signal.categoryName,
-            type: signal.type,
-            source: "import_confirmation",
-            confidence: signal.confidence,
-            teachabilityScore: signal.teachabilityScore,
-            notes: signal.notes,
-          }).catch(() => null);
-        });
-      }
-    }
 
     if (qaMetadataForRun && qaAccountForRun) {
       await recordDataQaRun({

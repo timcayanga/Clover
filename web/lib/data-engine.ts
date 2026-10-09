@@ -1,3 +1,4 @@
+import { enqueueLearningJob, processLearningJob, LearningInputError, type LearningAction, type LearningWriteContext } from "@/lib/learning-jobs";
 import { readAppMigration } from "@/lib/app-migration-import";
 import { getRegionalMerchantCategoryHint } from "@/lib/korea-indonesia-corpus";
 import { getIndonesianMerchantCategoryHint, getIndonesianIncomeCategoryHint, needsIndonesianPaymentCategoryReview } from "@/lib/indonesian-merchant-context";
@@ -2462,7 +2463,7 @@ export const loadBestStatementTemplateForInstitution = async (params: {
   }
 
   try {
-    const templates = await prisma.statementTemplate.findMany({
+    let templates = await prisma.statementTemplate.findMany({
       where: {
         workspaceId: params.workspaceId,
         institution,
@@ -2471,6 +2472,15 @@ export const loadBestStatementTemplateForInstitution = async (params: {
       orderBy: [{ successCount: "desc" }, { exampleCount: "desc" }, { updatedAt: "desc" }],
       take: 5,
     });
+
+    if (params.statementFamilySignature) {
+      const exactFamily = await prisma.statementTemplate.findMany({ where: {
+        workspaceId: params.workspaceId, institution,
+        ...(params.fileType ? { fileType: params.fileType } : {}),
+        parserConfig: { path: ["statementFamilySignature"], equals: params.statementFamilySignature },
+      } });
+      templates = [...new Map([...templates, ...exactFamily].map(template => [template.id, template])).values()];
+    }
 
     const scoredTemplates = templates
       .map((template) => ({
@@ -2513,7 +2523,7 @@ export const loadScoredStatementTemplatesForInstitution = async (params: {
   const take = Math.max(1, Math.min(25, Math.round(params.limit ?? 8)));
 
   try {
-    const templates = await prisma.statementTemplate.findMany({
+    let templates = await prisma.statementTemplate.findMany({
       where: {
         workspaceId: params.workspaceId,
         ...(params.fileType ? { fileType: params.fileType } : {}),
@@ -2526,6 +2536,16 @@ export const loadScoredStatementTemplatesForInstitution = async (params: {
       orderBy: [{ successCount: "desc" }, { exampleCount: "desc" }, { updatedAt: "desc" }],
       take: params.allowCrossInstitutionFamilyMatch ? Math.max(take * 4, 20) : Math.max(take * 2, 12),
     });
+
+    if (params.statementFamilySignature) {
+      const exactFamily = await prisma.statementTemplate.findMany({ where: {
+        workspaceId: params.workspaceId,
+        ...(institution && institution !== "Unknown" && !params.allowCrossInstitutionFamilyMatch ? { institution } : {}),
+        ...(params.fileType ? { fileType: params.fileType } : {}),
+        parserConfig: { path: ["statementFamilySignature"], equals: params.statementFamilySignature },
+      } });
+      templates = [...new Map([...templates, ...exactFamily].map(template => [template.id, template])).values()];
+    }
 
     return templates
       .map((template) => {
@@ -3776,7 +3796,27 @@ export const countParsedTransactionRows = async (importFileId: string) => {
   return Number(result[0]?.count ?? 0n);
 };
 
-export const loadMerchantRules = async (workspaceId: string) => {
+export type LearningRetrievalRow = Pick<ParsedImportRow, "merchantRaw" | "merchantClean" | "description" | "institution" | "accountName">;
+
+const learningRetrievalQuery = (rows: LearningRetrievalRow[]) => {
+  const keys = new Set<string>();
+  const tokens = new Set<string>();
+  for (const row of rows) {
+    for (const text of [row.merchantRaw, row.merchantClean, row.description].filter((text): text is string => Boolean(text))) {
+      const candidates = buildMerchantClassificationCandidates(text, summarizeMerchantText(text), row.institution ?? null);
+      for (const value of [text, ...candidates, buildMerchantFamilySignature(text)]) {
+        const key = normalizeMerchantText(value);
+        if (key) keys.add(key);
+      }
+      for (const token of tokenizeMerchant(text)) if (token.length >= 3 || /[^a-z0-9]/i.test(token)) tokens.add(token);
+    }
+  }
+  return { keys: [...keys], tokens: [...tokens] };
+};
+const mergeLearningRows = <T extends { merchantKey: string }>(...groups: T[][]): T[] =>
+  [...new Map(groups.flat().map(row => [row.merchantKey, row])).values()];
+
+export const loadMerchantRules = async (workspaceId: string, rows: LearningRetrievalRow[] = []) => {
   let rules: Array<{
     merchantKey: string;
     merchantPattern: string | null;
@@ -3792,14 +3832,25 @@ export const loadMerchantRules = async (workspaceId: string) => {
   }> = [];
 
   try {
-    rules = await prisma.merchantRule.findMany({
-      where: { workspaceId, status: "active" },
-      include: {
-        category: true,
-      },
-      orderBy: [{ timesConfirmed: "desc" }, { updatedAt: "desc" }],
-      take: 500,
+    const query = learningRetrievalQuery(rows);
+    const base = await prisma.merchantRule.findMany({
+      where: { workspaceId, status: "active" }, include: { category: true },
+      orderBy: [{ timesConfirmed: "desc" }, { updatedAt: "desc" }, { id: "asc" }], take: 500,
     });
+    rules = base;
+    // Exact keys have no age/popularity cutoff. Chunk parameters, never input rows.
+    for (let offset = 0; offset < query.keys.length; offset += 200) {
+      const exact = await prisma.merchantRule.findMany({ where: { workspaceId, status: "active", merchantKey: { in: query.keys.slice(offset, offset + 200) } }, include: { category: true } });
+      rules = mergeLearningRows(rules, exact);
+    }
+    // Keep fuzzy work bounded, but search the full Profile before limiting results.
+    for (let offset = 0; offset < query.tokens.length; offset += 40) {
+      const relevant = await prisma.merchantRule.findMany({
+        where: { workspaceId, status: "active", OR: query.tokens.slice(offset, offset + 40).map(token => ({ merchantKey: { contains: token } })) },
+        include: { category: true }, orderBy: [{ timesConfirmed: "desc" }, { updatedAt: "desc" }, { id: "asc" }], take: 100,
+      });
+      rules = mergeLearningRows(rules, relevant);
+    }
   } catch (error) {
     if (!isMissingDatabaseRelationError(error, "MerchantRule")) {
       throw error;
@@ -3820,7 +3871,7 @@ export const loadMerchantRules = async (workspaceId: string) => {
   }));
 };
 
-export const loadAccountRules = async (workspaceId: string) => {
+export const loadAccountRules = async (workspaceId: string, rows: LearningRetrievalRow[] = []) => {
   let rules: Array<{
     ruleKey: string;
     accountId: string | null;
@@ -3838,6 +3889,12 @@ export const loadAccountRules = async (workspaceId: string) => {
       orderBy: [{ timesConfirmed: "desc" }, { updatedAt: "desc" }],
       take: 250,
     });
+    const keys = [...new Set(rows.map(row => normalizeAccountRuleKey(row.accountName, row.institution)).filter(Boolean))];
+    for (let offset = 0; offset < keys.length; offset += 200) {
+      const exact = await prisma.accountRule.findMany({ where: { workspaceId, ruleKey: { in: keys.slice(offset, offset + 200) } } });
+      rules = [...exact, ...rules.filter(rule => !exact.some(row => row.ruleKey === rule.ruleKey))];
+    }
+
   } catch (error) {
     if (!isMissingDatabaseRelationError(error, "AccountRule")) {
       throw error;
@@ -3864,40 +3921,25 @@ export const upsertMerchantRule = async (params: {
   categoryName?: string | null;
   source: string;
   confidence?: number;
-}) => {
-  if (!await (await import("@/lib/app-preferences")).canLearnFromWorkspace(params.workspaceId)) return null;
+}, context?: LearningWriteContext) => {
+  const db = context?.db ?? prisma;
+  if (!context && !await (await import("@/lib/app-preferences")).canLearnFromWorkspace(params.workspaceId)) return null;
   const merchantKey = normalizeMerchantText(params.merchantText);
 
   try {
     const incomingConfidence = Math.max(0, Math.min(100, Math.round(params.confidence ?? 100)));
-    const existing = await prisma.merchantRule.findUnique({
+    const existing = await db.merchantRule.findUnique({
       where: { workspaceId_merchantKey: { workspaceId: params.workspaceId, merchantKey } },
-      select: { id: true, status: true, source: true, confidence: true, categoryId: true, normalizedName: true },
+      select: { id: true, status: true, source: true, confidence: true, categoryId: true, normalizedName: true, learningObservedAt: true },
     });
-    const incomingIsManual = /manual/i.test(params.source);
+    const incomingIsManual = /^manual(?:_|$)/i.test(params.source);
+    if (context && existing?.learningObservedAt && existing.learningObservedAt > context.observedAt) return null;
     if (existing && !incomingIsManual && (existing.status === "suspended" || existing.status === "rejected")) {
       return existing;
     }
-    if (
-      existing &&
-      existing.status === "active" &&
-      !incomingIsManual &&
-      existing.source === "manual" &&
-      existing.confidence >= incomingConfidence
-    ) {
-      return await prisma.merchantRule.update({
-        where: { id: existing.id },
-        data: {
-          applicationCount: { increment: 1 },
-          correctionCount: {
-            increment: existing.categoryId !== params.categoryId || normalizeMerchantText(existing.normalizedName) !== normalizeMerchantText(params.normalizedName) ? 1 : 0,
-          },
-          lastUsedAt: new Date(),
-        },
-      });
-    }
+    if (existing && !incomingIsManual && /^manual(?:_|$)/i.test(existing.source)) return existing;
 
-    const rule = await prisma.merchantRule.upsert({
+    const rule = await db.merchantRule.upsert({
       where: {
         workspaceId_merchantKey: {
           workspaceId: params.workspaceId,
@@ -3905,6 +3947,7 @@ export const upsertMerchantRule = async (params: {
         },
       },
       update: {
+        ...(context ? { learningObservedAt: context.observedAt } : {}),
         merchantPattern: params.merchantText.trim(),
         normalizedName: params.normalizedName.trim(),
         categoryId: params.categoryId,
@@ -3926,6 +3969,7 @@ export const upsertMerchantRule = async (params: {
         lastUsedAt: new Date(),
       },
       create: {
+        ...(context ? { learningObservedAt: context.observedAt } : {}),
         workspaceId: params.workspaceId,
         merchantKey,
         merchantPattern: params.merchantText.trim(),
@@ -3945,7 +3989,7 @@ export const upsertMerchantRule = async (params: {
 
     return rule;
   } catch (error) {
-    if (isMissingDatabaseRelationError(error, "MerchantRule")) {
+    if (!context && isMissingDatabaseRelationError(error, "MerchantRule")) {
       return null;
     }
 
@@ -3961,11 +4005,15 @@ export const upsertAccountRule = async (params: {
   accountType: AccountType;
   source: string;
   confidence?: number;
-}) => {
+}, context?: LearningWriteContext) => {
+  const db = context?.db ?? prisma;
   const ruleKey = normalizeAccountRuleKey(params.accountName, params.institution);
 
   try {
-    return await prisma.accountRule.upsert({
+    const existing = await db.accountRule.findUnique({ where: { workspaceId_ruleKey: { workspaceId: params.workspaceId, ruleKey } } });
+    if (existing && ((context && existing.learningObservedAt && existing.learningObservedAt > context.observedAt) ||
+      (/^(?:manual(?:_|$)|data_qa_review$)/.test(existing.source) && !/^(?:manual(?:_|$)|data_qa_review$)/.test(params.source)))) return context ? null : existing;
+    return await db.accountRule.upsert({
       where: {
         workspaceId_ruleKey: {
           workspaceId: params.workspaceId,
@@ -3973,7 +4021,8 @@ export const upsertAccountRule = async (params: {
         },
       },
       update: {
-        accountId: params.accountId ?? null,
+        ...(context ? { learningObservedAt: context.observedAt } : {}),
+        accountId: params.accountId ?? existing?.accountId ?? null,
         accountName: params.accountName.trim(),
         institution: params.institution?.trim() || null,
         accountType: params.accountType,
@@ -3983,6 +4032,7 @@ export const upsertAccountRule = async (params: {
         lastUsedAt: new Date(),
       },
       create: {
+        ...(context ? { learningObservedAt: context.observedAt } : {}),
         workspaceId: params.workspaceId,
         accountId: params.accountId ?? null,
         ruleKey,
@@ -3996,7 +4046,7 @@ export const upsertAccountRule = async (params: {
       },
     });
   } catch (error) {
-    if (isMissingDatabaseRelationError(error, "AccountRule")) {
+    if (!context && isMissingDatabaseRelationError(error, "AccountRule")) {
       return null;
     }
 
@@ -4401,7 +4451,8 @@ export const classifyMerchant = (params: {
   let bestSignal: TrainingSignalRow | null = null;
   let bestScore = 0;
 
-  for (const rule of params.merchantRules) {
+  const exactManualRules = params.merchantRules.filter(rule => normalizedMerchantCandidates.has(rule.merchantKey) && /^manual(?:_|$)/.test(rule.source));
+  for (const rule of exactManualRules.length ? exactManualRules : params.merchantRules) {
     const score = scoreMerchantRule(tokens, normalizedMerchantCandidates, rule);
     if (score > bestRuleScore) {
       bestRuleScore = score;
@@ -4539,9 +4590,10 @@ export const classifyMerchant = (params: {
   };
 };
 
-export const loadNegativeMerchantSignals = async (workspaceId: string) => {
+export const loadNegativeMerchantSignals = async (workspaceId: string, inputs: LearningRetrievalRow[] = []) => {
   try {
-    const rows = await prisma.transaction.findMany({
+    const query = learningRetrievalQuery(inputs);
+    let rows = await prisma.transaction.findMany({
       where: {
         workspaceId,
         reviewStatus: "rejected",
@@ -4555,6 +4607,14 @@ export const loadNegativeMerchantSignals = async (workspaceId: string) => {
       orderBy: [{ updatedAt: "desc" }],
       take: 250,
     });
+
+    for (let offset = 0; offset < query.tokens.length; offset += 40) {
+      rows.push(...await prisma.transaction.findMany({
+        where: { workspaceId, reviewStatus: "rejected", deletedAt: null, OR: query.tokens.slice(offset, offset + 40).flatMap(token => [
+          { merchantRaw: { contains: token, mode: "insensitive" as const } }, { merchantClean: { contains: token, mode: "insensitive" as const } },
+        ]) }, select: { merchantRaw: true, merchantClean: true, description: true }, orderBy: [{ updatedAt: "desc" }, { id: "asc" }], take: 100,
+      }));
+    }
 
     return rows
       .map((row) => {
@@ -4580,7 +4640,7 @@ export const loadNegativeMerchantSignals = async (workspaceId: string) => {
   }
 };
 
-export const loadTrainingSignals = async (workspaceId: string) => {
+export const loadTrainingSignals = async (workspaceId: string, rows: LearningRetrievalRow[] = []) => {
   const columns = await getCompatibleTrainingSignalColumns();
   if (columns.length === 0) {
     return [];
@@ -4599,13 +4659,36 @@ export const loadTrainingSignals = async (workspaceId: string) => {
 
   try {
     signals = await prisma.trainingSignal.findMany({
-      where: { workspaceId },
+      where: { workspaceId, approvalStatus: "active" },
       include: {
         category: true,
       },
-      orderBy: { createdAt: "desc" },
+      orderBy: [{ updatedAt: "desc" }, { id: "asc" }],
       take: 500,
     });
+    const query = learningRetrievalQuery(rows);
+    for (let offset = 0; offset < query.keys.length; offset += 200) {
+      // DISTINCT ON is evaluated before limits: a frequently seen merchant cannot
+      // crowd another exact key out of the candidate set.
+      const ids = await prisma.$queryRaw<Array<{ id: string }>>(Prisma.sql`
+        SELECT DISTINCT ON ("merchantKey") "id" FROM "TrainingSignal"
+        WHERE "workspaceId" = ${workspaceId} AND "approvalStatus" = 'active'
+          AND "merchantKey" IN (${Prisma.join(query.keys.slice(offset, offset + 200))})
+        ORDER BY "merchantKey",
+          CASE WHEN "source" IN ('manual_recategorization', 'manual_transaction_creation') THEN 0 ELSE 1 END,
+          COALESCE("learningObservedAt", "updatedAt") DESC, "id" ASC`);
+      const exact = await prisma.trainingSignal.findMany({ where: { workspaceId, approvalStatus: "active", id: { in: ids.map(row => row.id) } }, include: { category: true } });
+      // Exact observations are placed first so equal scores prefer current evidence.
+      signals = [...exact, ...signals.filter(signal => !exact.some(row => row.merchantKey === signal.merchantKey))];
+    }
+    for (let offset = 0; offset < query.tokens.length; offset += 40) {
+      const relevant = await prisma.trainingSignal.findMany({
+        where: { workspaceId, approvalStatus: "active", OR: query.tokens.slice(offset, offset + 40).map(token => ({ merchantKey: { contains: token } })) },
+        include: { category: true }, orderBy: [{ updatedAt: "desc" }, { id: "asc" }], take: 100,
+      });
+      signals.push(...relevant.filter(row => !signals.some(signal => signal.merchantKey === row.merchantKey)));
+    }
+
   } catch (error) {
     if (!isMissingDatabaseRelationError(error, "TrainingSignal") && !isMissingDatabaseColumnError(error)) {
       throw error;
@@ -4631,9 +4714,21 @@ export const upsertStatementTemplate = async (params: {
   metadata: ReturnType<typeof detectStatementMetadataFromText>;
   fileType?: string | null;
   parserConfig?: Prisma.InputJsonValue | null;
-}) => {
+}, context?: LearningWriteContext) => {
+  if (!context) {
+    const job = await enqueueLearningJob({ workspaceId: params.workspaceId, source: "statement_template", sourceId: params.fingerprint, actions: [{ kind: "template", input: params }] });
+    if (!job) return null;
+    await processLearningJob(job.id);
+    return prisma.statementTemplate.findUnique({ where: { workspaceId_fingerprint: { workspaceId: params.workspaceId, fingerprint: params.fingerprint } } });
+  }
+  const db = context.db;
   try {
-    return await prisma.statementTemplate.upsert({
+    const existing = await db.statementTemplate.findUnique({ where: { workspaceId_fingerprint: { workspaceId: params.workspaceId, fingerprint: params.fingerprint } } });
+    const previousConfig = isPlainObject(existing?.parserConfig) ? existing.parserConfig : {};
+    const nextConfig: Record<string, unknown> = isPlainObject(params.parserConfig) ? params.parserConfig as Record<string, unknown> : {};
+    if (previousConfig.source === "data_qa_review" && nextConfig.source !== "data_qa_review") return context ? null : existing;
+    if (context && existing?.learningObservedAt && existing.learningObservedAt > context.observedAt) return null;
+    return await db.statementTemplate.upsert({
       where: {
         workspaceId_fingerprint: {
           workspaceId: params.workspaceId,
@@ -4641,6 +4736,7 @@ export const upsertStatementTemplate = async (params: {
         },
       },
       update: {
+        ...(context ? { learningObservedAt: context.observedAt } : {}),
         fileType: params.fileType ?? null,
         institution: params.metadata.institution,
         accountNumber: params.metadata.accountNumber,
@@ -4652,6 +4748,7 @@ export const upsertStatementTemplate = async (params: {
         lastSeenAt: new Date(),
       },
       create: {
+        ...(context ? { learningObservedAt: context.observedAt } : {}),
         workspaceId: params.workspaceId,
         fingerprint: params.fingerprint,
         fileType: params.fileType ?? null,
@@ -4664,7 +4761,7 @@ export const upsertStatementTemplate = async (params: {
       },
     });
   } catch (error) {
-    if (isMissingDatabaseRelationError(error, "StatementTemplate")) {
+    if (!context && isMissingDatabaseRelationError(error, "StatementTemplate")) {
       return null;
     }
 
@@ -4836,115 +4933,35 @@ export const buildUnsupervisedLearningSnapshot = (
   };
 };
 
-export const promoteUnsupervisedLearningClustersForWorkspace = async (params: {
-  workspaceId: string;
-}) => {
-  if (!await (await import("@/lib/app-preferences")).canLearnFromWorkspace(params.workspaceId)) return { audit: { candidateCount: 0, promotedCount: 0, suspendedCount: 0, reason: "learning_disabled" } };
-  const templates = await prisma.statementTemplate.findMany({
-    where: { workspaceId: params.workspaceId },
-    orderBy: [{ updatedAt: "desc" }],
-    take: 25,
-  }).catch((error) => {
-    if (isMissingDatabaseRelationError(error, "StatementTemplate")) {
-      return [] as StatementTemplateRow[];
-    }
-    throw error;
-  });
-
-  let candidateCount = 0;
-  let promotedCount = 0;
-  const categories = await prisma.category.findMany({ where: { workspaceId: params.workspaceId }, select: { id: true, name: true } }).catch(() => []);
-  const categoryByName = new Map(categories.map((category) => [normalizeMerchantText(category.name), category] as const));
-  for (const template of templates) {
-    const parserConfig =
-      template.parserConfig && typeof template.parserConfig === "object" && !Array.isArray(template.parserConfig)
-        ? (template.parserConfig as Record<string, unknown>)
-        : null;
-    const snapshot =
-      parserConfig?.unsupervisedLearning && typeof parserConfig.unsupervisedLearning === "object" && !Array.isArray(parserConfig.unsupervisedLearning)
-        ? (parserConfig.unsupervisedLearning as Record<string, unknown>)
-        : null;
-    const clusters = Array.isArray(snapshot?.clusters) ? snapshot.clusters : [];
-    candidateCount += clusters.length;
-    for (const cluster of clusters) {
-      if (!isPlainObject(cluster)) continue;
-      const count = Number(cluster.count ?? 0);
-      const confidence = Number(cluster.avgConfidence ?? 0);
-      const teachability = Number(cluster.avgTeachability ?? 0);
-      const merchantSeed = typeof cluster.merchantSeed === "string" ? cluster.merchantSeed.trim() : "";
-      const categoryName = typeof cluster.categoryName === "string" ? cluster.categoryName.trim() : "";
-      const category = categoryByName.get(normalizeMerchantText(categoryName));
-      if (count < 2 || confidence < 85 || teachability < 70 || !merchantSeed || !category || categoryName.toLowerCase() === "other") continue;
-      const merchantKey = normalizeMerchantText(merchantSeed);
-      const existing = await prisma.merchantRule.findUnique({
-        where: { workspaceId_merchantKey: { workspaceId: params.workspaceId, merchantKey } },
-        select: { status: true },
-      }).catch(() => null);
-      if (existing?.status === "active") continue;
-      await prisma.merchantRule.upsert({
-        where: { workspaceId_merchantKey: { workspaceId: params.workspaceId, merchantKey } },
-        update: {
-          status: "candidate",
-          version: { increment: 1 },
-          normalizedName: merchantSeed,
-          categoryId: category.id,
-          categoryName: category.name,
-          confidence: Math.min(89, Math.round(confidence)),
-          provenance: { source: "unsupervised_learning", templateId: template.id, count, teachability },
-          lastEvaluatedAt: new Date(),
-        },
-        create: {
-          workspaceId: params.workspaceId,
-          merchantKey,
-          merchantPattern: merchantSeed,
-          normalizedName: merchantSeed,
-          categoryId: category.id,
-          categoryName: category.name,
-          source: "unsupervised_learning",
-          status: "candidate",
-          version: 1,
-          confidence: Math.min(89, Math.round(confidence)),
-          timesConfirmed: 0,
-          applicationCount: 0,
-          correctionCount: 0,
-          provenance: { source: "unsupervised_learning", templateId: template.id, count, teachability },
-          lastEvaluatedAt: new Date(),
-        },
-      }).catch(() => null);
-      promotedCount += 1;
-    }
+// Candidate derivation commits with its saved template and checkpoint. Candidates
+// remain inactive, and automatic learning never resets an operator's decision.
+const writeTemplateCandidates = async (template: { id: string; workspaceId: string; parserConfig: Prisma.JsonValue }, context: LearningWriteContext) => {
+  const config = isPlainObject(template.parserConfig) ? template.parserConfig : {};
+  const snapshot = isPlainObject(config.unsupervisedLearning) ? config.unsupervisedLearning : {};
+  const clusters = Array.isArray(snapshot.clusters) ? snapshot.clusters : [];
+  const categories = await context.db.category.findMany({ where: { workspaceId: template.workspaceId }, select: { id: true, name: true } });
+  const categoryByName = new Map(categories.map(category => [normalizeMerchantText(category.name), category]));
+  for (const cluster of clusters) {
+    if (!isPlainObject(cluster)) continue;
+    const count = Number(cluster.count ?? 0), confidence = Number(cluster.avgConfidence ?? 0), teachability = Number(cluster.avgTeachability ?? 0);
+    const merchantSeed = typeof cluster.merchantSeed === "string" ? cluster.merchantSeed.trim() : "";
+    const categoryName = typeof cluster.categoryName === "string" ? cluster.categoryName.trim() : "";
+    const category = categoryByName.get(normalizeMerchantText(categoryName));
+    if (!Number.isFinite(count + confidence + teachability) || count < 2 || confidence < 85 || teachability < 70 || !merchantSeed || !category || categoryName.toLowerCase() === "other") continue;
+    const merchantKey = normalizeMerchantText(merchantSeed);
+    const existing = await context.db.merchantRule.findUnique({ where: { workspaceId_merchantKey: { workspaceId: template.workspaceId, merchantKey } } });
+    if (existing && (existing.status !== "candidate" || /^manual(?:_|$)/.test(existing.source) || (existing.learningObservedAt && existing.learningObservedAt > context.observedAt))) continue;
+    const data = { normalizedName: merchantSeed, categoryId: category.id, categoryName: category.name, confidence: Math.min(89, Math.round(confidence)), learningObservedAt: context.observedAt, provenance: { source: "unsupervised_learning", templateId: template.id, count, teachability }, lastEvaluatedAt: new Date() };
+    await context.db.merchantRule.upsert({
+      where: { workspaceId_merchantKey: { workspaceId: template.workspaceId, merchantKey } },
+      update: { ...data, version: { increment: 1 } },
+      create: { ...data, workspaceId: template.workspaceId, merchantKey, merchantPattern: merchantSeed, source: "unsupervised_learning", status: "candidate", timesConfirmed: 0, applicationCount: 0, correctionCount: 0 },
+    });
   }
-
-  return {
-    audit: {
-      candidateCount,
-      promotedCount,
-      suspendedCount: Math.max(0, candidateCount - promotedCount),
-      reason: candidateCount > 0 ? "candidates_created_but_not_active" : "no_candidates",
-    },
-  };
 };
 
-export const recordUnsupervisedLearningAuditForTemplate = async (params: {
-  workspaceId: string;
-  fingerprint: string;
-  importFileId?: string | null;
-  audit: {
-    candidateCount: number;
-    promotedCount: number;
-    suspendedCount: number;
-    reason?: string | null;
-  };
-}) => {
-  return {
-    workspaceId: params.workspaceId,
-    fingerprint: params.fingerprint,
-    importFileId: params.importFileId ?? null,
-    audit: params.audit,
-  };
-};
-
-export const recordTrainingSignal = async (params: {
+export type RecordTrainingSignalInput = {
+  observationId?: string | null;
   workspaceId: string;
   importFileId?: string | null;
   transactionId?: string | null;
@@ -4962,8 +4979,19 @@ export const recordTrainingSignal = async (params: {
   fieldName?: string | null;
   previousValue?: Prisma.InputJsonValue | null;
   correctedValue?: Prisma.InputJsonValue | null;
-}) => {
-  if (!await (await import("@/lib/app-preferences")).canLearnFromWorkspace(params.workspaceId)) return null;
+};
+
+export const recordTrainingSignal = async (params: RecordTrainingSignalInput, db?: Prisma.TransactionClient) => {
+
+  const job = await enqueueLearningJob({ workspaceId: params.workspaceId, source: params.source, sourceId: params.transactionId ?? params.importFileId, actions: [{ kind: "signal", input: params }] }, db);
+  if (db) return null; // Transactional outbox: worker runs only after the financial save commits.
+  if (job) await processLearningJob(job.id, { maxItems: 1 });
+  return prisma.trainingSignal.findUnique({ where: { workspaceId_dedupeKey: { workspaceId: params.workspaceId, dedupeKey: buildTrainingSignalDedupeKey({ ...params, merchantKey: normalizeMerchantText(params.merchantText) }) } } });
+};
+
+const writeTrainingSignal = async (params: RecordTrainingSignalInput, context: LearningWriteContext) => {
+  const db = context.db;
+
   const teachabilityScore =
     typeof params.teachabilityScore === "number" && Number.isFinite(params.teachabilityScore)
       ? Math.max(0, Math.min(100, Math.round(params.teachabilityScore)))
@@ -4988,16 +5016,13 @@ export const recordTrainingSignal = async (params: {
     fieldName: params.fieldName ?? null,
   });
 
-  const columns = await getCompatibleTrainingSignalColumns();
-  if (columns.length === 0) {
-    return null;
-  }
-
-  if (!columns.includes("dedupeKey")) {
-    return null;
-  }
+  const existingSignal = await db.trainingSignal.findUnique({ where: { workspaceId_dedupeKey: { workspaceId: params.workspaceId, dedupeKey } } });
+  if (existingSignal && (existingSignal.approvalStatus !== "active" || existingSignal.appliedObservationKey === context.observationKey ||
+    (existingSignal.learningObservedAt && existingSignal.learningObservedAt > context.observedAt))) return null;
 
   const signalData = {
+    appliedObservationKey: context.observationKey,
+    learningObservedAt: context.observedAt,
     workspaceId: params.workspaceId,
     importFileId: params.importFileId ?? null,
     transactionId: params.transactionId ?? null,
@@ -5017,7 +5042,7 @@ export const recordTrainingSignal = async (params: {
     notes: params.notes ?? null,
   };
 
-  const signal = await prisma.trainingSignal.upsert({
+  const signal = await db.trainingSignal.upsert({
     where: {
       workspaceId_dedupeKey: {
         workspaceId: params.workspaceId,
@@ -5026,6 +5051,8 @@ export const recordTrainingSignal = async (params: {
     },
     create: signalData,
     update: {
+      appliedObservationKey: context.observationKey,
+      learningObservedAt: context.observedAt,
       importFileId: params.importFileId ?? null,
       transactionId: params.transactionId ?? null,
       source: params.source,
@@ -5044,23 +5071,11 @@ export const recordTrainingSignal = async (params: {
     },
   });
 
-  const category = await prisma.category.findUnique({
+  const category = await db.category.findUnique({
     where: { id: params.categoryId },
   });
 
   if (category) {
-    const existingRule = await prisma.merchantRule.findUnique({
-      where: {
-        workspaceId_merchantKey: {
-          workspaceId: params.workspaceId,
-          merchantKey,
-        },
-      },
-      select: {
-        id: true,
-      },
-    });
-
     await upsertMerchantRule({
       workspaceId: params.workspaceId,
       merchantText: params.merchantText,
@@ -5069,7 +5084,7 @@ export const recordTrainingSignal = async (params: {
       categoryName: params.categoryName ?? category.name,
       source: params.source,
       confidence: params.confidence ?? 100,
-    });
+    }, context);
 
     if (expandMerchantPrototypeMemory) {
       const institutionScopedMerchantText = buildInstitutionScopedMerchantVariant(params.institution ?? null, params.merchantText);
@@ -5082,7 +5097,7 @@ export const recordTrainingSignal = async (params: {
           categoryName: params.categoryName ?? category.name,
           source: `${params.source}:institution`,
           confidence: Math.max(70, (params.confidence ?? 100) - 5),
-        });
+        }, context);
       }
 
       const prototypeVariants = buildMerchantPrototypeVariants(params.merchantText, normalizedMerchantLabel);
@@ -5095,7 +5110,7 @@ export const recordTrainingSignal = async (params: {
           categoryName: params.categoryName ?? category.name,
           source: `${params.source}:prototype${index > 0 ? `:${index + 1}` : ""}`,
           confidence: Math.max(60, (params.confidence ?? 100) - 10 - index * 4),
-        });
+        }, context);
 
         const institutionScopedPrototype = buildInstitutionScopedMerchantVariant(params.institution ?? null, prototypeLabel);
         if (institutionScopedPrototype) {
@@ -5107,7 +5122,7 @@ export const recordTrainingSignal = async (params: {
             categoryName: params.categoryName ?? category.name,
             source: `${params.source}:institution:prototype${index > 0 ? `:${index + 1}` : ""}`,
             confidence: Math.max(60, (params.confidence ?? 100) - 12 - index * 4),
-          });
+          }, context);
         }
       }
 
@@ -5121,7 +5136,7 @@ export const recordTrainingSignal = async (params: {
           categoryName: params.categoryName ?? category.name,
           source: `${params.source}:family`,
           confidence: Math.max(62, (params.confidence ?? 100) - 14),
-        });
+        }, context);
 
         const institutionScopedFamily = buildInstitutionScopedMerchantVariant(params.institution ?? null, merchantFamilySignature);
         if (institutionScopedFamily) {
@@ -5133,39 +5148,11 @@ export const recordTrainingSignal = async (params: {
             categoryName: params.categoryName ?? category.name,
             source: `${params.source}:institution:family`,
             confidence: Math.max(60, (params.confidence ?? 100) - 16),
-          });
+          }, context);
         }
       }
     }
 
-    if (params.actorUserId) {
-      void capturePostHogServerEvent(existingRule ? "merchant_rule_updated" : "merchant_rule_created", params.actorUserId, {
-        workspace_id: params.workspaceId,
-        merchant_key: merchantKey,
-        category_id: params.categoryId,
-        category_name: params.categoryName ?? category.name,
-        source: params.source,
-        confidence: params.confidence ?? 100,
-        times_confirmed: 1,
-      });
-
-      void capturePostHogServerEvent("merchant_rule_applied", params.actorUserId, {
-        workspace_id: params.workspaceId,
-        merchant_key: merchantKey,
-        category_id: params.categoryId,
-        category_name: params.categoryName ?? category.name,
-        source: params.source,
-        confidence: params.confidence ?? 100,
-      });
-
-      void capturePostHogServerEvent("category_rule_applied", params.actorUserId, {
-        workspace_id: params.workspaceId,
-        category_id: params.categoryId,
-        category_name: params.categoryName ?? category.name,
-        source: params.source,
-        confidence: params.confidence ?? 100,
-      });
-    }
   }
 
   return signal;
@@ -5279,6 +5266,8 @@ const normalizeTransactionType = (value: unknown, amount?: unknown, categoryName
 
 export const applyDataQaReviewLearning = async (params: {
   workspaceId: string;
+  observationId?: string | null;
+  reviewAuthority?: "human" | "automated";
   importFileId?: string | null;
   accountId?: string | null;
   fileName: string;
@@ -5290,7 +5279,7 @@ export const applyDataQaReviewLearning = async (params: {
   actorUserId?: string | null;
   statementFingerprint?: string | null;
   statementMetadataOverride?: Partial<DetectedStatementMetadata> | null;
-}) => {
+}, db?: Prisma.TransactionClient) => {
   const review = isRecord(params.fieldReviewPayload) ? (params.fieldReviewPayload as DataQaReviewPayload) : {};
   const effectiveMetadata = {
     ...params.metadata,
@@ -5340,7 +5329,8 @@ export const applyDataQaReviewLearning = async (params: {
     confidence: effectiveMetadata.confidence ?? 0,
   };
 
-  const statementTemplate = await upsertStatementTemplate({
+  const actions: LearningAction[] = [];
+  const templateInput: Parameters<typeof upsertStatementTemplate>[0] = {
     workspaceId: params.workspaceId,
     fingerprint:
       params.statementFingerprint ??
@@ -5348,7 +5338,8 @@ export const applyDataQaReviewLearning = async (params: {
     metadata: fingerprintMetadata,
     fileType: params.fileType,
     parserConfig: {
-      source: "data_qa_review",
+      source: params.reviewAuthority === "automated" ? "automated_qa" : "data_qa_review",
+      reviewRevision: params.observationId ?? null,
       rowCount: params.parsedRows.length,
       statementFamilySignature: buildStatementFamilySignature({
         rows: params.parsedRows as ParsedImportRow[],
@@ -5372,19 +5363,21 @@ export const applyDataQaReviewLearning = async (params: {
         transactionRows: Array.isArray(review.transactions) ? review.transactions.filter((entry) => readReviewBoolean(entry, "correct")).length : 0,
       },
     } as Prisma.InputJsonValue,
-  });
+  };
 
-  const accountRule = await upsertAccountRule({
+  const accountInput: Parameters<typeof upsertAccountRule>[0] = {
     workspaceId: params.workspaceId,
     accountId: params.accountId ?? null,
     accountName,
     institution: bankName || null,
     accountType,
-    source: "data_qa_review",
+    source: params.reviewAuthority === "automated" ? "automated_qa" : "data_qa_review",
     confidence: readReviewBoolean(review.bank, "correct") || readReviewBoolean(review.accountNumber, "correct") || readReviewBoolean(review.accountType, "correct") ? 100 : 85,
-  });
+  };
 
-  const categories = await prisma.category.findMany({
+  actions.push({ kind: "template", input: templateInput }, { kind: "account", input: accountInput });
+
+  const categories = await (db ?? prisma).category.findMany({
     where: { workspaceId: params.workspaceId },
     select: {
       id: true,
@@ -5393,7 +5386,7 @@ export const applyDataQaReviewLearning = async (params: {
   });
   const categoriesByName = new Map(categories.map((category) => [normalizeMerchantText(category.name), category] as const));
 
-  const trainingSignals: Array<Promise<unknown>> = [];
+  let transactionSignals = 0;
   const transactionReviews = Array.isArray(review.transactions) ? review.transactions : [];
 
   for (let index = 0; index < Math.min(transactionReviews.length, params.parsedRows.length); index += 1) {
@@ -5442,8 +5435,9 @@ export const applyDataQaReviewLearning = async (params: {
       continue;
     }
 
-    trainingSignals.push(
-      recordTrainingSignal({
+    transactionSignals++;
+    actions.push({ kind: "signal", input: {
+        observationId: params.observationId ?? null,
         workspaceId: params.workspaceId,
         importFileId: params.importFileId ?? null,
         merchantText,
@@ -5451,15 +5445,14 @@ export const applyDataQaReviewLearning = async (params: {
         categoryId: category.id,
         categoryName: category.name,
         type,
-        source: "manual_recategorization",
+        source: params.reviewAuthority === "automated" ? "import_confirmation" : "manual_recategorization",
         confidence: Math.max(60, (readReviewString(reviewRow, "feedback") ? 90 : 100) - scoreRowShapeLearningPenalty(teachability.score)),
         teachabilityScore: teachability.score,
         notes:
           readReviewString(reviewRow, "feedback") ??
-          "Confirmed through Data QA review.",
+          (params.reviewAuthority === "automated" ? "Automated QA suggestion; not human confirmation." : "Confirmed through Data QA review."),
         actorUserId: params.actorUserId ?? null,
-      })
-    );
+      } });
   }
 
   const additionalTransactions = Array.isArray(review.additionalTransactions) ? review.additionalTransactions : [];
@@ -5497,60 +5490,40 @@ export const applyDataQaReviewLearning = async (params: {
       continue;
     }
 
-    trainingSignals.push(
-      recordTrainingSignal({
+    transactionSignals++;
+    actions.push({ kind: "signal", input: {
+        observationId: params.observationId ?? null,
         workspaceId: params.workspaceId,
         importFileId: params.importFileId ?? null,
         merchantText,
         categoryId: category.id,
         categoryName: category.name,
         type,
-        source: "manual_transaction_creation",
+        source: params.reviewAuthority === "automated" ? "import_confirmation" : "manual_transaction_creation",
         confidence: Math.max(60, (readReviewBoolean(reviewRow, "correct") ? 100 : 90) - scoreRowShapeLearningPenalty(teachability.score)),
         teachabilityScore: teachability.score,
         notes:
           readReviewString(reviewRow, "feedback") ??
           "Added manually from Data QA because the parser missed this transaction.",
         actorUserId: params.actorUserId ?? null,
-      })
-    );
+      } });
   }
 
-  await Promise.allSettled(trainingSignals);
-
-  if (params.actorUserId) {
-    await prisma.auditLog.create({
-      data: {
-        workspaceId: params.workspaceId,
-        actorUserId: params.actorUserId,
-        action: "data_qa.feedback_learning_applied",
-        entity: "DataQaRun",
-        entityId: params.importFileId ?? statementTemplate?.id ?? null,
-        metadata: {
-          importFileId: params.importFileId ?? null,
-          accountId: params.accountId ?? null,
-          statementTemplateId: statementTemplate?.id ?? null,
-          accountRuleId: accountRule?.id ?? null,
-          manualFeedback: Boolean(params.manualFeedback?.trim()),
-          transactionSignals: trainingSignals.length,
-        },
-      },
-    });
-  }
-
+  const job = await enqueueLearningJob({ workspaceId: params.workspaceId, source: params.reviewAuthority === "automated" ? "automated_qa" : "data_qa_review", sourceId: params.importFileId, actions }, db);
+  const result = job && !db ? await processLearningJob(job.id) : job;
   return {
-    statementTemplateId: statementTemplate?.id ?? null,
-    accountRuleId: accountRule?.id ?? null,
-    transactionSignals: trainingSignals.length,
+    learningJobId: result?.id ?? null, status: result?.status ?? "skipped",
+    transactionSignals, appliedItems: result?.appliedItems ?? 0, processedItems: result?.nextIndex ?? 0,
+    errorCode: result?.errorCode ?? null, errorMessage: result?.errorMessage ?? null,
   };
 };
 
-export const loadImportEnrichmentTrainingContext = async (workspaceId: string) => {
+export const loadImportEnrichmentTrainingContext = async (workspaceId: string, rows: LearningRetrievalRow[] = []) => {
   const [merchantRules, accountRules, trainingSignals, negativeSignals] = await Promise.all([
-    loadMerchantRules(workspaceId),
-    loadAccountRules(workspaceId),
-    loadTrainingSignals(workspaceId),
-    loadNegativeMerchantSignals(workspaceId),
+    loadMerchantRules(workspaceId, rows),
+    loadAccountRules(workspaceId, rows),
+    loadTrainingSignals(workspaceId, rows),
+    loadNegativeMerchantSignals(workspaceId, rows),
   ]);
 
   return { merchantRules, accountRules, trainingSignals, negativeSignals };
@@ -5585,7 +5558,7 @@ export const enrichParsedRowsWithTraining = async (params: {
   };
   if (params.rows.length && params.rows.every(row => readAppMigration(row.rawPayload))) return params.rows.map(preserveMigration);
   const { merchantRules, accountRules, trainingSignals, negativeSignals } =
-    params.trainingContext ?? (await loadImportEnrichmentTrainingContext(params.workspaceId));
+    params.trainingContext ?? (await loadImportEnrichmentTrainingContext(params.workspaceId, params.rows));
   const rawStatementConfidence =
     typeof params.statementConfidence === "number" && Number.isFinite(params.statementConfidence)
       ? Math.max(0, Math.min(100, params.statementConfidence))
@@ -5910,3 +5883,51 @@ export const enrichParsedRowsWithTraining = async (params: {
     } satisfies EnrichedParsedImportRow;
   });
 };
+
+export async function applyLearningAction(action: LearningAction, context: LearningWriteContext): Promise<boolean> {
+  const { db } = context;
+  const input = action.input;
+  if (action.kind === "signal") {
+    const signal = action.input;
+    const category = await db.category.findFirst({ where: { id: signal.categoryId, workspaceId: signal.workspaceId } });
+    if (!category) throw new LearningInputError("CATEGORY_UNAVAILABLE", "The learning category is missing or belongs to another Profile.");
+    if (signal.importFileId && !await db.importFile.findFirst({ where: { id: signal.importFileId, workspaceId: signal.workspaceId, status: { not: "deleted" } }, select: { id: true } })) {
+      throw new LearningInputError("SOURCE_UNAVAILABLE", "The source import is missing, removed or belongs to another Profile.");
+    }
+    if (signal.transactionId) {
+      const transaction = await db.transaction.findFirst({ where: { id: signal.transactionId, workspaceId: signal.workspaceId } });
+      if (!transaction) throw new LearningInputError("SOURCE_UNAVAILABLE", "The source transaction is missing or belongs to another Profile.");
+      if (transaction.deletedAt || ["rejected", "duplicate_skipped"].includes(transaction.reviewStatus)) return false;
+      // An old queued edit must never teach over a newer saved correction.
+      if (signal.observationId && signal.observationId !== transaction.updatedAt.toISOString()) {
+        // Notes, tags and other unrelated edits also advance updatedAt. Only
+        // superseded learning values invalidate this saved observation.
+        const currentNames = [transaction.merchantRaw, transaction.merchantClean].filter(Boolean).map(value => value!.trim());
+        if (transaction.categoryId !== signal.categoryId || transaction.type !== signal.type || !currentNames.includes(signal.merchantText.trim()) ||
+          (signal.normalizedName && signal.normalizedName.trim() !== (transaction.merchantClean || transaction.merchantRaw).trim())) return false;
+      }
+      if (/^manual/.test(signal.source) && (!(["confirmed", "edited"] as string[]).includes(transaction.reviewStatus) || transaction.categoryId !== signal.categoryId || transaction.type !== signal.type)) return false;
+    }
+    return Boolean(await writeTrainingSignal(signal, context));
+  }
+  if (action.kind === "account") {
+    if (action.input.accountId) {
+      const account = await db.account.findFirst({ where: { id: action.input.accountId, workspaceId: input.workspaceId } });
+      if (!account) throw new LearningInputError("ACCOUNT_UNAVAILABLE", "The learning account is missing or belongs to another Profile.");
+      if (/^manual/.test(action.input.source) && (account.name !== action.input.accountName || account.type !== action.input.accountType || account.institution !== (action.input.institution ?? null))) return false;
+    }
+    return Boolean(await upsertAccountRule(action.input, context));
+  }
+  if (action.kind === "template") {
+    if (action.sourceImportFileId) {
+      const source = await db.importFile.findFirst({ where: { id: action.sourceImportFileId, workspaceId: input.workspaceId }, select: { status: true, transactions: { select: { reviewStatus: true, deletedAt: true } } } });
+      if (!source || ["deleted", "failed"].includes(source.status)) throw new LearningInputError("SOURCE_UNAVAILABLE", "The template source is missing, removed or needs import repair.");
+      if (action.requireCompletedSource && source.status !== "done") throw new LearningInputError("SOURCE_NOT_READY", "Template learning is waiting for the source import to finish.");
+      if (action.requireReviewedTransactions && (!source.transactions.length || source.transactions.some(row => row.deletedAt || row.reviewStatus === "pending_review"))) throw new LearningInputError("SOURCE_NOT_READY", "Template learning is waiting for receipt review.");
+    }
+    const template = await upsertStatementTemplate(action.input, context);
+    if (template && action.learnCandidates) await writeTemplateCandidates(template, context);
+    return Boolean(template);
+  }
+  throw new LearningInputError("INVALID_INPUT", "This learning action is not supported.");
+}

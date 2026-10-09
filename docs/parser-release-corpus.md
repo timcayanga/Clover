@@ -64,3 +64,7 @@ Local PostgreSQL 16 or newer is required. The runner discovers `pg_config`/Homeb
 - Fresh PostgreSQL tests passed 1,062 migration transactions, bank-import persistence and the new preservation scenarios. The 1,000-row worker completed in 1.688 seconds against the unchanged 10-second limit, with zero provider calls.
 
 These counts describe regression coverage, not newly trained examples or human-confirmed labels. The sealed knowledge snapshot and production data are outside this test execution.
+
+## Durable learning extension
+
+The release gate also applies the additive learning migration to retained legacy records and runs fault-injected learning/job/API checks in the disposable database. See [the durable learning contract](durable-learning.md). Preserve immutable observations, atomic outbox/checkpoints, manual authority, inactive exclusion, older-rule retrieval and failure history alongside the financial preservation requirements above.

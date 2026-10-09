@@ -50,6 +50,7 @@ Clover is a personal finance app focused on statement import, transaction parsin
 
 43. `docs/app-migration-parser-rules.md` when working on source-app exports or migration templates
 44. `docs/parser-release-corpus.md` when changing parsing, extraction, enrichment, import persistence, or regression expectations
+45. `docs/durable-learning.md` when changing learning writes, retrieval, retries, or learning administration
 
 If `docs/product-spec.md` is added later, it should become the primary product spec and supersede `docs/user-management-spec.md` for implementation guidance.
 

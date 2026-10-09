@@ -783,6 +783,7 @@ model SavedReport {
 }
 
 model Workspace {
+  learningJobs LearningJob[]
   budgetRevisions BudgetRevision[]
   reportRecoveries ReportRecovery[]
   savedReports SavedReport[]
@@ -1531,6 +1532,7 @@ model ParsedTransaction {
 }
 
 model StatementTemplate {
+  learningObservedAt DateTime?
   id            String    @id @default(cuid())
   workspaceId   String
   fingerprint   String
@@ -2091,6 +2093,7 @@ model DataQaConfig {
 }
 
 model MerchantRule {
+  learningObservedAt DateTime?
   id               String             @id @default(cuid())
   workspaceId      String
   merchantKey      String
@@ -2121,6 +2124,7 @@ model MerchantRule {
 }
 
 model AccountRule {
+  learningObservedAt DateTime?
   id             String      @id @default(cuid())
   workspaceId    String
   accountId      String?
@@ -2144,6 +2148,8 @@ model AccountRule {
 }
 
 model TrainingSignal {
+  appliedObservationKey String?
+  learningObservedAt DateTime?
   id                String               @id @default(cuid())
   workspaceId       String
   transactionId     String?
@@ -2171,6 +2177,7 @@ model TrainingSignal {
 
   @@unique([workspaceId, dedupeKey])
   @@index([workspaceId])
+  @@index([workspaceId, merchantKey, approvalStatus])
   @@index([transactionId])
   @@index([importFileId])
   @@index([merchantKey])
@@ -2651,4 +2658,50 @@ model ReportRecovery {
   @@unique([expenseId, incomingId])
   @@index([workspaceId])
   @@index([incomingId])
+}
+
+// Immutable learning input; progress and effects commit together. No financial writes.
+model LearningJob {
+  id String @id @default(cuid())
+  workspaceId String
+  dedupeKey String
+  source String
+  sourceId String?
+  version Int @default(1)
+  payload Json
+  status String @default("queued")
+  totalItems Int
+  nextIndex Int @default(0)
+  appliedItems Int @default(0)
+  skippedItems Int @default(0)
+  attempts Int @default(0)
+  failureCount Int @default(0)
+  errorCode String?
+  errorMessage String?
+  nextAttemptAt DateTime @default(now())
+  leaseToken String?
+  lockedUntil DateTime?
+  completedAt DateTime?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  runs LearningJobAttempt[]
+  @@unique([workspaceId, dedupeKey])
+  @@index([status, nextAttemptAt])
+  @@index([workspaceId, createdAt])
+}
+
+model LearningJobAttempt {
+  id String @id @default(cuid())
+  jobId String
+  attempt Int
+  status String
+  startIndex Int
+  endIndex Int
+  errorCode String?
+  errorMessage String?
+  startedAt DateTime @default(now())
+  finishedAt DateTime?
+  job LearningJob @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  @@unique([jobId, attempt])
 }

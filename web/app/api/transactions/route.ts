@@ -4,7 +4,8 @@ import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { isLocalDevHost, requireAuth } from "@/lib/auth";
 import { assertWorkspaceAccess } from "@/lib/workspace-access";
-import { NextResponse } from "next/server";
+import { after, NextResponse } from "next/server";
+import { processPendingLearningJobs } from "@/lib/learning-jobs";
 import { z } from "zod";
 import { recordTrainingSignal } from "@/lib/data-engine";
 import { capturePostHogServerEvent } from "@/lib/analytics-server";
@@ -1505,107 +1506,111 @@ export async function POST(request: Request) {
       : coerceTransactionTypeFromCategoryName(resolvedCategoryName, payload.type);
     const resolvedIsTransfer = resolvedType === "transfer";
 
-    const transaction = await prisma.transaction.create({
-      data: {
-        workspaceId: payload.workspaceId,
-        accountId: payload.accountId,
-        categoryId: resolvedCategoryId,
-        date: new Date(payload.date),
-        amount: amount.toFixed(2),
-        currency: transactionCurrency,
-        type: resolvedType,
-        merchantRaw: payload.merchantRaw,
-        merchantClean: payload.merchantClean ?? null,
-        description: payload.description ?? null,
-        isTransfer: resolvedIsTransfer,
-        isExcluded: payload.isExcluded ?? false,
-        reviewStatus: "confirmed",
-        parserConfidence: 100,
-        categoryConfidence: resolvedCategoryId ? 100 : 0,
-        accountMatchConfidence: 100,
-        duplicateConfidence: 0,
-        transferConfidence: resolvedIsTransfer ? 100 : 0,
-        rawPayload: {
-          source: "manual",
+    const transaction = await prisma.$transaction(async db => {
+      const transaction = await db.transaction.create({
+        data: {
+          workspaceId: payload.workspaceId,
+          accountId: payload.accountId,
+          categoryId: resolvedCategoryId,
+          date: new Date(payload.date),
+          amount: amount.toFixed(2),
+          currency: transactionCurrency,
+          type: resolvedType,
           merchantRaw: payload.merchantRaw,
           merchantClean: payload.merchantClean ?? null,
-          assetName: payload.investmentAssetName ?? null,
           description: payload.description ?? null,
-          receiptLineItems:
-            payload.receiptLineItems?.map((item) => ({
-              description: item.description,
-              quantity: item.quantity === undefined || item.quantity === null ? null : item.quantity,
-              unitPrice: item.unitPrice === undefined || item.unitPrice === null ? null : item.unitPrice,
-              amount: item.amount === undefined || item.amount === null ? null : item.amount,
-            })) ?? [],
-        },
-        normalizedPayload: {
-          merchantClean: payload.merchantClean ?? payload.merchantRaw,
-          assetName: payload.investmentAssetName ?? null,
-          categoryId: resolvedCategoryId,
-          type: resolvedType,
-        },
-        learnedRuleIdsApplied: [],
-        transactionTags: payload.tags?.length
-          ? {
-              create: sanitizeTransactionTagNames(payload.tags).map((name) => ({
-                tag: {
-                  connectOrCreate: {
-                    where: {
-                      workspaceId_normalizedName: {
+          isTransfer: resolvedIsTransfer,
+          isExcluded: payload.isExcluded ?? false,
+          reviewStatus: "confirmed",
+          parserConfidence: 100,
+          categoryConfidence: resolvedCategoryId ? 100 : 0,
+          accountMatchConfidence: 100,
+          duplicateConfidence: 0,
+          transferConfidence: resolvedIsTransfer ? 100 : 0,
+          rawPayload: {
+            source: "manual",
+            merchantRaw: payload.merchantRaw,
+            merchantClean: payload.merchantClean ?? null,
+            assetName: payload.investmentAssetName ?? null,
+            description: payload.description ?? null,
+            receiptLineItems:
+              payload.receiptLineItems?.map((item) => ({
+                description: item.description,
+                quantity: item.quantity === undefined || item.quantity === null ? null : item.quantity,
+                unitPrice: item.unitPrice === undefined || item.unitPrice === null ? null : item.unitPrice,
+                amount: item.amount === undefined || item.amount === null ? null : item.amount,
+              })) ?? [],
+          },
+          normalizedPayload: {
+            merchantClean: payload.merchantClean ?? payload.merchantRaw,
+            assetName: payload.investmentAssetName ?? null,
+            categoryId: resolvedCategoryId,
+            type: resolvedType,
+          },
+          learnedRuleIdsApplied: [],
+          transactionTags: payload.tags?.length
+            ? {
+                create: sanitizeTransactionTagNames(payload.tags).map((name) => ({
+                  tag: {
+                    connectOrCreate: {
+                      where: {
+                        workspaceId_normalizedName: {
+                          workspaceId: payload.workspaceId,
+                          normalizedName: normalizeTransactionTag(name),
+                        },
+                      },
+                      create: {
                         workspaceId: payload.workspaceId,
+                        name,
                         normalizedName: normalizeTransactionTag(name),
                       },
                     },
-                    create: {
-                      workspaceId: payload.workspaceId,
-                      name,
-                      normalizedName: normalizeTransactionTag(name),
-                    },
                   },
-                },
-              })),
-            }
-          : undefined,
-      },
-      include: {
-        account: {
-          select: {
-            name: true,
-            institution: true,
-            accountNumber: true,
+                })),
+              }
+            : undefined,
+        },
+        include: {
+          account: {
+            select: {
+              name: true,
+              institution: true,
+              accountNumber: true,
+            },
+          },
+          category: {
+            select: {
+              name: true,
+            },
           },
         },
-        category: {
-          select: {
-            name: true,
-          },
-        },
-      },
-    });
-
-    if (resolvedCategoryId) {
-      const category = await prisma.category.findUnique({
-        where: { id: resolvedCategoryId },
       });
 
-      if (category) {
-        void recordTrainingSignal({
-          workspaceId: payload.workspaceId,
-          transactionId: transaction.id,
-          merchantText: payload.merchantClean ?? payload.merchantRaw,
-          categoryId: category.id,
-          categoryName: category.name,
-          type: resolvedType,
-          source: "manual_transaction_creation",
-          confidence: 100,
-          notes: payload.accountId ? "Manual transaction created in the app." : null,
-          actorUserId: userId,
-        }).catch(() => {
-          // Background learning should never block a user-facing save.
+      if (resolvedCategoryId) {
+        const category = await db.category.findUnique({
+          where: { id: resolvedCategoryId },
         });
+
+        if (category) {
+          await recordTrainingSignal({
+            workspaceId: payload.workspaceId,
+            transactionId: transaction.id,
+            observationId: transaction.updatedAt.toISOString(),
+            merchantText: payload.merchantClean ?? payload.merchantRaw,
+            categoryId: category.id,
+            categoryName: category.name,
+            type: resolvedType,
+            source: "manual_transaction_creation",
+            confidence: 100,
+            notes: payload.accountId ? "Manual transaction created in the app." : null,
+            actorUserId: userId,
+          }, db);
+        }
       }
-    }
+
+      return transaction;
+    });
+    after(async () => { await processPendingLearningJobs({ workspaceId: payload.workspaceId, limit: 1 }); });
 
     void syncWorkspaceRecurringPatterns(payload.workspaceId).catch(() => {
       // Recurring detection should never block a manual transaction save.

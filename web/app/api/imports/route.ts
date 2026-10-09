@@ -4,7 +4,8 @@ import { buildImportKey } from "@/lib/import-keys";
 import { createUploadUrl } from "@/lib/s3";
 import { hasCompatibleTable, insertImportFileCompat, listImportFilesCompat } from "@/lib/data-engine";
 import { assertWorkspaceAccess } from "@/lib/workspace-access";
-import { NextResponse } from "next/server";
+import { after, NextResponse } from "next/server";
+import { processPendingLearningJobs } from "@/lib/learning-jobs";
 import { z } from "zod";
 import { validateImportFileMetadata } from "@/lib/import-file-validation";
 import { getOrCreateCurrentUser } from "@/lib/user-context";
@@ -115,6 +116,7 @@ export async function GET(request: Request) {
         workerId: "api-imports-local-recovery",
         maxJobs: 2,
       }).catch(() => null);
+      after(async () => { await processPendingLearningJobs({ workspaceId, limit: 1 }); });
       const importFiles = await listImportFilesCompat(workspaceId);
 
       return NextResponse.json({ importFiles: await attachEnrichmentJobs(workspaceId, importFiles) });
@@ -135,6 +137,7 @@ export async function GET(request: Request) {
       maxJobs: 2,
     }).catch(() => null);
 
+    after(async () => { await processPendingLearningJobs({ workspaceId, limit: 1 }); });
     const importFiles = await listImportFilesCompat(workspaceId);
 
     return NextResponse.json({ importFiles: await attachEnrichmentJobs(workspaceId, importFiles) });

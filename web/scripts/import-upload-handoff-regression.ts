@@ -993,7 +993,7 @@ const main = async () => {
   );
   const templateLearningSource = section(
     importProcessorSource,
-    "const runTemplateLearning = async () =>",
+    "const templateLearningJob = await enqueueLearningJob",
     'if (await hasCompatibleTable("AccountStatementCheckpoint"))'
   );
   assert.match(
@@ -1001,9 +1001,11 @@ const main = async () => {
     /schedulePostVisibleImportWork\(`template-learning:\$\{importFileId\}`,[\s\S]{0,900}10_000\);/,
     "Statement-template learning must run after the import becomes visible so rule promotion cannot contend with account persistence."
   );
+  assert.match(templateLearningSource, /requireCompletedSource: true/, "A durable job must wait for the source import to complete before applying template learning.");
+  assert.match(templateLearningSource, /schedulePostVisibleImportWork[\s\S]{0,150}await processLearningJob/, "Only saved jobs execute after visibility.");
   assert.doesNotMatch(
     templateLearningSource,
-    /void runTemplateLearning\(\)/,
+    /await upsertStatementTemplate\(/,
     "Small statements must not start template promotion on the visible-row critical path."
   );
   assert.match(
