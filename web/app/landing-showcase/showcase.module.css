@@ -405,7 +405,6 @@
   color: #718880;
 }
 
-/* A lived journey, with Clover quietly in the background. */
 /* Each chapter has a protected copy column and a separate 3D stage. Motion
    never moves a graphic into a headline's layout box. */
 .scene {
@@ -797,7 +796,8 @@
 .scanLine {
   position: absolute;
   left: 10%;
-  top: calc(18% + var(--b) * 60%);
+  top: 18%;
+  transform: translateY(calc(var(--b) * 300px));
   width: 65%;
   height: 2px;
   background: linear-gradient(90deg, transparent, #00b7c1, transparent);
@@ -1822,5 +1822,25 @@
   .importPhone {
     width: 205px;
     left: 24%;
+  }
+}
+@media (max-width: 900px), (max-width: 1100px) and (min-height: 1000px) {
+  .heroPhone {
+    left: 30%;
+    max-width: 62%;
+  }
+  .importPhone {
+    left: 28%;
+    max-width: 68%;
+  }
+}
+@media (max-width: 360px) {
+  .heroPhone {
+    left: 30%;
+    max-width: none;
+  }
+  .importPhone {
+    left: 24%;
+    max-width: none;
   }
 }
