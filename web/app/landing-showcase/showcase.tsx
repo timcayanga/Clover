@@ -8,6 +8,7 @@ import {
   type ReactNode,
 } from "react";
 import Link from "next/link";
+import { useShowcaseMotion, type MotionMode } from "./use-showcase-motion";
 import { SwitchOfferNotice } from "@/components/switch-campaign";
 import {
   plannedPremiumPrices,
@@ -16,11 +17,6 @@ import {
 } from "@/lib/public-plan-comparison";
 import s from "./showcase.module.css";
 
-const clamp = (value: number) => Math.max(0, Math.min(1, value));
-const ease = (value: number) => {
-  const p = clamp(value);
-  return p * p * (3 - 2 * p);
-};
 const rows = [
   ["food-dining", "Lunch at Mendokoro", "BPI · Food & Dining", "−₱500.00"],
   ["salary", "Payday", "BPI · Income", "+₱45,000.00"],
@@ -97,7 +93,10 @@ function Icon({
     | "lock"
     | "edit"
     | "export"
-    | "chevron";
+    | "chevron"
+    | "motion"
+    | "replay"
+    | "back";
 }) {
   const path = {
     arrow: "M4 12h15m-6-6 6 6-6 6",
@@ -108,6 +107,9 @@ function Icon({
     edit: "m16 3 5 5L8 21H3v-5ZM13 6l5 5",
     export: "M12 16V3m-5 5 5-5 5 5M4 16v5h16v-5",
     chevron: "m7 9 5 5 5-5",
+    motion: "M4 6h16M4 18h16M8 3v6M16 15v6M4 12h16M13 9v6",
+    replay: "M4 10a8 8 0 1 1 1 7M4 4v6h6",
+    back: "M20 12H5m6-6-6 6 6 6",
   }[kind];
   return (
     <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
@@ -158,7 +160,7 @@ function Bank({ file, size = 40 }: { file: string; size?: number }) {
   return (
     <img
       className={s.bank}
-      src={`/assets/banks/philippines/${file}`}
+      src={`/assets/landing-showcase/${file.split(".")[0]}.webp`}
       width={size}
       height={size}
       alt=""
@@ -207,6 +209,14 @@ function ScrollScene({
     <section id={id} className={`${s.scene} ${className}`} data-scroll-scene>
       <div className={s.pin}>{children}</div>
     </section>
+  );
+}
+
+function CloverToken() {
+  return (
+    <span className={s.cloverToken}>
+      <img src="/clover-mark.svg" width="64" height="64" alt="" />
+    </span>
   );
 }
 
@@ -341,7 +351,11 @@ function Phone({ screen }: { screen: "accounts" | "split" }) {
         <span>••• ▰</span>
       </div>
       <img
-        src={`/assets/marketing-screens/${image}`}
+        src={
+          screen === "split"
+            ? "/assets/landing-showcase/split.webp"
+            : `/assets/marketing-screens/${image}`
+        }
         alt={`Clover ${screen === "accounts" ? "Accounts" : "Split Bills"}, from the current public production website`}
         width="1560"
         height="3024"
@@ -493,72 +507,34 @@ function Plans({ initialMarket }: { initialMarket: PricingMarket }) {
 
 export function Showcase({ initialMarket }: { initialMarket: PricingMarket }) {
   const root = useRef<HTMLDivElement>(null);
-  const [paused, setPaused] = useState(false);
-  const [reduced, setReduced] = useState(false);
+  const { mode, setMode, reduced, navigateScene } = useShowcaseMotion(root);
+  const [controlsOpen, setControlsOpen] = useState(false);
+  const controls = useRef<HTMLDivElement>(null);
+  const motionTrigger = useRef<HTMLButtonElement>(null);
   useEffect(() => {
-    const media = matchMedia("(prefers-reduced-motion: reduce)");
-    const change = () => setReduced(media.matches);
-    change();
-    media.addEventListener("change", change);
-    return () => media.removeEventListener("change", change);
-  }, []);
-  const animated = !paused && !reduced;
-  useEffect(() => {
-    const el = root.current;
-    if (!el) return;
-    const scenes = [...el.querySelectorAll<HTMLElement>("[data-scroll-scene]")];
-    let frame = 0;
-    const draw = () => {
-      frame = 0;
-      const height = innerHeight;
-      // Read geometry before writing styles. Compact/reduced-motion layouts
-      // have no pinned scroll track, so they show each illustration settled.
-      const layouts = scenes.map((scene) => ({
-        box: scene.getBoundingClientRect(),
-        pinned:
-          scene.firstElementChild?.classList.contains(s.pin) &&
-          getComputedStyle(scene.firstElementChild).position === "sticky",
-      }));
-      scenes.forEach((scene, index) => {
-        const { box, pinned } = layouts[index];
-        if (box.bottom < -height || box.top > height * 2) return;
-        const raw = clamp(-box.top / Math.max(1, box.height - height));
-        const p = animated && pinned ? raw : 1;
-        scene.style.setProperty("--p", String(p));
-        scene.style.setProperty("--a", String(ease((p - 0.05) / 0.75)));
-        scene.style.setProperty("--b", String(ease((p - 0.25) / 0.65)));
-        scene.style.setProperty("--c", String(ease((p - 0.5) / 0.35)));
-        scene.style.setProperty(
-          "--enter",
-          String(animated ? ease((height - box.top) / (height * 0.8)) : 1),
-        );
-      });
-      const max = document.documentElement.scrollHeight - height;
-      el.style.setProperty(
-        "--page-travel",
-        String(max > 0 ? clamp(scrollY / max) : 0),
-      );
+    if (!controlsOpen) return;
+    const closeOutside = (event: PointerEvent) => {
+      if (!controls.current?.contains(event.target as Node))
+        setControlsOpen(false);
     };
-    const schedule = () => {
-      if (!frame) frame = requestAnimationFrame(draw);
+    const escape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setControlsOpen(false);
+        motionTrigger.current?.focus();
+      }
     };
-    draw();
-    addEventListener("scroll", schedule, { passive: true });
-    addEventListener("resize", schedule);
-    const resize = new ResizeObserver(schedule);
-    resize.observe(el);
+    document.addEventListener("pointerdown", closeOutside);
+    document.addEventListener("keydown", escape);
     return () => {
-      cancelAnimationFrame(frame);
-      removeEventListener("scroll", schedule);
-      removeEventListener("resize", schedule);
-      resize.disconnect();
+      document.removeEventListener("pointerdown", closeOutside);
+      document.removeEventListener("keydown", escape);
     };
-  }, [animated]);
+  }, [controlsOpen]);
   return (
     <div
       ref={root}
       className={s.site}
-      data-motion={animated ? "on" : "off"}
+      data-motion={reduced ? "off" : mode}
       data-reduced={reduced}
     >
       <a href="#showcase-main" className={s.skip}>
@@ -573,15 +549,75 @@ export function Showcase({ initialMarket }: { initialMarket: PricingMarket }) {
           <a href="#plans">Plans</a>
         </nav>
         <div className={s.navActions}>
-          <button
-            className={s.motionButton}
-            type="button"
-            onClick={() => setPaused((p) => !p)}
-            aria-label={paused ? "Enable animation" : "Pause animation"}
-            aria-pressed={paused}
-          >
-            <Icon kind={paused ? "play" : "pause"} />
-          </button>
+          <div className={s.motionControls} ref={controls}>
+            <button
+              ref={motionTrigger}
+              className={s.motionButton}
+              type="button"
+              onClick={() => setControlsOpen((open) => !open)}
+              aria-label="Motion controls"
+              aria-expanded={controlsOpen}
+              aria-controls="showcase-motion-controls"
+            >
+              <Icon kind="motion" />
+            </button>
+            {controlsOpen && (
+              <div className={s.motionPanel} id="showcase-motion-controls">
+                <strong>Motion</strong>
+                <div
+                  className={s.motionModes}
+                  role="group"
+                  aria-label="Animation amount"
+                >
+                  {(["full", "gentle", "off"] as MotionMode[]).map((value) => (
+                    <button
+                      type="button"
+                      key={value}
+                      aria-pressed={(reduced ? "off" : mode) === value}
+                      disabled={reduced && value !== "off"}
+                      onClick={() => setMode(value)}
+                    >
+                      {value === "full"
+                        ? "Full"
+                        : value === "gentle"
+                          ? "Gentle"
+                          : "Off"}
+                    </button>
+                  ))}
+                </div>
+                {reduced && (
+                  <p>Following your device’s reduced motion setting.</p>
+                )}
+                <div
+                  className={s.sceneControls}
+                  role="group"
+                  aria-label="Explore scenes"
+                >
+                  <button
+                    type="button"
+                    aria-label="Previous scene"
+                    onClick={() => navigateScene(-1)}
+                  >
+                    <Icon kind="back" />
+                  </button>
+                  <button
+                    type="button"
+                    aria-label="Restart current scene"
+                    onClick={() => navigateScene(0)}
+                  >
+                    <Icon kind="replay" />
+                  </button>
+                  <button
+                    type="button"
+                    aria-label="Next scene"
+                    onClick={() => navigateScene(1)}
+                  >
+                    <Icon />
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
           <Link className={s.login} prefetch={false} href="/sign-in">
             Log in
           </Link>
@@ -602,10 +638,18 @@ export function Showcase({ initialMarket }: { initialMarket: PricingMarket }) {
           <Action>Organize my finances for free</Action>
           <div
             className={s.heroStage}
+            data-depth-stage
             role="img"
             aria-label="Illustration of statements and receipts coming together as organized Clover transactions"
           >
             <div className={s.heroShadow} />
+            <div className={s.heroOrbit} aria-hidden="true">
+              <i />
+              <i />
+            </div>
+            <div className={s.heroToken} aria-hidden="true">
+              <CloverToken />
+            </div>
             <div className={s.heroPaper}>
               <Receipt />
             </div>
@@ -639,10 +683,12 @@ export function Showcase({ initialMarket }: { initialMarket: PricingMarket }) {
           </Heading>
           <div
             className={s.intakeStage}
+            data-depth-stage
             role="img"
             aria-label="Example receipts and bank statements assembling into a categorized transaction list"
           >
             <div className={s.intakeGlow} />
+            <div className={s.scanBeam} aria-hidden="true" />
             <div className={s.fileOne}>
               <Receipt statement />
             </div>
@@ -671,7 +717,8 @@ export function Showcase({ initialMarket }: { initialMarket: PricingMarket }) {
               <br />
               <em>Your say.</em>
             </Heading>
-            <div className={s.controlStage} aria-hidden="true">
+            <div className={s.controlStage} data-depth-stage aria-hidden="true">
+              <div className={s.controlOrbit} aria-hidden="true" />
               <div className={s.shield}>
                 <div>
                   <Icon kind="lock" />
@@ -699,10 +746,16 @@ export function Showcase({ initialMarket }: { initialMarket: PricingMarket }) {
             </Heading>
             <div
               className={s.accountsStage}
+              data-depth-stage
               role="img"
               aria-label="Example Clover accounts: BPI ₱46,000, UnionBank ₱21,250, Maya ₱5,000, GStocks ₱12,000. Total ₱84,250."
             >
               <div className={s.accountHalo} />
+              <div className={s.accountOrbit} aria-hidden="true">
+                <i />
+                <i />
+                <i />
+              </div>
               <div className={s.accountTotal}>
                 <span>Net worth</span>
                 <strong>
@@ -724,8 +777,11 @@ export function Showcase({ initialMarket }: { initialMarket: PricingMarket }) {
             <br />
             <em>More understanding.</em>
           </Heading>
-          <div className={s.reportsStage}>
+          <div className={s.reportsStage} data-depth-stage>
             <SpendingRing />
+            <div className={s.reportSpark} aria-hidden="true">
+              <CloverToken />
+            </div>
             <div className={s.categoryList}>
               {spending.map((item, i) => (
                 <div key={item.name} style={{ "--row": i } as CSSProperties}>
@@ -748,7 +804,7 @@ export function Showcase({ initialMarket }: { initialMarket: PricingMarket }) {
               <br />
               <em>Meet your little helper.</em>
             </Heading>
-            <div className={s.askStage}>
+            <div className={s.askStage} data-depth-stage>
               <div className={s.mascotFigure}>
                 <Mascot pose="chat" size={260} />
               </div>
@@ -764,7 +820,8 @@ export function Showcase({ initialMarket }: { initialMarket: PricingMarket }) {
               <br />
               <em>Money can be, too.</em>
             </Heading>
-            <div className={s.sharedStage}>
+            <div className={s.sharedStage} data-depth-stage>
+              <div className={s.sharedOrbit} aria-hidden="true" />
               <div className={s.sharedPhone}>
                 <Phone screen="split" />
               </div>

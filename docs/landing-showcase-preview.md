@@ -20,24 +20,30 @@ Typography uses Raleway for headlines and Poppins for supporting text. Teal, lig
 
 ## Assets and example data
 
-The public production homepage at `https://clover.ph` was inspected on 2026-10-09. The showcase's Split Bills phone uses `/assets/marketing-screens/split-20260928.png`, which that homepage serves. It is a public sample screen, not a private user's account.
+The public production homepage at `https://clover.ph` was inspected on 2026-10-09. The showcase's Split Bills phone uses a 780-pixel WebP rendition of `/assets/marketing-screens/split-20260928.png`, which that homepage serves. The original is unchanged. Optimized preview-only images are stored in `assets/landing-showcase/` and copied into public assets by the existing build script. It is a public sample screen, not a private user's account.
 
 Other product compositions are HTML/CSS illustrations using Clover's production wordmark, bank logos, category icons, and approved mascots. Example spending categories sum to ₱24,800; the four account balances sum to ₱84,250. The footer identifies the data as illustrative. This route does not read private financial records, import files, or create transactions.
 
 ## Scroll and accessibility behavior
 
-- Seven full-screen scenes use longer native scroll tracks. Scroll position directly controls perspective, rotation, depth, translation, opacity, and chart growth. There is no autoplay, timer-driven slideshow, wheel interception, or forced scroll snapping.
-- Each scene ends in a readable state before the next one arrives. The header includes a page-progress line and an accessible animation toggle.
-- CSS creates the dimensional cards, glass shield, layered donut, and device frame. No animation library, WebGL runtime, or video download is needed.
-- Geometry reads are batched before style writes; passive scroll events schedule one requestAnimationFrame update. Progress remains in CSS variables instead of React state.
+- Seven full-screen scenes use longer native scroll tracks. Scroll position directly controls perspective, rotation, depth, translation, opacity, and chart growth. There is no timer-driven slideshow, wheel interception, or forced scroll snapping.
+- Each scene ends in a readable state before the next one arrives. The header includes a page-progress line and a motion panel with Full, Gentle, and Off settings, plus previous/restart/next scene controls. Preferences persist locally. Reduced-motion settings take precedence; Data Saver defaults to Gentle.
+- CSS creates the dimensional cards, glass shield, layered donut, device frame, Clover medallions, and orbital elements. Full mode adds subtle ambient floating, pointer depth, and scroll inertia on ornaments. Headings and financial amounts do not shake. No animation library, WebGL runtime, or video download is needed.
+- Scene geometry is cached on layout/viewport changes. Passive scroll events schedule requestAnimationFrame updates; geometry is not repeatedly queried during scrolling. Progress remains in CSS variables instead of React state. Ambient CSS animations pause when their scene leaves the viewport or the document is hidden. JavaScript stops scheduling frames after scroll inertia settles.
 - Short landscape/compact tablet windows use natural document flow and settled illustrations so content cannot become trapped inside a pinned viewport.
-- Reduced-motion preferences collapse the long scroll tracks and show settled illustrations. The header pause control also settles all visuals while retaining the current page position.
+- Reduced-motion preferences collapse the long scroll tracks and show settled illustrations. Off also settles all visuals while retaining the current page position. Gentle retains small scroll reveals without ambient animation or pointer tilt.
 - A skip link, visible keyboard focus, labeled controls, meaningful image alternatives, and grouped pricing controls are provided. Decorative elements are hidden from assistive technology.
 
 ## Verification
 
-Browser screenshots and scroll-state checks cover narrow phones, phones, tablets, laptop windows, desktop windows, and short landscape windows in Chromium, WebKit, and Firefox. Checks include horizontal overflow, heading/navigation clearance, scene bounds, image loading, browser exceptions, and beginning/middle/end scroll states.
+Browser screenshots and scroll-state checks cover 17 browser/viewport combinations, from 320-pixel phones through 1920-pixel desktops, including short landscape windows in Chromium, WebKit, and Firefox. Checks include horizontal overflow, heading/navigation clearance, scene bounds, image loading, browser exceptions, and beginning/middle/end scroll states.
 
-Interaction checks cover changing transforms with scroll, settled visuals while paused, reduced-motion natural flow, keyboard pricing selection, monthly/yearly prices, and PHP/USD switching. Local campaign responses are stubbed because the development database is unavailable; the staging smoke test must use the real campaign endpoint.
+Interaction checks cover reversible scroll transforms, all three motion settings, Escape/focus return and outside-click dismissal, previous/next scene navigation, reduced-motion natural flow, monthly/yearly prices, and PHP/USD switching. Local campaign responses are stubbed because the development database is unavailable; the staging smoke test must use the real campaign endpoint.
 
 Physical-device GPU performance is not implied by browser emulation. The repository's complete `qa:prepush` gate is required before publishing this preview to staging.
+
+## Viewport and loading refinement, 2026-10-09
+
+The opening composition keeps its headline, short description, CTA, and recognizable transaction window in the initial phone or desktop screen. The chat illustration is constrained to the phone content width; short phone windows use natural flow for that scene. Small transaction, category, and chat text is enlarged. Decorative orbital planes are positioned behind product surfaces to avoid crossing text. The motion control has a 44-pixel touch target.
+
+Bank logo variants are 1.9–2.7 KB each. The production Split Bills screen is served as a 42 KB WebP instead of the 320 KB PNG. Images below the opening scene remain lazy-loaded; no animation dependency, video, or WebGL renderer was added. Public pricing and the Switch to Clover offer use the existing shared components and configuration.

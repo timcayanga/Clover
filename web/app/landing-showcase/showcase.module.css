@@ -176,10 +176,10 @@
 }
 .scene {
   --p: 0;
-  --a: 0;
-  --b: 0;
-  --c: 0;
-  --enter: 0;
+  --a: 1;
+  --b: 1;
+  --c: 1;
+  --enter: 1;
   height: 210svh;
 }
 .pin {
@@ -2724,5 +2724,644 @@
     animation: none !important;
     transition: none !important;
     scroll-behavior: auto !important;
+  }
+}
+
+/* Optional motion controls stay tucked away from the product story. */
+.motionControls {
+  position: relative;
+}
+.motionPanel {
+  position: absolute;
+  top: calc(100% + 20px);
+  right: -12px;
+  width: 264px;
+  padding: 20px;
+  border: 1px solid #dae9e8;
+  border-radius: 22px;
+  background: #fff;
+  box-shadow: 0 16px 45px #163f4726;
+  color: var(--ink);
+}
+.motionPanel > strong {
+  font-size: 14px;
+  font-weight: 600;
+}
+.motionPanel > p {
+  font-size: 11px;
+  line-height: 1.7;
+  margin-top: 12px;
+  color: var(--muted);
+}
+.motionModes {
+  display: flex;
+  gap: 3px;
+  padding: 4px;
+  margin-top: 12px;
+  border-radius: 12px;
+  background: #edf5f4;
+}
+.motionModes > button {
+  flex: 1;
+  min-height: 38px;
+  padding: 6px;
+  font-size: 12px;
+  border: 0;
+  border-radius: 9px;
+  background: transparent;
+  color: #49666c;
+}
+.motionModes > button[aria-pressed="true"] {
+  background: #fff;
+  box-shadow: 0 2px 5px #23454b12;
+  color: #007e8d;
+}
+.motionModes > button:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+.sceneControls {
+  display: flex;
+  justify-content: space-between;
+  border-top: 1px solid #e2ebeb;
+  margin-top: 14px;
+  padding-top: 12px;
+}
+.sceneControls > button {
+  display: grid;
+  place-items: center;
+  width: 48px;
+  height: 42px;
+  border: 0;
+  border-radius: 12px;
+  background: transparent;
+  color: #007e8d;
+}
+.sceneControls > button:hover {
+  background: #edf8f5;
+}
+
+/* Separate camera motion from the transforms of individual product layers. */
+.scene {
+  --leave: 0;
+  --impulse: 0;
+  --pointer-x: 0;
+  --pointer-y: 0;
+}
+.site[data-motion="full"] [data-depth-stage] {
+  translate: calc(var(--pointer-x) * 5px)
+    calc(
+      (1 - var(--enter, 1)) * 75px - var(--leave, 0) * 55px + var(--pointer-y) *
+        3px
+    );
+  scale: calc(1 - var(--leave, 0) * 0.045);
+  rotate: y calc(var(--pointer-x) * 2deg);
+}
+.site[data-motion="gentle"] [data-depth-stage] {
+  translate: 0 calc((1 - var(--enter, 1)) * 18px);
+}
+.site[data-motion="full"] .heroWindow {
+  rotate: z calc(var(--impulse) * -0.7deg);
+}
+.site[data-motion="full"] .heroPaper,
+.site[data-motion="full"] .heroBank {
+  rotate: z calc(var(--impulse) * 3deg);
+}
+
+/* Clover medallions use existing vector branding, with CSS extrusion and light. */
+.cloverToken {
+  display: grid;
+  place-items: center;
+  width: 100%;
+  aspect-ratio: 1;
+  border-radius: 30%;
+  border: 1px solid #e6fff8;
+  background: linear-gradient(135deg, #fff 0%, #e1fff6 38%, #a8eadb 100%);
+  box-shadow:
+    1px 2px 0 #c1ebdf,
+    3px 4px 0 #a4dbcd,
+    5px 6px 0 #8ccbbe,
+    7px 8px 0 #80beb2,
+    14px 24px 28px #23726524,
+    inset 0 2px 2px #fff;
+  position: relative;
+  overflow: hidden;
+}
+.cloverToken img {
+  width: 61%;
+  height: auto;
+  filter: drop-shadow(0 3px 1px #278b8730);
+}
+.cloverToken::after {
+  content: "";
+  position: absolute;
+  inset: -50%;
+  background: linear-gradient(
+    115deg,
+    transparent 35%,
+    #ffffffa6 47%,
+    transparent 58%
+  );
+  transform: translateX(-80%);
+  animation: tokenGlint 7s ease-in-out infinite;
+}
+.heroToken {
+  position: absolute;
+  left: calc(50% - 50px);
+  top: 278px;
+  width: 88px;
+  z-index: 5;
+  transform: translateX(calc(35px - var(--a) * 65px))
+    rotateY(calc(-25deg + var(--a) * 45deg))
+    rotateZ(calc(-16deg + var(--a) * 28deg));
+}
+.heroOrbit {
+  position: absolute;
+  left: 50%;
+  top: 10%;
+  width: 760px;
+  height: 300px;
+  pointer-events: none;
+  transform: translateX(-50%) translateZ(-140px) rotateX(64deg)
+    rotateZ(calc(-15deg + var(--a) * 30deg));
+  transform-style: preserve-3d;
+}
+.heroOrbit > i {
+  position: absolute;
+  inset: 0;
+  border: 2px solid #9ddfc94f;
+  border-radius: 50%;
+}
+.heroOrbit > i:last-child {
+  inset: -35px;
+  border-color: #85d4d238;
+  transform: translateZ(-24px);
+}
+.heroOrbit > i::after {
+  content: "";
+  position: absolute;
+  left: 12%;
+  top: 15%;
+  width: 22px;
+  aspect-ratio: 1;
+  border-radius: 50%;
+  background: radial-gradient(circle at 30% 25%, #e4fff7, #74d5c0 60%, #229d97);
+  box-shadow: 0 4px 7px #21746133;
+}
+.heroOrbit > i:last-child::after {
+  left: auto;
+  right: 7%;
+  top: 72%;
+  width: 15px;
+}
+.scanBeam {
+  position: absolute;
+  left: 20%;
+  right: 20%;
+  top: 20%;
+  height: 1px;
+  z-index: 7;
+  background: linear-gradient(90deg, transparent, #5dd8c4, transparent);
+  box-shadow: 0 0 20px 5px #5dd8c438;
+  transform: translateY(calc(var(--a) * 220px));
+  opacity: calc((1 - var(--c)) * 0.8);
+  pointer-events: none;
+}
+.controlOrbit {
+  position: absolute;
+  inset: 10%;
+  border: 2px solid #92ddd1;
+  border-radius: 50%;
+  transform: rotateY(calc(-40deg + var(--a) * 30deg)) rotateX(55deg)
+    scale(calc(0.85 + var(--a) * 0.2));
+}
+.accountOrbit {
+  position: absolute;
+  inset: -2% -8%;
+  border: 1px solid #a9dfcd5c;
+  border-radius: 50%;
+  transform: rotateZ(calc(-35deg + var(--a) * 60deg));
+  pointer-events: none;
+}
+.accountOrbit > i {
+  position: absolute;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  left: 16%;
+  top: 10%;
+  background: radial-gradient(circle at 30% 20%, #effff6, #77ceba 65%, #2d9e8d);
+  box-shadow: 0 4px 6px #2b725e22;
+}
+.accountOrbit > i:nth-child(2) {
+  left: 95%;
+  top: 40%;
+  width: 11px;
+  height: 11px;
+}
+.accountOrbit > i:nth-child(3) {
+  left: 12%;
+  top: 85%;
+  width: 22px;
+  height: 22px;
+}
+.reportSpark {
+  position: absolute;
+  width: 66px;
+  left: 39%;
+  top: 18px;
+  z-index: 2;
+  transform: rotateY(calc(35deg - var(--a) * 60deg))
+    rotateZ(calc(-20deg + var(--a) * 45deg)) translateY(calc(var(--a) * -18px));
+}
+.sharedOrbit {
+  position: absolute;
+  inset: 20% -7%;
+  border: 2px solid #a1dec9;
+  border-radius: 50%;
+  transform: rotateZ(calc(-25deg + var(--a) * 55deg)) rotateY(25deg);
+  opacity: 0.45;
+}
+
+/* Ambient motion pauses off screen and when the tab is hidden. Text stays still. */
+.heroPaper,
+.heroBank,
+.heroToken,
+.heroCategory,
+.heroCategoryTwo,
+.controlTile,
+.controlTileTwo,
+.controlTileThree,
+.mascotFigure > img,
+.reportSpark,
+.sharedMascot > img,
+.finalMascot > img {
+  animation: float 6s ease-in-out infinite;
+  animation-play-state: paused;
+}
+.heroBank,
+.controlTileTwo,
+.reportSpark {
+  animation-delay: -2s;
+  animation-duration: 7s;
+}
+.heroCategoryTwo,
+.controlTileThree,
+.sharedMascot > img {
+  animation-delay: -4s;
+  animation-duration: 8s;
+}
+.heroToken {
+  animation-duration: 5s;
+  animation-delay: -1s;
+}
+.site .cloverToken::after {
+  animation-play-state: paused;
+}
+.site[data-motion="full"][data-awake="true"]
+  [data-visible="true"]
+  :is(
+    .heroPaper,
+    .heroBank,
+    .heroToken,
+    .heroCategory,
+    .heroCategoryTwo,
+    .controlTile,
+    .controlTileTwo,
+    .controlTileThree,
+    .mascotFigure > img,
+    .reportSpark,
+    .sharedMascot > img,
+    .finalMascot > img
+  ),
+.site[data-motion="full"][data-awake="true"]
+  [data-visible="true"]
+  .cloverToken::after {
+  animation-play-state: running;
+}
+@keyframes float {
+  0%,
+  100% {
+    translate: 0 0;
+  }
+  50% {
+    translate: 0 -10px;
+  }
+}
+@keyframes tokenGlint {
+  0%,
+  55% {
+    transform: translateX(-80%);
+  }
+  82%,
+  100% {
+    transform: translateX(80%);
+  }
+}
+
+@media (max-width: 1190px) and (min-width: 701px) {
+  .heroToken {
+    top: 288px;
+    width: 70px;
+  }
+  .heroOrbit {
+    width: 620px;
+  }
+}
+@media (max-width: 700px) {
+  .motionControls {
+    position: static;
+  }
+  .motionPanel {
+    top: calc(100% + 10px);
+    right: 8px;
+    max-width: calc(100vw - 44px);
+  }
+  .motionButton {
+    width: 32px;
+    height: 36px;
+  }
+  .motionButton svg {
+    width: 16px;
+    height: 16px;
+  }
+  .navActions {
+    gap: 9px;
+  }
+  .heroOrbit {
+    width: 340px;
+    height: 150px;
+    top: 78px;
+  }
+  .heroToken {
+    top: 255px;
+    left: calc(50% + 91px);
+    width: 48px;
+  }
+  .heroCategoryTwo {
+    display: block;
+    top: 248px;
+    width: 44px;
+    transform: translateX(calc(-128px - var(--a) * 6px))
+      rotateZ(calc(-13deg + var(--a) * 30deg));
+  }
+  .heroCategoryTwo > img {
+    width: 44px;
+    height: 44px;
+  }
+  .heroShadow {
+    top: 63%;
+  }
+  .scanBeam {
+    left: 3%;
+    right: 3%;
+    top: 20%;
+    transform: translateY(calc(var(--a) * 180px));
+  }
+  .reportSpark {
+    width: 43px;
+    left: calc(50% + 96px);
+    top: 34px;
+  }
+  .accountOrbit {
+    inset: 7% -3%;
+  }
+  .controlOrbit {
+    inset: 10% 7%;
+  }
+  .site[data-motion="full"] [data-depth-stage] {
+    translate: 0 calc((1 - var(--enter, 1)) * 40px - var(--leave, 0) * 25px);
+    rotate: none;
+  }
+}
+@media (max-width: 360px) {
+  .nav .brand > img:last-child {
+    width: 64px;
+  }
+  .navActions {
+    gap: 5px;
+  }
+  .heroToken {
+    top: 258px;
+    left: calc(50% + 74px);
+    width: 42px;
+  }
+  .heroCategoryTwo {
+    top: 251px;
+    transform: translateX(-106px) rotateZ(calc(-13deg + var(--a) * 30deg));
+  }
+  .heroOrbit {
+    width: 285px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .site [data-depth-stage] {
+    translate: none !important;
+    rotate: none !important;
+    scale: none !important;
+  }
+}
+
+/* Keep illustrations readable within real phone viewports. */
+@media (max-width: 700px) {
+  .askStage {
+    width: 100%;
+    max-width: 400px;
+    height: 458px;
+  }
+  .question,
+  .reply p {
+    font-size: 11px;
+  }
+  .reply strong {
+    font-size: 11px;
+  }
+  .chatReport > div {
+    font-size: 10px;
+    grid-template-columns: 84px 1fr 49px;
+    gap: 6px;
+  }
+  .chatReport {
+    gap: 10px;
+    margin-top: 15px;
+    margin-bottom: 15px;
+  }
+  .chatInput {
+    font-size: 10px;
+  }
+  .categoryList strong {
+    font-size: 12px;
+  }
+  .categoryList span {
+    font-size: 10px;
+  }
+  .categoryList b {
+    font-size: 12px;
+  }
+  .categoryList > div > img {
+    width: 25px;
+    height: 25px;
+  }
+  .categoryList > div {
+    gap: 6px;
+  }
+  .transaction strong,
+  .transaction > b {
+    font-size: 11px;
+  }
+  .transaction span {
+    font-size: 9px;
+  }
+  .transaction {
+    padding-top: 13px;
+    padding-bottom: 13px;
+  }
+  .heroStage {
+    height: 312px;
+  }
+  .heroToken {
+    top: 278px;
+    left: calc(50% + 103px);
+    transform: translateZ(20px) rotateY(calc(-25deg + var(--a) * 45deg))
+      rotateZ(calc(-16deg + var(--a) * 28deg));
+  }
+  .heroCategoryTwo {
+    top: 275px;
+  }
+}
+@media (max-width: 360px) {
+  .transaction strong,
+  .transaction > b {
+    font-size: 10px;
+  }
+  .transaction span {
+    font-size: 8px;
+  }
+  .heroToken {
+    left: calc(50% + 81px);
+    top: 278px;
+  }
+  .heroCategoryTwo {
+    top: 275px;
+  }
+  .categoryList strong {
+    font-size: 10px;
+  }
+  .categoryList b {
+    margin-left: 31px;
+  }
+  .chatCard {
+    padding: 14px 12px;
+  }
+  .chatReport > div {
+    grid-template-columns: 80px 1fr 49px;
+  }
+}
+
+@media (max-width: 700px) and (max-height: 800px) {
+  .ask {
+    height: auto;
+  }
+  .ask .pin {
+    position: relative;
+    height: auto;
+    min-height: 0;
+    padding-top: 105px;
+    padding-bottom: 65px;
+  }
+}
+
+/* Keep background light planes behind the card faces in 3D contexts. */
+.accountHalo {
+  transform: translateZ(-120px);
+}
+.accountOrbit {
+  translate: 0 0 -100px;
+}
+/* Comfortable touch targets without adding labels to the header. */
+.motionButton,
+.sceneControls > button {
+  width: 44px;
+  height: 44px;
+}
+.motionModes > button {
+  min-height: 44px;
+}
+@media (max-width: 700px) {
+  .nav {
+    top: max(12px, env(safe-area-inset-top));
+  }
+}
+/* The scrolling element is outside this route's root. Keep hash links quiet too. */
+:global(html):has(.site[data-motion="off"]) {
+  scroll-behavior: auto;
+}
+@media (prefers-reduced-motion: reduce) {
+  :global(html):has(.site) {
+    scroll-behavior: auto;
+  }
+}
+/* Flatten only the hero's stacking context so ornaments cannot cross UI text. */
+.heroStage {
+  transform-style: flat;
+}
+.heroOrbit {
+  z-index: 0;
+}
+.heroToken {
+  left: calc(50% + 355px);
+  top: 235px;
+  width: 76px;
+}
+@media (min-width: 901px) and (max-height: 850px) {
+  .hero h1 {
+    font-size: clamp(56px, 5vw, 72px);
+  }
+  .hero .heading > p {
+    font-size: 14px;
+    line-height: 1.7;
+    margin-top: 16px;
+  }
+  .hero .pin {
+    gap: 18px;
+    padding-top: 104px;
+  }
+  .heroStage {
+    height: 320px;
+  }
+}
+@media (min-width: 701px) and (max-width: 1190px) {
+  .heroToken {
+    left: calc(50% + 285px);
+    width: 65px;
+    top: 262px;
+  }
+}
+@media (max-width: 700px) {
+  .intakeStage {
+    width: 100%;
+  }
+  .heroToken {
+    left: calc(50% + 103px);
+    top: 278px;
+    width: 48px;
+  }
+}
+@media (max-width: 360px) {
+  .heroToken {
+    left: calc(50% + 81px);
+    width: 42px;
+  }
+}
+.hero {
+  --a: 0;
+  --b: 0;
+  --c: 0;
+}
+@media (prefers-reduced-motion: reduce) {
+  .hero {
+    --a: 1;
+    --b: 1;
+    --c: 1;
   }
 }
