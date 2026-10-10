@@ -118,8 +118,12 @@ try {
     for (let poll = 0; poll < 15; poll++) {
       const report = await diagnostic('inspect', state.runId); artifact('fresh-after', report);
       assert.deepEqual(report.changedOutsideProfile, []);
-      assert.equal(report.transactions.length, 100); assert.equal(report.parsedRows.length, 100); assert.equal(report.accounts.length, 1);
-      assert.equal(Number(report.accounts[0].balance), -1000); assert.equal(report.accounts[0].currency, 'PHP'); assert.equal(report.accounts[0].accountNumber, '9999000000008263');
+      assert.equal(report.transactions.length, 100); assert.equal(report.parsedRows.length, 100);
+      const accountIds = [...new Set(report.transactions.map(t => t.accountId))]; assert.equal(accountIds.length, 1);
+      const card = report.accounts.find(a => a.id === accountIds[0]); assert(card);
+      assert.equal(card.type, 'credit_card'); assert.equal(Number(card.balance), -1000); assert.equal(card.currency, 'PHP'); assert.equal(card.accountNumber, '9999000000008263');
+      const others = report.accounts.filter(a => a.id !== card.id);
+      assert(others.length <= 1 && others.every(a => a.name === 'Cash' && a.type === 'cash' && Number(a.balance) === 0 && a.currency === 'PHP' && a.accountNumber === null && a.source === 'manual'), 'Only Clover’s empty default Cash account may accompany the imported card');
       assert(report.transactions.every(t => Number(t.amount) === 10 && t.type === 'expense' && t.currency === 'PHP'));
       const failed = report.jobs.filter(j => j.status === 'failed'); assert.equal(failed.length, 0);
       if (report.jobs.length && report.jobs.every(j => j.status === 'completed')) break;
