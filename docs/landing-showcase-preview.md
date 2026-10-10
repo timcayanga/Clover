@@ -12,15 +12,18 @@ The financial product now carries the story instead of travel and generic paper:
 1. **Months of finances. Organized in minutes.** Current production Accounts
    screen, real bank logos, a receipt, and a categorized transaction on layered
    planes. The opening explicitly identifies Clover as a personal-finance app.
-2. **Less sorting. More living.** Receipt and statement layers move aside as the
+2. **Many places. One picture.** An interactive sculpture brings BPI, GCash,
+   Maya and UnionBank balances around a single total. Select a card to explore
+   its balance; select it again to return to the total. All numbers are fictional.
+3. **Less sorting. More living.** Receipt and statement layers move aside as the
    production Transactions screen and the corresponding lunch transaction emerge.
-3. **Less wondering. More knowing.** Spending segments assemble into a donut;
+4. **Less wondering. More knowing.** Spending segments assemble into a donut;
    category rows make the money picture legible.
-4. **Your money. Let’s talk about it.** A sample Ask Clover conversation answers a
+5. **Your money. Let’s talk about it.** A sample Ask Clover conversation answers a
    spending question using a comparison chart.
-5. **Make room. For what matters.** An emergency-fund goal grows over a quiet
+6. **Make room. For what matters.** An emergency-fund goal grows over a quiet
    at-home scene, connecting financial clarity to everyday peace of mind.
-6. Existing shared Free/Plus/Pro prices, regional currency selection, annual
+7. Existing shared Free/Plus/Pro prices, regional currency selection, annual
    toggle, and Switch to Clover campaign notice.
 
 Accounts and Transactions screenshots were refreshed from the same UI code as
@@ -30,6 +33,9 @@ cards are illustrations with sample data. No customer information is used.
 
 ## Motion and responsive behavior
 
+- Sculptural teal ribbons, shaded spheres, extruded card edges and a tilted
+  glass platform add a continuous visual language across the chapters. Surface
+  lighting animates card edges only, never obscuring labels or balances.
 - Long, reversible scroll chapters with CSS perspective, depth, angled screens,
   receipt movement, chart assembly and growing chart/goal bars.
 - No WebGL, video download, motion library, or continuous JavaScript idle loop.
@@ -39,7 +45,8 @@ cards are illustrations with sample data. No customer information is used.
 - Full / Gentle / Off controls, previous / replay / next scene navigation,
   persistent preference, reduced-motion and data-saver support.
 - Short viewports use natural document flow rather than cropped sticky screens.
-  Off mode and OS reduced motion show the complete final composition.
+  Off mode and OS reduced motion show the complete final composition, including
+  chapters outside the viewport when the mode changes.
 - Hero screenshot is prioritized; later imagery is lazy loaded. Both new product
   screenshots together are approximately 71 KB in WebP.
 

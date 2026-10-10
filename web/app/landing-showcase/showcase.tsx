@@ -184,6 +184,137 @@ function AppScreen({
     </div>
   );
 }
+function DepthField({ name }: { name: string }) {
+  return (
+    <div className={s.depthField} aria-hidden="true">
+      <svg viewBox="0 0 640 600" fill="none">
+        <defs>
+          <linearGradient
+            id={`ribbon-${name}`}
+            x1="80"
+            y1="100"
+            x2="540"
+            y2="500"
+            gradientUnits="userSpaceOnUse"
+          >
+            <stop stopColor="#aaf4dc" />
+            <stop offset=".45" stopColor="#00adc0" />
+            <stop offset="1" stopColor="#b4efe2" />
+          </linearGradient>
+        </defs>
+        <path
+          d="M90 460C-40 190 240 30 450 120S660 390 410 470 160 390 280 240"
+          stroke="#058c9e"
+          strokeOpacity=".10"
+          strokeWidth="40"
+          transform="translate(0 12)"
+        />
+        <path
+          d="M90 460C-40 190 240 30 450 120S660 390 410 470 160 390 280 240"
+          stroke={`url(#ribbon-${name})`}
+          strokeWidth="32"
+        />
+        <path
+          d="M90 460C-40 190 240 30 450 120S660 390 410 470 160 390 280 240"
+          stroke="white"
+          strokeOpacity=".55"
+          strokeWidth="2"
+          transform="translate(-5 -8)"
+        />
+      </svg>
+      <i className={s.depthPearl} />
+      <i className={s.depthPearlSmall} />
+    </div>
+  );
+}
+
+const sampleAccounts = [
+  { name: "BPI", type: "Bank", amount: 124861, logo: "bpi", color: "#b9152e" },
+  {
+    name: "GCash",
+    type: "Wallet",
+    amount: 3600,
+    logo: "gcash",
+    color: "#1677dd",
+  },
+  {
+    name: "Maya",
+    type: "Wallet",
+    amount: 36500,
+    logo: "maya",
+    color: "#117549",
+  },
+  {
+    name: "UnionBank",
+    type: "Bank",
+    amount: 120000,
+    logo: "unionbank",
+    color: "#da6b12",
+  },
+];
+const sampleMoney = (amount: number) => `₱${amount.toLocaleString("en-PH")}`;
+function MoneySculpture() {
+  const [selected, setSelected] = useState<number | null>(null);
+  const current = selected === null ? null : sampleAccounts[selected];
+  return (
+    <div className={s.moneySculpture}>
+      <DepthField name="money" />
+      <div className={s.moneyPlatform} aria-hidden="true" />
+      {sampleAccounts.map((account, index) => (
+        <button
+          key={account.name}
+          className={s.bankTile}
+          style={
+            { "--tile": index, "--bank-color": account.color } as CSSProperties
+          }
+          data-position={index}
+          aria-pressed={selected === index}
+          aria-label={`Explore ${account.name}, ${account.type}, ${sampleMoney(account.amount)}. Select again to see all accounts.`}
+          onClick={() => setSelected(selected === index ? null : index)}
+        >
+          <img
+            src={`/assets/landing-showcase/${account.logo}.webp`}
+            width={40}
+            height={40}
+            alt=""
+            loading="lazy"
+          />
+          <span>
+            <strong>{account.name}</strong>
+            <small>{account.type}</small>
+          </span>
+          <b>{sampleMoney(account.amount)}</b>
+          <svg viewBox="0 0 100 22" aria-hidden="true">
+            <path
+              d="M0 20 15 17 30 19 45 9 60 11 75 3 100 1"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+            />
+          </svg>
+        </button>
+      ))}
+      <div className={s.moneyCenter} aria-live="polite" aria-atomic="true">
+        <img src="/clover-mark.svg" width={26} height={26} alt="" />
+        <span>
+          {current ? `${current.name} balance` : "Your money together"}
+        </span>
+        <strong>
+          {sampleMoney(
+            current
+              ? current.amount
+              : sampleAccounts.reduce(
+                  (sum, account) => sum + account.amount,
+                  0,
+                ),
+          )}
+        </strong>
+        <small>Sample balances · PHP</small>
+      </div>
+    </div>
+  );
+}
+
 function Receipt({ small = false }: { small?: boolean }) {
   return (
     <div
@@ -517,7 +648,7 @@ export function Showcase({ initialMarket }: { initialMarket: PricingMarket }) {
           <Brand />
         </a>
         <nav aria-label="Main navigation">
-          <a href="#breathing-room">Discover Clover</a>
+          <a href="#one-picture">Discover Clover</a>
           <a href="#plans">Plans</a>
         </nav>
         <div className={s.navActions}>
@@ -612,6 +743,7 @@ export function Showcase({ initialMarket }: { initialMarket: PricingMarket }) {
               <Action />
             </div>
             <div className={`${s.stage} ${s.heroStage}`}>
+              <DepthField name="hero" />
               <div className={s.orbit} aria-hidden="true" />
               <div className={s.orbitInner} aria-hidden="true" />
               <div className={s.heroPhone}>
@@ -630,11 +762,26 @@ export function Showcase({ initialMarket }: { initialMarket: PricingMarket }) {
           </div>
           <a
             className={s.scrollArrow}
-            href="#breathing-room"
+            href="#one-picture"
             aria-label="Explore Clover"
           >
             <Icon kind="chevron" />
           </a>
+        </ScrollScene>
+
+        <ScrollScene id="one-picture" className={s.togetherScene}>
+          <div className={`${s.storyGrid} ${s.reverse}`}>
+            <div className={s.copy}>
+              <Heading text="Across your banks and wallets, see what you have. One clearer picture, without the mental juggling.">
+                Many places.
+                <br />
+                <em>One picture.</em>
+              </Heading>
+            </div>
+            <div className={`${s.stage} ${s.moneyStage}`}>
+              <MoneySculpture />
+            </div>
+          </div>
         </ScrollScene>
 
         <ScrollScene id="breathing-room" className={s.evening}>
@@ -647,6 +794,7 @@ export function Showcase({ initialMarket }: { initialMarket: PricingMarket }) {
               </Heading>
             </div>
             <div className={`${s.stage} ${s.importStage}`}>
+              <DepthField name="import" />
               <div className={s.paperStatement} aria-hidden="true">
                 <img
                   src="/assets/landing-showcase/bpi.webp"
@@ -685,6 +833,7 @@ export function Showcase({ initialMarket }: { initialMarket: PricingMarket }) {
               </Heading>
             </div>
             <div className={`${s.stage} ${s.reportStage}`}>
+              <DepthField name="report" />
               <SpendingStory />
             </div>
           </div>
@@ -700,6 +849,7 @@ export function Showcase({ initialMarket }: { initialMarket: PricingMarket }) {
               </Heading>
             </div>
             <div className={`${s.stage} ${s.chatStage}`}>
+              <DepthField name="chat" />
               <div className={s.chatHalo} aria-hidden="true" />
               <Conversation />
               <div className={s.chatMascot}>

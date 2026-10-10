@@ -112,7 +112,10 @@ export function useShowcaseMotion(root: RefObject<HTMLDivElement | null>) {
           relativeTop < viewport && relativeTop + height > 0,
         );
         if (scene.dataset.visible !== visible) scene.dataset.visible = visible;
-        if (relativeTop + height < -viewport || relativeTop > viewport * 2)
+        if (
+          animated &&
+          (relativeTop + height < -viewport || relativeTop > viewport * 2)
+        )
           return;
         const raw = clamp(-relativeTop / Math.max(1, height - pinHeight));
         const p =
