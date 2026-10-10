@@ -99,6 +99,7 @@ try {
   const health = await (await fetch(origin + '/api/health?learning-verification=' + randomUUID())).json();
   assert.equal(health.build.environment, 'preview'); assert.equal(health.build.gitSha, sha); artifact('build', health.build);
   if (phase === 'start') {
+    save(); // Persist the idempotency identity before a possibly ambiguous network outcome.
     const result = await diagnostic('start'); state.workspaceId = result.workspaceId; state.baseline = result.baseline; save();
     console.log(JSON.stringify({ runId: state.runId, workspaceId: state.workspaceId, baseline: result.baseline }));
   } else {

@@ -3522,8 +3522,14 @@ export const insertTransactionCompat = async (params: TransactionInsertParams, d
     return null;
   }
 
-  const values = keys.map((key) => record[key] ?? null);
-  const placeholders = values.map((_, index) => `$${index + 1}`).join(", ");
+  // pg treats JavaScript arrays as PostgreSQL arrays. Serialize JSON fields
+  // explicitly so non-empty rule/review arrays retain their JSON shape.
+  const jsonColumns = new Set(["rawPayload", "normalizedPayload", "learnedRuleIdsApplied", "reviewReasons"]);
+  const values = keys.map(key => {
+    const value = record[key] ?? null;
+    return jsonColumns.has(key) && value !== null ? JSON.stringify(value) : value;
+  });
+  const placeholders = keys.map((key, index) => `$${index + 1}${jsonColumns.has(key) ? "::jsonb" : ""}`).join(", ");
   await db.$executeRawUnsafe(
     `INSERT INTO "Transaction" (${keys.map((key) => `"${key}"`).join(", ")}) VALUES (${placeholders})`,
     ...values
@@ -3869,6 +3875,54 @@ export const loadMerchantRules = async (workspaceId: string, rows: LearningRetri
     confidence: rule.confidence,
     timesConfirmed: rule.timesConfirmed,
   }));
+};
+
+// Only explicit, high-confidence corrections may replace labels on the new
+// transaction's confirmation path. Keep parsed evidence and financial identity
+// untouched; fuzzy/automatic suggestions remain in the existing review path.
+export const loadConfirmedImportLabels = async (workspaceId: string, rows: Array<Record<string, unknown>>) => {
+  const result = new Map<number, {
+    merchantClean: string; categoryId: string | null; categoryName: string | null;
+    confidence: number; ruleId: string; source: string; reason: string;
+  }>();
+  if (rows.every(row => readAppMigration(row.rawPayload))) return result;
+  const query = rows.map(row => ({
+    merchantRaw: typeof row.merchantRaw === "string" ? row.merchantRaw : undefined,
+    merchantClean: typeof row.merchantClean === "string" ? row.merchantClean : undefined,
+    institution: typeof row.institution === "string" ? row.institution : undefined,
+  }));
+  const rules = (await loadMerchantRules(workspaceId, query)).filter(rule =>
+    /^manual(?:_|$)/.test(rule.source) && rule.confidence >= 85);
+  if (!rules.length) return result;
+  const categories = await prisma.category.findMany({
+    where: { workspaceId, id: { in: [...new Set(rules.flatMap(rule => rule.categoryId ? [rule.categoryId] : []))] } },
+    select: { id: true, name: true, type: true },
+  });
+  const categoryById = new Map(categories.map(category => [category.id, category]));
+  const ruleByKey = new Map(rules.map(rule => [rule.merchantKey, rule]));
+  rows.forEach((row, index) => {
+    if (readAppMigration(row.rawPayload)) return;
+    const input = query[index];
+    if (!input.merchantRaw) return;
+    const candidates = buildMerchantClassificationCandidates(input.merchantRaw, input.merchantClean, input.institution)
+      .map(normalizeMerchantText).filter(Boolean);
+    // Institution-specific corrections take precedence over a global alias.
+    const institution = normalizeMerchantText(input.institution ?? "");
+    const matched = candidates.map(key => ruleByKey.get(key)).filter((rule): rule is typeof rules[number] => Boolean(rule))
+      .sort((a, b) => Number(Boolean(institution) && b.merchantKey.startsWith(institution + " ")) - Number(Boolean(institution) && a.merchantKey.startsWith(institution + " ")));
+    const rule = matched[0];
+    if (!rule?.normalizedName.trim()) return;
+    const category = rule.categoryId ? categoryById.get(rule.categoryId) : null;
+    // A label must not change a debit/credit/transfer into another direction,
+    // nor use a category from another Profile or a deleted reference.
+    if (rule.categoryId && (!category || category.type !== row.type)) return;
+    result.set(index, {
+      merchantClean: rule.normalizedName, categoryId: category?.id ?? null, categoryName: category?.name ?? null,
+      confidence: rule.confidence, ruleId: `merchant-rule:${rule.merchantKey}:v${rule.version}`,
+      source: rule.source, reason: "confirmed-rule-exact",
+    });
+  });
+  return result;
 };
 
 export const loadAccountRules = async (workspaceId: string, rows: LearningRetrievalRow[] = []) => {

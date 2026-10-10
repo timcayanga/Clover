@@ -51,3 +51,13 @@ Keep these tables and columns during a code rollback. They are durable user lear
 The isolated PostgreSQL release gate now includes actual additive-migration SQL and fault-injected learning tests. It verifies legacy IDs/counts/versions/correction history; atomic outbox rollback; partial progress; concurrent retries; expired leases; a 205-observation batch; rules beyond 500 newer records; inactive exclusion; manual authority; Profile/consent boundaries; authenticated admin retries; environment isolation; safe error responses; and unchanged financial/source records. Existing reviewed parser, real-worker preservation, migration, bank-link and application checks remain required.
 
 New incidents need a minimized source-reviewed fixture and expected behavior. Never reset learning or regenerate historical labels just to make a release pass.
+
+## Correction retrieval before confirmation
+
+Live staging verification exposed a gap: deterministic imports were confirmed before the background enrichment worker could consult saved corrections. The worker correctly refused to rewrite confirmed rows, so later CSV imports and the separate receipt finalizer missed learned labels.
+
+New transaction creation now consults the existing Profile-scoped rule retrieval before confirmation. Only exact, active manual rules with at least 85 confidence apply here; institution-specific matches win over global aliases. Category references must belong to the same Profile and agree with the parsed transaction direction. Fuzzy and automatic suggestions retain their existing review path. Source-app migrations retain their source labels. Account identities, amounts, dates, currencies, balances, raw descriptions and parsed evidence are unaffected by this label lookup. Normalized transactions retain the applied rule key/version, source, confidence and reason. Existing confirmed/edited/rejected transactions remain protected, including repeat confirmation.
+
+The same test found that multi-account cleanup rewrote account labels from formatted display summaries after the account resolver had correctly preserved customization. That redundant name/institution write is removed; the existing resolver remains responsible for inferred account labels and honoring user choices.
+
+`import-learning-loop-db-regression.ts` permanently exercises the real statement and receipt workers, a durable manual correction, the next document, older-rule retrieval beyond 500 popular rules, preserved duplicate occurrences, currencies, account balance, source evidence and repeat confirmation. The deployed verification retains its failed first run as evidence and uses a fresh Profile for the corrected release.

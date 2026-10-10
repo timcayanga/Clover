@@ -86,6 +86,7 @@ import {
   fetchImportFileCompat,
   fetchParsedTransactionRows,
   enrichParsedRowsWithTraining,
+  loadConfirmedImportLabels,
   loadImportEnrichmentTrainingContext,
   defaultCategoryForType,
   insertTransactionCompat,
@@ -14241,11 +14242,16 @@ export const confirmImportFile = async (
         resolvedCategory: receiptCategoryName,
         lineItemCount: receiptLineItems.length,
       });
+      const receiptLabels = (await loadConfirmedImportLabels(String(importFile.workspaceId), [{
+        merchantRaw: receiptMerchantRaw, merchantClean: receiptMerchantClean, type: "expense",
+      }])).get(0);
+      const normalizedReceiptMerchant = receiptLabels?.merchantClean ?? receiptMerchantClean;
+      const normalizedReceiptCategory = receiptLabels?.categoryName ?? receiptCategoryName;
       const [cashAccountId, receiptCategoryId] = await Promise.all([
         cashAccountIdPromise,
-        resolveOrCreateWorkspaceCategoryId({
+        receiptLabels?.categoryId ?? resolveOrCreateWorkspaceCategoryId({
           workspaceId: String(importFile.workspaceId),
-          categoryName: receiptCategoryName,
+          categoryName: normalizedReceiptCategory,
           fallbackType: "expense",
         }),
       ]);
@@ -14276,7 +14282,7 @@ export const confirmImportFile = async (
             accountId: cashAccountId,
             importFileId,
             categoryId: receiptCategoryId,
-            categoryName: receiptCategoryName,
+            categoryName: normalizedReceiptCategory,
             reviewStatus: receiptNeedsReview || receiptDateInferredFromFileName ? "pending_review" : "confirmed",
             parserConfidence:
               Math.max(
@@ -14287,7 +14293,7 @@ export const confirmImportFile = async (
                     (receiptNeedsReview || receiptDateInferredFromFileName ? 50 : 95)
                 )
               ),
-            categoryConfidence: 95,
+            categoryConfidence: receiptLabels?.confidence ?? 95,
             accountMatchConfidence: 100,
             duplicateConfidence: 0,
             transferConfidence: 0,
@@ -14296,10 +14302,11 @@ export const confirmImportFile = async (
             currency: receiptCurrency,
             type: "expense",
             merchantRaw: receiptMerchantRaw,
-            merchantClean: receiptMerchantClean,
+            merchantClean: normalizedReceiptMerchant,
             description: receiptMerchantClean,
             rawPayload: {
               source: "receipt",
+              ...(receiptLabels ? { confirmedLearning: receiptLabels } : {}),
               documentType: "receipt",
               dateInferredFromFileName: receiptDateInferredFromFileName,
               receiptValidation: receiptValidationRecord,
@@ -14353,13 +14360,13 @@ export const confirmImportFile = async (
               receiptAccountMatch: receiptAccountMatchPayload as Prisma.InputJsonValue | null,
             } as Prisma.InputJsonValue,
             normalizedPayload: {
-              merchantClean: receiptMerchantClean,
+              merchantClean: normalizedReceiptMerchant,
               categoryId: receiptCategoryId,
-              categoryName: receiptCategoryName,
+              categoryName: normalizedReceiptCategory,
               type: "expense",
               notes: receiptLineItemNotes || null,
             } as Prisma.InputJsonValue,
-            learnedRuleIdsApplied: [],
+            learnedRuleIdsApplied: receiptLabels ? [receiptLabels.ruleId] : [],
           });
 
           if (!insertedTransaction.inserted) return {
@@ -14386,12 +14393,12 @@ export const confirmImportFile = async (
           where: { id: createdTransactionId, reviewStatus: "pending_review" },
           data: {
             categoryId: receiptCategoryId,
-            categoryConfidence: 95,
+            categoryConfidence: receiptLabels?.confidence ?? 95,
             normalizedPayload: {
               ...(existingNormalizedPayload ?? {}),
-              merchantClean: receiptMerchantClean,
+              merchantClean: normalizedReceiptMerchant,
               categoryId: receiptCategoryId,
-              categoryName: receiptCategoryName,
+              categoryName: normalizedReceiptCategory,
               type: "expense",
               notes: receiptLineItemNotes || existingNormalizedPayload?.notes || null,
             } as Prisma.InputJsonValue,
@@ -14614,6 +14621,7 @@ export const confirmImportFile = async (
     };
   }
   const parsedRowsReadyAt = Date.now();
+  const confirmedImportLabels = await loadConfirmedImportLabels(String(importFile.workspaceId), parsedRows);
   const structuredWorkbookConfirmation = parsedRows.some((row) => {
     const rawPayload = row.rawPayload;
     return Boolean(
@@ -15976,7 +15984,8 @@ export const confirmImportFile = async (
           workspaceAccounts: workspaceAccountsForTransferMatching,
           currentAccountId: rowResolvedAccountId,
         });
-    const categoryName = shouldTransferAtmWithdrawalToCash ? "Cash & ATM" : parsedCategoryName;
+    const learnedLabels = shouldTransferAtmWithdrawalToCash || canonicalType !== rowType ? undefined : confirmedImportLabels.get(index);
+    const categoryName = shouldTransferAtmWithdrawalToCash ? "Cash & ATM" : learnedLabels?.categoryName ?? parsedCategoryName;
     const rowIsTransfer = migration ? canonicalType === "transfer" : canonicalType === "transfer" || isTransferCategoryName(categoryName);
     const rowTransferConfidence =
       rowIsTransfer ? (typeof row.transferConfidence === "number" ? row.transferConfidence : 100) : 0;
@@ -16054,7 +16063,7 @@ export const confirmImportFile = async (
       continue;
     }
 
-    let categoryId = categoryByName.get(categoryName.toLowerCase());
+    let categoryId = learnedLabels?.categoryId ?? categoryByName.get(categoryName.toLowerCase());
 
     if (!categoryId) {
       const created = await tx.category.create({
@@ -16113,7 +16122,7 @@ export const confirmImportFile = async (
       reviewPriority: reviewOnlyRow ? "none" : getImportReviewPriority(reviewReasons),
       reviewReasons: reviewReasons as Prisma.InputJsonValue,
       parserConfidence: rowParserConfidence,
-      categoryConfidence: rowCategoryConfidence,
+      categoryConfidence: learnedLabels?.confidence ?? rowCategoryConfidence,
       accountMatchConfidence: rowAccountMatchConfidence,
       duplicateConfidence: rowDuplicateConfidence,
       transferConfidence: rowTransferConfidence,
@@ -16127,6 +16136,7 @@ export const confirmImportFile = async (
               : undefined,
         sourceRowIndex: index + 1,
         sourceImportFileId: importFileId,
+        ...(learnedLabels ? { confirmedLearning: learnedLabels } : {}),
         sourceStatementFingerprint:
           typeof row.statementFingerprint === "string" && row.statementFingerprint.trim()
             ? row.statementFingerprint.trim()
@@ -16147,8 +16157,11 @@ export const confirmImportFile = async (
             }
           : {}),
       } as Prisma.InputJsonValue,
-      normalizedPayload: (row.normalizedPayload ?? {}) as Prisma.InputJsonValue,
-      learnedRuleIdsApplied: (row.learnedRuleIdsApplied ?? []) as Prisma.InputJsonValue,
+      normalizedPayload: {
+        ...(row.normalizedPayload && typeof row.normalizedPayload === "object" ? row.normalizedPayload : {}),
+        ...(learnedLabels ? { merchantClean: learnedLabels.merchantClean, categoryName, categoryId, type: canonicalType } : {}),
+      } as Prisma.InputJsonValue,
+      learnedRuleIdsApplied: [...(Array.isArray(row.learnedRuleIdsApplied) ? row.learnedRuleIdsApplied : []), ...(learnedLabels ? [learnedLabels.ruleId] : [])] as Prisma.InputJsonValue,
       sourceRowKey:
         typeof row.statementFingerprint === "string" && row.statementFingerprint.trim()
           ? `${row.statementFingerprint.trim()}:${index + 1}`
@@ -16161,7 +16174,7 @@ export const confirmImportFile = async (
       currency: rowCurrency,
       type: canonicalType,
       merchantRaw: typeof row.merchantRaw === "string" ? row.merchantRaw : "Imported transaction",
-      merchantClean: typeof row.merchantClean === "string" ? row.merchantClean : typeof row.merchantRaw === "string" ? row.merchantRaw : null,
+      merchantClean: learnedLabels?.merchantClean ?? (typeof row.merchantClean === "string" ? row.merchantClean : typeof row.merchantRaw === "string" ? row.merchantRaw : null),
       description: extractHumanReadableDescription(row.rawPayload ?? null),
       isTransfer: rowIsTransfer,
       isExcluded:
@@ -16320,14 +16333,14 @@ export const confirmImportFile = async (
                     : typeof insertRow.merchantRaw === "string"
                       ? insertRow.merchantRaw
                       : null,
-                categoryConfidence: rowCategoryConfidence,
+                categoryConfidence: learnedLabels?.confidence ?? rowCategoryConfidence,
                 parserConfidence: rowParserConfidence,
                 reviewStatus: insertRow.reviewStatus as Prisma.EnumReviewStatusFieldUpdateOperationsInput | ReviewStatus,
                 reviewPriority: typeof insertRow.reviewPriority === "string" ? insertRow.reviewPriority : "none",
                 reviewReasons: insertRow.reviewReasons ? (insertRow.reviewReasons as Prisma.InputJsonValue) : Prisma.DbNull,
                 isTransfer: rowIsTransfer,
-                normalizedPayload: (row.normalizedPayload ?? {}) as Prisma.InputJsonValue,
-                learnedRuleIdsApplied: (row.learnedRuleIdsApplied ?? []) as Prisma.InputJsonValue,
+                normalizedPayload: insertRow.normalizedPayload as Prisma.InputJsonValue,
+                learnedRuleIdsApplied: insertRow.learnedRuleIdsApplied as Prisma.InputJsonValue,
               }
             : {}),
         },
@@ -16725,19 +16738,13 @@ export const confirmImportFile = async (
     );
     await Promise.allSettled(
       Array.from(resolvedAccountSummaryById.entries()).map(([accountId, summary]) => {
-        const displayName = formatUploadAccountDisplayName(
-          summary.accountName ?? summary.institution ?? null,
-          summary.institution ?? null,
-          summary.accountNumber ?? null,
-          summary.accountType ?? null
-        );
-
+        // Account resolution already updates inferred labels while honoring
+        // nameCustomized/institutionCustomized. A display summary must not
+        // undo those user choices after multi-account confirmation.
         return prisma.account.update({
           where: { id: accountId },
           data: {
             ...(summary.balance ? { balance: summary.balance } : {}),
-            ...(displayName ? { name: displayName } : {}),
-            ...(summary.institution ? { institution: summary.institution } : {}),
             ...(summary.accountNumber ? { accountNumber: summary.accountNumber } : {}),
             ...(summary.accountType ? { type: summary.accountType } : {}),
           },
