@@ -260,6 +260,25 @@ function MoneySculpture() {
     <div className={s.moneySculpture}>
       <DepthField name="money" />
       <div className={s.moneyPlatform} aria-hidden="true" />
+      <svg
+        className={s.moneyConnections}
+        viewBox="0 0 600 500"
+        aria-hidden="true"
+      >
+        {[
+          "M100 70C100 210 210 250 300 250",
+          "M500 70C500 210 390 250 300 250",
+          "M100 430C100 290 210 250 300 250",
+          "M500 430C500 290 390 250 300 250",
+        ].map((path, i) => (
+          <path
+            key={path}
+            d={path}
+            pathLength="1"
+            style={{ "--connection": i } as CSSProperties}
+          />
+        ))}
+      </svg>
       {sampleAccounts.map((account, index) => (
         <button
           key={account.name}
@@ -433,6 +452,8 @@ const spending = [
   },
 ];
 function SpendingStory() {
+  const [selected, setSelected] = useState<string | null>(null);
+  const current = spending.find((item) => item.name === selected);
   return (
     <div className={s.spendingStory}>
       <div className={s.reportCard}>
@@ -443,9 +464,36 @@ function SpendingStory() {
         <div
           className={s.donut}
           role="img"
-          aria-label="Sample October spending: 15,000 pesos. Food and dining 40%, groceries 30%, transport 20%, shopping 10%."
+          aria-label={
+            current
+              ? `${current.name}: ${current.amount}, ${current.percent}% of the 15,000 peso sample spending.`
+              : "Sample October spending: 15,000 pesos. Food and dining 40%, groceries 30%, transport 20%, shopping 10%."
+          }
         >
           <svg viewBox="0 0 240 240" aria-hidden="true">
+            <g className={s.donutDepth}>
+              {spending.map((item, i) => (
+                <circle
+                  key={item.name}
+                  cx="111"
+                  cy="120"
+                  r="94"
+                  pathLength="100"
+                  stroke={item.color}
+                  data-muted={selected !== null && selected !== item.name}
+                  style={
+                    {
+                      "--ring-x": `${[22, -25, -22, 22][i]}px`,
+                      "--ring-y": `${[-22, -22, 22, 22][i]}px`,
+                    } as CSSProperties
+                  }
+                  strokeDasharray={`${item.percent - 0.8} ${100 - item.percent + 0.8}`}
+                  strokeDashoffset={
+                    -spending.slice(0, i).reduce((n, x) => n + x.percent, 0)
+                  }
+                />
+              ))}
+            </g>
             <circle className={s.donutTrack} cx="120" cy="120" r="94" />
             {spending.map((item, i) => (
               <circle
@@ -455,6 +503,7 @@ function SpendingStory() {
                 r="94"
                 pathLength="100"
                 stroke={item.color}
+                data-muted={selected !== null && selected !== item.name}
                 style={
                   {
                     "--ring-x": `${[22, -25, -22, 22][i]}px`,
@@ -469,13 +518,21 @@ function SpendingStory() {
             ))}
           </svg>
           <div>
-            <span>Total spending</span>
-            <strong>₱15,000</strong>
+            <span>{current ? current.name : "Total spending"}</span>
+            <strong>{current ? current.amount : "₱15,000"}</strong>
           </div>
         </div>
         <div className={s.spendingRows}>
           {spending.map((item) => (
-            <div key={item.name}>
+            <button
+              key={item.name}
+              type="button"
+              aria-pressed={selected === item.name}
+              aria-label={`Explore ${item.name}, ${item.amount}, ${item.percent}% of spending. Select again to see total spending.`}
+              onClick={() =>
+                setSelected(selected === item.name ? null : item.name)
+              }
+            >
               <img
                 src={`/figma-icons/categories/${item.icon}.svg`}
                 alt=""
@@ -485,7 +542,7 @@ function SpendingStory() {
               <span>{item.name}</span>
               <strong>{item.amount}</strong>
               <i style={{ background: item.color }} />
-            </div>
+            </button>
           ))}
         </div>
       </div>
@@ -919,6 +976,16 @@ export function Showcase({ initialMarket }: { initialMarket: PricingMarket }) {
               <Action>Start my story</Action>
             </div>
             <div className={`${s.stage} ${s.lifeStage}`}>
+              <div className={s.savingsProp} aria-hidden="true">
+                <img
+                  src="/assets/landing-showcase/savings-glass-20261010.webp"
+                  width={600}
+                  height={762}
+                  alt=""
+                  loading="lazy"
+                  decoding="async"
+                />
+              </div>
               <div className={s.lifePhoto}>
                 <StoryPhoto
                   desktop="landing-story-v3/07-records-away"

@@ -2377,3 +2377,260 @@
 .importReceipt {
   opacity: clamp(0, calc(1 - var(--a) * 2), 1);
 }
+/* One tactile language across the story: ceramic cards, glass, paper and
+   extruded chart segments. Financial text remains on opaque, quiet surfaces. */
+.moneyConnections {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 0;
+  overflow: visible;
+  pointer-events: none;
+}
+.moneyConnections path {
+  fill: none;
+  stroke: #73cfc2;
+  stroke-width: 2;
+  stroke-dasharray: 1;
+  stroke-dashoffset: calc(1 - var(--b));
+  opacity: 0.65;
+}
+.bankTile {
+  background: linear-gradient(145deg, #fff 20%, #f5fbf9 65%, #d7ece6);
+  border-bottom: 3px solid #b9dcd3;
+  box-shadow:
+    3px 7px 0 #aecfc6,
+    0 22px 35px -15px #195d6355;
+  transform: translateY(calc((1 - var(--a)) * (var(--tile) - 1.5) * 30px))
+    rotateX(calc((1 - var(--a)) * 12deg))
+    rotateY(calc((1 - var(--b)) * -16deg + var(--pointer-x) * 2deg))
+    rotateZ(calc((1 - var(--a)) * (var(--tile) - 1.5) * 7deg));
+}
+.bankTile img {
+  box-shadow:
+    0 3px 6px #1c4e4420,
+    inset 0 1px 1px white;
+}
+.moneyCenter {
+  border-bottom: 3px solid #b8d9d0;
+}
+.reportCard {
+  background: #fff;
+  border-bottom: 5px solid #c3e1d9;
+  box-shadow:
+    8px 12px 0 #b7dbd1,
+    0 40px 65px -30px #205e6366;
+  transform: translateY(calc(-50% + (1 - var(--a)) * 35px))
+    rotateX(calc((1 - var(--a)) * 13deg))
+    rotateY(calc((1 - var(--b)) * 20deg + var(--pointer-x) * 1.5deg));
+}
+.donut {
+  transform: none;
+}
+.donut svg {
+  transform: rotate(-90deg) rotateY(calc((1 - var(--a)) * 15deg));
+  filter: drop-shadow(-3px 5px 5px #185f5d22);
+}
+.donutDepth {
+  filter: brightness(0.72);
+}
+.donut circle {
+  transition: opacity 0.22s ease;
+}
+.donut circle[data-muted="true"] {
+  opacity: 0.22;
+}
+.donut > div {
+  background: #fff;
+  border-radius: 50%;
+  inset: 31%;
+  gap: 5px;
+}
+.donut > div span {
+  text-align: center;
+  font-size: 10px;
+}
+.donut > div strong {
+  font-size: 25px;
+}
+.spendingRows > button {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  width: 100%;
+  padding: 12px 0;
+  border: 0;
+  border-top: 1px solid #e6eeee;
+  background: #fff;
+  font: inherit;
+  font-size: 12px;
+  color: var(--ink);
+  text-align: left;
+  cursor: pointer;
+  transform: translateX(calc((1 - var(--b)) * -12px));
+}
+.spendingRows > button strong {
+  margin-left: auto;
+  font-size: 12px;
+}
+.spendingRows > button[aria-pressed="true"] {
+  background: #edf9f5;
+  border-radius: 8px;
+}
+.spendingRows > button:focus-visible {
+  outline: 2px solid #007e94;
+  outline-offset: 3px;
+}
+.conversation {
+  background: linear-gradient(145deg, #fff 75%, #f0faf7);
+  border-bottom: 5px solid #bfded6;
+  transform: translateY(calc(-50% + (1 - var(--a)) * 28px))
+    rotateY(calc((1 - var(--b)) * -18deg + var(--pointer-x) * 1.5deg));
+  box-shadow:
+    -8px 12px 0 #bcdcd3,
+    0 40px 65px -28px #205e6355;
+}
+.question {
+  background: linear-gradient(135deg, #e6fbf3, #d6f3ee);
+  border-bottom: 3px solid #b7ded2;
+  box-shadow: 0 7px 12px -8px #145d4c60;
+  transform: translateY(calc((1 - var(--a)) * 24px))
+    rotateZ(calc((1 - var(--a)) * 3deg));
+}
+.answer {
+  opacity: 1;
+  transform: translateY(calc((1 - var(--b)) * 15px));
+}
+.chatChart {
+  background: #fff;
+  border-bottom: 3px solid #e0efea;
+  box-shadow: 0 8px 16px -12px #215e4f55;
+}
+.chatChart i {
+  border-bottom: 4px solid #6eb59f;
+  box-shadow: 0 5px 5px -4px #19534a55;
+}
+.chatChart > div:last-child i {
+  border-bottom-color: #008493;
+}
+.chatMascot {
+  filter: drop-shadow(0 14px 10px #145f4e25);
+}
+.lifeStage {
+  isolation: isolate;
+}
+.lifePhoto {
+  left: 18%;
+  bottom: 29%;
+  z-index: 1;
+  border: 6px solid white;
+  border-bottom-width: 12px;
+  border-radius: 70px 25px 25px 25px;
+  transform: translateY(calc((1 - var(--a)) * -20px))
+    rotateY(calc(-16deg + var(--a) * 16deg))
+    rotateZ(calc(6deg - var(--a) * 6deg));
+  box-shadow:
+    5px 9px 0 #bfded0,
+    0 35px 55px -28px #235f5d80;
+}
+.savingsProp {
+  position: absolute;
+  width: 40%;
+  left: -4%;
+  top: 27%;
+  z-index: 2;
+  transform: translateY(calc((1 - var(--b)) * 40px))
+    rotateZ(calc(-5deg + var(--b) * 5deg + var(--impulse) * 2deg));
+  filter: drop-shadow(0 18px 14px #2c5b4825);
+  pointer-events: none;
+}
+.savingsProp img {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+.goalMoment {
+  z-index: 3;
+  left: 19%;
+  bottom: 3%;
+  background: #fff;
+  border-bottom: 4px solid #b7d8c9;
+  box-shadow:
+    5px 8px 0 #c5e3d6,
+    0 25px 40px -18px #194f5355;
+  transform: translateY(calc((1 - var(--b)) * 35px))
+    rotateY(calc((1 - var(--b)) * 12deg));
+}
+.goalTrack {
+  height: 13px;
+  box-shadow: inset 0 2px 3px #1e6e5020;
+}
+.goalTrack i {
+  border-bottom: 3px solid #079d8b;
+  box-sizing: border-box;
+}
+.planCard {
+  border-bottom: 5px solid #c7e4dc;
+  box-shadow:
+    5px 8px 0 #deeee8,
+    0 25px 40px -30px #19564b50;
+  transform: translateY(calc((1 - var(--enter)) * (var(--card) + 1) * 25px))
+    rotateX(calc((1 - var(--enter)) * 6deg));
+}
+@media (max-width: 900px), (max-width: 1100px) and (min-height: 1000px) {
+  .reportCard,
+  .conversation {
+    transform: translateY(calc(-50% + (1 - var(--a)) * 18px))
+      rotateY(calc((1 - var(--b)) * 6deg));
+  }
+  .donut > div strong {
+    font-size: 22px;
+  }
+  .spendingRows > button {
+    padding: 9px 0;
+    font-size: 11px;
+  }
+  .spendingRows > button strong {
+    font-size: 11px;
+  }
+  .bankTile {
+    transform: translateY(calc((1 - var(--a)) * (var(--tile) - 1.5) * 12px))
+      rotateZ(calc((1 - var(--a)) * (var(--tile) - 1.5) * 3deg));
+  }
+  .lifePhoto {
+    left: 16%;
+    bottom: 36%;
+    top: 5%;
+  }
+  .savingsProp {
+    width: 38%;
+    left: -2%;
+    top: 24%;
+  }
+  .goalMoment {
+    width: 89%;
+    left: 7%;
+    bottom: 3%;
+    padding: 19px;
+  }
+}
+@media (max-width: 360px) {
+  .donut > div strong {
+    font-size: 20px;
+  }
+  .spendingRows > button {
+    gap: 6px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .donut circle,
+  .bankTile {
+    transition: none;
+  }
+}
+/* Reserve a quiet white centre even while chart segments are scattered. */
+.donut > div {
+  inset: 27%;
+  box-shadow: 0 0 0 5px #fff;
+}

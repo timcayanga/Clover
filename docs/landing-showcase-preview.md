@@ -67,3 +67,24 @@ scroll momentum and desktop pointer movement; all of this follows the existing
 Full/Gentle/Off and reduced-motion controls. A compressed WebP keeps the added
 raster payload small. Section anchor alignment now overrides the inherited
 section scroll margin, so anchored scenes use the complete viewport.
+
+### Tactile story across the remaining scenes (10 October 2026)
+
+Accounts now gather with deeper ceramic-like edges and scroll-drawn connecting
+lines. The report chart has shaded extrusion beneath each colored segment;
+segments assemble reversibly and category buttons focus the center amount and
+highlight the selected slice. Selecting the same category resets the total.
+Accessible labels follow the selection. Opaque white centers protect amounts.
+Ask Clover gains raised message and chart surfaces, restrained card tilt and
+comparison bars that grow with scroll. The explanation remains fully opaque.
+The goals scene adds a realistic glass savings jar, a dimensional photo frame
+and a goal card with a recessed progress track. Pricing cards share the material
+language and use existing viewport progress for their entrance.
+
+No WebGL library, additional fetch, or animation dependency was added. The only
+new raster asset is a lazy-loaded 105 KB WebP. Existing motion controls, reduced
+motion, hidden-tab pauses and short-screen natural layouts remain in effect.
+Local verification covered ten viewport sizes from 320 × 740 through
+1920 × 1080, Full/Gentle/Off modes, account selection, report category selection
+and reset, and phone/desktop compositions. No horizontal overflow or broken
+images were observed. Production remains unchanged; the preview is staging only.
