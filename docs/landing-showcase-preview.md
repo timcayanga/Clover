@@ -55,3 +55,15 @@ cards are illustrations with sample data. No customer information is used.
 Validate the preview at phone, tablet, laptop, desktop and short landscape sizes;
 check first and resolved scene states, reverse scroll, motion controls, pricing,
 image loading and error logs. Full repository pre-push checks remain mandatory.
+
+### Familiar everyday purchases and physical materials (10 October 2026)
+
+The hero now pairs a realistic, transparent thermal-paper Starbucks sample
+receipt with a matching coffee transaction. The import scene introduces Jollibee,
+Puregold and McDonald’s sample purchases, with raised card edges and scroll-driven
+rotation. Incoming records finish fading before the app text reveals, preventing
+overlapping text during forward and reverse scrolling. The receipt responds to
+scroll momentum and desktop pointer movement; all of this follows the existing
+Full/Gentle/Off and reduced-motion controls. A compressed WebP keeps the added
+raster payload small. Section anchor alignment now overrides the inherited
+section scroll margin, so anchored scenes use the complete viewport.

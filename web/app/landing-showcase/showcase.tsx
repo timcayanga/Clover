@@ -317,23 +317,71 @@ function MoneySculpture() {
 
 function Receipt({ small = false }: { small?: boolean }) {
   return (
+    <img
+      className={s.realReceipt}
+      src="/assets/landing-showcase/starbucks-receipt-realistic-20261010.webp"
+      width={520}
+      height={946}
+      alt=""
+      loading={small ? "eager" : "lazy"}
+      decoding="async"
+    />
+  );
+}
+
+const everydayPurchases = [
+  {
+    merchant: "Jollibee",
+    item: "Lunch",
+    amount: "₱250.00",
+    icon: "food-dining",
+    color: "#be1830",
+  },
+  {
+    merchant: "Puregold",
+    item: "Groceries",
+    amount: "₱1,250.00",
+    icon: "groceries",
+    color: "#187942",
+  },
+  {
+    merchant: "McDonald’s",
+    item: "Breakfast",
+    amount: "₱180.00",
+    icon: "food-dining",
+    color: "#b9430b",
+  },
+];
+function EverydayRecords() {
+  return (
     <div
-      className={`${s.receipt} ${small ? s.smallReceipt : ""}`}
-      aria-hidden="true"
+      className={s.everydayRecords}
+      aria-label="Illustrative everyday purchases"
     >
-      <span className={s.receiptLogo}>m.</span>
-      <strong>MENDOKORO</strong>
-      <span>October 5, 2026</span>
-      <div>
-        <span>Lunch</span>
-        <span>500.00</span>
-      </div>
-      <div className={s.receiptTotal}>
-        <span>Total</span>
-        <strong>₱500.00</strong>
-      </div>
-      <div className={s.barcode} />
-      <span>Thank you. See you again.</span>
+      {everydayPurchases.map((purchase, index) => (
+        <div
+          className={s.everydayRecord}
+          key={purchase.merchant}
+          style={
+            {
+              "--record-index": index,
+              "--merchant-color": purchase.color,
+            } as CSSProperties
+          }
+        >
+          <img
+            src={`/figma-icons/categories/${purchase.icon}.svg`}
+            width={32}
+            height={32}
+            alt=""
+          />
+          <div>
+            <strong>{purchase.merchant}</strong>
+            <span>{purchase.item}</span>
+          </div>
+          <b>−{purchase.amount}</b>
+        </div>
+      ))}
     </div>
   );
 }
@@ -347,10 +395,10 @@ function TransactionMoment() {
         alt=""
       />
       <div>
-        <strong>Lunch at Mendokoro</strong>
+        <strong>Coffee at Starbucks</strong>
         <span>Food & dining · BPI</span>
       </div>
-      <b>−₱500.00</b>
+      <b>−₱190.00</b>
     </div>
   );
 }
@@ -809,6 +857,7 @@ export function Showcase({ initialMarket }: { initialMarket: PricingMarket }) {
                 <div />
                 <div />
               </div>
+              <EverydayRecords />
               <div className={s.importReceipt}>
                 <Receipt />
               </div>

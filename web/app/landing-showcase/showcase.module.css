@@ -2220,3 +2220,160 @@
 .site[data-motion="gentle"] .moneyCenter::after {
   animation: none;
 }
+
+/* Thermal paper and familiar purchases bring the records to life. Keep all
+   light effects behind readable text; scroll progress drives the choreography. */
+.site .scene {
+  scroll-margin-top: 0;
+}
+.realReceipt {
+  display: block;
+  width: 100%;
+  height: auto;
+  filter: drop-shadow(10px 20px 14px rgb(35 67 69 / 0.16));
+}
+.heroReceipt {
+  width: 146px;
+}
+.importReceipt {
+  width: 185px;
+  left: 3%;
+  top: 12%;
+  z-index: 2;
+}
+.everydayRecords {
+  position: absolute;
+  inset: 15% 4% auto 28%;
+  z-index: 2;
+  perspective: 900px;
+  pointer-events: none;
+  opacity: calc(1 - var(--b));
+  transform: translateY(calc(var(--a) * -75px));
+}
+.everydayRecord {
+  position: relative;
+  display: grid;
+  grid-template-columns: 32px 1fr auto;
+  align-items: center;
+  gap: 10px;
+  padding: 16px 18px;
+  margin-bottom: 16px;
+  border: 1px solid rgb(255 255 255 / 0.95);
+  border-left: 4px solid var(--merchant-color);
+  border-radius: 16px;
+  background: linear-gradient(140deg, #fff 35%, #eff9f6);
+  box-shadow:
+    0 3px 0 #cee4df,
+    0 16px 30px rgb(25 81 83 / 0.13);
+  transform: translateX(calc((1 - var(--a)) * var(--record-index) * 14px))
+    rotateY(calc((1 - var(--a)) * -18deg))
+    rotateZ(calc((1 - var(--a)) * (var(--record-index) - 1) * 6deg));
+}
+.everydayRecord > div {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+.everydayRecord strong {
+  color: #25393e;
+  font-size: 15px;
+}
+.everydayRecord span {
+  color: #637a7e;
+  font-size: 11px;
+}
+.everydayRecord b {
+  font-size: 14px;
+  color: #b43644;
+  white-space: nowrap;
+}
+.phone::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  box-shadow:
+    inset 2px 0 2px rgb(255 255 255 / 0.8),
+    inset -2px 0 3px rgb(7 58 64 / 0.25);
+}
+@media (max-width: 900px), (max-width: 1100px) and (min-height: 1000px) {
+  .heroReceipt {
+    width: 115px;
+  }
+  .importReceipt {
+    width: 126px;
+    left: 0;
+    top: 8%;
+  }
+  .everydayRecords {
+    inset: 13% 0 auto 25%;
+  }
+  .everydayRecord {
+    padding: 12px;
+    gap: 7px;
+    grid-template-columns: 25px 1fr auto;
+    margin-bottom: 12px;
+  }
+  .everydayRecord img {
+    width: 25px;
+    height: 25px;
+  }
+  .everydayRecord strong {
+    font-size: 12px;
+  }
+  .everydayRecord b {
+    font-size: 11px;
+  }
+}
+@media (max-width: 360px) {
+  .heroReceipt {
+    width: 95px;
+  }
+  .everydayRecords {
+    left: 20%;
+  }
+  .everydayRecord {
+    padding: 10px 8px;
+    gap: 5px;
+  }
+}
+/* Incoming purchases give way to the app; never sandwich text behind a phone. */
+.importPhone {
+  opacity: var(--a);
+}
+.everydayRecords {
+  opacity: calc(1 - var(--a));
+  left: 35%;
+  right: 0;
+  z-index: 3;
+}
+.importReceipt {
+  transform: translateX(calc(var(--b) * -60px))
+    translateY(calc(var(--impulse) * -12px))
+    rotateX(calc(var(--pointer-y) * -5deg))
+    rotateY(calc(var(--pointer-x) * 8deg))
+    rotateZ(calc(9deg - var(--b) * 18deg + var(--impulse) * 3deg));
+}
+@media (max-width: 900px), (max-width: 1100px) and (min-height: 1000px) {
+  .everydayRecords {
+    left: 34%;
+  }
+  .everydayRecord {
+    grid-template-columns: 1fr auto;
+  }
+  .everydayRecord > img {
+    display: none;
+  }
+}
+/* Finish the paper fade before revealing app text, including during reversal. */
+.importPhone {
+  opacity: clamp(0, calc((var(--a) - 0.5) * 2), 1);
+}
+.everydayRecords {
+  opacity: clamp(0, calc(1 - var(--a) * 2), 1);
+}
+.paperStatement,
+.importReceipt {
+  opacity: clamp(0, calc(1 - var(--a) * 2), 1);
+}
