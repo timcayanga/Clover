@@ -10,7 +10,7 @@ const option = name => process.argv.find(x => x.startsWith(name + '='))?.slice(n
 assert(process.argv.includes('--execute'));
 const output = option('--output'), envFile = option('--env'), sha = option('--sha'), phase = option('--phase');
 assert(output && envFile && /^[a-f0-9]{40}$/.test(sha ?? ''));
-assert(['baseline', 'observe', 'preview', 'repair', 'fresh'].includes(phase));
+assert(['baseline', 'observe', 'preview', 'repair', 'inspect-fresh', 'fresh'].includes(phase));
 const origin = 'https://staging.clover.ph', oldRun = '857a2856-a14e-4d6a-b3ba-da7a4430d57c', importId = '8355c0a1-1b78-490d-868f-3ccb5ce4b1b5';
 const sourceSha = '1ca7bedede14497963e97e77782054e15cda64e0bfd74e445df9fdce8f6a3b73';
 const env = dotenv.parse(readFileSync(envFile)); assert(env.CLERK_SECRET_KEY?.startsWith('sk_test_'));
@@ -91,6 +91,11 @@ try {
     assert.deepEqual(afterStatus.plan.checkpoint, result.checkpoint, 'Status polling rewrote the repaired checkpoint');
     assert.deepEqual(afterStatus.preservation, preview.preservation);
     assert.equal(digest(await request('qa', `/api/imports/${importId}/file`, { binary: true })), sourceSha);
+  } else if (phase === 'inspect-fresh') {
+    const state = read('fresh-run'); assert.equal(state.sha, sha);
+    const report = await diagnostic('inspect', state.runId); artifact('fresh-inspect', report);
+    assert.deepEqual(report.changedOutsideProfile, []);
+    console.log(JSON.stringify({ rows: report.transactions.length, jobs: report.jobs.map(j => ({ id: j.id, status: j.status, errorCode: j.errorCode })) }));
   } else {
     const statePath = join(output, 'fresh-run.json');
     const state = existsSync(statePath) ? read('fresh-run') : { runId: randomUUID(), importId: randomUUID(), sha };
@@ -106,7 +111,7 @@ try {
     for (let poll = 0; poll < 30; poll++) {
       const status = await request('qa', `/api/imports/${state.importId}/status`); artifact('fresh-status', status);
       if (status.importFile?.status === 'failed') throw new Error('Fresh retained-source import failed');
-      if (status.importFile?.status === 'done') { assertCheckpoint(status.statementCheckpoint); assert.equal(status.telemetryPhase, 'complete'); done = true; break; }
+      if (status.importFile?.status === 'done') { assertCheckpoint(status.statementCheckpoint); assert.equal(status.telemetryPhase, 'complete'); assert.equal(status.settledImportComplete, true); assert.deepEqual(status.settlementIssues, []); done = true; break; }
       await new Promise(r => setTimeout(r, 1000));
     }
     assert(done);
@@ -127,6 +132,9 @@ try {
     const repeat = await diagnostic('inspect', state.runId); artifact('fresh-after-repeat', repeat);
     assert.deepEqual(repeat.changedOutsideProfile, []); assert.deepEqual(repeat.financial, beforeRepeat.financial);
     assert.equal(digest(await request('qa', `/api/imports/${state.importId}/file`, { binary: true })), sourceSha);
+    const original = await diagnostic('preview-bpi-checkpoint'); artifact('original-after-fresh', original);
+    assert.equal(original.plan.unchanged, true);
+    assert.deepEqual(original.plan.checkpoint, read('repair').checkpoint, 'A newer release or fresh upload changed the already repaired original checkpoint');
     artifact('result', { passed: true, sha, originalCheckpointMetadataRepaired: true, fullReconciliation: false, reason: 'MISSING_OPENING_BALANCE', allExistingLearningAndFinancialRowsPreserved: true, repairRetryNoOp: true, sourceBytesUnchanged: true, freshRetainedPdfPassed: true, freshRows: 100, freshBalance: -1000 });
   }
   console.log(JSON.stringify({ phase, passed: true, sha }));

@@ -12728,6 +12728,9 @@ const processImportFileTextImpl = async (
     try {
       const bpiReconciliation = effectiveImportMode === "statement" && isBpiCardMetadata(resolvedMetadata)
         ? assessBpiStatementReconciliation(textForParse, resolvedMetadata, rows) : null;
+      // Old cached metadata predates this field. Read the current source date
+      // without refreshing caches or copying a previous template's bill date.
+      const bpiStatementDate = bpiReconciliation ? detectStatementMetadataFromText(textForParse, fileName).statementDate ?? null : null;
       const checkpointStart = bpiReconciliation ? bpiReconciliation.statementStartDate : metadata.startDate;
       const checkpointEnd = bpiReconciliation ? bpiReconciliation.statementEndDate : resolvedMetadata.endDate;
       const metadataStartDate = checkpointStart ? new Date(checkpointStart) : null;
@@ -12759,7 +12762,7 @@ const processImportFileTextImpl = async (
         backupParserModel: useOpenAiParse ? openAiParsed?.model ?? null : null,
         backupParserSchemaValidated: useOpenAiParse ? openAiParsed?.audit.schemaValidated ?? false : null,
         backupParserQualityScore: useOpenAiParse ? openAiParsed?.audit.quality?.score ?? null : null,
-        ...(bpiReconciliation ? { reconciliation: bpiReconciliation, startDate: checkpointStart, endDate: checkpointEnd } : {}),
+        ...(bpiReconciliation ? { reconciliation: bpiReconciliation, statementDate: bpiStatementDate, startDate: checkpointStart, endDate: checkpointEnd } : {}),
         balanceReconciled: bpiReconciliation ? bpiReconciliation.balanceReconciled : rows.some((row) => {
           const rawPayload = row.rawPayload;
           if (!rawPayload || typeof rawPayload !== "object" || Array.isArray(rawPayload)) {
@@ -15046,6 +15049,8 @@ export const confirmImportFile = async (
     const publishedGroupBalance =
       groupIsMigration ? snapshotBalanceToString(groupAccount.balance)
         : groupBalance ?? (groupIsSnapshotOnly ? 0 : snapshotBalanceToString(groupAccount.balance));
+    const signedPublishedBalance = publishedGroupBalance !== null && groupAccount.type === "credit_card" && isBpiCardMetadata(baseStatementMetadata)
+      ? normalizeAccountBalanceSign(groupAccount.type, Number(publishedGroupBalance)) : publishedGroupBalance;
     const existingSummary = accountSummaryById.get(groupAccount.id);
     accountSummaryById.set(groupAccount.id, {
       accountId: groupAccount.id,
@@ -15054,7 +15059,7 @@ export const confirmImportFile = async (
       accountNumber: groupAccount.accountNumber,
       accountType: groupAccount.type,
       currency: groupAccount.currency,
-      balance: publishedGroupBalance !== null ? publishedGroupBalance.toString() : null,
+      balance: signedPublishedBalance !== null ? signedPublishedBalance.toString() : null,
       rowsImported: (existingSummary?.rowsImported ?? 0) + visibleGroupRows.length,
     });
   }

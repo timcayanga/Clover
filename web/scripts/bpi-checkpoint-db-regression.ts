@@ -18,6 +18,7 @@ async function main() {
   const { prisma: db } = await import("../lib/prisma");
   const { readUploadedFileText } = await import("../lib/import-file-text.server");
   const { detectStatementMetadata, parseImportText } = await import("../lib/import-parser");
+  const { detectStatementMetadataFromText, mergeStatementMetadataWithTemplate } = await import("../lib/data-engine");
   const { assessBpiStatementReconciliation: assess } = await import("../lib/bpi-statement-reconciliation");
   const { planBpiCheckpointRepair: plan } = await import("../lib/bpi-checkpoint-repair");
   const { checkpointPreservationManifest: manifest } = await import("../lib/staging-learning-verification");
@@ -33,6 +34,8 @@ async function main() {
   assert.equal(metadata.accountNumber, "9999000000008263"); assert.equal(metadata.currency, "PHP");
   assert.equal(metadata.endingBalance, 1000); assert.equal(metadata.totalAmountDue, 1000); assert.equal(metadata.openingBalance, null);
   assert.equal(metadata.statementDate, "2026-09-01T12:00:00.000Z"); assert.equal(metadata.paymentDueDate, "2026-09-20T12:00:00.000Z");
+  assert.equal(detectStatementMetadataFromText(text, "bpi.pdf").statementDate, metadata.statementDate);
+  assert.equal(mergeStatementMetadataWithTemplate(detectStatementMetadataFromText(text, "bpi.pdf"), { institution: "BPI" }).statementDate, metadata.statementDate);
   const rows = parseImportText(text, "retained-bpi.pdf", "application/pdf");
   assert.equal(rows.length, 100); assert(rows.every(r => Number(r.amount) === 10 && r.type === "expense"));
   const assessment = assess(text, metadata, rows);
@@ -57,10 +60,15 @@ async function main() {
     assert.equal(checkpoint.statementStartDate?.toISOString(), assessment.statementStartDate);
     assert.equal(checkpoint.statementEndDate?.toISOString(), assessment.statementEndDate);
     assert.equal(checkpoint.status, "pending"); assert.match(checkpoint.mismatchReason!, /opening balance/);
+    assert.equal((checkpoint.sourceMetadata as Record<string, unknown>).statementDate, "2026-09-01T12:00:00.000Z", "The bill date must survive the complete worker handoff");
+    assert.equal((checkpoint.sourceMetadata as Record<string, unknown>).paymentDueDate, "2026-09-20T12:00:00.000Z");
     assert.equal((checkpoint.sourceMetadata as Record<string, unknown>).workflowStage, "complete", "Missing evidence must not look like processing is still running");
     assert.equal(await db.transaction.count({ where: { importFileId: file.id } }), 100);
     const account = await db.account.findUniqueOrThrow({ where: { id: checkpoint.accountId! } });
     assert.equal(Number(account.balance), -1000);
+    const firstStatus = (await loadImportStatusSnapshot(file.id))!;
+    assert.equal(firstStatus.settledImportComplete, true, "The first published account summary must already use the stored liability sign");
+    assert.deepEqual(firstStatus.settlementIssues, []);
     // Publish once if needed, then prove an actual GET cannot rewrite JSONB
     // solely because its stored object keys are ordered differently.
     await persistPublishedAccountSummaries(await loadImportStatusSnapshot(file.id));

@@ -2027,6 +2027,7 @@ export const detectStatementMetadataFromText = (text: string, fileName = ""): St
     openingBalance: isMultiAccountCimbStatement ? null : metadata?.openingBalance ?? null,
     endingBalance,
     creditLimit: metadata?.creditLimit ?? null,
+    ...(metadata?.statementDate ? { statementDate: metadata.statementDate } : {}),
     paymentDueDate: metadata?.paymentDueDate ?? null,
     totalAmountDue: metadata?.totalAmountDue ?? null,
     startDate: metadata?.startDate ?? null,
@@ -2098,6 +2099,8 @@ export const mergeStatementMetadataWithTemplate = (
         : detected.currency ?? template.currency ?? null,
     openingBalance: detected.openingBalance ?? template.openingBalance ?? null,
     endingBalance: detected.endingBalance ?? template.endingBalance ?? null,
+    // A bill date belongs to this source, never an older learned template.
+    ...(detected.statementDate ? { statementDate: detected.statementDate } : {}),
     paymentDueDate: detected.paymentDueDate ?? template.paymentDueDate ?? null,
     totalAmountDue: detected.totalAmountDue ?? template.totalAmountDue ?? null,
     startDate: detected.startDate ?? template.startDate ?? null,
@@ -2158,6 +2161,7 @@ type StatementMetadataSnapshot = {
   openingBalance: number | null;
   endingBalance: number | null;
   creditLimit?: number | null;
+  statementDate?: string | null;
   paymentDueDate?: string | null;
   totalAmountDue?: number | null;
   startDate: string | null;
