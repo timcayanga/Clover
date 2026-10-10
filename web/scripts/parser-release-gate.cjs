@@ -46,7 +46,7 @@ async function main() {
     started = true;
     run(psql, ['-h', '127.0.0.1', '-p', '55441', '-U', 'clover_qa', '-d', 'postgres', '-v', 'ON_ERROR_STOP=1', '-c', 'CREATE DATABASE clover_migration_qa'], {}, true);
     run(process.execPath, [join(web, 'node_modules/prisma/build/index.js'), 'db', 'push', '--schema', 'prisma/schema.prisma'], {}, true);
-    for (const script of ['learning-migration-db-regression.ts', 'app-migration-db-regression.ts', 'bank-import-database-regression.ts', 'parser-preservation-db-regression.ts', 'durable-learning-db-regression.ts', 'record-training-signal-regression.ts']) {
+    for (const script of ['learning-migration-db-regression.ts', 'app-migration-db-regression.ts', 'bank-import-database-regression.ts', 'parser-preservation-db-regression.ts', 'durable-learning-db-regression.ts', 'staging-learning-verification-db-regression.ts', 'record-training-signal-regression.ts']) {
       run(process.execPath, [tsx, join('scripts', script), '--execute'], { BANK_IMPORT_QA_DATABASE_URL: env.DATABASE_URL });
     }
     console.log('Parser release gate passed. Disposable PostgreSQL will be removed.');
