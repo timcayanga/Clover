@@ -13,6 +13,24 @@ export function assessBpiStatementReconciliation(text: string, metadata: Detecte
   const dates = rows.map(row => parseDateValue(row.date ?? null)).filter((date): date is Date => Boolean(date));
   const cents = (value: unknown) => value !== null && value !== undefined && String(value).trim() && Number.isFinite(Number(value))
     ? Math.round(Number(value) * 100) : null;
+  let sourceAmountConflict = false;
+  const movements = rows.map(row => {
+    const amount = cents(row.amount);
+    if (amount === null) return null;
+    const raw = row.rawPayload;
+    if (raw && typeof raw === "object" && !Array.isArray(raw) && raw.bank === "BPI" && typeof raw.amountText === "string") {
+      // A card payment can retain Clover's established Financial/expense
+      // classification while reducing the debt on the source statement.
+      // Reconcile the signed PHP evidence, without rewriting that classification.
+      const sourceAmount = typeof raw.recoveredAmountText === "string" ? raw.recoveredAmountText : raw.amountText;
+      if (!/^-?[0-9][0-9,]*\.\d{2}$/.test(sourceAmount)) return null;
+      const signed = cents(sourceAmount.replace(/,/g, ""));
+      if (signed === null) return null;
+      if (Math.abs(signed) !== Math.abs(amount)) { sourceAmountConflict = true; return null; }
+      return signed;
+    }
+    return row.type === "expense" ? Math.abs(amount) : row.type === "income" ? -Math.abs(amount) : null;
+  });
   const opening = cents(metadata.openingBalance), ending = cents(metadata.endingBalance);
   let reason: string | null = null;
   let code = "BALANCE_RECONCILED";
@@ -24,12 +42,14 @@ export function assessBpiStatementReconciliation(text: string, metadata: Detecte
     code = "CONFLICTING_HEADERS"; reason = "The source contains conflicting balance headers. Review the statement.";
   } else if (ending === null || endings.length === 0 || cents(endings[0]) !== ending) {
     code = "MISSING_ENDING_BALANCE"; reason = "The statement ending balance could not be verified from its source header.";
-  } else if (rows.length === 0 || dates.length !== rows.length || rows.some(row => cents(row.amount) === null || !["expense", "income"].includes(row.type ?? "") || (row.currency ?? metadata.currency) !== metadata.currency)) {
+  } else if (sourceAmountConflict) {
+    code = "SOURCE_AMOUNT_CONFLICT"; status = "mismatch"; reason = "A normalized transaction amount differs from its retained statement amount. Review the conflict without changing confirmed data.";
+  } else if (rows.length === 0 || dates.length !== rows.length || movements.some(amount => amount === null) || rows.some(row => !["expense", "income"].includes(row.type ?? "") || (row.currency ?? metadata.currency) !== metadata.currency)) {
     code = "UNRESOLVED_LEDGER"; reason = "Every statement row needs a date, amount, direction and matching currency before reconciliation.";
   } else if (opening === null || previous.length === 0 || cents(previous[0]) !== opening) {
     code = "MISSING_OPENING_BALANCE"; reason = "Ending balance captured. The source does not state a verified opening balance; full reconciliation needs that evidence. No zero opening balance was assumed.";
   } else {
-    const expected = rows.reduce((balance, row) => balance + (row.type === "expense" ? 1 : -1) * Math.abs(cents(row.amount)!), opening);
+    const expected = movements.reduce<number>((balance, movement) => balance + movement!, opening);
     expectedEndingBalance = expected / 100;
     status = expected === ending ? "reconciled" : "mismatch";
     if (status === "mismatch") { code = "BALANCE_MISMATCH"; reason = "The printed opening balance and statement movements do not equal the printed ending balance."; }

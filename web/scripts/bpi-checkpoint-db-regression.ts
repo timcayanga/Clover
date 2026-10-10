@@ -20,6 +20,7 @@ async function main() {
   const { detectStatementMetadata, parseImportText } = await import("../lib/import-parser");
   const { detectStatementMetadataFromText, mergeStatementMetadataWithTemplate } = await import("../lib/data-engine");
   const { assessBpiStatementReconciliation: assess } = await import("../lib/bpi-statement-reconciliation");
+  const { assessImportEvidenceSafety } = await import("../lib/import-evidence-safety");
   const { planBpiCheckpointRepair: plan } = await import("../lib/bpi-checkpoint-repair");
   const { checkpointPreservationManifest: manifest } = await import("../lib/staging-learning-verification");
   const { processImportFileText } = await import("../workers/import-processor");
@@ -49,6 +50,27 @@ async function main() {
   assert.equal(assess(withOpening, openingMetadata, rows.map((r, i) => i === 0 ? { ...r, amount: "10.01" } : r)).status, "mismatch", "A one-cent mismatch is not rounded away");
   assert.equal(assess(withOpening, openingMetadata, rows.map((r, i) => i === 0 ? { ...r, currency: "USD" } : r)).code, "UNRESOLVED_LEDGER");
   assert.equal(assess(`${withOpening}\nTotal Amount Due: 999.00`, openingMetadata, rows).code, "CONFLICTING_HEADERS");
+  const signedText = readFileSync(new URL("./fixtures/bpi-checkpoint/signed-payment.txt", import.meta.url), "utf8");
+  assert.equal(createHash("sha256").update(signedText).digest("hex"), "1eff68163fbae60569d29bea31fc294c16e592762e9ab47c4a40643a8c52b83c");
+  const signedMetadata = detectStatementMetadata(signedText, "bpi-signed-payment.txt")!;
+  const signedRows = parseImportText(signedText, "bpi-signed-payment.txt", "text/plain");
+  assert.deepEqual(signedRows.map(r => [r.date, r.amount, r.type]), [
+    ["2026-03-06", "200.00", "expense"], ["2026-03-16", "50.25", "expense"],
+    ["2026-03-16", "50.25", "expense"], ["2026-03-25", "24.75", "expense"],
+  ]);
+  assert.equal(signedRows[0].categoryName, "Financial");
+  assert.equal(signedRows[0].merchantClean, "Statement Payment Credit");
+  assert.equal(signedRows[0].rawPayload?.amountText, "-200.00");
+  assert(signedRows.every(row => row.confidence === 95 && row.rawPayload?.kind === "bpi_credit_card_transaction"));
+  assert.deepEqual(assessImportEvidenceSafety(signedRows, signedText).reasons, [], "Deterministic two-date card rows carry parser provenance; the safety guard remains enabled");
+  assert.deepEqual(signedRows.slice(1).map(r => r.rawPayload?.fxNote), ["Baht 25.00", "Baht 25.00", "U.S. Dollar 0.40"]);
+  const beforeAssessment = json(signedRows);
+  assert.equal(assess(signedText, signedMetadata, signedRows).status, "reconciled");
+  assert.equal(assess(signedText, signedMetadata, signedRows).expectedEndingBalance, 125.25);
+  assert.deepEqual(json(signedRows), beforeAssessment, "Reconciliation never rewrites normalized labels or source evidence");
+  assert.equal(assess(signedText, signedMetadata, signedRows.filter((_, i) => i !== 2)).status, "mismatch", "Both identical source occurrences are required");
+  assert.equal(assess(signedText, signedMetadata, signedRows.map((r, i) => i ? r : { ...r, amount: "201.00" })).code, "SOURCE_AMOUNT_CONFLICT");
+  assert.equal(assess(signedText, signedMetadata, signedRows.map((r, i) => i ? r : { ...r, rawPayload: undefined })).status, "mismatch", "Do not invent a payment credit without signed source evidence");
   const user = await db.user.create({ data: { clerkUserId: randomUUID(), email: `${randomUUID()}@example.invalid`, environment: "staging", planTier: "pro", planTierLocked: true } });
   try {
     const workspace = await db.workspace.create({ data: { userId: user.id, name: "BPI checkpoint preservation" } });
@@ -66,6 +88,23 @@ async function main() {
     assert.equal(await db.transaction.count({ where: { importFileId: file.id } }), 100);
     const account = await db.account.findUniqueOrThrow({ where: { id: checkpoint.accountId! } });
     assert.equal(Number(account.balance), -1000);
+    const signedWorkspace = await db.workspace.create({ data: { userId: user.id, name: "BPI signed movements" } });
+    const signedFile = await db.importFile.create({ data: { workspaceId: signedWorkspace.id, fileName: "bpi-signed-payment.txt", fileType: "text/plain", storageKey: `qa/${randomUUID()}`, sourceFingerprint: createHash("sha256").update(signedText).digest("hex") } });
+    await processImportFileText(signedFile.id, { text: signedText, importMode: "statement", actorUserId: user.id });
+    await drain();
+    for (const job of await db.learningJob.findMany({ where: { workspaceId: signedWorkspace.id, status: "queued" } })) await processLearningJob(job.id);
+    const signedCheckpoint = await db.accountStatementCheckpoint.findUniqueOrThrow({ where: { importFileId: signedFile.id } });
+    assert.equal(signedCheckpoint.status, "reconciled"); assert.equal(signedCheckpoint.mismatchReason, null);
+    assert.equal(Number(signedCheckpoint.openingBalance), 200); assert.equal(Number(signedCheckpoint.endingBalance), 125.25);
+    assert.equal((signedCheckpoint.sourceMetadata as Record<string, unknown>).workflowStage, "complete");
+    assert.equal(Number((await db.account.findUniqueOrThrow({ where: { id: signedCheckpoint.accountId! } })).balance), -125.25);
+    const signedTransactions = await db.transaction.findMany({ where: { importFileId: signedFile.id } });
+    assert.equal(signedTransactions.length, 4); assert(signedTransactions.every(t => t.currency === "PHP"));
+    assert.equal(signedTransactions.filter(t => Number(t.amount) === 50.25).length, 2);
+    const preservedPayment = signedTransactions.find(t => Number(t.amount) === 200)!;
+    assert.equal(preservedPayment.type, "expense"); assert.equal(preservedPayment.merchantClean, "Statement Payment Credit");
+    const signedStatus = (await loadImportStatusSnapshot(signedFile.id))!;
+    assert.equal(signedStatus.settledImportComplete, true); assert.deepEqual(signedStatus.settlementIssues, []);
     const firstStatus = (await loadImportStatusSnapshot(file.id))!;
     assert.equal(firstStatus.settledImportComplete, true, "The first published account summary must already use the stored liability sign");
     assert.deepEqual(firstStatus.settlementIssues, []);
@@ -110,7 +149,7 @@ async function main() {
     await assert.rejects(plan(db, input), /LEDGER_CONFLICT/, "A confirmed amount edit blocks repair instead of being overwritten");
     assert.equal(Number((await db.transaction.findUniqueOrThrow({ where: { id: transaction.id } })).amount), 11);
     assert.equal(networkCalls, 0);
-    console.log("PASS BPI checkpoint: exact retained PDF, colon headers, dates, 100 rows, no invented opening balance, one-cent mismatch, repeat/currency guards, real worker, read-only preview, checkpoint-only idempotent repair, confirmed edits and all learning preserved.");
+    console.log("PASS BPI checkpoint: exact retained PDF, signed payment reconciliation without relabeling, repeated FX rows, source-amount conflict, dates, no invented opening balance, real worker, read-only preview, checkpoint-only idempotent repair, confirmed edits and all learning preserved.");
   } finally { await drain(); await db.user.delete({ where: { id: user.id } }); await db.$disconnect(); }
 }
 main().catch(error => { console.error(error); process.exitCode = 1; });

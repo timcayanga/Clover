@@ -7631,8 +7631,11 @@ const parseBpiCreditCardTransactionLine = (
     accountName: state.accountName,
     institution: state.institution ?? undefined,
     type,
+    confidence: 95,
     rawPayload: {
       bank: "BPI",
+      kind: "bpi_credit_card_transaction",
+      source: "bpi_credit_card",
       accountName: state.accountName,
       accountNumber: "9001",
       statementDate: state.statementDate,

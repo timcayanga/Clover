@@ -1,0 +1,19 @@
+BPI Credit Cards Statement of Account
+SYNTHETIC REGRESSION ONLY - NO CUSTOMER DATA
+Customer Number 9999 0000 0000 8264
+Statement Date March 29, 2026
+Payment Due Date April 20, 2026
+Total Amount Due PHP 125.25
+BPI SIGNATURE CARD
+Transaction Post Date Description Amount
+Date
+March 6 March 6 Payment - Thank You -200.00
+Finance Charge 0.00
+Previous Balance 200.00
+Ending Balance 125.25
+March 13 March 16 EXAMPLE RIDE Bangkok TH
+Baht 25.00 50.25
+March 13 March 16 EXAMPLE RIDE Bangkok TH
+Baht 25.00 50.25
+March 24 March 25 EXAMPLE DIGITAL US
+U.S. Dollar 0.40 24.75
