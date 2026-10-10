@@ -1,7 +1,9 @@
 import assert from "node:assert/strict";
 import { createHash, randomUUID } from "node:crypto";
-import { readFileSync } from "node:fs";
+import { readFileSync, writeFileSync, rmSync, mkdtempSync } from "node:fs";
 import { createRequire } from "node:module";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 
 const url = new URL(process.env.DATABASE_URL ?? "http://invalid");
 assert.equal(url.hostname, "127.0.0.1"); assert.equal(url.port, "55441"); assert.equal(url.pathname, "/clover_migration_qa"); assert(process.argv.includes("--execute"));
@@ -39,6 +41,25 @@ async function main() {
       }); await settle(); return json(edited);
     };
     const source = readFileSync(new URL("./fixtures/reviewed-parser-corpus/repeated-and-multicurrency.csv", import.meta.url), "utf8");
+    // Model a storage write that has not completed at worker entry. The source
+    // appears only when the worker awaits the handoff; no timer/network race.
+    const { getLocalImportObjectPath } = await import("../lib/s3");
+    const delayedFile = await db.importFile.create({ data: { workspaceId: w.id, fileName: "delayed-source.csv", fileType: "text/csv", storageKey: `qa/${randomUUID()}` } });
+    const oldStorage = process.env.CLOVER_IMPORT_STORAGE_DIR;
+    const storage = mkdtempSync(join(tmpdir(), "clover-learning-upload-"));
+    process.env.CLOVER_IMPORT_STORAGE_DIR = storage;
+    const delayedPath = getLocalImportObjectPath(delayedFile.storageKey!);
+    let storageAcknowledged = false;
+    const rawFileReady = { then(resolve: (value: unknown) => void) { storageAcknowledged = true; writeFileSync(delayedPath, source.replaceAll("2026-09-15", "2026-09-14")); resolve(undefined); }, catch() { return Promise.resolve(); } } as unknown as Promise<unknown>;
+    try {
+      await processImportFileText(delayedFile.id, { importMode: "statement", actorUserId: user.id, rawFileReady }); await settle();
+      assert(storageAcknowledged);
+      assert.equal(await db.transaction.count({ where: { importFileId: delayedFile.id } }), 3, "A pending raw upload must be available before storage-only extraction");
+    } finally {
+      if (oldStorage === undefined) delete process.env.CLOVER_IMPORT_STORAGE_DIR;
+      else process.env.CLOVER_IMPORT_STORAGE_DIR = oldStorage;
+      rmSync(storage, { recursive: true, force: true });
+    }
     const first = await upload(source, "first.csv"); assert.equal(first.rows.length, 3);
     const coffee = first.rows.find(r => r.merchantRaw === "Repeated coffee")!;
     const edited = await correct(coffee.id, "My reviewed coffee");

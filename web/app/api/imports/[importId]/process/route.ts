@@ -2434,7 +2434,7 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
         return processInline({
           bankName: processingBankName || null,
           progressMessage: "Importing trained receipt...",
-          sourceBytes: canProcessImageFromRequestBytes ? bytes : null,
+          sourceBytes: canProcessImageFromRequestBytes || canExtractPdfFromRequestBytes || canProcessSpreadsheetFromRequestBytes ? bytes : null,
           rawFileReady: uploadPromise,
         });
       }
@@ -2443,14 +2443,14 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
         return processInline({
           bankName: processingBankName || null,
           progressMessage: "Reading receipt image...",
-          sourceBytes: canProcessImageFromRequestBytes ? bytes : null,
+          sourceBytes: canProcessImageFromRequestBytes || canExtractPdfFromRequestBytes || canProcessSpreadsheetFromRequestBytes ? bytes : null,
           rawFileReady: uploadPromise,
         });
       }
 
       if (importMode === "receipt" && !forceInlineProcessing) {
         return processReceiptAfterResponse(processingBankName || null, {
-          sourceBytes: canProcessImageFromRequestBytes ? bytes : null,
+          sourceBytes: canProcessImageFromRequestBytes || canExtractPdfFromRequestBytes || canProcessSpreadsheetFromRequestBytes ? bytes : null,
           rawFileReady: uploadPromise,
         });
       }
@@ -2487,7 +2487,7 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
 
       if (shouldQueueDocumentUpload && !cachedDocTextInfo) {
         return queueBackgroundProcessing(processingBankName || null, {
-          sourceBytes: canProcessImageFromRequestBytes ? bytes : null,
+          sourceBytes: canProcessImageFromRequestBytes || canExtractPdfFromRequestBytes || canProcessSpreadsheetFromRequestBytes ? bytes : null,
           rawFileReady: uploadPromise,
         });
       }

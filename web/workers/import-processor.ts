@@ -8538,6 +8538,9 @@ const processImportFileTextImpl = async (
   let importMode = options.importMode ?? readCheckpointImportMode(statementCheckpoint?.sourceMetadata) ?? "statement";
   if (imageImport && importMode === "statement" && hasReceiptPhotoEvidence(usableDeviceText ?? options.text ?? "")) importMode = "receipt";
   const storageKey = String(importFile.storageKey ?? "");
+  // If request bytes are unavailable, storage readers must wait for the original
+  // upload. Otherwise a new PDF can be mistaken for an empty receipt on a 404.
+  if (!options.sourceBytes && options.rawFileReady) await options.rawFileReady;
   // Image normalization is local and token-free. Overlap it with the receipt
   // cache/history preflight so a cache miss can launch vision immediately.
   const eagerReceiptImagePreparationStartedAt =
@@ -9218,6 +9221,8 @@ const processImportFileTextImpl = async (
     }
 
     if (fileType === "application/pdf") {
+      // The page renderer reads durable storage even when text used request bytes.
+      if (options.rawFileReady) await options.rawFileReady;
       const importedBytes = options.sourceBytes ?? (await downloadImportObject(storageKey));
       let renderedPages: Array<{ page: number; dataUrl: string }> = [];
       try {
