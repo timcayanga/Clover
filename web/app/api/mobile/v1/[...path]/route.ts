@@ -1,3 +1,4 @@
+import { after } from "next/server";
 import { mobileAccountOption } from "@/lib/mobile-account-option";
 import { normalizeRegionalPreferences } from "@/lib/regional-preferences";
 import { resolveReportCurrency } from "@/lib/report-currency";
@@ -360,9 +361,8 @@ async function handle(
       const result = await applyMobileOfflineMutation(userId, workspaceId, JSON.parse(text));
       if(result.status===200){
         (await import("@/lib/workspace-summary-cache")).invalidateWorkspaceSummaryCache(workspaceId);
-        if('committed' in result && result.committed && result.kind === 'create') {
-          const row=(result.body as {transaction:{id:string;categoryId:string|null;categoryName:string|null;merchantRaw:string;merchantClean:string|null;type:"income"|"expense"}}).transaction;
-          if(row.categoryId)void import("@/lib/data-engine").then(({recordTrainingSignal})=>recordTrainingSignal({workspaceId,transactionId:row.id,merchantText:row.merchantClean??row.merchantRaw,categoryId:row.categoryId!,categoryName:row.categoryName,source:"manual_transaction_creation",type:row.type,confidence:100,actorUserId:userId})).catch(()=>{});
+        if ('committed' in result && result.committed && result.kind === 'create') {
+          after(async () => { await (await import("@/lib/learning-jobs")).processPendingLearningJobs({ workspaceId, limit: 1 }); });
         }
       }
       return reply(result.body,result.status);

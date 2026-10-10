@@ -4,12 +4,17 @@ import {
   ensurePdfJsTextPolyfills,
   pdfTextLayerLooksSufficientForParsing,
   shouldRunSecondaryPdfOcrPass,
+  knownStatementNativeTextIsComplete,
 } from "@/lib/import-file-text.server";
 import { pdfjs } from "@/lib/pdfjs.server";
 
 ensurePdfJsTextPolyfills();
 assert.equal(typeof globalThis.DOMMatrix, "function", "Text extraction should install its lightweight DOMMatrix fallback.");
 assert.equal(typeof pdfjs.getDocument, "function", "The server PDF.js module should load without resolving a filesystem worker path.");
+
+assert.equal(knownStatementNativeTextIsComplete("", "eastwest.pdf"), false);
+assert.equal(knownStatementNativeTextIsComplete(Array.from({ length: 12 }, (_, i) => `Jul ${i + 1} 100.00 200.00`).join("\n"), "china-bank.pdf"), false,
+  "Numeric-only hybrid layers must recover the image header/descriptions instead of inventing identity.");
 
 const healthyStatementText = [
   "RCBC VISA PLATINUM STATEMENT OF ACCOUNT",
@@ -25,6 +30,8 @@ const healthyStatementText = [
   "Minimum Amount Due 850.00",
   "Please review your transactions and report any discrepancy promptly.",
 ].join("\n");
+
+assert.equal(knownStatementNativeTextIsComplete(healthyStatementText), true);
 
 assert.equal(
   pdfTextLayerLooksSufficientForParsing(healthyStatementText),

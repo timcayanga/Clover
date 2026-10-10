@@ -66944,3 +66944,39 @@ html[data-theme="dark"] .content--accounts .accounts-overview-card:first-child {
   .content--accounts .accounts-overview-card:nth-child(3) { border-radius:0 0 0 21px; }
   .content--accounts .accounts-wallet .financial-account-card:is(:hover,:focus-within) { transform:none; box-shadow:none; }
 }
+
+/* Approved wallet pockets: stitch-safe inset, zero row gaps, rigid credit-card reveal. */
+@media (max-width:1100px) {
+  .content--accounts .accounts-mobile-list.accounts-wallet { padding:10px 10px 7px; box-shadow:none; overflow-anchor:none; }
+  .content--accounts .accounts-wallet::after { display:none; }
+  .content--accounts .accounts-wallet > .accounts-wallet__inset { margin:0; border-radius:12px; overflow:hidden; }
+  .accounts-wallet__inset > * { margin:0; }
+  .content--accounts .accounts-wallet .mobile-swipe-delete,
+  .content--accounts .accounts-wallet .mobile-swipe-delete__content { border-radius:0; background:var(--wallet-shell); }
+  .content--accounts .accounts-wallet .wallet-pocket { --pocket-height:60px; --card-width:100%; --card-height:auto; --card-x:3px; --card-y:0px; --card-scale:1; --card-icon:22px; --card-name-size:13px; --card-name-left:42px; --card-number-y:35px; --card-number-size:10px; --card-amount-y:33px; --card-amount-size:15px; --sleeve-shadow:.23; --card-shadow:none; position:relative; height:var(--pocket-height); overflow:hidden; margin:0; border:0; }
+  .wallet-pocket__card { position:absolute; left:0; top:0; width:var(--card-width); height:var(--card-height); aspect-ratio:85.6 / 53.98; transform-origin:top left; transform:translate(var(--card-x),var(--card-y)) scale(var(--card-scale)); }
+  .content--accounts .wallet-pocket__card .accounts-card-drag-shell { width:100%; height:100%; }
+  .content--accounts .accounts-wallet .wallet-pocket .financial-account-card { position:relative; width:100%; height:100%; min-height:0; max-height:none; padding:0; border-radius:12px; box-shadow:var(--card-shadow); overflow:hidden; transform:none; transition:none; }
+  .content--accounts .accounts-wallet .wallet-pocket .financial-account-card:is(:hover,:focus-within) { box-shadow:var(--card-shadow); }
+  .content--accounts .wallet-pocket .financial-account-card__content { position:relative; width:100%; height:100%; min-height:0; padding:0; display:block; }
+  .wallet-pocket .financial-account-card__head,
+  .wallet-pocket .financial-account-card__identity,
+  .wallet-pocket .financial-account-card__meta { display:contents!important; }
+  .content--accounts .wallet-pocket .accounts-brand-mark,
+  .content--accounts .wallet-pocket .financial-account-card__logo-trigger { position:absolute; left:10px; top:10px; width:var(--card-icon); height:var(--card-icon); border-radius:7px; }
+  .content--accounts .wallet-pocket .financial-account-card__logo-trigger .accounts-brand-mark { position:static; }
+  .content--accounts .wallet-pocket .financial-account-card__name { position:absolute; left:var(--card-name-left); top:10px; max-width:calc(100% - var(--card-name-left) - 40px); font-size:var(--card-name-size)!important; font-weight:600!important; line-height:22px; overflow:hidden; white-space:nowrap; text-overflow:ellipsis; }
+  .content--accounts .wallet-pocket .financial-account-card__number { position:absolute; left:10px; top:var(--card-number-y); max-width:44%; font-size:var(--card-number-size)!important; font-weight:500!important; line-height:15px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .content--accounts .wallet-pocket .financial-account-card__amount { position:absolute; right:10px; top:var(--card-amount-y); max-width:75%; margin:0; font-size:var(--card-amount-size)!important; font-weight:600!important; padding-bottom:0; line-height:1.3; white-space:nowrap; text-align:right; }
+  .wallet-pocket .financial-account-card__chevron,
+  .wallet-pocket .financial-account-card__edit { display:none!important; }
+  .content--accounts .accounts-wallet .wallet-pocket > .wallet-pocket__toggle { position:absolute; inset:0; width:100%; height:100%; min-height:0; max-height:none; padding:0; margin:0; border:0; border-radius:12px 12px 0 0; box-shadow:none; background:transparent!important; cursor:pointer; }
+  .content--accounts .accounts-wallet .wallet-pocket.is-expanded > .wallet-pocket__toggle { height:100%; opacity:0; pointer-events:none; }
+  .wallet-pocket__collapse { position:absolute; right:9px; top:7px; width:44px; height:44px; padding:0; border:0; background:transparent; color:inherit; font-size:20px; z-index:2; opacity:0; pointer-events:none; }
+  .wallet-pocket.is-expanded .wallet-pocket__collapse { opacity:1; pointer-events:auto; }
+  .wallet-pocket__chevron { position:absolute; right:15px; top:8px; font-size:20px; pointer-events:none; }
+  .wallet-pocket.is-expanded .wallet-pocket__chevron { visibility:hidden; }
+  .wallet-pocket__sleeve { position:absolute; bottom:0; left:0; right:0; height:6px; border-radius:8px 8px 2px 2px / 5px 5px 2px 2px; background:var(--wallet-shell); box-shadow:inset 0 1px 1px #ffffff66,inset 0 -1px 1px #0000001f; pointer-events:none; }
+  .wallet-pocket__sleeve::before { content:""; position:absolute; left:0; right:0; bottom:100%; height:5px; background:linear-gradient(transparent,rgb(0 0 0 / var(--sleeve-shadow))); }
+  .wallet-pocket [inert] { pointer-events:none; }
+}

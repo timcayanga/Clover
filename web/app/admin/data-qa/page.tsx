@@ -30,6 +30,7 @@ export default async function AdminDataQaPage() {
       subtitle="Inspect parser quality, speed regressions, and feedback coverage across imported statements and image OCR training."
       actions={
         <div style={{ display: "flex", flexWrap: "wrap", gap: 12 }}>
+          <Link className="button button-secondary button-small" href="/admin/data-qa/learning">Learning jobs</Link>
           <Link className="button button-secondary button-small" href="/admin/data-qa/summary">
             Bank summary
           </Link>

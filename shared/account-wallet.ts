@@ -3,7 +3,26 @@ export const walletFinish = {
   light: { shell: "#D6CEC3", edge: "#A99D8D", thread: "#F1E6D5", holes: "#8B7C6D", threadOpacity: .9, threadWidth: 1.1 },
   dark: { shell: "#30383D", edge: "#58636A", thread: "#A6AAA9", holes: "#0E1417", threadOpacity: .52, threadWidth: .9 },
 } as const;
-export const walletGeometry = { radius: 22, inset: 6, overlap: 16, stitchInset: 3.2, stitchRadius: 18 } as const;
+export const walletGeometry = { radius: 22, inset: 10, bottomInset: 7, overlap: 0, stitchInset: 4, stitchRadius: 18, sleeve: 6, collapsedHeight: 60, cardRatio: 85.6 / 53.98 } as const;
+
+// The full card is rigid; only its pocket clips it while tucked into the wallet.
+export function walletCardLayout(width: number, progress: number) {
+  const p = Math.min(1, Math.max(0, progress));
+  const cardWidth = Math.max(1, width - 6);
+  const cardHeight = cardWidth / walletGeometry.cardRatio;
+  const scale = (cardWidth - 14 * p) / cardWidth;
+  return { cardWidth, cardHeight, scale, x: 3 + 7 * p, y: 7 * p,
+    height: walletGeometry.collapsedHeight + ((width - 20) / walletGeometry.cardRatio + 16 - walletGeometry.collapsedHeight) * p };
+}
+
+// Critically damped motion can be retargeted without resetting position or velocity.
+export function stepWalletSpring(position: number, velocity: number, target: number, seconds: number) {
+  const dt = Math.min(Math.max(seconds, 0), 1 / 30), omega = 8 / .56;
+  const distance = position - target, combined = velocity + omega * distance, decay = Math.exp(-omega * dt);
+  const next = Math.min(1, Math.max(0, target + (distance + combined * dt) * decay));
+  const speed = (velocity - omega * combined * dt) * decay;
+  return Math.abs(next - target) < .0005 && Math.abs(speed) < .005 ? { position: target, velocity: 0 } : { position: next, velocity: speed };
+}
 export const genericAccountColors: Record<string, [string, string, string]> = {
   bank: ["#D9F6F8", "#90DEE8", "#45BED3"],
   cash: ["#DCFCE7", "#A2EFBF", "#4ADE80"],

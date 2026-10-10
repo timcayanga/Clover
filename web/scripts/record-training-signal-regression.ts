@@ -3,6 +3,9 @@ import { strict as assert } from "node:assert";
 import { prisma } from "@/lib/prisma";
 import { recordTrainingSignal } from "@/lib/data-engine";
 
+const url = new URL(process.env.DATABASE_URL ?? "http://invalid");
+assert.equal(url.hostname, "127.0.0.1"); assert.equal(url.port, "55441"); assert.equal(url.pathname, "/clover_migration_qa"); assert(process.argv.includes("--execute"));
+
 const main = async () => {
   const unique = randomUUID();
   const clerkUserId = `test-${unique}`;
@@ -33,10 +36,13 @@ const main = async () => {
       },
     });
 
+    const account = await prisma.account.create({ data: { workspaceId: workspace.id, name: "Synthetic account", type: "bank", currency: "PHP", balance: 0 } });
+    const file = await prisma.importFile.create({ data: { workspaceId: workspace.id, fileName: "synthetic.csv", fileType: "text/csv", storageKey: "synthetic/training" } });
+    const transaction = await prisma.transaction.create({ data: { workspaceId: workspace.id, accountId: account.id, importFileId: file.id, categoryId: category.id, merchantRaw: "GrabPay", merchantClean: "GrabPay", date: new Date("2026-01-01"), amount: 10, currency: "PHP", type: "expense", reviewStatus: "confirmed" } });
     const signalArgs = {
       workspaceId: workspace.id,
-      importFileId: "import-test",
-      transactionId: "transaction-test",
+      importFileId: file.id,
+      transactionId: transaction.id,
       merchantText: "GrabPay",
       categoryId: category.id,
       categoryName: category.name,
@@ -72,6 +78,7 @@ const main = async () => {
         id: user.id,
       },
     });
+    await prisma.$disconnect();
   }
 };
 

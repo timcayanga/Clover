@@ -1,0 +1,4 @@
+Account,Flag,Date,Payee,Category Group/Category,Category Group,Category,Memo,Outflow,Inflow,Cleared,Currency
+QA Checking,,2026-09-01,Starting Balance,Inflow: Ready to Assign,,Inflow: Ready to Assign,Opening amount,0,1000,Cleared,USD
+QA Checking,Blue,2026-09-02,Neighbourhood Market,Living: Groceries,Living,Groceries,Apples,45.25,0,Cleared,USD
+QA Checking,,2026-09-03,Employer,Income: Salary,Income,Salary,September pay,0,2500,Reconciled,USD

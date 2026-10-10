@@ -1,0 +1,21 @@
+{
+  "id": "bpi-signed-payment-and-repeated-fx",
+  "source": "signed-payment.txt",
+  "sha256": "1eff68163fbae60569d29bea31fc294c16e592762e9ab47c4a40643a8c52b83c",
+  "representation": "Independently authored synthetic extracted-text reproduction; no customer names, identities, merchants or amounts",
+  "reviewAuthority": "Codex source review and independent decimal arithmetic, not human confirmation or training count",
+  "reviewed": "2026-10-10",
+  "provenance": "A private user-authorized BPI statement revealed that a negative payment retains Financial/expense classification. Its source, page review and full ledger remain in the private verification archive; this minimized reproduction uses invented values.",
+  "expected": {
+    "openingBalance": "200.00",
+    "payment": "-200.00",
+    "purchases": ["50.25", "50.25", "24.75"],
+    "endingBalance": "125.25",
+    "currency": "PHP",
+    "rows": 4,
+    "repeatedPurchaseOccurrences": 2,
+    "foreignAmounts": ["THB 25.00", "THB 25.00", "USD 0.40"],
+    "reconciliation": "BALANCE_RECONCILED"
+  },
+  "reviewBasis": "200.00 - 200.00 + 50.25 + 50.25 + 24.75 = 125.25. Both repeated rides are real source occurrences. Foreign amounts are evidence, not additional transactions. Keep the payment's established normalized label and Financial/expense classification, and use its negative printed amount for debt reconciliation. Reject changes to normalized magnitudes that disagree with source evidence."
+}

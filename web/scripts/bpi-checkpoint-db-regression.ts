@@ -1,0 +1,155 @@
+import assert from "node:assert/strict";
+import { createHash, randomUUID } from "node:crypto";
+import { readFileSync } from "node:fs";
+import { createRequire } from "node:module";
+
+const url = new URL(process.env.DATABASE_URL ?? "http://invalid");
+assert.equal(url.hostname, "127.0.0.1"); assert.equal(url.port, "55441"); assert.equal(url.pathname, "/clover_migration_qa"); assert(process.argv.includes("--execute"));
+const require = createRequire(import.meta.url);
+require("next/cache").revalidateTag = () => {};
+const tasks: Array<() => Promise<void>> = [];
+require("next/server").after = (task: () => Promise<void>) => tasks.push(task);
+const drain = async () => { while (tasks.length) await Promise.all(tasks.splice(0).map(fn => fn())); };
+let networkCalls = 0;
+globalThis.fetch = async () => { networkCalls++; throw new Error("BPI checkpoint QA prohibits provider calls"); };
+const json = (v: unknown) => JSON.parse(JSON.stringify(v));
+
+async function main() {
+  const { prisma: db } = await import("../lib/prisma");
+  const { readUploadedFileText } = await import("../lib/import-file-text.server");
+  const { detectStatementMetadata, parseImportText } = await import("../lib/import-parser");
+  const { detectStatementMetadataFromText, mergeStatementMetadataWithTemplate } = await import("../lib/data-engine");
+  const { assessBpiStatementReconciliation: assess } = await import("../lib/bpi-statement-reconciliation");
+  const { assessImportEvidenceSafety } = await import("../lib/import-evidence-safety");
+  const { planBpiCheckpointRepair: plan } = await import("../lib/bpi-checkpoint-repair");
+  const { checkpointPreservationManifest: manifest } = await import("../lib/staging-learning-verification");
+  const { processImportFileText } = await import("../workers/import-processor");
+  const { processLearningJob } = await import("../lib/learning-jobs");
+  const { loadImportStatusSnapshot } = await import("../lib/import-status-snapshot");
+  const { persistPublishedAccountSummaries } = await import("../lib/import-checkpoint-publication");
+  const bytes = readFileSync(new URL("./fixtures/bpi-checkpoint/retained-synthetic.pdf", import.meta.url));
+  const sourceSha256 = createHash("sha256").update(bytes).digest("hex");
+  assert.equal(sourceSha256, "1ca7bedede14497963e97e77782054e15cda64e0bfd74e445df9fdce8f6a3b73");
+  const text = await readUploadedFileText(new File([bytes], "retained-bpi.pdf", { type: "application/pdf" }));
+  const metadata = detectStatementMetadata(text, "retained-bpi.pdf")!;
+  assert.equal(metadata.accountNumber, "9999000000008263"); assert.equal(metadata.currency, "PHP");
+  assert.equal(metadata.endingBalance, 1000); assert.equal(metadata.totalAmountDue, 1000); assert.equal(metadata.openingBalance, null);
+  assert.equal(metadata.statementDate, "2026-09-01T12:00:00.000Z"); assert.equal(metadata.paymentDueDate, "2026-09-20T12:00:00.000Z");
+  assert.equal(detectStatementMetadataFromText(text, "bpi.pdf").statementDate, metadata.statementDate);
+  assert.equal(mergeStatementMetadataWithTemplate(detectStatementMetadataFromText(text, "bpi.pdf"), { institution: "BPI" }).statementDate, metadata.statementDate);
+  const rows = parseImportText(text, "retained-bpi.pdf", "application/pdf");
+  assert.equal(rows.length, 100); assert(rows.every(r => Number(r.amount) === 10 && r.type === "expense"));
+  const assessment = assess(text, metadata, rows);
+  assert.equal(assessment.code, "MISSING_OPENING_BALANCE"); assert.equal(assessment.balanceReconciled, false);
+  assert.equal(assessment.statementStartDate, "2026-08-01T12:00:00.000Z"); assert.equal(assessment.statementEndDate, "2026-08-25T12:00:00.000Z");
+  const withOpening = `${text}\nPrevious Balance: PHP 0.00`;
+  const openingMetadata = detectStatementMetadata(withOpening, "bpi.pdf")!;
+  assert.equal(assess(withOpening, openingMetadata, rows).status, "reconciled");
+  assert.equal(assess(withOpening, openingMetadata, rows.slice(1)).status, "mismatch");
+  assert.equal(assess(withOpening, openingMetadata, [...rows, rows[0]]).status, "mismatch", "Do not deduplicate legitimate occurrences");
+  assert.equal(assess(withOpening, openingMetadata, rows.map((r, i) => i === 0 ? { ...r, amount: "10.01" } : r)).status, "mismatch", "A one-cent mismatch is not rounded away");
+  assert.equal(assess(withOpening, openingMetadata, rows.map((r, i) => i === 0 ? { ...r, currency: "USD" } : r)).code, "UNRESOLVED_LEDGER");
+  assert.equal(assess(`${withOpening}\nTotal Amount Due: 999.00`, openingMetadata, rows).code, "CONFLICTING_HEADERS");
+  const signedText = readFileSync(new URL("./fixtures/bpi-checkpoint/signed-payment.txt", import.meta.url), "utf8");
+  assert.equal(createHash("sha256").update(signedText).digest("hex"), "1eff68163fbae60569d29bea31fc294c16e592762e9ab47c4a40643a8c52b83c");
+  const signedMetadata = detectStatementMetadata(signedText, "bpi-signed-payment.txt")!;
+  const signedRows = parseImportText(signedText, "bpi-signed-payment.txt", "text/plain");
+  assert.deepEqual(signedRows.map(r => [r.date, r.amount, r.type]), [
+    ["2026-03-06", "200.00", "expense"], ["2026-03-16", "50.25", "expense"],
+    ["2026-03-16", "50.25", "expense"], ["2026-03-25", "24.75", "expense"],
+  ]);
+  assert.equal(signedRows[0].categoryName, "Financial");
+  assert.equal(signedRows[0].merchantClean, "Statement Payment Credit");
+  assert.equal(signedRows[0].rawPayload?.amountText, "-200.00");
+  assert(signedRows.every(row => row.confidence === 95 && row.rawPayload?.kind === "bpi_credit_card_transaction"));
+  assert.deepEqual(assessImportEvidenceSafety(signedRows, signedText).reasons, [], "Deterministic two-date card rows carry parser provenance; the safety guard remains enabled");
+  assert.deepEqual(signedRows.slice(1).map(r => r.rawPayload?.fxNote), ["Baht 25.00", "Baht 25.00", "U.S. Dollar 0.40"]);
+  const beforeAssessment = json(signedRows);
+  assert.equal(assess(signedText, signedMetadata, signedRows).status, "reconciled");
+  assert.equal(assess(signedText, signedMetadata, signedRows).expectedEndingBalance, 125.25);
+  assert.deepEqual(json(signedRows), beforeAssessment, "Reconciliation never rewrites normalized labels or source evidence");
+  assert.equal(assess(signedText, signedMetadata, signedRows.filter((_, i) => i !== 2)).status, "mismatch", "Both identical source occurrences are required");
+  assert.equal(assess(signedText, signedMetadata, signedRows.map((r, i) => i ? r : { ...r, amount: "201.00" })).code, "SOURCE_AMOUNT_CONFLICT");
+  assert.equal(assess(signedText, signedMetadata, signedRows.map((r, i) => i ? r : { ...r, rawPayload: undefined })).status, "mismatch", "Do not invent a payment credit without signed source evidence");
+  const user = await db.user.create({ data: { clerkUserId: randomUUID(), email: `${randomUUID()}@example.invalid`, environment: "staging", planTier: "pro", planTierLocked: true } });
+  try {
+    const workspace = await db.workspace.create({ data: { userId: user.id, name: "BPI checkpoint preservation" } });
+    const file = await db.importFile.create({ data: { workspaceId: workspace.id, fileName: "retained-bpi.pdf", fileType: "application/pdf", storageKey: `qa/${randomUUID()}`, sourceFingerprint: sourceSha256 } });
+    const settle = async () => { await drain(); for (const job of await db.learningJob.findMany({ where: { workspaceId: workspace.id, status: "queued" } })) await processLearningJob(job.id); };
+    await processImportFileText(file.id, { text, importMode: "statement", actorUserId: user.id }); await settle();
+    let checkpoint = await db.accountStatementCheckpoint.findUniqueOrThrow({ where: { importFileId: file.id } });
+    assert.equal(Number(checkpoint.endingBalance), 1000); assert.equal(checkpoint.openingBalance, null);
+    assert.equal(checkpoint.statementStartDate?.toISOString(), assessment.statementStartDate);
+    assert.equal(checkpoint.statementEndDate?.toISOString(), assessment.statementEndDate);
+    assert.equal(checkpoint.status, "pending"); assert.match(checkpoint.mismatchReason!, /opening balance/);
+    assert.equal((checkpoint.sourceMetadata as Record<string, unknown>).statementDate, "2026-09-01T12:00:00.000Z", "The bill date must survive the complete worker handoff");
+    assert.equal((checkpoint.sourceMetadata as Record<string, unknown>).paymentDueDate, "2026-09-20T12:00:00.000Z");
+    assert.equal((checkpoint.sourceMetadata as Record<string, unknown>).workflowStage, "complete", "Missing evidence must not look like processing is still running");
+    assert.equal(await db.transaction.count({ where: { importFileId: file.id } }), 100);
+    const account = await db.account.findUniqueOrThrow({ where: { id: checkpoint.accountId! } });
+    assert.equal(Number(account.balance), -1000);
+    const signedWorkspace = await db.workspace.create({ data: { userId: user.id, name: "BPI signed movements" } });
+    const signedFile = await db.importFile.create({ data: { workspaceId: signedWorkspace.id, fileName: "bpi-signed-payment.txt", fileType: "text/plain", storageKey: `qa/${randomUUID()}`, sourceFingerprint: createHash("sha256").update(signedText).digest("hex") } });
+    await processImportFileText(signedFile.id, { text: signedText, importMode: "statement", actorUserId: user.id });
+    await drain();
+    for (const job of await db.learningJob.findMany({ where: { workspaceId: signedWorkspace.id, status: "queued" } })) await processLearningJob(job.id);
+    const signedCheckpoint = await db.accountStatementCheckpoint.findUniqueOrThrow({ where: { importFileId: signedFile.id } });
+    assert.equal(signedCheckpoint.status, "reconciled"); assert.equal(signedCheckpoint.mismatchReason, null);
+    assert.equal(Number(signedCheckpoint.openingBalance), 200); assert.equal(Number(signedCheckpoint.endingBalance), 125.25);
+    assert.equal((signedCheckpoint.sourceMetadata as Record<string, unknown>).workflowStage, "complete");
+    assert.equal(Number((await db.account.findUniqueOrThrow({ where: { id: signedCheckpoint.accountId! } })).balance), -125.25);
+    const signedTransactions = await db.transaction.findMany({ where: { importFileId: signedFile.id } });
+    assert.equal(signedTransactions.length, 4); assert(signedTransactions.every(t => t.currency === "PHP"));
+    assert.equal(signedTransactions.filter(t => Number(t.amount) === 50.25).length, 2);
+    const preservedPayment = signedTransactions.find(t => Number(t.amount) === 200)!;
+    assert.equal(preservedPayment.type, "expense"); assert.equal(preservedPayment.merchantClean, "Statement Payment Credit");
+    const signedStatus = (await loadImportStatusSnapshot(signedFile.id))!;
+    assert.equal(signedStatus.settledImportComplete, true); assert.deepEqual(signedStatus.settlementIssues, []);
+    const firstStatus = (await loadImportStatusSnapshot(file.id))!;
+    assert.equal(firstStatus.settledImportComplete, true, "The first published account summary must already use the stored liability sign");
+    assert.deepEqual(firstStatus.settlementIssues, []);
+    // Publish once if needed, then prove an actual GET cannot rewrite JSONB
+    // solely because its stored object keys are ordered differently.
+    await persistPublishedAccountSummaries(await loadImportStatusSnapshot(file.id));
+    const published = json(await db.accountStatementCheckpoint.findUniqueOrThrow({ where: { id: checkpoint.id } }));
+    const authPath = require.resolve("../lib/auth"), priorAuth = require.cache[authPath];
+    require.cache[authPath] = { id: authPath, filename: authPath, loaded: true, exports: { isLocalDevHost: async () => true, requireAuth: async () => ({ userId: user.id }) } } as NodeModule;
+    try {
+      const route = await import("../app/api/imports/[importId]/status/route");
+      for (let i = 0; i < 2; i++) {
+        const response = await route.GET(new Request(`http://localhost/api/imports/${file.id}/status`), { params: Promise.resolve({ importId: file.id }) });
+        assert.equal(response.status, 200); await drain();
+        assert.deepEqual(json(await db.accountStatementCheckpoint.findUniqueOrThrow({ where: { id: checkpoint.id } })), published, "A settled status GET must not touch checkpoint metadata or updatedAt");
+      }
+    } finally { if (priorAuth) require.cache[authPath] = priorAuth; else delete require.cache[authPath]; }
+    // Reproduce the old missing-header checkpoint; keep its rows and learning.
+    const oldMetadata = { ...(checkpoint.sourceMetadata as Record<string, unknown>), openingBalance: null, endingBalance: null, totalAmountDue: null, paymentDueDate: null, startDate: null, endDate: null, workflowStage: "reconciling" };
+    delete oldMetadata.statementDate; delete oldMetadata.reconciliation;
+    checkpoint = await db.accountStatementCheckpoint.update({ where: { id: checkpoint.id }, data: { openingBalance: null, endingBalance: null, statementStartDate: null, statementEndDate: null, status: "pending", mismatchReason: null, sourceMetadata: json(oldMetadata) } });
+    await db.account.update({ where: { id: account.id }, data: { name: "My reviewed BPI card", nameCustomized: true, balance: -1234.56 } });
+    const transaction = await db.transaction.findFirstOrThrow({ where: { importFileId: file.id } });
+    await db.transaction.update({ where: { id: transaction.id }, data: { merchantClean: "My confirmed merchant", reviewStatus: "edited", description: "User-owned description" } });
+    const input = { importFileId: file.id, workspaceId: workspace.id, sourceSha256, text };
+    const before = await manifest(checkpoint.id, db);
+    const proposed = await plan(db, input); assert.equal(proposed.unchanged, false);
+    assert.deepEqual(await manifest(checkpoint.id, db), before, "Preview is read-only");
+    const stale = (await loadImportStatusSnapshot(file.id))!;
+    stale.accountSummaries = stale.accountSummaries.map(summary => ({ ...summary, accountName: "Stale summary must not win" }));
+    await db.$transaction(async tx => { await tx.accountStatementCheckpoint.update({ where: { id: checkpoint.id }, data: proposed.patch }); }, { isolationLevel: "Serializable" });
+    assert.deepEqual(await manifest(checkpoint.id, db), before, "Only the checkpoint changed; all account, transaction, source and learned rows remain byte-identical");
+    const repaired = json(await db.accountStatementCheckpoint.findUniqueOrThrow({ where: { id: checkpoint.id } }));
+    assert.equal((await persistPublishedAccountSummaries(stale)).count, 0, "Delayed status publication cannot overwrite a newer checkpoint repair");
+    assert.deepEqual(json(await db.accountStatementCheckpoint.findUniqueOrThrow({ where: { id: checkpoint.id } })), repaired);
+    assert.equal((await plan(db, input)).unchanged, true, "Retry must not even touch updatedAt");
+    assert.deepEqual(json(await db.accountStatementCheckpoint.findUniqueOrThrow({ where: { id: checkpoint.id } })), repaired);
+    await assert.rejects(plan(db, { ...input, workspaceId: randomUUID() }), /SOURCE_OR_SCOPE_CHANGED/);
+    await assert.rejects(plan(db, { ...input, sourceSha256: "0".repeat(64) }), /SOURCE_OR_SCOPE_CHANGED/);
+    await assert.rejects(plan(db, { ...input, text: text.replaceAll("9999 0000 0000 8263", "9999 0000 0000 1234") }), /IDENTITY_CONFLICT/);
+    await db.transaction.update({ where: { id: transaction.id }, data: { amount: 11 } });
+    await assert.rejects(plan(db, input), /LEDGER_CONFLICT/, "A confirmed amount edit blocks repair instead of being overwritten");
+    assert.equal(Number((await db.transaction.findUniqueOrThrow({ where: { id: transaction.id } })).amount), 11);
+    assert.equal(networkCalls, 0);
+    console.log("PASS BPI checkpoint: exact retained PDF, signed payment reconciliation without relabeling, repeated FX rows, source-amount conflict, dates, no invented opening balance, real worker, read-only preview, checkpoint-only idempotent repair, confirmed edits and all learning preserved.");
+  } finally { await drain(); await db.user.delete({ where: { id: user.id } }); await db.$disconnect(); }
+}
+main().catch(error => { console.error(error); process.exitCode = 1; });

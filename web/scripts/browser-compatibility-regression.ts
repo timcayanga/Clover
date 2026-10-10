@@ -542,7 +542,7 @@ async function main() {
   );
   assert.match(
     accountsSource,
-    /aria-expanded=\{isExpanded\}[\s\S]{0,220}setExpandedMobileAccount\(rowKey\)/,
+    /<AccountWalletPocket expanded=\{isExpanded\}[\s\S]{0,220}setExpandedMobileAccount\(row.id\)/,
     "Mobile account rows must expose an accessible vertical accordion interaction."
   );
   assert.match(
@@ -561,8 +561,8 @@ async function main() {
     "Desktop and mobile account sections must place their highest-value cards first."
   );
   assert.match(
-    globalStyles,
-    /\.accounts-mobile-list-item__reveal \{[\s\S]{0,500}grid-template-rows: 0fr;[\s\S]{0,800}\.accounts-mobile-list-item\.is-expanded \.accounts-mobile-list-item__reveal \{[\s\S]{0,120}grid-template-rows: 1fr;/,
+    await readFile(path.join(process.cwd(), "components/account-wallet.tsx"), "utf8"),
+    /stepWalletSpring[\s\S]*requestAnimationFrame/ ,
     "Mobile account drawers must animate between collapsed and expanded states."
   );
   assert.doesNotMatch(

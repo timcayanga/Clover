@@ -1,0 +1,24 @@
+{
+  "id": "bpi-colon-header-retained-163",
+  "source": "retained-synthetic.pdf",
+  "sha256": "1ca7bedede14497963e97e77782054e15cda64e0bfd74e445df9fdce8f6a3b73",
+  "representation": "original four-page synthetic QA PDF, no customer data",
+  "provenance": "Existing Clover QA source qa-speed-bpi-163.pdf, retained unchanged from the 2026-10-10 staging learning verification archive. Document explicitly says SYNTHETIC QA ONLY.",
+  "reviewAuthority": "Codex source inspection and independent arithmetic, not human confirmation or newly trained data",
+  "reviewed": "2026-10-10",
+  "expected": {
+    "accountNumber": "9999000000008263",
+    "currency": "PHP",
+    "statementDate": "2026-09-01",
+    "paymentDueDate": "2026-09-20",
+    "transactionStart": "2026-08-01",
+    "transactionEnd": "2026-08-25",
+    "rows": 100,
+    "amountEach": 10,
+    "directionEach": "expense",
+    "totalAmountDue": 1000,
+    "openingBalance": null,
+    "reconciliation": "MISSING_OPENING_BALANCE"
+  },
+  "reviewBasis": "Each of four pages repeats the same dated header and has 25 PHP 10 purchases dated August 1–25, numbered ITEM 001–100. The sum is PHP 1,000. No page prints a previous/opening balance. Matching purchases and total due must not manufacture a zero opening balance. Bill/due dates are not transaction coverage. Existing account balance remains -1000."
+}

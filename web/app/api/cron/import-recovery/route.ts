@@ -1,5 +1,6 @@
 import { timingSafeEqual } from "node:crypto";
 import { runImportRecoverySweep } from "@/lib/import-recovery-sweep";
+import { processPendingLearningJobs } from "@/lib/learning-jobs";
 import { NextResponse } from "next/server";
 
 export const dynamic = "force-dynamic";
@@ -31,5 +32,6 @@ export async function GET(request: Request) {
     ok: true,
     durationMs: Date.now() - startedAt,
     ...result,
+    learning: await processPendingLearningJobs({ limit: 2 }),
   });
 }

@@ -40,3 +40,9 @@ export function spendingRoomReply(s: SpendingRoom, question = "") {
     : `No spending room is left in this estimate for the next ${s.horizonDays} days. The protected amounts exceed available cash by ${money(-s.roomAfterProtection)}.`;
   return `${headline}\n\nCash in accounts: ${money(s.availableCash)}\nExpected income included: ${money(s.expectedIncome)}\nLess known bills and shared payments: ${money(s.knownObligations)}\nLess everyday spending reserve: ${money(s.everydaySpendingBuffer)}\nLess goal contributions: ${money(s.goalContribution)}\nLess extra buffer: ${money(s.additionalBuffer)}\n\nConfidence: ${s.confidence.label} (${s.confidence.score}/100). This is a conservative estimate, not a guarantee. Credit limits and investments are not cash for this calculation.\n\nBefore relying on it:\n${s.caveats.map(c => `• ${c}`).join("\n")}\n• Confirm balances and any missing bills or savings you want to protect. Historical spending reserves can overlap with separately reserved bills, so review the breakdown. Already-paid trip costs should not be deducted again. Any unpaid trip costs must fit inside the remaining room.`;
 }
+
+export function spendingRoomChart(s: SpendingRoom & {asOf:string;through:string}) {
+  return {title:"Your spending room",currency:s.currency,from:s.asOf,through:s.through,
+    bars:[{label:"Cash in accounts",amount:s.availableCash},{label:"Protected",amount:s.knownObligations+s.everydaySpendingBuffer+s.goalContribution+s.additionalBuffer},{label:"Estimated room",amount:s.safeToSpend}],
+    spendingPlan:{horizonDays:s.horizonDays,availableCash:s.availableCash,expectedIncome:s.expectedIncome,knownObligations:s.knownObligations,everydaySpendingBuffer:s.everydaySpendingBuffer,goalContribution:s.goalContribution,additionalBuffer:s.additionalBuffer,safeToSpend:s.safeToSpend,roomAfterProtection:s.roomAfterProtection,confidence:s.confidence,caveats:s.caveats}};
+}

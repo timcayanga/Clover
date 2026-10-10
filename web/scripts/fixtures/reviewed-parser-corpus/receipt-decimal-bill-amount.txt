@@ -1,0 +1,6 @@
+REVIEW CAFE
+Jan 12, 2026
+Coffee 25.00
+Sandwich 30.00
+Total Qty 2
+Bill Amount 55.00

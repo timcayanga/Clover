@@ -1,3 +1,5 @@
+import { enqueueLearningJob, processLearningJob, type LearningAction } from "@/lib/learning-jobs";
+import { assessBpiStatementReconciliation, isBpiCardMetadata } from "@/lib/bpi-statement-reconciliation";
 import { readAppMigration, createMigrationOverlapMatcher, summarizeAppMigration } from "@/lib/app-migration-import";
 import { persistMigrationTags } from "@/lib/app-migration-persistence";
 import { encodeLocalReceiptOcr, readLocalReceiptOcrText } from "@/lib/local-receipt-ocr-envelope";
@@ -20,7 +22,7 @@ import { capturePostHogServerEvent } from "@/lib/analytics-server";
 import { findDeletedAccountTombstoneMatch } from "@/lib/account-tombstones";
 import { formatUploadAccountDisplayName } from "@/lib/account-display";
 import { recordDataQaRun, type DataQaParsedRow, type DataQaSource } from "@/lib/data-qa";
-import { deriveReconciledBalance, type BalanceLikeTransaction } from "@/lib/account-balance";
+import { deriveReconciledBalance, normalizeAccountBalanceSign, type BalanceLikeTransaction } from "@/lib/account-balance";
 import { getWorkspaceOwnerLimits, getWorkspaceOwnerPlanUsage } from "@/lib/plan-access";
 import { createBankImportOverlapMatcher } from "@/lib/bank-import-overlap";
 import {
@@ -85,6 +87,7 @@ import {
   fetchImportFileCompat,
   fetchParsedTransactionRows,
   enrichParsedRowsWithTraining,
+  loadConfirmedImportLabels,
   loadImportEnrichmentTrainingContext,
   defaultCategoryForType,
   insertTransactionCompat,
@@ -104,8 +107,6 @@ import {
   loadScoredStatementTemplatesForInstitution,
   mergeStatementMetadataWithTemplate,
   recordStatementTemplateOutcome,
-  promoteUnsupervisedLearningClustersForWorkspace,
-  recordUnsupervisedLearningAuditForTemplate,
   resolveImportFileExtractionCacheVersion,
   updateImportFileCompat,
   normalizeAccountRuleKey,
@@ -7786,7 +7787,7 @@ export const processImportEnrichmentJobs = async (options: {
           where: { workspaceId: String(importFile.workspaceId) },
           select: { id: true, name: true },
         }),
-        loadImportEnrichmentTrainingContext(String(importFile.workspaceId)),
+        loadImportEnrichmentTrainingContext(String(importFile.workspaceId), parsedRows as ParsedImportRow[]),
       ]);
       const enrichmentSetupCompletedAt = Date.now();
       const statementConfidence =
@@ -8538,6 +8539,9 @@ const processImportFileTextImpl = async (
   let importMode = options.importMode ?? readCheckpointImportMode(statementCheckpoint?.sourceMetadata) ?? "statement";
   if (imageImport && importMode === "statement" && hasReceiptPhotoEvidence(usableDeviceText ?? options.text ?? "")) importMode = "receipt";
   const storageKey = String(importFile.storageKey ?? "");
+  // If request bytes are unavailable, storage readers must wait for the original
+  // upload. Otherwise a new PDF can be mistaken for an empty receipt on a 404.
+  if (!options.sourceBytes && options.rawFileReady) await options.rawFileReady;
   // Image normalization is local and token-free. Overlap it with the receipt
   // cache/history preflight so a cache miss can launch vision immediately.
   const eagerReceiptImagePreparationStartedAt =
@@ -9218,6 +9222,8 @@ const processImportFileTextImpl = async (
     }
 
     if (fileType === "application/pdf") {
+      // The page renderer reads durable storage even when text used request bytes.
+      if (options.rawFileReady) await options.rawFileReady;
       const importedBytes = options.sourceBytes ?? (await downloadImportObject(storageKey));
       let renderedPages: Array<{ page: number; dataUrl: string }> = [];
       try {
@@ -12664,21 +12670,17 @@ const processImportFileTextImpl = async (
       resolvedImportMode: "receipt", confirmedTransactionsCount: 0, status: "error" };
   }
 
-  const runTemplateLearning = async () => {
-    if (await getImportUserControl(importFileId, String(importFile.workspaceId)) !== "running") return;
-    const learningState = await prisma.importFile.findUnique({
-      where: { id: importFileId },
-      select: { status: true, transactions: { select: { reviewStatus: true, deletedAt: true } } },
-    });
-    if (learningState?.status !== "done") return;
-    if (effectiveImportMode === "receipt" && (!learningState.transactions.length ||
-      learningState.transactions.some(row => row.deletedAt || row.reviewStatus === "pending_review"))) return;
-    const template = await upsertStatementTemplate({
+  // Save the request before deferring execution. If confirmation or the worker
+  // is interrupted, the job waits for its source and can resume independently.
+  const templateLearningJob = await enqueueLearningJob({
+    workspaceId: importFile.workspaceId, source: "import_template", sourceId: importFileId,
+    actions: [{ kind: "template", sourceImportFileId: importFileId, requireCompletedSource: true, requireReviewedTransactions: effectiveImportMode === "receipt", learnCandidates: true, input: {
       workspaceId: importFile.workspaceId,
       fingerprint: statementFingerprint,
       metadata: resolvedMetadata,
       fileType: importFile.fileType,
       parserConfig: {
+        importFileId,
         parserSource: useOpenAiParse ? "backup_parser" : "local_parser",
         backupParserModel: useOpenAiParse ? openAiParsed?.model ?? null : null,
         backupParserPromptVersion: useOpenAiParse ? openAiParsed?.promptVersion ?? null : null,
@@ -12716,54 +12718,23 @@ const processImportFileTextImpl = async (
               ? rows.at(-1)?.merchantRaw
               : null,
       } as Prisma.InputJsonValue,
-    });
-    if (!template || unsupervisedLearningSnapshot.clusterCount <= 0) {
-      return;
-    }
-
-    const result = await promoteUnsupervisedLearningClustersForWorkspace({
-      workspaceId: importFile.workspaceId,
-    });
-    await recordUnsupervisedLearningAuditForTemplate({
-      workspaceId: importFile.workspaceId,
-      fingerprint: template.fingerprint,
-      importFileId,
-      audit: result.audit,
-    }).catch((error) => {
-      console.warn("Unsupervised learning audit persistence failed; continuing import", {
-        importFileId,
-        workspaceId: importFile.workspaceId,
-        error,
-      });
-    });
-    if (result.audit.candidateCount > 0 || result.audit.promotedCount > 0 || result.audit.suspendedCount > 0) {
-      console.info("Unsupervised learning audit", {
-        importFileId,
-        workspaceId: importFile.workspaceId,
-        audit: result.audit,
-      });
-    }
-  };
-
-  // Template promotion scans recent statement memory and may perform many rule
-  // upserts. It is valuable durable learning, but never belongs on the path
-  // that makes the current statement visible. Running it immediately can
-  // consume one of the small serverless database pool's connections while
-  // parsed rows, checkpoints, and account balances are being committed.
-  schedulePostVisibleImportWork(`template-learning:${importFileId}`, async () => {
-    await runTemplateLearning().catch((error) => {
-      console.warn("Deferred statement template learning failed; continuing import", {
-        importFileId,
-        workspaceId: importFile.workspaceId,
-        error,
-      });
-    });
+    } }],
+  });
+  if (templateLearningJob) schedulePostVisibleImportWork(`template-learning:${importFileId}`, async () => {
+    await processLearningJob(templateLearningJob.id);
   }, 10_000);
 
   if (await hasCompatibleTable("AccountStatementCheckpoint")) {
     try {
-      const metadataStartDate = metadata.startDate ? new Date(metadata.startDate) : null;
-      const metadataEndDate = resolvedMetadata.endDate ? new Date(resolvedMetadata.endDate) : null;
+      const bpiReconciliation = effectiveImportMode === "statement" && isBpiCardMetadata(resolvedMetadata)
+        ? assessBpiStatementReconciliation(textForParse, resolvedMetadata, rows) : null;
+      // Old cached metadata predates this field. Read the current source date
+      // without refreshing caches or copying a previous template's bill date.
+      const bpiStatementDate = bpiReconciliation ? detectStatementMetadataFromText(textForParse, fileName).statementDate ?? null : null;
+      const checkpointStart = bpiReconciliation ? bpiReconciliation.statementStartDate : metadata.startDate;
+      const checkpointEnd = bpiReconciliation ? bpiReconciliation.statementEndDate : resolvedMetadata.endDate;
+      const metadataStartDate = checkpointStart ? new Date(checkpointStart) : null;
+      const metadataEndDate = checkpointEnd ? new Date(checkpointEnd) : null;
       const checkpointSourceMetadata = {
         ...resolvedMetadata,
         importMode: effectiveImportMode,
@@ -12791,7 +12762,8 @@ const processImportFileTextImpl = async (
         backupParserModel: useOpenAiParse ? openAiParsed?.model ?? null : null,
         backupParserSchemaValidated: useOpenAiParse ? openAiParsed?.audit.schemaValidated ?? false : null,
         backupParserQualityScore: useOpenAiParse ? openAiParsed?.audit.quality?.score ?? null : null,
-        balanceReconciled: rows.some((row) => {
+        ...(bpiReconciliation ? { reconciliation: bpiReconciliation, statementDate: bpiStatementDate, startDate: checkpointStart, endDate: checkpointEnd } : {}),
+        balanceReconciled: bpiReconciliation ? bpiReconciliation.balanceReconciled : rows.some((row) => {
           const rawPayload = row.rawPayload;
           if (!rawPayload || typeof rawPayload !== "object" || Array.isArray(rawPayload)) {
             return false;
@@ -13455,6 +13427,7 @@ const processImportFileTextImpl = async (
       });
 
       await applyDataQaReviewLearning({
+        reviewAuthority: "automated",
         workspaceId: String(importFile.workspaceId),
         importFileId,
         accountId: importFile.account?.id ?? null,
@@ -14283,11 +14256,16 @@ export const confirmImportFile = async (
         resolvedCategory: receiptCategoryName,
         lineItemCount: receiptLineItems.length,
       });
+      const receiptLabels = (await loadConfirmedImportLabels(String(importFile.workspaceId), [{
+        merchantRaw: receiptMerchantRaw, merchantClean: receiptMerchantClean, type: "expense",
+      }])).get(0);
+      const normalizedReceiptMerchant = receiptLabels?.merchantClean ?? receiptMerchantClean;
+      const normalizedReceiptCategory = receiptLabels?.categoryName ?? receiptCategoryName;
       const [cashAccountId, receiptCategoryId] = await Promise.all([
         cashAccountIdPromise,
-        resolveOrCreateWorkspaceCategoryId({
+        receiptLabels?.categoryId ?? resolveOrCreateWorkspaceCategoryId({
           workspaceId: String(importFile.workspaceId),
-          categoryName: receiptCategoryName,
+          categoryName: normalizedReceiptCategory,
           fallbackType: "expense",
         }),
       ]);
@@ -14318,7 +14296,7 @@ export const confirmImportFile = async (
             accountId: cashAccountId,
             importFileId,
             categoryId: receiptCategoryId,
-            categoryName: receiptCategoryName,
+            categoryName: normalizedReceiptCategory,
             reviewStatus: receiptNeedsReview || receiptDateInferredFromFileName ? "pending_review" : "confirmed",
             parserConfidence:
               Math.max(
@@ -14329,7 +14307,7 @@ export const confirmImportFile = async (
                     (receiptNeedsReview || receiptDateInferredFromFileName ? 50 : 95)
                 )
               ),
-            categoryConfidence: 95,
+            categoryConfidence: receiptLabels?.confidence ?? 95,
             accountMatchConfidence: 100,
             duplicateConfidence: 0,
             transferConfidence: 0,
@@ -14338,10 +14316,11 @@ export const confirmImportFile = async (
             currency: receiptCurrency,
             type: "expense",
             merchantRaw: receiptMerchantRaw,
-            merchantClean: receiptMerchantClean,
+            merchantClean: normalizedReceiptMerchant,
             description: receiptMerchantClean,
             rawPayload: {
               source: "receipt",
+              ...(receiptLabels ? { confirmedLearning: receiptLabels } : {}),
               documentType: "receipt",
               dateInferredFromFileName: receiptDateInferredFromFileName,
               receiptValidation: receiptValidationRecord,
@@ -14395,13 +14374,13 @@ export const confirmImportFile = async (
               receiptAccountMatch: receiptAccountMatchPayload as Prisma.InputJsonValue | null,
             } as Prisma.InputJsonValue,
             normalizedPayload: {
-              merchantClean: receiptMerchantClean,
+              merchantClean: normalizedReceiptMerchant,
               categoryId: receiptCategoryId,
-              categoryName: receiptCategoryName,
+              categoryName: normalizedReceiptCategory,
               type: "expense",
               notes: receiptLineItemNotes || null,
             } as Prisma.InputJsonValue,
-            learnedRuleIdsApplied: [],
+            learnedRuleIdsApplied: receiptLabels ? [receiptLabels.ruleId] : [],
           });
 
           if (!insertedTransaction.inserted) return {
@@ -14428,12 +14407,12 @@ export const confirmImportFile = async (
           where: { id: createdTransactionId, reviewStatus: "pending_review" },
           data: {
             categoryId: receiptCategoryId,
-            categoryConfidence: 95,
+            categoryConfidence: receiptLabels?.confidence ?? 95,
             normalizedPayload: {
               ...(existingNormalizedPayload ?? {}),
-              merchantClean: receiptMerchantClean,
+              merchantClean: normalizedReceiptMerchant,
               categoryId: receiptCategoryId,
-              categoryName: receiptCategoryName,
+              categoryName: normalizedReceiptCategory,
               type: "expense",
               notes: receiptLineItemNotes || existingNormalizedPayload?.notes || null,
             } as Prisma.InputJsonValue,
@@ -14656,6 +14635,7 @@ export const confirmImportFile = async (
     };
   }
   const parsedRowsReadyAt = Date.now();
+  const confirmedImportLabels = await loadConfirmedImportLabels(String(importFile.workspaceId), parsedRows);
   const structuredWorkbookConfirmation = parsedRows.some((row) => {
     const rawPayload = row.rawPayload;
     return Boolean(
@@ -15069,6 +15049,8 @@ export const confirmImportFile = async (
     const publishedGroupBalance =
       groupIsMigration ? snapshotBalanceToString(groupAccount.balance)
         : groupBalance ?? (groupIsSnapshotOnly ? 0 : snapshotBalanceToString(groupAccount.balance));
+    const signedPublishedBalance = publishedGroupBalance !== null && groupAccount.type === "credit_card" && isBpiCardMetadata(baseStatementMetadata)
+      ? normalizeAccountBalanceSign(groupAccount.type, Number(publishedGroupBalance)) : publishedGroupBalance;
     const existingSummary = accountSummaryById.get(groupAccount.id);
     accountSummaryById.set(groupAccount.id, {
       accountId: groupAccount.id,
@@ -15077,7 +15059,7 @@ export const confirmImportFile = async (
       accountNumber: groupAccount.accountNumber,
       accountType: groupAccount.type,
       currency: groupAccount.currency,
-      balance: publishedGroupBalance !== null ? publishedGroupBalance.toString() : null,
+      balance: signedPublishedBalance !== null ? signedPublishedBalance.toString() : null,
       rowsImported: (existingSummary?.rowsImported ?? 0) + visibleGroupRows.length,
     });
   }
@@ -15238,6 +15220,7 @@ export const confirmImportFile = async (
     notes: string | null;
   }> = [];
   const preparedTransactions: PreparedImportTransaction[] = [];
+  let learningJobId: string | null = null;
   const preparedAtmCashDestinations: PreparedAtmCashDestination[] = [];
   let duplicateSkippedTransactionsCount = 0;
   let qaMetadataForRun: {
@@ -15449,12 +15432,18 @@ export const confirmImportFile = async (
       isPublishedAccountInventory && accountSummaries.length === 1
         ? accountSummaries[0]?.balance ?? null
         : null;
+    const bpiReconciliation = isRecord(checkpointSourceMetadata?.reconciliation) &&
+      checkpointSourceMetadata.reconciliation.version === "bpi-header-reconciliation-v1"
+        ? checkpointSourceMetadata.reconciliation : null;
     if (isPublishedAccountInventory) {
       // Learned spreadsheet templates may retain the previous file's document
       // balance. Account-inventory rows are authoritative for the current
       // upload, so never let that stale checkpoint override the published card.
       checkpointStatus = "pending";
       mismatchReason = null;
+    } else if (bpiReconciliation) {
+      checkpointStatus = bpiReconciliation.status === "reconciled" ? "reconciled" : bpiReconciliation.status === "mismatch" ? "mismatch" : "pending";
+      mismatchReason = typeof bpiReconciliation.reason === "string" ? bpiReconciliation.reason : null;
     } else if (statementCheckpoint.endingBalance !== null && checkpointSourceMetadata?.balanceReconciled === true) {
       checkpointStatus = "reconciled";
     } else if (statementCheckpoint.endingBalance !== null) {
@@ -15488,7 +15477,7 @@ export const confirmImportFile = async (
           accountNumber: account.accountNumber,
           accountType: account.type,
           ...(isPublishedAccountInventory ? { endingBalance: inventoryCheckpointBalance } : {}),
-          workflowStage: checkpointStatus === "reconciled" ? "complete" : checkpointStatus === "mismatch" ? "repair_needed" : "reconciling",
+          workflowStage: bpiReconciliation && checkpointStatus === "pending" ? "complete" : checkpointStatus === "reconciled" ? "complete" : checkpointStatus === "mismatch" ? "repair_needed" : "reconciling",
           publishedVisibleImportComplete: accountSummaries.length > 0,
           publishedAccountSummaries: accountSummaries,
         }) as Prisma.InputJsonValue,
@@ -15733,7 +15722,11 @@ export const confirmImportFile = async (
       return snapshotBalanceToString((row.rawPayload as Record<string, unknown>).balance) !== null;
     });
 
-  const statementEndingBalance = snapshotBalanceToString(statementCheckpoint?.endingBalance);
+  const printedEndingBalance = snapshotBalanceToString(statementCheckpoint?.endingBalance);
+  // BPI prints an amount owed as positive. Keep that source value in the
+  // checkpoint while applying Clover's existing liability sign to the account.
+  const statementEndingBalance = printedEndingBalance !== null && account.type === "credit_card" && isBpiCardMetadata(baseStatementMetadata)
+    ? String(normalizeAccountBalanceSign(account.type, Number(printedEndingBalance))) : printedEndingBalance;
   const latestExplicitStatementBalance = snapshotBalanceToString(
     latestExplicitBalance && typeof latestExplicitBalance.rawPayload === "object" && !Array.isArray(latestExplicitBalance.rawPayload)
       ? (latestExplicitBalance.rawPayload as Record<string, unknown>).balance
@@ -16017,7 +16010,8 @@ export const confirmImportFile = async (
           workspaceAccounts: workspaceAccountsForTransferMatching,
           currentAccountId: rowResolvedAccountId,
         });
-    const categoryName = shouldTransferAtmWithdrawalToCash ? "Cash & ATM" : parsedCategoryName;
+    const learnedLabels = shouldTransferAtmWithdrawalToCash || canonicalType !== rowType ? undefined : confirmedImportLabels.get(index);
+    const categoryName = shouldTransferAtmWithdrawalToCash ? "Cash & ATM" : learnedLabels?.categoryName ?? parsedCategoryName;
     const rowIsTransfer = migration ? canonicalType === "transfer" : canonicalType === "transfer" || isTransferCategoryName(categoryName);
     const rowTransferConfidence =
       rowIsTransfer ? (typeof row.transferConfidence === "number" ? row.transferConfidence : 100) : 0;
@@ -16095,7 +16089,7 @@ export const confirmImportFile = async (
       continue;
     }
 
-    let categoryId = categoryByName.get(categoryName.toLowerCase());
+    let categoryId = learnedLabels?.categoryId ?? categoryByName.get(categoryName.toLowerCase());
 
     if (!categoryId) {
       const created = await tx.category.create({
@@ -16154,7 +16148,7 @@ export const confirmImportFile = async (
       reviewPriority: reviewOnlyRow ? "none" : getImportReviewPriority(reviewReasons),
       reviewReasons: reviewReasons as Prisma.InputJsonValue,
       parserConfidence: rowParserConfidence,
-      categoryConfidence: rowCategoryConfidence,
+      categoryConfidence: learnedLabels?.confidence ?? rowCategoryConfidence,
       accountMatchConfidence: rowAccountMatchConfidence,
       duplicateConfidence: rowDuplicateConfidence,
       transferConfidence: rowTransferConfidence,
@@ -16168,6 +16162,7 @@ export const confirmImportFile = async (
               : undefined,
         sourceRowIndex: index + 1,
         sourceImportFileId: importFileId,
+        ...(learnedLabels ? { confirmedLearning: learnedLabels } : {}),
         sourceStatementFingerprint:
           typeof row.statementFingerprint === "string" && row.statementFingerprint.trim()
             ? row.statementFingerprint.trim()
@@ -16188,8 +16183,11 @@ export const confirmImportFile = async (
             }
           : {}),
       } as Prisma.InputJsonValue,
-      normalizedPayload: (row.normalizedPayload ?? {}) as Prisma.InputJsonValue,
-      learnedRuleIdsApplied: (row.learnedRuleIdsApplied ?? []) as Prisma.InputJsonValue,
+      normalizedPayload: {
+        ...(row.normalizedPayload && typeof row.normalizedPayload === "object" ? row.normalizedPayload : {}),
+        ...(learnedLabels ? { merchantClean: learnedLabels.merchantClean, categoryName, categoryId, type: canonicalType } : {}),
+      } as Prisma.InputJsonValue,
+      learnedRuleIdsApplied: [...(Array.isArray(row.learnedRuleIdsApplied) ? row.learnedRuleIdsApplied : []), ...(learnedLabels ? [learnedLabels.ruleId] : [])] as Prisma.InputJsonValue,
       sourceRowKey:
         typeof row.statementFingerprint === "string" && row.statementFingerprint.trim()
           ? `${row.statementFingerprint.trim()}:${index + 1}`
@@ -16202,7 +16200,7 @@ export const confirmImportFile = async (
       currency: rowCurrency,
       type: canonicalType,
       merchantRaw: typeof row.merchantRaw === "string" ? row.merchantRaw : "Imported transaction",
-      merchantClean: typeof row.merchantClean === "string" ? row.merchantClean : typeof row.merchantRaw === "string" ? row.merchantRaw : null,
+      merchantClean: learnedLabels?.merchantClean ?? (typeof row.merchantClean === "string" ? row.merchantClean : typeof row.merchantRaw === "string" ? row.merchantRaw : null),
       description: extractHumanReadableDescription(row.rawPayload ?? null),
       isTransfer: rowIsTransfer,
       isExcluded:
@@ -16361,14 +16359,14 @@ export const confirmImportFile = async (
                     : typeof insertRow.merchantRaw === "string"
                       ? insertRow.merchantRaw
                       : null,
-                categoryConfidence: rowCategoryConfidence,
+                categoryConfidence: learnedLabels?.confidence ?? rowCategoryConfidence,
                 parserConfidence: rowParserConfidence,
                 reviewStatus: insertRow.reviewStatus as Prisma.EnumReviewStatusFieldUpdateOperationsInput | ReviewStatus,
                 reviewPriority: typeof insertRow.reviewPriority === "string" ? insertRow.reviewPriority : "none",
                 reviewReasons: insertRow.reviewReasons ? (insertRow.reviewReasons as Prisma.InputJsonValue) : Prisma.DbNull,
                 isTransfer: rowIsTransfer,
-                normalizedPayload: (row.normalizedPayload ?? {}) as Prisma.InputJsonValue,
-                learnedRuleIdsApplied: (row.learnedRuleIdsApplied ?? []) as Prisma.InputJsonValue,
+                normalizedPayload: insertRow.normalizedPayload as Prisma.InputJsonValue,
+                learnedRuleIdsApplied: insertRow.learnedRuleIdsApplied as Prisma.InputJsonValue,
               }
             : {}),
         },
@@ -16591,6 +16589,40 @@ export const confirmImportFile = async (
     };
   }
 
+  const backupParserRows = parsedRows.filter((row) => {
+    const rawPayload = row.rawPayload;
+    return (
+      rawPayload &&
+      typeof rawPayload === "object" &&
+      !Array.isArray(rawPayload) &&
+      (rawPayload as Record<string, unknown>).source === "openai"
+    );
+  }) as EnrichedParsedImportRow[];
+  // Persist every observation before scheduling work. Identity comes from the
+  // source transaction, so legitimate repeats are retained and retries dedupe.
+  const learningActions: LearningAction[] = trainingSignals.map(entry => ({ kind: "signal", input: {
+    workspaceId: importFile.workspaceId, importFileId, transactionId: entry.transactionId,
+    institution: importFile.account?.institution ?? null, merchantText: entry.merchantText,
+    categoryId: entry.categoryId, categoryName: entry.categoryName, type: entry.type,
+    source: "import_confirmation", confidence: entry.confidence, teachabilityScore: entry.teachabilityScore, notes: entry.notes,
+  } }));
+  if (pendingAccountRule) learningActions.push({ kind: "account", input: pendingAccountRule });
+  if (backupParserRows.length > 0) {
+    const categories = await tx.category.findMany({ where: { workspaceId: importFile.workspaceId }, select: { id: true, name: true } });
+    const categoryIdsByName = new Map(categories.map(category => [category.name.trim().toLowerCase(), category.id]));
+    for (const signal of extractBackupParserLearningSignals(backupParserRows)) {
+      const categoryId = categoryIdsByName.get(signal.categoryName.trim().toLowerCase());
+      if (categoryId) learningActions.push({ kind: "signal", input: {
+        workspaceId: importFile.workspaceId, importFileId,
+        // This is a source-level suggestion, not a fabricated Transaction FK.
+        institution: importFile.account?.institution ?? null, merchantText: signal.merchantText, normalizedName: signal.normalizedName,
+        categoryId, categoryName: signal.categoryName, type: signal.type, source: "import_confirmation",
+        confidence: signal.confidence, teachabilityScore: signal.teachabilityScore, notes: signal.notes,
+      } });
+    }
+  }
+  learningJobId = (await enqueueLearningJob({ workspaceId: importFile.workspaceId, source: "import_confirmation", sourceId: importFileId, actions: learningActions }, tx))?.id ?? null;
+
   const insightSummary = buildImportInsightSummary(transactions);
 
   qaMetadataForRun = {
@@ -16732,19 +16764,13 @@ export const confirmImportFile = async (
     );
     await Promise.allSettled(
       Array.from(resolvedAccountSummaryById.entries()).map(([accountId, summary]) => {
-        const displayName = formatUploadAccountDisplayName(
-          summary.accountName ?? summary.institution ?? null,
-          summary.institution ?? null,
-          summary.accountNumber ?? null,
-          summary.accountType ?? null
-        );
-
+        // Account resolution already updates inferred labels while honoring
+        // nameCustomized/institutionCustomized. A display summary must not
+        // undo those user choices after multi-account confirmation.
         return prisma.account.update({
           where: { id: accountId },
           data: {
             ...(summary.balance ? { balance: summary.balance } : {}),
-            ...(displayName ? { name: displayName } : {}),
-            ...(summary.institution ? { institution: summary.institution } : {}),
             ...(summary.accountNumber ? { accountNumber: summary.accountNumber } : {}),
             ...(summary.accountType ? { type: summary.accountType } : {}),
           },
@@ -16874,111 +16900,21 @@ export const confirmImportFile = async (
 
   }
 
-  const backupParserRows = parsedRows.filter((row) => {
-    const rawPayload = row.rawPayload;
-    return (
-      rawPayload &&
-      typeof rawPayload === "object" &&
-      !Array.isArray(rawPayload) &&
-      (rawPayload as Record<string, unknown>).source === "openai"
-    );
-  }) as EnrichedParsedImportRow[];
-  // Large workbooks can contain hundreds of repeated ledger descriptions.
-  // Learning one durable signal per merchant/category/direction is sufficient
-  // and avoids flooding the database pool immediately after rows become
-  // visible. User-confirmed edits still create their own authoritative signals.
-  const postVisibleTrainingSignals = Array.from(
-    trainingSignals.reduce((signals, entry) => {
-      const key = [
-        entry.merchantText.trim().toLowerCase(),
-        entry.categoryName.trim().toLowerCase(),
-        entry.type,
-      ].join(":");
-      const existing = signals.get(key);
-      if (
-        !existing ||
-        entry.teachabilityScore > existing.teachabilityScore ||
-        (entry.teachabilityScore === existing.teachabilityScore && entry.confidence > existing.confidence)
-      ) {
-        signals.set(key, entry);
-      }
-      return signals;
-    }, new Map<string, (typeof trainingSignals)[number]>()).values()
-  ).slice(0, highVolumeConfirmation ? 50 : 200);
   // Per-row analytics is useful for small statements, but hundreds of network
   // calls from a workbook compete with the first UI refresh. Keep a bounded
   // representative sample; aggregate import metrics are emitted separately.
   const postVisibleAnalyticsTransactions = preparedTransactions.slice(0, highVolumeConfirmation ? 25 : 100);
   const analyticsDistinctId = String(importFile.workspaceId ?? "import-worker");
   schedulePostVisibleImportWork(`finalize:${importFileId}`, async () => {
-    await prisma.trainingSignal.deleteMany({
-      where: {
-        importFileId,
-        source: "import_confirmation",
-      },
-    }).catch(() => null);
+    if (learningJobId) await processLearningJob(learningJobId, { maxItems: 5000, deadlineMs: 45_000 });
 
     await collapseDuplicateTransactionsForImport(importFileId).catch((error) => {
       console.warn("Unable to collapse duplicate transactions after confirmation", { importFileId, error });
     });
 
-    if (pendingAccountRule) {
-      await upsertAccountRule(pendingAccountRule).catch(() => null);
-    }
-
     await syncWorkspaceRecurringPatterns(String(importFile.workspaceId)).catch((error) => {
       console.warn("Unable to sync recurring patterns after import confirmation", { importFileId, error });
     });
-
-    await runWithConcurrency(postVisibleTrainingSignals, 4, async (entry) => {
-      await recordTrainingSignal({
-        workspaceId: importFile.workspaceId,
-        importFileId,
-        transactionId: entry.transactionId,
-        institution: importFile.account?.institution ?? null,
-        merchantText: entry.merchantText,
-        categoryId: entry.categoryId,
-        categoryName: entry.categoryName,
-        type: entry.type,
-        source: "import_confirmation",
-        confidence: entry.confidence,
-        teachabilityScore: entry.teachabilityScore,
-        notes: entry.notes,
-      }).catch(() => null);
-    });
-
-    if (backupParserRows.length > 0) {
-      const backupLearningSignals = extractBackupParserLearningSignals(backupParserRows);
-      if (backupLearningSignals.length > 0) {
-        const categories = await prisma.category.findMany({
-          where: { workspaceId: importFile.workspaceId },
-          select: { id: true, name: true },
-        }).catch(() => []);
-        const categoryIdsByName = new Map(
-          categories.map((category) => [category.name.trim().toLowerCase(), category.id] as const)
-        );
-
-        await runWithConcurrency(backupLearningSignals, 4, async (signal, index) => {
-          const categoryId = categoryIdsByName.get(signal.categoryName.trim().toLowerCase());
-          if (!categoryId) return;
-          await recordTrainingSignal({
-            workspaceId: importFile.workspaceId,
-            importFileId,
-            transactionId: `${importFileId}:backup:${index + 1}`,
-            institution: importFile.account?.institution ?? null,
-            merchantText: signal.merchantText,
-            normalizedName: signal.normalizedName,
-            categoryId,
-            categoryName: signal.categoryName,
-            type: signal.type,
-            source: "import_confirmation",
-            confidence: signal.confidence,
-            teachabilityScore: signal.teachabilityScore,
-            notes: signal.notes,
-          }).catch(() => null);
-        });
-      }
-    }
 
     if (qaMetadataForRun && qaAccountForRun) {
       await recordDataQaRun({

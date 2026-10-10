@@ -1,8 +1,8 @@
 import type { ReceiptPreviewResult } from "@/lib/split-bill";
 import { detectCurrencyEvidence } from "@/lib/financial-identity-detection";
 
-const finalLabel = /^(?:grand\s*total|amount\s+due|due|du|tl)(?=\s|[:.]|$)\s*[:.]?\s*/i;
-const totalLabel = /^total(?=\s|[:.]|$)\s*[.:]?\s*/i;
+const finalLabel = /^(?:grand\s*total|bill\s+amount|amount\s+due|due|du|tl)(?=\s|[:.]|$)\s*[:.]?\s*/i;
+const totalLabel = /^total(?:\s+amount)?(?=\s|[:.]|$)\s*[.:]?\s*/i;
 export const readUnlocalizedReceiptInteger = (text: string, allowZero = false): number | null => {
   const token = text.replace(/^(?:Rp\.?|IDR)\s*/i, "").trim();
   if (!/^(?:[1-9]\d{0,2}(?:,\d{3})+|[1-9]\d{0,2}(?:\.\d{3})+|\d+)$/.test(token)) return null;

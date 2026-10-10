@@ -1,10 +1,11 @@
+import { after } from "next/server";
+import { enqueueLearningJob, processPendingLearningJobs } from "@/lib/learning-jobs";
 import { finverseBalances } from "@/lib/finverse-balances";
 import { prisma } from "@/lib/prisma";
 import { isLocalDevHost, requireAuth } from "@/lib/auth";
 import { assertWorkspaceAccess } from "@/lib/workspace-access";
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { upsertAccountRule } from "@/lib/data-engine";
 import { INVESTMENT_SUBTYPES, type InvestmentSubtype } from "@/lib/investments";
 import { capturePostHogServerEvent } from "@/lib/analytics-server";
 import { isMissingAccountNumberColumnError, omitAccountNumberField } from "@/lib/account-column-compat";
@@ -607,23 +608,25 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ ac
         balance: payload.balance === undefined ? undefined : payload.balance === null || payload.balance === "" ? null : payload.balance.toString(),
       };
 
+    const saveAccount = (data: Parameters<typeof prisma.account.update>[0]["data"]) => prisma.$transaction(async tx => {
+      const saved = await tx.account.update({
+        where: { id: accountId },
+        data, select: getCompatibleAccountSelect(compatibleColumns),
+      });
+      await enqueueLearningJob({ workspaceId: saved.workspaceId, source: "manual_account_update", sourceId: saved.id, actions: [{ kind: "account", input: {
+        workspaceId: saved.workspaceId, accountId: saved.id, accountName: saved.name, institution: saved.institution, accountType: saved.type, source: "manual_account_update", confidence: 100,
+      } }] }, tx);
+      return saved;
+    });
     let account;
     try {
-      account = await prisma.account.update({
-        where: { id: accountId },
-        data: accountUpdateData,
-        select: getCompatibleAccountSelect(compatibleColumns),
-      });
+      account = await saveAccount(accountUpdateData);
     } catch (error) {
       if (!isMissingAccountNumberColumnError(error)) {
         throw error;
       }
 
-      account = await prisma.account.update({
-        where: { id: accountId },
-        data: omitAccountNumberField(accountUpdateData),
-        select: getCompatibleAccountSelect(compatibleColumns),
-      });
+      account = await saveAccount(omitAccountNumberField(accountUpdateData));
     }
 
     void capturePostHogServerEvent("account_updated", userId, {
@@ -637,15 +640,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ ac
       is_cash: account.type === "cash",
     });
 
-    void upsertAccountRule({
-      workspaceId: account.workspaceId,
-      accountId: account.id,
-      accountName: account.name,
-      institution: account.institution,
-      accountType: account.type,
-      source: "manual_account_update",
-      confidence: 100,
-    }).catch(() => null);
+    after(async () => { await processPendingLearningJobs({ workspaceId: account.workspaceId, limit: 1 }); });
 
     invalidateWorkspaceSummaryCache(account.workspaceId);
     const bankSnapshot=(await finverseBalances(account.workspaceId,[account.id])).get(account.id);

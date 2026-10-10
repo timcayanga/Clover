@@ -407,7 +407,7 @@ export default function Adviser() {
               {message.role === "user" ? "You" : "Clover"}
             </Text>
             </View>
-            <Body muted={false}>{message.content}</Body>
+            {!message.visualization?.spendingPlan ? <Body muted={false}>{message.content}</Body> : null}
             {message.visualization ? (
               <AdviserReportCard chart={message.visualization} />
             ) : null}

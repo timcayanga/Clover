@@ -25,3 +25,10 @@ no live financial writes, at 320/390/768/1100/1440 pixels in light and dark mode
 
 Vercel deployments update desktop/mobile web and the native API. Installed native
 apps need new signed builds; a web deployment alone does not update native UI.
+
+
+## October 9 sleeve refinement
+
+Main Screens light/dark collapsed, expanded and currency states now use editable card pockets and the shared rounded sleeve component (2182:100235). The approved full card ratio is 85.6:53.98. Collapsed rows expose 60px with no inter-row gap; opening grows the wallet downward and reveals all four card corners. Sleeve edges are 6px, clipped inside the stitching, including the last card. Wallets have no outer shadow; empty-slot contact shadows fade away when a card is pulled out.
+
+Web and native reuse the existing institution/generic brand resolver and account details actions. The web card stays mounted through motion and swipe deletion retains its confirmation. Shared geometry and spring regression coverage live in `web/scripts/wallet-motion-regression.ts`; the browser harness additionally checks both themes, 320–1440px layouts, physical proportions, sleeve clearance, rapid reversal, reduced motion, details access, selected-logo palettes, and deletion cancellation.

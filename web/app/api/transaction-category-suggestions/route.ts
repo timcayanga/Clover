@@ -8,18 +8,6 @@ import type { TransactionType } from "@/lib/domain-types";
 
 export const dynamic = "force-dynamic";
 
-type SuggestionWorkspaceCacheEntry = {
-  expiresAt: number;
-  merchantRules: Awaited<ReturnType<typeof loadMerchantRules>>;
-  categories: Array<{ id: string; name: string; type: TransactionType }>;
-  trainingSignals: Awaited<ReturnType<typeof loadTrainingSignals>> | null;
-  trainingSignalsExpiresAt: number;
-};
-
-const suggestionWorkspaceCache = new Map<string, SuggestionWorkspaceCacheEntry>();
-const SUGGESTION_CACHE_TTL_MS = 60_000;
-const TRAINING_SIGNAL_CACHE_TTL_MS = 15_000;
-
 const resolveSuggestionRouteUserId = async () => {
   if (await isLocalDevHost()) {
     return "local-admin";
@@ -65,56 +53,6 @@ const mapSuggestionLabel = (categoryReason: string) => {
   return "merchant keyword hints";
 };
 
-const loadSuggestionWorkspaceData = async (workspaceId: string) => {
-  const cached = suggestionWorkspaceCache.get(workspaceId);
-  if (cached && cached.expiresAt > Date.now()) {
-    return cached;
-  }
-
-  const [merchantRules, categories] = await Promise.all([
-    loadMerchantRules(workspaceId),
-    prisma.category.findMany({
-      where: { workspaceId, isArchived: false },
-      select: { id: true, name: true, type: true },
-    }),
-  ]);
-
-  const nextCache: SuggestionWorkspaceCacheEntry = {
-    expiresAt: Date.now() + SUGGESTION_CACHE_TTL_MS,
-    merchantRules,
-    categories,
-    trainingSignals: cached?.trainingSignals ?? null,
-    trainingSignalsExpiresAt: cached?.trainingSignalsExpiresAt ?? 0,
-  };
-
-  suggestionWorkspaceCache.set(workspaceId, nextCache);
-  return nextCache;
-};
-
-const loadSuggestionTrainingSignals = async (workspaceId: string) => {
-  const cached = suggestionWorkspaceCache.get(workspaceId);
-  if (cached?.trainingSignals && cached.trainingSignalsExpiresAt > Date.now()) {
-    return cached.trainingSignals;
-  }
-
-  const trainingSignals = await loadTrainingSignals(workspaceId);
-  const base = cached ?? {
-    expiresAt: Date.now() + SUGGESTION_CACHE_TTL_MS,
-    merchantRules: [],
-    categories: [],
-    trainingSignals: null,
-    trainingSignalsExpiresAt: 0,
-  };
-
-  suggestionWorkspaceCache.set(workspaceId, {
-    ...base,
-    trainingSignals,
-    trainingSignalsExpiresAt: Date.now() + TRAINING_SIGNAL_CACHE_TTL_MS,
-  });
-
-  return trainingSignals;
-};
-
 export async function POST(request: Request) {
   try {
     const userId = await resolveSuggestionRouteUserId();
@@ -127,7 +65,10 @@ export async function POST(request: Request) {
       return NextResponse.json({ suggestion: null });
     }
 
-    const { merchantRules, categories } = await loadSuggestionWorkspaceData(payload.workspaceId);
+    const [merchantRules, categories] = await Promise.all([
+      loadMerchantRules(payload.workspaceId, [{ merchantRaw: merchantText }]),
+      prisma.category.findMany({ where: { workspaceId: payload.workspaceId, isArchived: false }, select: { id: true, name: true, type: true } }),
+    ]);
     const eligibleCategories = categories.filter(category => category.type === payload.type);
     const namedCategory = eligibleCategories.find(category => normalizeName(category.name) === normalizeName(merchantText) && normalizeName(category.name) !== "other");
     if (namedCategory) return NextResponse.json({ suggestion: {
@@ -151,7 +92,7 @@ export async function POST(request: Request) {
           merchantText,
           type: payload.type as TransactionType,
           merchantRules,
-          trainingSignals: await loadSuggestionTrainingSignals(payload.workspaceId),
+          trainingSignals: await loadTrainingSignals(payload.workspaceId, [{ merchantRaw: merchantText }]),
         });
 
     if (result.categoryName.trim().toLowerCase() === "other") {
