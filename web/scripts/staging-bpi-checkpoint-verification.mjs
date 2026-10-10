@@ -5,11 +5,12 @@ import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { createClerkClient } from '@clerk/backend';
 import dotenv from 'dotenv';
+import { isDeepStrictEqual } from 'node:util';
 const option = name => process.argv.find(x => x.startsWith(name + '='))?.slice(name.length + 1);
 assert(process.argv.includes('--execute'));
 const output = option('--output'), envFile = option('--env'), sha = option('--sha'), phase = option('--phase');
 assert(output && envFile && /^[a-f0-9]{40}$/.test(sha ?? ''));
-assert(['baseline', 'preview', 'repair', 'fresh'].includes(phase));
+assert(['baseline', 'observe', 'preview', 'repair', 'fresh'].includes(phase));
 const origin = 'https://staging.clover.ph', oldRun = '857a2856-a14e-4d6a-b3ba-da7a4430d57c', importId = '8355c0a1-1b78-490d-868f-3ccb5ce4b1b5';
 const sourceSha = '1ca7bedede14497963e97e77782054e15cda64e0bfd74e445df9fdce8f6a3b73';
 const env = dotenv.parse(readFileSync(envFile)); assert(env.CLERK_SECRET_KEY?.startsWith('sk_test_'));
@@ -53,11 +54,25 @@ try {
     assert.equal(status.statementCheckpoint.status, 'pending'); assert.equal(status.statementCheckpoint.endingBalance, null);
     const bytes = await request('qa', `/api/imports/${importId}/file`, { binary: true }); assert.equal(digest(bytes), sourceSha);
     writeFileSync(join(output, 'retained-source.pdf'), bytes, { mode: 0o600 });
+  } else if (phase === 'observe') {
+    assert(!existsSync(join(output, 'status-read-observation.json')), 'Never overwrite the incident evidence');
+    const observed = await diagnostic('preview-bpi-checkpoint');
+    const original = read('baseline-status').statementCheckpoint;
+    const changedKeys = Object.keys(original).filter(key => !isDeepStrictEqual(original[key], observed.plan.checkpoint[key]));
+    assert.deepEqual(changedKeys, ['updatedAt'], 'Do not accept any financial or source metadata drift');
+    const report = await diagnostic('inspect');
+    for (const key of ['accounts', 'transactions', 'files', 'parsedRows', 'rules', 'signals', 'accountRules', 'templates', 'jobs']) assert.deepEqual(report[key], read('baseline')[key]);
+    for (const [table, value] of Object.entries(read('baseline').financial)) if (table !== 'AccountStatementCheckpoint') assert.deepEqual(report.financial[table], value);
+    assert.deepEqual(report.changedOutsideProfile, []);
+    artifact('status-read-observation', { original, checkpoint: observed.plan.checkpoint, changedKeys, financial: report.financial, preservation: observed.preservation,
+      explanation: 'The baseline status GET scheduled an identical JSONB account-summary rewrite because object key order differed. Only the target checkpoint updatedAt changed. This observation retains the original baseline and records the timestamp change explicitly; no financial, source or learning expectation is relaxed.' });
   } else if (phase === 'preview') {
     const preview = await diagnostic('preview-bpi-checkpoint');
-    assert.deepEqual(preview.plan.checkpoint, read('baseline-status').statementCheckpoint);
+    const observation = existsSync(join(output, 'status-read-observation.json')) ? read('status-read-observation') : null;
+    assert.deepEqual(preview.plan.checkpoint, observation?.checkpoint ?? read('baseline-status').statementCheckpoint);
     assertCheckpoint({ ...preview.plan.checkpoint, ...preview.plan.patch }); assert.equal(preview.plan.unchanged, false);
-    assert.deepEqual(await diagnostic('inspect').then(x => x.financial), read('baseline').financial);
+    assert.deepEqual(await diagnostic('inspect').then(x => x.financial), observation?.financial ?? read('baseline').financial);
+    if (observation) assert.deepEqual(preview.preservation, observation.preservation);
     artifact('preview', preview);
   } else if (phase === 'repair') {
     const preview = read('preview');
@@ -71,6 +86,10 @@ try {
     for (const key of ['accounts', 'transactions', 'files', 'parsedRows', 'rules', 'signals', 'accountRules', 'templates', 'jobs']) assert.deepEqual(after[key], read('baseline')[key], `${key} changed`);
     assert.deepEqual(after.changedOutsideProfile, []);
     const status = await request('qa', `/api/imports/${importId}/status`); artifact('after-status', status); assertCheckpoint(status.statementCheckpoint); assert.equal(status.telemetryPhase, 'complete');
+    await new Promise(r => setTimeout(r, 1500));
+    const afterStatus = await diagnostic('preview-bpi-checkpoint'); artifact('after-status-preview', afterStatus);
+    assert.deepEqual(afterStatus.plan.checkpoint, result.checkpoint, 'Status polling rewrote the repaired checkpoint');
+    assert.deepEqual(afterStatus.preservation, preview.preservation);
     assert.equal(digest(await request('qa', `/api/imports/${importId}/file`, { binary: true })), sourceSha);
   } else {
     const statePath = join(output, 'fresh-run.json');

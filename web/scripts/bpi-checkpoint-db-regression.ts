@@ -23,6 +23,8 @@ async function main() {
   const { checkpointPreservationManifest: manifest } = await import("../lib/staging-learning-verification");
   const { processImportFileText } = await import("../workers/import-processor");
   const { processLearningJob } = await import("../lib/learning-jobs");
+  const { loadImportStatusSnapshot } = await import("../lib/import-status-snapshot");
+  const { persistPublishedAccountSummaries } = await import("../lib/import-checkpoint-publication");
   const bytes = readFileSync(new URL("./fixtures/bpi-checkpoint/retained-synthetic.pdf", import.meta.url));
   const sourceSha256 = createHash("sha256").update(bytes).digest("hex");
   assert.equal(sourceSha256, "1ca7bedede14497963e97e77782054e15cda64e0bfd74e445df9fdce8f6a3b73");
@@ -59,6 +61,20 @@ async function main() {
     assert.equal(await db.transaction.count({ where: { importFileId: file.id } }), 100);
     const account = await db.account.findUniqueOrThrow({ where: { id: checkpoint.accountId! } });
     assert.equal(Number(account.balance), -1000);
+    // Publish once if needed, then prove an actual GET cannot rewrite JSONB
+    // solely because its stored object keys are ordered differently.
+    await persistPublishedAccountSummaries(await loadImportStatusSnapshot(file.id));
+    const published = json(await db.accountStatementCheckpoint.findUniqueOrThrow({ where: { id: checkpoint.id } }));
+    const authPath = require.resolve("../lib/auth"), priorAuth = require.cache[authPath];
+    require.cache[authPath] = { id: authPath, filename: authPath, loaded: true, exports: { isLocalDevHost: async () => true, requireAuth: async () => ({ userId: user.id }) } } as NodeModule;
+    try {
+      const route = await import("../app/api/imports/[importId]/status/route");
+      for (let i = 0; i < 2; i++) {
+        const response = await route.GET(new Request(`http://localhost/api/imports/${file.id}/status`), { params: Promise.resolve({ importId: file.id }) });
+        assert.equal(response.status, 200); await drain();
+        assert.deepEqual(json(await db.accountStatementCheckpoint.findUniqueOrThrow({ where: { id: checkpoint.id } })), published, "A settled status GET must not touch checkpoint metadata or updatedAt");
+      }
+    } finally { if (priorAuth) require.cache[authPath] = priorAuth; else delete require.cache[authPath]; }
     // Reproduce the old missing-header checkpoint; keep its rows and learning.
     const oldMetadata = { ...(checkpoint.sourceMetadata as Record<string, unknown>), openingBalance: null, endingBalance: null, totalAmountDue: null, paymentDueDate: null, startDate: null, endDate: null, workflowStage: "reconciling" };
     delete oldMetadata.statementDate; delete oldMetadata.reconciliation;
@@ -70,9 +86,13 @@ async function main() {
     const before = await manifest(checkpoint.id, db);
     const proposed = await plan(db, input); assert.equal(proposed.unchanged, false);
     assert.deepEqual(await manifest(checkpoint.id, db), before, "Preview is read-only");
+    const stale = (await loadImportStatusSnapshot(file.id))!;
+    stale.accountSummaries = stale.accountSummaries.map(summary => ({ ...summary, accountName: "Stale summary must not win" }));
     await db.$transaction(async tx => { await tx.accountStatementCheckpoint.update({ where: { id: checkpoint.id }, data: proposed.patch }); }, { isolationLevel: "Serializable" });
     assert.deepEqual(await manifest(checkpoint.id, db), before, "Only the checkpoint changed; all account, transaction, source and learned rows remain byte-identical");
     const repaired = json(await db.accountStatementCheckpoint.findUniqueOrThrow({ where: { id: checkpoint.id } }));
+    assert.equal((await persistPublishedAccountSummaries(stale)).count, 0, "Delayed status publication cannot overwrite a newer checkpoint repair");
+    assert.deepEqual(json(await db.accountStatementCheckpoint.findUniqueOrThrow({ where: { id: checkpoint.id } })), repaired);
     assert.equal((await plan(db, input)).unchanged, true, "Retry must not even touch updatedAt");
     assert.deepEqual(json(await db.accountStatementCheckpoint.findUniqueOrThrow({ where: { id: checkpoint.id } })), repaired);
     await assert.rejects(plan(db, { ...input, workspaceId: randomUUID() }), /SOURCE_OR_SCOPE_CHANGED/);

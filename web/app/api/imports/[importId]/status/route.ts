@@ -8,7 +8,8 @@ import {
   upsertImportEnrichmentJob,
 } from "@/lib/import-enrichment-jobs";
 import { loadImportStatusSnapshot } from "@/lib/import-status-snapshot";
-import { mergeCheckpointSourceMetadata, readCheckpointImportMode } from "@/lib/import-workflow";
+import { shouldPersistPublishedAccountSummaries, persistPublishedAccountSummaries } from "@/lib/import-checkpoint-publication";
+import { readCheckpointImportMode } from "@/lib/import-workflow";
 import { prisma } from "@/lib/prisma";
 import { processImportEnrichmentJobs } from "@/workers/import-processor";
 import {
@@ -18,7 +19,6 @@ import {
   getVisualImportRetryMessage,
 } from "@/lib/import-visual-recovery";
 import { after, NextResponse } from "next/server";
-import type { Prisma } from "@prisma/client";
 import {
   createTransientDataUnavailableResponse,
   isTransientDataError,
@@ -71,24 +71,6 @@ const buildRecoverableImageImportSuccessMessage = (importMode?: string | null) =
   }
 };
 
-const shouldPersistPublishedAccountSummaries = (snapshot: Awaited<ReturnType<typeof loadImportStatusSnapshot>>) => {
-  if (!snapshot?.statementCheckpoint || snapshot.accountSummaries.length === 0) {
-    return false;
-  }
-
-  const sourceMetadata =
-    snapshot.statementCheckpoint.sourceMetadata &&
-    typeof snapshot.statementCheckpoint.sourceMetadata === "object" &&
-    !Array.isArray(snapshot.statementCheckpoint.sourceMetadata)
-      ? (snapshot.statementCheckpoint.sourceMetadata as Record<string, unknown>)
-      : null;
-  const existingVisibleFlag = sourceMetadata?.publishedVisibleImportComplete === true;
-  const existingSummaries = Array.isArray(sourceMetadata?.publishedAccountSummaries) ? sourceMetadata.publishedAccountSummaries : [];
-  const nextSerialized = JSON.stringify(snapshot.accountSummaries);
-  const existingSerialized = JSON.stringify(existingSummaries);
-  return !existingVisibleFlag || nextSerialized !== existingSerialized;
-};
-
 export async function GET(_request: Request, { params }: { params: Promise<{ importId: string }> }) {
   try {
     const { importId } = await params;
@@ -123,17 +105,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ imp
 
     if (shouldPersistPublishedAccountSummaries(snapshot)) {
       after(async () => {
-        await prisma.accountStatementCheckpoint
-          .update({
-            where: { importFileId: importId },
-            data: {
-              sourceMetadata: mergeCheckpointSourceMetadata(snapshot.statementCheckpoint?.sourceMetadata, {
-                publishedVisibleImportComplete: snapshot.visibleImportComplete,
-                publishedAccountSummaries: snapshot.accountSummaries,
-              }) as Prisma.InputJsonValue,
-            },
-          })
-          .catch(() => null);
+        await persistPublishedAccountSummaries(snapshot).catch(() => null);
       });
     }
 
