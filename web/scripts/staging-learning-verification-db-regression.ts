@@ -52,6 +52,9 @@ async function main() {
       permission = "reader"; assert.equal((await route.POST(request())).status, 403);
       permission = "owner"; assert.equal((await route.POST(request(undefined, "https://untrusted.invalid"))).status, 403);
       assert.equal((await route.POST(request({ runId, action: "inspect", workspaceId: original.id }))).status, 400);
+      assert.equal((await route.POST(request({ runId, action: "repair-bpi-checkpoint" }))).status, 400, "A repair needs the reviewed preview hash");
+      assert.equal((await route.POST(request({ runId, action: "preview-bpi-checkpoint", expectedPlanHash: "0".repeat(64) }))).status, 400);
+      assert.equal((await route.POST(request({ runId, action: "preview-bpi-checkpoint" }))).status, 404, "Only the retained owned run can use this diagnostic");
       assert.equal((await route.POST(request())).status, 200);
       process.env.VERCEL_ENV = "production"; assert.equal((await route.POST(request())).status, 404);
     } finally { if (prior) require.cache[adminPath] = prior; else delete require.cache[adminPath]; }

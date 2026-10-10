@@ -1,4 +1,5 @@
 import { Prisma } from "@prisma/client";
+import { createHash } from "node:crypto";
 import { prisma } from "@/lib/prisma";
 import { enqueueLearningJob, processLearningJob, type LearningAction } from "@/lib/learning-jobs";
 
@@ -20,6 +21,17 @@ const missingCategoryId = (runId: string) => `learning-verification-category-${r
 const tables = ["Workspace", "Account", "AccountTombstone", "Category", "Transaction", "ImportFile", "ParsedTransaction", "DocumentImport", "AccountStatementCheckpoint", "ReceiptDocument", "MerchantRule", "AccountRule", "TrainingSignal", "StatementTemplate", "DataQaRun", "DataQaFinding", "ImportFileExtractionCache", "ImportEnrichmentJob", "LearningJob", "DocumentImportPage", "LearningJobAttempt"] as const;
 type Manifest = Record<string, { count: number; sha256: string }>;
 const financialTables = new Set<string>(["Account", "AccountTombstone", "Transaction", "ImportFile", "ParsedTransaction", "DocumentImport", "AccountStatementCheckpoint", "ReceiptDocument", "DocumentImportPage"]);
+export async function checkpointPreservationManifest(checkpointId: string, db: Prisma.TransactionClient): Promise<Manifest> {
+  const result: Manifest = {};
+  for (const table of tables) {
+    const predicate = table === "AccountStatementCheckpoint" ? 'WHERE t."id" <> $1' : "";
+    const rows = await db.$queryRawUnsafe<Array<{ count: number; sha256: string }>>(`SELECT count(*)::int AS count,
+      encode(sha256(convert_to(COALESCE(string_agg(encode(sha256(convert_to(to_jsonb(t)::text, 'UTF8')), 'hex'), '' ORDER BY t."id"), ''), 'UTF8')), 'hex') AS sha256
+      FROM "${table}" t ${predicate}`, ...(predicate ? [checkpointId] : []));
+    result[table] = rows[0];
+  }
+  return result;
+}
 export async function learningVerificationManifest(workspaceId: string, own = false, db: Prisma.TransactionClient = prisma): Promise<Manifest> {
   const result: Manifest = {};
   for (const table of tables) {
@@ -116,4 +128,34 @@ export async function inspectLearningVerification(runId: string, actor: string) 
     changedProtectedFinancial: run.state.protectedFinancial ? changed(run.state.protectedFinancial, financial) : null,
     failureJobId: run.state.failureJobId, interruptionJobId: run.state.interruptionJobId,
     accounts, transactions, files, parsedRows, rules, signals, accountRules, templates, jobs };
+}
+
+// A reviewed retained fixture in the already-owned verification Profile only.
+// No arbitrary import/Profile/source input and no production execution path.
+export async function repairVerificationBpiCheckpoint(runId: string, actor: string, expectedPlanHash?: string) {
+  const run = await loadRun(runId, actor);
+  if (runId !== "857a2856-a14e-4d6a-b3ba-da7a4430d57c") throw new Error("VERIFICATION_NOT_FOUND");
+  const importFileId = "8355c0a1-1b78-490d-868f-3ccb5ce4b1b5";
+  const sourceSha256 = "1ca7bedede14497963e97e77782054e15cda64e0bfd74e445df9fdce8f6a3b73";
+  const file = await prisma.importFile.findFirstOrThrow({ where: { id: importFileId, workspaceId: run.workspace.id, sourceFingerprint: sourceSha256 } });
+  const { downloadImportObject } = await import("@/lib/import-storage.server");
+  const { readUploadedFileText } = await import("@/lib/import-file-text.server");
+  const { planBpiCheckpointRepair } = await import("@/lib/bpi-checkpoint-repair");
+  const bytes = await downloadImportObject(file.storageKey);
+  if (createHash("sha256").update(bytes).digest("hex") !== sourceSha256) throw new Error("VERIFICATION_SOURCE_CHANGED");
+  // Read original bytes directly; do not refresh or replace extraction caches.
+  const text = await readUploadedFileText(new File([Buffer.from(bytes)], file.fileName, { type: file.fileType }));
+  return prisma.$transaction(async db => {
+    const plan = await planBpiCheckpointRepair(db, { importFileId, workspaceId: run.workspace.id, sourceSha256, text });
+    const before = await checkpointPreservationManifest(plan.checkpoint.id, db);
+    if (!expectedPlanHash) return { plan, preservation: before, sourceSha256 };
+    if (plan.planHash !== expectedPlanHash) throw new Error("VERIFICATION_PLAN_CHANGED");
+    if (plan.unchanged) return { unchanged: true, checkpoint: plan.checkpoint, preservation: before, sourceSha256 };
+    const checkpoint = await db.accountStatementCheckpoint.update({ where: { id: plan.checkpoint.id }, data: plan.patch });
+    const after = await checkpointPreservationManifest(checkpoint.id, db);
+    if (JSON.stringify(before) !== JSON.stringify(after)) throw new Error("VERIFICATION_PRESERVATION_FAILED");
+    await db.auditLog.create({ data: { workspaceId: run.workspace.id, actorUserId: actor, action: "statement.checkpoint.metadata_repaired", entity: "AccountStatementCheckpoint", entityId: checkpoint.id,
+      metadata: json({ before: plan.checkpoint, after: checkpoint, sourceSha256, preservation: before, planHash: plan.planHash }) } });
+    return { unchanged: false, checkpoint, preservation: after, sourceSha256 };
+  }, { isolationLevel: "Serializable", timeout: 45_000 });
 }

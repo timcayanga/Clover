@@ -1,4 +1,5 @@
 import { enqueueLearningJob, processLearningJob, type LearningAction } from "@/lib/learning-jobs";
+import { assessBpiStatementReconciliation, isBpiCardMetadata } from "@/lib/bpi-statement-reconciliation";
 import { readAppMigration, createMigrationOverlapMatcher, summarizeAppMigration } from "@/lib/app-migration-import";
 import { persistMigrationTags } from "@/lib/app-migration-persistence";
 import { encodeLocalReceiptOcr, readLocalReceiptOcrText } from "@/lib/local-receipt-ocr-envelope";
@@ -21,7 +22,7 @@ import { capturePostHogServerEvent } from "@/lib/analytics-server";
 import { findDeletedAccountTombstoneMatch } from "@/lib/account-tombstones";
 import { formatUploadAccountDisplayName } from "@/lib/account-display";
 import { recordDataQaRun, type DataQaParsedRow, type DataQaSource } from "@/lib/data-qa";
-import { deriveReconciledBalance, type BalanceLikeTransaction } from "@/lib/account-balance";
+import { deriveReconciledBalance, normalizeAccountBalanceSign, type BalanceLikeTransaction } from "@/lib/account-balance";
 import { getWorkspaceOwnerLimits, getWorkspaceOwnerPlanUsage } from "@/lib/plan-access";
 import { createBankImportOverlapMatcher } from "@/lib/bank-import-overlap";
 import {
@@ -12725,8 +12726,12 @@ const processImportFileTextImpl = async (
 
   if (await hasCompatibleTable("AccountStatementCheckpoint")) {
     try {
-      const metadataStartDate = metadata.startDate ? new Date(metadata.startDate) : null;
-      const metadataEndDate = resolvedMetadata.endDate ? new Date(resolvedMetadata.endDate) : null;
+      const bpiReconciliation = effectiveImportMode === "statement" && isBpiCardMetadata(resolvedMetadata)
+        ? assessBpiStatementReconciliation(textForParse, resolvedMetadata, rows) : null;
+      const checkpointStart = bpiReconciliation ? bpiReconciliation.statementStartDate : metadata.startDate;
+      const checkpointEnd = bpiReconciliation ? bpiReconciliation.statementEndDate : resolvedMetadata.endDate;
+      const metadataStartDate = checkpointStart ? new Date(checkpointStart) : null;
+      const metadataEndDate = checkpointEnd ? new Date(checkpointEnd) : null;
       const checkpointSourceMetadata = {
         ...resolvedMetadata,
         importMode: effectiveImportMode,
@@ -12754,7 +12759,8 @@ const processImportFileTextImpl = async (
         backupParserModel: useOpenAiParse ? openAiParsed?.model ?? null : null,
         backupParserSchemaValidated: useOpenAiParse ? openAiParsed?.audit.schemaValidated ?? false : null,
         backupParserQualityScore: useOpenAiParse ? openAiParsed?.audit.quality?.score ?? null : null,
-        balanceReconciled: rows.some((row) => {
+        ...(bpiReconciliation ? { reconciliation: bpiReconciliation, startDate: checkpointStart, endDate: checkpointEnd } : {}),
+        balanceReconciled: bpiReconciliation ? bpiReconciliation.balanceReconciled : rows.some((row) => {
           const rawPayload = row.rawPayload;
           if (!rawPayload || typeof rawPayload !== "object" || Array.isArray(rawPayload)) {
             return false;
@@ -15421,12 +15427,18 @@ export const confirmImportFile = async (
       isPublishedAccountInventory && accountSummaries.length === 1
         ? accountSummaries[0]?.balance ?? null
         : null;
+    const bpiReconciliation = isRecord(checkpointSourceMetadata?.reconciliation) &&
+      checkpointSourceMetadata.reconciliation.version === "bpi-header-reconciliation-v1"
+        ? checkpointSourceMetadata.reconciliation : null;
     if (isPublishedAccountInventory) {
       // Learned spreadsheet templates may retain the previous file's document
       // balance. Account-inventory rows are authoritative for the current
       // upload, so never let that stale checkpoint override the published card.
       checkpointStatus = "pending";
       mismatchReason = null;
+    } else if (bpiReconciliation) {
+      checkpointStatus = bpiReconciliation.status === "reconciled" ? "reconciled" : bpiReconciliation.status === "mismatch" ? "mismatch" : "pending";
+      mismatchReason = typeof bpiReconciliation.reason === "string" ? bpiReconciliation.reason : null;
     } else if (statementCheckpoint.endingBalance !== null && checkpointSourceMetadata?.balanceReconciled === true) {
       checkpointStatus = "reconciled";
     } else if (statementCheckpoint.endingBalance !== null) {
@@ -15460,7 +15472,7 @@ export const confirmImportFile = async (
           accountNumber: account.accountNumber,
           accountType: account.type,
           ...(isPublishedAccountInventory ? { endingBalance: inventoryCheckpointBalance } : {}),
-          workflowStage: checkpointStatus === "reconciled" ? "complete" : checkpointStatus === "mismatch" ? "repair_needed" : "reconciling",
+          workflowStage: bpiReconciliation && checkpointStatus === "pending" ? "complete" : checkpointStatus === "reconciled" ? "complete" : checkpointStatus === "mismatch" ? "repair_needed" : "reconciling",
           publishedVisibleImportComplete: accountSummaries.length > 0,
           publishedAccountSummaries: accountSummaries,
         }) as Prisma.InputJsonValue,
@@ -15705,7 +15717,11 @@ export const confirmImportFile = async (
       return snapshotBalanceToString((row.rawPayload as Record<string, unknown>).balance) !== null;
     });
 
-  const statementEndingBalance = snapshotBalanceToString(statementCheckpoint?.endingBalance);
+  const printedEndingBalance = snapshotBalanceToString(statementCheckpoint?.endingBalance);
+  // BPI prints an amount owed as positive. Keep that source value in the
+  // checkpoint while applying Clover's existing liability sign to the account.
+  const statementEndingBalance = printedEndingBalance !== null && account.type === "credit_card" && isBpiCardMetadata(baseStatementMetadata)
+    ? String(normalizeAccountBalanceSign(account.type, Number(printedEndingBalance))) : printedEndingBalance;
   const latestExplicitStatementBalance = snapshotBalanceToString(
     latestExplicitBalance && typeof latestExplicitBalance.rawPayload === "object" && !Array.isArray(latestExplicitBalance.rawPayload)
       ? (latestExplicitBalance.rawPayload as Record<string, unknown>).balance

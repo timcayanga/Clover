@@ -2,7 +2,7 @@
 
 ## Scope
 
-Use these rules for BPI savings and related statement imports.
+Use these rules for BPI savings and credit-card statement imports.
 
 ## Core Patterns
 
@@ -35,6 +35,10 @@ Use these rules for BPI savings and related statement imports.
 - Treat `RATES AND FEES TABLE`, important reminders, notices, and terms pages as hard credit-card ledger boundaries. Percentages and sample fee amounts on those pages are never transactions.
 - Preserve whitespace between a BPI card approval/reference number and its amount. A reference such as `4029357733` must not be concatenated with the following monetary token.
 - Keep statement date and payment due date as separate card metadata. Derive the transaction period from the earliest and latest parsed ledger rows instead of validating purchases against the statement-to-due-date window.
+- Credit-card header labels may use colons and a PHP/₱ prefix (`Total Amount Due: PHP 1,000.00`). Capture those forms without changing the original source. Keep positive printed amounts owed in checkpoint metadata and use Clover's negative liability sign for the account balance.
+- Reconciliation requires independently printed opening and ending balances, matching currency, resolved row directions and exact cent arithmetic. A closing total equal to purchases does not prove an unstated zero opening balance. Preserve all repeated rows; stop on conflicting headers or a one-cent mismatch.
+- When source evidence is missing, finish the import and record a specific reconciliation review reason. `pending` is the financial evidence status, not an indefinitely running import. Never invent an opening transaction or mark the balance reconciled just to clear a checkpoint.
+- Repairing an already published checkpoint must verify the original file checksum, full account identity, currency, source/parsed/confirmed ledger occurrence counts and amounts. Preserve edited merchant/category fields, account balances, parsed evidence and learned rules. A financial conflict blocks repair. Fill only supported missing metadata; retries must perform no write.
 - Use the PHP equivalent as the primary amount when a foreign-currency line shows both the source currency and the PHP conversion.
 - Keep the original source-currency amount in notes or raw payload metadata instead of making it a second transaction row.
 - Treat `Payment - Thank You` as a card payment / transfer-style credit, not an expense.

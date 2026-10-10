@@ -79,6 +79,7 @@ export type DetectedStatementMetadata = {
   openingBalance: number | null;
   endingBalance: number | null;
   creditLimit?: number | null;
+  statementDate?: string | null;
   paymentDueDate?: string | null;
   totalAmountDue?: number | null;
   startDate: string | null;
@@ -4380,18 +4381,17 @@ const bpiCreditCardStatementMetadata = (text: string): DetectedStatementMetadata
   const compact = lines.join("").replace(/\s+/g, "");
 
   const statementDate =
-    parseBpiDate(normalized.match(/STATEMENT\s+DATE\s+([A-Z]+\s+\d{1,2},\s*\d{4})/i)?.[1] ?? null) ??
-    parseBpiDate(compact.match(/STATEMENTDATE([A-Z]+\d{1,2},\d{4})/i)?.[1] ?? null) ??
-    parseBpiDate(compact.match(/STATEMENTDATE([A-Z]+\d{1,2},\d{4})/i)?.[1] ?? null);
+    parseBpiDate(normalized.match(/STATEMENT\s+DATE\s*:?\s*([A-Z]+\s+\d{1,2},\s*\d{4})/i)?.[1] ?? null) ??
+    parseBpiDate(compact.match(/STATEMENTDATE:?([A-Z]+\d{1,2},\d{4})/i)?.[1] ?? null);
   const paymentDueDate =
-    parseBpiDate(normalized.match(/PAYMENT\s+DUE\s+DATE\s+([A-Z]+\s+\d{1,2},\s*\d{4})/i)?.[1] ?? null) ??
-    parseBpiDate(compact.match(/PAYMENTDUEDATE([A-Z]+\d{1,2},\d{4})/i)?.[1] ?? null);
+    parseBpiDate(normalized.match(/PAYMENT\s+DUE\s+DATE\s*:?\s*([A-Z]+\s+\d{1,2},\s*\d{4})/i)?.[1] ?? null) ??
+    parseBpiDate(compact.match(/PAYMENTDUEDATE:?([A-Z]+\d{1,2},\d{4})/i)?.[1] ?? null);
   const previousBalance =
-    parseMoney(compact.match(/PREVIOUSBALANCE([0-9,]+\.\d{2})/i)?.[1] ?? null) ??
+    parseMoney(compact.match(/PREVIOUSBALANCE:?(?:PHP|₱)?([0-9,]+\.\d{2})/i)?.[1] ?? null) ??
     parseMoney(lines.find((line) => /BPISIGNATURE/i.test(line))?.match(/\b([0-9][0-9,]*\.\d{2})\b/)?.[1] ?? null);
   const endingBalance =
-    parseMoney(compact.match(/TOTALAMOUNTDUE([0-9,]+\.\d{2})/i)?.[1] ?? null) ??
-    parseMoney(compact.match(/ENDINGBALANCE([0-9,]+\.\d{2})/i)?.[1] ?? null);
+    parseMoney(compact.match(/TOTALAMOUNTDUE:?(?:PHP|₱)?([0-9,]+\.\d{2})/i)?.[1] ?? null) ??
+    parseMoney(compact.match(/ENDINGBALANCE:?(?:PHP|₱)?([0-9,]+\.\d{2})/i)?.[1] ?? null);
   const accountNumber = detectAccountNumberFromText(normalized) ?? "9001";
 
   return {
@@ -4402,6 +4402,7 @@ const bpiCreditCardStatementMetadata = (text: string): DetectedStatementMetadata
     currency: "PHP",
     openingBalance: previousBalance,
     endingBalance,
+    statementDate: statementDate ? statementDate.toISOString() : null,
     paymentDueDate: paymentDueDate ? paymentDueDate.toISOString() : null,
     totalAmountDue: endingBalance,
     startDate: statementDate ? statementDate.toISOString() : null,

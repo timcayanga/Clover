@@ -68,3 +68,11 @@ These counts describe regression coverage, not newly trained examples or human-c
 ## Durable learning extension
 
 The release gate also applies the additive learning migration to retained legacy records and runs fault-injected learning/job/API checks in the disposable database. See [the durable learning contract](durable-learning.md). Preserve immutable observations, atomic outbox/checkpoints, manual authority, inactive exclusion, older-rule retrieval and failure history alongside the financial preservation requirements above.
+
+## BPI checkpoint incident regression
+
+`bpi-checkpoint-db-regression.ts` adds the exact four-page synthetic PDF from the staging verification to the permanent release gate; `fixtures/bpi-checkpoint/review.json` records its independent source review and immutable checksum. Its 100 PHP 10 purchases total PHP 1,000. The colon-delimited bill/due dates and closing total must be captured, transaction coverage remains August 1–25, and the absent opening balance must remain absent. Positive tests use an explicitly added synthetic previous-balance header; these are separate derivatives, not changes to the retained PDF.
+
+The real worker test verifies the account's liability sign, completed processing with an explicit missing-evidence reason, cent-level mismatches, repeated occurrences and currency guards. It recreates a legacy checkpoint and proves preview is read-only and repair changes only that checkpoint. All other complete rows across the 21 protected tables, including confirmed edits, raw imports, account balances and every learned rule/job, must hash identically. Repeat repair is a no-op, and a confirmed amount edit blocks it.
+
+The staging-only operator diagnostic permits this reviewed checkpoint repair only in its original owned verification Profile, verifies downloaded source bytes, requires a preview hash, checks preservation atomically, and journals the complete before/after checkpoint. It does not reprocess the import or reset any source, transaction, cache or learning record.

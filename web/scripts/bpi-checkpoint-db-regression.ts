@@ -1,0 +1,88 @@
+import assert from "node:assert/strict";
+import { createHash, randomUUID } from "node:crypto";
+import { readFileSync } from "node:fs";
+import { createRequire } from "node:module";
+
+const url = new URL(process.env.DATABASE_URL ?? "http://invalid");
+assert.equal(url.hostname, "127.0.0.1"); assert.equal(url.port, "55441"); assert.equal(url.pathname, "/clover_migration_qa"); assert(process.argv.includes("--execute"));
+const require = createRequire(import.meta.url);
+require("next/cache").revalidateTag = () => {};
+const tasks: Array<() => Promise<void>> = [];
+require("next/server").after = (task: () => Promise<void>) => tasks.push(task);
+const drain = async () => { while (tasks.length) await Promise.all(tasks.splice(0).map(fn => fn())); };
+let networkCalls = 0;
+globalThis.fetch = async () => { networkCalls++; throw new Error("BPI checkpoint QA prohibits provider calls"); };
+const json = (v: unknown) => JSON.parse(JSON.stringify(v));
+
+async function main() {
+  const { prisma: db } = await import("../lib/prisma");
+  const { readUploadedFileText } = await import("../lib/import-file-text.server");
+  const { detectStatementMetadata, parseImportText } = await import("../lib/import-parser");
+  const { assessBpiStatementReconciliation: assess } = await import("../lib/bpi-statement-reconciliation");
+  const { planBpiCheckpointRepair: plan } = await import("../lib/bpi-checkpoint-repair");
+  const { checkpointPreservationManifest: manifest } = await import("../lib/staging-learning-verification");
+  const { processImportFileText } = await import("../workers/import-processor");
+  const { processLearningJob } = await import("../lib/learning-jobs");
+  const bytes = readFileSync(new URL("./fixtures/bpi-checkpoint/retained-synthetic.pdf", import.meta.url));
+  const sourceSha256 = createHash("sha256").update(bytes).digest("hex");
+  assert.equal(sourceSha256, "1ca7bedede14497963e97e77782054e15cda64e0bfd74e445df9fdce8f6a3b73");
+  const text = await readUploadedFileText(new File([bytes], "retained-bpi.pdf", { type: "application/pdf" }));
+  const metadata = detectStatementMetadata(text, "retained-bpi.pdf")!;
+  assert.equal(metadata.accountNumber, "9999000000008263"); assert.equal(metadata.currency, "PHP");
+  assert.equal(metadata.endingBalance, 1000); assert.equal(metadata.totalAmountDue, 1000); assert.equal(metadata.openingBalance, null);
+  assert.equal(metadata.statementDate, "2026-09-01T12:00:00.000Z"); assert.equal(metadata.paymentDueDate, "2026-09-20T12:00:00.000Z");
+  const rows = parseImportText(text, "retained-bpi.pdf", "application/pdf");
+  assert.equal(rows.length, 100); assert(rows.every(r => Number(r.amount) === 10 && r.type === "expense"));
+  const assessment = assess(text, metadata, rows);
+  assert.equal(assessment.code, "MISSING_OPENING_BALANCE"); assert.equal(assessment.balanceReconciled, false);
+  assert.equal(assessment.statementStartDate, "2026-08-01T12:00:00.000Z"); assert.equal(assessment.statementEndDate, "2026-08-25T12:00:00.000Z");
+  const withOpening = `${text}\nPrevious Balance: PHP 0.00`;
+  const openingMetadata = detectStatementMetadata(withOpening, "bpi.pdf")!;
+  assert.equal(assess(withOpening, openingMetadata, rows).status, "reconciled");
+  assert.equal(assess(withOpening, openingMetadata, rows.slice(1)).status, "mismatch");
+  assert.equal(assess(withOpening, openingMetadata, [...rows, rows[0]]).status, "mismatch", "Do not deduplicate legitimate occurrences");
+  assert.equal(assess(withOpening, openingMetadata, rows.map((r, i) => i === 0 ? { ...r, amount: "10.01" } : r)).status, "mismatch", "A one-cent mismatch is not rounded away");
+  assert.equal(assess(withOpening, openingMetadata, rows.map((r, i) => i === 0 ? { ...r, currency: "USD" } : r)).code, "UNRESOLVED_LEDGER");
+  assert.equal(assess(`${withOpening}\nTotal Amount Due: 999.00`, openingMetadata, rows).code, "CONFLICTING_HEADERS");
+  const user = await db.user.create({ data: { clerkUserId: randomUUID(), email: `${randomUUID()}@example.invalid`, environment: "staging", planTier: "pro", planTierLocked: true } });
+  try {
+    const workspace = await db.workspace.create({ data: { userId: user.id, name: "BPI checkpoint preservation" } });
+    const file = await db.importFile.create({ data: { workspaceId: workspace.id, fileName: "retained-bpi.pdf", fileType: "application/pdf", storageKey: `qa/${randomUUID()}`, sourceFingerprint: sourceSha256 } });
+    const settle = async () => { await drain(); for (const job of await db.learningJob.findMany({ where: { workspaceId: workspace.id, status: "queued" } })) await processLearningJob(job.id); };
+    await processImportFileText(file.id, { text, importMode: "statement", actorUserId: user.id }); await settle();
+    let checkpoint = await db.accountStatementCheckpoint.findUniqueOrThrow({ where: { importFileId: file.id } });
+    assert.equal(Number(checkpoint.endingBalance), 1000); assert.equal(checkpoint.openingBalance, null);
+    assert.equal(checkpoint.statementStartDate?.toISOString(), assessment.statementStartDate);
+    assert.equal(checkpoint.statementEndDate?.toISOString(), assessment.statementEndDate);
+    assert.equal(checkpoint.status, "pending"); assert.match(checkpoint.mismatchReason!, /opening balance/);
+    assert.equal((checkpoint.sourceMetadata as Record<string, unknown>).workflowStage, "complete", "Missing evidence must not look like processing is still running");
+    assert.equal(await db.transaction.count({ where: { importFileId: file.id } }), 100);
+    const account = await db.account.findUniqueOrThrow({ where: { id: checkpoint.accountId! } });
+    assert.equal(Number(account.balance), -1000);
+    // Reproduce the old missing-header checkpoint; keep its rows and learning.
+    const oldMetadata = { ...(checkpoint.sourceMetadata as Record<string, unknown>), openingBalance: null, endingBalance: null, totalAmountDue: null, paymentDueDate: null, startDate: null, endDate: null, workflowStage: "reconciling" };
+    delete oldMetadata.statementDate; delete oldMetadata.reconciliation;
+    checkpoint = await db.accountStatementCheckpoint.update({ where: { id: checkpoint.id }, data: { openingBalance: null, endingBalance: null, statementStartDate: null, statementEndDate: null, status: "pending", mismatchReason: null, sourceMetadata: json(oldMetadata) } });
+    await db.account.update({ where: { id: account.id }, data: { name: "My reviewed BPI card", nameCustomized: true, balance: -1234.56 } });
+    const transaction = await db.transaction.findFirstOrThrow({ where: { importFileId: file.id } });
+    await db.transaction.update({ where: { id: transaction.id }, data: { merchantClean: "My confirmed merchant", reviewStatus: "edited", description: "User-owned description" } });
+    const input = { importFileId: file.id, workspaceId: workspace.id, sourceSha256, text };
+    const before = await manifest(checkpoint.id, db);
+    const proposed = await plan(db, input); assert.equal(proposed.unchanged, false);
+    assert.deepEqual(await manifest(checkpoint.id, db), before, "Preview is read-only");
+    await db.$transaction(async tx => { await tx.accountStatementCheckpoint.update({ where: { id: checkpoint.id }, data: proposed.patch }); }, { isolationLevel: "Serializable" });
+    assert.deepEqual(await manifest(checkpoint.id, db), before, "Only the checkpoint changed; all account, transaction, source and learned rows remain byte-identical");
+    const repaired = json(await db.accountStatementCheckpoint.findUniqueOrThrow({ where: { id: checkpoint.id } }));
+    assert.equal((await plan(db, input)).unchanged, true, "Retry must not even touch updatedAt");
+    assert.deepEqual(json(await db.accountStatementCheckpoint.findUniqueOrThrow({ where: { id: checkpoint.id } })), repaired);
+    await assert.rejects(plan(db, { ...input, workspaceId: randomUUID() }), /SOURCE_OR_SCOPE_CHANGED/);
+    await assert.rejects(plan(db, { ...input, sourceSha256: "0".repeat(64) }), /SOURCE_OR_SCOPE_CHANGED/);
+    await assert.rejects(plan(db, { ...input, text: text.replaceAll("9999 0000 0000 8263", "9999 0000 0000 1234") }), /IDENTITY_CONFLICT/);
+    await db.transaction.update({ where: { id: transaction.id }, data: { amount: 11 } });
+    await assert.rejects(plan(db, input), /LEDGER_CONFLICT/, "A confirmed amount edit blocks repair instead of being overwritten");
+    assert.equal(Number((await db.transaction.findUniqueOrThrow({ where: { id: transaction.id } })).amount), 11);
+    assert.equal(networkCalls, 0);
+    console.log("PASS BPI checkpoint: exact retained PDF, colon headers, dates, 100 rows, no invented opening balance, one-cent mismatch, repeat/currency guards, real worker, read-only preview, checkpoint-only idempotent repair, confirmed edits and all learning preserved.");
+  } finally { await drain(); await db.user.delete({ where: { id: user.id } }); await db.$disconnect(); }
+}
+main().catch(error => { console.error(error); process.exitCode = 1; });
