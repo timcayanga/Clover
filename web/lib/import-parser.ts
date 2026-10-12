@@ -25939,10 +25939,6 @@ const filterSharedScreenshotParsedRows = (
 };
 
 export const detectStatementMetadata = (text: string, fileName = ""): DetectedStatementMetadata | null => {
-  const posb = parsePosbStatement(text);
-  if (posb) return posb.metadata;
-  const gcashBill = parseGcashBillsReceipt(text);
-  if (gcashBill) return gcashBill.metadata;
   const investmentSummaryRows = text.includes("__CLOVER_WORKSHEET__") ? null : parseInvestmentSummary(text);
   if (investmentSummaryRows) return { institution: null, accountName: null, accountNumber: null, accountType: "investment", currency: null, openingBalance: null, endingBalance: null, startDate: null, endDate: null, confidence: 65 };
   // Recognized tabular exports have explicit columns. Their headings and row
@@ -25966,6 +25962,10 @@ export const detectStatementMetadata = (text: string, fileName = ""): DetectedSt
     };
   }
 
+  const posb = parsePosbStatement(text);
+  if (posb) return posb.metadata;
+  const gcashBill = parseGcashBillsReceipt(text);
+  if (gcashBill) return gcashBill.metadata;
   const wisePdfStatement = parseWisePdfStatement(text);
   if (wisePdfStatement) {
     return wisePdfStatement.metadata;
@@ -26844,10 +26844,6 @@ export const parseImportText = (
   if (financialExchangeRows) {
     return financialExchangeRows;
   }
-  const posb = parsePosbStatement(text);
-  if (posb) return posb.rows;
-  const gcashBill = parseGcashBillsReceipt(text);
-  if (gcashBill) return gcashBill.rows;
   const structuredWorkbookRows = parseStructuredWorkbookImport(text, fileName, fileType, context);
   if (structuredWorkbookRows) {
     return structuredWorkbookRows;
@@ -26862,6 +26858,10 @@ export const parseImportText = (
   if (structuredDelimitedRows) {
     return structuredDelimitedRows;
   }
+  const posb = parsePosbStatement(text);
+  if (posb) return posb.rows;
+  const gcashBill = parseGcashBillsReceipt(text);
+  if (gcashBill) return gcashBill.rows;
 
   const koreanBankRows = parseKoreanBankDocument(text, context);
   if (koreanBankRows) return koreanBankRows;

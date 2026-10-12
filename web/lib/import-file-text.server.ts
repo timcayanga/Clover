@@ -1,5 +1,6 @@
 import { hasReconciledBdoInlineLedger } from "@/lib/import-parser";
 import { buildPosbPdfRows } from "@/lib/posb-statement";
+import { gcashBillsReceiptTextLayerIsComplete } from "@/lib/gcash-bills-receipt";
 import { readLocalReceiptImage, shutdownLocalReceiptOcr } from "./local-receipt-ocr.server";
 import { hasHangul, hasKoreanFinancialHeaders } from "@/lib/korean-financial-text";
 import { koreanStatementLineEvidence } from "@/lib/korean-statement-evidence";
@@ -3104,7 +3105,7 @@ export const readImportedFileTextWithCacheInfo = async (
         // contain repeated transaction rows, so that gate incorrectly sends a
         // complete text layer through a 30-60 second rendered OCR pass. Keep
         // the OCR fallback for scanned PDFs whose text layer is actually empty.
-        if (textLayer.trim() && (
+        if (textLayer.trim() && gcashBillsReceiptTextLayerIsComplete(textLayer) && (
           shouldPreferPdfTextLayerWithoutStatementGate(params.fileName, params.importMode) ||
           knownStatementNativeTextIsComplete(textLayer, params.fileName)
         )) {

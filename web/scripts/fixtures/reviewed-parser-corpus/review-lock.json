@@ -24,5 +24,6 @@
   "eastwest-template-explicit-account": "c1552faf9ad8df78dccc2aed29f603ef84d4abd8180369d87dfc442add0d7837",
   "posb-column-ledger": "7da0c9146f657ad97eab005b632c60114d84bc69f16b9bd4064bc55ef8476d10",
   "gcash-bill-fee-email": "7b64ffb2f8fd6aabbd891124e4746e157a4859d2c1b08689cf10f2051f0f9eac",
-  "maribank-retained-column-repeats": "242f03c3874306f01553af570bab88b89a84681579147781707a3c8067c90561"
+  "maribank-retained-column-repeats": "242f03c3874306f01553af570bab88b89a84681579147781707a3c8067c90561",
+  "gcash-bill-native-body": "2fb1ab79cea466928aa8331fa90aa41b8c63af721599944c642203c84982141e"
 }

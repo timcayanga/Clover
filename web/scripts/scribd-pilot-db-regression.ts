@@ -3,7 +3,8 @@ import { createHash, randomUUID } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { buildPosbPdfRows, parsePosbStatement } from '../lib/posb-statement';
-import { parseGcashBillsReceipt } from '../lib/gcash-bills-receipt';
+import { parseGcashBillsReceipt, gcashBillsReceiptTextLayerIsComplete } from '../lib/gcash-bills-receipt';
+import { parseImportText, detectStatementMetadata } from '../lib/import-parser';
 
 const url=new URL(process.env.DATABASE_URL??'http://invalid');
 assert.equal(url.hostname,'127.0.0.1');assert.equal(url.port,'55441');assert.equal(url.pathname,'/clover_migration_qa');assert(process.argv.includes('--execute'));
@@ -16,6 +17,17 @@ const source=(name:string)=>readFileSync(new URL(`./fixtures/reviewed-parser-cor
 
 async function main(){
   const posb=source('posb-column-ledger'),gcash=source('gcash-bill-fee-email');
+  assert.equal(gcashBillsReceiptTextLayerIsComplete(gcash),true);
+  assert.equal(gcashBillsReceiptTextLayerIsComplete(gcash.replace('Amount Paid PHP 120.00\n','')),false,'An image-only net bill cannot be inferred from a partial native receipt');
+  assert.equal(gcashBillsReceiptTextLayerIsComplete('Airline e-ticket native receipt text'),true,'Unrelated text-native receipts retain their established fast path');
+  const nativeBody=gcash.replace('Subject: GCash Bills Pay Receipt\n','').replace('Date: Feb 1, 2025 at 6:09:25 PM\n','').replace('INC (SAMPLE)\nBiller Name','Biller Name\nINC (SAMPLE)');
+  assert.equal(gcashBillsReceiptTextLayerIsComplete(nativeBody),true,'Receipt fields identify the payment even when the email header is image-only');
+  assert.equal(parseGcashBillsReceipt(nativeBody)?.rows[0].merchantRaw,'INVENTED ELECTRIC COOPERATIVE, INC (SAMPLE)');
+  const exportCsv='date,amount,currency,type,merchant,account,notes\n2025-06-03,4.50,USD,expense,Invented shop,Export account,"'+gcash.replaceAll('"','""')+'"\n';
+  const exportRows=parseImportText(exportCsv,'export.csv','text/csv');
+  assert.equal(exportRows.length,1,'A receipt inside an export memo cannot replace the export ledger');
+  assert.equal(exportRows[0].date,'2025-06-03');assert.equal(exportRows[0].amount,'4.50');assert.equal(exportRows[0].currency,'USD');
+  assert.equal(detectStatementMetadata(exportCsv,'export.csv')?.currency,'USD');
   assert.throws(()=>parsePosbStatement(posb.replace('80.22','80.23')),/balance does not reconcile/);
   assert.throws(()=>parsePosbStatement(posb.replace('Page 1 of 1','Page 1 of 2')),/pages are missing/);
   assert.throws(()=>parsePosbStatement(posb.replace('As at 31 Dec 2025','As at 31 Dec')),/year is missing/);
@@ -30,9 +42,16 @@ async function main(){
   const {processImportFileText,confirmImportFile}=await import('../workers/import-processor');
   const {processLearningJob}=await import('../lib/learning-jobs');
   const {AI_CONSENT_VERSION}=await import('../../shared/ai-consent');
+  const {resolveImportFileExtractionCacheVersion}=await import('../lib/data-engine');
+  assert.equal(resolveImportFileExtractionCacheVersion('GCash-Bills-Pay-Receipt.pdf'),'v40-gcash-bills-receipt');
+  assert.equal(resolveImportFileExtractionCacheVersion('ordinary-airline-receipt.pdf'),'v39');
   const user=await db.user.create({data:{clerkUserId:randomUUID(),email:`${randomUUID()}@example.invalid`,environment:'staging',planTier:'pro',planTierLocked:true,appPreferences:{aiConsent:{version:AI_CONSENT_VERSION,grantedAt:new Date().toISOString(),withdrawnAt:null}}}});
   try{
     const workspace=await db.workspace.create({data:{userId:user.id,name:'Reviewed Scribd source families'}});
+    const fingerprint=createHash('sha256').update(gcash).digest('hex');
+    const oldCache=await db.importFileExtractionCache.create({data:{workspaceId:workspace.id,fileFingerprint:fingerprint,fileType:'application/pdf',importMode:'statement',cacheVersion:'v39',extractedText:gcash.replace('Amount Paid PHP 120.00\n','')}});
+    await db.importFileExtractionCache.create({data:{workspaceId:workspace.id,fileFingerprint:fingerprint,fileType:'application/pdf',importMode:'statement',cacheVersion:'v40-gcash-bills-receipt',extractedText:gcash}});
+    assert.deepEqual(await db.importFileExtractionCache.findUniqueOrThrow({where:{id:oldCache.id}}),oldCache,'The complete extraction is additive; legacy source evidence is not refreshed');
     const settle=async()=>{await drain();for(const j of await db.learningJob.findMany({where:{workspaceId:workspace.id,status:'queued'}}))await processLearningJob(j.id);};
     for(const [text,name,count,currency,balance] of [[posb,'posb-column-ledger',5,'SGD',80.22],[gcash,'gcash-bill-fee-email',2,'PHP',null]] as const){
       const file=await db.importFile.create({data:{workspaceId:workspace.id,fileName:name+'.pdf',fileType:'application/pdf',storageKey:`qa/${randomUUID()}`,sourceFingerprint:createHash('sha256').update(text).digest('hex')}});

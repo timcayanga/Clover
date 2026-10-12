@@ -1,5 +1,13 @@
 import type { DetectedStatementMetadata, ParsedImportRow } from './import-parser';
 
+const looksLikeGcashBillsReceipt = (text: string) => /GCash Bills Pay Receipt/i.test(text) ||
+  (/GCash\s+Ref\.?\s*No\./i.test(text) && /Biller Name/i.test(text) && /Total Amount/i.test(text) && /Date\/Time/i.test(text));
+
+export function gcashBillsReceiptTextLayerIsComplete(text: string): boolean {
+  if(!looksLikeGcashBillsReceipt(text)) return true;
+  try{return parseGcashBillsReceipt(text)!==null;}catch{return false;}
+}
+
 export function readGcashBillsPaymentTimestamp(payload: unknown): Date | null {
   if (!payload || typeof payload !== 'object' || Array.isArray(payload)) return null;
   const raw=payload as Record<string,unknown>;
@@ -22,7 +30,7 @@ export function hasVerifiedGcashBillsRows(text: string, rows: Array<{ amount?: u
 
 /** A biller account is evidence for the payment, never the payer's wallet ID. */
 export function parseGcashBillsReceipt(text: string): { metadata: DetectedStatementMetadata; rows: ParsedImportRow[] } | null {
-  if (!/GCash Bills Pay Receipt/i.test(text) || !/GCash\s+Ref\.?\s*No\./i.test(text)) return null;
+  if (!looksLikeGcashBillsReceipt(text) || !/GCash\s+Ref\.?\s*No\./i.test(text)) return null;
   const uniqueAmount = (label: string) => {
     const values = [...text.matchAll(new RegExp(`\\b${label}\\s+PHP\\s+([\\d,]+\\.\\d{2})`, 'gi'))].map(m=>Math.round(Number(m[1].replaceAll(',',''))*100));
     const unique = [...new Set(values)];
@@ -47,7 +55,11 @@ export function parseGcashBillsReceipt(text: string): { metadata: DetectedStatem
   // the image transcript may place it after. Restrict to the receipt fields.
   const lines=text.split(/\r?\n/).map(l=>l.trim()).filter(Boolean);
   const labelIndex=lines.findIndex(l=>/^Biller Name$/i.test(l));
-  let biller=labelIndex>=2 ? lines.slice(labelIndex-2,labelIndex).filter(l=>!/^PHP\b/i.test(l)).join(' ') : '';
+  const isField=(line:string)=>/^(?:PHP\b|Amount Paid\b|Total Amount\b|Fee\b|Account\b|Date\/Time\b|GCash\b|Email Receipt\b|Subject:|Date:|To:|Pay Bills\b)/i.test(line);
+  const before=labelIndex>=0 ? lines.slice(Math.max(0,labelIndex-2),labelIndex).filter(l=>!isField(l)) : [];
+  const after:string[]=[];
+  if(labelIndex>=0)for(const line of lines.slice(labelIndex+1)){if(isField(line))break;after.push(line);}
+  let biller=[...new Set([...before,...after])].join(' ');
   if(!biller) biller=text.match(/Biller Nam(?:e)?\s+(.+?)(?=\s+Total Amount)/is)?.[1]?.replace(/[©\n]/g,' ').replace(/\s+/g,' ').trim()??'';
   if(!biller || /Amount Paid|GCash Ref|Date\/Time/i.test(biller)) throw new Error('GCash biller requires source review.');
   const dayText=checked.toISOString().slice(0,10);

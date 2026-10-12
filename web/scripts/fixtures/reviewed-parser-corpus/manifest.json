@@ -1859,6 +1859,61 @@
         "status": "reviewed",
         "basis": "Invented source and values retaining the established column behavior. Opening10 plus incoming52 minus outgoing40 ends22. Both same-day20 transfers survive. Monthly aggregate interest keeps existing statement-end-date policy; it is not a printed transaction day."
       }
+    },
+    {
+      "id": "gcash-bill-native-body",
+      "source": "gcash-bill-native-body.txt",
+      "expected": [
+        {
+          "date": "2025-02-01T18:09:19+08:00",
+          "amount": "120.00",
+          "currency": "PHP",
+          "type": "expense",
+          "institution": "GCash",
+          "categoryName": "Utilities",
+          "rawPayload": {
+            "source": "gcash_bills_receipt",
+            "component": "bill",
+            "billerAccountNumber": "0000012345",
+            "totalAmount": 123.25,
+            "billAmount": 120,
+            "feeAmount": 3.25
+          },
+          "merchantRaw": "INVENTED ELECTRIC COOPERATIVE, INC (SAMPLE)"
+        },
+        {
+          "date": "2025-02-01T18:09:19+08:00",
+          "amount": "3.25",
+          "currency": "PHP",
+          "type": "expense",
+          "institution": "GCash",
+          "categoryName": "Financial",
+          "rawPayload": {
+            "source": "gcash_bills_receipt",
+            "component": "fee",
+            "billerAccountNumber": "0000012345",
+            "totalAmount": 123.25,
+            "billAmount": 120,
+            "feeAmount": 3.25
+          }
+        }
+      ],
+      "expectedMetadata": {
+        "accountName": "GCash",
+        "accountNumber": null,
+        "currency": "PHP",
+        "accountType": "wallet"
+      },
+      "sha256": "cc90b29f2f7916cecaac127bf38fba43853bb482eb80b50aec988c6d8e1966e0",
+      "kind": "statement",
+      "representation": "synthetic native PDF body with image-only email header and interleaved label",
+      "provenance": {
+        "origin": "synthetic",
+        "reviewer": "Codex",
+        "reviewedAt": "2026-10-12",
+        "status": "reviewed",
+        "basis": "Same independently invented ledger as the email receipt: bill120 plus fee3.25 equals123.25. The selectable PDF body omits the email subject and splits the biller name around its label. Preserve the full invented biller, payment timestamp, one reference and biller-account vs wallet distinction; this is another representation, not another real financial example."
+      }
     }
   ]
 }
