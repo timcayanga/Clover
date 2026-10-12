@@ -1,3 +1,4 @@
+import { accountSectionType } from "../../../shared/account-presentation";
 import { SwipeDeleteRow } from "../../src/swipe-delete-row";
 import { recordedSummary } from "../../src/recorded-summary";
 import { Modal } from "../../src/adaptive-modal";
@@ -204,7 +205,7 @@ function AccountsContent() {
   const displayedCurrency = currencyFilter === "ALL" ? "ALL" : ownedCurrencies.includes(currencyFilter) ? currencyFilter : ownedCurrencies.includes(session.data?.defaultCurrency ?? "") ? session.data!.defaultCurrency : ownedCurrencies[0];
   useLayoutEffect(() => {
     navigation.setOptions({ header: () => <AppHeader title="Accounts" trailing={<>
-      <Pressable accessibilityRole="button" accessibilityLabel={`Select account currency: ${displayedCurrency ?? "none"}`} onPress={() => setCurrencyOpen(true)} style={styles.iconButton}><Icon line name="globe-outline" size={24} /></Pressable>
+      <Pressable accessibilityRole="button" accessibilityLabel={`Select account currency: ${displayedCurrency ?? "none"}`} onPress={() => setCurrencyOpen(true)} style={styles.iconButton}>{displayedCurrency === "ALL" || !displayedCurrency ? <Icon line name="globe-outline" size={24} /> : <Text style={{ color: colors.teal, fontFamily: "Poppins-SemiBold", fontSize: 13 }}>{displayedCurrency}</Text>}</Pressable>
       <Pressable accessibilityRole="button" accessibilityLabel="Add account" onPress={() => setAdding(true)} style={styles.iconButton}><AddNavigationMark size={32} /></Pressable>
     </>} /> });
   }, [navigation, displayedCurrency, styles.iconButton]);
@@ -214,8 +215,8 @@ function AccountsContent() {
     { title: string; currency: string; rows: Account[] }
   >();
   for (const account of accounts.filter(account => displayedCurrency === "ALL" || account.currency === displayedCurrency)) {
-    const title = sectionName(account.type),
-      key = `${title}:${account.currency}`;
+    const title = sectionName(accountSectionType(account)),
+      key = displayedCurrency === "ALL" ? title : `${title}:${account.currency}`;
     if (!groups.has(key))
       groups.set(key, { title, currency: account.currency, rows: [] });
     groups.get(key)!.rows.push(account);
@@ -231,7 +232,7 @@ function AccountsContent() {
     "Other accounts",
   ];
   const summaryCurrency = displayedCurrency === "ALL" ? session.data?.defaultCurrency ?? "PHP" : displayedCurrency ?? session.data?.defaultCurrency ?? "PHP";
-  const summaryRows = accounts.filter(a => displayedCurrency === "ALL" || a.currency === displayedCurrency).map(a => ({ type: a.type, currency: a.currency, balance: accountDisplayBalance(a) === null ? null : Number(accountDisplayBalance(a)) }));
+  const summaryRows = accounts.filter(a => displayedCurrency === "ALL" || a.currency === displayedCurrency).map(a => ({ type: accountSectionType(a), currency: a.currency, balance: accountDisplayBalance(a) === null ? null : Number(accountDisplayBalance(a)) }));
   const exchangeRates = useExchangeRates(summaryRows.filter(a => a.balance !== null && a.balance !== 0).map(a => a.currency), summaryCurrency, displayedCurrency === "ALL");
   const summary = consolidatedAccountSummary(summaryRows, summaryCurrency, exchangeRates.rates);
   const accountEditor = selected || adding ? (
@@ -274,7 +275,7 @@ function AccountsContent() {
       />
   ) : null;
   if (selected) return accountEditor;
-  const institution = institutionGroups(accounts).find(group => group.id === institutionId);
+  const institution = institutionGroups(accounts, accountSectionType).find(group => group.id === institutionId);
   const institutionDetail = institution ? <Screen gap={20}>
     <Button title="All accounts" secondary onPress={() => setInstitutionId(null)} />
     <Heading>{institution.name}</Heading>
@@ -283,7 +284,7 @@ function AccountsContent() {
       <Card><View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
         <AccountBrandLogo account={asset} size={36} />
         <View style={{ flex: 1 }}><Text style={{ color: colors.ink, fontFamily: "Poppins-SemiBold" }}>{asset.name}</Text><Body>{asset.investmentSymbol ?? "Investment"}</Body></View>
-        <Text style={{ color: colors.ink }}>{accountDisplayBalance(asset) === null ? "Not recorded" : money(accountDisplayBalance(asset)!, asset.currency)}</Text>
+        <Text style={{ color: colors.ink }}>{money(accountDisplayBalance(asset) ?? "0", asset.currency)}</Text>
         <Icon line name="chevron-forward" size={16} />
       </View></Card>
     </Pressable></SwipeDeleteRow>)}
@@ -306,16 +307,13 @@ function AccountsContent() {
         </View>
       </Modal>
       <View style={{ gap: 8 }}>
-        {displayedCurrency === "ALL" ? <Body>{summary.estimated ? "Estimated in" : "All balances in"} {summaryCurrency}</Body> : null}
         <View style={{ flexDirection: "row", flexWrap: "wrap", borderWidth: 1, borderColor: dark ? "#29384A" : "#D8E7E3", borderRadius: 22, overflow: "hidden", backgroundColor: dark ? "#0E1725" : "#FCFEFC" }}>
           {["Net worth", "Spendable", "Assets", "Liabilities"].map((title, i) => <View key={title} style={{ width: "50%", minHeight: 81, padding: 16, gap: 5, borderRightWidth: i % 2 === 0 ? 1 : 0, borderTopWidth: i > 1 ? 1 : 0, borderColor: dark ? "#29384A" : "#E1ECE8", backgroundColor: i === 0 ? (dark ? "#15382F" : "#E9F8EF") : "transparent" }}>
-            <Text style={{ fontSize: 11, fontFamily: "Poppins-Medium", color: colors.muted }}>{title}</Text>
+            <Text style={{ fontSize: 11, fontFamily: "Poppins-Medium", color: colors.muted }}>{displayedCurrency === "ALL" ? `Est. ${title}` : title}</Text>
             <Text style={{ fontSize: 18, fontFamily: "Poppins-SemiBold", color: i === 3 || (summary.values[i] ?? 0) < 0 ? colors.danger : i === 0 ? (dark ? "#86E9D1" : "#12614E") : colors.ink }}>{summary.values[i] === null ? "—" : money(String(summary.values[i]), summaryCurrency)}</Text>
           </View>)}
         </View>
-        {summary.estimated && exchangeRates.asOf ? <Body>Estimated using exchange rates dated {exchangeRates.asOf}. Accounts keep their original currencies.</Body> : null}
         {summary.missingCurrencies.length ? <><Body>{exchangeRates.loading ? "Loading exchange rates…" : `Unable to estimate all balances. Exchange rate unavailable: ${summary.missingCurrencies.join(", ")}.`}</Body>{!exchangeRates.loading ? <Button secondary title="Retry rates" onPress={exchangeRates.retry} /> : null}</> : null}
-        {summary.unknown ? <Body>{summary.unknown} account{summary.unknown === 1 ? " has" : "s have"} no recorded balance. A complete total is unavailable.</Body> : null}
       </View>
       {loading ? (
         <Body>Loading accounts…</Body>
@@ -350,31 +348,21 @@ function AccountsContent() {
                     color: colors.ink,
                   }}
                 >
-                  {group.rows.some(
-                    (a) =>
-                      accountDisplayBalance(a) === null ||
-                      !Number.isFinite(Number(accountDisplayBalance(a))),
-                  )
-                    ? "Balance not recorded"
-                    : money(
-                        String(
-                          group.rows.reduce(
-                            (sum, a) => sum + Number(accountDisplayBalance(a)),
-                            0,
-                          ),
-                        ),
-                        group.currency,
-                      )}
+                  {(() => {
+                    const totals = consolidatedAccountSummary(group.rows.map(account => ({ type: accountSectionType(account), currency: account.currency, balance: Number(accountDisplayBalance(account) ?? 0) })), displayedCurrency === "ALL" ? summaryCurrency : group.currency, exchangeRates.rates);
+                    const total = totals.values[0];
+                    return total === null ? "—" : money(String(["Credit cards", "Liabilities"].includes(group.title) ? Math.abs(total) : total), displayedCurrency === "ALL" ? summaryCurrency : group.currency);
+                  })()}
                 </Text>
               </View>
               <AccountWallet>
-              {group.title === "Investments" ? institutionGroups(group.rows).map(institution => {
+              {group.title === "Investments" ? institutionGroups(group.rows, accountSectionType).map(institution => {
                 const representative = institution.assets[0];
                 const palette = accountCardPalette(representative);
-                const value = recordedSummary(institution.assets.map(accountDisplayBalance));
+                const value = recordedSummary(institution.assets.map(a => accountDisplayBalance(a) ?? "0"));
                 return <AccountWalletCard key={institution.id} expanded={expandedAccount === institution.id} name={institution.name}
                   identifier={`${institution.assets.length} ${institution.assets.length === 1 ? "asset" : "assets"}`}
-                  amount={(value.value === null ? "Not recorded" : money(String(value.value), institution.currency)) + (value.missing > 0 && value.known > 0 ? "*" : "")}
+                  amount={(money(String(value.value ?? 0), institution.currency)) + (value.missing > 0 && value.known > 0 ? "*" : "")}
                   palette={palette} logo={<AccountBrandLogo account={representative} size={32} radius={7} />}
                   onToggle={() => setExpandedAccount(current => current === institution.id ? null : institution.id)} onOpen={() => setInstitutionId(institution.id)} />;
               }) : [...group.rows]
@@ -392,7 +380,7 @@ function AccountsContent() {
                     <SwipeDeleteRow wallet expanded={expanded} key={account.id} label={label(account)} disabled={session.demo || account.id.startsWith("fallback-cash-")} message={`Delete "${label(account)}" and its linked transactions? This cannot be undone.`} onOpen={() => setSelected(account)} onDelete={() => deleteRow(account)}>
                       <AccountWalletCard expanded={expanded} name={label(account)}
                         identifier={account.lastFour ? `•••• ${account.lastFour}` : account.type === "cash" ? "Cash on hand" : account.type.replaceAll("_", " ")}
-                        amount={balance === null ? "Not recorded" : money(balance, account.currency)} palette={palette}
+                        amount={money(balance ?? "0", account.currency)} palette={palette}
                         logo={<AccountBrandLogo account={account} size={32} radius={7} />}
                         onToggle={() => setExpandedAccount(current => current === account.id ? null : account.id)} onOpen={() => setSelected(account)} />
                     </SwipeDeleteRow>

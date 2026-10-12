@@ -1,4 +1,5 @@
 "use client";
+import { accountSectionType } from "../../../shared/account-presentation";
 import { consolidatedAccountSummary } from "../../../shared/account-summary";
 import { investmentNameLabel, investmentTickerMatches, investmentTickerHint } from "../../../shared/investment-entry";
 import { usePullRefresh } from "@/lib/pull-refresh";
@@ -973,7 +974,7 @@ const getEffectiveAccountType = (account: Account) => {
     return "credit_card";
   }
 
-  return account.type;
+  return accountSectionType(account);
 };
 
 const getAccountDisplayType = (account: Account) => {
@@ -4408,7 +4409,7 @@ function AccountsPageContent() {
                   {getAccountSummaryTooltip("Assets minus liabilities across visible accounts. Positive balances add to net worth; credit cards, loans, and other debts subtract from it.")}
                 </span>
               </button>
-              <p className="eyebrow">{usesFxEstimates ? "Est. Net Worth" : "Net Worth"}</p>
+              <p className="eyebrow">{isAllCurrenciesView ? "Est. Net Worth" : "Net Worth"}</p>
               <strong className={`accounts-overview-card__amount ${getNetWorthTone(estimatedTotals.netWorth)}`} title={accountEstimateUnavailable ? `Exchange rate unavailable for ${accountExchangeRates.unavailable.join(", ")}` : undefined}>
                 {formatAccountSummary(estimatedTotals.netWorth, true)}
               </strong>
@@ -4420,7 +4421,7 @@ function AccountsPageContent() {
                   {getAccountSummaryTooltip("Positive balances from spendable accounts, such as bank, wallet, and cash accounts. Debts and tracked assets are excluded.")}
                 </span>
               </button>
-              <p className="eyebrow">{usesFxEstimates ? "Est. Spendable" : "Spendable"}</p>
+              <p className="eyebrow">{isAllCurrenciesView ? "Est. Spendable" : "Spendable"}</p>
               <strong className="accounts-overview-card__amount is-good">
                 {formatAccountSummary(estimatedTotals.spendable)}
               </strong>
@@ -4432,7 +4433,7 @@ function AccountsPageContent() {
                   {getAccountSummaryTooltip("Sum of visible account balances that count as positive value after Clover applies each account type's balance rules.")}
                 </span>
               </button>
-              <p className="eyebrow">{usesFxEstimates ? "Est. Assets" : "Assets"}</p>
+              <p className="eyebrow">{isAllCurrenciesView ? "Est. Assets" : "Assets"}</p>
               <strong className="accounts-overview-card__amount is-good">
                 {formatAccountSummary(estimatedTotals.assets)}
               </strong>
@@ -4444,16 +4445,15 @@ function AccountsPageContent() {
                   {getAccountSummaryTooltip("Sum of visible credit card, loan, and other debt balances. Clover shows this as a positive total so the amount is easy to scan.")}
                 </span>
               </button>
-              <p className="eyebrow">{usesFxEstimates ? "Est. Liabilities" : "Liabilities"}</p>
+              <p className="eyebrow">{isAllCurrenciesView ? "Est. Liabilities" : "Liabilities"}</p>
               <strong className="accounts-overview-card__amount is-danger">
                 {formatAccountSummary(estimatedTotals.liabilities)}
               </strong>
             </article>
           </section>
         ) : null}
-        {usesFxEstimates ? <p className="muted" role="status">{accountExchangeRates.loading ? "Loading exchange rates…" : consolidated.missingCurrencies.length ? `Unable to estimate all balances. Exchange rate unavailable: ${consolidated.missingCurrencies.join(", ")}.` : `Estimated in ${defaultCurrencyCode}${accountExchangeRates.asOf ? ` using exchange rates dated ${accountExchangeRates.asOf}` : ""}. Accounts keep their original currencies.`}</p> : null}
+        {usesFxEstimates && (accountExchangeRates.loading || consolidated.missingCurrencies.length > 0) ? <p className="muted" role="status">{accountExchangeRates.loading ? "Loading exchange rates…" : `Unable to estimate all balances. Exchange rate unavailable: ${consolidated.missingCurrencies.join(", ")}.`}</p> : null}
         {usesFxEstimates && !accountExchangeRates.loading && consolidated.missingCurrencies.length ? <button type="button" className="button button-small" onClick={accountExchangeRates.retry}>Retry rates</button> : null}
-        {consolidated.unknown ? <p className="muted">{consolidated.unknown} accounts have no recorded balance. A complete total is unavailable.</p> : null}
         <section className="accounts-main-grid">
           <div className="accounts-list-column">
             <div className="accounts-sections">

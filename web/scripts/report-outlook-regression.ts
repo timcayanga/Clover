@@ -1,3 +1,4 @@
+import { accountSectionType } from "../../shared/account-presentation";
 import { forecastScenario } from "../../shared/reports/scenarios";
 import assert from "node:assert/strict";
 import { consolidatedAccountSummary } from "../../shared/account-summary";
@@ -35,13 +36,19 @@ assert.deepEqual(
   ).values,
   [0, 0, 0, 0],
 );
-assert.ok(
-  consolidatedAccountSummary(
-    [...accounts, { type: "bank", currency: "PHP", balance: null }],
-    "PHP",
-    { USD: 50 },
-  ).values.every((v) => v === null),
+assert.deepEqual(
+  consolidatedAccountSummary([...accounts, { type: "bank", currency: "PHP", balance: null }], "PHP", { USD: 50 }).values,
+  [5000, 1000, 6000, 1000],
 );
+
+for (const name of ["GSave UNO", "GSave CIMB", "#UNOboost@GCash"]) {
+  const account = { name, type: "bank", institution: null };
+  assert.equal(accountSectionType(account), "investment");
+  assert.equal(account.type, "bank", "Presentation must not overwrite stored classification");
+}
+assert.equal(accountSectionType({type: "bank", name: "BPI", investmentSubtype: "time_deposit"}), "investment");
+assert.equal(accountSectionType({type: "bank", name: "CIMB UpSave"}), "bank");
+assert.deepEqual(consolidatedAccountSummary([{type:"bank",currency:"PHP",balance:null}, {type:"wallet",currency:"USD",balance:0}], "PHP", {}).values, [0,0,0,0]);
 const base: FinancialCommitmentSummary = {
   id: "rent",
   workspaceId: "w",

@@ -56,7 +56,7 @@ export function consolidatedAccountSummary(
     totals[3] += Math.max(0, -value);
   }
   return {
-    values: totals.map((value) => (missing.size || unknown ? null : value)),
+    values: totals.map((value) => (missing.size ? null : value)),
     missingCurrencies: [...missing].sort(),
     unknown,
     estimated: accounts.some((a) => a.currency !== target && a.balance !== 0),

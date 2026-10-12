@@ -257,3 +257,21 @@ Free / Plus / Pro limits are 10/20/40 non-cash accounts, 3/10/20 Profiles, 2/5/1
 When a lower entitlement takes effect, preserve existing records, history and ordinary access. Never automatically archive, delete, or make excess items read-only. Existing active budgets keep running. Block additional creation (and budget reactivation) at or above the new limit. Users need not delete records to continue using Clover. Upgrade or voluntarily reduce counted usage to create more. Joined Circles do not consume ownership slots.
 
 Settings Plan on web and native shows account-wide usage and a read-only plan preview. Previewing does not schedule or perform a billing change. The billing provider determines the effective change date. Paid features, AI allowances and bank connections follow the effective entitlement; consumed AI usage does not reset. Bank connection lifecycle remains a separate policy and preserves financial history.
+
+### Accounts summary presentation
+
+- Accounts without a recorded balance contribute no amount to visible summaries;
+  they must not blank the totals from other accounts. Their Accounts cards show
+  zero without writing a fabricated balance back to the account or history.
+- All Currencies shows one set of summary cards converted into the default
+  currency, with `Est.` before each title. Keep exchange-rate dates in optional
+  explanations rather than a persistent statement above the account list.
+- A missing exchange rate for a nonzero balance remains an unavailable estimate;
+  do not sum unlike currencies or fabricate a conversion.
+- All Currencies has one section and wallet stack per account type. Each account
+  retains its original currency; section totals use the default currency.
+- The Accounts currency control shows a globe for All Currencies and the currency
+  code for an individual selection.
+- Use the established GSave-family Investments presentation on web, iOS and
+  Android, including legacy bank-typed GSave UNO/CIMB and explicit time deposits.
+  Presentation must not overwrite stored account types, balances or identity.

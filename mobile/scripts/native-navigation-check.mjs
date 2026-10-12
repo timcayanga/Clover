@@ -1,3 +1,4 @@
+import { accountSectionType } from "../../shared/account-presentation.ts";
 import assert from 'node:assert/strict';
 import { performance } from 'node:perf_hooks';
 import { PageCache, isPageRead } from '../src/page-cache.ts';
@@ -25,6 +26,14 @@ const assets=[
 {id:'4',type:'investment',institution:null,currency:'PHP'},
 {id:'5',type:'bank',institution:'GFunds',currency:'PHP'},
 ];
+
+const gsaveAssets = [
+  {id:'uno', name:'GSave UNO', type:'bank', institution:'GSave', currency:'PHP'},
+  {id:'cimb', name:'GSave CIMB', type:'bank', institution:'CIMB', currency:'PHP'},
+];
+assert.equal(institutionGroups(gsaveAssets, accountSectionType).reduce((sum,g)=>sum+g.assets.length,0),2);
+assert.ok(gsaveAssets.every(a=>a.type==='bank'),'Grouping must not change saved account types');
+
 const before=JSON.stringify(assets),groups=institutionGroups(assets);
 assert.equal(groups.length,3);assert.equal(groups.find(g=>g.name==='GFunds'&&g.currency==='PHP').assets.length,2);
 assert.equal(groups.reduce((s,g)=>s+g.assets.length,0),4);assert.equal(JSON.stringify(assets),before);
