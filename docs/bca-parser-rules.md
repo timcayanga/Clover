@@ -11,3 +11,9 @@ Create one IDR expense component for the principal in Transfers and, when positi
 New accounts follow the existing balance calculation for the known movements; that derived value is not a printed bank balance. Existing matched account balances, labels, currencies and fields are preserved. Publish the actual stored balance summary in the same confirmation transaction so first and repeated status reads do not repair it. Respect account ownership, capacity, tombstones and ambiguous identities.
 
 Named future `bukti-trf` uploads use the additive `v41-bca-transfer-proof` cache namespace. Older entries, learning and imports remain intact. Private downloaded source and independent labels stay outside Git; the permanent portable example uses invented identities and values. Review authority is Codex source review, not human approval or model fine-tuning.
+
+## Additional verified native variants
+
+The complete one-row table may split Dari/Rekening and Status/Alasan/No./Referensi headers across cells. Validate ordered column roles and full labels. A one-page native KlikBCA URL plus browser1/1 footer may establish print completeness when the copyright footer is absent. Same-bank Rekening BCA recipients use their own full account and owner, separately from the payer. Explicit zero fee produces no additional movement.
+
+A two-page native KlikBCA Bisnis notification is one mirrored event. Require complete matching Indonesian and English date, clock, source/destination account, Rp principal and unique reference; both statuses and immediate transfer types must agree. Preserve original two-page evidence. An absent fee remains unknown (fee and total debit null), and must not be inferred as zero. Printed local clock is retained separately; no timezone or bank balance is inferred. Recognized incomplete/conflicting proofs require review and cannot enter generic confirmation or learning.

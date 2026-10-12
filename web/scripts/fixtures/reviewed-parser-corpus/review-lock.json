@@ -27,5 +27,13 @@
   "maribank-retained-column-repeats": "242f03c3874306f01553af570bab88b89a84681579147781707a3c8067c90561",
   "gcash-bill-native-body": "2fb1ab79cea466928aa8331fa90aa41b8c63af721599944c642203c84982141e",
   "cimb-consolidated-zero-account": "2da0e60cf769c3c4bde2657db45d54f8ce3edf00656086e7906fc0b1c7f00d39",
-  "bca-transfer-components": "0444c2712d4324b331b8d68b5d8ffd9c0d3e40e3dd1c4ca1c7461646511c29c3"
+  "bca-transfer-components": "0444c2712d4324b331b8d68b5d8ffd9c0d3e40e3dd1c4ca1c7461646511c29c3",
+  "gcash-multiple-native-receipts": "ca1f0d92199091ada0ff3d1cf2ac2fbc2972e67f4c58cd21e9299cc2d409f31c",
+  "gcash-wrapped-zero-fee": "b285ce0ab0f17ed66a800dd28d5f15e394cfd4b943419f8fb38611619bbc25e1",
+  "cimb-upsave-wrapped-summary": "d76d03a70ecd85315b6c1dc831d06377ba02444549e17df45034a276ec301a98",
+  "cimb-single-native-interest": "7f7431821777c5920a8c89d8496e33141d1566c20b5f60ac8bc9ce8216989014",
+  "posb-negative-zero-interest": "288d6c35c2dfac9ca447e2f303e44a473fb4c28d00dec5ea1d719faf343e6cf4",
+  "bca-alternate-print-footer": "f9390f4f04cd067fb5b03865c7209e46f59e802aa23dcccfe83360414cd86538",
+  "bca-same-bank-zero-fee": "7cdb6c34ed90888cbaae12c6c772b8c3e4dae5150ba368e2791a5874b00377c5",
+  "bca-bilingual-notification": "57c3dad54789f8ade14f4d8153fdd723c34dbd9fc0b85d5f0eab1b39855ac6ad"
 }

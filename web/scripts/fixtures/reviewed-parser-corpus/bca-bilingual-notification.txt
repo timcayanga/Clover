@@ -1,0 +1,27 @@
+Notification
+klikbcabisnis@klikbca.com
+KlikBCA Bisnis
+Tanggal : 19/06/2026
+Jam : 16:25:13
+Jenis Transaksi : TRANSFER DANA
+Dari Rekening : 001-1234567
+Ke Rekening : 002-7654321
+Nominal : Rp 40.00
+Jenis Transfer : Sekarang
+No Referensi : 20260619001234
+Status : Berhasil
+PT. BANK CENTRAL ASIA TBK.
+Thank you for using KlikBCA Bisnis.
+Date : 19/06/2026
+Time : 16:25:13
+Transaction Type : FUND TRANSFER
+From Account : 001-1234567
+To Account : 002-7654321
+Amount : Rp 40.00
+Transfer Type : Immediate
+Reference No : 20260619001234
+Status : Success
+Notes:
+Charges VAT Inclusive (If any)
+PT. BANK CENTRAL ASIA TBK.
+BCA_NATIVE_PAGES 2

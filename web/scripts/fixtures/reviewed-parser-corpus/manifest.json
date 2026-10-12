@@ -2054,6 +2054,385 @@
         }
       ],
       "sha256": "bebb8a00c356a2afabba2c8f2304ea4da40076919756ea8314d23235cd7f9016"
+    },
+    {
+      "kind": "statement",
+      "representation": "independently invented native PDF transcription",
+      "provenance": {
+        "origin": "synthetic",
+        "reviewer": "Codex",
+        "reviewedAt": "2026-10-12",
+        "status": "reviewed",
+        "basis": "Invented three-page receipt: two distinct payments, one duplicate image. Principal110 and fee5; principal200 and fee5. Duplicate reference has identical fields, so only four financial components. Local clocks use Philippine +08:00; split P M glyphs remain valid. Biller AB001 never becomes payer identity."
+      },
+      "id": "gcash-multiple-native-receipts",
+      "source": "gcash-multiple-native-receipts.txt",
+      "expected": [
+        {
+          "date": "2025-04-10T07:11:45+08:00",
+          "amount": "110.00",
+          "currency": "PHP",
+          "type": "expense",
+          "rawPayload": {
+            "source": "gcash_bills_receipt",
+            "referenceNumber": "000001111",
+            "component": "bill",
+            "billerAccountNumber": "AB001"
+          }
+        },
+        {
+          "date": "2025-04-10T07:11:45+08:00",
+          "amount": "5.00",
+          "currency": "PHP",
+          "type": "expense",
+          "rawPayload": {
+            "source": "gcash_bills_receipt",
+            "referenceNumber": "000001111",
+            "component": "fee",
+            "billerAccountNumber": "AB001"
+          }
+        },
+        {
+          "date": "2025-04-11T16:21:15+08:00",
+          "amount": "200.00",
+          "currency": "PHP",
+          "type": "expense",
+          "rawPayload": {
+            "source": "gcash_bills_receipt",
+            "referenceNumber": "000002222",
+            "component": "bill",
+            "billerAccountNumber": "AB001"
+          }
+        },
+        {
+          "date": "2025-04-11T16:21:15+08:00",
+          "amount": "5.00",
+          "currency": "PHP",
+          "type": "expense",
+          "rawPayload": {
+            "source": "gcash_bills_receipt",
+            "referenceNumber": "000002222",
+            "component": "fee",
+            "billerAccountNumber": "AB001"
+          }
+        }
+      ],
+      "sha256": "60cf975318ead38d585eadc60e39ac264d991b14b5cda24d1b43d22609ebbec3"
+    },
+    {
+      "kind": "statement",
+      "representation": "independently invented native PDF transcription",
+      "provenance": {
+        "origin": "synthetic",
+        "reviewer": "Codex",
+        "reviewedAt": "2026-10-12",
+        "status": "reviewed",
+        "basis": "Invented government bill155 with explicitly printed fee0. Wrapped payment date crosses the Date/Time field label; preserve seconds and Philippine +08:00. Alphanumeric biller identity is payment evidence, not payer wallet identity. Zero fee is not an additional transaction."
+      },
+      "id": "gcash-wrapped-zero-fee",
+      "source": "gcash-wrapped-zero-fee.txt",
+      "expected": [
+        {
+          "date": "2022-09-07T13:06:22+08:00",
+          "amount": "155.00",
+          "currency": "PHP",
+          "type": "expense",
+          "rawPayload": {
+            "component": "bill",
+            "referenceNumber": "000003333",
+            "billerAccountNumber": "EX0AMPLE"
+          }
+        }
+      ],
+      "sha256": "609f6740aa425ae752c760b6361a5e3a3af20334c2174f6b791d0be22627b730"
+    },
+    {
+      "kind": "statement",
+      "representation": "independently invented native PDF transcription",
+      "provenance": {
+        "origin": "synthetic",
+        "reviewer": "Codex",
+        "reviewedAt": "2026-10-12",
+        "status": "reviewed",
+        "basis": "Independent invented derivative: four active UPSave movements100,1,1,-1 and one zero Fast Plus snapshot. Repeated1 entries remain distinct. Summary withdrawal label is wrapped with its PHP prefix. Only the zero-activity account may have a later Nov15 opening anchor inside the Nov1–30 period; active20 opening remains at start."
+      },
+      "id": "cimb-upsave-wrapped-summary",
+      "source": "cimb-upsave-wrapped-summary.txt",
+      "expected": [
+        {
+          "date": "2025-11-30",
+          "amount": "0.00",
+          "currency": "PHP",
+          "accountNumber": "00000123450000",
+          "rawPayload": {
+            "kind": "account_snapshot_marker",
+            "source": "cimb_consolidated_snapshot",
+            "balance": 0,
+            "snapshotDate": "2025-11-30"
+          }
+        },
+        {
+          "date": "2025-11-01",
+          "amount": "100.00",
+          "currency": "PHP",
+          "type": "income",
+          "accountNumber": "00000123456789",
+          "rawPayload": {
+            "source": "cimb_consolidated_ledger",
+            "ref": "EXAMPLE001",
+            "balance": "120.00",
+            "balanceReconciled": true
+          }
+        },
+        {
+          "date": "2025-11-02",
+          "amount": "1.00",
+          "currency": "PHP",
+          "type": "income",
+          "accountNumber": "00000123456789",
+          "rawPayload": {
+            "source": "cimb_consolidated_ledger",
+            "ref": "EXAMPLE002",
+            "balance": "121.00",
+            "balanceReconciled": true
+          }
+        },
+        {
+          "date": "2025-11-02",
+          "amount": "1.00",
+          "currency": "PHP",
+          "type": "income",
+          "accountNumber": "00000123456789",
+          "rawPayload": {
+            "source": "cimb_consolidated_ledger",
+            "ref": "EXAMPLE003",
+            "balance": "122.00",
+            "balanceReconciled": true
+          }
+        },
+        {
+          "date": "2025-11-03",
+          "amount": "1.00",
+          "currency": "PHP",
+          "type": "expense",
+          "accountNumber": "00000123456789",
+          "rawPayload": {
+            "source": "cimb_consolidated_ledger",
+            "ref": "EXAMPLE004",
+            "balance": "121.00",
+            "balanceReconciled": true
+          }
+        }
+      ],
+      "sha256": "bc562b03602d9b51a40f0b66144140701daa033a0087c6ff361e6750613b5c11"
+    },
+    {
+      "kind": "statement",
+      "representation": "independently invented native PDF transcription",
+      "provenance": {
+        "origin": "synthetic",
+        "reviewer": "Codex",
+        "reviewedAt": "2026-10-12",
+        "status": "reviewed",
+        "basis": "Invented single FastPlus statement: opening10 plus interest.04 minus tax.01 closes10.03. Opening/closing anchors and generated-on date are not transactions. The same interest reference has two legitimate different components, both retained. Physical page, full identity, summary totals and each running balance must agree."
+      },
+      "id": "cimb-single-native-interest",
+      "source": "cimb-single-native-interest.txt",
+      "expected": [
+        {
+          "date": "2026-05-01",
+          "amount": "0.04",
+          "currency": "PHP",
+          "type": "income",
+          "accountNumber": "00000123459999",
+          "rawPayload": {
+            "ref": "EXAMPLEINT001",
+            "balanceReconciled": true,
+            "direction": "incoming"
+          }
+        },
+        {
+          "date": "2026-05-01",
+          "amount": "0.01",
+          "currency": "PHP",
+          "type": "expense",
+          "accountNumber": "00000123459999",
+          "rawPayload": {
+            "ref": "EXAMPLEINT001",
+            "balanceReconciled": true,
+            "direction": "outgoing"
+          }
+        }
+      ],
+      "sha256": "1e44e0d8a6751240c74bbfc3d32ba06de1ecfcd254e2f67b3c44f88934c089ad"
+    },
+    {
+      "kind": "statement",
+      "representation": "independently invented native PDF transcription",
+      "provenance": {
+        "origin": "synthetic",
+        "reviewer": "Codex",
+        "reviewedAt": "2026-10-12",
+        "status": "reviewed",
+        "basis": "Invented leap-February SGD ledger: -1.33+20-5-5-10-2=-3.33. Two same-day5 transfers remain separate. Only explicit cash10 produces a derived cash counterpart; ATM withdrawal fee2 is Financial. Zero interest is retained source disclosure without creating income. Trailing minus signs are negative balance evidence."
+      },
+      "id": "posb-negative-zero-interest",
+      "source": "posb-negative-zero-interest.txt",
+      "expected": [
+        {
+          "date": "2024-02-06",
+          "amount": "20.00",
+          "currency": "SGD",
+          "type": "income",
+          "accountNumber": "001-23456-7",
+          "balance": 18.67,
+          "categoryName": "Income"
+        },
+        {
+          "date": "2024-02-07",
+          "amount": "5.00",
+          "currency": "SGD",
+          "type": "expense",
+          "accountNumber": "001-23456-7",
+          "balance": 13.67,
+          "categoryName": "Transfers"
+        },
+        {
+          "date": "2024-02-07",
+          "amount": "5.00",
+          "currency": "SGD",
+          "type": "expense",
+          "accountNumber": "001-23456-7",
+          "balance": 8.67,
+          "categoryName": "Transfers"
+        },
+        {
+          "date": "2024-02-08",
+          "amount": "10.00",
+          "currency": "SGD",
+          "type": "expense",
+          "accountNumber": "001-23456-7",
+          "balance": -1.33,
+          "categoryName": "Cash & ATM"
+        },
+        {
+          "date": "2024-02-08",
+          "amount": "2.00",
+          "currency": "SGD",
+          "type": "expense",
+          "accountNumber": "001-23456-7",
+          "balance": -3.33,
+          "categoryName": "Financial"
+        }
+      ],
+      "sha256": "b9779d5f6397c7529fe570404a201004d522a3f2d01d1164b5e4a952e652c260"
+    },
+    {
+      "kind": "statement",
+      "representation": "independently invented native PDF transcription",
+      "provenance": {
+        "origin": "synthetic",
+        "reviewer": "Codex",
+        "reviewedAt": "2026-10-12",
+        "status": "reviewed",
+        "basis": "Invented derivative of previously reviewed30 principal plus2 fee. The complete one-page printout has a native KlikBCA URL and1/1 browser footer; no copyright label. Every native transfer column, success, reference and date still must validate. A footer alone cannot establish financial fields."
+      },
+      "id": "bca-alternate-print-footer",
+      "source": "bca-alternate-print-footer.txt",
+      "expected": [
+        {
+          "date": "2025-04-10",
+          "amount": "30.00",
+          "currency": "IDR",
+          "type": "expense",
+          "accountNumber": "001-1234567",
+          "rawPayload": {
+            "source": "bca_transfer_proof",
+            "component": "principal",
+            "reference": "20250410001234",
+            "recipientIdentifier": "90012345678",
+            "transferTime": "09:12:34",
+            "totalDebit": 32
+          }
+        },
+        {
+          "date": "2025-04-10",
+          "amount": "2.00",
+          "currency": "IDR",
+          "type": "expense",
+          "accountNumber": "001-1234567",
+          "rawPayload": {
+            "source": "bca_transfer_proof",
+            "component": "fee",
+            "reference": "20250410001234",
+            "recipientIdentifier": "90012345678",
+            "transferTime": "09:12:34",
+            "totalDebit": 32
+          }
+        }
+      ],
+      "sha256": "6454a8bef15e95da43446fb8addcc40d0a25e15e1cdbc769367f1ef2b2121f45"
+    },
+    {
+      "kind": "statement",
+      "representation": "independently invented native PDF transcription",
+      "provenance": {
+        "origin": "synthetic",
+        "reviewer": "Codex",
+        "reviewedAt": "2026-10-12",
+        "status": "reviewed",
+        "basis": "Invented same-bank native transfer: payer001-1234567 and recipient002-7654321 have distinct owners; payer name is never merchant. Explicit zero fee produces only principal30. No bank balance or timezone is printed; preserve source clock separately from calendar-date normalization."
+      },
+      "id": "bca-same-bank-zero-fee",
+      "source": "bca-same-bank-zero-fee.txt",
+      "expected": [
+        {
+          "date": "2025-04-10",
+          "amount": "30.00",
+          "currency": "IDR",
+          "type": "expense",
+          "accountNumber": "001-1234567",
+          "rawPayload": {
+            "recipientIdentifier": "002-7654321",
+            "recipientOwner": "EXAMPLE RECIPIENT",
+            "component": "principal",
+            "fee": 0,
+            "totalDebit": 30
+          }
+        }
+      ],
+      "sha256": "ad7cf6002d453ced5ed267259b8ba618a6674f7d402177bb9b56288baca82e07"
+    },
+    {
+      "kind": "statement",
+      "representation": "independently invented native PDF transcription",
+      "provenance": {
+        "origin": "synthetic",
+        "reviewer": "Codex",
+        "reviewedAt": "2026-10-12",
+        "status": "reviewed",
+        "basis": "Invented two-page notification mirrors one40 IDR event in Indonesian and English. Both complete blocks must match amount, reference, accounts, date and clock, and status must succeed in both. Fee is absent and remains unknown, not zero; no balance anchor or timezone is inferred."
+      },
+      "id": "bca-bilingual-notification",
+      "source": "bca-bilingual-notification.txt",
+      "expected": [
+        {
+          "date": "2026-06-19",
+          "amount": "40.00",
+          "currency": "IDR",
+          "type": "expense",
+          "accountNumber": "001-1234567",
+          "rawPayload": {
+            "reference": "20260619001234",
+            "recipientIdentifier": "002-7654321",
+            "transferTime": "16:25:13",
+            "component": "principal",
+            "fee": null,
+            "totalDebit": null
+          }
+        }
+      ],
+      "sha256": "f52dbccddac77d963cfe17de2663426d2428b6da7149daecdbb2d6604a6f8b06"
     }
   ]
 }

@@ -102,3 +102,11 @@ The `cimb-consolidated-zero-account` and `bca-transfer-components` examples exte
 Status publication also compares balances as exact decimals: `34.10` and `34.1` must not cause a checkpoint rewrite. Missing balances remain distinct from zero, and real amount or identity changes remain detectable. The permanent worker regression exercises the publication helper as well as snapshot loading.
 
 Real documents are replayed privately through the normal stored-file reader and worker before staging uploads. The named cache versions are additional namespaces; no old cache, projection, signal, template or original file is refreshed or deleted.
+
+## Scribd third batch regression extension
+
+Eight independently invented cases extend the corpus to37 representations /145 observations. Existing cases and their review locks remain unchanged. The mandatory scribd-batch-three-db-regression checks multiple/wrapped GCash receipts, UPSave/wrapped CIMB summaries, a complete single FastPlus ledger, negative POSB balances/zero disclosures/ATM fees and additional BCA native/mirrored layouts. Actual workers must preserve complete identities, currency, balances, source occurrences, confirmed edits and evidence, finish durable jobs and leave settled reads/repeat confirmation unchanged.
+
+The staging-only read-only batch preservation diagnostic excludes only explicitly supplied actor-owned verification runs (maximum32), with fixed QA-user/environment checks. It hashes every historical protected row including null-Profile records, retaining the original baseline. It never accepts arbitrary Profile IDs or resets data. The existing retained BPI checkpoint is compared separately.
+
+The privately retained Maya Savings source remains outside accepted training while its normalized timestamp contract and overlap protection are unresolved. Its original, independent labels and failed replay evidence are preserved. A download or approximate date-only parse is not an accepted full-fidelity example.

@@ -2,7 +2,7 @@ import { parseCimbConsolidatedStatement } from "@/lib/import-parser";
 import { buildBcaTransferPdfRows, parseBcaTransferProof } from "@/lib/bca-transfer-proof";
 import { hasReconciledBdoInlineLedger } from "@/lib/import-parser";
 import { buildPosbPdfRows } from "@/lib/posb-statement";
-import { gcashBillsReceiptTextLayerIsComplete } from "@/lib/gcash-bills-receipt";
+import { gcashBillsReceiptTextLayerIsComplete, buildGcashBillsNativePages, parseGcashBillsReceipt } from "@/lib/gcash-bills-receipt";
 import { readLocalReceiptImage, shutdownLocalReceiptOcr } from "./local-receipt-ocr.server";
 import { hasHangul, hasKoreanFinancialHeaders } from "@/lib/korean-financial-text";
 import { koreanStatementLineEvidence } from "@/lib/korean-statement-evidence";
@@ -1165,6 +1165,7 @@ const scoreStatementTextCandidate = (text: string) => {
 };
 
 export const pdfTextLayerLooksSufficientForParsing = (text: string, fileName?: string | null) => {
+  try { if (parseGcashBillsReceipt(text)?.rows.length) return true; } catch { return false; }
   if (parseBcaTransferProof(text)?.rows.length) return true;
   const normalized = text.trim();
   if (hasReconciledBdoInlineLedger(normalized)) return true;
@@ -2240,6 +2241,8 @@ const extractTextFromPdfBytes = async (data: Uint8Array, password?: string, base
 
     try {
       const extractedText = pages.join("\n");
+      const gcashPages = buildGcashBillsNativePages(pages);
+      if (gcashPages) return `${extractedText}\n${gcashPages}`;
       const cimbText = `${extractedText}\nCIMB_NATIVE_PAGES ${pdf.numPages}`;
       if (parseCimbConsolidatedStatement(cimbText)) return cimbText;
       const bcaText = `${extractedText}\nBCA_NATIVE_PAGES ${pdf.numPages}\n${bcaProofRows.flat().filter(Boolean).join("\n")}`;

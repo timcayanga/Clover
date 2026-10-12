@@ -21,13 +21,20 @@ const missingCategoryId = (runId: string) => `learning-verification-category-${r
 const tables = ["Workspace", "Account", "AccountTombstone", "Category", "Transaction", "ImportFile", "ParsedTransaction", "DocumentImport", "AccountStatementCheckpoint", "ReceiptDocument", "MerchantRule", "AccountRule", "TrainingSignal", "StatementTemplate", "DataQaRun", "DataQaFinding", "ImportFileExtractionCache", "ImportEnrichmentJob", "LearningJob", "DocumentImportPage", "LearningJobAttempt"] as const;
 type Manifest = Record<string, { count: number; sha256: string }>;
 const financialTables = new Set<string>(["Account", "AccountTombstone", "Transaction", "ImportFile", "ParsedTransaction", "DocumentImport", "AccountStatementCheckpoint", "ReceiptDocument", "DocumentImportPage"]);
-export async function checkpointPreservationManifest(checkpointId: string, db: Prisma.TransactionClient): Promise<Manifest> {
+export async function checkpointPreservationManifest(checkpointId: string, db: Prisma.TransactionClient, excludedWorkspaceIds: string[] = []): Promise<Manifest> {
   const result: Manifest = {};
   for (const table of tables) {
-    const predicate = table === "AccountStatementCheckpoint" ? 'WHERE t."id" <> $1' : "";
+    const conditions: string[] = [], params: unknown[] = [];
+    if (table === "AccountStatementCheckpoint") { params.push(checkpointId); conditions.push('t."id" <> $1'); }
+    if (excludedWorkspaceIds.length) {
+      const expression = table === "Workspace" ? 't."id"' : table === "DocumentImportPage" ? '(SELECT p."workspaceId" FROM "DocumentImport" p WHERE p."id" = t."documentImportId")' : table === "LearningJobAttempt" ? '(SELECT j."workspaceId" FROM "LearningJob" j WHERE j."id" = t."jobId")' : 't."workspaceId"';
+      params.push(excludedWorkspaceIds);
+      conditions.push(`(${expression} IS NULL OR NOT (${expression} = ANY($${params.length}::text[])))`);
+    }
+    const predicate = conditions.length ? 'WHERE ' + conditions.join(' AND ') : '';
     const rows = await db.$queryRawUnsafe<Array<{ count: number; sha256: string }>>(`SELECT count(*)::int AS count,
       encode(sha256(convert_to(COALESCE(string_agg(encode(sha256(convert_to(to_jsonb(t)::text, 'UTF8')), 'hex'), '' ORDER BY t."id"), ''), 'UTF8')), 'hex') AS sha256
-      FROM "${table}" t ${predicate}`, ...(predicate ? [checkpointId] : []));
+      FROM "${table}" t ${predicate}`, ...params);
     result[table] = rows[0];
   }
   return result;
@@ -158,4 +165,13 @@ export async function repairVerificationBpiCheckpoint(runId: string, actor: stri
       metadata: json({ before: plan.checkpoint, after: checkpoint, sourceSha256, preservation: before, planHash: plan.planHash }) } });
     return { unchanged: false, checkpoint, preservation: after, sourceSha256 };
   }, { isolationLevel: "Serializable", timeout: 45_000 });
+}
+
+/** Read-only aggregate: only actor-owned staging QA runs can be excluded. */
+export async function previewLearningBatchPreservation(runIds: string[], actor: string) {
+  assertLearningVerificationEnvironment();
+  if (!Array.isArray(runIds) || runIds.length < 1 || runIds.length > 32 || new Set(runIds).size !== runIds.length || runIds.some(id => !/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i.test(id))) throw new Error('VERIFICATION_NOT_FOUND');
+  const workspaces: string[] = [];
+  for (const id of runIds) workspaces.push((await loadRun(id, actor)).workspace.id);
+  return prisma.$transaction(async db => ({ runIds, excludedProfiles: workspaces, preservation: await checkpointPreservationManifest('cmv29w3r4002806ictv6bmnfp', db, workspaces), retainedCheckpoint: await db.accountStatementCheckpoint.findUnique({ where: { id: 'cmv29w3r4002806ictv6bmnfp' } }) }), { isolationLevel: 'RepeatableRead', timeout: 45_000 });
 }

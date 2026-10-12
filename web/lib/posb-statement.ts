@@ -1,7 +1,9 @@
 import type { DetectedStatementMetadata, ParsedImportRow } from './import-parser';
 
 type Item = { str?: unknown; transform?: number[]; width?: number };
-const money = (s: string) => Number(s.replaceAll(',', ''));
+const money = (s: string) => /-\s*$/.test(s) ? -Number(s.replace(/-\s*$/, '').trim().replaceAll(',', '')) : Number(s.replaceAll(',', ''));
+const balancePattern = /^(?:-?\d[\d,]*\.\d{2}|\d[\d,]*\.\d{2}\s*-)$/;
+const isZeroInterest = (row: ParsedImportRow) => Number(row.amount) === 0 && row.type === 'income' && /^Interest Earned(?:\s|$)/i.test(row.description ?? '');
 const months = ['jan','feb','mar','apr','may','jun','jul','aug','sep','oct','nov','dec'];
 const date = (day: string, month: string, year: number) => {
   const m = months.indexOf(month.toLowerCase());
@@ -14,7 +16,8 @@ export function hasVerifiedPosbRows(text: string, rows: Array<{ amount?: unknown
     const source=parsePosbStatement(text);
     if(!source || !source.rows.length || source.metadata.openingBalance===null || source.metadata.endingBalance===null || rows.length!==source.rows.length) return false;
     const nativeDates=text.split(/\r?\n/).filter(l=>/^\d{1,2}\s+[A-Z]{3}\s+/i.test(l.trim()));
-    if(nativeDates.length && nativeDates.length!==source.rows.length) return false;
+    const zeroRows = (source.rows[0]?.rawPayload?.reconciliation as { zeroInterestRows?: unknown[] } | undefined)?.zeroInterestRows?.length ?? 0;
+    if(nativeDates.length && nativeDates.length!==source.rows.length + zeroRows) return false;
     return rows.every((row,index)=>{
       const raw=row.rawPayload as Record<string,unknown> | null;
       const expected=source.rows[index];
@@ -34,14 +37,17 @@ export function buildPosbPdfRows(items: Item[]): string[] {
   const dates = points.filter(i => i.x < withdrawal.x && i.y < withdrawal.y && /^\d{1,2}\s+[A-Z]{3}$/i.test(i.text)).sort((a,b) => b.y-a.y);
   const footer = points.filter(i => /^Balance Carried Forward$/i.test(i.text)).sort((a,b) => b.y-a.y)[0];
   return dates.map((d,index) => {
-    const numbers = points.filter(i => Math.abs(i.y-d.y) <= 2.25 && /^\d[\d,]*\.\d{2}$/.test(i.text) && i.x >= withdrawal.x-30);
+    const numbers = points.filter(i => Math.abs(i.y-d.y) <= 2.25 && balancePattern.test(i.text) && i.x >= withdrawal.x-30);
     const columns = headers.map(h => numbers.filter(i => Math.abs(i.x+i.width-(h!.x+h!.width)) <= 12));
     const [out, incoming, balances] = columns;
     if (out.length + incoming.length !== 1 || balances.length > 1) return 'POSB_INVALID_COLUMN_EVIDENCE';
     const lower = dates[index+1]?.y ?? footer?.y ?? d.y-20;
     const description = points.filter(i => i.x > d.x+30 && i.x < withdrawal.x-25 && i.y <= d.y+2.25 && i.y > lower+2.25).sort((a,b) => b.y-a.y || a.x-b.x).map(i=>i.text).join(' ');
     if (!description) return 'POSB_INVALID_COLUMN_EVIDENCE';
-    return ['POSB_TXN', d.text, out.length ? 'outgoing' : 'incoming', (out[0] ?? incoming[0]).text, balances[0]?.text ?? '', description.replaceAll('|',' / ')].join(' | ');
+    const balanceCell = balances[0];
+    const trailingMinus = balanceCell && points.some(i => i.text === '-' && Math.abs(i.y-d.y) <= 2.25 && i.x >= balanceCell.x + balanceCell.width - 1 && i.x <= balanceCell.x + balanceCell.width + 12);
+    const balanceText = balanceCell ? balanceCell.text + (trailingMinus && !/-\s*$/.test(balanceCell.text) ? ' -' : '') : '';
+    return ['POSB_TXN', d.text, out.length ? 'outgoing' : 'incoming', (out[0] ?? incoming[0]).text, balanceText, description.replaceAll('|',' / ')].join(' | ');
   });
 }
 
@@ -58,9 +64,12 @@ export function parsePosbStatement(text: string): { metadata: DetectedStatementM
     const total = Number(printedPages[0][2]);
     if (totals.size!==1 || total<1 || total>500 || pages.size!==total || [...pages].some(p=>p<1 || p>total)) throw new Error('POSB statement pages are missing; retain the source for review.');
   }
-  const opening = text.match(/Balance Brought Forward\s+([\d,]+\.\d{2})/i)?.[1];
-  const endings = [...text.matchAll(/Balance Carried Forward\s+([\d,]+\.\d{2})/gi)];
+  const accountNumbers = [...new Set([...text.matchAll(/Account No\.:\s*([\d-]+)/gi)].map(m=>m[1]))];
+  if (accountNumbers.length !== 1) throw new Error('POSB source account identity requires review.');
+  const opening = text.match(/Balance Brought Forward\s+(-?[\d,]+\.\d{2}(?:[ \t]*-)?)/i)?.[1];
+  const endings = [...text.matchAll(/Balance Carried Forward\s+(-?[\d,]+\.\d{2}(?:[ \t]*-)?)/gi)];
   const ending = endings.at(-1)?.[1];
+  if ((opening && !balancePattern.test(opening)) || (ending && !balancePattern.test(ending))) throw new Error('POSB source balance signs require review.');
   const accountName = accountNumber ? `POSB ${accountNumber.replace(/\D/g,'').slice(-4)}` : 'POSB';
   const rows: ParsedImportRow[] = [];
   for (const line of text.split(/\r?\n/).filter(l=>/^POSB_TXN\s*\|/.test(l))) {
@@ -72,12 +81,13 @@ export function parsePosbStatement(text: string): { metadata: DetectedStatementM
     let year=statementDate.getUTCFullYear();
     if (months.indexOf(dm[2].toLowerCase()) > statementDate.getUTCMonth()) year--;
     const rowDate=date(dm[1],dm[2],year);
-    if (!rowDate || (balanceText && !/^\d[\d,]*\.\d{2}$/.test(balanceText))) throw new Error('POSB source date or balance requires review.');
+    if (!rowDate || (balanceText && !balancePattern.test(balanceText))) throw new Error('POSB source date or balance requires review.');
     const type=direction==='incoming'?'income':'expense';
-    const categoryName=/Cash Withdrawal/i.test(description)?'Cash & ATM':/FAST Payment/i.test(description)?'Transfers':/Salary|Interest Earned/i.test(description)?'Income':/BUS\/MRT/i.test(description)?'Transportation':'Other';
+    const categoryName=/Withdrawal Fee|Service Charge/i.test(description)?'Financial':/Cash Withdrawal/i.test(description)?'Cash & ATM':/FAST Payment/i.test(description)?'Transfers':/Salary|Interest Earned/i.test(description)?'Income':/BUS\/MRT/i.test(description)?'Transportation':'Other';
     const merchant=description.split(/Wise:|BUS\/MRT|H & M/i)[0].trim();
     rows.push({date:rowDate.toISOString().slice(0,10),amount:money(amountText).toFixed(2),currency:'SGD',type,categoryName,merchantRaw:description,merchantClean:merchant,description,accountName,accountNumber,institution:'POSB',confidence:95, ...(balanceText?{balance:money(balanceText)}:{}),rawPayload:{kind:'bank_transaction',source:'posb_pdf_columns',line,direction,amountText,balance:balanceText?money(balanceText):null,accountNumber,accountCurrency:'SGD',notes:description,parserEvidence:{statementYear:year,amountColumn:direction==='incoming'?'deposit':'withdrawal'}}});
   }
+  if (rows.some(row => Number(row.amount) === 0 && !isZeroInterest(row))) throw new Error('POSB zero movement requires source review.');
   if (rows.length && opening && ending) {
     let running=Math.round(money(opening)*100);
     for (const row of rows) {
@@ -87,7 +97,11 @@ export function parsePosbStatement(text: string): { metadata: DetectedStatementM
     if (running!==Math.round(money(ending)*100)) throw new Error('POSB closing balance does not reconcile with source movements.');
     const nativeDates=text.split(/\r?\n/).filter(l=>/^\d{1,2}\s+[A-Z]{3}\s+/i.test(l.trim()));
     if (nativeDates.length && nativeDates.length!==rows.length) throw new Error('POSB source row coverage requires review.');
-    for (const row of rows) row.rawPayload={...row.rawPayload,balanceReconciled:true,reconciliation:{version:'posb-column-reconciliation-v1',openingBalance:money(opening),endingBalance:money(ending),sourceRows:rows.length,code:'BALANCE_RECONCILED'}};
+    const zeroInterestRows = rows.filter(isZeroInterest).map(row => ({ date: row.date, sourceLine: row.rawPayload?.line, balance: row.balance ?? null, amount: '0.00' }));
+    for (const row of rows) row.rawPayload={...row.rawPayload,balanceReconciled:true,reconciliation:{version:'posb-column-reconciliation-v1',openingBalance:money(opening),endingBalance:money(ending),sourceRows:rows.length-zeroInterestRows.length,code:'BALANCE_RECONCILED',...(zeroInterestRows.length ? { zeroInterestRows } : {})}};
   }
-  return {rows,metadata:{institution:'POSB',accountNumber,accountName,accountType:'bank',currency:'SGD',openingBalance:opening?money(opening):null,endingBalance:ending?money(ending):null,statementDate:statementDate?.toISOString()??null,startDate:rows[0]?.date?`${rows[0].date}T12:00:00.000Z`:null,endDate:statementDate?.toISOString()??null,confidence:rows.length?95:55,currencyConfidence:100,institutionConfidence:100,identityEvidence:['POSB payroll account header','Singapore dollar account columns']}};
+  // Zero interest is a disclosure, not an income transaction. Its original
+  // line/balance remain in the proof and complete source file.
+  const financialRows = rows.filter(row => !isZeroInterest(row));
+  return {rows:financialRows,metadata:{institution:'POSB',accountNumber,accountName,accountType:'bank',currency:'SGD',openingBalance:opening?money(opening):null,endingBalance:ending?money(ending):null,statementDate:statementDate?.toISOString()??null,startDate:financialRows[0]?.date?`${financialRows[0].date}T12:00:00.000Z`:null,endDate:statementDate?.toISOString()??null,confidence:financialRows.length?95:55,currencyConfidence:100,institutionConfidence:100,identityEvidence:['POSB payroll account header','Singapore dollar account columns']}};
 }

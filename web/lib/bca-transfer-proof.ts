@@ -17,11 +17,12 @@ type Proof = {
   fx: string;
   status: string;
   reference: string;
+  recipientOwner?: string;
 };
 const heading = (text: string) =>
   /Transfer Dana/i.test(text) &&
   /Transaksi berhasil diotorisasi/i.test(text) &&
-  /BCA\.\s*Hak cipta/i.test(text);
+  (/BCA\.\s*Hak cipta/i.test(text) || /https:\/\/vpn\.klikbca\.com\//i.test(text));
 const money = (value: string) =>
   /^Rp\s*(?:\d{1,3}(?:,\d{3})+|\d+)\.\d{2}$/.test(value)
     ? Number(value.replace(/^Rp\s*/, "").replace(/,/g, ""))
@@ -55,16 +56,18 @@ export function buildBcaTransferPdfRows(
     }));
   if (!heading(cells.map((c) => c.text).join("\n"))) return [];
   const find = (label: string) => cells.find((c) => c.text === label);
-  const source = find("Dari Rekening"),
+  const source = find("Dari Rekening") ?? find("Dari"),
     kind = find("Jenis"),
     transfer = find("Transfer"),
-    destination = find("Rekening /"),
+    destination = find("Rekening /") ?? cells.find(c => /^Ke Rekening(?:\s*\/)?$/.test(c.text)),
     amount = find("Jumlah"),
     fee = find("Biaya"),
     fx = find("Kurs");
-  const status = cells.find((c) =>
-    /^Status\s+Alasan\s+No\.\s+Referensi$/.test(c.text),
-  );
+  const status = cells.find((c) => /^Status\s+Alasan\s+No\.\s+Referensi$/.test(c.text)) ?? find("Status");
+  const reasonHeader = find("Alasan"), referenceHeader = find("No. Referensi") ?? find("No.");
+  if (status?.text === "Status" && (!reasonHeader || !referenceHeader || reasonHeader.x <= status.x || referenceHeader.x <= reasonHeader.x)) return [];
+  if (source?.text === "Dari" && !cells.some(c => c.text === "Rekening" && Math.abs(c.x-source.x)<1 && c.y<source.y && c.y>=source.y-2*source.height)) return [];
+  if (referenceHeader?.text === "No." && !cells.some(c => c.text === "Referensi" && Math.abs(c.x-referenceHeader.x)<1 && c.y<referenceHeader.y && c.y>=referenceHeader.y-2*referenceHeader.height)) return [];
   const input = cells.find((c) => c.text === "Tanggal" && kind && c.x < kind.x);
   if (
     !source ||
@@ -128,9 +131,13 @@ export function buildBcaTransferPdfRows(
     transferParts.length !== 2 ||
     !from ||
     !result ||
-    column(kind.x, transferDateHeader.x) !== "Rekening Bank Lain"
+    !/^Rekening (?:Bank Lain|BCA)$/.test(column(kind.x, transferDateHeader.x))
   )
     return [];
+  const recipientColumn = column(destination.x, amount.x);
+  const sameBank = column(kind.x, transferDateHeader.x) === "Rekening BCA";
+  const recipient = sameBank ? recipientColumn.match(/^(\d{3})-\s*(\d{7})\s*\/\s*(.+?)\s*\(Rp\)$/) : null;
+  if (sameBank && !recipient) return [];
   const proof: Proof = {
     inputDate: inputParts[0]!,
     inputTime: inputParts[1]!,
@@ -138,7 +145,8 @@ export function buildBcaTransferPdfRows(
     transferTime: transferParts[1]!,
     sourceAccount: from[1] + "-" + from[2],
     owner: from[3]!,
-    recipient: column(destination.x, amount.x),
+    recipient: recipient ? recipient[1] + "-" + recipient[2] : recipientColumn,
+    ...(recipient ? {recipientOwner: recipient[3]} : {}),
     amount: column(amount.x, fee.x),
     fee: column(fee.x, fx.x),
     fx: column(fx.x, status.x),
@@ -181,7 +189,7 @@ function valid(p: Proof) {
     p.inputTime === p.transferTime &&
     /^\d{3}-\d{7}$/.test(p.sourceAccount) &&
     /[A-Za-z]/.test(p.owner) &&
-    /^\d{10,20}$/.test(p.recipient) &&
+    (/^[0-9]{10,20}$/.test(p.recipient) || (/^\d{3}-\d{7}$/.test(p.recipient) && typeof p.recipientOwner === "string" && /[A-Za-z]/.test(p.recipientOwner))) &&
     money(p.amount)! > 0 &&
     money(p.fee)! >= 0 &&
     p.fx === "1.00" &&
@@ -192,6 +200,8 @@ function valid(p: Proof) {
 export function parseBcaTransferProof(
   text: string,
 ): { rows: ParsedImportRow[]; metadata: DetectedStatementMetadata } | null {
+  const notification = parseBcaTransferNotification(text);
+  if (notification) return notification;
   if (!heading(text)) return null;
   const metadata: DetectedStatementMetadata = {
     institution: "BCA",
@@ -215,9 +225,7 @@ export function parseBcaTransferProof(
     physical.length !== 1 ||
     physical[0]![1] !== "1" ||
     lines.length !== 1 ||
-    pages.length !== 1 ||
-    pages[0]![1] !== "1" ||
-    pages[0]![2] !== "1"
+    !((pages.length === 1 && pages[0]![1] === "1" && pages[0]![2] === "1") || (!pages.length && /https:\/\/vpn\.klikbca\.com\//i.test(text) && /(?:^|\s)1\/1[ \t]*$/m.test(text)))
   )
     return { rows: [], metadata };
   let p: Proof;
@@ -274,6 +282,7 @@ export function parseBcaTransferProof(
         sourceAccount: p.sourceAccount,
         sourceAccountOwner: p.owner,
         recipientIdentifier: p.recipient,
+        ...(p.recipientOwner ? { recipientOwner: p.recipientOwner } : {}),
         inputDate: p.inputDate,
         inputTime: p.inputTime,
         transferDate: p.transferDate,
@@ -315,4 +324,25 @@ export function hasVerifiedBcaTransferRows(
   return (
     JSON.stringify(rows.map(project)) === JSON.stringify(expected.map(project))
   );
+}
+
+/** Mirrored Indonesian/English notifications describe one event, never two. */
+function parseBcaTransferNotification(text: string): { rows: ParsedImportRow[]; metadata: DetectedStatementMetadata } | null {
+  if (!/KlikBCA Bisnis/i.test(text) || !/Jenis Transaksi\s*:\s*TRANSFER DANA/i.test(text)) return null;
+  const metadata: DetectedStatementMetadata = { institution: 'BCA', accountNumber: null, accountName: 'BCA', accountType: 'bank', currency: 'IDR', openingBalance: null, endingBalance: null, startDate: null, endDate: null, confidence: 0, identityEvidence: ['bca-native-bilingual-notification'] };
+  const unsafe = { rows: [] as ParsedImportRow[], metadata };
+  const physical = [...text.matchAll(/^BCA_NATIVE_PAGES (\d+)$/gm)];
+  if (physical.length !== 1 || physical[0][1] !== '2' || !/klikbcabisnis@klikbca\.com/i.test(text) || !/PT\.\s*BANK CENTRAL ASIA TBK/i.test(text) || !/Notes:\s*Charges VAT Inclusive/i.test(text)) return unsafe;
+  const one = (label: string) => { const matches=[...text.matchAll(new RegExp('^\\s*'+label+'\\s*:\\s*([^\\n]+)$','gmi'))]; return matches.length===1 ? matches[0][1].trim() : null; };
+  const fields = [ ['Tanggal','Date'], ['Jam','Time'], ['Dari Rekening','From Account'], ['Ke Rekening','To Account'], ['Nominal','Amount'], ['No Referensi','Reference No'] ];
+  const values=fields.map(([a,b])=>{const x=one(a),y=one(b);return x && y && x===y ? x : null;});
+  if(values.some(v=>v===null)) return unsafe;
+  const statuses=[...text.matchAll(/^\s*Status\s*:\s*(\S+)\s*$/gmi)].map(m=>m[1]);
+  if(JSON.stringify(statuses)!==JSON.stringify(['Berhasil','Success']) || one('Transaction Type')!=='FUND TRANSFER' || one('Jenis Transfer')!=='Sekarang' || one('Transfer Type')!=='Immediate') return unsafe;
+  const [stamp, clock, source, recipient, amount, reference]=values as string[];
+  const d=date(stamp), n=money(amount);
+  if(!d || !time(clock) || !/^\d{3}-\d{7}$/.test(source) || !/^\d{3}-\d{7}$/.test(recipient) || !/^\d{10,25}$/.test(reference) || n===null || n<=0 || !Number.isSafeInteger(Math.round(n*100))) return unsafe;
+  metadata.accountNumber=source;metadata.accountName='BCA '+source.slice(-4);metadata.startDate=d;metadata.endDate=d;metadata.confidence=95;
+  const name='Transfer to '+recipient;
+  return {metadata,rows:[{date:d,amount:n.toFixed(2),currency:'IDR',type:'expense',merchantRaw:name,merchantClean:name,description:name,categoryName:'Transfers',institution:'BCA',accountNumber:source,accountName:metadata.accountName!,confidence:95,parserConfidence:100,categoryConfidence:95,rawPayload:{source:'bca_transfer_proof',kind:'bank_transfer_component',component:'principal',direction:'outgoing',reference,sourceAccount:source,recipientIdentifier:recipient,transferDate:stamp,transferTime:clock,sourceCurrency:'IDR',principal:n,fee:null,totalDebit:null,accountCurrency:'IDR',accountType:'bank',sourceText:text,parserEvidence:{version:'bca-bilingual-notification-v1',physicalPages:2,mirroredLanguages:['id','en'],feePolicy:'not printed; unknown',datePolicy:'calendar date; printed timezone absent',reason:'Complete matching bilingual successful transfer; no balance anchor'}}}]};
 }

@@ -42,6 +42,15 @@ async function main() {
     assert.deepEqual(again.changedOutsideProfile, []); assert.deepEqual(again.changedProtectedFinancial, []);
     await db.merchantRule.update({ where: { id: oldRule.id }, data: { normalizedName: "Concurrent change" } });
     assert.deepEqual((await v.inspectLearningVerification(runId, actor)).changedOutsideProfile, ["MerchantRule"], "The baseline detects changes and never silently accepts a new baseline");
+    const completeBaseline = await db.$transaction(tx => v.checkpointPreservationManifest("cmv29w3r4002806ictv6bmnfp", tx, [start.workspaceId]));
+    const secondRunId = randomUUID();
+    const secondRun = await v.startLearningVerification(secondRunId, actor);
+    const batch = await v.previewLearningBatchPreservation([runId, secondRunId], actor);
+    assert.deepEqual(batch.preservation, completeBaseline, "Exclude only newly allocated owned QA Profiles; retain all historical and null-Profile rows");
+    await assert.rejects(v.previewLearningBatchPreservation([runId, secondRunId], "another-admin"), /VERIFICATION_NOT_FOUND/);
+    for (const ids of [[], [runId,runId], [randomUUID()], Array.from({length:33},()=>randomUUID()), [original.id]]) await assert.rejects(v.previewLearningBatchPreservation(ids, actor), /VERIFICATION_NOT_FOUND/);
+    await db.merchantRule.update({ where: { id: oldRule.id }, data: { normalizedName: "Another concurrent change" } });
+    assert.notDeepEqual((await v.previewLearningBatchPreservation([runId, secondRunId], actor)).preservation.MerchantRule, completeBaseline.MerchantRule, "Aggregate checks detect edits to older rules");
     const require = createRequire(import.meta.url), adminPath = require.resolve("../lib/admin"), prior = require.cache[adminPath];
     let permission = "owner";
     require.cache[adminPath] = { id: adminPath, filename: adminPath, loaded: true, exports: { requireAdminAuth: async () => { if (permission === "anonymous") throw new Error("UNAUTHORIZED"); if (permission === "reader") throw new Error("FORBIDDEN"); return { userId: actor }; } } } as NodeModule;
@@ -55,6 +64,10 @@ async function main() {
       assert.equal((await route.POST(request({ runId, action: "repair-bpi-checkpoint" }))).status, 400, "A repair needs the reviewed preview hash");
       assert.equal((await route.POST(request({ runId, action: "preview-bpi-checkpoint", expectedPlanHash: "0".repeat(64) }))).status, 400);
       assert.equal((await route.POST(request({ runId, action: "preview-bpi-checkpoint" }))).status, 404, "Only the retained owned run can use this diagnostic");
+      assert.equal((await route.POST(request({runId,action:"preview-batch-preservation",runIds:[runId,secondRunId]}))).status,200);
+      assert.equal((await route.POST(request({runId,action:"preview-batch-preservation",runIds:[runId,runId]}))).status,400);
+      assert.equal((await route.POST(request({runId,action:"preview-batch-preservation",runIds:[randomUUID()]}))).status,404);
+      assert.equal((await route.POST(request({runId,action:"inspect",runIds:[runId]}))).status,400);
       assert.equal((await route.POST(request())).status, 200);
       process.env.VERCEL_ENV = "production"; assert.equal((await route.POST(request())).status, 404);
     } finally { if (prior) require.cache[adminPath] = prior; else delete require.cache[adminPath]; }

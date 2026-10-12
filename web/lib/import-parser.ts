@@ -16932,6 +16932,7 @@ const parseCimbTransactionSegment = (
     institution: string | null;
     statementStartDate: string | null;
     statementEndDate: string | null;
+    nativeMonthDates?: boolean;
   }
 ) : ParsedImportRow[] => {
   if (segmentLines.length === 0) {
@@ -16939,7 +16940,8 @@ const parseCimbTransactionSegment = (
   }
 
   const rows: ParsedImportRow[] = [];
-  const dateStartPattern = new RegExp(`^(${cimbDatePattern})(?:\\s+(.+))?$`, "i");
+  const datePattern = state.nativeMonthDates ? cimbDatePattern.replace(",\\s*", ",?\\s*") : cimbDatePattern;
+  const dateStartPattern = new RegExp(`^(${datePattern})(?:\\s+(.+))?$`, "i");
   let pendingPrelude: string[] = [];
   let activeRow: {
     date: Date;
@@ -17062,7 +17064,7 @@ const parseCimbTransactionSegment = (
 
     finalizeActiveRow();
 
-    const date = parseCimbDate(dateMatch[1]);
+    const date = parseCimbDate(state.nativeMonthDates ? dateMatch[1].replace(/^(\w+\s+\d{1,2})\s+(\d{4})$/, "$1, $2") : dateMatch[1]);
     if (!date) {
       pendingPrelude = [];
       continue;
@@ -17140,10 +17142,11 @@ const parseCimbTransactionSegment = (
 export function parseCimbConsolidatedStatement(
   text: string,
 ): { rows: ParsedImportRow[]; metadata: DetectedStatementMetadata } | null {
+  const legacySingle = /^Statement of Account$/mi.test(text) && /FastPlus - Savings Account No\./i.test(text) && /^CIMB_NATIVE_PAGES /m.test(text);
   if (
-    !/CONSOLIDATED STATEMENT OF ACCOUNT/i.test(text) ||
+    (!/CONSOLIDATED STATEMENT OF ACCOUNT/i.test(text) && !legacySingle) ||
     !/\bCIMB\b/i.test(text) ||
-    !/(?:Fast Plus|GSave) Account\s*-\s*Savings Account No\./i.test(text)
+    (!/(?:Fast Plus|GSave|UPSave) Account\s*-\s*Savings Account No\./i.test(text) && !legacySingle)
   )
     return null;
   const empty = (): {
@@ -17165,6 +17168,20 @@ export function parseCimbConsolidatedStatement(
       identityEvidence: ["cimb-consolidated-products"],
     },
   });
+  const nativeDatePattern = legacySingle ? cimbDatePattern.replace(",\\s*", ",?\\s*") : cimbDatePattern;
+  const parseSourceDate = (value?: string | null) => {
+    if (!value) return null;
+    const normalized=normalizeWhitespace(value);
+    const monthFirst=normalized.match(new RegExp(`^(${monthNamePattern})\\s+(\\d{1,2}),?\\s+(\\d{4})$`, "i"));
+    const dayFirst=normalized.match(new RegExp(`^(\\d{1,2})\\s+(${monthNamePattern})\\s+(\\d{4})$`, "i"));
+    const iso=normalized.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    if(!monthFirst&&!dayFirst&&!iso)return null;
+    const year=Number(monthFirst?.[3]??dayFirst?.[3]??iso?.[1]);
+    const month=iso ? Number(iso[2])-1 : monthIndexByAbbr[(monthFirst?.[1]??dayFirst?.[2]??'').slice(0,3).toUpperCase()];
+    const day=Number(monthFirst?.[2]??dayFirst?.[1]??iso?.[3]);
+    const result=new Date(Date.UTC(year,month,day,12));
+    return result.getUTCFullYear()===year&&result.getUTCMonth()===month&&result.getUTCDate()===day ? result : null;
+  };
   const lines = text.split(/\r?\n/).map(normalizeWhitespace).filter(Boolean);
   const holders = lines.filter(
     (l) =>
@@ -17176,7 +17193,7 @@ export function parseCimbConsolidatedStatement(
     lines.some(
       (l) =>
         /Account\s*-\s*Savings Account No\./i.test(l) &&
-        !/^(Fast Plus|GSave) Account\s*-\s*Savings Account No\./i.test(l),
+        !/^(Fast Plus|GSave|UPSave) Account\s*-\s*Savings Account No\./i.test(l),
     )
   )
     return null;
@@ -17195,13 +17212,13 @@ export function parseCimbConsolidatedStatement(
   const periods = lines.filter((l) => /^For .+ to .+$/i.test(l));
   if (new Set(periods).size !== 1) return empty();
   const period = periods[0]?.match(/^For (.+) to (.+)$/i),
-    start = parseCimbDate(period?.[1]),
-    end = parseCimbDate(period?.[2]);
+    start = parseSourceDate(period?.[1]),
+    end = parseSourceDate(period?.[2]);
   if (!start || !end || start > end) return empty();
   const startDate = start.toISOString().slice(0, 10),
     endDate = end.toISOString().slice(0, 10);
   const header =
-    /^(Fast Plus|GSave) Account\s*-\s*Savings Account No\.\s*(\d{14})$/i;
+    legacySingle ? /^(FastPlus) - Savings Account No\.\s*(\d{14}) Interest Rate \d+(?:\.\d+)?% p\.a\.$/i : /^(Fast Plus|GSave|UPSave) Account\s*-\s*Savings Account No\.\s*(\d{14})$/i;
   const indices = lines
     .map((l, i) => (header.test(l) ? i : -1))
     .filter((i) => i >= 0);
@@ -17217,6 +17234,16 @@ export function parseCimbConsolidatedStatement(
   const summaries = new Map<string, Summary>(),
     ledgers = new Map<string, string[]>();
   const cents = (v: unknown) => Math.round(Number(v) * 100);
+  if (legacySingle) {
+    if (indices.length !== 1 || lines.filter(l => /Savings Account No\./i.test(l)).length !== 1) return empty();
+    const summary = lines.slice(0, indices[0]);
+    const field = (pattern: RegExp) => { const values = summary.flatMap(l => l.match(pattern)?.[1] ? [l.match(pattern)![1]] : []); return values.length === 1 ? parseMoney(values[0]) : null; };
+    const opening = field(/^Opening Balance PHP ([\d,]+\.\d{2})$/i), deposits = field(/^Total Deposit PHP ([\d,]+\.\d{2})$/i), withdrawals = field(/^Total Withdrawal PHP ([\d,]+\.\d{2})$/i), closing = field(/^Closing Balance as of .+ PHP ([\d,]+\.\d{2})$/i);
+    const closingLabel=summary.filter(l=>/^Closing Balance as of /i.test(l));
+    if ([opening,deposits,withdrawals,closing].some(v=>v===null || !Number.isSafeInteger(cents(v))) || closingLabel.length!==1 || parseSourceDate(closingLabel[0].match(/^Closing Balance as of (.+) PHP /i)?.[1])?.toISOString().slice(0,10)!==endDate) return empty();
+    const m=lines[indices[0]].match(header)!;
+    summaries.set(m[2],{product:m[1],account:m[2],opening:opening!,deposits:deposits!,withdrawals:withdrawals!,closing:closing!,lines:summary});
+  }
   for (let n = 0; n < indices.length; n++) {
     const index = indices[n]!,
       m = lines[index]!.match(header)!,
@@ -17224,23 +17251,24 @@ export function parseCimbConsolidatedStatement(
       account = m[2]!;
     if (
       body.some((l) =>
-        /^Date\s+Details\s+Deposit\s+Withdrawal\s+Balance$/i.test(l),
+        /^Date\s+Details?\s+Deposit\s+Withdrawal\s+Balance$/i.test(l),
       )
     ) {
       if (ledgers.has(account)) return empty();
       ledgers.set(account, body);
       continue;
     }
-    const field = (pattern: RegExp) => {
-      const values = body
-        .map((l) => l.match(pattern)?.[1])
-        .filter((v): v is string => !!v);
-      return values.length === 1 ? parseMoney(values[0]) : null;
+    const field = (_pattern: RegExp, label: string) => {
+      // Match each complete adjacent label/currency/value occurrence exactly
+      // once, including wrapped native fields. Conflicting duplicates fail.
+      const pattern = new RegExp(`(?:^|\\n)(?:PHP\\s+${label}\\s+([\\d,]+\\.\\d{2})|${label}\\s+PHP\\s+([\\d,]+\\.\\d{2}))(?=\\n|$)`, "gi");
+      const values=[...body.join("\n").matchAll(pattern)].map(m=>m[1]??m[2]);
+      return values.length===1 ? parseMoney(values[0]) : null;
     };
-    const opening = field(/^Opening Balance PHP ([\d,]+\.\d{2})$/i),
-      deposits = field(/^Total Deposit PHP ([\d,]+\.\d{2})$/i),
-      withdrawals = field(/^Total Withdrawal PHP ([\d,]+\.\d{2})$/i),
-      closing = field(/^Closing Balance as of .+ PHP ([\d,]+\.\d{2})$/i);
+    const opening = field(/^Opening Balance PHP ([\d,]+\.\d{2})$/i, "Opening Balance"),
+      deposits = field(/^Total Deposit PHP ([\d,]+\.\d{2})$/i, "Total Deposit"),
+      withdrawals = field(/^Total Withdrawal PHP ([\d,]+\.\d{2})$/i, "Total Withdrawal"),
+      closing = field(/^Closing Balance as of .+ PHP ([\d,]+\.\d{2})$/i, "Closing Balance as of [^\\n]+");
     if (
       [opening, deposits, withdrawals, closing].some(
         (v) => v === null || !Number.isSafeInteger(cents(v)),
@@ -17248,7 +17276,7 @@ export function parseCimbConsolidatedStatement(
       summaries.has(account)
     )
       return empty();
-    const summaryDate = parseCimbDate(
+    const summaryDate = parseSourceDate(
       body
         .find((l) => /^Closing Balance as of /i.test(l))
         ?.match(/^Closing Balance as of (.+) PHP /i)?.[1],
@@ -17273,8 +17301,9 @@ export function parseCimbConsolidatedStatement(
   const totalLine = lines.filter((l) =>
     /^Total Balance PHP [\d,]+\.\d{2}$/i.test(l),
   );
-  if (totalLine.length !== 1) return empty();
-  const total = parseMoney(totalLine[0]!.match(/PHP ([\d,]+\.\d{2})$/)![1]);
+  if (!legacySingle && totalLine.length !== 1) return empty();
+  if (legacySingle && totalLine.length) return empty();
+  const total = legacySingle ? [...summaries.values()][0]?.closing : parseMoney(totalLine[0]!.match(/PHP ([\d,]+\.\d{2})$/)![1]);
   if (
     cents(total) !==
     [...summaries.values()].reduce((n, s) => n + cents(s.closing), 0)
@@ -17285,14 +17314,14 @@ export function parseCimbConsolidatedStatement(
     const body = ledgers.get(s.account)!,
       openingIndices = body
         .map((l, i) =>
-          new RegExp(`^${cimbDatePattern}\\s+Opening Balance\\b`, "i").test(l)
+          new RegExp(`^${nativeDatePattern}\\s+Opening Balance\\b`, "i").test(l)
             ? i
             : -1,
         )
         .filter((i) => i >= 0),
       closingIndices = body
         .map((l, i) =>
-          new RegExp(`^${cimbDatePattern}\\s+Closing Balance\\b`, "i").test(l)
+          new RegExp(`^${nativeDatePattern}\\s+Closing Balance\\b`, "i").test(l)
             ? i
             : -1,
         )
@@ -17303,14 +17332,16 @@ export function parseCimbConsolidatedStatement(
       closingIndices[0]! <= openingIndices[0]!
     )
       return empty();
-    const openingDate = parseCimbDate(
+    const openingDate = parseSourceDate(
         body[openingIndices[0]!]!.split(/ Opening Balance/i)[0],
       ),
-      closingDate = parseCimbDate(
+      closingDate = parseSourceDate(
         body[closingIndices[0]!]!.split(/ Closing Balance/i)[0],
       );
+    const openingDay = openingDate?.toISOString().slice(0, 10);
+    const laterZeroOpening = Boolean(openingDay && openingDay > startDate && openingDay <= endDate && s.opening === 0);
     if (
-      openingDate?.toISOString().slice(0, 10) !== startDate ||
+      (openingDay !== startDate && !laterZeroOpening) ||
       closingDate?.toISOString().slice(0, 10) !== endDate
     )
       return empty();
@@ -17333,7 +17364,7 @@ export function parseCimbConsolidatedStatement(
       return empty();
     const ledger = body.slice(openingIndices[0]! + 1, closingIndices[0]!);
     const count = ledger.filter((l) =>
-      new RegExp(`^${cimbDatePattern}(?:\\s|$)`, "i").test(l),
+      new RegExp(`^${nativeDatePattern}(?:\\s|$)`, "i").test(l),
     ).length;
     const parsed = parseCimbTransactionSegment(ledger, {
       accountName: `CIMB ${s.account.slice(-4)}`,
@@ -17341,6 +17372,7 @@ export function parseCimbConsolidatedStatement(
       institution: "CIMB",
       statementStartDate: start.toISOString(),
       statementEndDate: end.toISOString(),
+      nativeMonthDates: legacySingle,
     });
     if (parsed.length !== count) return empty();
     let running = cents(s.opening),
@@ -17361,7 +17393,8 @@ export function parseCimbConsolidatedStatement(
         row.type !== (deposit > 0 ? "income" : "expense") ||
         cents(row.amount) !== deposit + withdrawal ||
         !row.date ||
-        row.date < startDate ||
+        parseSourceDate(String(raw.line).match(new RegExp(`^(${nativeDatePattern})(?:\\s|$)`, "i"))?.[1])?.toISOString().slice(0, 10) !== row.date ||
+        row.date < (openingDay ?? startDate) ||
         row.date > endDate
       )
         return empty();
@@ -17377,11 +17410,12 @@ export function parseCimbConsolidatedStatement(
     )
       return empty();
     const proof = {
-      version: "cimb-consolidated-ledger-v1",
+      version: legacySingle ? "cimb-single-ledger-v1" : "cimb-consolidated-ledger-v1",
       openingBalance: s.opening,
       closingBalance: s.closing,
       totalDeposits: s.deposits,
       totalWithdrawals: s.withdrawals,
+      ...(laterZeroOpening ? { sourceOpeningDate: openingDay, openingAnchorWithinPeriod: true } : {}),
     };
     if (!parsed.length) {
       if (s.deposits !== 0 || s.withdrawals !== 0) return empty();

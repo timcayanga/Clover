@@ -1,0 +1,21 @@
+Statement of Account
+For May 01, 2026 to May 31, 2026
+EXAMPLE HOLDER Reference No. 20260601999999
+SUMMARY
+Opening Balance PHP 10.00
+Total Deposit PHP 0.04
+Total Withdrawal PHP 0.01
+Closing Balance as of May 31, 2026 PHP 10.03
+FastPlus - Savings Account No. 00000123459999 Interest Rate 0.75% p.a.
+Date Detail Deposit Withdrawal Balance
+May 01 2026 Opening Balance PHP 10.00
+Credit Interest account
+May 01 2026 PHP 0.04 PHP 0.00 PHP 10.04
+Reference No. EXAMPLEINT001
+TAX RATE
+May 01 2026 PHP 0.00 PHP 0.01 PHP 10.03
+Reference No. EXAMPLEINT001
+May 31 2026 Closing Balance PHP 10.03
+For more information, please call CIMB.
+Statement is generated on June 19, 2026 Page 1 of 1
+CIMB_NATIVE_PAGES 1

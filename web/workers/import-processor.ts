@@ -5647,12 +5647,13 @@ const resolveConfirmationAccount = async (params: {
   const consolidatedCimbRows = params.parsedRows.length > 0 && params.parsedRows.every(row =>
     ["cimb_consolidated_ledger", "cimb_consolidated_snapshot"].includes(String((row.rawPayload as Record<string, unknown> | null)?.source)));
   const bcaTransferRows = params.parsedRows.length > 0 && params.parsedRows.every(row => (row.rawPayload as Record<string, unknown> | null)?.source === "bca_transfer_proof");
-  if (consolidatedCimbRows || bcaTransferRows) {
-    const institution = consolidatedCimbRows ? "CIMB" : "BCA";
-    const currency = consolidatedCimbRows ? "PHP" : "IDR";
+  const posbStatementRows = params.parsedRows.length > 0 && params.parsedRows.every(row => { const raw = row.rawPayload as Record<string, unknown> | null; return raw?.source === "posb_pdf_columns" && raw.balanceReconciled === true && (raw.reconciliation as Record<string, unknown> | null)?.version === "posb-column-reconciliation-v1"; });
+  if (consolidatedCimbRows || bcaTransferRows || posbStatementRows) {
+    const institution = consolidatedCimbRows ? "CIMB" : posbStatementRows ? "POSB" : "BCA";
+    const currency = consolidatedCimbRows ? "PHP" : posbStatementRows ? "SGD" : "IDR";
     const first = params.parsedRows[0] as Record<string, unknown>;
     const number = readParsedRowAccountNumber(first);
-    if (!number || !(consolidatedCimbRows ? /^\d{14}$/ : /^\d{3}-\d{7}$/).test(number)) throw new Error("Review the document source account identity before importing.");
+    if (!number || !(consolidatedCimbRows ? /^\d{14}$/ : posbStatementRows ? /^\d{3}-\d{5}-\d$/ : /^\d{3}-\d{7}$/).test(number)) throw new Error("Review the document source account identity before importing.");
     const name = `${institution} ${number.slice(-4)}`;
     const limits = await getWorkspaceOwnerLimits(workspaceId);
     const owner = await prisma.workspace.findUniqueOrThrow({ where: { id: workspaceId }, select: { userId: true } });
@@ -5671,13 +5672,19 @@ const resolveConfirmationAccount = async (params: {
       if (matches[0]) return matches[0];
       if (tombstone && !params.allowDeletedAccountRecreation) throw new Error("This statement matches a deleted account. Confirm before recreating it.");
       if (limits?.accountLimit != null && await tx.account.count({ where: { workspace: { userId: owner.userId }, type: { not: "cash" } } }) >= limits.accountLimit) throw new Error("Choose an existing account or change your plan before importing more accounts.");
-      const balance = consolidatedCimbRows ? getImportAccountBalanceFromParsedRows(params.parsedRows as EnrichedParsedImportRow[]) : null;
+      const balance = consolidatedCimbRows || posbStatementRows ? getImportAccountBalanceFromParsedRows(params.parsedRows as EnrichedParsedImportRow[]) : null;
       return tx.account.create({ data: { workspaceId, name, institution, accountNumber: number, currency, type: "bank", source: "upload", balance: balance?.toString() ?? null,
         ...(compatibleAccountColumns.has("importIdentityName") ? { importIdentityName: name } : {}),
         ...(compatibleAccountColumns.has("importIdentityInstitution") ? { importIdentityInstitution: institution } : {}),
         ...(compatibleAccountColumns.has("importIdentityAccountNumber") ? { importIdentityAccountNumber: number } : {}),
       }, select: getCompatibleAccountSelect(compatibleAccountColumns) });
     });
+    // Keep the established ATM-to-cash mirror; account matching itself stays
+    // read-only for existing bank accounts and existing cash accounts.
+    if (posbStatementRows && params.parsedRows.some(row => {
+      const raw = row.rawPayload as Record<string, unknown> | null;
+      return raw?.direction === "outgoing" && typeof raw.notes === "string" && /^Cash Withdrawal(?:\s|$)/i.test(raw.notes);
+    }) && !await prisma.account.findFirst({ where: { workspaceId, type: "cash", currency }, select: { id: true } })) await resolveWorkspaceCashAccountId(workspaceId, currency);
     return account;
   }
   const migrationRow = params.parsedRows.length && params.parsedRows.every(row => readAppMigration(row.rawPayload)) ? params.parsedRows[0] : null;
@@ -15867,7 +15874,8 @@ export const confirmImportFile = async (
     parsedRows.every((row) => (row.rawPayload as Record<string, unknown> | null)?.source === "wide_account_snapshot_csv");
   // App migrations are history, not a balance snapshot. A partial date range
   // must never replace a confirmed balance with its net imported movements.
-  if (consolidatedCimbImport || (parsedRows.length > 0 && parsedRows.every(row => (row.rawPayload as Record<string, unknown> | null)?.source === "bca_transfer_proof") && account.balance !== null)) {
+  const verifiedPosbImport = parsedRows.length > 0 && parsedRows.every(row => { const raw = row.rawPayload as Record<string, unknown> | null; return raw?.source === "posb_pdf_columns" && raw.balanceReconciled === true && (raw.reconciliation as Record<string, unknown> | null)?.version === "posb-column-reconciliation-v1"; });
+  if (consolidatedCimbImport || ((verifiedPosbImport || (parsedRows.length > 0 && parsedRows.every(row => (row.rawPayload as Record<string, unknown> | null)?.source === "bca_transfer_proof"))) && account.balance !== null)) {
     reconciledAccountBalance = snapshotBalanceToString(account.balance);
   } else if (parsedRows.length > 0 && parsedRows.every(row => readAppMigration(row.rawPayload))) {
     reconciledAccountBalance = snapshotBalanceToString(account.balance);
