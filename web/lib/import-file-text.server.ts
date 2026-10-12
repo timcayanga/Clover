@@ -1,4 +1,5 @@
 import { hasReconciledBdoInlineLedger } from "@/lib/import-parser";
+import { buildPosbPdfRows } from "@/lib/posb-statement";
 import { readLocalReceiptImage, shutdownLocalReceiptOcr } from "./local-receipt-ocr.server";
 import { hasHangul, hasKoreanFinancialHeaders } from "@/lib/korean-financial-text";
 import { koreanStatementLineEvidence } from "@/lib/korean-statement-evidence";
@@ -2207,6 +2208,7 @@ const extractTextFromPdfBytes = async (data: Uint8Array, password?: string, base
     const pdf = await loadingTask.promise;
     const pages = new Array<string>(pdf.numPages);
     const mariBankTransactionRows = new Array<string[]>(pdf.numPages);
+    const posbTransactionRows = new Array<string[]>(pdf.numPages);
     let nextPageIndex = 0;
     // PDF.js can read independent text layers concurrently. Bound the work so
     // a long statement does not monopolize a serverless invocation, while
@@ -2225,12 +2227,15 @@ const extractTextFromPdfBytes = async (data: Uint8Array, password?: string, base
           mariBankTransactionRows[pageIndex] = buildMariBankTransactionRowsFromContentItems(
             content.items as PdfTextContentItemLike[]
           );
+          posbTransactionRows[pageIndex] = buildPosbPdfRows(content.items as PdfTextContentItemLike[]);
         }
       })
     );
 
     try {
       const extractedText = pages.join("\n");
+      const structuredPosbRows = posbTransactionRows.flat().filter(Boolean);
+      if (/Details of Your POSB Payroll Account/i.test(extractedText) && structuredPosbRows.length > 0) return `${extractedText}\n${structuredPosbRows.join('\n')}`;
       const structuredMariBankRows = mariBankTransactionRows.flat().filter(Boolean);
       return /\bMARI\s*BANK\b/i.test(extractedText) && structuredMariBankRows.length > 0
         ? `${extractedText}\n${structuredMariBankRows.join("\n")}`

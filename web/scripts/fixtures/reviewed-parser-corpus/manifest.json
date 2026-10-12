@@ -1657,6 +1657,208 @@
         "endingBalance": 9000,
         "maxConfidence": 45
       }
+    },
+    {
+      "id": "posb-column-ledger",
+      "source": "posb-column-ledger.txt",
+      "expected": [
+        {
+          "date": "2025-12-09",
+          "amount": "10.00",
+          "currency": "SGD",
+          "type": "expense",
+          "accountNumber": "000-00123-4",
+          "institution": "POSB",
+          "rawPayload": {
+            "source": "posb_pdf_columns",
+            "direction": "outgoing",
+            "balance": 90
+          }
+        },
+        {
+          "date": "2025-12-09",
+          "amount": "10.00",
+          "currency": "SGD",
+          "type": "expense",
+          "accountNumber": "000-00123-4",
+          "institution": "POSB",
+          "rawPayload": {
+            "source": "posb_pdf_columns",
+            "direction": "outgoing",
+            "balance": 80
+          }
+        },
+        {
+          "date": "2025-12-10",
+          "amount": "5.00",
+          "currency": "SGD",
+          "type": "expense",
+          "accountNumber": "000-00123-4",
+          "institution": "POSB",
+          "rawPayload": {
+            "source": "posb_pdf_columns",
+            "direction": "outgoing",
+            "balance": 75
+          }
+        },
+        {
+          "date": "2025-12-27",
+          "amount": "5.20",
+          "currency": "SGD",
+          "type": "income",
+          "accountNumber": "000-00123-4",
+          "institution": "POSB",
+          "rawPayload": {
+            "source": "posb_pdf_columns",
+            "direction": "incoming",
+            "balance": 80.2
+          }
+        },
+        {
+          "date": "2025-12-31",
+          "amount": "0.02",
+          "currency": "SGD",
+          "type": "income",
+          "accountNumber": "000-00123-4",
+          "institution": "POSB",
+          "rawPayload": {
+            "source": "posb_pdf_columns",
+            "direction": "incoming",
+            "balance": 80.22
+          }
+        }
+      ],
+      "expectedMetadata": {
+        "institution": "POSB",
+        "accountNumber": "000-00123-4",
+        "accountType": "bank",
+        "currency": "SGD",
+        "openingBalance": 100,
+        "endingBalance": 80.22
+      },
+      "sha256": "87fb9cb9f11b4f07ad53e7ca70bdbd4678641a5fcddf28be98034e851df9c8c8",
+      "kind": "statement",
+      "representation": "synthetic extracted PDF column evidence",
+      "provenance": {
+        "origin": "synthetic",
+        "reviewer": "Codex",
+        "reviewedAt": "2026-10-12",
+        "status": "reviewed",
+        "basis": "Invented source and identity. Two distinct same-day10 withdrawals and one ATM5 from100, salary5.20 and interest0.02 end80.22. Wise counterparty cannot replace POSB identity; year2025/SGD persist. Existing cash counterpart for ATM5 remains a derived transaction linked to its source, not an extra parsed row."
+      }
+    },
+    {
+      "id": "gcash-bill-fee-email",
+      "source": "gcash-bill-fee-email.txt",
+      "expected": [
+        {
+          "date": "2025-02-01T18:09:19+08:00",
+          "amount": "120.00",
+          "currency": "PHP",
+          "type": "expense",
+          "institution": "GCash",
+          "categoryName": "Utilities",
+          "rawPayload": {
+            "source": "gcash_bills_receipt",
+            "component": "bill",
+            "billerAccountNumber": "0000012345",
+            "totalAmount": 123.25,
+            "billAmount": 120,
+            "feeAmount": 3.25
+          }
+        },
+        {
+          "date": "2025-02-01T18:09:19+08:00",
+          "amount": "3.25",
+          "currency": "PHP",
+          "type": "expense",
+          "institution": "GCash",
+          "categoryName": "Financial",
+          "rawPayload": {
+            "source": "gcash_bills_receipt",
+            "component": "fee",
+            "billerAccountNumber": "0000012345",
+            "totalAmount": 123.25,
+            "billAmount": 120,
+            "feeAmount": 3.25
+          }
+        }
+      ],
+      "expectedMetadata": {
+        "accountName": "GCash",
+        "accountNumber": null,
+        "currency": "PHP",
+        "accountType": "wallet"
+      },
+      "sha256": "9f78aa48462fa1c00aacb4b251582f66881d80eda1e2721f923eaa8871632aed",
+      "kind": "statement",
+      "representation": "synthetic native/OCR email receipt transcription",
+      "provenance": {
+        "origin": "synthetic",
+        "reviewer": "Codex",
+        "reviewedAt": "2026-10-12",
+        "status": "reviewed",
+        "basis": "Invented biller identity, account and values. Printed bill120 plus fee3.25 equals total123.25. Repeated header totals do not create extra transactions. Recipient biller number must not become payer wallet identity; payment timestamp outranks email timestamp."
+      }
+    },
+    {
+      "id": "maribank-retained-column-repeats",
+      "source": "maribank-retained-column-repeats.txt",
+      "expected": [
+        {
+          "date": "2025-03-11",
+          "amount": "50.00",
+          "type": "income",
+          "rawPayload": {
+            "direction": "incoming",
+            "accountNumber": "00012345678"
+          }
+        },
+        {
+          "date": "2025-03-28",
+          "amount": "20.00",
+          "type": "expense",
+          "rawPayload": {
+            "direction": "outgoing",
+            "accountNumber": "00012345678"
+          }
+        },
+        {
+          "date": "2025-03-28",
+          "amount": "20.00",
+          "type": "expense",
+          "rawPayload": {
+            "direction": "outgoing",
+            "accountNumber": "00012345678"
+          }
+        },
+        {
+          "date": "2025-03-31",
+          "amount": "2.00",
+          "type": "income",
+          "rawPayload": {
+            "direction": "incoming",
+            "accountNumber": "00012345678"
+          }
+        }
+      ],
+      "expectedMetadata": {
+        "institution": "MariBank",
+        "accountNumber": "00012345678",
+        "openingBalance": 10,
+        "endingBalance": 22,
+        "currency": "PHP"
+      },
+      "sha256": "261f2d36d13722c6f97d147438851e711fbc85e2a1e49f79f5d22de3e40671ba",
+      "kind": "statement",
+      "representation": "synthetic extracted PDF column evidence",
+      "provenance": {
+        "origin": "synthetic",
+        "reviewer": "Codex",
+        "reviewedAt": "2026-10-12",
+        "status": "reviewed",
+        "basis": "Invented source and values retaining the established column behavior. Opening10 plus incoming52 minus outgoing40 ends22. Both same-day20 transfers survive. Monthly aggregate interest keeps existing statement-end-date policy; it is not a printed transaction day."
+      }
     }
   ]
 }

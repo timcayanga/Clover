@@ -42,3 +42,7 @@ Structured spreadsheets keep their deterministic schema parser and do not enter 
 - Force backup verification when a transaction amount is taken solely from a date, a holdings valuation summary becomes transactions, or generic heuristic rows have neither confidence nor structured parser evidence.
 - Penalize unsafe local candidates before choosing a winner. A failed/unavailable backup must not silently fall back to those same unsupported rows; stop before persistence with an actionable error.
 - Dated investment snapshot markers remain valid and do not require backup solely because their valuation date is present.
+
+## Reviewed POSB columns and GCash bill receipts
+
+These two dedicated source families can retain their deterministic candidate only after reparsing the source and verifying exact ordered amounts, dates and provenance. POSB additionally requires opening/closing reconciliation, complete printed page coverage, running-balance checks and matching native dated-row coverage. GCash requires one payment reference, explicit PHP bill/fee/total arithmetic, payment timestamp and component evidence. These verified candidates bypass the generic ledger challenger, which would otherwise turn summary balances or repeated receipt headers into extra transactions. The evidence-safety guard still runs before the fast path; markers, institution identity and high confidence alone do not qualify.

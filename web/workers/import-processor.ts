@@ -20,6 +20,8 @@ import { prisma } from "@/lib/prisma";
 import { getEnv } from "@/lib/env";
 import { capturePostHogServerEvent } from "@/lib/analytics-server";
 import { findDeletedAccountTombstoneMatch } from "@/lib/account-tombstones";
+import { readGcashBillsPaymentTimestamp, hasVerifiedGcashBillsRows } from "@/lib/gcash-bills-receipt";
+import { hasVerifiedPosbRows } from "@/lib/posb-statement";
 import { formatUploadAccountDisplayName } from "@/lib/account-display";
 import { recordDataQaRun, type DataQaParsedRow, type DataQaSource } from "@/lib/data-qa";
 import { deriveReconciledBalance, normalizeAccountBalanceSign, type BalanceLikeTransaction } from "@/lib/account-balance";
@@ -5918,7 +5920,7 @@ const resolveConfirmationAccount = async (params: {
         !Number.isFinite(currentBalance) ||
         currentBalance === 0 ||
         Math.abs(currentBalance - next.balance) > 0.000001;
-      if (shouldUpdateBalance) {
+      if (shouldUpdateBalance && (!Number.isFinite(currentBalance) || Math.abs(currentBalance - next.balance) > 0.000001)) {
         data.balance = next.balance.toString();
       }
     }
@@ -9973,6 +9975,8 @@ const processImportFileTextImpl = async (
     hasReliableDeterministicStatementParse:
       preliminaryStrongStructuredPdfParse ||
       preliminaryHasStrongWisePdfDeterministicParse ||
+      hasVerifiedGcashBillsRows(textForParse, parsedRows) ||
+      hasVerifiedPosbRows(textForParse, parsedRows) ||
       hasStructuredWorkbookRows ||
       hasFinancialExchangeRows,
     imageStatementParseLooksUsable: preliminaryImageStatementParseLooksUsable,
@@ -10458,6 +10462,8 @@ const processImportFileTextImpl = async (
     importMode === "statement" &&
     (importFile.fileType === "application/pdf" || imageImport) &&
     Boolean(textForParse.trim()) &&
+    !hasVerifiedGcashBillsRows(textForParse, parsedRows) &&
+    !hasVerifiedPosbRows(textForParse, parsedRows) &&
     !hasStructuredWorkbookRows &&
     !hasFinancialExchangeRows &&
     !shouldDiscardGenericScreenshotRowsBeforeBackup &&
@@ -10629,6 +10635,8 @@ const processImportFileTextImpl = async (
     rows: parsedRows as Array<Record<string, unknown>>,
   });
   const hasReliableDeterministicStatementParse =
+    hasVerifiedGcashBillsRows(textForParse, parsedRows) ||
+    hasVerifiedPosbRows(textForParse, parsedRows) ||
     hasStructuredWorkbookRows ||
     hasFinancialExchangeRows ||
     strongStructuredPdfParse ||
@@ -15875,8 +15883,8 @@ export const confirmImportFile = async (
         },
       });
     } else if (balanceToPersist !== null) {
-      await tx.account.update({
-        where: { id: resolvedAccountId },
+      await tx.account.updateMany({
+        where: { id: resolvedAccountId, OR: [{ balance: null }, { balance: { not: balanceToPersist } }] },
         data: {
           balance: balanceToPersist,
         },
@@ -15912,7 +15920,10 @@ export const confirmImportFile = async (
   const matchMigrationOverlap = createMigrationOverlapMatcher(existingRowsForAccount as unknown as Array<Record<string, unknown>>);
 
   for (const [index, originalRow] of parsedRows.entries()) {
-    const row = readAppMigration(originalRow.rawPayload) ? originalRow : normalizeLandbankImportedRow(originalRow as ImportInsightSourceRow, statementInstitution);
+    // POSB's amountColumn="withdrawal" is column evidence, not an ATM
+    // description. Its dedicated parser already distinguishes FAST and cash.
+    const row = readAppMigration(originalRow.rawPayload) || (originalRow.rawPayload as Record<string, unknown> | null)?.source === "posb_pdf_columns"
+      ? originalRow : normalizeLandbankImportedRow(originalRow as ImportInsightSourceRow, statementInstitution);
     const migration = readAppMigration(row.rawPayload);
     const rowAccount = rowAccountFor(row as Record<string, unknown>);
     const rowResolvedAccountId = rowAccount.id;
@@ -16033,7 +16044,7 @@ export const confirmImportFile = async (
         !Array.isArray(row.rawPayload) &&
         (row.rawPayload as Record<string, unknown>).kind === "receivable_commitment_marker"
     );
-    const parsedTransactionDate =
+    const parsedTransactionDate = readGcashBillsPaymentTimestamp(row.rawPayload) ??
       (row.date instanceof Date && !Number.isNaN(row.date.getTime())
         ? row.date
         : parseDateValue(typeof row.date === "string" ? row.date : null)) ?? null;

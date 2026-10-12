@@ -21,5 +21,8 @@
   "receipt-decimal-total-amount": "093dcb77c4ed8d8a71ff67663dd38c6720be72444fa5bfe30ca9dd05f19983f4",
   "chinabank-adjacent-account-balances": "de78f144b16814d56cf315a2eeb13e669dc02e2a9152918942df88e20467a830",
   "eastwest-template-blank-account": "7a35c956b3fae71fb32354bacc7dcd3dd38006ff13bf9b19c130b4f1d3dae2fd",
-  "eastwest-template-explicit-account": "c1552faf9ad8df78dccc2aed29f603ef84d4abd8180369d87dfc442add0d7837"
+  "eastwest-template-explicit-account": "c1552faf9ad8df78dccc2aed29f603ef84d4abd8180369d87dfc442add0d7837",
+  "posb-column-ledger": "7da0c9146f657ad97eab005b632c60114d84bc69f16b9bd4064bc55ef8476d10",
+  "gcash-bill-fee-email": "7b64ffb2f8fd6aabbd891124e4746e157a4859d2c1b08689cf10f2051f0f9eac",
+  "maribank-retained-column-repeats": "242f03c3874306f01553af570bab88b89a84681579147781707a3c8067c90561"
 }

@@ -1,4 +1,6 @@
 import { parseAppMigrationTable, readAppMigration } from "@/lib/app-migration-import";
+import { parsePosbStatement } from "@/lib/posb-statement";
+import { parseGcashBillsReceipt } from "@/lib/gcash-bills-receipt";
 import { parseQifMigration } from "@/lib/qif-migration-import";
 import { getRegionalMerchantCategoryHint } from "@/lib/korea-indonesia-corpus";
 import { parseRegionalJsonFinancialExport } from "@/lib/regional-json-financial-export";
@@ -25937,6 +25939,10 @@ const filterSharedScreenshotParsedRows = (
 };
 
 export const detectStatementMetadata = (text: string, fileName = ""): DetectedStatementMetadata | null => {
+  const posb = parsePosbStatement(text);
+  if (posb) return posb.metadata;
+  const gcashBill = parseGcashBillsReceipt(text);
+  if (gcashBill) return gcashBill.metadata;
   const investmentSummaryRows = text.includes("__CLOVER_WORKSHEET__") ? null : parseInvestmentSummary(text);
   if (investmentSummaryRows) return { institution: null, accountName: null, accountNumber: null, accountType: "investment", currency: null, openingBalance: null, endingBalance: null, startDate: null, endDate: null, confidence: 65 };
   // Recognized tabular exports have explicit columns. Their headings and row
@@ -26838,6 +26844,10 @@ export const parseImportText = (
   if (financialExchangeRows) {
     return financialExchangeRows;
   }
+  const posb = parsePosbStatement(text);
+  if (posb) return posb.rows;
+  const gcashBill = parseGcashBillsReceipt(text);
+  if (gcashBill) return gcashBill.rows;
   const structuredWorkbookRows = parseStructuredWorkbookImport(text, fileName, fileType, context);
   if (structuredWorkbookRows) {
     return structuredWorkbookRows;

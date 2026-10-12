@@ -1,4 +1,5 @@
 import { enqueueLearningJob, processLearningJob, LearningInputError, type LearningAction, type LearningWriteContext } from "@/lib/learning-jobs";
+import { readGcashBillsPaymentTimestamp } from "@/lib/gcash-bills-receipt";
 import { readAppMigration } from "@/lib/app-migration-import";
 import { getRegionalMerchantCategoryHint } from "@/lib/korea-indonesia-corpus";
 import { getIndonesianMerchantCategoryHint, getIndonesianIncomeCategoryHint, needsIndonesianPaymentCategoryReview } from "@/lib/indonesian-merchant-context";
@@ -1953,6 +1954,9 @@ export const detectStatementMetadataFromText = (text: string, fileName = ""): St
   }
 
   const metadata = detectStatementMetadata(text, fileName);
+  // This receipt's account number belongs to the biller. An explicit absence
+  // of wallet identity must survive the generic account-number fallback.
+  if (metadata?.identityEvidence?.includes("GCash bill receipt and reference")) return { ...metadata, currency: metadata.currency ?? null };
   // Some Metrobank online PDFs preserve the MB-Online-MSOA filename but lose
   // the bank masthead during extraction. Prefer that durable filename signal
   // over incidental words (for example, a contact email containing "Wise").
@@ -3668,7 +3672,7 @@ export const buildParsedTransactionInsertData = async (params: {
         : row.accountNumber ?? params.metadata.accountNumber;
     }
     if (columns.has("accountName")) record.accountName = row.accountName ?? null;
-    if (columns.has("date")) record.date = parseDateValue(row.date ?? null);
+    if (columns.has("date")) record.date = readGcashBillsPaymentTimestamp(row.rawPayload) ?? parseDateValue(row.date ?? null);
     if (columns.has("amount")) record.amount = amount;
     if (columns.has("currency")) record.currency = currency;
     if (columns.has("merchantRaw")) record.merchantRaw = row.merchantRaw ?? null;

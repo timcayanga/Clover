@@ -61,3 +61,9 @@ This document captures the GCash parsing rules learned from the training bundles
 
 - GCash imports should preserve wallet movement, merchant payments, and transfer direction cleanly.
 - Time-stamped wallet activity should remain distinct from bank-style statement ledgers.
+
+## Bills-payment email receipts
+
+A receipt labeled `GCash Bills Pay Receipt` with a GCash reference is a single payment document, not a wallet history table. Preserve the printed bill and fee as separate PHP expense components; together they must equal `Total Amount`. Repeated email/visual/OCR copies of identical totals do not create additional purchases. Missing/conflicting values require source review. Use the payment `Date/Time` in Philippine time rather than the email delivery timestamp.
+
+The receipt's `Account Number` belongs to the biller. Retain it in source evidence with the payment reference; leave the payer's wallet number absent unless the source independently identifies it. Generic identity fallback must respect that absence. Keep the complete source text and component evidence traceable. The portable `gcash-bill-fee-email` example uses invented identity and values; the private original is retained outside Git.
