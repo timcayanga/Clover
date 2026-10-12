@@ -59,11 +59,12 @@ export function buildBcaTransferPdfRows(
   const source = find("Dari Rekening") ?? find("Dari"),
     kind = find("Jenis"),
     transfer = find("Transfer"),
-    destination = find("Rekening /") ?? cells.find(c => /^Ke Rekening(?:\s*\/)?$/.test(c.text)),
+    destination = find("Rekening /") ?? cells.find(c => /^Ke Rekening(?:\s*\/(?:\s*No\.)?)?$/.test(c.text)),
     amount = find("Jumlah"),
     fee = find("Biaya"),
     fx = find("Kurs");
   const status = cells.find((c) => /^Status\s+Alasan\s+No\.\s+Referensi$/.test(c.text)) ?? find("Status");
+  if (destination && /\/\s*No\.$/.test(destination.text) && !["BCA Virtual", "Account"].every(label => cells.some(c => c.text === label && Math.abs(c.x-destination.x)<2 && c.y<destination.y && c.y>=destination.y-3*destination.height))) return [];
   const reasonHeader = find("Alasan"), referenceHeader = find("No. Referensi") ?? find("No.");
   if (status?.text === "Status" && (!reasonHeader || !referenceHeader || reasonHeader.x <= status.x || referenceHeader.x <= reasonHeader.x)) return [];
   if (source?.text === "Dari" && !cells.some(c => c.text === "Rekening" && Math.abs(c.x-source.x)<1 && c.y<source.y && c.y>=source.y-2*source.height)) return [];
@@ -220,7 +221,7 @@ export function parseBcaTransferProof(
     .split(/\r?\n/)
     .filter((l) => l.startsWith("BCA_TRANSFER "));
   const physical = [...text.matchAll(/^BCA_NATIVE_PAGES (\d+)$/gm)];
-  const pages = [...text.matchAll(/Halaman\s+(\d+)\s+dari\s+(\d+)/gi)];
+  const pages = [...text.matchAll(/(?:Halaman|Page)\s+(\d+)\s+(?:dari|of)\s+(\d+)/gi)];
   if (
     physical.length !== 1 ||
     physical[0]![1] !== "1" ||
@@ -333,16 +334,26 @@ function parseBcaTransferNotification(text: string): { rows: ParsedImportRow[]; 
   const unsafe = { rows: [] as ParsedImportRow[], metadata };
   const physical = [...text.matchAll(/^BCA_NATIVE_PAGES (\d+)$/gm)];
   if (physical.length !== 1 || physical[0][1] !== '2' || !/klikbcabisnis@klikbca\.com/i.test(text) || !/PT\.\s*BANK CENTRAL ASIA TBK/i.test(text) || !/Notes:\s*Charges VAT Inclusive/i.test(text)) return unsafe;
-  const one = (label: string) => { const matches=[...text.matchAll(new RegExp('^\\s*'+label+'\\s*:\\s*([^\\n]+)$','gmi'))]; return matches.length===1 ? matches[0][1].trim() : null; };
+  const languageBlocks=text.split('Thank you for using KlikBCA Bisnis.');
+  if(languageBlocks.length!==2) return unsafe;
+  const englishLabels=new Set(['Date','Time','From Account','To Account','Amount','Reference No','Transaction Type','Transfer Type','Charges']);
+  const one = (label: string) => { const block=languageBlocks[englishLabels.has(label)?1:0]; const matches=[...block.matchAll(new RegExp('^\\s*'+label+'\\s*:\\s*([^\\n]+)$','gmi'))]; return matches.length===1 ? matches[0][1].trim() : null; };
   const fields = [ ['Tanggal','Date'], ['Jam','Time'], ['Dari Rekening','From Account'], ['Ke Rekening','To Account'], ['Nominal','Amount'], ['No Referensi','Reference No'] ];
   const values=fields.map(([a,b])=>{const x=one(a),y=one(b);return x && y && x===y ? x : null;});
   if(values.some(v=>v===null)) return unsafe;
   const statuses=[...text.matchAll(/^\s*Status\s*:\s*(\S+)\s*$/gmi)].map(m=>m[1]);
-  if(JSON.stringify(statuses)!==JSON.stringify(['Berhasil','Success']) || one('Transaction Type')!=='FUND TRANSFER' || one('Jenis Transfer')!=='Sekarang' || one('Transfer Type')!=='Immediate') return unsafe;
+  const transferPair=[one('Jenis Transfer'),one('Transfer Type')];
+  const immediate=JSON.stringify(transferPair)===JSON.stringify(['Sekarang','Immediate']) || JSON.stringify(transferPair)===JSON.stringify(['Transfer Diproses Saat Diotorisasi','Immediate Transfer on Authorization']);
+  if(JSON.stringify(statuses)!==JSON.stringify(['Berhasil','Success']) || one('Transaction Type')!=='FUND TRANSFER' || !immediate) return unsafe;
+  const idFee=one('Biaya'),enFee=one('Charges');
+  if((/^\s*Biaya\s*:/mi.test(text) && idFee===null) || (/^\s*Charges\s*:/mi.test(text) && enFee===null) || (idFee===null)!==(enFee===null) || (idFee!==null && idFee!==enFee)) return unsafe;
+  const fee=idFee===null?null:money(idFee);
+  if(idFee!==null && (fee===null || fee<0 || !Number.isSafeInteger(Math.round(fee*100)))) return unsafe;
   const [stamp, clock, source, recipient, amount, reference]=values as string[];
   const d=date(stamp), n=money(amount);
-  if(!d || !time(clock) || !/^\d{3}-\d{7}$/.test(source) || !/^\d{3}-\d{7}$/.test(recipient) || !/^\d{10,25}$/.test(reference) || n===null || n<=0 || !Number.isSafeInteger(Math.round(n*100))) return unsafe;
+  if(!d || !time(clock) || !/^\d{3}-\d{7}$/.test(source) || !/^(?:\d{3}-\d{7}|\d{10})$/.test(recipient) || !/^\d{10,25}$/.test(reference) || n===null || n<=0 || !Number.isSafeInteger(Math.round(n*100))) return unsafe;
   metadata.accountNumber=source;metadata.accountName='BCA '+source.slice(-4);metadata.startDate=d;metadata.endDate=d;metadata.confidence=95;
   const name='Transfer to '+recipient;
-  return {metadata,rows:[{date:d,amount:n.toFixed(2),currency:'IDR',type:'expense',merchantRaw:name,merchantClean:name,description:name,categoryName:'Transfers',institution:'BCA',accountNumber:source,accountName:metadata.accountName!,confidence:95,parserConfidence:100,categoryConfidence:95,rawPayload:{source:'bca_transfer_proof',kind:'bank_transfer_component',component:'principal',direction:'outgoing',reference,sourceAccount:source,recipientIdentifier:recipient,transferDate:stamp,transferTime:clock,sourceCurrency:'IDR',principal:n,fee:null,totalDebit:null,accountCurrency:'IDR',accountType:'bank',sourceText:text,parserEvidence:{version:'bca-bilingual-notification-v1',physicalPages:2,mirroredLanguages:['id','en'],feePolicy:'not printed; unknown',datePolicy:'calendar date; printed timezone absent',reason:'Complete matching bilingual successful transfer; no balance anchor'}}}]};
+  const components=[{component:'principal',amount:n,category:'Transfers',name},...(fee!==null && fee>0?[{component:'fee',amount:fee,category:'Financial',name:'BCA Transfer Fee'}]:[])];
+  return {metadata,rows:components.map(c=>({date:d,amount:c.amount.toFixed(2),currency:'IDR',type:'expense',merchantRaw:c.name,merchantClean:c.name,description:c.name,categoryName:c.category,institution:'BCA',accountNumber:source,accountName:metadata.accountName!,confidence:95,parserConfidence:100,categoryConfidence:95,rawPayload:{source:'bca_transfer_proof',kind:'bank_transfer_component',component:c.component,direction:'outgoing',reference,sourceAccount:source,recipientIdentifier:recipient,transferDate:stamp,transferTime:clock,sourceCurrency:'IDR',principal:n,fee,totalDebit:fee===null?null:n+fee,accountCurrency:'IDR',accountType:'bank',sourceText:text,parserEvidence:{version:'bca-bilingual-notification-v1',physicalPages:2,mirroredLanguages:['id','en'],feePolicy:fee===null?'not printed; unknown':'matching explicit bilingual fee',datePolicy:'calendar date; printed timezone absent',reason:'Complete matching bilingual successful transfer; no balance anchor'}}}))};
 }

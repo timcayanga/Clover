@@ -40,7 +40,7 @@ export const resolveImportFileExtractionCacheVersion = (fileName?: string | null
   const normalizedFileName = String(fileName ?? "");
   if (/cimb[-_\s]*conso[-_\s]*statement/i.test(normalizedFileName)) return "v41-cimb-consolidated";
   if (/bukti[-_\s]*trf/i.test(normalizedFileName)) return "v41-bca-transfer-proof";
-  if (/gcash.*bills?[-_\s]*pay[-_\s]*receipt/i.test(normalizedFileName)) return "v40-gcash-bills-receipt";
+  if (/gcash.*bills?[-_\s]*pay[-_\s]*receipt/i.test(normalizedFileName)) return "v42-gcash-bills-receipt";
   if (/^BE\d{8}\.pdf$/i.test(normalizedFileName.trim())) {
     return "v12-bpi-card-ledger-r2";
   }

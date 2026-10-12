@@ -19,3 +19,9 @@ Preserve leading or trailing minus signs on printed balances, including a separa
 Source-verified POSB confirmation reuses existing matched bank accounts read-only, preserving current balances and customized identity. New accounts may use the verified source closing balance. Re-confirming or importing historical statements cannot restore an older printed balance over a newer confirmed balance. Ownership, capacity, currency/type, ambiguous matches and tombstone checks remain enforced.
 
 Publish the normalized transaction count, including derived cash counterparts, and every actual stored bank/cash account summary atomically before marking a verified POSB import done. Parsed/source row counts remain separate. First and repeated status reads must not repair the ImportFile count or add a missing Cash summary to the checkpoint. This applies to future confirmations and does not refresh historical records.
+
+## Address coverage and signed reversals
+
+Source-row coverage recognizes actual month names; a street address beginning with a number and a three-letter word is not a transaction date. Missing dated movements still fail coverage. A signed negative movement in a proven withdrawal/deposit column reverses the financial direction while retaining the original column, signed amount, source line and occurrence. Match every running/closing balance. Preserve original transfers, reversals and later legitimate repeats as separate occurrences. Reversed cash withdrawals remain review-required, so they cannot produce an unsupported cash counterpart.
+
+A downloaded PDF may concatenate several separately numbered monthly statements. Do not infer one statement period from its first header or Scribd's listing page count. The current single-period path keeps such sources outside accepted training until every period/page and overlap is independently verified.

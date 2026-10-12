@@ -36,5 +36,10 @@
   "bca-alternate-print-footer": "f9390f4f04cd067fb5b03865c7209e46f59e802aa23dcccfe83360414cd86538",
   "bca-same-bank-zero-fee": "7cdb6c34ed90888cbaae12c6c772b8c3e4dae5150ba368e2791a5874b00377c5",
   "bca-bilingual-notification": "57c3dad54789f8ade14f4d8153fdd723c34dbd9fc0b85d5f0eab1b39855ac6ad",
-  "gcash-split-biller-account": "4d770140739156f9d3b361bfe6732ad2f558c7725e9b5b2a0f120a652dce8036"
+  "gcash-split-biller-account": "4d770140739156f9d3b361bfe6732ad2f558c7725e9b5b2a0f120a652dce8036",
+  "gcash-native-null-clock": "cd2fbbe80a93819fa9eeb02dcc5cb1d0a8e0cebb875c40ab8584203cc2d408e5",
+  "gcash-tax-receipt-no-wallet": "2a8e329df5ae1d5c5306acff997846f7dc3060af855840084cc67d3c357182f9",
+  "posb-address-signed-reversal": "90512f969de25aa748cc6b58c26acaf9cb7498557862e25ef4d603aae0db7410",
+  "bca-bilingual-authorized-fee": "465b5e386fda4433415b3c1971777bc8b035eafdef689fb4694cc00fc5bdc26e",
+  "bca-native-english-page-footer": "1a2c5fde82286bde970812f80275213c707ec442257461510fe44c1505f0d9dc"
 }

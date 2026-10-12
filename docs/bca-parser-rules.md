@@ -17,3 +17,13 @@ Named future `bukti-trf` uploads use the additive `v41-bca-transfer-proof` cache
 The complete one-row table may split Dari/Rekening and Status/Alasan/No./Referensi headers across cells. Validate ordered column roles and full labels. A one-page native KlikBCA URL plus browser1/1 footer may establish print completeness when the copyright footer is absent. Same-bank Rekening BCA recipients use their own full account and owner, separately from the payer. Explicit zero fee produces no additional movement.
 
 A two-page native KlikBCA Bisnis notification is one mirrored event. Require complete matching Indonesian and English date, clock, source/destination account, Rp principal and unique reference; both statuses and immediate transfer types must agree. Preserve original two-page evidence. An absent fee remains unknown (fee and total debit null), and must not be inferred as zero. Printed local clock is retained separately; no timezone or bank balance is inferred. Recognized incomplete/conflicting proofs require review and cannot enter generic confirmation or learning.
+
+## Authorized bilingual transfers with explicit fees
+
+Separate the Indonesian financial block from the English financial block at its native greeting. Email delivery Date/GMT offsets cannot replace the transfer date or establish its timezone. The exact paired labels Transfer Diproses Saat Diotorisasi / Immediate Transfer on Authorization describe a completed authorization; inconsistent transfer types still fail review. Recipient IDs may be ten digits without the payer's hyphen format, including leading zeros.
+
+Both languages must print the same fee or both omit it. A missing, duplicate, malformed or conflicting fee side requires review. A positive matching fee creates one Financial component beside the principal; explicit zero creates none; an absent fee stays unknown. Preserve local clock, source/recipient roles, reference and full original evidence. Repeated confirmation cannot alter existing financial or learning records.
+
+A complete native single-page proof may print Page 1 of 1 in English. Require exactly one consistent complete printed footer alongside the physical page and all financial columns; duplicated or contradictory footers remain unsafe.
+
+The native recipient header can wrap Ke Rekening / No. above BCA Virtual and Account. Require both continuation labels at the same column before assigning recipient roles; missing labels remain review-required. Payer and recipient must come from their own printed columns, even when a download summary reverses them.

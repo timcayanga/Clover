@@ -5,6 +5,7 @@ const money = (s: string) => /-\s*$/.test(s) ? -Number(s.replace(/-\s*$/, '').tr
 const balancePattern = /^(?:-?\d[\d,]*\.\d{2}|\d[\d,]*\.\d{2}\s*-)$/;
 const isZeroInterest = (row: ParsedImportRow) => Number(row.amount) === 0 && row.type === 'income' && /^Interest Earned(?:\s|$)/i.test(row.description ?? '');
 const months = ['jan','feb','mar','apr','may','jun','jul','aug','sep','oct','nov','dec'];
+const nativeDateLine = /^\d{1,2}\s+(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+/i;
 const date = (day: string, month: string, year: number) => {
   const m = months.indexOf(month.toLowerCase());
   const d = new Date(Date.UTC(year, m, Number(day), 12));
@@ -15,7 +16,7 @@ export function hasVerifiedPosbRows(text: string, rows: Array<{ amount?: unknown
   try {
     const source=parsePosbStatement(text);
     if(!source || !source.rows.length || source.metadata.openingBalance===null || source.metadata.endingBalance===null || rows.length!==source.rows.length) return false;
-    const nativeDates=text.split(/\r?\n/).filter(l=>/^\d{1,2}\s+[A-Z]{3}\s+/i.test(l.trim()));
+    const nativeDates=text.split(/\r?\n/).filter(l=>nativeDateLine.test(l.trim()));
     const zeroRows = (source.rows[0]?.rawPayload?.reconciliation as { zeroInterestRows?: unknown[] } | undefined)?.zeroInterestRows?.length ?? 0;
     if(nativeDates.length && nativeDates.length!==source.rows.length + zeroRows) return false;
     return rows.every((row,index)=>{
@@ -77,15 +78,18 @@ export function parsePosbStatement(text: string): { metadata: DetectedStatementM
     if (parts.length !== 6 || !statementDate || !accountNumber) throw new Error('POSB source identity or statement year is missing.');
     const [,stamp,direction,amountText,balanceText,description] = parts;
     const dm=stamp.match(/^(\d{1,2})\s+([A-Z]{3})$/i);
-    if (!dm || !['incoming','outgoing'].includes(direction) || !/^\d[\d,]*\.\d{2}$/.test(amountText)) throw new Error('POSB source fields require review.');
+    if (!dm || !['incoming','outgoing'].includes(direction) || !balancePattern.test(amountText)) throw new Error('POSB source fields require review.');
     let year=statementDate.getUTCFullYear();
     if (months.indexOf(dm[2].toLowerCase()) > statementDate.getUTCMonth()) year--;
     const rowDate=date(dm[1],dm[2],year);
     if (!rowDate || (balanceText && !balancePattern.test(balanceText))) throw new Error('POSB source date or balance requires review.');
-    const type=direction==='incoming'?'income':'expense';
+    const signedAmount=money(amountText);
+    if(signedAmount<0 && /Cash Withdrawal/i.test(description)) throw new Error('POSB reversed cash movement requires source review.');
+    const effectiveDirection=signedAmount<0?(direction==='incoming'?'outgoing':'incoming'):direction;
+    const type=effectiveDirection==='incoming'?'income':'expense';
     const categoryName=/Withdrawal Fee|Service Charge/i.test(description)?'Financial':/Cash Withdrawal/i.test(description)?'Cash & ATM':/FAST Payment/i.test(description)?'Transfers':/Salary|Interest Earned/i.test(description)?'Income':/BUS\/MRT/i.test(description)?'Transportation':'Other';
     const merchant=description.split(/Wise:|BUS\/MRT|H & M/i)[0].trim();
-    rows.push({date:rowDate.toISOString().slice(0,10),amount:money(amountText).toFixed(2),currency:'SGD',type,categoryName,merchantRaw:description,merchantClean:merchant,description,accountName,accountNumber,institution:'POSB',confidence:95, ...(balanceText?{balance:money(balanceText)}:{}),rawPayload:{kind:'bank_transaction',source:'posb_pdf_columns',line,direction,amountText,balance:balanceText?money(balanceText):null,accountNumber,accountCurrency:'SGD',notes:description,parserEvidence:{statementYear:year,amountColumn:direction==='incoming'?'deposit':'withdrawal'}}});
+    rows.push({date:rowDate.toISOString().slice(0,10),amount:Math.abs(signedAmount).toFixed(2),currency:'SGD',type,categoryName,merchantRaw:description,merchantClean:merchant,description,accountName,accountNumber,institution:'POSB',confidence:95, ...(balanceText?{balance:money(balanceText)}:{}),rawPayload:{kind:'bank_transaction',source:'posb_pdf_columns',line,direction:effectiveDirection,amountText,balance:balanceText?money(balanceText):null,accountNumber,accountCurrency:'SGD',notes:description,parserEvidence:{statementYear:year,amountColumn:direction==='incoming'?'deposit':'withdrawal',...(signedAmount<0?{signedColumnAmount:signedAmount}: {})}}});
   }
   if (rows.some(row => Number(row.amount) === 0 && !isZeroInterest(row))) throw new Error('POSB zero movement requires source review.');
   if (rows.length && opening && ending) {
@@ -95,7 +99,7 @@ export function parsePosbStatement(text: string): { metadata: DetectedStatementM
       if (row.balance!==undefined && running!==Math.round(Number(row.balance)*100)) throw new Error('POSB running balance does not reconcile with source movements.');
     }
     if (running!==Math.round(money(ending)*100)) throw new Error('POSB closing balance does not reconcile with source movements.');
-    const nativeDates=text.split(/\r?\n/).filter(l=>/^\d{1,2}\s+[A-Z]{3}\s+/i.test(l.trim()));
+    const nativeDates=text.split(/\r?\n/).filter(l=>nativeDateLine.test(l.trim()));
     if (nativeDates.length && nativeDates.length!==rows.length) throw new Error('POSB source row coverage requires review.');
     const zeroInterestRows = rows.filter(isZeroInterest).map(row => ({ date: row.date, sourceLine: row.rawPayload?.line, balance: row.balance ?? null, amount: '0.00' }));
     for (const row of rows) row.rawPayload={...row.rawPayload,balanceReconciled:true,reconciliation:{version:'posb-column-reconciliation-v1',openingBalance:money(opening),endingBalance:money(ending),sourceRows:rows.length-zeroInterestRows.length,code:'BALANCE_RECONCILED',...(zeroInterestRows.length ? { zeroInterestRows } : {})}};

@@ -2,7 +2,8 @@ import { parseCimbConsolidatedStatement } from "@/lib/import-parser";
 import { buildBcaTransferPdfRows, parseBcaTransferProof } from "@/lib/bca-transfer-proof";
 import { hasReconciledBdoInlineLedger } from "@/lib/import-parser";
 import { buildPosbPdfRows } from "@/lib/posb-statement";
-import { gcashBillsReceiptTextLayerIsComplete, buildGcashBillsNativePages, parseGcashBillsReceipt } from "@/lib/gcash-bills-receipt";
+import { gcashBillsReceiptTextLayerIsComplete, buildGcashBillsNativePages, parseGcashBillsReceipt, selectCompleteGcashBillsNativeText } from "@/lib/gcash-bills-receipt";
+import { encodeNativePdfNullGlyphs } from "@/lib/native-pdf-text";
 import { readLocalReceiptImage, shutdownLocalReceiptOcr } from "./local-receipt-ocr.server";
 import { hasHangul, hasKoreanFinancialHeaders } from "@/lib/korean-financial-text";
 import { koreanStatementLineEvidence } from "@/lib/korean-statement-evidence";
@@ -2229,7 +2230,7 @@ const extractTextFromPdfBytes = async (data: Uint8Array, password?: string, base
           const content = await page.getTextContent();
           const simpleText = buildSimplePdfTextFromContentItems(content.items as PdfTextContentItemLike[]);
           const layoutAwareText = buildLayoutAwarePdfTextFromContentItems(content.items as PdfTextContentItemLike[]);
-          pages[pageIndex] = pickBetterPdfTextLayerCandidate(simpleText, layoutAwareText);
+          pages[pageIndex] = encodeNativePdfNullGlyphs(pickBetterPdfTextLayerCandidate(simpleText, layoutAwareText));
           mariBankTransactionRows[pageIndex] = buildMariBankTransactionRowsFromContentItems(
             content.items as PdfTextContentItemLike[]
           );
@@ -2487,6 +2488,10 @@ const pickBetterPdfTextLayerCandidate = (simpleText: string, layoutAwareText: st
 
   // Column grouping is preferable when all BDO movements and balances reconcile.
   if (hasReconciledBdoInlineLedger(layout)) return layout;
+  // Keep a complete native bill/fee receipt before generic table scoring can
+  // discard its principal field and force a lossy OCR replacement.
+  const completeGcashReceipt=selectCompleteGcashBillsNativeText(simple,layout);
+  if(completeGcashReceipt) return completeGcashReceipt;
 
   const simpleScore = scoreStatementTextCandidate(simple);
   const layoutScore = scoreStatementTextCandidate(layout);

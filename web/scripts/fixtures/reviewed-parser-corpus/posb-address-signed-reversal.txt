@@ -1,0 +1,21 @@
+POSB example holder
+20 SIN EXAMPLE LANE
+Details of Your POSB Payroll Account
+Account No.: 001-98765-4
+As at 29 Feb 2024
+WITHDRAWAL($) DEPOSIT($) BALANCE($)
+Balance Brought Forward 10.00
+01 Feb FAST Payment / Receipt 5.00 5.00
+01 Feb Salary 20.00 25.00
+02 Feb FAST Payment / Receipt 5.00 20.00
+02 Feb FAST Payment / Receipt 5.00- 25.00
+02 Feb FAST Payment / Receipt 5.00 20.00
+29 Feb Interest Earned 0.00 20.00
+Balance Carried Forward 20.00
+Page 1 of 1
+POSB_TXN | 01 Feb | outgoing | 5.00 | 5.00 | FAST Payment / Receipt RefA
+POSB_TXN | 01 Feb | incoming | 20.00 | 25.00 | Salary
+POSB_TXN | 02 Feb | outgoing | 5.00 | 20.00 | FAST Payment / Receipt RefB
+POSB_TXN | 02 Feb | outgoing | 5.00- | 25.00 | FAST Payment / Receipt RefB reversal
+POSB_TXN | 02 Feb | outgoing | 5.00 | 20.00 | FAST Payment / Receipt RefC
+POSB_TXN | 29 Feb | incoming | 0.00 | 20.00 | Interest Earned

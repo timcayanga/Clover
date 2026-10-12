@@ -2154,7 +2154,7 @@
         "reviewer": "Codex",
         "reviewedAt": "2026-10-12",
         "status": "reviewed",
-        "basis": "Independent invented derivative: four active UPSave movements100,1,1,-1 and one zero Fast Plus snapshot. Repeated1 entries remain distinct. Summary withdrawal label is wrapped with its PHP prefix. Only the zero-activity account may have a later Nov15 opening anchor inside the Nov1–30 period; active20 opening remains at start."
+        "basis": "Independent invented derivative: four active UPSave movements100,1,1,-1 and one zero Fast Plus snapshot. Repeated1 entries remain distinct. Summary withdrawal label is wrapped with its PHP prefix. Only the zero-activity account may have a later Nov15 opening anchor inside the Nov1\u201330 period; active20 opening remains at start."
       },
       "id": "cimb-upsave-wrapped-summary",
       "source": "cimb-upsave-wrapped-summary.txt",
@@ -2461,6 +2461,222 @@
         }
       ],
       "sha256": "6dca8a7745400b21042d62ed07566dd79edc6ba866a249b5111c9c2dae3ddae8"
+    },
+    {
+      "kind": "statement",
+      "representation": "independently invented source transcription",
+      "provenance": {
+        "origin": "synthetic",
+        "reviewer": "Codex",
+        "reviewedAt": "2026-10-12",
+        "status": "reviewed",
+        "basis": "Invented bill120+fee5 equals125. Native two NUL separators are visible clock colons within the complete labeled payment timestamp only. Keep seconds/PH timezone, raw transcript and leading-zero biller identity; account name is not payer wallet identity."
+      },
+      "id": "gcash-native-null-clock",
+      "source": "gcash-native-null-clock.txt",
+      "expected": [
+        {
+          "date": "2024-07-16T10:45:19+08:00",
+          "amount": "120.00",
+          "currency": "PHP",
+          "type": "expense",
+          "rawPayload": {
+            "component": "bill",
+            "referenceNumber": "0000912345",
+            "billerAccountNumber": "000012345678"
+          }
+        },
+        {
+          "date": "2024-07-16T10:45:19+08:00",
+          "amount": "5.00",
+          "currency": "PHP",
+          "type": "expense",
+          "rawPayload": {
+            "component": "fee",
+            "referenceNumber": "0000912345",
+            "billerAccountNumber": "000012345678"
+          }
+        }
+      ],
+      "sha256": "1dfa7dd5525dbdb2883cada86584ef435e98ed3d58259e2cf7e8279aa6a6ca9e"
+    },
+    {
+      "kind": "statement",
+      "representation": "independently invented source transcription",
+      "provenance": {
+        "origin": "synthetic",
+        "reviewer": "Codex",
+        "reviewedAt": "2026-10-12",
+        "status": "reviewed",
+        "basis": "Invented tax bill135, zero fee; TIN/branch/return period are source tax fields, never payer/biller Account Number or payment date. One outgoing movement; raw tax evidence preserved."
+      },
+      "id": "gcash-tax-receipt-no-wallet",
+      "source": "gcash-tax-receipt-no-wallet.txt",
+      "expected": [
+        {
+          "date": "2020-06-07T17:12:55+08:00",
+          "amount": "135.00",
+          "currency": "PHP",
+          "type": "expense",
+          "rawPayload": {
+            "billerAccountNumber": null,
+            "referenceNumber": "0000333344",
+            "component": "bill"
+          }
+        }
+      ],
+      "sha256": "43c9c1216b4fd8c2a9cdc017a775662afda33a00d4c14ee4b899be82f55fb041",
+      "expectedMetadata": {
+        "institution": "GCash",
+        "accountNumber": null,
+        "currency": "PHP"
+      }
+    },
+    {
+      "kind": "statement",
+      "representation": "independently invented source transcription",
+      "provenance": {
+        "origin": "synthetic",
+        "reviewer": "Codex",
+        "reviewedAt": "2026-10-12",
+        "status": "reviewed",
+        "basis": "Invented20 SIN address is not a date. A signed negative withdrawal is an incoming reversal5, distinct from original and later legitimate repeated5. Opening10+20-5-5+5-5=20. Zero interest stays a disclosure. No cash movement/counterpart."
+      },
+      "id": "posb-address-signed-reversal",
+      "source": "posb-address-signed-reversal.txt",
+      "expected": [
+        {
+          "date": "2024-02-01",
+          "amount": "5.00",
+          "currency": "SGD",
+          "type": "expense",
+          "accountNumber": "001-98765-4",
+          "balance": 5
+        },
+        {
+          "date": "2024-02-01",
+          "amount": "20.00",
+          "currency": "SGD",
+          "type": "income",
+          "accountNumber": "001-98765-4",
+          "balance": 25
+        },
+        {
+          "date": "2024-02-02",
+          "amount": "5.00",
+          "currency": "SGD",
+          "type": "expense",
+          "accountNumber": "001-98765-4",
+          "balance": 20
+        },
+        {
+          "date": "2024-02-02",
+          "amount": "5.00",
+          "currency": "SGD",
+          "type": "income",
+          "accountNumber": "001-98765-4",
+          "balance": 25
+        },
+        {
+          "date": "2024-02-02",
+          "amount": "5.00",
+          "currency": "SGD",
+          "type": "expense",
+          "accountNumber": "001-98765-4",
+          "balance": 20
+        }
+      ],
+      "sha256": "cdcea1facd1ed073d371bc0997472662513fc9ef8a4f6a21c71dd1233b4ce1b3"
+    },
+    {
+      "kind": "statement",
+      "representation": "independently invented source transcription",
+      "provenance": {
+        "origin": "synthetic",
+        "reviewer": "Codex",
+        "reviewedAt": "2026-10-12",
+        "status": "reviewed",
+        "basis": "Invented bilingual principal100+fee2.90 equals102.90; mirrored fields and success match. Email Date/GMT+8 is delivery metadata; source transfer calendar/date clock preserved without timezone inference. Exact authorization labels, full source/recipient roles and leading zero remain distinct. Missing/conflicting fee side must fail closed."
+      },
+      "id": "bca-bilingual-authorized-fee",
+      "source": "bca-bilingual-authorized-fee.txt",
+      "expected": [
+        {
+          "date": "2025-02-14",
+          "amount": "100.00",
+          "currency": "IDR",
+          "type": "expense",
+          "accountNumber": "001-1234567",
+          "rawPayload": {
+            "recipientIdentifier": "0019876543",
+            "reference": "20250214999999",
+            "component": "principal",
+            "fee": 2.9,
+            "totalDebit": 102.9
+          }
+        },
+        {
+          "date": "2025-02-14",
+          "amount": "2.90",
+          "currency": "IDR",
+          "type": "expense",
+          "accountNumber": "001-1234567",
+          "rawPayload": {
+            "recipientIdentifier": "0019876543",
+            "reference": "20250214999999",
+            "component": "fee",
+            "fee": 2.9,
+            "totalDebit": 102.9
+          }
+        }
+      ],
+      "sha256": "dc24b15e716857c294cf078e325bea8c6a243e8ce88862af7df60b2d8cfc27e7"
+    },
+    {
+      "id": "bca-native-english-page-footer",
+      "kind": "statement",
+      "source": "bca-native-english-page-footer.txt",
+      "sha256": "472de5b3c154d66b19796b49afac70adf252972f38e8dea09996717b7a6c427d",
+      "representation": "independently invented native PDF transcription",
+      "provenance": {
+        "origin": "synthetic",
+        "reviewer": "Codex",
+        "reviewedAt": "2026-10-12",
+        "status": "reviewed",
+        "basis": "Invented reviewed30 principal plus2 fee and complete native columns; Page1of1 English print footer has the same completeness contract as Halaman1dari1. Physical1 and exactly one full success proof still required. Multiple/conflicting page footers fail review."
+      },
+      "expected": [
+        {
+          "date": "2025-04-10",
+          "amount": "30.00",
+          "currency": "IDR",
+          "type": "expense",
+          "accountNumber": "001-1234567",
+          "rawPayload": {
+            "source": "bca_transfer_proof",
+            "component": "principal",
+            "reference": "20250410001234",
+            "recipientIdentifier": "90012345678",
+            "transferTime": "09:12:34",
+            "totalDebit": 32
+          }
+        },
+        {
+          "date": "2025-04-10",
+          "amount": "2.00",
+          "currency": "IDR",
+          "type": "expense",
+          "accountNumber": "001-1234567",
+          "rawPayload": {
+            "source": "bca_transfer_proof",
+            "component": "fee",
+            "reference": "20250410001234",
+            "recipientIdentifier": "90012345678",
+            "transferTime": "09:12:34",
+            "totalDebit": 32
+          }
+        }
+      ]
     }
   ]
 }

@@ -112,3 +112,9 @@ The staging-only read-only batch preservation diagnostic excludes only explicitl
 The privately retained Maya Savings source remains outside accepted training while its normalized timestamp contract and overlap protection are unresolved. Its original, independent labels and failed replay evidence are preserved. A download or approximate date-only parse is not an accepted full-fidelity example.
 
 The biller-account extension preserves identifiers split between Account/Number labels. The staging diagnostic retrieves missing legacy structured values from unchanged source text as a read-only projection, separately from financial/raw rows. It does not reset prior learning or patch confirmed data.
+
+## Scribd fourth batch regression extension
+
+Five independently invented source contracts extend the passing corpus to43 representations /158 financial or item observations (zero-account markers remain separately retained). Existing sources, financial expectations and review locks are unchanged. The mandatory scribd-batch-four-db-regression exercises native payment clocks and tax identities, POSB address/date coverage and signed reversals, bilingual BCA authorization/explicit fees, full real-worker fields, durable jobs, first/repeated status reads, no-op confirmation, and preservation after confirmed edits/current balances.
+
+The private batch retains original PDFs, URLs, checksums, independent labels, initial failures and rejected candidates separately. Public download titles/page counts are discovery metadata, not source truth. A malformed card summary, incomplete extraction, unsupported concatenated period or unknown payer identity is not repaired by changing expected labels. No historical sources, caches, learning projections or confirmed finance are refreshed.

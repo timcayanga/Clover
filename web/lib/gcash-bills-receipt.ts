@@ -1,4 +1,5 @@
 import type { DetectedStatementMetadata, ParsedImportRow } from './import-parser';
+import { encodeNativePdfNullGlyphs, decodeNativePdfNullGlyphField } from './native-pdf-text';
 
 const looksLikeGcashBillsReceipt = (text: string) => /GCash Bills Pay Receipt/i.test(text) ||
   (/GCash\s+Ref\.?\s*No\./i.test(text) && /Biller Name/i.test(text) && /Total (?:Amount|Name)/i.test(text) && /Date\/Time/i.test(text));
@@ -6,6 +7,12 @@ const looksLikeGcashBillsReceipt = (text: string) => /GCash Bills Pay Receipt/i.
 export function gcashBillsReceiptTextLayerIsComplete(text: string): boolean {
   if(!looksLikeGcashBillsReceipt(text)) return true;
   try{return parseGcashBillsReceipt(text)!==null;}catch{return false;}
+}
+
+/** Prefer complete native receipt fields over generic statement scoring. */
+export function selectCompleteGcashBillsNativeText(simple: string, layout: string): string | null {
+  for(const text of [layout,simple]) { try { if(parseGcashBillsReceipt(text)?.rows.length) return text; } catch { /* Partial fields require the existing OCR/review path. */ } }
+  return null;
 }
 
 export function readGcashBillsPaymentTimestamp(payload: unknown): Date | null {
@@ -69,7 +76,12 @@ function parseSingleGcashBillsReceipt(text: string): { metadata: DetectedStateme
   // only a bounded region around the payment label, never the email/print date.
   const stamps = [...text.matchAll(/Date\/Time/gi)].flatMap(label => {
     const at = label.index!;
-    const field = text.slice(Math.max(0, at - 110), at + 110).replace(/Date\/Time/gi, " ").replace(/\b([AP])\s+M\b/gi, "$1M");
+    const rawField = text.slice(Math.max(0, at - 110), at + 110);
+    const nativeClockField = /^NATIVE_PDF_NULL_GLYPHS_ENCODED$/m.test(text) ? decodeNativePdfNullGlyphField(rawField) : rawField;
+    const field = nativeClockField.replace(/Date\/Time/gi, " ").replace(/\b([AP])\s+M\b/gi, "$1M")
+      // A reviewed native font maps its two visible clock colons to NUL.
+      // Only the complete payment-clock shape qualifies; keep raw.line intact.
+      .replace(/\b(\d{1,2})\s*\x00\s*(\d{2})\s*\x00\s*(\d{2})(?=\s*(?:AM|PM)\b)/gi, "$1:$2:$3");
     return [...field.matchAll(/(\d{1,2})\s+([A-Za-z]+)\s+(\d{4})\s+(\d{1,2}):(\d{2}):(\d{2})\s*(AM|PM)/gi)];
   });
   const distinctStamps = [...new Map(stamps.map(s => [s.slice(1).join("|").toLowerCase(), s])).values()];
@@ -93,11 +105,13 @@ function parseSingleGcashBillsReceipt(text: string): { metadata: DetectedStateme
   if(labelIndex>=0)for(const line of lines.slice(labelIndex+1)){if(isField(line))break;after.push(line);}
   let biller=[...new Set([...before,...after])].join(' ');
   if(!biller) biller=text.match(/Biller Nam(?:e)?\s+(.+?)(?=\s+Total (?:Amount|Name))/is)?.[1]?.replace(/[©\n]/g,' ').replace(/\s+/g,' ').trim()??'';
+  if(/^NATIVE_PDF_NULL_GLYPHS_ENCODED$/m.test(text)) biller=decodeNativePdfNullGlyphField(biller);
+  if(biller.includes('\x00')) throw new Error('GCash biller font glyph requires source review.');
   if(!biller || /Amount Paid|GCash Ref|Date\/Time/i.test(biller)) throw new Error('GCash biller requires source review.');
   const dayText=checked.toISOString().slice(0,10);
   const hour=(Number(stamp[4])%12)+(stamp[7].toUpperCase()==='PM'?12:0);
   const paymentTimestamp=`${dayText}T${String(hour).padStart(2,'0')}:${stamp[5]}:${stamp[6]}+08:00`;
-  const rows: ParsedImportRow[]=[{amount:(bill/100).toFixed(2),merchantRaw:biller,merchantClean:biller,description:`GCash bill payment • ${biller}`,categoryName:/ELECTRIC/i.test(biller)?'Utilities':'Other'},...(fee>0?[{amount:(fee/100).toFixed(2),merchantRaw:'GCash Bills Payment Fee',merchantClean:'GCash Bills Payment Fee',description:`GCash fee • ${biller}`,categoryName:'Financial'}]:[])].map((r,index)=>({...r,date:paymentTimestamp,currency:'PHP',type:'expense',accountName:'GCash',institution:'GCash',confidence:95,rawPayload:{kind:'wallet_transaction',source:'gcash_bills_receipt',line:text,referenceNumber:reference,billerAccountNumber:billerAccount,paymentTimestamp,amountText:r.amount,totalAmount:total/100,billAmount:bill/100,feeAmount:fee/100,component:index===0?'bill':'fee',notes:`${biller} • Reference ${reference}`,parserEvidence:{currency:'PHP',totalReconciled:true,billerAccountIsNotWalletIdentity:true}}}));
+  const rows: ParsedImportRow[]=[{amount:(bill/100).toFixed(2),merchantRaw:biller,merchantClean:biller,description:`GCash bill payment • ${biller}`,categoryName:/ELECTRIC/i.test(biller)?'Utilities':'Other'},...(fee>0?[{amount:(fee/100).toFixed(2),merchantRaw:'GCash Bills Payment Fee',merchantClean:'GCash Bills Payment Fee',description:`GCash fee • ${biller}`,categoryName:'Financial'}]:[])].map((r,index)=>({...r,date:paymentTimestamp,currency:'PHP',type:'expense',accountName:'GCash',institution:'GCash',confidence:95,rawPayload:{kind:'wallet_transaction',source:'gcash_bills_receipt',line:encodeNativePdfNullGlyphs(text),referenceNumber:reference,billerAccountNumber:billerAccount,paymentTimestamp,amountText:r.amount,totalAmount:total/100,billAmount:bill/100,feeAmount:fee/100,component:index===0?'bill':'fee',notes:`${biller} • Reference ${reference}`,parserEvidence:{currency:'PHP',totalReconciled:true,billerAccountIsNotWalletIdentity:true,...(text.includes('\x00') || /^NATIVE_PDF_NULL_GLYPHS_ENCODED$/m.test(text) ? {nulGlyphEncoding:'backslash-u0000'} : {})}}}));
   return {rows,metadata:{institution:'GCash',accountName:'GCash',accountNumber:null,accountType:'wallet',currency:'PHP',openingBalance:null,endingBalance:null,startDate:paymentTimestamp,endDate:paymentTimestamp,confidence:95,currencyConfidence:100,institutionConfidence:100,identityEvidence:['GCash bill receipt and reference','PHP bill plus fee equals total']}};
 }
 

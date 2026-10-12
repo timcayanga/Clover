@@ -162,7 +162,7 @@ async function main() {
   assert.equal(resolveImportFileExtractionCacheVersion("retained.pdf"), "v39");
   assert.equal(
     resolveImportFileExtractionCacheVersion("GCash-Bills-Pay-Receipt.pdf"),
-    "v40-gcash-bills-receipt",
+    "v42-gcash-bills-receipt",
   );
   const user = await db.user.create({
     data: {
