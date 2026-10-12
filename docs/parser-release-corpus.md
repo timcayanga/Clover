@@ -99,4 +99,6 @@ The `cimb-consolidated-zero-account` and `bca-transfer-components` examples exte
 
 `scribd-batch-two-db-regression.ts` is part of the mandatory real-worker release gate. It checks physical/printed pages, dates, running balances, repeated references, zero-activity account visibility, native BCA columns, payer/recipient separation, principal/fee currency, explicit absence of bank-balance anchors, first/repeated status reads, no-op confirmation and completed durable jobs. Invalid recognized proofs cannot create financial rows or learning jobs. Later user edits, current balances and custom identities survive historical confirmation.
 
+Status publication also compares balances as exact decimals: `34.10` and `34.1` must not cause a checkpoint rewrite. Missing balances remain distinct from zero, and real amount or identity changes remain detectable. The permanent worker regression exercises the publication helper as well as snapshot loading.
+
 Real documents are replayed privately through the normal stored-file reader and worker before staging uploads. The named cache versions are additional namespaces; no old cache, projection, signal, template or original file is refreshed or deleted.

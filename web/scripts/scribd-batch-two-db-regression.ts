@@ -146,6 +146,7 @@ async function main() {
     "../lib/import-status-snapshot"
   );
   const { processLearningJob } = await import("../lib/learning-jobs");
+  const { shouldPersistPublishedAccountSummaries, persistPublishedAccountSummaries } = await import("../lib/import-checkpoint-publication");
   const { AI_CONSENT_VERSION } = await import("../../shared/ai-consent");
   const { resolveImportFileExtractionCacheVersion } = await import(
     "../lib/data-engine"
@@ -278,6 +279,20 @@ async function main() {
       });
       const status = await loadImportStatusSnapshot(file.id);
       assert(status?.settledImportComplete);
+      assert.equal(shouldPersistPublishedAccountSummaries(status), false);
+      const formatted = structuredClone(status);
+      const metadata = formatted.statementCheckpoint!.sourceMetadata as Record<string, unknown>;
+      metadata.publishedAccountSummaries = formatted.accountSummaries.map(summary => ({
+        ...summary, balance: summary.balance === null ? null : Number(summary.balance).toFixed(3),
+      }));
+      assert.equal(shouldPersistPublishedAccountSummaries(formatted), false, "Equivalent decimal formatting must not rewrite a checkpoint");
+      assert.deepEqual(await persistPublishedAccountSummaries(formatted), { count: 0 });
+      metadata.publishedAccountSummaries = formatted.accountSummaries.map(summary => ({ ...summary, balance: null }));
+      assert.equal(shouldPersistPublishedAccountSummaries(formatted), true, "An absent balance is distinct from zero");
+      metadata.publishedAccountSummaries = formatted.accountSummaries.map(summary => ({ ...summary, balance: String(Number(summary.balance) + 1) }));
+      assert.equal(shouldPersistPublishedAccountSummaries(formatted), true, "A real balance change must remain detectable");
+      metadata.publishedAccountSummaries = formatted.accountSummaries.map(summary => ({ ...summary, accountNumber: "DIFFERENT" }));
+      assert.equal(shouldPersistPublishedAccountSummaries(formatted), true, "Identity changes must remain detectable");
       assert.deepEqual(
         await db.accountStatementCheckpoint.findUniqueOrThrow({
           where: { importFileId: file.id },
