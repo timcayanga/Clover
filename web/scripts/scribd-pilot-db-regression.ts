@@ -41,6 +41,7 @@ async function main(){
   const {prisma:db}=await import('../lib/prisma');
   const {processImportFileText,confirmImportFile}=await import('../workers/import-processor');
   const {processLearningJob}=await import('../lib/learning-jobs');
+  const {loadImportStatusSnapshot}=await import('../lib/import-status-snapshot');
   const {AI_CONSENT_VERSION}=await import('../../shared/ai-consent');
   const {resolveImportFileExtractionCacheVersion}=await import('../lib/data-engine');
   assert.equal(resolveImportFileExtractionCacheVersion('GCash-Bills-Pay-Receipt.pdf'),'v40-gcash-bills-receipt');
@@ -63,6 +64,15 @@ async function main(){
       assert.equal(originalRows.length,count);assert(rows.every(r=>r.currency===currency&&r.account?.currency===currency));
       if(balance!==null){assert.equal(rows.length,6);assert.equal(Number(originalRows[0].account!.balance),balance);assert.equal(originalRows[0].account!.accountNumber,'000-00123-4');assert.equal(originalRows.filter(r=>Number(r.amount)===10).length,2);assert(rows.every(r=>r.date.getUTCFullYear()===2025));const mirror=rows.find(r=>(r.rawPayload as any).source==='derived_atm_cash_transfer')!;assert.equal(Number(mirror.amount),5);assert(originalRows.some(r=>r.id===(mirror.rawPayload as any).atmCashTransfer.sourceTransactionId));}
       else {assert(rows.every(r=>r.account!.accountNumber===null));assert.deepEqual(rows.map(r=>Number(r.amount)).sort((a,b)=>a-b),[3.25,120]);assert(rows.every(r=>r.date.toISOString()==='2025-02-01T10:09:19.000Z'));}
+      if(balance===null){
+        const published=await db.accountStatementCheckpoint.findUniqueOrThrow({where:{importFileId:file.id}});
+        const first=await loadImportStatusSnapshot(file.id);assert(first?.settledImportComplete);
+        assert.deepEqual(await db.accountStatementCheckpoint.findUniqueOrThrow({where:{importFileId:file.id}}),published,'The first settled receipt read leaves the published checkpoint untouched');
+        assert.equal(String((first!.statementCheckpoint!.sourceMetadata as any).publishedAccountSummaries[0].balance),String(rows[0].account!.balance));
+        const checkpoint=await db.accountStatementCheckpoint.findUniqueOrThrow({where:{importFileId:file.id}});
+        await loadImportStatusSnapshot(file.id);
+        assert.deepEqual(await db.accountStatementCheckpoint.findUniqueOrThrow({where:{importFileId:file.id}}),checkpoint,'Settled receipt reads do not repair the balance projection or timestamp');
+      }
       const knowledge=async()=>JSON.stringify({rows:await db.transaction.findMany({where:{workspaceId:workspace.id},orderBy:{id:'asc'}}),signals:await db.trainingSignal.findMany({where:{workspaceId:workspace.id},orderBy:{id:'asc'}}),rules:await db.merchantRule.findMany({where:{workspaceId:workspace.id},orderBy:{id:'asc'}}),accounts:await db.account.findMany({where:{workspaceId:workspace.id},orderBy:{id:'asc'}})});
       const before=await knowledge();await confirmImportFile(file.id);await settle();
       const after=await knowledge();

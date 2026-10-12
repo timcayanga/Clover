@@ -15892,6 +15892,25 @@ export const confirmImportFile = async (
     }
   }
 
+  // The bill receipt has no printed wallet balance. Publish the stored
+  // projection after the existing balance calculation, in this transaction,
+  // so the first settled GET need not repair a stale pre-confirmation value.
+  if (!multiAccountImport && parsedRows.length > 0 && parsedRows.every(row =>
+    (row.rawPayload as Record<string, unknown> | null)?.source === "gcash_bills_receipt")) {
+    const storedAccount = await tx.account.findUniqueOrThrow({ where: { id: resolvedAccountId }, select: { balance: true } });
+    const storedBalance = snapshotBalanceToString(storedAccount.balance);
+    const summary = accountSummaries.find(entry => entry.accountId === resolvedAccountId);
+    if (summary && summary.balance !== storedBalance) {
+      summary.balance = storedBalance;
+      const checkpoint = await tx.accountStatementCheckpoint.findUnique({ where: { importFileId } });
+      if (checkpoint && isRecord(checkpoint.sourceMetadata)) {
+        await tx.accountStatementCheckpoint.update({ where: { id: checkpoint.id }, data: {
+          sourceMetadata: { ...checkpoint.sourceMetadata, publishedAccountSummaries: accountSummaries } as Prisma.InputJsonValue,
+        } });
+      }
+    }
+  }
+
   const [confirmationReadSnapshot, readSnapshotReadyAt] = await Promise.all([
     confirmationReadSnapshotPromise,
     confirmationReadSnapshotReadyAtPromise,
