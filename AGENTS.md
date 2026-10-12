@@ -55,6 +55,9 @@ Clover is a personal finance app focused on statement import, transaction parsin
 47. `docs/boost-bank-parser-rules.md` when reviewing Boost Bank imports
 48. `docs/bca-parser-rules.md` when working on Indonesian KlikBCA transfer proofs
 49. `docs/grab-parser-rules.md` when working on Grab and GrabFood email receipts
+50. `docs/rhb-parser-rules.md` when reviewing Malaysian RHB imports
+51. `docs/ocbc-parser-rules.md` when reviewing OCBC imports
+52. `docs/dbs-parser-rules.md` when reviewing DBS consolidated multi-product imports
 
 If `docs/product-spec.md` is added later, it should become the primary product spec and supersede `docs/user-management-spec.md` for implementation guidance.
 

@@ -1,5 +1,7 @@
 import type { DetectedStatementMetadata, ParsedImportRow } from './import-parser';
 
+export const POSB_NATIVE_ACCOUNT_HEADING = /Details of Your POSB (?:Payroll|eEveryday Savings) Account/i;
+
 type Item = { str?: unknown; transform?: number[]; width?: number };
 const money = (s: string) => /-\s*$/.test(s) ? -Number(s.replace(/-\s*$/, '').trim().replaceAll(',', '')) : Number(s.replaceAll(',', ''));
 const balancePattern = /^(?:-?\d[\d,]*\.\d{2}|\d[\d,]*\.\d{2}\s*-)$/;
@@ -30,7 +32,7 @@ export function hasVerifiedPosbRows(text: string, rows: Array<{ amount?: unknown
 /** Preserve empty withdrawal/deposit columns before whitespace normalization. */
 export function buildPosbPdfRows(items: Item[]): string[] {
   const points = items.map(i => ({ text: String(i.str ?? '').replace(/\s+/g, ' ').trim(), x: Number(i.transform?.[4]), y: Number(i.transform?.[5]), width: Number(i.width ?? 0) })).filter(i => i.text && Number.isFinite(i.x) && Number.isFinite(i.y));
-  if (!points.some(i => /Details of Your POSB Payroll Account/i.test(i.text))) return [];
+  if (!points.some(i => POSB_NATIVE_ACCOUNT_HEADING.test(i.text))) return [];
   const headers = [/^WITHDRAWAL\(\$\)$/i, /^DEPOSIT\(\$\)$/i, /^BALANCE\(\$\)$/i].map(re => points.find(i => re.test(i.text)));
   if (headers.some(h => !h)) return [];
   const [withdrawal, deposit, balance] = headers as typeof points;
@@ -53,7 +55,7 @@ export function buildPosbPdfRows(items: Item[]): string[] {
 }
 
 export function parsePosbStatement(text: string): { metadata: DetectedStatementMetadata; rows: ParsedImportRow[] } | null {
-  if (!/Details of Your POSB Payroll Account/i.test(text) || !/WITHDRAWAL\(\$\).*DEPOSIT\(\$\).*BALANCE\(\$\)/i.test(text)) return null;
+  if (!POSB_NATIVE_ACCOUNT_HEADING.test(text) || !/WITHDRAWAL\(\$\).*DEPOSIT\(\$\).*BALANCE\(\$\)/i.test(text)) return null;
   if (text.includes('POSB_INVALID_COLUMN_EVIDENCE')) throw new Error('POSB statement contains ambiguous amount columns; review the original source.');
   const asAt = text.match(/As at\s+(\d{1,2})\s+([A-Z]{3})\s+(\d{4})/i);
   const statementDate = asAt ? date(asAt[1],asAt[2],Number(asAt[3])) : null;

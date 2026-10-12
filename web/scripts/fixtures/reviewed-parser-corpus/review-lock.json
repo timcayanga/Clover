@@ -46,5 +46,9 @@
   "grab-cash-date-only": "9b11a4a7f4d224c3ffd7d1a14706719cdf93d3af612eb118bc94d35422f997fc",
   "grab-legacy-distinct-bookings": "180c5115f13bf7f43f66970a18487e6641d044a52ef87e08bd25b487d845ec01",
   "maribank-native-repeated-columns": "0fa60150c9b82c878e45028de29d56eadc62d49dbc638b59ae6137ef39e72337",
-  "seabank-native-php-alias": "8d66fdeb0694b8c11515cb2c88799895addc186a6568073b3bdbee64ca23ab62"
+  "seabank-native-php-alias": "8d66fdeb0694b8c11515cb2c88799895addc186a6568073b3bdbee64ca23ab62",
+  "maribank-empty-zero-snapshot": "f6779847b8a39fbb2861d97163504fb0314878ce9bbe21c49b301d669f904a48",
+  "seabank-empty-retained-balance": "7a7715b0448dff49dfc59afbe0750df12fb6c389ce0987553ac01e6375962e4c",
+  "maribank-native-atm-fees": "ac537ab960e7582f8050433b2018003949e1bcdfc91b40aacc3064888e1eaa07",
+  "posb-native-everyday-alias": "241ec319ca3c68cc622a68d7d8996fbe9a8d13a7940db7979e799b3ecda385c0"
 }

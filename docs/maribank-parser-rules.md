@@ -66,3 +66,11 @@ Keep each printed occurrence, including identical transfers or purchases on the 
 Existing matched bank accounts are reused read-only, retaining customized labels, institution aliases, current balances and timestamps. New accounts can initialize from the source closing balance. Publish the actual current account projection before settlement. Later historical imports and retries cannot reset an existing balance to an older closing amount. Account ownership, currency/type, capacity, ambiguous identities and deletion tombstones remain guarded.
 
 Future named savings statements use an additional v43-maribank-native-ledger namespace. Older cache entries, templates, corrections, sources and financial records are not refreshed or deleted.
+
+## Explicit empty savings statements
+
+Complete native MariBank/SeaBank statements with `NO RECENT TRANSACTION` inside the savings ledger, zero incoming/outgoing totals, equal opening/closing balance, one valid monthly period and full physical/printed page coverage retain exactly one `account_snapshot_marker`. They create **zero financial transactions**. A nonzero unchanged balance is not income. Dated movements, incomplete source fields or conflicting totals require source review; recognized native evidence cannot be replaced with OCR of disclosure illustrations.
+
+The existing verified account resolver remains read-only for matched accounts. The source historical closing balance stays in the checkpoint and marker while status publishes the stored current account balance. Completed zero-transaction snapshots have a narrow locked retry path that leaves source, finance, learning and timestamps unchanged. Future named bank statements use additive `v44-maribank-native-snapshot` extraction entries; older v43/v39 entries and previous learning are retained.
+
+Native source account values directly followed by the explicit contact label `Call` remain eleven-digit bank identities; longer numbers cannot be truncated. Verified native ATM withdrawals reuse the shared same-currency Cash mirror. Separate Card Fee/ATM Withdrawal rows remain expenses. The bank and Cash projections and complete normalized count are published before settlement, while existing account labels and balances remain read-only.

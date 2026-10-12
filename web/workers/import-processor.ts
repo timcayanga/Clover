@@ -5684,10 +5684,16 @@ const resolveConfirmationAccount = async (params: {
     });
     // Keep the established ATM-to-cash mirror; account matching itself stays
     // read-only for existing bank accounts and existing cash accounts.
-    if (posbStatementRows && params.parsedRows.some(row => {
+    if ((posbStatementRows && params.parsedRows.some(row => {
       const raw = row.rawPayload as Record<string, unknown> | null;
       return raw?.direction === "outgoing" && typeof raw.notes === "string" && /^Cash Withdrawal(?:\s|$)/i.test(raw.notes);
-    }) && !await prisma.account.findFirst({ where: { workspaceId, type: "cash", currency }, select: { id: true } })) await resolveWorkspaceCashAccountId(workspaceId, currency);
+    }) || mariStatementRows && params.parsedRows.some(row => {
+      const raw = row.rawPayload as Record<string, unknown> | null;
+      return raw?.direction === "outgoing" && isAtmCashWithdrawalCandidate({
+        type: "expense", merchantRaw: null, merchantClean: null,
+        description: typeof raw.notes === "string" ? raw.notes : null, rawPayload: raw,
+      });
+    })) && !await prisma.account.findFirst({ where: { workspaceId, type: "cash", currency }, select: { id: true } })) await resolveWorkspaceCashAccountId(workspaceId, currency);
     return account;
   }
   const migrationRow = params.parsedRows.length && params.parsedRows.every(row => readAppMigration(row.rawPayload)) ? params.parsedRows[0] : null;
@@ -15387,6 +15393,7 @@ export const confirmImportFile = async (
         status: true,
         accountId: true,
         confirmedTransactionsCount: true,
+        confirmedAt: true,
       },
     });
     const lockedConfirmedTransactions = Number(lockedImportFile?.confirmedTransactionsCount ?? 0);
@@ -15406,6 +15413,16 @@ export const confirmImportFile = async (
           status: "done",
         } satisfies ConfirmImportResult;
       }
+    }
+
+    const snapshotEvidence = parsedRows.length === 1 ? parsedRows[0].rawPayload as Record<string, unknown> | null : null;
+    if (lockedImportFile?.status === "done" && lockedImportFile.confirmedAt && lockedImportFile.accountId && lockedConfirmedTransactions === 0 &&
+        snapshotEvidence?.source === "maribank_native_columns" && snapshotEvidence.kind === "account_snapshot_marker" && snapshotEvidence.balanceReconciled === true &&
+        (snapshotEvidence.reconciliation as Record<string, unknown> | null)?.version === "maribank-native-ledger-v1" &&
+        await tx.transaction.count({ where: { importFileId, deletedAt: null } }) === 0) {
+      // A reviewed empty statement is a completed import with zero finance.
+      // Reconfirming it must not refresh source evidence or durable learning.
+      return { imported: 0, duplicate: true, accountId: lockedImportFile.accountId, confirmedTransactionsCount: 0, status: "done" } satisfies ConfirmImportResult;
     }
 
     const existingImportTransactions = await existingImportTransactionsPromise;
@@ -16656,7 +16673,7 @@ export const confirmImportFile = async (
   // A verified POSB statement can create a cash mirror. Publish every stored
   // account projection before marking the file done; a status GET must not
   // finish confirmation by adding the cash card or correcting its count.
-  if (verifiedPosbImport) {
+  if (verifiedPosbImport || verifiedMariImport && preparedAtmCashDestinations.length > 0) {
     const groups = await tx.transaction.groupBy({ where: { deletedAt: null, OR: [{ importFileId }, { rawPayload: { path: ["sourceImportFileId"], equals: importFileId } }] }, by: ["accountId"], _count: { _all: true } });
     const storedAccounts = await tx.account.findMany({ where: { id: { in: groups.map(group => group.accountId) } }, select: { id: true, name: true, institution: true, accountNumber: true, type: true, currency: true, balance: true } });
     for (const group of groups) {
@@ -16674,7 +16691,7 @@ export const confirmImportFile = async (
     retainedExistingImportTransactionsCount +
     preparedTransactions.length +
     duplicateSkippedTransactionsCount +
-    (verifiedPosbImport ? preparedAtmCashDestinations.length : 0) +
+    (verifiedPosbImport || verifiedMariImport ? preparedAtmCashDestinations.length : 0) +
     (openingBalanceInserted ? 1 : 0);
 
     await updateImportFileWithTxCompat(

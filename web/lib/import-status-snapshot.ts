@@ -374,7 +374,10 @@ const buildCheckpointAccountSummary = async (
     (accountRecord?.type as AccountType | null | undefined) ??
     (typeof checkpointMetadata?.accountType === "string" ? (checkpointMetadata.accountType as AccountType) : null) ??
     null;
+  const verifiedEmptyMariSnapshot = Array.isArray(checkpointMetadata?.identityEvidence) &&
+    checkpointMetadata.identityEvidence.includes("maribank-native-empty-snapshot-v1");
   const balance =
+    (verifiedEmptyMariSnapshot ? accountRecord?.balance?.toString() : null) ??
     statementCheckpoint?.endingBalance?.toString() ??
     accountRecord?.balance?.toString() ??
     null;

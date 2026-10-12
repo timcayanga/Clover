@@ -18,7 +18,7 @@ export function parseMariBankNativeLedger(text: string): { metadata: DetectedSta
   const pages = Number(native[0][1]);
   const printed = [...text.matchAll(/\bpage\s+(\d+)\s+of\s+(\d+)/gi)];
   if (pages < 1 || pages > 100 || printed.length !== pages || printed.some((m, i) => Number(m[1]) !== i + 1 || Number(m[2]) !== pages)) fail('printed and physical pages must agree');
-  const identities = [...text.matchAll(/(?:MARI\s*BANK|SEABANK)\s+ACCOUNT:\s*(\d{11})\b/gi)].map(m => m[1]);
+  const identities = [...text.matchAll(/(?:MARI\s*BANK|SEABANK)\s+ACCOUNT:\s*(\d{11})(?=\b|Call\b)/gi)].map(m => m[1]);
   if (!identities.length || new Set(identities).size !== 1) fail('full source account identity is missing or conflicting');
   const accountNumber = identities[0];
   const periods = [...text.matchAll(/\b(\d{1,2})\s+([A-Z]{3})\s+(\d{4})\s+to\s+(\d{1,2})\s+([A-Z]{3})\s+(\d{4})\b/gi)];
@@ -35,6 +35,17 @@ export function parseMariBankNativeLedger(text: string): { metadata: DetectedSta
   if (opening + incoming - outgoing !== closing) fail('summary totals do not reconcile');
   const lines = text.split(/\r?\n/).filter(l => l.startsWith('MARIBANK_TXN |'));
   const coverage = [...text.matchAll(/^MARIBANK_NATIVE_ROW_COUNT (\d+)$/gm)].map(m => Number(m[1]));
+  if (!lines.length) {
+    const taxStart = text.search(/SAVINGS\s*-\s*INTEREST\s*&\s*TAX\s+DETAILS/i);
+    const ledger = taxStart > detailStart ? text.slice(detailStart, taxStart) : '';
+    if (!coverage.length || coverage.some(n => n !== 0) || !/\bNO RECENT TRANSACTION\b/i.test(ledger) || outgoing !== 0 || incoming !== 0 || opening !== closing) fail('empty ledger needs explicit source evidence and zero movement totals');
+    if (/\b\d{1,2}\s+(?:JAN|FEB|MAR|APR|MAY|JUN|JUL|AUG|SEP|OCT|NOV|DEC)\b/i.test(ledger)) fail('dated movements conflict with empty ledger');
+    const accountName = `MariBank ${accountNumber.slice(-4)}`;
+    const line = `MARIBANK_EMPTY_LEDGER | ${start} | ${end} | ${accountNumber} | ${(closing / 100).toFixed(2)}`;
+    return { metadata: { institution: 'MariBank', accountName, accountNumber, accountType: 'bank', currency: 'PHP', openingBalance: opening / 100, endingBalance: closing / 100, startDate: start, endDate: end, confidence: 95, currencyConfidence: 100, institutionConfidence: 100, identityEvidence: ['maribank-native-ledger-v1', 'maribank-native-empty-snapshot-v1', 'Complete native pages, explicit empty savings ledger and zero source flows'] },
+      rows: [{ date: end, amount: '0.00', currency: 'PHP', type: 'income', merchantRaw: accountName, merchantClean: accountName, description: 'No recent transaction; account balance snapshot', accountNumber, accountName, institution: 'MariBank', categoryName: 'Other', confidence: 95,
+        rawPayload: { source: 'maribank_native_columns', kind: 'account_snapshot_marker', line, sourceRowIndex: 0, accountNumber, accountName, accountType: 'bank', accountCurrency: 'PHP', balance: closing / 100, statementEndingBalance: closing / 100, snapshotDate: end, sourceEmptyLedgerLabel: 'NO RECENT TRANSACTION', balanceReconciled: true, reconciliation: { version: 'maribank-native-ledger-v1', openingBalance: opening / 100, endingBalance: closing / 100, totalIncoming: 0, totalOutgoing: 0, physicalPages: pages }, sourceDocumentText: text } }] };
+  }
   if (!lines.length || coverage.reduce((n, x) => n + x, 0) !== lines.length) fail('dated native movements are missing');
   let actualIn = 0, actualOut = 0;
   const rows = lines.map((line, sourceRowIndex): ParsedImportRow => {

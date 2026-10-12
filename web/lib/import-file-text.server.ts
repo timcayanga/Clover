@@ -2,7 +2,7 @@ import { buildGrabReceiptNativePages, buildGrabPickupFields } from '@/lib/grab-e
 import { parseCimbConsolidatedStatement } from "@/lib/import-parser";
 import { buildBcaTransferPdfRows, parseBcaTransferProof } from "@/lib/bca-transfer-proof";
 import { hasReconciledBdoInlineLedger } from "@/lib/import-parser";
-import { buildPosbPdfRows } from "@/lib/posb-statement";
+import { buildPosbPdfRows, POSB_NATIVE_ACCOUNT_HEADING } from "@/lib/posb-statement";
 import { gcashBillsReceiptTextLayerIsComplete, buildGcashBillsNativePages, parseGcashBillsReceipt, selectCompleteGcashBillsNativeText } from "@/lib/gcash-bills-receipt";
 import { encodeNativePdfNullGlyphs } from "@/lib/native-pdf-text";
 import { readLocalReceiptImage, shutdownLocalReceiptOcr } from "./local-receipt-ocr.server";
@@ -1169,6 +1169,10 @@ const scoreStatementTextCandidate = (text: string) => {
 export const pdfTextLayerLooksSufficientForParsing = (text: string, fileName?: string | null) => {
   // A captured Grab proof retains failed validation for the parser review gate.
   if (text.split(/\r?\n/).some(line => line.startsWith("GRAB_RECEIPT_NATIVE "))) return true;
+  // Preserve recognized empty native statements, including failed proofs, for
+  // the strict source review gate. OCR cannot replace their empty ledger with
+  // transactions extracted from the interest-rate illustrations.
+  if (/^MARIBANK_NATIVE_PAGES \d+$/m.test(text) && !/^MARIBANK_TXN \|/m.test(text) && /NO RECENT TRANSACTION/i.test(text)) return true;
   try { if (parseGcashBillsReceipt(text)?.rows.length) return true; } catch { return false; }
   if (parseBcaTransferProof(text)?.rows.length) return true;
   const normalized = text.trim();
@@ -2256,10 +2260,10 @@ const extractTextFromPdfBytes = async (data: Uint8Array, password?: string, base
       const bcaText = `${extractedText}\nBCA_NATIVE_PAGES ${pdf.numPages}\n${bcaProofRows.flat().filter(Boolean).join("\n")}`;
       if (parseBcaTransferProof(bcaText)?.rows.length) return bcaText;
       const structuredPosbRows = posbTransactionRows.flat().filter(Boolean);
-      if (/Details of Your POSB Payroll Account/i.test(extractedText) && structuredPosbRows.length > 0) return `${extractedText}\n${structuredPosbRows.join('\n')}`;
+      if (POSB_NATIVE_ACCOUNT_HEADING.test(extractedText) && structuredPosbRows.length > 0) return `${extractedText}\n${structuredPosbRows.join('\n')}`;
       const structuredMariBankRows = mariBankTransactionRows.flat().filter(Boolean);
-      const modernMari = /(?:MARI\s*BANK|SEABANK)\s+ACCOUNT:\s*\d{11}\b/i.test(extractedText) && /SAVINGS\s*-\s*TRANSACTION\s+DETAILS/i.test(extractedText) && /PHP/i.test(extractedText);
-      if (modernMari && structuredMariBankRows.some(row => row.startsWith("MARIBANK_TXN"))) return `${extractedText}\nMARIBANK_NATIVE_PAGES ${pdf.numPages}\n${structuredMariBankRows.join("\n")}`;
+      const modernMari = /(?:MARI\s*BANK|SEABANK)\s+ACCOUNT:\s*\d{11}(?=\b|Call\b)/i.test(extractedText) && /SAVINGS\s*-\s*TRANSACTION\s+DETAILS/i.test(extractedText) && /PHP/i.test(extractedText);
+      if (modernMari && (structuredMariBankRows.some(row => row.startsWith("MARIBANK_TXN")) || /NO RECENT TRANSACTION/i.test(extractedText))) return `${extractedText}\nMARIBANK_NATIVE_PAGES ${pdf.numPages}\n${structuredMariBankRows.join("\n")}`;
       // Preserve the established unproved legacy path for other account shapes.
       return /\bMARI\s*BANK\b/i.test(extractedText) && structuredMariBankRows.some(row => row.startsWith("MARIBANK_TXN"))
         ? `${extractedText}\n${structuredMariBankRows.filter(row => row.startsWith("MARIBANK_TXN")).join("\n")}` : extractedText;

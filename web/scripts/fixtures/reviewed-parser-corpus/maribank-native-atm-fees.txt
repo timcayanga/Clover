@@ -1,0 +1,25 @@
+BANK STATEMENT
+MARIBANK ACCOUNT: 00123456789
+ACCOUNT SUMMARY
+01 JUL 2026 to 31 JUL 2026
+ACCOUNT STARTING BALANCE (PHP) TOTAL OUTGOING (PHP) TOTAL INCOMING (PHP) ENDING BALANCE (PHP)
+SAVINGS 500.00 230.00 1.00 271.00
+TOTAL: 271.00
+SAVINGS - TRANSACTION DETAILS
+DATE TRANSACTION OUTGOING (PHP) INCOMING (PHP)
+JUL Interest Net Interest 1.00
+11 JUL ATM Cash Withdrawal Cash Withdrawal 100.00
+11 JUL Card Fee ATM Withdrawal 15.00
+11 JUL ATM Cash Withdrawal Cash Withdrawal 100.00
+11 JUL Card Fee ATM Withdrawal 15.00
+page 1 of 2
+SAVINGS - INTEREST & TAX DETAILS
+Daily interest disclosures are evidence, not extra movements.
+page 2 of 2
+MARIBANK_NATIVE_PAGES 2
+MARIBANK_NATIVE_ROW_COUNT 5
+MARIBANK_TXN | JUL | incoming | 1.00 | Interest | Net Interest
+MARIBANK_TXN | 11 JUL | outgoing | 100.00 | ATM Cash Withdrawal | Cash Withdrawal
+MARIBANK_TXN | 11 JUL | outgoing | 15.00 | Card Fee | ATM Withdrawal
+MARIBANK_TXN | 11 JUL | outgoing | 100.00 | ATM Cash Withdrawal | Cash Withdrawal
+MARIBANK_TXN | 11 JUL | outgoing | 15.00 | Card Fee | ATM Withdrawal

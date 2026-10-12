@@ -25,3 +25,9 @@ Publish the normalized transaction count, including derived cash counterparts, a
 Source-row coverage recognizes actual month names; a street address beginning with a number and a three-letter word is not a transaction date. Missing dated movements still fail coverage. A signed negative movement in a proven withdrawal/deposit column reverses the financial direction while retaining the original column, signed amount, source line and occurrence. Match every running/closing balance. Preserve original transfers, reversals and later legitimate repeats as separate occurrences. Reversed cash withdrawals remain review-required, so they cannot produce an unsupported cash counterpart.
 
 A downloaded PDF may concatenate several separately numbered monthly statements. Do not infer one statement period from its first header or Scribd's listing page count. The current single-period path keeps such sources outside accepted training until every period/page and overlap is independently verified.
+
+## eEveryday Savings native statements
+
+The explicit `Details of Your POSB eEveryday Savings Account` heading uses the same native withdrawal/deposit/balance protocol as Payroll. Keep full account identifiers, SGD, every page anchor and each printed occurrence. Both products must pass the existing column, year, page-count, running-balance and source-total checks. Other account products require their own review.
+
+Cash withdrawals retain the existing same-currency Cash counterpart; separately printed fees remain expenses. Publish the bank and Cash projections/counts before settlement. Confirmed account labels and balances, source evidence and durable learning remain protected on retries. DBS consolidated statements with multiple products/currencies are a separate held source family; SGD-equivalent summaries cannot replace native-currency balances.

@@ -2957,6 +2957,241 @@
         "openingBalance": 50,
         "endingBalance": 70
       }
+    },
+    {
+      "id": "maribank-empty-zero-snapshot",
+      "kind": "statement",
+      "source": "maribank-empty-zero-snapshot.txt",
+      "sha256": "b7de14da70f31c5c576a828fff93ac0dfb5e3d8e570d9af8b1169f11f72c6e19",
+      "representation": "Independently invented complete native page and empty ledger transcript",
+      "provenance": {
+        "origin": "synthetic",
+        "reviewer": "Codex",
+        "reviewedAt": "2026-10-13",
+        "status": "reviewed",
+        "basis": "Explicit empty ledger, zero incoming/outgoing and equal opening/closing balances. Two complete pages and full leading-zero PHP bank identity. Exactly one source snapshot marker, zero financial movements. Nonzero retained balance is not income; illustrations are not account evidence."
+      },
+      "expected": [
+        {
+          "date": "2026-07-31",
+          "amount": "0.00",
+          "currency": "PHP",
+          "type": "income",
+          "accountNumber": "00123456789",
+          "rawPayload": {
+            "source": "maribank_native_columns",
+            "kind": "account_snapshot_marker",
+            "balance": 0.0,
+            "sourceEmptyLedgerLabel": "NO RECENT TRANSACTION",
+            "sourceRowIndex": 0,
+            "balanceReconciled": true
+          }
+        }
+      ],
+      "expectedMetadata": {
+        "institution": "MariBank",
+        "accountNumber": "00123456789",
+        "currency": "PHP",
+        "openingBalance": 0.0,
+        "endingBalance": 0.0
+      }
+    },
+    {
+      "id": "seabank-empty-retained-balance",
+      "kind": "statement",
+      "source": "seabank-empty-retained-balance.txt",
+      "sha256": "ac47e900380d354f83f2ac2a1adef112bd32912c6fa42a4f70b01c1385b60c7e",
+      "representation": "Independently invented complete native page and empty ledger transcript",
+      "provenance": {
+        "origin": "synthetic",
+        "reviewer": "Codex",
+        "reviewedAt": "2026-10-13",
+        "status": "reviewed",
+        "basis": "Explicit empty ledger, zero incoming/outgoing and equal opening/closing balances. Two complete pages and full leading-zero PHP bank identity. Exactly one source snapshot marker, zero financial movements. Nonzero retained balance is not income; illustrations are not account evidence."
+      },
+      "expected": [
+        {
+          "date": "2026-07-31",
+          "amount": "0.00",
+          "currency": "PHP",
+          "type": "income",
+          "accountNumber": "00123456789",
+          "rawPayload": {
+            "source": "maribank_native_columns",
+            "kind": "account_snapshot_marker",
+            "balance": 12.34,
+            "sourceEmptyLedgerLabel": "NO RECENT TRANSACTION",
+            "sourceRowIndex": 0,
+            "balanceReconciled": true
+          }
+        }
+      ],
+      "expectedMetadata": {
+        "institution": "MariBank",
+        "accountNumber": "00123456789",
+        "currency": "PHP",
+        "openingBalance": 12.34,
+        "endingBalance": 12.34
+      }
+    },
+    {
+      "id": "maribank-native-atm-fees",
+      "kind": "statement",
+      "source": "maribank-native-atm-fees.txt",
+      "sha256": "f49c43ef2d06dc30763e0f73e25da92a019340a9268cbf8c6b8717c27930fb63",
+      "representation": "Independently invented native MariBank cash withdrawals and separate fee columns",
+      "provenance": {
+        "origin": "synthetic",
+        "reviewer": "Codex",
+        "reviewedAt": "2026-10-13",
+        "status": "reviewed",
+        "basis": "Opening500 + interest1 - two legitimate100 cash withdrawals - two separate15 fees = closing271. Five source movements. Normalization creates exactly two same-currency Cash counterparts; fees remain expenses, never cash movements. Full original occurrence order and evidence remain traceable."
+      },
+      "expected": [
+        {
+          "date": "2026-07-31",
+          "amount": "1.00",
+          "currency": "PHP",
+          "type": "income",
+          "accountNumber": "00123456789",
+          "rawPayload": {
+            "source": "maribank_native_columns",
+            "sourceRowIndex": 0,
+            "direction": "incoming",
+            "balanceReconciled": true
+          }
+        },
+        {
+          "date": "2026-07-11",
+          "amount": "100.00",
+          "currency": "PHP",
+          "type": "expense",
+          "accountNumber": "00123456789",
+          "rawPayload": {
+            "source": "maribank_native_columns",
+            "sourceRowIndex": 1,
+            "direction": "outgoing",
+            "balanceReconciled": true
+          }
+        },
+        {
+          "date": "2026-07-11",
+          "amount": "15.00",
+          "currency": "PHP",
+          "type": "expense",
+          "accountNumber": "00123456789",
+          "rawPayload": {
+            "source": "maribank_native_columns",
+            "sourceRowIndex": 2,
+            "direction": "outgoing",
+            "balanceReconciled": true
+          }
+        },
+        {
+          "date": "2026-07-11",
+          "amount": "100.00",
+          "currency": "PHP",
+          "type": "expense",
+          "accountNumber": "00123456789",
+          "rawPayload": {
+            "source": "maribank_native_columns",
+            "sourceRowIndex": 3,
+            "direction": "outgoing",
+            "balanceReconciled": true
+          }
+        },
+        {
+          "date": "2026-07-11",
+          "amount": "15.00",
+          "currency": "PHP",
+          "type": "expense",
+          "accountNumber": "00123456789",
+          "rawPayload": {
+            "source": "maribank_native_columns",
+            "sourceRowIndex": 4,
+            "direction": "outgoing",
+            "balanceReconciled": true
+          }
+        }
+      ],
+      "expectedMetadata": {
+        "institution": "MariBank",
+        "accountNumber": "00123456789",
+        "currency": "PHP",
+        "openingBalance": 500,
+        "endingBalance": 271
+      }
+    },
+    {
+      "id": "posb-native-everyday-alias",
+      "kind": "statement",
+      "source": "posb-native-everyday-alias.txt",
+      "sha256": "7f0ad4eed769b4acdef9b00d06109f6e80634ace427c8d86e8f2e293f2742a84",
+      "representation": "Independently invented POSB eEveryday savings native columns and complete two-page balance anchors",
+      "provenance": {
+        "origin": "synthetic",
+        "reviewer": "Codex",
+        "reviewedAt": "2026-10-13",
+        "status": "reviewed",
+        "basis": "Existing POSB Payroll column/reconciliation protocol reused for the explicit eEveryday Savings product. Opening100 + salary250 - cash50 - fee2 + interest0.01 = closing298.01. Four source events and one same-currency Cash counterpart; fee remains an expense. Full leading-zero source account and page/date coverage retained."
+      },
+      "expected": [
+        {
+          "date": "2026-09-01",
+          "amount": "250.00",
+          "currency": "SGD",
+          "type": "income",
+          "accountNumber": "001-23456-7",
+          "rawPayload": {
+            "source": "posb_pdf_columns",
+            "direction": "incoming",
+            "balanceReconciled": true
+          }
+        },
+        {
+          "date": "2026-09-02",
+          "amount": "50.00",
+          "currency": "SGD",
+          "type": "expense",
+          "accountNumber": "001-23456-7",
+          "rawPayload": {
+            "source": "posb_pdf_columns",
+            "direction": "outgoing",
+            "balanceReconciled": true
+          }
+        },
+        {
+          "date": "2026-09-02",
+          "amount": "2.00",
+          "currency": "SGD",
+          "type": "expense",
+          "accountNumber": "001-23456-7",
+          "rawPayload": {
+            "source": "posb_pdf_columns",
+            "direction": "outgoing",
+            "balanceReconciled": true
+          }
+        },
+        {
+          "date": "2026-09-30",
+          "amount": "0.01",
+          "currency": "SGD",
+          "type": "income",
+          "accountNumber": "001-23456-7",
+          "rawPayload": {
+            "source": "posb_pdf_columns",
+            "direction": "incoming",
+            "balanceReconciled": true
+          }
+        }
+      ],
+      "expectedMetadata": {
+        "institution": "POSB",
+        "accountNumber": "001-23456-7",
+        "currency": "SGD",
+        "openingBalance": 100,
+        "endingBalance": 298.01
+      }
     }
   ]
 }

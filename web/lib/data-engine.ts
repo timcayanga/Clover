@@ -39,7 +39,7 @@ export const DATA_ENGINE_VERSION = "v2";
 export const IMPORT_FILE_EXTRACTION_CACHE_VERSION = "v39";
 export const resolveImportFileExtractionCacheVersion = (fileName?: string | null) => {
   const normalizedFileName = String(fileName ?? "");
-  if (/(?:mari[-_\s]*bank|sea[-_\s]*bank).*statement/i.test(normalizedFileName)) return "v43-maribank-native-ledger";
+  if (/(?:mari[-_\s]*bank|sea[-_\s]*bank).*statement/i.test(normalizedFileName)) return "v44-maribank-native-snapshot";
   if (/grab.*(?:e[-_\s]*receipt|receipts)/i.test(normalizedFileName)) return "v43-grab-email-receipt";
   if (/cimb[-_\s]*conso[-_\s]*statement/i.test(normalizedFileName)) return "v41-cimb-consolidated";
   if (/bukti[-_\s]*trf/i.test(normalizedFileName)) return "v41-bca-transfer-proof";
