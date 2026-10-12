@@ -1,9 +1,9 @@
-type InvestmentAccount = { id: string; institution: string | null; type: string; currency: string };
+type InvestmentAccount = { id: string; institution: string | null; type: string; currency: string; name?: string; investmentSubtype?: string | null };
 /** Presentation grouping only. Never changes account IDs, balances or ownership. */
-export function institutionGroups<T extends InvestmentAccount>(accounts: T[]) {
+export function institutionGroups<T extends InvestmentAccount>(accounts: T[], sectionType: (account: T) => string = account => account.type) {
   const groups = new Map<string, { id: string; name: string; currency: string; assets: T[] }>();
   for (const account of accounts) {
-    if (account.type !== 'investment') continue;
+    if (sectionType(account) !== 'investment') continue;
     const name = account.institution?.trim().replace(/\s+/g, ' ') || 'Other investments';
     const id = `${name.toLocaleLowerCase('en')}:${account.currency}`;
     if (!groups.has(id)) groups.set(id, { id, name, currency: account.currency, assets: [] });
