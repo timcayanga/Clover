@@ -817,7 +817,7 @@ const getAccountCardEyebrow = (account: Account) => {
 };
 
 const isGSaveInstitutionAccount = (account: Account) =>
-  /\bgsave\b|\b(?:unoready|unoboost)\b/i.test(`${account.institution ?? ""} ${account.name}`);
+  accountSectionType(account) === "investment" && /\bgsave\b|\b(?:unoready|unoboost)\b/i.test(`${account.institution ?? ""} ${account.name}`);
 
 const getInvestmentInstitutionPreviewLabel = (account: Account) => {
   const symbol = account.investmentSymbol?.trim();
