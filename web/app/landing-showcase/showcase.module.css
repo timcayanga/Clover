@@ -2638,8 +2638,8 @@
 /* Clover editorial direction: depth belongs to the product, not its backdrop. */
 .site { background: #fafcfc; }
 .hero, .togetherScene, .evening, .clarity, .ask { background: #f5faf9; }
-.site .scene { min-height: 190svh; }
-.site .hero { min-height: 175svh; }
+.site .scene { height: 190svh; min-height: 0; }
+.site .hero { height: 175svh; }
 .site .copy { z-index: 8; }
 .receipt {
   background: linear-gradient(115deg, #fff 60%, #eaf5f2);
@@ -2709,8 +2709,8 @@
 .lifePhoto { left: 6%; right: 6%; top: 5%; bottom: 22%; border-radius: 32px; border-width: 0; transform: translateY(calc((1 - var(--a)) * 24px)); }
 .goalMoment { left: 14%; width: 76%; bottom: 5%; border-bottom-width: 4px; }
 @media (max-width: 900px), (max-width: 1100px) and (min-height: 1000px) {
-  .site .scene { min-height: 190svh; }
-  .site .hero { min-height: 165svh; }
+  .site .scene { height: 190svh; min-height: 0; }
+  .site .hero { height: 165svh; }
   .moneySculpture { inset: 0 5%; gap: 10px; }
   .moneyCenter { min-height: 94px; padding: 14px; }
   .moneyCenter strong { font-size: 28px; }
@@ -2722,9 +2722,11 @@
   .smallReceipt { min-height: 210px; }
 }
 @media (prefers-reduced-motion: reduce) {
-  .site .scene, .site .hero { min-height: auto; }
+  .site .scene, .site .hero { height: auto; min-height: auto; }
 }
-.site[data-motion="off"] .scene, .site[data-motion="off"] .hero { min-height: auto; }
+.site[data-motion="off"] .scene, .site[data-motion="off"] .hero { height: auto; min-height: auto; }
 @media (max-height: 659px) and (min-width: 901px), (max-height: 739px) and (max-width: 900px) {
-  .site .scene, .site .hero { min-height: auto; }
+  .site .scene, .site .hero { height: auto; min-height: auto; }
 }
+
+.importStage::before { display: none; }
