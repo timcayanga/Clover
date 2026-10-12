@@ -16643,10 +16643,28 @@ export const confirmImportFile = async (
     await reconcileWorkspaceInternalTransfers(tx, String(importFile.workspaceId));
   }
 
+  // A verified POSB statement can create a cash mirror. Publish every stored
+  // account projection before marking the file done; a status GET must not
+  // finish confirmation by adding the cash card or correcting its count.
+  if (verifiedPosbImport) {
+    const groups = await tx.transaction.groupBy({ where: { deletedAt: null, OR: [{ importFileId }, { rawPayload: { path: ["sourceImportFileId"], equals: importFileId } }] }, by: ["accountId"], _count: { _all: true } });
+    const storedAccounts = await tx.account.findMany({ where: { id: { in: groups.map(group => group.accountId) } }, select: { id: true, name: true, institution: true, accountNumber: true, type: true, currency: true, balance: true } });
+    for (const group of groups) {
+      const stored = storedAccounts.find(entry => entry.id === group.accountId);
+      if (!stored) continue;
+      const projection = { accountId: stored.id, accountName: stored.name, institution: stored.institution, accountNumber: stored.accountNumber, accountType: stored.type, currency: stored.currency, balance: snapshotBalanceToString(stored.balance), rowsImported: group._count._all };
+      const existing = accountSummaries.find(entry => entry.accountId === stored.id);
+      if (existing) Object.assign(existing, projection); else accountSummaries.push(projection);
+    }
+    const checkpoint = await tx.accountStatementCheckpoint.findUnique({ where: { importFileId } });
+    if (checkpoint && isRecord(checkpoint.sourceMetadata)) await tx.accountStatementCheckpoint.update({ where: { id: checkpoint.id }, data: { sourceMetadata: { ...checkpoint.sourceMetadata, publishedVisibleImportComplete: accountSummaries.length > 0, publishedAccountSummaries: accountSummaries } as Prisma.InputJsonValue } });
+  }
+
   const visibleTransactionsCount =
     retainedExistingImportTransactionsCount +
     preparedTransactions.length +
     duplicateSkippedTransactionsCount +
+    (verifiedPosbImport ? preparedAtmCashDestinations.length : 0) +
     (openingBalanceInserted ? 1 : 0);
 
     await updateImportFileWithTxCompat(
