@@ -49,6 +49,9 @@ for (const name of ["GSave UNO", "GSave CIMB", "#UNOboost@GCash"]) {
 assert.equal(accountSectionType({type: "bank", name: "BPI", investmentSubtype: "time_deposit"}), "investment");
 assert.equal(accountSectionType({type: "bank", name: "CIMB UpSave"}), "bank");
 assert.deepEqual(consolidatedAccountSummary([{type:"bank",currency:"PHP",balance:null}, {type:"wallet",currency:"USD",balance:0}], "PHP", {}).values, [0,0,0,0]);
+for (const type of ["credit_card", "loan", "cash", "wallet"]) {
+  assert.equal(accountSectionType({type, name:"GSave payment", institution:"GCash"}), type, "A name must not move debt, cash or wallets into investments");
+}
 const base: FinancialCommitmentSummary = {
   id: "rent",
   workspaceId: "w",
