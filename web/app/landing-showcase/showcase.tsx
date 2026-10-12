@@ -184,50 +184,6 @@ function AppScreen({
     </div>
   );
 }
-function DepthField({ name }: { name: string }) {
-  return (
-    <div className={s.depthField} aria-hidden="true">
-      <svg viewBox="0 0 640 600" fill="none">
-        <defs>
-          <linearGradient
-            id={`ribbon-${name}`}
-            x1="80"
-            y1="100"
-            x2="540"
-            y2="500"
-            gradientUnits="userSpaceOnUse"
-          >
-            <stop stopColor="#aaf4dc" />
-            <stop offset=".45" stopColor="#00adc0" />
-            <stop offset="1" stopColor="#b4efe2" />
-          </linearGradient>
-        </defs>
-        <path
-          d="M90 460C-40 190 240 30 450 120S660 390 410 470 160 390 280 240"
-          stroke="#058c9e"
-          strokeOpacity=".10"
-          strokeWidth="40"
-          transform="translate(0 12)"
-        />
-        <path
-          d="M90 460C-40 190 240 30 450 120S660 390 410 470 160 390 280 240"
-          stroke={`url(#ribbon-${name})`}
-          strokeWidth="32"
-        />
-        <path
-          d="M90 460C-40 190 240 30 450 120S660 390 410 470 160 390 280 240"
-          stroke="white"
-          strokeOpacity=".55"
-          strokeWidth="2"
-          transform="translate(-5 -8)"
-        />
-      </svg>
-      <i className={s.depthPearl} />
-      <i className={s.depthPearlSmall} />
-    </div>
-  );
-}
-
 const sampleAccounts = [
   { name: "BPI", type: "Bank", amount: 124861, logo: "bpi", color: "#b9152e" },
   {
@@ -258,27 +214,6 @@ function MoneySculpture() {
   const current = selected === null ? null : sampleAccounts[selected];
   return (
     <div className={s.moneySculpture}>
-      <DepthField name="money" />
-      <div className={s.moneyPlatform} aria-hidden="true" />
-      <svg
-        className={s.moneyConnections}
-        viewBox="0 0 600 500"
-        aria-hidden="true"
-      >
-        {[
-          "M100 70C100 210 210 250 300 250",
-          "M500 70C500 210 390 250 300 250",
-          "M100 430C100 290 210 250 300 250",
-          "M500 430C500 290 390 250 300 250",
-        ].map((path, i) => (
-          <path
-            key={path}
-            d={path}
-            pathLength="1"
-            style={{ "--connection": i } as CSSProperties}
-          />
-        ))}
-      </svg>
       {sampleAccounts.map((account, index) => (
         <button
           key={account.name}
@@ -336,15 +271,14 @@ function MoneySculpture() {
 
 function Receipt({ small = false }: { small?: boolean }) {
   return (
-    <img
-      className={s.realReceipt}
-      src="/assets/landing-showcase/starbucks-receipt-realistic-20261010.webp"
-      width={520}
-      height={946}
-      alt=""
-      loading={small ? "eager" : "lazy"}
-      decoding="async"
-    />
+    <div className={`${s.receipt} ${small ? s.smallReceipt : ""}`} aria-hidden="true">
+      <img src="/figma-icons/categories/food-dining.svg" className={s.receiptLogo} width={38} height={38} alt="" />
+      <strong>STARBUCKS</strong>
+      <span>October 5, 2026 · 9:41 AM</span>
+      <div><span>Caffè Latte</span><span>₱190.00</span></div>
+      <div className={s.receiptTotal}><strong>Total</strong><strong>₱190.00</strong></div>
+      <div className={s.barcode} />
+    </div>
   );
 }
 
@@ -471,29 +405,6 @@ function SpendingStory() {
           }
         >
           <svg viewBox="0 0 240 240" aria-hidden="true">
-            <g className={s.donutDepth}>
-              {spending.map((item, i) => (
-                <circle
-                  key={item.name}
-                  cx="111"
-                  cy="120"
-                  r="94"
-                  pathLength="100"
-                  stroke={item.color}
-                  data-muted={selected !== null && selected !== item.name}
-                  style={
-                    {
-                      "--ring-x": `${[22, -25, -22, 22][i]}px`,
-                      "--ring-y": `${[-22, -22, 22, 22][i]}px`,
-                    } as CSSProperties
-                  }
-                  strokeDasharray={`${item.percent - 0.8} ${100 - item.percent + 0.8}`}
-                  strokeDashoffset={
-                    -spending.slice(0, i).reduce((n, x) => n + x.percent, 0)
-                  }
-                />
-              ))}
-            </g>
             <circle className={s.donutTrack} cx="120" cy="120" r="94" />
             {spending.map((item, i) => (
               <circle
@@ -504,12 +415,6 @@ function SpendingStory() {
                 pathLength="100"
                 stroke={item.color}
                 data-muted={selected !== null && selected !== item.name}
-                style={
-                  {
-                    "--ring-x": `${[22, -25, -22, 22][i]}px`,
-                    "--ring-y": `${[-22, -22, 22, 22][i]}px`,
-                  } as CSSProperties
-                }
                 strokeDasharray={`${item.percent - 0.8} ${100 - item.percent + 0.8}`}
                 strokeDashoffset={
                   -spending.slice(0, i).reduce((n, x) => n + x.percent, 0)
@@ -848,9 +753,6 @@ export function Showcase({ initialMarket }: { initialMarket: PricingMarket }) {
               <Action />
             </div>
             <div className={`${s.stage} ${s.heroStage}`}>
-              <DepthField name="hero" />
-              <div className={s.orbit} aria-hidden="true" />
-              <div className={s.orbitInner} aria-hidden="true" />
               <div className={s.heroPhone}>
                 <AppScreen page="accounts" eager />
               </div>
@@ -893,13 +795,12 @@ export function Showcase({ initialMarket }: { initialMarket: PricingMarket }) {
           <div className={s.storyGrid}>
             <div className={s.copy}>
               <Heading text="Bring the records you already have. Clover finds and organizes the transactions, ready for your confirmation.">
-                Less sorting.
+                Start with what
                 <br />
-                <em>More living.</em>
+                <em>suits you.</em>
               </Heading>
             </div>
             <div className={`${s.stage} ${s.importStage}`}>
-              <DepthField name="import" />
               <div className={s.paperStatement} aria-hidden="true">
                 <img
                   src="/assets/landing-showcase/bpi.webp"
@@ -933,13 +834,12 @@ export function Showcase({ initialMarket }: { initialMarket: PricingMarket }) {
           <div className={`${s.storyGrid} ${s.reverse}`}>
             <div className={s.copy}>
               <Heading text="The little purchases. The regular bills. See the patterns behind your spending, and understand what changed.">
-                Less wondering.
+                Understand your money.
                 <br />
-                <em>More knowing.</em>
+                <em>Build better habits.</em>
               </Heading>
             </div>
             <div className={`${s.stage} ${s.reportStage}`}>
-              <DepthField name="report" />
               <SpendingStory />
             </div>
           </div>
@@ -955,8 +855,6 @@ export function Showcase({ initialMarket }: { initialMarket: PricingMarket }) {
               </Heading>
             </div>
             <div className={`${s.stage} ${s.chatStage}`}>
-              <DepthField name="chat" />
-              <div className={s.chatHalo} aria-hidden="true" />
               <Conversation />
               <div className={s.chatMascot}>
                 <Mascot pose="chat" size={190} />
@@ -976,16 +874,6 @@ export function Showcase({ initialMarket }: { initialMarket: PricingMarket }) {
               <Action>Start my story</Action>
             </div>
             <div className={`${s.stage} ${s.lifeStage}`}>
-              <div className={s.savingsProp} aria-hidden="true">
-                <img
-                  src="/assets/landing-showcase/savings-glass-20261010.webp"
-                  width={600}
-                  height={762}
-                  alt=""
-                  loading="lazy"
-                  decoding="async"
-                />
-              </div>
               <div className={s.lifePhoto}>
                 <StoryPhoto
                   desktop="landing-story-v3/07-records-away"
