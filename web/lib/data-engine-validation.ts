@@ -1,4 +1,5 @@
 import { parseDateValue, parseAmountValue, type DetectedStatementMetadata, type ParsedImportRow } from "@/lib/import-parser";
+import {parseGcashBillsReceipt} from '@/lib/gcash-bills-receipt';
 
 export type ImportValidationFinding = {
   code: string;
@@ -66,7 +67,18 @@ const unsafeRowFinding = (row: ParsedImportRow): ImportValidationFinding | null 
       message: "A statement balance anchor was incorrectly extracted as a transaction.",
     };
   }
-  if (merchant.length > 500 || sourceText.length > 1_500) {
+  // A receipt keeps its entire source in line; length alone does not make a
+  // fully reconciled, explicitly labeled receipt a boilerplate transaction.
+  let completeGcashComponent = false;
+  if (payload?.source === 'gcash_bills_receipt' && sourceText.length > 1_500) {
+    try {
+      completeGcashComponent = Boolean(parseGcashBillsReceipt(sourceText)?.rows.some(expected =>
+        expected.date === row.date && expected.currency === row.currency && expected.type === row.type &&
+        Number(expected.amount) === Number(row.amount) && expected.rawPayload?.component === payload.component &&
+        expected.rawPayload?.referenceNumber === payload.referenceNumber));
+    } catch { /* Contradictory or incomplete evidence retains the existing guard. */ }
+  }
+  if (merchant.length > 500 || (sourceText.length > 1_500 && !completeGcashComponent)) {
     return {
       code: "evidence.boilerplate",
       severity: "critical",
@@ -77,7 +89,12 @@ const unsafeRowFinding = (row: ParsedImportRow): ImportValidationFinding | null 
 
   const amount = parseAmountValue(row.amount == null ? null : String(row.amount));
   const rawAmountText = text(payload?.amountText);
-  const sourceAmounts = Array.from(rawAmountText.matchAll(/[0-9][0-9,]*\.\d{2}/g))
+  // One native Indonesian integer uses dots for thousands, not several PHP
+  // decimal values. Keep the generic merged-number guard for every other shape.
+  const singleNativeRupiah = payload?.source === 'seabank_indonesia_native' && row.currency === 'IDR' &&
+    /^(?:0|[1-9]\d*|[1-9]\d{0,2}(?:\.\d{3})+)$/.test(rawAmountText) &&
+    Number(rawAmountText.replaceAll('.', '')) === Number(row.amount);
+  const sourceAmounts = singleNativeRupiah ? [Number(row.amount)] : Array.from(rawAmountText.matchAll(/[0-9][0-9,]*\.\d{2}/g))
     .map((match) => Number(match[0].replace(/,/g, "")))
     .filter(Number.isFinite);
   const largestSourceAmount = sourceAmounts.length > 0 ? Math.max(...sourceAmounts) : 0;

@@ -201,6 +201,8 @@ function valid(p: Proof) {
 export function parseBcaTransferProof(
   text: string,
 ): { rows: ParsedImportRow[]; metadata: DetectedStatementMetadata } | null {
+  const received = parseBcaRecipientNotification(text);
+  if (received) return received;
   const notification = parseBcaTransferNotification(text);
   if (notification) return notification;
   if (!heading(text)) return null;
@@ -305,6 +307,26 @@ export function parseBcaTransferProof(
       },
     })),
   };
+}
+
+/** Recipient-side notification: the destination owns the income, not the payer. */
+function parseBcaRecipientNotification(text: string): {rows: ParsedImportRow[]; metadata: DetectedStatementMetadata} | null {
+  if (!/telah melakukan transfer dana dengan informasi sebagai berikut:/i.test(text) || !/has done fund transfer with the following information:/i.test(text)) return null;
+  const metadata: DetectedStatementMetadata = {institution:'BCA',accountName:'BCA',accountNumber:null,accountType:'bank',currency:'IDR',openingBalance:null,endingBalance:null,startDate:null,endDate:null,confidence:0,identityEvidence:['bca-recipient-bilingual-v1']};
+  const unsafe={metadata,rows:[] as ParsedImportRow[]};
+  if([...text.matchAll(/^BCA_NATIVE_PAGES (\d+)$/gm)].map(m=>m[1]).join()!=='1' || !/klikbcabisnis@klikbca\.com/i.test(text) || !/Catatan:\s*Biaya Termasuk PPN/i.test(text) || !/Notes:\s*Charges VAT Inclusive/i.test(text) || !/Best regards,\s*PT\. Bank Central Asia,?\s*Tbk/i.test(text)) return unsafe;
+  const cut=text.search(/[^\n]+ has done fund transfer with the following information:/i);
+  const blocks=[text.slice(0,cut),text.slice(cut)];
+  const one=(block:string,label:string)=>{const ms=[...block.matchAll(new RegExp('^\\s*'+label+'\\s*:\\s*([^\\n]+)$','gmi'))];return ms.length===1?ms[0][1].trim():null;};
+  const pairs=[['Tanggal','Date'],['Jam','Time'],['Pengirim','Sender'],['Rekening Tujuan','To Account'],['No\\. Referensi','Reference No\\.'],['Nominal','Amount']];
+  const values=pairs.map(([a,b])=>{const x=one(blocks[0],a),y=one(blocks[1],b);return x && x===y?x:null;});if(values.some(v=>v===null))return unsafe;
+  const [stamp,clock,sender,recipient,reference,amount]=values as string[];
+  if(!date(stamp) || !time(clock) || !/^\d{3}-\d{7}$/.test(recipient) || !/^\d{10,25}$/.test(reference) || !/[A-Za-z]/.test(sender) || !/^Rp\s+(?:\d+|\d{1,3}(?:\.\d{3})+)$/.test(amount))return unsafe;
+  const principal=Number(amount.replace(/^Rp\s+/,'').replaceAll('.',''));if(principal<=0 || !Number.isSafeInteger(principal*100))return unsafe;
+  if(/^\s*(?:Dari Rekening|From Account|Biaya|Charges)\s*:/mi.test(text))return unsafe;
+  metadata.accountNumber=recipient;metadata.accountName='BCA '+recipient.slice(-4);metadata.startDate=date(stamp);metadata.endDate=date(stamp);metadata.confidence=95;
+  const description='Transfer from '+sender;
+  return {metadata,rows:[{date:date(stamp)!,amount:principal.toFixed(2),currency:'IDR',type:'income',categoryName:'Transfers',accountNumber:recipient,accountName:metadata.accountName!,institution:'BCA',merchantRaw:sender,merchantClean:sender,description,confidence:95,rawPayload:{source:'bca_transfer_proof',kind:'bank_transfer_component',component:'principal',direction:'incoming',reference,sourceAccount:null,recipientIdentifier:recipient,senderName:sender,transferDate:stamp,transferTime:clock,principal,fee:null,totalDebit:null,accountCurrency:'IDR',accountType:'bank',sourceText:text,parserEvidence:{version:'bca-recipient-bilingual-v1',physicalPages:1,mirroredLanguages:['id','en'],datePolicy:'calendar date; printed timezone absent',feePolicy:'not printed; unknown',reason:'Matching complete recipient notification; destination identity is the receiving account; source payer identity absent'}}}]};
 }
 export function hasVerifiedBcaTransferRows(
   text: string,

@@ -1,3 +1,4 @@
+import {parseHeldNativeSource} from '@/lib/held-source-contracts';
 import { parseMariBankNativeLedger } from '@/lib/maribank-native-ledger';
 import { parseGrabEmailReceipt } from '@/lib/grab-email-receipt';
 import { parseAppMigrationTable, readAppMigration } from "@/lib/app-migration-import";
@@ -26340,6 +26341,8 @@ export const detectStatementMetadata = (text: string, fileName = ""): DetectedSt
     };
   }
 
+  const heldNative = parseHeldNativeSource(text);
+  if (heldNative) return heldNative.metadata;
   const nativeMari = parseMariBankNativeLedger(text);
   if (nativeMari) return nativeMari.metadata;
   const consolidatedCimb = parseCimbConsolidatedStatement(text);
@@ -27244,6 +27247,8 @@ export const parseImportText = (
   if (structuredDelimitedRows) {
     return structuredDelimitedRows;
   }
+  const heldNative = parseHeldNativeSource(text);
+  if (heldNative) return heldNative.rows;
   const nativeMari = parseMariBankNativeLedger(text);
   if (nativeMari) return nativeMari.rows;
   const consolidatedCimb = parseCimbConsolidatedStatement(text);

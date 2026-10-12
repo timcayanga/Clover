@@ -52,5 +52,10 @@
   "maribank-native-atm-fees": "ac537ab960e7582f8050433b2018003949e1bcdfc91b40aacc3064888e1eaa07",
   "posb-native-everyday-alias": "241ec319ca3c68cc622a68d7d8996fbe9a8d13a7940db7979e799b3ecda385c0",
   "gcash-explicit-bill-protect": "39e0d8f11de10f641f7a7eb0d0bb0415d16e8c9f95c7c129c0e46fa2f15c2553",
-  "gcash-bill-protect-and-fee": "490066e8388f040f5054422b6f798a42e21e01b7158ec4c9c818f6e8b02f5cdb"
+  "gcash-bill-protect-and-fee": "490066e8388f040f5054422b6f798a42e21e01b7158ec4c9c818f6e8b02f5cdb",
+  "seabank-indonesia-columns": "c81c4f772a58972fc0987444b182bf673bbd9b09eaa0a4da8b4d1dfdfce9a05b",
+  "dbs-my-account-zero": "b2808804b5a3350a11f58c0490121b9fd709482540b73344ad2d58d372a2f83f",
+  "dbs-digivault-zero": "3a38a454c1a5e03fd0ab13980aff60aef2b35be18feaf03ef0561e315cd85424",
+  "bca-recipient-income": "d898241a3178c8564fbebefc40bbad5972446139ad605a84d4e5972b27bdc39c",
+  "gcash-ocr-wrapped-biller": "e0ad358c0a33a49cc58fb4544530f974c1598047143a31fc066e43ea312ab61a"
 }

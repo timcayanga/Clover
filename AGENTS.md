@@ -58,6 +58,7 @@ Clover is a personal finance app focused on statement import, transaction parsin
 50. `docs/rhb-parser-rules.md` when reviewing Malaysian RHB imports
 51. `docs/ocbc-parser-rules.md` when reviewing OCBC imports
 52. `docs/dbs-parser-rules.md` when reviewing DBS consolidated multi-product imports
+53. `docs/seabank-indonesia-parser-rules.md` when working on Indonesian SeaBank IDR statements
 
 If `docs/product-spec.md` is added later, it should become the primary product spec and supersede `docs/user-management-spec.md` for implementation guidance.
 

@@ -2154,7 +2154,7 @@
         "reviewer": "Codex",
         "reviewedAt": "2026-10-12",
         "status": "reviewed",
-        "basis": "Independent invented derivative: four active UPSave movements100,1,1,-1 and one zero Fast Plus snapshot. Repeated1 entries remain distinct. Summary withdrawal label is wrapped with its PHP prefix. Only the zero-activity account may have a later Nov15 opening anchor inside the Nov1\u201330 period; active20 opening remains at start."
+        "basis": "Independent invented derivative: four active UPSave movements100,1,1,-1 and one zero Fast Plus snapshot. Repeated1 entries remain distinct. Summary withdrawal label is wrapped with its PHP prefix. Only the zero-activity account may have a later Nov15 opening anchor inside the Nov1–30 period; active20 opening remains at start."
       },
       "id": "cimb-upsave-wrapped-summary",
       "source": "cimb-upsave-wrapped-summary.txt",
@@ -3294,6 +3294,240 @@
         "accountNumber": null,
         "currency": "PHP"
       }
+    },
+    {
+      "id": "seabank-indonesia-columns",
+      "source": "seabank-indonesia-columns.txt",
+      "sha256": "2324d063efed1fac38e138f36992d6893536a50c521cea73cb0875a37fbcfb31",
+      "kind": "statement",
+      "representation": "Independently invented native column/receipt transcription; no private identities",
+      "provenance": {
+        "origin": "synthetic",
+        "reviewer": "Codex",
+        "reviewedAt": "2026-10-13",
+        "status": "reviewed",
+        "basis": "Invented integer IDR ledger: opening100 + incoming1001 - outgoing220 =881. Five occurrences include identical purchases; every native running balance, twelve-digit identity and physical/printed pages independently specified."
+      },
+      "expected": [
+        {
+          "date": "2026-01-07",
+          "amount": "1000.00",
+          "currency": "IDR",
+          "type": "income",
+          "accountNumber": "901000000123",
+          "rawPayload": {
+            "source": "seabank_indonesia_native",
+            "sourceRowIndex": 0,
+            "balance": 1100,
+            "balanceReconciled": true
+          }
+        },
+        {
+          "date": "2026-01-07",
+          "amount": "100.00",
+          "currency": "IDR",
+          "type": "expense",
+          "accountNumber": "901000000123",
+          "rawPayload": {
+            "source": "seabank_indonesia_native",
+            "sourceRowIndex": 1,
+            "balance": 1000,
+            "balanceReconciled": true
+          }
+        },
+        {
+          "date": "2026-01-07",
+          "amount": "100.00",
+          "currency": "IDR",
+          "type": "expense",
+          "accountNumber": "901000000123",
+          "rawPayload": {
+            "source": "seabank_indonesia_native",
+            "sourceRowIndex": 2,
+            "balance": 900,
+            "balanceReconciled": true
+          }
+        },
+        {
+          "date": "2026-01-08",
+          "amount": "1.00",
+          "currency": "IDR",
+          "type": "income",
+          "accountNumber": "901000000123",
+          "rawPayload": {
+            "source": "seabank_indonesia_native",
+            "sourceRowIndex": 3,
+            "balance": 901,
+            "balanceReconciled": true
+          }
+        },
+        {
+          "date": "2026-01-08",
+          "amount": "20.00",
+          "currency": "IDR",
+          "type": "expense",
+          "accountNumber": "901000000123",
+          "rawPayload": {
+            "source": "seabank_indonesia_native",
+            "sourceRowIndex": 4,
+            "balance": 881,
+            "balanceReconciled": true
+          }
+        }
+      ],
+      "expectedMetadata": {
+        "institution": "SeaBank Indonesia",
+        "accountNumber": "901000000123",
+        "currency": "IDR",
+        "openingBalance": 100,
+        "endingBalance": 881
+      }
+    },
+    {
+      "id": "dbs-my-account-zero",
+      "source": "dbs-my-account-zero.txt",
+      "sha256": "4b3318f2391ee8530d7a978d07d8ab8b28f3ca8781a9f8e5bbe57e89eb482093",
+      "kind": "statement",
+      "representation": "Independently invented native column/receipt transcription; no private identities",
+      "provenance": {
+        "origin": "synthetic",
+        "reviewer": "Codex",
+        "reviewedAt": "2026-10-13",
+        "status": "reviewed",
+        "basis": "Invented full DBS three-page single SGD account snapshot. Summary/ledger identity and date match, dated row has only a zero balance, both movement totals and both balances are zero. One marker, zero financial movements."
+      },
+      "expected": [
+        {
+          "date": "2026-01-31",
+          "amount": "0.00",
+          "currency": "SGD",
+          "accountNumber": "120-000123-4",
+          "rawPayload": {
+            "source": "dbs_native_zero",
+            "kind": "account_snapshot_marker",
+            "balance": 0
+          }
+        }
+      ],
+      "expectedMetadata": {
+        "institution": "DBS",
+        "accountNumber": "120-000123-4",
+        "currency": "SGD",
+        "openingBalance": 0,
+        "endingBalance": 0
+      }
+    },
+    {
+      "id": "dbs-digivault-zero",
+      "source": "dbs-digivault-zero.txt",
+      "sha256": "f3de366abcae4c0fa7b607c8821ea83515f84427e2e70ef1feedc46e06755a6a",
+      "kind": "statement",
+      "representation": "Independently invented native column/receipt transcription; no private identities",
+      "provenance": {
+        "origin": "synthetic",
+        "reviewer": "Codex",
+        "reviewedAt": "2026-10-13",
+        "status": "reviewed",
+        "basis": "Invented full DBS three-page single SGD account snapshot. Summary/ledger identity and date match, dated row has only a zero balance, both movement totals and both balances are zero. One marker, zero financial movements."
+      },
+      "expected": [
+        {
+          "date": "2026-01-31",
+          "amount": "0.00",
+          "currency": "SGD",
+          "accountNumber": "272-000456-7",
+          "rawPayload": {
+            "source": "dbs_native_zero",
+            "kind": "account_snapshot_marker",
+            "balance": 0
+          }
+        }
+      ],
+      "expectedMetadata": {
+        "institution": "DBS",
+        "accountNumber": "272-000456-7",
+        "currency": "SGD",
+        "openingBalance": 0,
+        "endingBalance": 0
+      }
+    },
+    {
+      "id": "bca-recipient-income",
+      "source": "bca-recipient-income.txt",
+      "sha256": "15e62310764cce50e782afafd0ce037d4101ae457663859c651a947ad585c3cb",
+      "kind": "statement",
+      "representation": "Independently invented native column/receipt transcription; no private identities",
+      "provenance": {
+        "origin": "synthetic",
+        "reviewer": "Codex",
+        "reviewedAt": "2026-10-13",
+        "status": "reviewed",
+        "basis": "Invented one-page complete bilingual recipient notification. Both labels agree on recipient, sender, local clock, IDR12345 and full reference. One income on destination; no payer account, fee, UTC timestamp or bank balance invented."
+      },
+      "expected": [
+        {
+          "date": "2026-01-02",
+          "amount": "12345.00",
+          "currency": "IDR",
+          "type": "income",
+          "accountNumber": "123-0004567",
+          "rawPayload": {
+            "direction": "incoming",
+            "sourceAccount": null,
+            "recipientIdentifier": "123-0004567",
+            "reference": "000000000000123456",
+            "fee": null,
+            "transferTime": "10:20:30",
+            "source": "bca_transfer_proof"
+          }
+        }
+      ],
+      "expectedMetadata": {
+        "institution": "BCA",
+        "accountNumber": "123-0004567",
+        "currency": "IDR",
+        "endingBalance": null
+      }
+    },
+    {
+      "id": "gcash-ocr-wrapped-biller",
+      "source": "gcash-ocr-wrapped-biller.txt",
+      "sha256": "34f28a4f8f56f81d4f1c26a6ce1b1466233e1fd11854cbe69c3bf5375e4896c1",
+      "kind": "statement",
+      "representation": "Independently invented native column/receipt transcription; no private identities",
+      "provenance": {
+        "origin": "synthetic",
+        "reviewer": "Codex",
+        "reviewedAt": "2026-10-13",
+        "status": "reviewed",
+        "basis": "Independently invented OCR-shaped receipt with principal100, fee15, total115. Wrapped Account identifier then Number selects biller ID while distinct plain Account field is not wallet identity. Exact seconds and +08 clock independently specified."
+      },
+      "expected": [
+        {
+          "date": "2026-03-09T14:41:55+08:00",
+          "amount": "100.00",
+          "currency": "PHP",
+          "type": "expense",
+          "rawPayload": {
+            "source": "gcash_bills_receipt",
+            "component": "bill",
+            "billerAccountNumber": "CA20260001",
+            "referenceNumber": "000123456"
+          }
+        },
+        {
+          "date": "2026-03-09T14:41:55+08:00",
+          "amount": "15.00",
+          "currency": "PHP",
+          "type": "expense",
+          "rawPayload": {
+            "source": "gcash_bills_receipt",
+            "component": "fee",
+            "billerAccountNumber": "CA20260001",
+            "referenceNumber": "000123456"
+          }
+        }
+      ]
     }
   ]
 }

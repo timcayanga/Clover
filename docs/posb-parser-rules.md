@@ -31,3 +31,7 @@ A downloaded PDF may concatenate several separately numbered monthly statements.
 The explicit `Details of Your POSB eEveryday Savings Account` heading uses the same native withdrawal/deposit/balance protocol as Payroll. Keep full account identifiers, SGD, every page anchor and each printed occurrence. Both products must pass the existing column, year, page-count, running-balance and source-total checks. Other account products require their own review.
 
 Cash withdrawals retain the existing same-currency Cash counterpart; separately printed fees remain expenses. Publish the bank and Cash projections/counts before settlement. Confirmed account labels and balances, source evidence and durable learning remain protected on retries. DBS consolidated statements with multiple products/currencies are a separate held source family; SGD-equivalent summaries cannot replace native-currency balances.
+
+## Unpaired reversed cash evidence
+
+A signed negative Cash Withdrawal with a different printed ATM/location from earlier cash movements does not prove which Cash counterpart to reverse. A same-amount positive withdrawal later in source order remains a legitimate separate occurrence. Preserve the incoming bank direction in private reviewed labels and the complete source; retain the existing reversed-cash review guard until a supported cash mapping is evidenced. Do not force training by deleting the guard or changing the sign.

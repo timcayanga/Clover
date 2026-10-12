@@ -27,3 +27,7 @@ Both languages must print the same fee or both omit it. A missing, duplicate, ma
 A complete native single-page proof may print Page 1 of 1 in English. Require exactly one consistent complete printed footer alongside the physical page and all financial columns; duplicated or contradictory footers remain unsafe.
 
 The native recipient header can wrap Ke Rekening / No. above BCA Virtual and Account. Require both continuation labels at the same column before assigning recipient roles; missing labels remain review-required. Payer and recipient must come from their own printed columns, even when a download summary reverses them.
+
+## Recipient-side bilingual income
+
+A complete one-page native recipient notification has explicit paired Pengirim/Sender and Rekening Tujuan/To Account fields, matched date/time, full leading-zero reference and Indonesian grouped Rp integer amount, both tax/Notes blocks and closing. Retain one income on the receiving BCA account; sender name is not a payer bank identity. Missing fee, bank balance and timezone remain unknown. No mirror movement or fee is inferred. Missing/conflicting bilingual fields or physical completeness remain review-required; the existing payer-side two-page protocol and its held incomplete examples retain their strict guards.

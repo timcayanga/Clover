@@ -1,3 +1,4 @@
+import {buildSeaBankIndonesiaPdfRows, buildDbsZeroPdfProof} from '@/lib/held-source-contracts';
 import { buildGrabReceiptNativePages, buildGrabPickupFields } from '@/lib/grab-email-receipt';
 import { parseCimbConsolidatedStatement } from "@/lib/import-parser";
 import { buildBcaTransferPdfRows, parseBcaTransferProof } from "@/lib/bca-transfer-proof";
@@ -1167,6 +1168,7 @@ const scoreStatementTextCandidate = (text: string) => {
 };
 
 export const pdfTextLayerLooksSufficientForParsing = (text: string, fileName?: string | null) => {
+  if (/^(?:SEABANK_ID_NATIVE_PAGES|DBS_NATIVE_PAGES) \d+$/m.test(text)) return true;
   // A captured Grab proof retains failed validation for the parser review gate.
   if (text.split(/\r?\n/).some(line => line.startsWith("GRAB_RECEIPT_NATIVE "))) return true;
   // Preserve recognized empty native statements, including failed proofs, for
@@ -2223,6 +2225,7 @@ const extractTextFromPdfBytes = async (data: Uint8Array, password?: string, base
     const mariBankTransactionRows = new Array<string[]>(pdf.numPages);
     const posbTransactionRows = new Array<string[]>(pdf.numPages);
     const bcaProofRows = new Array<string[]>(pdf.numPages);
+    const heldNativeRows = new Array<string[]>(pdf.numPages);
     let nextPageIndex = 0;
     // PDF.js can read independent text layers concurrently. Bound the work so
     // a long statement does not monopolize a serverless invocation, while
@@ -2244,6 +2247,7 @@ const extractTextFromPdfBytes = async (data: Uint8Array, password?: string, base
             content.items as PdfTextContentItemLike[]
           );
           posbTransactionRows[pageIndex] = buildPosbPdfRows(content.items as PdfTextContentItemLike[]);
+          heldNativeRows[pageIndex] = [...buildSeaBankIndonesiaPdfRows(content.items as PdfTextContentItemLike[]), ...buildDbsZeroPdfProof(content.items as PdfTextContentItemLike[])];
           bcaProofRows[pageIndex] = buildBcaTransferPdfRows(content.items as PdfTextContentItemLike[], pdf.numPages);
         }
       })
@@ -2251,6 +2255,8 @@ const extractTextFromPdfBytes = async (data: Uint8Array, password?: string, base
 
     try {
       const extractedText = pages.join("\n");
+      if (/REKENING KORAN/.test(extractedText) && /NO\. REKENING SEABANK:/.test(extractedText)) return `${extractedText}\nSEABANK_ID_NATIVE_PAGES ${pdf.numPages}\n${heldNativeRows.flat().join('\n')}`;
+      if (/Consolidated Statement/.test(extractedText) && /DBS/.test(extractedText)) return `${extractedText}\nDBS_NATIVE_PAGES ${pdf.numPages}\n${heldNativeRows.flat().join('\n')}`;
       const grabPages = buildGrabReceiptNativePages(pages, grabPickupFields.flat());
       if (grabPages) return `${extractedText}\n${grabPages}`;
       const gcashPages = buildGcashBillsNativePages(pages);
@@ -2597,6 +2603,18 @@ const extractTextFromPdfBytesWithOcrFallback = async (
       }
     }
 
+    // A scanned GCash receipt needs its principal label as well as its total.
+    // Keep a complete lossless English OCR pass separate from noisy candidates;
+    // never infer a missing principal by subtraction to repair OCR.
+    if (/gcash/i.test(fileName ?? "") || ocrPages.some(page => /GCash Bills Pay Receipt|GCash Ref\.? No\./i.test(page))) {
+      const losslessPages = await renderPdfPageImagesFromBytes(data, password, 6, 3.5, false, true);
+      if (losslessPages.length && losslessPages.length === losslessPages[0].totalPages) {
+        const receiptPages: string[] = [];
+        for (const page of losslessPages) receiptPages.push(await extractTextFromImageBufferWithOcr(page.dataUrl, "6", "eng"));
+        const candidate = receiptPages.join("\n");
+        try { if (parseGcashBillsReceipt(candidate)?.rows.length) return candidate; } catch { /* Incomplete/contradictory fields remain review-required. */ }
+      }
+    }
     const compactOcrText = ocrPages.join("\n").trim();
     const needsSecondaryOcr = shouldRunSecondaryPdfOcrPass({
       primaryOcrText: compactOcrText,

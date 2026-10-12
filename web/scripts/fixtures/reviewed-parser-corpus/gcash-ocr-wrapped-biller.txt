@@ -1,0 +1,13 @@
+GCash Bills Pay Receipt
+Thank you for using GCash!
+Biller Name Example College
+Total Amount PHP 115.00
+Amount Paid PHP 100.00
+Fee PHP 15.00
+Account CA000999
+Account CA20260001
+
+Number
+Date/Time 09 March 2026 02:41:55
+PM
+GCash Ref. No. 000123456

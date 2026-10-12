@@ -1,0 +1,19 @@
+Consolidated Statement DBS
+Account Summary as at 31 Jan 2026
+Current and Savings Account Total: SGD Equivalent 0.00
+My Account 120-000123-4 SGD 0.00 0.00
+Account Summary as of 31 Jan 2026
+Page 1 of 3
+Transaction Details as at 31 Jan 2026
+My Account Account No. 120-000123-4
+Date Description Withdrawal (-) Deposit (+) Balance
+CURRENCY: SINGAPORE DOLLAR
+Balance Brought Forward SGD 0.00
+31/01/2026 0.00
+Total Balance Carried Forward in SGD: 0.00 0.00 0.00
+Transaction Details as of 31 Jan 2026
+Page 2 of 3
+Messages For You
+Page 3 of 3
+DBS_NATIVE_PAGES 3
+DBS_ZERO_COLUMN_PROOF {"product":"My Account","accountNumber":"120-000123-4","date":"2026-01-31","rows":1,"movements":0,"balance":0}

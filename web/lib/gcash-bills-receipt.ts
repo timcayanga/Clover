@@ -39,6 +39,7 @@ export function hasVerifiedGcashBillsRows(text: string, rows: Array<{ amount?: u
 function extractBillerAccount(text: string): string | null {
   const values = [
     ...text.matchAll(/\bAccount\s+Number\s+([A-Za-z0-9*]+)(?=\s|$)/gi),
+    ...text.matchAll(/(?:^|\n)Account[ \t]+([A-Za-z0-9*]+)[ \t]*\n(?:[ \t]*\n)*Number(?=[ \t]*(?:\n|$))/gi),
     ...text.matchAll(/(?:^|\n)Account[ \t]*\n([A-Za-z0-9*]+)[ \t]*\nNumber(?:[ \t]*\n|$)/gi),
   ].map(match => match[1]).filter(value => !/^(?:Biller|Name|Account|Number|Date|Time|Fee|Total|Amount|Paid|Email|Receipt|Sent|To|Transaction|Type|GCash)$/i.test(value));
   const unique = [...new Set(values)];
