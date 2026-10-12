@@ -5667,7 +5667,7 @@ const resolveConfirmationAccount = async (params: {
     };
     const limits = await getWorkspaceOwnerLimits(workspaceId);
     const owner = await prisma.workspace.findUniqueOrThrow({ where: { id: workspaceId }, select: { userId: true } });
-    const tombstone = await findDeletedAccountTombstoneMatch(workspaceId, { name, institution, accountNumber: number, type: "bank", currency, source: "upload" }) ?? (mariStatementRows || indonesianSeaBank ? await findDeletedAccountTombstoneMatch(workspaceId, { name, institution: "SeaBank", accountNumber: number, type: "bank", currency, source: "upload" }) : null);
+    const tombstone = await findDeletedAccountTombstoneMatch(workspaceId, { name, institution, accountNumber: number, type: "bank", currency, source: "upload" }) ?? (mariStatementRows || indonesianSeaBank ? await findDeletedAccountTombstoneMatch(workspaceId, { name, institution: "SeaBank", accountNumber: number, type: "bank", currency, source: "upload" }) : heldNativeRows ? await findDeletedAccountTombstoneMatch(workspaceId, { name, institution: "DBS Bank", accountNumber: number, type: "bank", currency, source: "upload" }) : null);
     const account = await prisma.$transaction(async tx => {
       await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`verified-proof-accounts:${owner.userId}`}, 0))`;
       const accounts = await tx.account.findMany({ where: { workspaceId }, select: getCompatibleAccountSelect(compatibleAccountColumns) });
