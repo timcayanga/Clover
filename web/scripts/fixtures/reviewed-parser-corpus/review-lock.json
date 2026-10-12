@@ -35,5 +35,6 @@
   "posb-negative-zero-interest": "288d6c35c2dfac9ca447e2f303e44a473fb4c28d00dec5ea1d719faf343e6cf4",
   "bca-alternate-print-footer": "f9390f4f04cd067fb5b03865c7209e46f59e802aa23dcccfe83360414cd86538",
   "bca-same-bank-zero-fee": "7cdb6c34ed90888cbaae12c6c772b8c3e4dae5150ba368e2791a5874b00377c5",
-  "bca-bilingual-notification": "57c3dad54789f8ade14f4d8153fdd723c34dbd9fc0b85d5f0eab1b39855ac6ad"
+  "bca-bilingual-notification": "57c3dad54789f8ade14f4d8153fdd723c34dbd9fc0b85d5f0eab1b39855ac6ad",
+  "gcash-split-biller-account": "4d770140739156f9d3b361bfe6732ad2f558c7725e9b5b2a0f120a652dce8036"
 }

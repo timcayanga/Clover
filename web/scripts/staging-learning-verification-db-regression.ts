@@ -21,9 +21,13 @@ async function main() {
     const account = await db.account.create({ data: { workspaceId: start.workspaceId, name: "Test PHP", accountNumber: "0001", balance: 123, type: "bank" } });
     const category = await db.category.create({ data: { workspaceId: start.workspaceId, name: "Food", type: "expense" } });
     await db.transaction.create({ data: { workspaceId: start.workspaceId, accountId: account.id, categoryId: category.id, merchantRaw: "Retained fixture", date: new Date("2026-09-15"), amount: 25, type: "expense", reviewStatus: "edited", rawPayload: { evidence: "retained" } } });
+    const legacyFile = await db.importFile.create({data:{workspaceId:start.workspaceId,fileName:"legacy-receipt.txt",fileType:"text/plain",storageKey:"qa/legacy"}});
+    const legacyReceipt = await db.parsedTransaction.create({data:{workspaceId:start.workspaceId,importFileId:legacyFile.id,amount:"155.00",date:new Date("2022-09-07T05:06:22Z"),type:"expense",rawPayload:{source:"gcash_bills_receipt",line:"GCash Bills Pay Receipt\nAccount 09000000000\nAccount\nEX0AMPLE\nNumber",billerAccountNumber:null}}});
     const prepared = await v.prepareLearningVerificationCheckpoints(runId, actor);
     const report = await v.inspectLearningVerification(runId, actor);
     assert.deepEqual(report.changedOutsideProfile, []); assert.deepEqual(report.changedProtectedFinancial, []);
+    assert.equal(report.retrievedSourceEvidence.find(row=>row.parsedRowId===legacyReceipt.id)?.billerAccountNumber,"EX0AMPLE");
+    assert.deepEqual(await db.parsedTransaction.findUniqueOrThrow({where:{id:legacyReceipt.id}}),legacyReceipt,"Read-only source retrieval preserves every original field and timestamp");
     const failed = report.jobs.find(j => j.id === prepared.failureJobId)!;
     assert.equal(failed.errorCode, "CATEGORY_UNAVAILABLE"); assert.equal(failed.nextIndex, 1); assert.equal(failed.status, "failed");
     const interrupted = report.jobs.find(j => j.id === prepared.interruptionJobId)!;

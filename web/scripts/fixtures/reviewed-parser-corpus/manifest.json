@@ -2433,6 +2433,34 @@
         }
       ],
       "sha256": "f52dbccddac77d963cfe17de2663426d2428b6da7149daecdbb2d6604a6f8b06"
+    },
+    {
+      "kind": "statement",
+      "representation": "independently invented native receipt field transcription",
+      "provenance": {
+        "origin": "synthetic",
+        "reviewer": "Codex",
+        "reviewedAt": "2026-10-12",
+        "status": "reviewed",
+        "basis": "Invented155 PHP bill with zero fee, a separate plain Account phone field and a labeled alphanumeric biller identifier between Account and Number. Preserve seconds/+08:00, retain EX0AMPLE as biller evidence, leave payer wallet ID absent. Older structured nulls must be retrieved read-only from the unchanged complete source, never patched into confirmed raw data."
+      },
+      "id": "gcash-split-biller-account",
+      "source": "gcash-split-biller-account.txt",
+      "expected": [
+        {
+          "date": "2022-09-07T13:06:22+08:00",
+          "amount": "155.00",
+          "currency": "PHP",
+          "type": "expense",
+          "rawPayload": {
+            "source": "gcash_bills_receipt",
+            "component": "bill",
+            "referenceNumber": "000004444",
+            "billerAccountNumber": "EX0AMPLE"
+          }
+        }
+      ],
+      "sha256": "6dca8a7745400b21042d62ed07566dd79edc6ba866a249b5111c9c2dae3ddae8"
     }
   ]
 }

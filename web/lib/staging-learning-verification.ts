@@ -1,6 +1,7 @@
 import { Prisma } from "@prisma/client";
 import { createHash } from "node:crypto";
 import { prisma } from "@/lib/prisma";
+import { readGcashBillsBillerAccountEvidence } from "@/lib/gcash-bills-receipt";
 import { enqueueLearningJob, processLearningJob, type LearningAction } from "@/lib/learning-jobs";
 
 // This diagnostic has no production mode and never accepts a user/Profile ID.
@@ -134,7 +135,8 @@ export async function inspectLearningVerification(runId: string, actor: string) 
   return { runId, workspaceId: run.workspace.id, baseline: run.state.baseline, current: outside, changedOutsideProfile: changed(run.state.baseline, outside), financial,
     changedProtectedFinancial: run.state.protectedFinancial ? changed(run.state.protectedFinancial, financial) : null,
     failureJobId: run.state.failureJobId, interruptionJobId: run.state.interruptionJobId,
-    accounts, transactions, files, parsedRows, rules, signals, accountRules, templates, jobs };
+    accounts, transactions, files, parsedRows, rules, signals, accountRules, templates, jobs,
+    retrievedSourceEvidence: parsedRows.flatMap(row => { const evidence = readGcashBillsBillerAccountEvidence(row.rawPayload); return evidence ? [{ parsedRowId: row.id, ...evidence }] : []; }) };
 }
 
 // A reviewed retained fixture in the already-owned verification Profile only.

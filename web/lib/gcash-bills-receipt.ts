@@ -28,6 +28,30 @@ export function hasVerifiedGcashBillsRows(text: string, rows: Array<{ amount?: u
   }catch{return false;}
 }
 
+/** Native PDFs may place the value between the two account-number labels. */
+function extractBillerAccount(text: string): string | null {
+  const values = [
+    ...text.matchAll(/\bAccount\s+Number\s+([A-Za-z0-9*]+)(?=\s|$)/gi),
+    ...text.matchAll(/(?:^|\n)Account[ \t]*\n([A-Za-z0-9*]+)[ \t]*\nNumber(?:[ \t]*\n|$)/gi),
+  ].map(match => match[1]).filter(value => !/^(?:Biller|Name|Account|Number|Date|Time|Fee|Total|Amount|Paid|Email|Receipt|Sent|To|Transaction|Type|GCash)$/i.test(value));
+  const unique = [...new Set(values)];
+  if (unique.length > 1) throw new Error('GCash biller account fields conflict; review the source.');
+  return unique[0] ?? null;
+}
+
+/** Retrieve older source evidence; this never patches a stored financial row. */
+export function readGcashBillsBillerAccountEvidence(payload: unknown): { billerAccountNumber: string | null; recoveredFromSource: boolean; confidence: number; reason: string } | null {
+  if (!payload || typeof payload !== 'object' || Array.isArray(payload)) return null;
+  const raw = payload as Record<string, unknown>;
+  if (raw.source !== 'gcash_bills_receipt' || typeof raw.line !== 'string' || !looksLikeGcashBillsReceipt(raw.line)) return null;
+  let printed: string | null;
+  try { printed = extractBillerAccount(raw.line); } catch { return { billerAccountNumber: null, recoveredFromSource: false, confidence: 0, reason: 'Conflicting receipt biller labels require source review.' }; }
+  const stored = typeof raw.billerAccountNumber === 'string' ? raw.billerAccountNumber : null;
+  if (stored && printed && stored !== printed) return { billerAccountNumber: null, recoveredFromSource: false, confidence: 0, reason: 'Stored and printed biller account require source review.' };
+  const value = printed ?? stored;
+  return { billerAccountNumber: value, recoveredFromSource: !stored && Boolean(printed), confidence: value ? 100 : 0, reason: value ? 'Explicit biller account label; never payer wallet identity.' : 'Biller account not established by receipt fields.' };
+}
+
 /** A biller account is evidence for the payment, never the payer's wallet ID. */
 function parseSingleGcashBillsReceipt(text: string): { metadata: DetectedStatementMetadata; rows: ParsedImportRow[] } | null {
   if (!looksLikeGcashBillsReceipt(text) || !/GCash\s+Ref\.?\s*No\./i.test(text)) return null;
@@ -58,7 +82,7 @@ function parseSingleGcashBillsReceipt(text: string): { metadata: DetectedStateme
   const references=[...new Set([...text.matchAll(/GCash\s+Ref\.?\s*No\.\s+(\d+)/gi)].map(m=>m[1]))];
   if(references.length!==1) throw new Error('GCash receipt contains multiple payment references; review each source.');
   const reference=references[0];
-  const billerAccount=text.match(/Account\s+Number\s+([A-Za-z0-9*]+)/i)?.[1]??null;
+  const billerAccount=extractBillerAccount(text);
   // The complete native transcript places the value before Biller Name;
   // the image transcript may place it after. Restrict to the receipt fields.
   const lines=text.split(/\r?\n/).map(l=>l.trim()).filter(Boolean);
