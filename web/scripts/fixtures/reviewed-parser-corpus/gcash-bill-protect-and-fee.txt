@@ -1,0 +1,13 @@
+GCash Bills Pay Receipt
+Amount Paid PHP 137.00
+Biller Name
+EXAMPLE ELECTRIC
+Total Amount PHP 137.00
+Bill Amount PHP 120.00
+GInsure Bill PHP 10.00
+Protect
+Amount Paid PHP 120.00
+Fee PHP 7.00
+Account Number 0000111122
+Date/Time 07 August 2026 02:03:04 PM
+GCash Ref. No. 0011223344

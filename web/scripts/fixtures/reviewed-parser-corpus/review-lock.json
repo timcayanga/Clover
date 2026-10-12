@@ -50,5 +50,7 @@
   "maribank-empty-zero-snapshot": "f6779847b8a39fbb2861d97163504fb0314878ce9bbe21c49b301d669f904a48",
   "seabank-empty-retained-balance": "7a7715b0448dff49dfc59afbe0750df12fb6c389ce0987553ac01e6375962e4c",
   "maribank-native-atm-fees": "ac537ab960e7582f8050433b2018003949e1bcdfc91b40aacc3064888e1eaa07",
-  "posb-native-everyday-alias": "241ec319ca3c68cc622a68d7d8996fbe9a8d13a7940db7979e799b3ecda385c0"
+  "posb-native-everyday-alias": "241ec319ca3c68cc622a68d7d8996fbe9a8d13a7940db7979e799b3ecda385c0",
+  "gcash-explicit-bill-protect": "39e0d8f11de10f641f7a7eb0d0bb0415d16e8c9f95c7c129c0e46fa2f15c2553",
+  "gcash-bill-protect-and-fee": "490066e8388f040f5054422b6f798a42e21e01b7158ec4c9c818f6e8b02f5cdb"
 }

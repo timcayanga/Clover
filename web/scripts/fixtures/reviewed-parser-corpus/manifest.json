@@ -3192,6 +3192,108 @@
         "openingBalance": 100,
         "endingBalance": 298.01
       }
+    },
+    {
+      "id": "gcash-explicit-bill-protect",
+      "kind": "statement",
+      "source": "gcash-explicit-bill-protect.txt",
+      "sha256": "1f0c0a692231c022de4dd54cf7956ccd61e704ced7f53791431dcf69e77190b9",
+      "representation": "Independently invented native receipt transcript",
+      "provenance": {
+        "origin": "synthetic",
+        "reviewer": "Codex",
+        "reviewedAt": "2026-10-13",
+        "status": "reviewed",
+        "basis": "Invented explicit utility bill120, separately labeled GInsure10, fee0 or7; sum130 or137. Each component is an expense; biller identifier is never payer wallet identity. Source payment clock retained. Expected values specified independently."
+      },
+      "expected": [
+        {
+          "date": "2026-08-07T14:03:04+08:00",
+          "amount": "120.00",
+          "currency": "PHP",
+          "type": "expense",
+          "rawPayload": {
+            "billerAccountNumber": "0000111122",
+            "referenceNumber": "0011223344",
+            "component": "bill",
+            "billProtectAmount": 10
+          }
+        },
+        {
+          "date": "2026-08-07T14:03:04+08:00",
+          "amount": "10.00",
+          "currency": "PHP",
+          "type": "expense",
+          "rawPayload": {
+            "billerAccountNumber": "0000111122",
+            "referenceNumber": "0011223344",
+            "component": "bill_protect",
+            "billProtectAmount": 10
+          }
+        }
+      ],
+      "expectedMetadata": {
+        "institution": "GCash",
+        "accountNumber": null,
+        "currency": "PHP"
+      }
+    },
+    {
+      "id": "gcash-bill-protect-and-fee",
+      "kind": "statement",
+      "source": "gcash-bill-protect-and-fee.txt",
+      "sha256": "27384cd797e96faad61c92f9dd802bd0d6e8a31afb66094b6f98bf7245ec06cf",
+      "representation": "Independently invented native receipt transcript",
+      "provenance": {
+        "origin": "synthetic",
+        "reviewer": "Codex",
+        "reviewedAt": "2026-10-13",
+        "status": "reviewed",
+        "basis": "Invented explicit utility bill120, separately labeled GInsure10, fee0 or7; sum130 or137. Each component is an expense; biller identifier is never payer wallet identity. Source payment clock retained. Expected values specified independently. Native amount interrupts only the two-line GInsure label; preserve original source text."
+      },
+      "expected": [
+        {
+          "date": "2026-08-07T14:03:04+08:00",
+          "amount": "120.00",
+          "currency": "PHP",
+          "type": "expense",
+          "rawPayload": {
+            "billerAccountNumber": "0000111122",
+            "referenceNumber": "0011223344",
+            "component": "bill",
+            "billProtectAmount": 10
+          }
+        },
+        {
+          "date": "2026-08-07T14:03:04+08:00",
+          "amount": "7.00",
+          "currency": "PHP",
+          "type": "expense",
+          "rawPayload": {
+            "billerAccountNumber": "0000111122",
+            "referenceNumber": "0011223344",
+            "component": "fee",
+            "billProtectAmount": 10
+          }
+        },
+        {
+          "date": "2026-08-07T14:03:04+08:00",
+          "amount": "10.00",
+          "currency": "PHP",
+          "type": "expense",
+          "rawPayload": {
+            "billerAccountNumber": "0000111122",
+            "referenceNumber": "0011223344",
+            "component": "bill_protect",
+            "billProtectAmount": 10
+          }
+        }
+      ],
+      "expectedMetadata": {
+        "institution": "GCash",
+        "accountNumber": null,
+        "currency": "PHP"
+      }
     }
   ]
 }

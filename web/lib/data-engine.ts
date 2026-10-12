@@ -43,7 +43,7 @@ export const resolveImportFileExtractionCacheVersion = (fileName?: string | null
   if (/grab.*(?:e[-_\s]*receipt|receipts)/i.test(normalizedFileName)) return "v43-grab-email-receipt";
   if (/cimb[-_\s]*conso[-_\s]*statement/i.test(normalizedFileName)) return "v41-cimb-consolidated";
   if (/bukti[-_\s]*trf/i.test(normalizedFileName)) return "v41-bca-transfer-proof";
-  if (/gcash.*bills?[-_\s]*pay[-_\s]*receipt/i.test(normalizedFileName)) return "v42-gcash-bills-receipt";
+  if (/gcash.*bills?[-_\s]*pay[-_\s]*receipt/i.test(normalizedFileName)) return "v45-gcash-bill-protect";
   if (/^BE\d{8}\.pdf$/i.test(normalizedFileName.trim())) {
     return "v12-bpi-card-ledger-r2";
   }

@@ -74,3 +74,7 @@ Complete native MariBank/SeaBank statements with `NO RECENT TRANSACTION` inside 
 The existing verified account resolver remains read-only for matched accounts. The source historical closing balance stays in the checkpoint and marker while status publishes the stored current account balance. Completed zero-transaction snapshots have a narrow locked retry path that leaves source, finance, learning and timestamps unchanged. Future named bank statements use additive `v44-maribank-native-snapshot` extraction entries; older v43/v39 entries and previous learning are retained.
 
 Native source account values directly followed by the explicit contact label `Call` remain eleven-digit bank identities; longer numbers cannot be truncated. Verified native ATM withdrawals reuse the shared same-currency Cash mirror. Separate Card Fee/ATM Withdrawal rows remain expenses. The bank and Cash projections and complete normalized count are published before settlement, while existing account labels and balances remain read-only.
+
+## Country boundaries in retained Scribd sources
+
+Indonesian SeaBank `REKENING KORAN` documents print IDR, Indonesian contact details and twelve-digit bank identities. They are a separate native source family from Philippine PHP savings statements. Do not apply the eleven-digit PHP contract, truncate identity, interpret IDR grouping as Philippine decimal amounts, or infer a country from Scribd recommendations or a document title. Retain complete originals for independent regional column/page/running-balance review before accepted training.

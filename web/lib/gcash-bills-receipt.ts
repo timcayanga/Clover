@@ -62,15 +62,32 @@ export function readGcashBillsBillerAccountEvidence(payload: unknown): { billerA
 /** A biller account is evidence for the payment, never the payer's wallet ID. */
 function parseSingleGcashBillsReceipt(text: string): { metadata: DetectedStatementMetadata; rows: ParsedImportRow[] } | null {
   if (!looksLikeGcashBillsReceipt(text) || !/GCash\s+Ref\.?\s*No\./i.test(text)) return null;
+  // In the reviewed native layout the amount can interrupt the two-line
+  // insurance label. Normalize only that bounded field for parsing; raw.line
+  // below retains the complete unchanged native transcript.
+  const fields = text.replace(/(?:^|\n)(GInsure[ \t]+Bill)[ \t]*(?:\n)?[ \t]*(PHP[ \t]+-?[\d,]+\.\d{2})[ \t]*\nProtect(?=\n|$)/gi, '\n$1 Protect $2');
   const uniqueAmount = (label: string) => {
-    const values = [...text.matchAll(new RegExp(`\\b${label}\\s+PHP\\s+([\\d,]+\\.\\d{2})`, 'gi'))].map(m=>Math.round(Number(m[1].replaceAll(',',''))*100));
+    const values = [...fields.matchAll(new RegExp(`\\b${label}\\s+PHP\\s+([\\d,]+\\.\\d{2})`, 'gi'))].map(m=>Math.round(Number(m[1].replaceAll(',',''))*100));
     const unique = [...new Set(values)];
     if (unique.length !== 1) throw new Error('GCash bill receipt has missing or conflicting totals; review the source.');
     return unique[0];
   };
   const total=uniqueAmount('Total (?:Amount|Name)'), fee=uniqueAmount('Fee');
   const paid=[...text.matchAll(/\bAmount Paid\s+PHP\s+([\d,]+\.\d{2})/gi)].map(m=>Math.round(Number(m[1].replaceAll(',',''))*100));
-  const bill=total-fee;
+  // The optional insurance charge is a separate printed component, not part
+  // of the utility principal or a wallet balance. Require its explicit labels.
+  const hasBillProtect = /\bGInsure\s+Bill\s+Protect\b/i.test(fields);
+  if (/\bGInsure\s+Bill\b/i.test(fields) && !hasBillProtect) throw new Error('GCash bill protection fields require source review.');
+  if (hasBillProtect) {
+    for (const label of ['GInsure\\s+Bill\\s+Protect', 'Bill Amount']) {
+      const printed = [...fields.matchAll(new RegExp(`\\b${label}\\b`, 'gi'))].length;
+      const complete = [...fields.matchAll(new RegExp(`\\b${label}\\s+PHP\\s+[\\d,]+\\.\\d{2}(?=\\s|$)`, 'gi'))].length;
+      if (!printed || printed !== complete) throw new Error('GCash bill protection fields are incomplete; review the source.');
+    }
+  }
+  const protection = hasBillProtect ? uniqueAmount('GInsure\\s+Bill\\s+Protect') : 0;
+  const bill = hasBillProtect ? uniqueAmount('Bill Amount') : total-fee;
+  if (hasBillProtect && (protection < 0 || bill + fee + protection !== total)) throw new Error('GCash bill protection does not reconcile with the printed total; review the source.');
   if (bill<=0 || fee<0 || paid.some(n=>n!==bill && n!==total) || !paid.includes(bill)) throw new Error('GCash bill and fee do not reconcile with the printed total.');
   // Native PDF field labels can lie between the wrapped date and AM/PM. Read
   // only a bounded region around the payment label, never the email/print date.
@@ -111,8 +128,13 @@ function parseSingleGcashBillsReceipt(text: string): { metadata: DetectedStateme
   const dayText=checked.toISOString().slice(0,10);
   const hour=(Number(stamp[4])%12)+(stamp[7].toUpperCase()==='PM'?12:0);
   const paymentTimestamp=`${dayText}T${String(hour).padStart(2,'0')}:${stamp[5]}:${stamp[6]}+08:00`;
-  const rows: ParsedImportRow[]=[{amount:(bill/100).toFixed(2),merchantRaw:biller,merchantClean:biller,description:`GCash bill payment • ${biller}`,categoryName:/ELECTRIC/i.test(biller)?'Utilities':'Other'},...(fee>0?[{amount:(fee/100).toFixed(2),merchantRaw:'GCash Bills Payment Fee',merchantClean:'GCash Bills Payment Fee',description:`GCash fee • ${biller}`,categoryName:'Financial'}]:[])].map((r,index)=>({...r,date:paymentTimestamp,currency:'PHP',type:'expense',accountName:'GCash',institution:'GCash',confidence:95,rawPayload:{kind:'wallet_transaction',source:'gcash_bills_receipt',line:encodeNativePdfNullGlyphs(text),referenceNumber:reference,billerAccountNumber:billerAccount,paymentTimestamp,amountText:r.amount,totalAmount:total/100,billAmount:bill/100,feeAmount:fee/100,component:index===0?'bill':'fee',notes:`${biller} • Reference ${reference}`,parserEvidence:{currency:'PHP',totalReconciled:true,billerAccountIsNotWalletIdentity:true,...(text.includes('\x00') || /^NATIVE_PDF_NULL_GLYPHS_ENCODED$/m.test(text) ? {nulGlyphEncoding:'backslash-u0000'} : {})}}}));
-  return {rows,metadata:{institution:'GCash',accountName:'GCash',accountNumber:null,accountType:'wallet',currency:'PHP',openingBalance:null,endingBalance:null,startDate:paymentTimestamp,endDate:paymentTimestamp,confidence:95,currencyConfidence:100,institutionConfidence:100,identityEvidence:['GCash bill receipt and reference','PHP bill plus fee equals total']}};
+  const components = [
+    {amount:(bill/100).toFixed(2),merchantRaw:biller,merchantClean:biller,description:`GCash bill payment • ${biller}`,categoryName:/ELECTRIC/i.test(biller)?'Utilities':'Other',component:'bill'},
+    ...(fee>0?[{amount:(fee/100).toFixed(2),merchantRaw:'GCash Bills Payment Fee',merchantClean:'GCash Bills Payment Fee',description:`GCash fee • ${biller}`,categoryName:'Financial',component:'fee'}]:[]),
+    ...(protection>0?[{amount:(protection/100).toFixed(2),merchantRaw:'GInsure Bill Protect',merchantClean:'GInsure Bill Protect',description:`GCash bill protection • ${biller}`,categoryName:'Financial',component:'bill_protect'}]:[]),
+  ];
+  const rows: ParsedImportRow[]=components.map(({component,...r})=>({...r,date:paymentTimestamp,currency:'PHP',type:'expense',accountName:'GCash',institution:'GCash',confidence:95,rawPayload:{kind:'wallet_transaction',source:'gcash_bills_receipt',line:encodeNativePdfNullGlyphs(text),referenceNumber:reference,billerAccountNumber:billerAccount,paymentTimestamp,amountText:r.amount,totalAmount:total/100,billAmount:bill/100,feeAmount:fee/100,...(hasBillProtect?{billProtectAmount:protection/100}:{}),component,notes:`${biller} • Reference ${reference}`,parserEvidence:{currency:'PHP',totalReconciled:true,billerAccountIsNotWalletIdentity:true,...(text.includes('\x00') || /^NATIVE_PDF_NULL_GLYPHS_ENCODED$/m.test(text) ? {nulGlyphEncoding:'backslash-u0000'} : {})}}}));
+  return {rows,metadata:{institution:'GCash',accountName:'GCash',accountNumber:null,accountType:'wallet',currency:'PHP',openingBalance:null,endingBalance:null,startDate:paymentTimestamp,endDate:paymentTimestamp,confidence:95,currencyConfidence:100,institutionConfidence:100,identityEvidence:['GCash bill receipt and reference',hasBillProtect?'PHP bill plus fee plus explicit protection equals total':'PHP bill plus fee equals total']}};
 }
 
 /** Page boundaries distinguish separate payments from duplicated receipt art. */

@@ -44,7 +44,7 @@ async function main(){
   const {loadImportStatusSnapshot}=await import('../lib/import-status-snapshot');
   const {AI_CONSENT_VERSION}=await import('../../shared/ai-consent');
   const {resolveImportFileExtractionCacheVersion}=await import('../lib/data-engine');
-  assert.equal(resolveImportFileExtractionCacheVersion('GCash-Bills-Pay-Receipt.pdf'),'v42-gcash-bills-receipt');
+  assert.equal(resolveImportFileExtractionCacheVersion('GCash-Bills-Pay-Receipt.pdf'),'v45-gcash-bill-protect');
   assert.equal(resolveImportFileExtractionCacheVersion('ordinary-airline-receipt.pdf'),'v39');
   const user=await db.user.create({data:{clerkUserId:randomUUID(),email:`${randomUUID()}@example.invalid`,environment:'staging',planTier:'pro',planTierLocked:true,appPreferences:{aiConsent:{version:AI_CONSENT_VERSION,grantedAt:new Date().toISOString(),withdrawnAt:null}}}});
   try{
@@ -52,7 +52,9 @@ async function main(){
     const fingerprint=createHash('sha256').update(gcash).digest('hex');
     const oldCache=await db.importFileExtractionCache.create({data:{workspaceId:workspace.id,fileFingerprint:fingerprint,fileType:'application/pdf',importMode:'statement',cacheVersion:'v39',extractedText:gcash.replace('Amount Paid PHP 120.00\n','')}});
     const priorReceiptCache=await db.importFileExtractionCache.create({data:{workspaceId:workspace.id,fileFingerprint:fingerprint,fileType:'application/pdf',importMode:'statement',cacheVersion:'v40-gcash-bills-receipt',extractedText:gcash}});
-    await db.importFileExtractionCache.create({data:{workspaceId:workspace.id,fileFingerprint:fingerprint,fileType:'application/pdf',importMode:'statement',cacheVersion:'v42-gcash-bills-receipt',extractedText:gcash}});
+    const nativeClockCache=await db.importFileExtractionCache.create({data:{workspaceId:workspace.id,fileFingerprint:fingerprint,fileType:'application/pdf',importMode:'statement',cacheVersion:'v42-gcash-bills-receipt',extractedText:gcash}});
+    await db.importFileExtractionCache.create({data:{workspaceId:workspace.id,fileFingerprint:fingerprint,fileType:'application/pdf',importMode:'statement',cacheVersion:'v45-gcash-bill-protect',extractedText:gcash}});
+    assert.deepEqual(await db.importFileExtractionCache.findUniqueOrThrow({where:{id:nativeClockCache.id}}),nativeClockCache,'Prior v42 evidence and timestamps survive additive bill-protection support');
     assert.deepEqual(await db.importFileExtractionCache.findUniqueOrThrow({where:{id:priorReceiptCache.id}}),priorReceiptCache,'Prior v40 source evidence and timestamp survive the additive native-clock namespace');
     assert.deepEqual(await db.importFileExtractionCache.findUniqueOrThrow({where:{id:oldCache.id}}),oldCache,'The complete extraction is additive; legacy source evidence is not refreshed');
     const settle=async()=>{await drain();for(const j of await db.learningJob.findMany({where:{workspaceId:workspace.id,status:'queued'}}))await processLearningJob(j.id);};
