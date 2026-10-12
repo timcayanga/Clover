@@ -355,7 +355,12 @@ function parseBcaTransferNotification(text: string): { rows: ParsedImportRow[]; 
   const metadata: DetectedStatementMetadata = { institution: 'BCA', accountNumber: null, accountName: 'BCA', accountType: 'bank', currency: 'IDR', openingBalance: null, endingBalance: null, startDate: null, endDate: null, confidence: 0, identityEvidence: ['bca-native-bilingual-notification'] };
   const unsafe = { rows: [] as ParsedImportRow[], metadata };
   const physical = [...text.matchAll(/^BCA_NATIVE_PAGES (\d+)$/gm)];
-  if (physical.length !== 1 || physical[0][1] !== '2' || !/klikbcabisnis@klikbca\.com/i.test(text) || !/PT\.\s*BANK CENTRAL ASIA TBK/i.test(text) || !/Notes:\s*Charges VAT Inclusive/i.test(text)) return unsafe;
+  const closedLegacy = !/\b(?:Catatan|Notes)\s*:/i.test(text) &&
+    /Terima kasih Anda telah menggunakan fasilitas KlikBCA Bisnis\./i.test(text) &&
+    /Semoga informasi ini bermanfaat bagi Anda\.\s*Terima kasih\.\s*Hormat Kami,\s*PT\. Bank Central Asia,?\s*Tbk/i.test(text) &&
+    /We hope this information is useful for you\.\s*Thank you\.\s*Best Regards,\s*PT\. Bank Central Asia,?\s*Tbk/i.test(text) &&
+    !/Kutipan teks disembunyikan|quoted text hidden/i.test(text);
+  if (physical.length !== 1 || physical[0][1] !== '2' || (!closedLegacy && (!/klikbcabisnis@klikbca\.com/i.test(text) || !/PT\.\s*BANK CENTRAL ASIA TBK/i.test(text) || !/Notes:\s*Charges VAT Inclusive/i.test(text)))) return unsafe;
   const languageBlocks=text.split('Thank you for using KlikBCA Bisnis.');
   if(languageBlocks.length!==2) return unsafe;
   const englishLabels=new Set(['Date','Time','From Account','To Account','Amount','Reference No','Transaction Type','Transfer Type','Charges']);
@@ -377,5 +382,5 @@ function parseBcaTransferNotification(text: string): { rows: ParsedImportRow[]; 
   metadata.accountNumber=source;metadata.accountName='BCA '+source.slice(-4);metadata.startDate=d;metadata.endDate=d;metadata.confidence=95;
   const name='Transfer to '+recipient;
   const components=[{component:'principal',amount:n,category:'Transfers',name},...(fee!==null && fee>0?[{component:'fee',amount:fee,category:'Financial',name:'BCA Transfer Fee'}]:[])];
-  return {metadata,rows:components.map(c=>({date:d,amount:c.amount.toFixed(2),currency:'IDR',type:'expense',merchantRaw:c.name,merchantClean:c.name,description:c.name,categoryName:c.category,institution:'BCA',accountNumber:source,accountName:metadata.accountName!,confidence:95,parserConfidence:100,categoryConfidence:95,rawPayload:{source:'bca_transfer_proof',kind:'bank_transfer_component',component:c.component,direction:'outgoing',reference,sourceAccount:source,recipientIdentifier:recipient,transferDate:stamp,transferTime:clock,sourceCurrency:'IDR',principal:n,fee,totalDebit:fee===null?null:n+fee,accountCurrency:'IDR',accountType:'bank',sourceText:text,parserEvidence:{version:'bca-bilingual-notification-v1',physicalPages:2,mirroredLanguages:['id','en'],feePolicy:fee===null?'not printed; unknown':'matching explicit bilingual fee',datePolicy:'calendar date; printed timezone absent',reason:'Complete matching bilingual successful transfer; no balance anchor'}}}))};
+  return {metadata,rows:components.map(c=>({date:d,amount:c.amount.toFixed(2),currency:'IDR',type:'expense',merchantRaw:c.name,merchantClean:c.name,description:c.name,categoryName:c.category,institution:'BCA',accountNumber:source,accountName:metadata.accountName!,confidence:95,parserConfidence:100,categoryConfidence:95,rawPayload:{source:'bca_transfer_proof',kind:'bank_transfer_component',component:c.component,direction:'outgoing',reference,sourceAccount:source,recipientIdentifier:recipient,transferDate:stamp,transferTime:clock,sourceCurrency:'IDR',principal:n,fee,totalDebit:fee===null?null:n+fee,accountCurrency:'IDR',accountType:'bank',sourceText:text,parserEvidence:{version:closedLegacy?'bca-bilingual-legacy-closed-v1':'bca-bilingual-notification-v1',physicalPages:2,mirroredLanguages:['id','en'],feePolicy:fee===null?'not printed; unknown':'matching explicit bilingual fee',datePolicy:'calendar date; printed timezone absent',reason:'Complete matching bilingual successful transfer; no balance anchor'}}}))};
 }

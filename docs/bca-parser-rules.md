@@ -31,3 +31,7 @@ The native recipient header can wrap Ke Rekening / No. above BCA Virtual and Acc
 ## Recipient-side bilingual income
 
 A complete one-page native recipient notification has explicit paired Pengirim/Sender and Rekening Tujuan/To Account fields, matched date/time, full leading-zero reference and Indonesian grouped Rp integer amount, both tax/Notes blocks and closing. Retain one income on the receiving BCA account; sender name is not a payer bank identity. Missing fee, bank balance and timezone remain unknown. No mirror movement or fee is inferred. Missing/conflicting bilingual fields or physical completeness remain review-required; the existing payer-side two-page protocol and its held incomplete examples retain their strict guards.
+
+## Closed legacy bilingual notifications
+
+A separate two-page legacy layout can use the complete native Indonesian greeting/financial block/formal closing and complete English financial block/formal closing as evidence. Require every mirrored amount/account/reference/date/clock/status/transfer-type field to agree, both native closings, no hidden quotes and no partial tax/Notes block. When both note blocks are absent, missing charges remain unknown; do not fabricate fee or UTC time. The modern notification's email/tax-notes contract and its negative guards remain unchanged. Missing either legacy closing, partial notes, inconsistent fields or fewer physical pages remains review-required. The private image-only email header is retained in the original, not invented as native text.

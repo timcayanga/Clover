@@ -3528,6 +3528,38 @@
           }
         }
       ]
+    },
+    {
+      "id": "bca-legacy-closed-bilingual",
+      "source": "bca-legacy-closed-bilingual.txt",
+      "sha256": "47db49994a223098de61f0701951863c83ad846936da2ad89bc4b4c315296ac9",
+      "kind": "statement",
+      "representation": "Independently invented native complete legacy bilingual notification",
+      "provenance": {
+        "origin": "synthetic",
+        "reviewer": "Codex",
+        "reviewedAt": "2026-10-13",
+        "status": "reviewed",
+        "basis": "Invented complete closed two-page legacy bilingual transfer. Both native financial blocks and both formal closings are present with no hidden quotes or partial tax-note block. Matched IDR240 outgoing on full payer ID; fee, timezone and bank balance remain absent."
+      },
+      "expected": [
+        {
+          "date": "2021-11-30",
+          "amount": "240.00",
+          "currency": "IDR",
+          "type": "expense",
+          "accountNumber": "123-0001234",
+          "rawPayload": {
+            "source": "bca_transfer_proof",
+            "fee": null,
+            "recipientIdentifier": "234-0002345",
+            "reference": "000000000000987654",
+            "parserEvidence": {
+              "version": "bca-bilingual-legacy-closed-v1"
+            }
+          }
+        }
+      ]
     }
   ]
 }
