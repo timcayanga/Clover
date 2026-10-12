@@ -56,3 +56,13 @@ This document captures the MariBank parsing rules learned from the synthetic tra
 ## Review
 
 - Unexpected `Other` categories or statement-housekeeping rows should be treated as parser review candidates.
+
+## Complete native savings ledgers
+
+A new native-page proof accepts the printed Philippine MariBank and older SeaBank savings layout only when every physical/printed page, dated native row, full eleven-digit account, PHP column, statement period and separate incoming/outgoing summary total agree. Both Starting Balance and Starting Savings Balance headers remain source labels. Missing rows or contradictory dates/amounts fail review; a weaker generic candidate cannot override failed recognized evidence.
+
+Keep each printed occurrence, including identical transfers or purchases on the same day. Preserve monthly net interest as one source movement; daily interest/tax tables and illustrative balances are separate evidence. Column direction outranks narrative wording. Original descriptions, native row index and complete document evidence remain traceable.
+
+Existing matched bank accounts are reused read-only, retaining customized labels, institution aliases, current balances and timestamps. New accounts can initialize from the source closing balance. Publish the actual current account projection before settlement. Later historical imports and retries cannot reset an existing balance to an older closing amount. Account ownership, currency/type, capacity, ambiguous identities and deletion tombstones remain guarded.
+
+Future named savings statements use an additional v43-maribank-native-ledger namespace. Older cache entries, templates, corrections, sources and financial records are not refreshed or deleted.

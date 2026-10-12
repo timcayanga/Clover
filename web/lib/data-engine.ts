@@ -1,3 +1,4 @@
+import { readGrabReceiptTimestamp } from '@/lib/grab-email-receipt';
 import { enqueueLearningJob, processLearningJob, LearningInputError, type LearningAction, type LearningWriteContext } from "@/lib/learning-jobs";
 import { readGcashBillsPaymentTimestamp } from "@/lib/gcash-bills-receipt";
 import { readAppMigration } from "@/lib/app-migration-import";
@@ -38,6 +39,8 @@ export const DATA_ENGINE_VERSION = "v2";
 export const IMPORT_FILE_EXTRACTION_CACHE_VERSION = "v39";
 export const resolveImportFileExtractionCacheVersion = (fileName?: string | null) => {
   const normalizedFileName = String(fileName ?? "");
+  if (/(?:mari[-_\s]*bank|sea[-_\s]*bank).*statement/i.test(normalizedFileName)) return "v43-maribank-native-ledger";
+  if (/grab.*(?:e[-_\s]*receipt|receipts)/i.test(normalizedFileName)) return "v43-grab-email-receipt";
   if (/cimb[-_\s]*conso[-_\s]*statement/i.test(normalizedFileName)) return "v41-cimb-consolidated";
   if (/bukti[-_\s]*trf/i.test(normalizedFileName)) return "v41-bca-transfer-proof";
   if (/gcash.*bills?[-_\s]*pay[-_\s]*receipt/i.test(normalizedFileName)) return "v42-gcash-bills-receipt";
@@ -1959,7 +1962,7 @@ export const detectStatementMetadataFromText = (text: string, fileName = ""): St
   const metadata = detectStatementMetadata(text, fileName);
   // This receipt's account number belongs to the biller. An explicit absence
   // of wallet identity must survive the generic account-number fallback.
-  if (metadata?.identityEvidence?.some(evidence => ["GCash bill receipt and reference", "cimb-consolidated-products", "bca-native-transfer-columns"].includes(evidence))) return { ...metadata, currency: metadata.currency ?? null };
+  if (metadata?.identityEvidence?.some(evidence => ["GCash bill receipt and reference", "cimb-consolidated-products", "bca-native-transfer-columns", "grab-receipt-payment-method-only", "maribank-native-ledger-v1"].includes(evidence))) return { ...metadata, currency: metadata.currency ?? null };
   // Some Metrobank online PDFs preserve the MB-Online-MSOA filename but lose
   // the bank masthead during extraction. Prefer that durable filename signal
   // over incidental words (for example, a contact email containing "Wise").
@@ -2062,6 +2065,9 @@ export const mergeStatementMetadataWithTemplate = (
   if (!template) {
     return detected;
   }
+
+  // New source proofs retain explicit absent identity/balance fields; old templates cannot invent them.
+  if ((detected as DetectedStatementMetadata).identityEvidence?.some(e => ["grab-receipt-payment-method-only", "maribank-native-ledger-v1"].includes(e))) return { ...detected };
 
   const detectedHasStrongIdentity = Boolean(detected.institution || detected.accountNumber || detected.accountName);
   const detectedHasAccountNumber = Boolean(detected.accountNumber);
@@ -3675,7 +3681,7 @@ export const buildParsedTransactionInsertData = async (params: {
         : row.accountNumber ?? params.metadata.accountNumber;
     }
     if (columns.has("accountName")) record.accountName = row.accountName ?? null;
-    if (columns.has("date")) record.date = readGcashBillsPaymentTimestamp(row.rawPayload) ?? parseDateValue(row.date ?? null);
+    if (columns.has("date")) record.date = readGrabReceiptTimestamp(row.rawPayload) ?? readGcashBillsPaymentTimestamp(row.rawPayload) ?? parseDateValue(row.date ?? null);
     if (columns.has("amount")) record.amount = amount;
     if (columns.has("currency")) record.currency = currency;
     if (columns.has("merchantRaw")) record.merchantRaw = row.merchantRaw ?? null;

@@ -1,3 +1,5 @@
+import { hasVerifiedMariBankNativeRows } from '@/lib/maribank-native-ledger';
+import { hasVerifiedGrabReceiptRows, readGrabReceiptTimestamp } from '@/lib/grab-email-receipt';
 import { hasVerifiedBcaTransferRows, parseBcaTransferProof } from "@/lib/bca-transfer-proof";
 import { enqueueLearningJob, processLearningJob, type LearningAction } from "@/lib/learning-jobs";
 import { assessBpiStatementReconciliation, isBpiCardMetadata } from "@/lib/bpi-statement-reconciliation";
@@ -5647,32 +5649,33 @@ const resolveConfirmationAccount = async (params: {
   const consolidatedCimbRows = params.parsedRows.length > 0 && params.parsedRows.every(row =>
     ["cimb_consolidated_ledger", "cimb_consolidated_snapshot"].includes(String((row.rawPayload as Record<string, unknown> | null)?.source)));
   const bcaTransferRows = params.parsedRows.length > 0 && params.parsedRows.every(row => (row.rawPayload as Record<string, unknown> | null)?.source === "bca_transfer_proof");
+  const mariStatementRows = params.parsedRows.length > 0 && params.parsedRows.every(row => (row.rawPayload as Record<string, unknown> | null)?.source === "maribank_native_columns");
   const posbStatementRows = params.parsedRows.length > 0 && params.parsedRows.every(row => { const raw = row.rawPayload as Record<string, unknown> | null; return raw?.source === "posb_pdf_columns" && raw.balanceReconciled === true && (raw.reconciliation as Record<string, unknown> | null)?.version === "posb-column-reconciliation-v1"; });
-  if (consolidatedCimbRows || bcaTransferRows || posbStatementRows) {
-    const institution = consolidatedCimbRows ? "CIMB" : posbStatementRows ? "POSB" : "BCA";
-    const currency = consolidatedCimbRows ? "PHP" : posbStatementRows ? "SGD" : "IDR";
+  if (consolidatedCimbRows || bcaTransferRows || posbStatementRows || mariStatementRows) {
+    const institution = consolidatedCimbRows ? "CIMB" : posbStatementRows ? "POSB" : mariStatementRows ? "MariBank" : "BCA";
+    const currency = consolidatedCimbRows || mariStatementRows ? "PHP" : posbStatementRows ? "SGD" : "IDR";
     const first = params.parsedRows[0] as Record<string, unknown>;
     const number = readParsedRowAccountNumber(first);
-    if (!number || !(consolidatedCimbRows ? /^\d{14}$/ : posbStatementRows ? /^\d{3}-\d{5}-\d$/ : /^\d{3}-\d{7}$/).test(number)) throw new Error("Review the document source account identity before importing.");
+    if (!number || !(consolidatedCimbRows ? /^\d{14}$/ : posbStatementRows ? /^\d{3}-\d{5}-\d$/ : mariStatementRows ? /^\d{11}$/ : /^\d{3}-\d{7}$/).test(number)) throw new Error("Review the document source account identity before importing.");
     const name = `${institution} ${number.slice(-4)}`;
     const limits = await getWorkspaceOwnerLimits(workspaceId);
     const owner = await prisma.workspace.findUniqueOrThrow({ where: { id: workspaceId }, select: { userId: true } });
-    const tombstone = await findDeletedAccountTombstoneMatch(workspaceId, { name, institution, accountNumber: number, type: "bank", currency, source: "upload" });
+    const tombstone = await findDeletedAccountTombstoneMatch(workspaceId, { name, institution, accountNumber: number, type: "bank", currency, source: "upload" }) ?? (mariStatementRows ? await findDeletedAccountTombstoneMatch(workspaceId, { name, institution: "SeaBank", accountNumber: number, type: "bank", currency, source: "upload" }) : null);
     const account = await prisma.$transaction(async tx => {
       await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`verified-proof-accounts:${owner.userId}`}, 0))`;
       const accounts = await tx.account.findMany({ where: { workspaceId }, select: getCompatibleAccountSelect(compatibleAccountColumns) });
       const matches = accounts.filter(a => a.currency === currency && a.type === "bank" &&
         [a.accountNumber, a.importIdentityAccountNumber].some(v => String(v ?? "").replace(/[\s-]/g, "") === number.replace(/-/g, "")) &&
-        [a.institution, a.importIdentityInstitution].some(v => String(v ?? "").trim().toUpperCase() === institution));
+        [a.institution, a.importIdentityInstitution].some(v => (mariStatementRows ? /^(?:MARI\s*BANK|SEA\s*BANK)$/i.test(String(v ?? "").trim()) : String(v ?? "").trim().toUpperCase() === institution)));
       if (matches.length > 1) throw new Error("More than one account matches this document. Review its identity.");
-      if (!matches.length && accounts.some(a => a.currency === currency && a.type !== "bank" && [a.accountNumber, a.importIdentityAccountNumber].some(v => String(v ?? "").replace(/[\s-]/g, "") === number.replace(/-/g, "")) && [a.institution, a.importIdentityInstitution].some(v => String(v ?? "").trim().toUpperCase() === institution))) throw new Error("The confirmed account type differs from this document. Review the account mapping before importing.");
+      if (!matches.length && accounts.some(a => a.currency === currency && a.type !== "bank" && [a.accountNumber, a.importIdentityAccountNumber].some(v => String(v ?? "").replace(/[\s-]/g, "") === number.replace(/-/g, "")) && [a.institution, a.importIdentityInstitution].some(v => (mariStatementRows ? /^(?:MARI\s*BANK|SEA\s*BANK)$/i.test(String(v ?? "").trim()) : String(v ?? "").trim().toUpperCase() === institution)))) throw new Error("The confirmed account type differs from this document. Review the account mapping before importing.");
       if (params.accountId && matches[0]?.id !== params.accountId) throw new Error("The selected account does not match this document.");
       // Existing balances and customized identity are durable confirmed state.
       // Source balances remain in parsed evidence and do not reset that state.
       if (matches[0]) return matches[0];
       if (tombstone && !params.allowDeletedAccountRecreation) throw new Error("This statement matches a deleted account. Confirm before recreating it.");
       if (limits?.accountLimit != null && await tx.account.count({ where: { workspace: { userId: owner.userId }, type: { not: "cash" } } }) >= limits.accountLimit) throw new Error("Choose an existing account or change your plan before importing more accounts.");
-      const balance = consolidatedCimbRows || posbStatementRows ? getImportAccountBalanceFromParsedRows(params.parsedRows as EnrichedParsedImportRow[]) : null;
+      const balance = mariStatementRows ? ((first.rawPayload as Record<string, unknown>)?.reconciliation as Record<string, unknown>)?.endingBalance : consolidatedCimbRows || posbStatementRows ? getImportAccountBalanceFromParsedRows(params.parsedRows as EnrichedParsedImportRow[]) : null;
       return tx.account.create({ data: { workspaceId, name, institution, accountNumber: number, currency, type: "bank", source: "upload", balance: balance?.toString() ?? null,
         ...(compatibleAccountColumns.has("importIdentityName") ? { importIdentityName: name } : {}),
         ...(compatibleAccountColumns.has("importIdentityInstitution") ? { importIdentityInstitution: institution } : {}),
@@ -10030,6 +10033,8 @@ const processImportFileTextImpl = async (
     hasReliableDeterministicStatementParse:
       preliminaryStrongStructuredPdfParse ||
       preliminaryHasStrongWisePdfDeterministicParse ||
+      hasVerifiedMariBankNativeRows(textForParse, parsedRows) ||
+      hasVerifiedGrabReceiptRows(textForParse, parsedRows) ||
       hasVerifiedGcashBillsRows(textForParse, parsedRows) ||
       hasVerifiedPosbRows(textForParse, parsedRows) ||
       hasVerifiedBcaTransferRows(textForParse, parsedRows) ||
@@ -10519,6 +10524,8 @@ const processImportFileTextImpl = async (
     importMode === "statement" &&
     (importFile.fileType === "application/pdf" || imageImport) &&
     Boolean(textForParse.trim()) &&
+    !hasVerifiedMariBankNativeRows(textForParse, parsedRows) &&
+    !hasVerifiedGrabReceiptRows(textForParse, parsedRows) &&
     !hasVerifiedGcashBillsRows(textForParse, parsedRows) &&
     !hasVerifiedPosbRows(textForParse, parsedRows) &&
     !hasVerifiedBcaTransferRows(textForParse, parsedRows) &&
@@ -10694,7 +10701,9 @@ const processImportFileTextImpl = async (
     rows: parsedRows as Array<Record<string, unknown>>,
   });
   const hasReliableDeterministicStatementParse =
-    hasVerifiedGcashBillsRows(textForParse, parsedRows) ||
+    hasVerifiedMariBankNativeRows(textForParse, parsedRows) ||
+      hasVerifiedGrabReceiptRows(textForParse, parsedRows) ||
+      hasVerifiedGcashBillsRows(textForParse, parsedRows) ||
     hasVerifiedPosbRows(textForParse, parsedRows) ||
       hasVerifiedBcaTransferRows(textForParse, parsedRows) ||
       hasVerifiedCimbConsolidatedRows(textForParse, parsedRows) ||
@@ -15874,8 +15883,9 @@ export const confirmImportFile = async (
     parsedRows.every((row) => (row.rawPayload as Record<string, unknown> | null)?.source === "wide_account_snapshot_csv");
   // App migrations are history, not a balance snapshot. A partial date range
   // must never replace a confirmed balance with its net imported movements.
+  const verifiedMariImport = parsedRows.length > 0 && parsedRows.every(row => (row.rawPayload as Record<string, unknown> | null)?.source === "maribank_native_columns");
   const verifiedPosbImport = parsedRows.length > 0 && parsedRows.every(row => { const raw = row.rawPayload as Record<string, unknown> | null; return raw?.source === "posb_pdf_columns" && raw.balanceReconciled === true && (raw.reconciliation as Record<string, unknown> | null)?.version === "posb-column-reconciliation-v1"; });
-  if (consolidatedCimbImport || ((verifiedPosbImport || (parsedRows.length > 0 && parsedRows.every(row => (row.rawPayload as Record<string, unknown> | null)?.source === "bca_transfer_proof"))) && account.balance !== null)) {
+  if (consolidatedCimbImport || ((verifiedPosbImport || verifiedMariImport || (parsedRows.length > 0 && parsedRows.every(row => (row.rawPayload as Record<string, unknown> | null)?.source === "bca_transfer_proof"))) && account.balance !== null)) {
     reconciledAccountBalance = snapshotBalanceToString(account.balance);
   } else if (parsedRows.length > 0 && parsedRows.every(row => readAppMigration(row.rawPayload))) {
     reconciledAccountBalance = snapshotBalanceToString(account.balance);
@@ -15962,7 +15972,7 @@ export const confirmImportFile = async (
   // projection after the existing balance calculation, in this transaction,
   // so the first settled GET need not repair a stale pre-confirmation value.
   if (!multiAccountImport && parsedRows.length > 0 && parsedRows.every(row =>
-    ["gcash_bills_receipt", "bca_transfer_proof"].includes(String((row.rawPayload as Record<string, unknown> | null)?.source)))) {
+    ["gcash_bills_receipt", "bca_transfer_proof", "grab_email_receipt", "maribank_native_columns"].includes(String((row.rawPayload as Record<string, unknown> | null)?.source)))) {
     const storedAccount = await tx.account.findUniqueOrThrow({ where: { id: resolvedAccountId }, select: { balance: true } });
     const storedBalance = snapshotBalanceToString(storedAccount.balance);
     const summary = accountSummaries.find(entry => entry.accountId === resolvedAccountId);
@@ -16022,7 +16032,7 @@ export const confirmImportFile = async (
   for (const [index, originalRow] of parsedRows.entries()) {
     // POSB's amountColumn="withdrawal" is column evidence, not an ATM
     // description. Its dedicated parser already distinguishes FAST and cash.
-    const row = readAppMigration(originalRow.rawPayload) || ["posb_pdf_columns", "bca_transfer_proof", "cimb_consolidated_ledger", "cimb_consolidated_snapshot"].includes(String((originalRow.rawPayload as Record<string, unknown> | null)?.source))
+    const row = readAppMigration(originalRow.rawPayload) || ["posb_pdf_columns", "bca_transfer_proof", "cimb_consolidated_ledger", "cimb_consolidated_snapshot", "grab_email_receipt", "maribank_native_columns"].includes(String((originalRow.rawPayload as Record<string, unknown> | null)?.source))
       ? originalRow : normalizeLandbankImportedRow(originalRow as ImportInsightSourceRow, statementInstitution);
     const migration = readAppMigration(row.rawPayload);
     const rowAccount = rowAccountFor(row as Record<string, unknown>);
@@ -16144,7 +16154,7 @@ export const confirmImportFile = async (
         !Array.isArray(row.rawPayload) &&
         (row.rawPayload as Record<string, unknown>).kind === "receivable_commitment_marker"
     );
-    const parsedTransactionDate = readGcashBillsPaymentTimestamp(row.rawPayload) ??
+    const parsedTransactionDate = readGrabReceiptTimestamp(row.rawPayload) ?? readGcashBillsPaymentTimestamp(row.rawPayload) ??
       (row.date instanceof Date && !Number.isNaN(row.date.getTime())
         ? row.date
         : parseDateValue(typeof row.date === "string" ? row.date : null)) ?? null;

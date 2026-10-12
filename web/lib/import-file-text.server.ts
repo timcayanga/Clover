@@ -1,3 +1,4 @@
+import { buildGrabReceiptNativePages, buildGrabPickupFields } from '@/lib/grab-email-receipt';
 import { parseCimbConsolidatedStatement } from "@/lib/import-parser";
 import { buildBcaTransferPdfRows, parseBcaTransferProof } from "@/lib/bca-transfer-proof";
 import { hasReconciledBdoInlineLedger } from "@/lib/import-parser";
@@ -1166,6 +1167,8 @@ const scoreStatementTextCandidate = (text: string) => {
 };
 
 export const pdfTextLayerLooksSufficientForParsing = (text: string, fileName?: string | null) => {
+  // A captured Grab proof retains failed validation for the parser review gate.
+  if (text.split(/\r?\n/).some(line => line.startsWith("GRAB_RECEIPT_NATIVE "))) return true;
   try { if (parseGcashBillsReceipt(text)?.rows.length) return true; } catch { return false; }
   if (parseBcaTransferProof(text)?.rows.length) return true;
   const normalized = text.trim();
@@ -2220,6 +2223,7 @@ const extractTextFromPdfBytes = async (data: Uint8Array, password?: string, base
     // PDF.js can read independent text layers concurrently. Bound the work so
     // a long statement does not monopolize a serverless invocation, while
     // avoiding the avoidable page-by-page wait on normal SOAs.
+    const grabPickupFields: ReturnType<typeof buildGrabPickupFields>[] = new Array(pdf.numPages);
     const readerCount = Math.min(4, pdf.numPages);
     await Promise.all(
       Array.from({ length: readerCount }, async () => {
@@ -2228,6 +2232,7 @@ const extractTextFromPdfBytes = async (data: Uint8Array, password?: string, base
           nextPageIndex += 1;
           const page = await pdf.getPage(pageIndex + 1);
           const content = await page.getTextContent();
+          grabPickupFields[pageIndex] = buildGrabPickupFields(content.items as PdfTextContentItemLike[], pageIndex + 1);
           const simpleText = buildSimplePdfTextFromContentItems(content.items as PdfTextContentItemLike[]);
           const layoutAwareText = buildLayoutAwarePdfTextFromContentItems(content.items as PdfTextContentItemLike[]);
           pages[pageIndex] = encodeNativePdfNullGlyphs(pickBetterPdfTextLayerCandidate(simpleText, layoutAwareText));
@@ -2242,6 +2247,8 @@ const extractTextFromPdfBytes = async (data: Uint8Array, password?: string, base
 
     try {
       const extractedText = pages.join("\n");
+      const grabPages = buildGrabReceiptNativePages(pages, grabPickupFields.flat());
+      if (grabPages) return `${extractedText}\n${grabPages}`;
       const gcashPages = buildGcashBillsNativePages(pages);
       if (gcashPages) return `${extractedText}\n${gcashPages}`;
       const cimbText = `${extractedText}\nCIMB_NATIVE_PAGES ${pdf.numPages}`;
@@ -2251,9 +2258,11 @@ const extractTextFromPdfBytes = async (data: Uint8Array, password?: string, base
       const structuredPosbRows = posbTransactionRows.flat().filter(Boolean);
       if (/Details of Your POSB Payroll Account/i.test(extractedText) && structuredPosbRows.length > 0) return `${extractedText}\n${structuredPosbRows.join('\n')}`;
       const structuredMariBankRows = mariBankTransactionRows.flat().filter(Boolean);
-      return /\bMARI\s*BANK\b/i.test(extractedText) && structuredMariBankRows.length > 0
-        ? `${extractedText}\n${structuredMariBankRows.join("\n")}`
-        : extractedText;
+      const modernMari = /(?:MARI\s*BANK|SEABANK)\s+ACCOUNT:\s*\d{11}\b/i.test(extractedText) && /SAVINGS\s*-\s*TRANSACTION\s+DETAILS/i.test(extractedText) && /PHP/i.test(extractedText);
+      if (modernMari && structuredMariBankRows.some(row => row.startsWith("MARIBANK_TXN"))) return `${extractedText}\nMARIBANK_NATIVE_PAGES ${pdf.numPages}\n${structuredMariBankRows.join("\n")}`;
+      // Preserve the established unproved legacy path for other account shapes.
+      return /\bMARI\s*BANK\b/i.test(extractedText) && structuredMariBankRows.some(row => row.startsWith("MARIBANK_TXN"))
+        ? `${extractedText}\n${structuredMariBankRows.filter(row => row.startsWith("MARIBANK_TXN")).join("\n")}` : extractedText;
     } finally {
       await loadingTask.destroy().catch(() => null);
     }
@@ -2393,9 +2402,10 @@ const buildMariBankTransactionRowsFromContentItems = (items: PdfTextContentItemL
   const interestTableHeading = normalizedItems.find((item) => /SAVINGS\s*-\s*INTEREST\s*&\s*TAX\s+DETAILS/i.test(item.text));
   const dateItems = normalizedItems
     .filter((item) => {
-      if (item.x > 110 || !/^(?:\d{1,2}\s+)?[A-Z]{3}$/i.test(item.text)) {
+      if (item.x > 110 || !/^(?:\d{1,2}\s+)?(?:JAN|FEB|MAR|APR|MAY|JUN|JUL|AUG|SEP|OCT|NOV|DEC)$/i.test(item.text)) {
         return false;
       }
+      if (transactionHeading && item.y >= transactionHeading.y - 3) return false;
       if (transactionColumnHeading && item.y >= transactionColumnHeading.y - 3) {
         return false;
       }
@@ -2406,7 +2416,7 @@ const buildMariBankTransactionRowsFromContentItems = (items: PdfTextContentItemL
     })
     .sort((left, right) => right.y - left.y);
 
-  return dateItems.flatMap((dateItem) => {
+  const rows = dateItems.flatMap((dateItem) => {
     const amountItem = normalizedItems.find(
       (item) => item.x >= 350 && Math.abs(item.y - dateItem.y) <= 2.25 && /^-?[0-9][0-9,]*\.\d{2}$/.test(item.text)
     );
@@ -2446,6 +2456,7 @@ const buildMariBankTransactionRowsFromContentItems = (items: PdfTextContentItemL
       ),
     ];
   });
+  return [`MARIBANK_NATIVE_ROW_COUNT ${dateItems.length}`, ...rows];
 };
 
 const buildSimplePdfTextFromContentItems = (items: PdfTextContentItemLike[]) => {

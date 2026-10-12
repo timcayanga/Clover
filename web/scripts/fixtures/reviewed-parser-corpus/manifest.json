@@ -2677,6 +2677,286 @@
           }
         }
       ]
+    },
+    {
+      "id": "grab-food-gcash-clock",
+      "kind": "statement",
+      "source": "grab-food-gcash-clock.txt",
+      "sha256": "dc6d0a46ccaa1cb3db37e9955aa783161568efa4ba5deff1e46b2629eb93bab1",
+      "representation": "Independently invented complete native receipt pages",
+      "provenance": {
+        "origin": "synthetic",
+        "reviewer": "Codex",
+        "reviewedAt": "2026-10-12",
+        "status": "reviewed",
+        "basis": "Invented subtotal120+delivery20 equals140. One purchase, no extra fee transaction or duplicated headline total; full original page evidence and explicit GCash method without payer wallet ID. Pickup timestamp19:30+08 is used instead of email delivery clock; ALL in footer is not Albanian currency."
+      },
+      "expected": [
+        {
+          "date": "2026-08-14T11:30:00.000Z",
+          "amount": "140.00",
+          "currency": "PHP",
+          "type": "expense",
+          "merchantRaw": "Example Kitchen - Metro Manila",
+          "accountName": "GCash",
+          "rawPayload": {
+            "source": "grab_email_receipt",
+            "referenceNumber": "A-INVENTEDFOOD001",
+            "payerAccountNumber": null,
+            "sourceTimestamp": "2026-08-14T19:30:00+08:00",
+            "components": [
+              {
+                "label": "Subtotal",
+                "amount": "120.00"
+              },
+              {
+                "label": "Delivery Fee",
+                "amount": "20.00"
+              }
+            ]
+          }
+        }
+      ],
+      "expectedMetadata": {
+        "currency": "PHP",
+        "accountNumber": null,
+        "openingBalance": null,
+        "endingBalance": null
+      }
+    },
+    {
+      "id": "grab-cash-date-only",
+      "kind": "statement",
+      "source": "grab-cash-date-only.txt",
+      "sha256": "de6807c542cea3ca4a91242c94e5633dd1c2897876e53174bbc32d2aafb7c3fa",
+      "representation": "Independently invented complete native receipt pages",
+      "provenance": {
+        "origin": "synthetic",
+        "reviewer": "Codex",
+        "reviewedAt": "2026-10-12",
+        "status": "reviewed",
+        "basis": "Invented cash120 fare45+25+20+30. Calendar-only pickup retains no invented clock; duplicated receipt art with same booking is one event. Driver/passenger/booking identifiers are not bank accounts and no opening/closing balance is inferred."
+      },
+      "expected": [
+        {
+          "date": "2026-08-14T12:00:00.000Z",
+          "amount": "120.00",
+          "currency": "PHP",
+          "type": "expense",
+          "merchantRaw": "Grab",
+          "accountName": "Cash",
+          "rawPayload": {
+            "source": "grab_email_receipt",
+            "referenceNumber": "A-INVENTEDCASH001",
+            "sourceTimestamp": null,
+            "payerAccountNumber": null
+          }
+        }
+      ],
+      "expectedMetadata": {
+        "currency": "PHP",
+        "accountNumber": null,
+        "openingBalance": null,
+        "endingBalance": null
+      }
+    },
+    {
+      "id": "grab-legacy-distinct-bookings",
+      "kind": "statement",
+      "source": "grab-legacy-distinct-bookings.txt",
+      "sha256": "331d62c58c8ea11127c90493c3d3a47156910ef475fc1d384f65fef5d6f78b12",
+      "representation": "Independently invented complete native receipt pages",
+      "provenance": {
+        "origin": "synthetic",
+        "reviewer": "Codex",
+        "reviewedAt": "2026-10-12",
+        "status": "reviewed",
+        "basis": "Two invented cash rides of100, each fare40+40+30-discount10=100. Same amount, merchant and calendar day with distinct booking/time are two legitimate events. Preserve the negative promotion and actual pickup offsets, source reference and absence of bank balance/identity."
+      },
+      "expected": [
+        {
+          "date": "2026-08-14T03:00:00.000Z",
+          "amount": "100.00",
+          "currency": "PHP",
+          "type": "expense",
+          "accountName": "Cash",
+          "rawPayload": {
+            "source": "grab_email_receipt",
+            "referenceNumber": "ADR-INVENTED-RIDE-1",
+            "totalAmount": 100,
+            "payerAccountNumber": null
+          }
+        },
+        {
+          "date": "2026-08-14T03:02:00.000Z",
+          "amount": "100.00",
+          "currency": "PHP",
+          "type": "expense",
+          "accountName": "Cash",
+          "rawPayload": {
+            "source": "grab_email_receipt",
+            "referenceNumber": "ADR-INVENTED-RIDE-2",
+            "totalAmount": 100,
+            "payerAccountNumber": null
+          }
+        }
+      ],
+      "expectedMetadata": {
+        "currency": "PHP",
+        "accountNumber": null,
+        "openingBalance": null,
+        "endingBalance": null
+      }
+    },
+    {
+      "id": "maribank-native-repeated-columns",
+      "kind": "statement",
+      "source": "maribank-native-repeated-columns.txt",
+      "sha256": "fd2227e9f479bdc5832f7c5776f42c13fd56f65f8a1bc9fca820d45a41b73db8",
+      "representation": "Independently invented complete native PDF columns and page transcript",
+      "provenance": {
+        "origin": "synthetic",
+        "reviewer": "Codex",
+        "reviewedAt": "2026-10-12",
+        "status": "reviewed",
+        "basis": "Invented opening50 + monthly net interest1 + salary59 - two legitimate identical20 payments = closing70. Every source occurrence remains separate; daily interest/tax disclosures are not extra movements. Full leading-zero Philippine account, PHP columns and every physical/printed page are required. Older SeaBank branding maps to the existing MariBank family without replacing customized current identities or balances."
+      },
+      "expected": [
+        {
+          "date": "2026-07-31",
+          "amount": "1.00",
+          "currency": "PHP",
+          "type": "income",
+          "accountNumber": "00123456789",
+          "rawPayload": {
+            "source": "maribank_native_columns",
+            "sourceRowIndex": 0,
+            "direction": "incoming",
+            "balanceReconciled": true
+          }
+        },
+        {
+          "date": "2026-07-10",
+          "amount": "59.00",
+          "currency": "PHP",
+          "type": "income",
+          "accountNumber": "00123456789",
+          "rawPayload": {
+            "source": "maribank_native_columns",
+            "sourceRowIndex": 1,
+            "direction": "incoming",
+            "balanceReconciled": true
+          }
+        },
+        {
+          "date": "2026-07-11",
+          "amount": "20.00",
+          "currency": "PHP",
+          "type": "expense",
+          "accountNumber": "00123456789",
+          "rawPayload": {
+            "source": "maribank_native_columns",
+            "sourceRowIndex": 2,
+            "direction": "outgoing",
+            "balanceReconciled": true
+          }
+        },
+        {
+          "date": "2026-07-11",
+          "amount": "20.00",
+          "currency": "PHP",
+          "type": "expense",
+          "accountNumber": "00123456789",
+          "rawPayload": {
+            "source": "maribank_native_columns",
+            "sourceRowIndex": 3,
+            "direction": "outgoing",
+            "balanceReconciled": true
+          }
+        }
+      ],
+      "expectedMetadata": {
+        "institution": "MariBank",
+        "accountNumber": "00123456789",
+        "currency": "PHP",
+        "openingBalance": 50,
+        "endingBalance": 70
+      }
+    },
+    {
+      "id": "seabank-native-php-alias",
+      "kind": "statement",
+      "source": "seabank-native-php-alias.txt",
+      "sha256": "598f818cb48ef21aae434fad58cad487ba8776bd38fdfdcf0371b6232cb3b9d1",
+      "representation": "Independently invented complete native PDF columns and page transcript",
+      "provenance": {
+        "origin": "synthetic",
+        "reviewer": "Codex",
+        "reviewedAt": "2026-10-12",
+        "status": "reviewed",
+        "basis": "Invented opening50 + monthly net interest1 + salary59 - two legitimate identical20 payments = closing70. Every source occurrence remains separate; daily interest/tax disclosures are not extra movements. Full leading-zero Philippine account, PHP columns and every physical/printed page are required. Older SeaBank branding maps to the existing MariBank family without replacing customized current identities or balances."
+      },
+      "expected": [
+        {
+          "date": "2026-07-31",
+          "amount": "1.00",
+          "currency": "PHP",
+          "type": "income",
+          "accountNumber": "00123456789",
+          "rawPayload": {
+            "source": "maribank_native_columns",
+            "sourceRowIndex": 0,
+            "direction": "incoming",
+            "balanceReconciled": true
+          }
+        },
+        {
+          "date": "2026-07-10",
+          "amount": "59.00",
+          "currency": "PHP",
+          "type": "income",
+          "accountNumber": "00123456789",
+          "rawPayload": {
+            "source": "maribank_native_columns",
+            "sourceRowIndex": 1,
+            "direction": "incoming",
+            "balanceReconciled": true
+          }
+        },
+        {
+          "date": "2026-07-11",
+          "amount": "20.00",
+          "currency": "PHP",
+          "type": "expense",
+          "accountNumber": "00123456789",
+          "rawPayload": {
+            "source": "maribank_native_columns",
+            "sourceRowIndex": 2,
+            "direction": "outgoing",
+            "balanceReconciled": true
+          }
+        },
+        {
+          "date": "2026-07-11",
+          "amount": "20.00",
+          "currency": "PHP",
+          "type": "expense",
+          "accountNumber": "00123456789",
+          "rawPayload": {
+            "source": "maribank_native_columns",
+            "sourceRowIndex": 3,
+            "direction": "outgoing",
+            "balanceReconciled": true
+          }
+        }
+      ],
+      "expectedMetadata": {
+        "institution": "MariBank",
+        "accountNumber": "00123456789",
+        "currency": "PHP",
+        "openingBalance": 50,
+        "endingBalance": 70
+      }
     }
   ]
 }

@@ -41,5 +41,10 @@
   "gcash-tax-receipt-no-wallet": "2a8e329df5ae1d5c5306acff997846f7dc3060af855840084cc67d3c357182f9",
   "posb-address-signed-reversal": "90512f969de25aa748cc6b58c26acaf9cb7498557862e25ef4d603aae0db7410",
   "bca-bilingual-authorized-fee": "465b5e386fda4433415b3c1971777bc8b035eafdef689fb4694cc00fc5bdc26e",
-  "bca-native-english-page-footer": "1a2c5fde82286bde970812f80275213c707ec442257461510fe44c1505f0d9dc"
+  "bca-native-english-page-footer": "1a2c5fde82286bde970812f80275213c707ec442257461510fe44c1505f0d9dc",
+  "grab-food-gcash-clock": "6a313c5eeecc2f65ecf0e35d9d2251f1a5f4492d4ba1a54bdda93dd1edcc74f1",
+  "grab-cash-date-only": "9b11a4a7f4d224c3ffd7d1a14706719cdf93d3af612eb118bc94d35422f997fc",
+  "grab-legacy-distinct-bookings": "180c5115f13bf7f43f66970a18487e6641d044a52ef87e08bd25b487d845ec01",
+  "maribank-native-repeated-columns": "0fa60150c9b82c878e45028de29d56eadc62d49dbc638b59ae6137ef39e72337",
+  "seabank-native-php-alias": "8d66fdeb0694b8c11515cb2c88799895addc186a6568073b3bdbee64ca23ab62"
 }

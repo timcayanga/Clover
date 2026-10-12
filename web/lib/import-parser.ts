@@ -1,3 +1,5 @@
+import { parseMariBankNativeLedger } from '@/lib/maribank-native-ledger';
+import { parseGrabEmailReceipt } from '@/lib/grab-email-receipt';
 import { parseAppMigrationTable, readAppMigration } from "@/lib/app-migration-import";
 import { parseBcaTransferProof } from "@/lib/bca-transfer-proof";
 import { parsePosbStatement } from "@/lib/posb-statement";
@@ -26338,12 +26340,16 @@ export const detectStatementMetadata = (text: string, fileName = ""): DetectedSt
     };
   }
 
+  const nativeMari = parseMariBankNativeLedger(text);
+  if (nativeMari) return nativeMari.metadata;
   const consolidatedCimb = parseCimbConsolidatedStatement(text);
   if (consolidatedCimb) return consolidatedCimb.metadata;
   const bca = parseBcaTransferProof(text);
   if (bca) return bca.metadata;
   const posb = parsePosbStatement(text);
   if (posb) return posb.metadata;
+  const grabReceipt = parseGrabEmailReceipt(text);
+  if (grabReceipt) return grabReceipt.metadata;
   const gcashBill = parseGcashBillsReceipt(text);
   if (gcashBill) return gcashBill.metadata;
   const wisePdfStatement = parseWisePdfStatement(text);
@@ -27238,12 +27244,16 @@ export const parseImportText = (
   if (structuredDelimitedRows) {
     return structuredDelimitedRows;
   }
+  const nativeMari = parseMariBankNativeLedger(text);
+  if (nativeMari) return nativeMari.rows;
   const consolidatedCimb = parseCimbConsolidatedStatement(text);
   if (consolidatedCimb) return consolidatedCimb.rows;
   const bca = parseBcaTransferProof(text);
   if (bca) return bca.rows;
   const posb = parsePosbStatement(text);
   if (posb) return posb.rows;
+  const grabReceipt = parseGrabEmailReceipt(text);
+  if (grabReceipt) return grabReceipt.rows;
   const gcashBill = parseGcashBillsReceipt(text);
   if (gcashBill) return gcashBill.rows;
 
