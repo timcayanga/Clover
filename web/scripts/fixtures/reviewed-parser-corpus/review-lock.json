@@ -25,5 +25,7 @@
   "posb-column-ledger": "7da0c9146f657ad97eab005b632c60114d84bc69f16b9bd4064bc55ef8476d10",
   "gcash-bill-fee-email": "7b64ffb2f8fd6aabbd891124e4746e157a4859d2c1b08689cf10f2051f0f9eac",
   "maribank-retained-column-repeats": "242f03c3874306f01553af570bab88b89a84681579147781707a3c8067c90561",
-  "gcash-bill-native-body": "2fb1ab79cea466928aa8331fa90aa41b8c63af721599944c642203c84982141e"
+  "gcash-bill-native-body": "2fb1ab79cea466928aa8331fa90aa41b8c63af721599944c642203c84982141e",
+  "cimb-consolidated-zero-account": "2da0e60cf769c3c4bde2657db45d54f8ce3edf00656086e7906fc0b1c7f00d39",
+  "bca-transfer-components": "0444c2712d4324b331b8d68b5d8ffd9c0d3e40e3dd1c4ca1c7461646511c29c3"
 }

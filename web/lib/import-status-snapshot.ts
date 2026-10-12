@@ -248,11 +248,13 @@ const loadPortfolioAccountSummaries = async (importFileId: string, workspaceId: 
 
 const loadSnapshotInventoryAccountSummaries = async (
   importFileId: string,
-  workspaceId: string
+  workspaceId: string,
+  includeSingleCimbSnapshot = false
 ): Promise<ImportAccountSummary[]> => {
   const markerRows = await prisma.parsedTransaction.findMany({
     where: {
       importFileId,
+      ...(includeSingleCimbSnapshot ? { AND: { rawPayload: { path: ["source"], equals: "cimb_consolidated_snapshot" } } } : {}),
       rawPayload: {
         path: ["kind"],
         equals: "account_snapshot_marker",
@@ -266,7 +268,7 @@ const loadSnapshotInventoryAccountSummaries = async (
       rawPayload: true,
     },
   }).catch(() => []);
-  if (markerRows.length < 2) return [];
+  if (markerRows.length < 2 && !(includeSingleCimbSnapshot && markerRows.length > 0)) return [];
 
   const accounts = await prisma.account.findMany({
     where: { workspaceId },
@@ -695,12 +697,13 @@ export const loadImportStatusSnapshot = async (
     confirmedTransactionsCount > 0 || hasConfirmedRows || accountDetailOnlyImport || receiptHasVisibleTransaction;
   const hasVisibleImportData =
     visibleImportComplete || parsedRowsCount > 0 || checkpointRowCount > 0 || receiptHasVisibleDocument;
+  const containsConsolidatedCimbSnapshot = (statementCheckpoint?.sourceMetadata as Record<string, unknown> | null)?.containsConsolidatedCimbSnapshot === true;
   const [checkpointAccountSummaries, snapshotInventoryAccountSummaries, visibleTransactionAccountSummaries] = await Promise.all([
     hasVisibleImportData
       ? buildCheckpointAccountSummary(statementCheckpoint, importFile.accountId ?? null)
       : Promise.resolve([]),
-    parsedRowsCount > 1 && confirmedTransactionsCount === 0
-      ? loadSnapshotInventoryAccountSummaries(importFileId, String(importFile.workspaceId))
+    parsedRowsCount > 1 && (confirmedTransactionsCount === 0 || containsConsolidatedCimbSnapshot)
+      ? loadSnapshotInventoryAccountSummaries(importFileId, String(importFile.workspaceId), containsConsolidatedCimbSnapshot)
       : Promise.resolve([]),
     confirmedTransactionsCount > 0 || hasConfirmedRows || receiptHasVisibleTransaction
       ? loadVisibleImportAccountSummaries(importFileId)
@@ -713,7 +716,9 @@ export const loadImportStatusSnapshot = async (
   const computedAccountSummaries =
     portfolioAccountSummaries.length > 0 ? portfolioAccountSummaries :
     visibleTransactionAccountSummaries.length > 0
-      ? visibleTransactionAccountSummaries
+      ? containsConsolidatedCimbSnapshot
+        ? [...visibleTransactionAccountSummaries, ...snapshotInventoryAccountSummaries.filter(snapshot => !visibleTransactionAccountSummaries.some(entry => entry.accountId === snapshot.accountId))]
+        : visibleTransactionAccountSummaries
       : snapshotInventoryAccountSummaries.length > 0
         ? snapshotInventoryAccountSummaries
       : receiptDocumentAccountSummaries.length > 0

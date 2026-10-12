@@ -1,0 +1,38 @@
+CONSOLIDATED STATEMENT OF ACCOUNT
+For November 01, 2025 to November 30, 2025
+EXAMPLE HOLDER Reference No. 20251199000001
+SUMMARY
+Total Balance PHP 121.00
+Fast Plus Account - Savings Account No. 00000123450000
+Opening Balance PHP 0.00
+Total Deposit PHP 0.00
+Total Withdrawal PHP 0.00
+Closing Balance as of November 30, 2025 PHP 0.00
+GSave Account - Savings Account No. 00000123456789
+Opening Balance PHP 20.00
+Total Deposit PHP 102.00
+Total Withdrawal PHP 1.00
+Closing Balance as of November 30, 2025 PHP 121.00
+Fast Plus Account - Savings Account No. 00000123450000
+Date Details Deposit Withdrawal Balance
+Nov 01, 2025 Opening Balance PHP 0.00 PHP 0.00 PHP 0.00
+Nov 30, 2025 Closing Balance PHP 0.00 PHP 0.00 PHP 0.00
+GSave Account - Savings Account No. 00000123456789
+Date Details Deposit Withdrawal Balance
+Nov 01, 2025 Opening Balance PHP 20.00
+Instapay Inward Transfer to
+Nov 01, 2025 *6789 PHP 100.00 PHP 0.00 PHP 120.00
+Reference No. EXAMPLE001
+Back Office Cash In(ICMS)
+Nov 02, 2025 PHP 1.00 PHP 0.00 PHP 121.00
+Reference No. EXAMPLE002
+Back Office Cash In(ICMS)
+Nov 02, 2025 PHP 1.00 PHP 0.00 PHP 122.00
+Reference No. EXAMPLE003
+TAX RATE
+Nov 03, 2025 PHP 0.00 PHP 1.00 PHP 121.00
+Reference No. EXAMPLE004
+Nov 30, 2025 Closing Balance PHP 121.00
+For more information call CIMB.
+Statement is generated on December 06, 2025 Page 1 of 1
+CIMB_NATIVE_PAGES 1

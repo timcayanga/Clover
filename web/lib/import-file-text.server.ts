@@ -1,3 +1,5 @@
+import { parseCimbConsolidatedStatement } from "@/lib/import-parser";
+import { buildBcaTransferPdfRows, parseBcaTransferProof } from "@/lib/bca-transfer-proof";
 import { hasReconciledBdoInlineLedger } from "@/lib/import-parser";
 import { buildPosbPdfRows } from "@/lib/posb-statement";
 import { gcashBillsReceiptTextLayerIsComplete } from "@/lib/gcash-bills-receipt";
@@ -1163,6 +1165,7 @@ const scoreStatementTextCandidate = (text: string) => {
 };
 
 export const pdfTextLayerLooksSufficientForParsing = (text: string, fileName?: string | null) => {
+  if (parseBcaTransferProof(text)?.rows.length) return true;
   const normalized = text.trim();
   if (hasReconciledBdoInlineLedger(normalized)) return true;
   // A complete labeled proof is one payment, not a multi-row bank statement.
@@ -2210,6 +2213,7 @@ const extractTextFromPdfBytes = async (data: Uint8Array, password?: string, base
     const pages = new Array<string>(pdf.numPages);
     const mariBankTransactionRows = new Array<string[]>(pdf.numPages);
     const posbTransactionRows = new Array<string[]>(pdf.numPages);
+    const bcaProofRows = new Array<string[]>(pdf.numPages);
     let nextPageIndex = 0;
     // PDF.js can read independent text layers concurrently. Bound the work so
     // a long statement does not monopolize a serverless invocation, while
@@ -2229,12 +2233,17 @@ const extractTextFromPdfBytes = async (data: Uint8Array, password?: string, base
             content.items as PdfTextContentItemLike[]
           );
           posbTransactionRows[pageIndex] = buildPosbPdfRows(content.items as PdfTextContentItemLike[]);
+          bcaProofRows[pageIndex] = buildBcaTransferPdfRows(content.items as PdfTextContentItemLike[], pdf.numPages);
         }
       })
     );
 
     try {
       const extractedText = pages.join("\n");
+      const cimbText = `${extractedText}\nCIMB_NATIVE_PAGES ${pdf.numPages}`;
+      if (parseCimbConsolidatedStatement(cimbText)) return cimbText;
+      const bcaText = `${extractedText}\nBCA_NATIVE_PAGES ${pdf.numPages}\n${bcaProofRows.flat().filter(Boolean).join("\n")}`;
+      if (parseBcaTransferProof(bcaText)?.rows.length) return bcaText;
       const structuredPosbRows = posbTransactionRows.flat().filter(Boolean);
       if (/Details of Your POSB Payroll Account/i.test(extractedText) && structuredPosbRows.length > 0) return `${extractedText}\n${structuredPosbRows.join('\n')}`;
       const structuredMariBankRows = mariBankTransactionRows.flat().filter(Boolean);
@@ -3105,6 +3114,7 @@ export const readImportedFileTextWithCacheInfo = async (
         // contain repeated transaction rows, so that gate incorrectly sends a
         // complete text layer through a 30-60 second rendered OCR pass. Keep
         // the OCR fallback for scanned PDFs whose text layer is actually empty.
+        if (parseBcaTransferProof(textLayer)?.rows.length) return textLayer;
         if (textLayer.trim() && gcashBillsReceiptTextLayerIsComplete(textLayer) && (
           shouldPreferPdfTextLayerWithoutStatementGate(params.fileName, params.importMode) ||
           knownStatementNativeTextIsComplete(textLayer, params.fileName)

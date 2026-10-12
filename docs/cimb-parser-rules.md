@@ -57,3 +57,15 @@ This document captures the CIMB / GSave parsing rules learned from the training 
 ## Expected Outcome
 
 - CIMB imports should behave like a structured savings ledger with reliable directionality and durable title mappings.
+
+## Consolidated Fast Plus / GSave statements
+
+The single-customer consolidated layout has separate product summaries and ledgers. Preserve each complete 14-digit account number, including leading zeros. Never substitute the customer `Reference No.` for an account number. Multiple customers or unsupported products continue through the existing parser path.
+
+For the dedicated consolidated path, require the physical PDF page count to equal the complete printed page set, one consistent statement period, every account summary and ledger, matching opening/closing dates, all three PHP movement columns, every running balance, per-account movement totals and the combined closing total. A contradiction or missing evidence stops confirmation with a source-review reason; a generic or AI guess cannot override that failed proof. Keep the generation date separate from the ledger period.
+
+A product with zero deposits/withdrawals and a verified opening/closing balance is an account snapshot. Retain a hidden `account_snapshot_marker`; do not create a zero-value income or a `Closing Balance` transaction. A mixed import's status response must include the snapshot account alongside accounts with transactions, with stable first and repeated reads.
+
+New accounts may initialize from the source-backed closing balance. Existing matched accounts retain all current balances, customized identities, currencies and timestamps; ambiguous identities, deleted accounts and capacity limits remain guarded. Do not run legacy placeholder deletion or multi-account refresh cleanup for this new family. Source closing balances stay in their own raw evidence. Repeated confirmation must leave financial records and completed learning unchanged. User-confirmed edits must survive later historical confirmation.
+
+The private second Scribd batch supplies eight movements, one empty-account snapshot and two distinct account identities. Source pages and independent labels stay outside Git. The portable reproduction uses invented identities/amounts, includes two legitimate repeated cash adjustments with distinct references, and is reviewed by Codex rather than claimed as human confirmation. Named future `CIMBConsoStatement` uploads use additive `v41-cimb-consolidated` cache entries; existing v39 entries and learning remain intact.

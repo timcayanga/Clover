@@ -38,6 +38,8 @@ export const DATA_ENGINE_VERSION = "v2";
 export const IMPORT_FILE_EXTRACTION_CACHE_VERSION = "v39";
 export const resolveImportFileExtractionCacheVersion = (fileName?: string | null) => {
   const normalizedFileName = String(fileName ?? "");
+  if (/cimb[-_\s]*conso[-_\s]*statement/i.test(normalizedFileName)) return "v41-cimb-consolidated";
+  if (/bukti[-_\s]*trf/i.test(normalizedFileName)) return "v41-bca-transfer-proof";
   if (/gcash.*bills?[-_\s]*pay[-_\s]*receipt/i.test(normalizedFileName)) return "v40-gcash-bills-receipt";
   if (/^BE\d{8}\.pdf$/i.test(normalizedFileName.trim())) {
     return "v12-bpi-card-ledger-r2";
@@ -1957,7 +1959,7 @@ export const detectStatementMetadataFromText = (text: string, fileName = ""): St
   const metadata = detectStatementMetadata(text, fileName);
   // This receipt's account number belongs to the biller. An explicit absence
   // of wallet identity must survive the generic account-number fallback.
-  if (metadata?.identityEvidence?.includes("GCash bill receipt and reference")) return { ...metadata, currency: metadata.currency ?? null };
+  if (metadata?.identityEvidence?.some(evidence => ["GCash bill receipt and reference", "cimb-consolidated-products", "bca-native-transfer-columns"].includes(evidence))) return { ...metadata, currency: metadata.currency ?? null };
   // Some Metrobank online PDFs preserve the MB-Online-MSOA filename but lose
   // the bank masthead during extraction. Prefer that durable filename signal
   // over incidental words (for example, a contact email containing "Wise").

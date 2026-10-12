@@ -1914,6 +1914,146 @@
         "status": "reviewed",
         "basis": "Same independently invented ledger as the email receipt: bill120 plus fee3.25 equals123.25. The selectable PDF body omits the email subject and splits the biller name around its label. Preserve the full invented biller, payment timestamp, one reference and biller-account vs wallet distinction; this is another representation, not another real financial example."
       }
+    },
+    {
+      "kind": "statement",
+      "representation": "independently invented native PDF column transcription",
+      "provenance": {
+        "origin": "synthetic",
+        "reviewer": "Codex",
+        "reviewedAt": "2026-10-12",
+        "status": "reviewed",
+        "basis": "Invented identity and values. Separate Fast Plus zero snapshot and GSave ledger: opening20+deposits102-withdrawal1=closing121. Four movements including two legitimate identical cash adjustments with distinct references. Never create a closing-balance transaction or combine account identities. Physical PDF page count must match the complete printed page count; unrelated extra pages are not silently ignored."
+      },
+      "id": "cimb-consolidated-zero-account",
+      "source": "cimb-consolidated-zero-account.txt",
+      "expectedMetadata": {
+        "institution": "CIMB",
+        "accountNumber": null,
+        "currency": "PHP",
+        "openingBalance": null,
+        "endingBalance": null
+      },
+      "expected": [
+        {
+          "date": "2025-11-30",
+          "amount": "0.00",
+          "currency": "PHP",
+          "accountNumber": "00000123450000",
+          "rawPayload": {
+            "kind": "account_snapshot_marker",
+            "source": "cimb_consolidated_snapshot",
+            "balance": 0,
+            "snapshotDate": "2025-11-30"
+          }
+        },
+        {
+          "date": "2025-11-01",
+          "amount": "100.00",
+          "currency": "PHP",
+          "type": "income",
+          "accountNumber": "00000123456789",
+          "rawPayload": {
+            "source": "cimb_consolidated_ledger",
+            "ref": "EXAMPLE001",
+            "balance": "120.00",
+            "balanceReconciled": true
+          }
+        },
+        {
+          "date": "2025-11-02",
+          "amount": "1.00",
+          "currency": "PHP",
+          "type": "income",
+          "accountNumber": "00000123456789",
+          "rawPayload": {
+            "source": "cimb_consolidated_ledger",
+            "ref": "EXAMPLE002",
+            "balance": "121.00",
+            "balanceReconciled": true
+          }
+        },
+        {
+          "date": "2025-11-02",
+          "amount": "1.00",
+          "currency": "PHP",
+          "type": "income",
+          "accountNumber": "00000123456789",
+          "rawPayload": {
+            "source": "cimb_consolidated_ledger",
+            "ref": "EXAMPLE003",
+            "balance": "122.00",
+            "balanceReconciled": true
+          }
+        },
+        {
+          "date": "2025-11-03",
+          "amount": "1.00",
+          "currency": "PHP",
+          "type": "expense",
+          "accountNumber": "00000123456789",
+          "rawPayload": {
+            "source": "cimb_consolidated_ledger",
+            "ref": "EXAMPLE004",
+            "balance": "121.00",
+            "balanceReconciled": true
+          }
+        }
+      ],
+      "sha256": "0e30a152ee7b14164afa35082179ee2741059cb9da6171175a38f338034ab13d"
+    },
+    {
+      "kind": "statement",
+      "representation": "independently invented native PDF column transcription",
+      "provenance": {
+        "origin": "synthetic",
+        "reviewer": "Codex",
+        "reviewedAt": "2026-10-12",
+        "status": "reviewed",
+        "basis": "Invented KlikBCA native-column proof. One outgoing30 IDR transfer plus2 IDR fee totals32. Leading-zero payer001-1234567 differs from recipient90012345678. EXAMPLE HOLDING is the payer label, not merchant/payee. Preserve printed time without inventing a timezone or source balance. Physical PDF page count must match the complete printed page count; unrelated extra pages are not silently ignored."
+      },
+      "id": "bca-transfer-components",
+      "source": "bca-transfer-components.txt",
+      "expectedMetadata": {
+        "institution": "BCA",
+        "accountNumber": "001-1234567",
+        "currency": "IDR",
+        "openingBalance": null,
+        "endingBalance": null
+      },
+      "expected": [
+        {
+          "date": "2025-04-10",
+          "amount": "30.00",
+          "currency": "IDR",
+          "type": "expense",
+          "accountNumber": "001-1234567",
+          "rawPayload": {
+            "source": "bca_transfer_proof",
+            "component": "principal",
+            "reference": "20250410001234",
+            "recipientIdentifier": "90012345678",
+            "transferTime": "09:12:34",
+            "totalDebit": 32
+          }
+        },
+        {
+          "date": "2025-04-10",
+          "amount": "2.00",
+          "currency": "IDR",
+          "type": "expense",
+          "accountNumber": "001-1234567",
+          "rawPayload": {
+            "source": "bca_transfer_proof",
+            "component": "fee",
+            "reference": "20250410001234",
+            "recipientIdentifier": "90012345678",
+            "transferTime": "09:12:34",
+            "totalDebit": 32
+          }
+        }
+      ],
+      "sha256": "bebb8a00c356a2afabba2c8f2304ea4da40076919756ea8314d23235cd7f9016"
     }
   ]
 }

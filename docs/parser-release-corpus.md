@@ -92,3 +92,11 @@ The private download catalogue records source URL, checksum, download method, du
 The retry regression exposed an unchanged-balance account write. Confirmation now updates a single-account balance only when its database value differs (or is null). This preserves the account timestamp on retry without changing balance selection, confirmed transaction protection or learning semantics.
 
 The native-body GCash representation retains the same invented bill/fee ledger without its image-only email subject. Source receipt fields and the interrupted biller label must identify it. The stored-file native-layer fast path requires complete fields; named receipts use an additional cache version, with the old version retained unchanged. The private original is replayed through `readImportedFileTextWithCacheInfo`, matching normal upload preflight rather than only the direct-file reader.
+
+## Scribd second batch
+
+The `cimb-consolidated-zero-account` and `bca-transfer-components` examples extend the portable corpus to29 representations /124 observations. Invented expectations were independently specified: four CIMB movements plus one empty-account marker; one BCA principal and fee. These are regression observations, not a newly trained-document count.
+
+`scribd-batch-two-db-regression.ts` is part of the mandatory real-worker release gate. It checks physical/printed pages, dates, running balances, repeated references, zero-activity account visibility, native BCA columns, payer/recipient separation, principal/fee currency, explicit absence of bank-balance anchors, first/repeated status reads, no-op confirmation and completed durable jobs. Invalid recognized proofs cannot create financial rows or learning jobs. Later user edits, current balances and custom identities survive historical confirmation.
+
+Real documents are replayed privately through the normal stored-file reader and worker before staging uploads. The named cache versions are additional namespaces; no old cache, projection, signal, template or original file is refreshed or deleted.

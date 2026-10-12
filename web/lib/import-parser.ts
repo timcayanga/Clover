@@ -1,4 +1,5 @@
 import { parseAppMigrationTable, readAppMigration } from "@/lib/app-migration-import";
+import { parseBcaTransferProof } from "@/lib/bca-transfer-proof";
 import { parsePosbStatement } from "@/lib/posb-statement";
 import { parseGcashBillsReceipt } from "@/lib/gcash-bills-receipt";
 import { parseQifMigration } from "@/lib/qif-migration-import";
@@ -17134,6 +17135,347 @@ const parseCimbTransactionSegment = (
   return rows;
 };
 
+/** Complete single-customer consolidated summaries, with separate product ledgers.
+ * The legacy multi-customer CIMB parser remains unchanged below this path. */
+export function parseCimbConsolidatedStatement(
+  text: string,
+): { rows: ParsedImportRow[]; metadata: DetectedStatementMetadata } | null {
+  if (
+    !/CONSOLIDATED STATEMENT OF ACCOUNT/i.test(text) ||
+    !/\bCIMB\b/i.test(text) ||
+    !/(?:Fast Plus|GSave) Account\s*-\s*Savings Account No\./i.test(text)
+  )
+    return null;
+  const empty = (): {
+    rows: ParsedImportRow[];
+    metadata: DetectedStatementMetadata;
+  } => ({
+    rows: [],
+    metadata: {
+      institution: "CIMB",
+      accountName: "CIMB",
+      accountNumber: null,
+      accountType: "bank",
+      currency: "PHP",
+      openingBalance: null,
+      endingBalance: null,
+      startDate: null,
+      endDate: null,
+      confidence: 0,
+      identityEvidence: ["cimb-consolidated-products"],
+    },
+  });
+  const lines = text.split(/\r?\n/).map(normalizeWhitespace).filter(Boolean);
+  const holders = lines.filter(
+    (l) =>
+      /Reference No\./i.test(l) &&
+      /[A-Za-z]/.test(l.replace(/Reference No\..*$/i, "")),
+  );
+  if (
+    new Set(holders).size > 1 ||
+    lines.some(
+      (l) =>
+        /Account\s*-\s*Savings Account No\./i.test(l) &&
+        !/^(Fast Plus|GSave) Account\s*-\s*Savings Account No\./i.test(l),
+    )
+  )
+    return null;
+  const physical = [...text.matchAll(/^CIMB_NATIVE_PAGES (\d+)$/gm)];
+  const pages = [...text.matchAll(/\bPage\s+(\d+)\s+of\s+(\d+)/gi)];
+  if (
+    physical.length !== 1 ||
+    physical[0]![1] !== pages[0]?.[2] ||
+    !pages.length ||
+    pages.length !== Number(pages[0]![2]) ||
+    pages.some((p) => p[2] !== pages[0]![2]) ||
+    new Set(pages.map((p) => p[1])).size !== Number(pages[0]![2]) ||
+    pages.some((p) => Number(p[1]) < 1 || Number(p[1]) > Number(p[2]))
+  )
+    return empty();
+  const periods = lines.filter((l) => /^For .+ to .+$/i.test(l));
+  if (new Set(periods).size !== 1) return empty();
+  const period = periods[0]?.match(/^For (.+) to (.+)$/i),
+    start = parseCimbDate(period?.[1]),
+    end = parseCimbDate(period?.[2]);
+  if (!start || !end || start > end) return empty();
+  const startDate = start.toISOString().slice(0, 10),
+    endDate = end.toISOString().slice(0, 10);
+  const header =
+    /^(Fast Plus|GSave) Account\s*-\s*Savings Account No\.\s*(\d{14})$/i;
+  const indices = lines
+    .map((l, i) => (header.test(l) ? i : -1))
+    .filter((i) => i >= 0);
+  type Summary = {
+    product: string;
+    account: string;
+    opening: number;
+    deposits: number;
+    withdrawals: number;
+    closing: number;
+    lines: string[];
+  };
+  const summaries = new Map<string, Summary>(),
+    ledgers = new Map<string, string[]>();
+  const cents = (v: unknown) => Math.round(Number(v) * 100);
+  for (let n = 0; n < indices.length; n++) {
+    const index = indices[n]!,
+      m = lines[index]!.match(header)!,
+      body = lines.slice(index + 1, indices[n + 1] ?? lines.length),
+      account = m[2]!;
+    if (
+      body.some((l) =>
+        /^Date\s+Details\s+Deposit\s+Withdrawal\s+Balance$/i.test(l),
+      )
+    ) {
+      if (ledgers.has(account)) return empty();
+      ledgers.set(account, body);
+      continue;
+    }
+    const field = (pattern: RegExp) => {
+      const values = body
+        .map((l) => l.match(pattern)?.[1])
+        .filter((v): v is string => !!v);
+      return values.length === 1 ? parseMoney(values[0]) : null;
+    };
+    const opening = field(/^Opening Balance PHP ([\d,]+\.\d{2})$/i),
+      deposits = field(/^Total Deposit PHP ([\d,]+\.\d{2})$/i),
+      withdrawals = field(/^Total Withdrawal PHP ([\d,]+\.\d{2})$/i),
+      closing = field(/^Closing Balance as of .+ PHP ([\d,]+\.\d{2})$/i);
+    if (
+      [opening, deposits, withdrawals, closing].some(
+        (v) => v === null || !Number.isSafeInteger(cents(v)),
+      ) ||
+      summaries.has(account)
+    )
+      return empty();
+    const summaryDate = parseCimbDate(
+      body
+        .find((l) => /^Closing Balance as of /i.test(l))
+        ?.match(/^Closing Balance as of (.+) PHP /i)?.[1],
+    );
+    if (summaryDate?.toISOString().slice(0, 10) !== endDate) return empty();
+    summaries.set(account, {
+      product: m[1]!,
+      account,
+      opening: opening!,
+      deposits: deposits!,
+      withdrawals: withdrawals!,
+      closing: closing!,
+      lines: body,
+    });
+  }
+  if (
+    !summaries.size ||
+    summaries.size !== ledgers.size ||
+    [...ledgers.keys()].some((k) => !summaries.has(k))
+  )
+    return empty();
+  const totalLine = lines.filter((l) =>
+    /^Total Balance PHP [\d,]+\.\d{2}$/i.test(l),
+  );
+  if (totalLine.length !== 1) return empty();
+  const total = parseMoney(totalLine[0]!.match(/PHP ([\d,]+\.\d{2})$/)![1]);
+  if (
+    cents(total) !==
+    [...summaries.values()].reduce((n, s) => n + cents(s.closing), 0)
+  )
+    return empty();
+  const rows: ParsedImportRow[] = [];
+  for (const s of summaries.values()) {
+    const body = ledgers.get(s.account)!,
+      openingIndices = body
+        .map((l, i) =>
+          new RegExp(`^${cimbDatePattern}\\s+Opening Balance\\b`, "i").test(l)
+            ? i
+            : -1,
+        )
+        .filter((i) => i >= 0),
+      closingIndices = body
+        .map((l, i) =>
+          new RegExp(`^${cimbDatePattern}\\s+Closing Balance\\b`, "i").test(l)
+            ? i
+            : -1,
+        )
+        .filter((i) => i >= 0);
+    if (
+      openingIndices.length !== 1 ||
+      closingIndices.length !== 1 ||
+      closingIndices[0]! <= openingIndices[0]!
+    )
+      return empty();
+    const openingDate = parseCimbDate(
+        body[openingIndices[0]!]!.split(/ Opening Balance/i)[0],
+      ),
+      closingDate = parseCimbDate(
+        body[closingIndices[0]!]!.split(/ Closing Balance/i)[0],
+      );
+    if (
+      openingDate?.toISOString().slice(0, 10) !== startDate ||
+      closingDate?.toISOString().slice(0, 10) !== endDate
+    )
+      return empty();
+    const anchor = (line: string) => {
+      const amounts = [...line.matchAll(/PHP\s+([\d,]+\.\d{2})/g)];
+      return amounts.length === 1 ||
+        (amounts.length === 3 &&
+          amounts.slice(0, 2).every((m) => parseMoney(m[1]) === 0))
+        ? parseMoney(amounts.at(-1)![1])
+        : null;
+    };
+    const sourceOpening = anchor(body[openingIndices[0]!]!),
+      sourceClosing = anchor(body[closingIndices[0]!]!);
+    if (
+      sourceOpening === null ||
+      sourceClosing === null ||
+      cents(sourceOpening) !== cents(s.opening) ||
+      cents(sourceClosing) !== cents(s.closing)
+    )
+      return empty();
+    const ledger = body.slice(openingIndices[0]! + 1, closingIndices[0]!);
+    const count = ledger.filter((l) =>
+      new RegExp(`^${cimbDatePattern}(?:\\s|$)`, "i").test(l),
+    ).length;
+    const parsed = parseCimbTransactionSegment(ledger, {
+      accountName: `CIMB ${s.account.slice(-4)}`,
+      accountNumber: s.account,
+      institution: "CIMB",
+      statementStartDate: start.toISOString(),
+      statementEndDate: end.toISOString(),
+    });
+    if (parsed.length !== count) return empty();
+    let running = cents(s.opening),
+      deposits = 0,
+      withdrawals = 0;
+    for (const row of parsed) {
+      const raw = row.rawPayload!,
+        deposit = cents(raw.depositText),
+        withdrawal = cents(raw.withdrawalText);
+      if (
+        (String(raw.line).match(/\bPHP\s+[0-9,]+\.\d{2}/g) ?? []).length !==
+          3 ||
+        !Number.isSafeInteger(deposit) ||
+        !Number.isSafeInteger(withdrawal) ||
+        deposit < 0 ||
+        withdrawal < 0 ||
+        deposit > 0 === withdrawal > 0 ||
+        row.type !== (deposit > 0 ? "income" : "expense") ||
+        cents(row.amount) !== deposit + withdrawal ||
+        !row.date ||
+        row.date < startDate ||
+        row.date > endDate
+      )
+        return empty();
+      running += deposit - withdrawal;
+      deposits += deposit;
+      withdrawals += withdrawal;
+      if (running !== cents(raw.balanceText)) return empty();
+    }
+    if (
+      running !== cents(s.closing) ||
+      deposits !== cents(s.deposits) ||
+      withdrawals !== cents(s.withdrawals)
+    )
+      return empty();
+    const proof = {
+      version: "cimb-consolidated-ledger-v1",
+      openingBalance: s.opening,
+      closingBalance: s.closing,
+      totalDeposits: s.deposits,
+      totalWithdrawals: s.withdrawals,
+    };
+    if (!parsed.length) {
+      if (s.deposits !== 0 || s.withdrawals !== 0) return empty();
+      rows.push({
+        date: endDate,
+        amount: "0.00",
+        currency: "PHP",
+        type: "income",
+        merchantRaw: `CIMB ${s.account.slice(-4)}`,
+        merchantClean: `CIMB ${s.account.slice(-4)}`,
+        accountName: `CIMB ${s.account.slice(-4)}`,
+        accountNumber: s.account,
+        institution: "CIMB",
+        description: `${s.product} closing balance`,
+        confidence: 95,
+        parserConfidence: 100,
+        categoryConfidence: 100,
+        rawPayload: {
+          source: "cimb_consolidated_snapshot",
+          kind: "account_snapshot_marker",
+          accountNumber: s.account,
+          accountName: `CIMB ${s.account.slice(-4)}`,
+          accountType: "bank",
+          accountCurrency: "PHP",
+          institutionRaw: "CIMB",
+          product: s.product,
+          balance: s.closing,
+          snapshotDate: endDate,
+          statementOpeningBalance: s.opening.toFixed(2),
+          statementEndingBalance: s.closing.toFixed(2),
+          sourceText: text,
+          reconciliation: proof,
+        },
+      });
+    } else
+      rows.push(
+        ...parsed.map((row) => ({
+          ...row,
+          currency: "PHP",
+          parserConfidence: 100,
+          rawPayload: {
+            ...row.rawPayload,
+            source: "cimb_consolidated_ledger",
+            product: s.product,
+            direction: row.type === "income" ? "incoming" : "outgoing",
+            statementOpeningBalance: s.opening.toFixed(2),
+            statementEndingBalance: s.closing.toFixed(2),
+            balanceReconciled: true,
+            reconciliation: proof,
+          },
+        })),
+      );
+  }
+  return {
+    rows,
+    metadata: {
+      institution: "CIMB",
+      accountNumber: summaries.size === 1 ? [...summaries.keys()][0]! : null,
+      accountName: "CIMB",
+      accountType: "bank",
+      currency: "PHP",
+      openingBalance:
+        summaries.size === 1 ? [...summaries.values()][0]!.opening : null,
+      endingBalance:
+        summaries.size === 1 ? [...summaries.values()][0]!.closing : null,
+      startDate: start.toISOString(),
+      endDate: end.toISOString(),
+      confidence: 95,
+      identityEvidence: ["cimb-consolidated-products"],
+    },
+  };
+}
+export function hasVerifiedCimbConsolidatedRows(
+  text: string,
+  rows: ParsedImportRow[],
+) {
+  const expected = parseCimbConsolidatedStatement(text)?.rows;
+  if (!expected?.length || rows.length !== expected.length) return false;
+  const project = (r: ParsedImportRow) => [
+    r.date,
+    r.amount,
+    r.currency,
+    r.type,
+    r.accountNumber,
+    r.rawPayload?.source,
+    r.rawPayload?.kind,
+    r.rawPayload?.ref,
+    r.rawPayload?.balance,
+  ];
+  return (
+    JSON.stringify(rows.map(project)) === JSON.stringify(expected.map(project))
+  );
+}
+
 const parseCimbImportText = (text: string) => {
   const normalizedText = text.replace(/\u00a0/g, " ");
   const compact = normalizeWhitespace(normalizedText);
@@ -25962,6 +26304,10 @@ export const detectStatementMetadata = (text: string, fileName = ""): DetectedSt
     };
   }
 
+  const consolidatedCimb = parseCimbConsolidatedStatement(text);
+  if (consolidatedCimb) return consolidatedCimb.metadata;
+  const bca = parseBcaTransferProof(text);
+  if (bca) return bca.metadata;
   const posb = parsePosbStatement(text);
   if (posb) return posb.metadata;
   const gcashBill = parseGcashBillsReceipt(text);
@@ -26858,6 +27204,10 @@ export const parseImportText = (
   if (structuredDelimitedRows) {
     return structuredDelimitedRows;
   }
+  const consolidatedCimb = parseCimbConsolidatedStatement(text);
+  if (consolidatedCimb) return consolidatedCimb.rows;
+  const bca = parseBcaTransferProof(text);
+  if (bca) return bca.rows;
   const posb = parsePosbStatement(text);
   if (posb) return posb.rows;
   const gcashBill = parseGcashBillsReceipt(text);
