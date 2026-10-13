@@ -105,3 +105,20 @@ with natural flow for small landscape screens, disabled motion and reduced
 motion. Copy is limited to a heading and one paragraph per chapter, drawing on
 the production story's start-your-way and financial-habits language.
 No new raster assets, WebGL runtime or animation packages were introduced.
+
+### Continuous life-to-clarity story (13 October 2026)
+
+Replaced the independent feature sections with one four-part pinned journey:
+everyday purchases, a coherent spending picture, a conversation about what
+changed, and a calmer moment at home. Desktop uses a centered caption above a
+wide visual stage instead of alternating feature columns. Scroll progress drives
+reversible depth, perspective, entrances and departures across that same stage.
+The human photo opens into a wider scene; the savings card stays away from the
+face. Heading surfaces remain quiet and opaque.
+
+Inactive visual panels are inert, while narrative headings remain available to
+assistive technology. Off/reduced-motion and short landscape screens use a normal
+flow with every story part available. Gentle motion uses small vertical movement
+in place of the stage's perspective travel. The previous/restart/next controls
+now navigate individual story parts, including the static layout. No animation
+package, WebGL runtime, new raster asset or continuous idle rendering was added.
