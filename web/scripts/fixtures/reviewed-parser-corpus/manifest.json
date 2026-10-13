@@ -3593,6 +3593,183 @@
           }
         }
       ]
+    },
+    {
+      "id": "seabank-id-english-columns",
+      "source": "seabank-id-english-columns.txt",
+      "sha256": "dcd202b955a9028defa8cf51e095a3fcaaca0a90e0e76d2e1fc25442ea710fde",
+      "kind": "statement",
+      "representation": "Invented native en column proof with bounded 3+9 digit identity split",
+      "provenance": {
+        "origin": "synthetic",
+        "reviewer": "Codex",
+        "reviewedAt": "2026-10-13",
+        "status": "reviewed",
+        "basis": "Independent paper contract: opening250 plus400+1 less40+40+10 equals561. Repeated40 purchases remain separate; complete physical/printed pages, IDR integers, exact full identity and each running balance are fixed before parser execution. Voucher is a ledger counterparty description; complete proof must outrank the promotion heuristic."
+      },
+      "expected": [
+        {
+          "date": "2026-01-05",
+          "amount": "400.00",
+          "currency": "IDR",
+          "type": "income",
+          "accountNumber": "901000000456",
+          "rawPayload": {
+            "source": "seabank_indonesia_native",
+            "sourceRowIndex": 0,
+            "balance": 650,
+            "balanceReconciled": true
+          },
+          "merchantRaw": "Voucher Wallet Transfer"
+        },
+        {
+          "date": "2026-01-05",
+          "amount": "40.00",
+          "currency": "IDR",
+          "type": "expense",
+          "accountNumber": "901000000456",
+          "rawPayload": {
+            "source": "seabank_indonesia_native",
+            "sourceRowIndex": 1,
+            "balance": 610,
+            "balanceReconciled": true
+          }
+        },
+        {
+          "date": "2026-01-05",
+          "amount": "40.00",
+          "currency": "IDR",
+          "type": "expense",
+          "accountNumber": "901000000456",
+          "rawPayload": {
+            "source": "seabank_indonesia_native",
+            "sourceRowIndex": 2,
+            "balance": 570,
+            "balanceReconciled": true
+          }
+        },
+        {
+          "date": "2026-01-06",
+          "amount": "1.00",
+          "currency": "IDR",
+          "type": "income",
+          "accountNumber": "901000000456",
+          "rawPayload": {
+            "source": "seabank_indonesia_native",
+            "sourceRowIndex": 3,
+            "balance": 571,
+            "balanceReconciled": true
+          }
+        },
+        {
+          "date": "2026-01-06",
+          "amount": "10.00",
+          "currency": "IDR",
+          "type": "expense",
+          "accountNumber": "901000000456",
+          "rawPayload": {
+            "source": "seabank_indonesia_native",
+            "sourceRowIndex": 4,
+            "balance": 561,
+            "balanceReconciled": true
+          }
+        }
+      ],
+      "expectedMetadata": {
+        "institution": "SeaBank Indonesia",
+        "accountNumber": "901000000456",
+        "currency": "IDR",
+        "openingBalance": 250,
+        "endingBalance": 561
+      }
+    },
+    {
+      "id": "seabank-id-spaced-identity",
+      "source": "seabank-id-spaced-identity.txt",
+      "sha256": "7f6611312a4e8245bea2daf7a58183add3c7b567a1ae870e1bd1b020321eccd5",
+      "kind": "statement",
+      "representation": "Invented native id column proof with bounded 3+9 digit identity split",
+      "provenance": {
+        "origin": "synthetic",
+        "reviewer": "Codex",
+        "reviewedAt": "2026-10-13",
+        "status": "reviewed",
+        "basis": "Independent paper contract: opening250 plus400+1 less40+40+10 equals561. Repeated40 purchases remain separate; complete physical/printed pages, IDR integers, exact full identity and each running balance are fixed before parser execution."
+      },
+      "expected": [
+        {
+          "date": "2026-01-05",
+          "amount": "400.00",
+          "currency": "IDR",
+          "type": "income",
+          "accountNumber": "901000000456",
+          "rawPayload": {
+            "source": "seabank_indonesia_native",
+            "sourceRowIndex": 0,
+            "balance": 650,
+            "balanceReconciled": true
+          }
+        },
+        {
+          "date": "2026-01-05",
+          "amount": "40.00",
+          "currency": "IDR",
+          "type": "expense",
+          "accountNumber": "901000000456",
+          "rawPayload": {
+            "source": "seabank_indonesia_native",
+            "sourceRowIndex": 1,
+            "balance": 610,
+            "balanceReconciled": true
+          }
+        },
+        {
+          "date": "2026-01-05",
+          "amount": "40.00",
+          "currency": "IDR",
+          "type": "expense",
+          "accountNumber": "901000000456",
+          "rawPayload": {
+            "source": "seabank_indonesia_native",
+            "sourceRowIndex": 2,
+            "balance": 570,
+            "balanceReconciled": true
+          }
+        },
+        {
+          "date": "2026-01-06",
+          "amount": "1.00",
+          "currency": "IDR",
+          "type": "income",
+          "accountNumber": "901000000456",
+          "rawPayload": {
+            "source": "seabank_indonesia_native",
+            "sourceRowIndex": 3,
+            "balance": 571,
+            "balanceReconciled": true
+          }
+        },
+        {
+          "date": "2026-01-06",
+          "amount": "10.00",
+          "currency": "IDR",
+          "type": "expense",
+          "accountNumber": "901000000456",
+          "rawPayload": {
+            "source": "seabank_indonesia_native",
+            "sourceRowIndex": 4,
+            "balance": 561,
+            "balanceReconciled": true
+          }
+        }
+      ],
+      "expectedMetadata": {
+        "institution": "SeaBank Indonesia",
+        "accountNumber": "901000000456",
+        "currency": "IDR",
+        "openingBalance": 250,
+        "endingBalance": 561
+      }
     }
   ]
 }

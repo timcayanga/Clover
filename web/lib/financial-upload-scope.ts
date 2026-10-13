@@ -1,5 +1,6 @@
 import { hasKoreanFinancialHeaders, normalizeKoreanFinancialText } from "@/lib/korean-financial-text";
 import { hasIndonesianFinancialHeaders, hasIndonesianFinancialText, hasRupiahMarker } from "@/lib/indonesian-financial-text";
+import { parseHeldNativeSource } from "@/lib/held-source-contracts";
 export type FinancialUploadScopeDecision = {
   decision: "financial" | "ambiguous" | "non_financial";
   confidence: number;
@@ -31,6 +32,17 @@ export const assessFinancialUploadScope = (params: {
   metadataConfidence?: number | null;
   hasInstitution?: boolean;
 }): FinancialUploadScopeDecision => {
+  // A merchant's voucher label is not a promotion-only document when the
+  // complete native bank ledger independently proves every movement. Row
+  // counts, institution guesses and proof markers alone cannot qualify.
+  if (/^SEABANK_ID_NATIVE_PAGES \d+$/m.test(params.text ?? "")) {
+    try {
+      const native = parseHeldNativeSource(params.text ?? "");
+      if (native?.rows.length && native.rows.every(row => row.rawPayload?.source === "seabank_indonesia_native")) {
+        return { decision: "financial", confidence: 95, reasons: ["complete reconciled native Indonesian SeaBank ledger"] };
+      }
+    } catch { /* Incomplete proofs retain the ordinary scope/review guards. */ }
+  }
   const text = normalizeKoreanFinancialText(params.text ?? "").replace(/\s+/g, " ").trim();
   const fileName = params.fileName ?? "";
   const reasons: string[] = [];

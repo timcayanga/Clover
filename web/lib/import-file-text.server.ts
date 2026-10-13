@@ -2257,6 +2257,7 @@ const extractTextFromPdfBytes = async (data: Uint8Array, password?: string, base
     try {
       const extractedText = pages.join("\n");
       if (/REKENING KORAN/.test(extractedText) && /NO\. REKENING SEABANK:/.test(extractedText)) return `${extractedText}\nSEABANK_ID_NATIVE_PAGES ${pdf.numPages}\n${heldNativeRows.flat().join('\n')}`;
+      if (/BANK STATEMENT/.test(extractedText) && /SEABANK ACCOUNT:/.test(extractedText) && /cs@seabank\.co\.id/.test(extractedText)) return `${extractedText}\nSEABANK_ID_NATIVE_PAGES ${pdf.numPages}\nSEABANK_ID_NATIVE_LANGUAGE EN\n${heldNativeRows.flat().join('\n')}`;
       if (/Consolidated Statement/.test(extractedText) && /DBS/.test(extractedText)) return `${extractedText}\nDBS_NATIVE_PAGES ${pdf.numPages}\n${heldNativeRows.flat().join('\n')}`;
       const grabPages = buildGrabReceiptNativePages(pages, grabPickupFields.flat());
       if (grabPages) return `${extractedText}\n${grabPages}`;

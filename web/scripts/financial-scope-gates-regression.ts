@@ -169,6 +169,12 @@ const importErrorSpecSource = fs.readFileSync(path.join(process.cwd(), "lib/impo
 assert.match(importErrorSpecSource, /Try another financial file/);
 assert.match(importErrorSpecSource, /Coupons, advertisements, menus, and promotional offers cannot create transactions/);
 
+const completeEnglishIdrLedger = fs.readFileSync("scripts/fixtures/reviewed-parser-corpus/seabank-id-english-columns.txt", "utf8");
+assert.equal(assessFinancialUploadScope({text:completeEnglishIdrLedger}).decision,"financial","A complete reconciled native ledger can contain a voucher counterparty");
+for(const invalid of [completeEnglishIdrLedger.replace("400 | 650","401 | 650"),completeEnglishIdrLedger.replace("page 2 of 2","page 2 of 3"),completeEnglishIdrLedger.replaceAll("(IDR)","(USD)"),completeEnglishIdrLedger.replace("901 000000456","901 ***000456")]) assert.notEqual(assessFinancialUploadScope({text:invalid}).decision,"financial","An invalid native proof does not exempt a promotion-only document");
+assert.equal(assessFinancialUploadScope({text:"Voucher Wallet Transfer IDR 100.00 05/01/2026\nSEABANK_ID_NATIVE_PAGES 2"}).decision,"non_financial","A marker cannot exempt a coupon");
+
+
 async function verifyPublicScopeBoundary() {
   const originalFetch = globalThis.fetch;
   let externalRequests = 0;

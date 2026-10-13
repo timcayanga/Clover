@@ -59,5 +59,7 @@
   "bca-recipient-income": "d898241a3178c8564fbebefc40bbad5972446139ad605a84d4e5972b27bdc39c",
   "gcash-ocr-wrapped-biller": "e0ad358c0a33a49cc58fb4544530f974c1598047143a31fc066e43ea312ab61a",
   "bca-legacy-closed-bilingual": "5531df3c893bda4f1d526a31c25b28da2a926384a4086305959ee04b249dc2cb",
-  "bca-compact-current-event": "ebd85ef13594f7bb417cb393cd38196aeb69db0b421a4ee143e160d459fdf551"
+  "bca-compact-current-event": "ebd85ef13594f7bb417cb393cd38196aeb69db0b421a4ee143e160d459fdf551",
+  "seabank-id-english-columns": "1650aa05c54b96b4e79cdfcdb733df28dbb630c743fbcad211139730c3ac0aad",
+  "seabank-id-spaced-identity": "67435555ec04cb6883dd01c5aa764eb6ca5b552215e7e2257925a02cb51294a2"
 }
