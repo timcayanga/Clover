@@ -1,4 +1,3 @@
-import "server-only";
 import { prisma } from "./prisma";
 import { countParsedTransactionRows, countTransactionsByImportFileCompat, fetchImportFileCompat } from "./data-engine";
 import { isSourceReviewRequiredError, sourceReviewFailureReason, sourceReviewUserMessage, SOURCE_REVIEW_PHASE } from "./import-source-review";
