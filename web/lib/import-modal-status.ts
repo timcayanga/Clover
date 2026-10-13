@@ -1,4 +1,5 @@
 import { IMPORT_PROGRESS } from "@/lib/import-progress";
+import { SOURCE_REVIEW_PHASE } from "@/lib/import-source-review";
 
 export type ImportModalStatusMode = "receipt" | "statement" | "portfolio" | "account_detail" | "notes";
 
@@ -13,7 +14,7 @@ export type ImportModalStatusDecision =
       kind: "repair_needed";
       progress: number;
       progressLabel: string;
-      errorCode: "I-104";
+      errorCode: "I-104" | "I-109";
       message: string;
     }
   | {
@@ -140,6 +141,11 @@ export const resolveImportModalStatusDecision = (params: {
   }
 
   const repairMessage = cleanLabel(params.processingMessage) ?? cleanLabel(params.telemetryMessage);
+  if (processingPhase === SOURCE_REVIEW_PHASE && parsedRowsCount === 0) {
+    return { kind: "repair_needed", progress: Math.min(params.progressFloor ?? IMPORT_PROGRESS.finalizing, IMPORT_PROGRESS.finalizing),
+      progressLabel: "Review needed", errorCode: "I-109",
+      message: repairMessage ?? "This source needs review before transactions can be added." };
+  }
   if (params.status === "failed" || params.telemetryPhase === "repair_needed" || processingPhase === "repair_needed") {
     return {
       kind: "repair_needed",

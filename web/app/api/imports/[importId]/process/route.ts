@@ -1,4 +1,5 @@
 import { startImportTiming, measureImportTiming } from "@/lib/import-timing";
+import { SOURCE_REVIEW_PHASE, SOURCE_REVIEW_CODE, isSourceReviewRequiredError, sourceReviewFailureReason, sourceReviewUserMessage } from "@/lib/import-source-review";
 import { isLocalDevHost, requireAuth } from "@/lib/auth";
 import { buildImportKey } from "@/lib/import-keys";
 import { formatUploadAccountDisplayName } from "@/lib/account-display";
@@ -3317,8 +3318,29 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
         );
       }
 
-      const savedTransactionsCount = await countTransactionsByImportFileCompat(importId).catch(() => 0);
-      const parsedRowsCount = await countParsedTransactionRows(importId).catch(() => 0);
+      const savedTransactionsLookup = await countTransactionsByImportFileCompat(importId).catch(() => null);
+      const parsedRowsLookup = await countParsedTransactionRows(importId).catch(() => null);
+      const savedTransactionsCount = savedTransactionsLookup ?? 0;
+      const parsedRowsCount = parsedRowsLookup ?? 0;
+      if (isSourceReviewRequiredError(error) && (savedTransactionsLookup === null || parsedRowsLookup === null)) {
+        return importJsonResponse({ error: "Clover could not verify this import's existing rows. Existing records were not changed.",
+          code: "I-107", retryable: true, importFileId: importId }, { status: 503 });
+      }
+      const sourceReviewReason = sourceReviewFailureReason(error, {
+        parsedRows: parsedRowsLookup ?? -1, confirmedRows: savedTransactionsLookup ?? -1,
+      });
+      if (sourceReviewReason) {
+        const message = sourceReviewUserMessage(sourceReviewReason);
+        await updateImportFileCompat(importId, {
+          status: "failed", processingPhase: SOURCE_REVIEW_PHASE,
+          processingMessage: message, processingCurrentScore: 0,
+          parsedRowsCount: 0, confirmedTransactionsCount: 0,
+        });
+        return importJsonResponse({
+          error: message, diagnosticReason: sourceReviewReason, code: SOURCE_REVIEW_CODE, stage: "source_review",
+          retryable: false, requiresSourceReview: true, importFileId: importId,
+        }, { status: 422 });
+      }
       const recoveryImportFile = await fetchImportFileCompat(importId).catch(() => null);
       const recoveryFileName = String(recoveryImportFile?.fileName ?? "");
       const recoveryFileType = String(recoveryImportFile?.fileType ?? "");

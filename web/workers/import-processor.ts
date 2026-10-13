@@ -16,6 +16,7 @@ import { finalizePortfolioImport, isHoldingsOnlyPortfolio, portfolioConfidence }
 import { assessImportEvidenceSafety, assertSafeImportEvidence } from "@/lib/import-evidence-safety";
 import { startImportTiming, measureImportTiming } from "@/lib/import-timing";
 import { incompleteReceiptFields, receiptCurrencyForPersistence, receiptReviewMessage, RECEIPT_REVIEW_PHASE } from "@/lib/receipt-review";
+import { SOURCE_REVIEW_PHASE, SourceReviewRequiredError } from "@/lib/import-source-review";
 import { shouldRefineReceiptCore } from "@/lib/receipt-detail-refinement";
 import { Prisma } from "@prisma/client";
 import type { AccountType, ReviewStatus, TransactionType } from "@prisma/client";
@@ -89,6 +90,7 @@ import {
   buildStatementFingerprint,
   buildUnsupervisedLearningSnapshot,
   countTransactionsByImportFileCompat,
+  countParsedTransactionRows,
   detectStatementMetadataFromText,
   type EnrichedParsedImportRow,
   findExistingImportedStatement,
@@ -13990,6 +13992,10 @@ export const confirmImportFile = async (
 
   if (importFile.processingPhase === RECEIPT_REVIEW_PHASE && await countTransactionsByImportFileCompat(importFileId) === 0) {
     throw new Error(String(importFile.processingMessage ?? receiptReviewMessage(["required details"])));
+  }
+  if (importFile.processingPhase === SOURCE_REVIEW_PHASE && await countTransactionsByImportFileCompat(importFileId) === 0 &&
+      await countParsedTransactionRows(importFileId) === 0) {
+    throw new SourceReviewRequiredError(String(importFile.processingMessage ?? "This source needs review before transactions can be added."));
   }
 
   const documentCheckpointPromise = (async () =>

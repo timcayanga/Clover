@@ -1,6 +1,7 @@
 import { isLocalDevHost, requireAuth } from "@/lib/auth";
 import { assertWorkspaceAccess } from "@/lib/workspace-access";
-import { countTransactionsByImportFileCompat, fetchImportFileCompat, hasCompatibleTable, updateImportFileCompat } from "@/lib/data-engine";
+import { countParsedTransactionRows, countTransactionsByImportFileCompat, fetchImportFileCompat, hasCompatibleTable, updateImportFileCompat } from "@/lib/data-engine";
+import { SOURCE_REVIEW_PHASE, SOURCE_REVIEW_CODE, isSourceReviewRequiredError, sourceReviewFailureReason, sourceReviewUserMessage } from "@/lib/import-source-review";
 import { buildImportTelemetrySnapshot } from "@/lib/import-telemetry";
 import { readCheckpointWorkflowStage } from "@/lib/import-workflow";
 import { enqueueImportProcessing } from "@/lib/import-queue";
@@ -17,6 +18,7 @@ export const maxDuration = 300;
 export const preferredRegion = "sin1";
 
 export async function POST(_request: Request, { params }: { params: Promise<{ importId: string }> }) {
+  let authorizedImportId: string | null = null;
   try {
     const { importId } = await params;
     const localDev = await isLocalDevHost();
@@ -29,6 +31,7 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
     if (!localDev) {
       await assertWorkspaceAccess(userId, importFile.workspaceId as string);
     }
+    authorizedImportId = importId;
 
     const control = await getImportUserControl(importId, String(importFile.workspaceId));
     if (control !== "running") return NextResponse.json({ error: control === "paused" ? "Resume this paused import using its play icon." : "This import was cancelled.", control }, { status: 409 });
@@ -39,8 +42,14 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
         })
       : null;
     const parsedRowsCount = Math.max(Number(importFile.parsedRowsCount ?? 0), Number(statementCheckpoint?.rowCount ?? 0));
-    const savedTransactionsCount = await countTransactionsByImportFileCompat(importId).catch(() => 0);
+    const savedTransactionsLookup = await countTransactionsByImportFileCompat(importId).catch(() => null);
+    const savedTransactionsCount = savedTransactionsLookup ?? 0;
     const confirmedTransactionsCount = Math.max(Number(importFile.confirmedTransactionsCount ?? 0), savedTransactionsCount);
+    if (importFile.processingPhase === SOURCE_REVIEW_PHASE && savedTransactionsLookup === 0 &&
+        await countParsedTransactionRows(importId) === 0) {
+      return NextResponse.json({ error: importFile.processingMessage, code: SOURCE_REVIEW_CODE,
+        stage: "source_review", retryable: false, requiresSourceReview: true, importFileId: importId }, { status: 422 });
+    }
     const hasVisibleImportData = confirmedTransactionsCount > 0;
     if (importFile.status === "failed" && hasVisibleImportData) {
       await updateImportFileCompat(importId, {
@@ -323,7 +332,25 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
       canResume: nextTelemetry.canResume,
       resumeReason: nextTelemetry.resumeReason,
     });
-  } catch {
+  } catch (error) {
+    if (authorizedImportId) {
+      const counts = await Promise.all([
+        countTransactionsByImportFileCompat(authorizedImportId).catch(() => -1),
+        countParsedTransactionRows(authorizedImportId).catch(() => -1),
+      ]);
+      const reason = sourceReviewFailureReason(error, { confirmedRows: counts[0], parsedRows: counts[1] });
+      if (isSourceReviewRequiredError(error) && counts.some(count => count < 0)) {
+        return NextResponse.json({ error: "Clover could not verify this import's existing rows. Existing records were not changed.",
+          retryable: true, importFileId: authorizedImportId }, { status: 503 });
+      }
+      if (reason) {
+        const message = sourceReviewUserMessage(reason);
+        await updateImportFileCompat(authorizedImportId, { status: "failed", processingPhase: SOURCE_REVIEW_PHASE,
+          processingMessage: message, processingCurrentScore: 0, parsedRowsCount: 0, confirmedTransactionsCount: 0 });
+        return NextResponse.json({ error: message, diagnosticReason: reason, code: SOURCE_REVIEW_CODE, stage: "source_review",
+          retryable: false, requiresSourceReview: true, importFileId: authorizedImportId }, { status: 422 });
+      }
+    }
     const importId = await params.then((value) => value.importId).catch(() => null);
     if (importId) {
       const visibleRows = await countTransactionsByImportFileCompat(importId).catch(() => 0);

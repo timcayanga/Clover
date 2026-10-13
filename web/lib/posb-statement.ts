@@ -1,4 +1,5 @@
 import type { DetectedStatementMetadata, ParsedImportRow } from './import-parser';
+import { SourceReviewRequiredError } from './import-source-review';
 
 export const POSB_NATIVE_ACCOUNT_HEADING = /Details of Your POSB (?:Payroll|eEveryday Savings) Account/i;
 
@@ -86,7 +87,7 @@ export function parsePosbStatement(text: string): { metadata: DetectedStatementM
     const rowDate=date(dm[1],dm[2],year);
     if (!rowDate || (balanceText && !balancePattern.test(balanceText))) throw new Error('POSB source date or balance requires review.');
     const signedAmount=money(amountText);
-    if(signedAmount<0 && /Cash Withdrawal/i.test(description)) throw new Error('POSB reversed cash movement requires source review.');
+    if(signedAmount<0 && /Cash Withdrawal/i.test(description)) throw new SourceReviewRequiredError('POSB reversed cash movement requires source review.');
     const effectiveDirection=signedAmount<0?(direction==='incoming'?'outgoing':'incoming'):direction;
     const type=effectiveDirection==='incoming'?'income':'expense';
     const categoryName=/Withdrawal Fee|Service Charge/i.test(description)?'Financial':/Cash Withdrawal/i.test(description)?'Cash & ATM':/FAST Payment/i.test(description)?'Transfers':/Salary|Interest Earned/i.test(description)?'Income':/BUS\/MRT/i.test(description)?'Transportation':'Other';

@@ -239,7 +239,7 @@ export function GlobalImportActivity() {
             progress: decision.progress,
             detail: decision.progressLabel,
             errorCode: decision.errorCode,
-            errorTitle: "File needs another read",
+            errorTitle: decision.errorCode === "I-109" ? "Source needs review" : "File needs another read",
             errorMessage: decision.message,
             errorNextSteps: getImportErrorNextSteps(decision.errorCode),
             updatedAt: Date.now(),

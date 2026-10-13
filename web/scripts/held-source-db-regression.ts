@@ -8,6 +8,7 @@ import {parseHeldNativeSource,hasVerifiedHeldNativeRows,buildSeaBankIndonesiaPdf
 import {parseBcaTransferProof} from '../lib/bca-transfer-proof';
 import {pdfTextLayerLooksSufficientForParsing} from '../lib/import-file-text.server';
 import {validateParsedImportRows} from '../lib/data-engine-validation';
+import {SOURCE_REVIEW_PHASE,SourceReviewRequiredError,sourceReviewFailureReason} from '../lib/import-source-review';
 import {shouldPersistPublishedAccountSummaries,persistPublishedAccountSummaries} from '../lib/import-checkpoint-publication';
 const url=new URL(process.env.DATABASE_URL??'http://invalid');assert.equal(url.hostname,'127.0.0.1');assert.equal(url.port,process.env.CLOVER_QA_PARSER_PORT??'55441');assert.equal(url.pathname,'/clover_migration_qa');assert(process.argv.includes('--execute'));
 const require=createRequire(import.meta.url);require('next/cache').revalidateTag=()=>{};const tasks:Array<()=>Promise<void>>=[];require('next/server').after=(t:()=>Promise<void>)=>tasks.push(t);const drain=async()=>{while(tasks.length)await Promise.all(tasks.splice(0).map(t=>t()));};let network=0;globalThis.fetch=async()=>{network++;throw new Error('Held source regression prohibits providers');};
@@ -41,6 +42,20 @@ async function main(){
 
  }
  const {buildAccountTombstoneKey}=await import('../lib/account-tombstones');
+ const refusalWorkspace=await db.workspace.create({data:{userId:user.id,name:'Native source refusal'}});
+ const refusalFile=await db.importFile.create({data:{workspaceId:refusalWorkspace.id,fileName:'native-source-review.pdf',fileType:'application/pdf',storageKey:'qa/'+randomUUID()}});
+ let refusal:unknown;try{await processImportFileText(refusalFile.id,{text:idr.replace('1.000 | 1.100','1.001 | 1.100'),importMode:'statement',actorUserId:user.clerkUserId});}catch(error){refusal=error;}
+ assert(refusal instanceof SourceReviewRequiredError,'Actual worker preserves the deterministic refusal type');
+ const refusedRows=await db.parsedTransaction.count({where:{importFileId:refusalFile.id}}),refusedTransactions=await db.transaction.count({where:{importFileId:refusalFile.id}});
+ const refusalReason=sourceReviewFailureReason(refusal,{parsedRows:refusedRows,confirmedRows:refusedTransactions});assert(refusalReason);assert.equal(await db.learningJob.count({where:{workspaceId:refusalWorkspace.id}}),0);
+ await db.importFile.update({where:{id:refusalFile.id},data:{status:'failed',processingPhase:SOURCE_REVIEW_PHASE,processingMessage:refusalReason,processingCurrentScore:0}});
+ const refusalBefore=await db.importFile.findUniqueOrThrow({where:{id:refusalFile.id}});
+ const allConfirmedBefore=await db.transaction.findMany({where:{workspace:{userId:user.id}},orderBy:{id:'asc'}});
+ const allAccountsBefore=await db.account.findMany({where:{workspace:{userId:user.id}},orderBy:{id:'asc'}});
+ await assert.rejects(confirmImportFile(refusalFile.id),error=>error instanceof SourceReviewRequiredError&&error.message===refusalReason);
+ assert.deepEqual(await db.importFile.findUniqueOrThrow({where:{id:refusalFile.id}}),refusalBefore,'Refusal confirmation leaves the source and status unchanged');
+ assert.deepEqual(await db.transaction.findMany({where:{workspace:{userId:user.id}},orderBy:{id:'asc'}}),allConfirmedBefore);
+ assert.deepEqual(await db.account.findMany({where:{workspace:{userId:user.id}},orderBy:{id:'asc'}}),allAccountsBefore);
  for(const [id,institution] of [['seabank-indonesia-columns','SeaBank'],['dbs-my-account-zero','DBS Bank']]){const c=manifest.cases.find((x:any)=>x.id===id);const workspace=await db.workspace.create({data:{userId:user.id,name:'Tombstone '+id}});const accountNumber=c.expected[0].accountNumber,currency=c.expected[0].currency;const identity={name:'Previously deleted bank',institution,accountNumber,type:'bank',currency};await db.accountTombstone.create({data:{workspaceId:workspace.id,name:identity.name,institution,accountNumber,currency,accountType:'bank',source:'upload',normalizedAccountKey:buildAccountTombstoneKey(identity)}});const file=await db.importFile.create({data:{workspaceId:workspace.id,fileName:id+'.pdf',fileType:'application/pdf',storageKey:'qa/'+randomUUID()}});let error=null;try{await processImportFileText(file.id,{text:source(id),importMode:'statement',actorUserId:user.clerkUserId});await settleTombstone();}catch(e){error=String(e);}async function settleTombstone(){await drain();}assert(error || (await db.importFile.findUniqueOrThrow({where:{id:file.id}})).status!=='done');assert.equal(await db.account.count({where:{workspaceId:workspace.id}}),0,'Historical source cannot resurrect a deleted institution alias');assert.equal(await db.transaction.count({where:{workspaceId:workspace.id}}),0);}
  }finally{await drain();await db.user.delete({where:{id:user.id}});await db.$disconnect();}assert.equal(network,0);console.log('Held sources: Indonesian IDR repeats, DBS zero snapshots, BCA income direction, GCash OCR labels, durable jobs and historical confirmed-data preservation passed.');
 }

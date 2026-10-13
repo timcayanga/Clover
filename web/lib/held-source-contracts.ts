@@ -1,8 +1,9 @@
 import type { DetectedStatementMetadata, ParsedImportRow } from './import-parser';
+import { SourceReviewRequiredError } from './import-source-review';
 
 type Item = { str?: unknown; transform?: number[]; width?: number };
 const months = ['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC'];
-function fail(why: string): never { throw new Error(`Native source requires review: ${why}`); }
+function fail(why: string): never { throw new SourceReviewRequiredError(`Native source requires review: ${why}`); }
 const rupiah = (s: string) => /^(?:0|[1-9]\d*|[1-9]\d{0,2}(?:\.\d{3})+)$/.test(s) ? Number(s.replaceAll('.','')) : fail('invalid IDR grouping');
 const day = (d: string, m: string, y: string) => {
   const n=months.indexOf(m.toUpperCase()), result=new Date(Date.UTC(Number(y),n,Number(d),12));

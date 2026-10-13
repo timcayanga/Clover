@@ -25,7 +25,7 @@ async function main() {
   if (process.argv.length !== 2) throw new Error('Release gate accepts no skip, filter or remote-database arguments');
   console.log('Parser release gate: reviewed sources, historical inline contracts, isolated real worker persistence.');
   const tsx = join(web, 'node_modules/tsx/dist/cli.mjs');
-  for (const [script, args] of [['parser-regression.ts', ['--portable']], ['reviewed-parser-corpus.ts', []], ...['merchant-enrichment-regression.ts', 'context-corpus-learning-regression.ts', 'training-signal-dedupe.ts', 'account-tombstone-currency-regression.ts', 'account-import-identity-regression.ts'].map(script => [script, []])]) {
+  for (const [script, args] of [['parser-regression.ts', ['--portable']], ['reviewed-parser-corpus.ts', []], ...['merchant-enrichment-regression.ts', 'context-corpus-learning-regression.ts', 'training-signal-dedupe.ts', 'account-tombstone-currency-regression.ts', 'account-import-identity-regression.ts', 'source-review-regression.ts'].map(script => [script, []])]) {
     run(process.execPath, [tsx, join('scripts', script), ...args], { NODE_OPTIONS: '--conditions=react-server' });
   }
   // Refuse an occupied port; never reuse or reset any existing database.

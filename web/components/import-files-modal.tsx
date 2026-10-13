@@ -80,6 +80,7 @@ import { getLocalPreparseProgressPatch, resolveImportModalStatusDecision } from 
 import { waitForImportSettledVisibility } from "@/lib/import-settled-visibility";
 import { parsePlanLimitMessage, parsePlanLimitPayload, type PlanLimitPayload } from "@/lib/plan-limit-nudges";
 import { getImportErrorSpec, getImportErrorSpecForCode, isResumableImportErrorCode, type ImportErrorStage, type ImportErrorSpec } from "@/lib/import-error-spec";
+import { SOURCE_REVIEW_PHASE } from "@/lib/import-source-review";
 import {
   clearImportActivity,
   isFirstCompletedImportActivity,
@@ -2586,6 +2587,7 @@ export function ImportFilesModal({
         const hasRowBackedVisibility = confirmedTransactionsCount > 0 || visibleImportComplete;
         const visibleProgressSignal = requiresVisibleRows ? hasRowBackedVisibility : hasVisibleImportDataSignal;
         const visualRepairGraceActive =
+          processingPhase !== SOURCE_REVIEW_PHASE &&
           isRecoverableVisualUploadFileName(summaryContext.fileName) &&
           parsedRowsCount === 0 &&
           confirmedTransactionsCount === 0 &&
@@ -2596,6 +2598,12 @@ export function ImportFilesModal({
         // hide the password prompt.
         if (passwordRequired) {
           requestPasswordForItem(itemId, Boolean(itemsRef.current.find((item) => item.id === itemId)?.password.trim()));
+          return;
+        }
+
+        if (processingPhase === SOURCE_REVIEW_PHASE && parsedRowsCount === 0 && confirmedTransactionsCount === 0) {
+          closeImportAfterError(itemId, "source_review", summaryContext.fileName,
+            processingMessage ?? "This source needs review before transactions can be added.");
           return;
         }
 
@@ -4754,6 +4762,7 @@ export function ImportFilesModal({
       const resumeReason = typeof payload.resumeReason === "string" ? payload.resumeReason : null;
       const visualRepairGraceActive =
         processingPhase !== "receipt_review_required" &&
+        processingPhase !== SOURCE_REVIEW_PHASE &&
         isRecoverableVisualUploadFileName(fileName) &&
         parsedRowsCount === 0 &&
         confirmedTransactionsCount === 0 &&
@@ -4805,7 +4814,7 @@ export function ImportFilesModal({
           await sleep(statusPollDelayMs);
           continue;
         }
-        closeImportAfterError(itemId, "background", fileName, statusDecision.message);
+        closeImportAfterError(itemId, statusDecision.errorCode === "I-109" ? "source_review" : "background", fileName, statusDecision.message);
         return { completed: false, summary: null };
       }
 
@@ -5561,7 +5570,7 @@ export function ImportFilesModal({
                 inFlightStatusMonitorStopped = true;
                 importEventStream?.close();
                 importEventStream = null;
-                closeImportAfterError(itemId, "background", item.file.name, statusDecision.message);
+                closeImportAfterError(itemId, statusDecision.errorCode === "I-109" ? "source_review" : "background", item.file.name, statusDecision.message);
                 break;
               }
 

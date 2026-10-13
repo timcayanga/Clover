@@ -1,7 +1,8 @@
 import type { DetectedStatementMetadata, ParsedImportRow } from './import-parser';
 import { summarizeMerchantText } from './merchant-labels';
+import { SourceReviewRequiredError } from './import-source-review';
 
-function fail(reason: string): never { throw new Error(`MariBank native statement requires source review: ${reason}`); }
+function fail(reason: string): never { throw new SourceReviewRequiredError(`MariBank native statement requires source review: ${reason}`); }
 const months = ['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC'];
 function date(day: string, month: string, year: string): string {
   const m = months.indexOf(month.toUpperCase()), y = Number(year), d = Number(day);

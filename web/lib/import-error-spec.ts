@@ -1,6 +1,7 @@
 export type ImportErrorStage =
   | "validation"
   | "scope"
+  | "source_review"
   | "password"
   | "upload"
   | "process"
@@ -70,6 +71,14 @@ const SPEC_BY_STAGE: Record<
       "You can also upload a statement, invoice, transaction screenshot, portfolio record, or financial note.",
       "Coupons, advertisements, menus, and promotional offers cannot create transactions.",
     ],
+    resumable: false,
+  },
+  source_review: {
+    code: "I-109", category: "Validation", httpClass: "400 client-side error",
+    title: "Source needs review",
+    message: "Some details in this file need review before Clover can add transactions.",
+    nextSteps: ["Review the source issue against the saved original.",
+      "Use a corrected source or add the verified transaction manually."],
     resumable: false,
   },
   password: {
@@ -174,6 +183,7 @@ const STAGE_BY_CODE: Record<string, ImportErrorStage> = {
   "I-106": "background",
   "I-107": "monitor",
   "I-108": "scope",
+  "I-109": "source_review",
   "I-199": "unknown",
 };
 

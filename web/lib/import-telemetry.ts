@@ -1,4 +1,5 @@
 import { RECEIPT_REVIEW_PHASE } from "./receipt-review";
+import { SOURCE_REVIEW_PHASE } from "./import-source-review";
 
 export type ImportTelemetryPhase =
   | "queued"
@@ -103,6 +104,12 @@ const GENERIC_PROGRESS_MESSAGES = new Set([
 ]);
 
 export const buildImportTelemetrySnapshot = (params: ImportTelemetryParams): ImportTelemetrySnapshot => {
+  if (params.processingPhase === SOURCE_REVIEW_PHASE &&
+      Number(params.parsedRowsCount ?? 0) === 0 && Number(params.confirmedTransactionsCount ?? 0) === 0) {
+    return { phase: "repair_needed", phaseLabel: "Review needed",
+      message: params.processingMessage?.trim() || "This source needs review before transactions can be added.",
+      canResume: false, resumeReason: SOURCE_REVIEW_PHASE };
+  }
   if (params.processingPhase === RECEIPT_REVIEW_PHASE && Number(params.confirmedTransactionsCount ?? 0) === 0) {
     return { phase: "repair_needed", phaseLabel: "Review needed",
       message: params.processingMessage?.trim() || "This receipt needs more details before a transaction can be added.",
