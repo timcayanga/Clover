@@ -197,6 +197,24 @@ function Receipt({ small = false }: { small?: boolean }) {
   );
 }
 
+// One purchase stays in the same DOM node as paper becomes a row, then joins
+// its category. The labels are illustrative; no customer data is processed here.
+function PurchaseThroughline() {
+  return (
+    <div className={s.purchaseThroughline} aria-hidden="true">
+      <div className={s.purchasePaper}>
+        <div className={s.purchaseReceiptHead}>STARBUCKS<small>October 5, 2026 · 9:41 AM</small></div>
+        <div className={s.purchaseIdentity}>
+          <img src="/figma-icons/categories/food-dining.svg" width={44} height={44} alt="" />
+          <div><strong>Coffee at Starbucks</strong><small>Food & dining · BPI</small></div>
+          <b>₱190.00</b>
+        </div>
+        <div className={s.purchaseReceiptTail}><span>Caffè Latte</span><span>Total paid</span><div className={s.barcode} /></div>
+      </div>
+    </div>
+  );
+}
+
 const everydayPurchases = [
   {
     merchant: "Jollibee",
@@ -693,6 +711,7 @@ export function Showcase({ initialMarket }: { initialMarket: PricingMarket }) {
 
         <ScrollScene id="one-picture" className={s.journey}>
           <div className={s.journeyWorld}>
+            <PurchaseThroughline />
             <article className={s.journeyBeat} data-story-act>
               <div className={s.journeyCopy}>
                 <Heading text="A coffee on the way. Groceries for home. Life keeps moving, and the little moments add up.">

@@ -2805,3 +2805,32 @@
 .site[data-motion="gentle"] .journeyArt { transform: translateY(calc((1 - var(--act-enter)) * 12px)); }
 .journey[data-story-static="true"] .journeyRecords .everydayRecords { opacity: 1; transform: none; }
 .journey[data-story-static="true"] .journeyReceipt { transform: rotateZ(-6deg); }
+
+/* The same coffee purchase crosses the receipt / report boundary. */
+.purchaseThroughline { position: absolute; left: 12%; top: 43%; width: 76%; height: 52%; z-index: 5; pointer-events: none; perspective: 1200px; opacity: calc(1 - var(--purchase-away, 0)); }
+.purchasePaper { --fold: var(--paper-fold, 0); --join: var(--category-join, 0); position: absolute; left: calc(22% - var(--fold) * 16% + var(--join) * 45%); top: calc(var(--fold) * 52% - var(--join) * 16%); width: calc(230px + var(--fold) * (76% - 230px)); padding: 22px; border: 1px solid #d4e8e4; border-bottom: 5px solid #d4e8e4; border-radius: calc(6px + var(--fold) * 18px); color: #243c40; background: linear-gradient(140deg, #fff, #f4fbfa); box-shadow: 0 30px 50px -24px #13605b55; transform-origin: center; transform: rotateZ(calc(-10deg + var(--fold) * 10deg)) rotateY(calc((1 - var(--fold)) * 18deg + var(--join) * -12deg)) rotateX(calc(sin(var(--fold) * 180deg) * 12deg)) translateZ(calc(var(--fold) * 80px - var(--join) * 150px)) scale(calc(1 - var(--join) * .62)); }
+.purchaseReceiptHead { height: calc((1 - var(--fold)) * 62px); overflow: hidden; opacity: calc(1 - var(--fold)); font-size: 16px; font-weight: 800; text-align: center; }
+.purchaseReceiptHead small { display: block; font-size: 10px; font-weight: 400; margin-top: 10px; }
+.purchaseIdentity { display: flex; align-items: center; gap: 12px; min-width: 0; }
+.purchaseIdentity img { width: calc(var(--fold) * 44px); height: 44px; opacity: var(--fold); flex-shrink: 0; }
+.purchaseIdentity > div { flex: 1; min-width: 0; }
+.purchaseIdentity strong { display: block; font-size: calc(12px + var(--fold) * 7px); }
+.purchaseIdentity small { display: block; font-size: 12px; margin-top: 5px; opacity: var(--fold); color: #637b7b; }
+.purchaseIdentity b { font-size: clamp(13px, 1.7vw, 21px); white-space: nowrap; color: #008d9f; }
+.purchaseReceiptTail { height: calc((1 - var(--fold)) * 110px); opacity: calc(1 - var(--fold)); overflow: hidden; transform-origin: top; transform: rotateX(calc(var(--fold) * -85deg)); font-size: 12px; }
+.purchaseReceiptTail span { display: block; margin: 15px 0; }
+.journey:not([data-story-static="true"]) .journeyReceipt, .journey:not([data-story-static="true"]) .journeyTransaction { visibility: hidden; }
+.journey:not([data-story-static="true"]) .journeyClarity { opacity: calc(var(--report-reveal, 0) * var(--act-leave)); transform: none; }
+.journeyClarity .spendingRows > button:first-child { background: rgb(153 238 225 / calc(var(--category-glow, 0) * .35)); box-shadow: 0 0 0 calc(var(--category-glow, 0) * 3px) #a0e5de; border-radius: 10px; }
+.journey[data-story-static="true"] .purchaseThroughline { display: none; }
+.site[data-motion="gentle"] .purchasePaper { transform: scale(calc(1 - var(--category-join, 0) * .62)); }
+@media (max-width: 900px), (max-width: 1100px) and (min-height: 1000px) {
+  .purchaseThroughline { left: 7%; width: 86%; top: 42%; height: 53%; }
+  .purchasePaper { left: calc(5% - var(--fold) * 5% + var(--join) * 18%); width: calc(190px + var(--fold) * (100% - 190px)); top: calc(8% + var(--fold) * 52% - var(--join) * 8%); padding: 16px; }
+  .purchaseIdentity { gap: calc(4px + var(--fold) * 5px); }
+  .purchaseIdentity strong { font-size: 13px; }
+  .purchaseIdentity small { font-size: 10px; }
+  .purchaseIdentity b { font-size: 14px; }
+  .purchaseIdentity img { width: calc(var(--fold) * 34px); height: 34px; }
+}
+@media (max-width: 360px) { .purchaseThroughline { top: 44%; height: 52%; } }

@@ -122,3 +122,7 @@ flow with every story part available. Gentle motion uses small vertical movement
 in place of the stage's perspective travel. The previous/restart/next controls
 now navigate individual story parts, including the static layout. No animation
 package, WebGL runtime, new raster asset or continuous idle rendering was added.
+
+### Receipt-to-insight continuity (2026-10-13)
+
+The pinned narrative now keeps one Starbucks purchase in a shared DOM layer across its first two acts. Scroll folds the receipt's date/item/barcode away, expands the paper into a categorized transaction row, then moves and scales that row into the Food & dining report. A brief category highlight finishes the handoff; reversing scroll reverses the same geometry. The report reveals behind the purchase before the act boundary, avoiding the prior empty frame between independent panels. Captions stay outside the motion layer. Gentle mode preserves the story without perspective rotations; Off, reduced motion and short viewports retain the natural static examples. No animation library, WebGL, new media payload or background animation loop was added.
