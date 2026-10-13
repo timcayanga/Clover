@@ -149,6 +149,8 @@ Deterministic native source-validation refusals use a typed error and a separate
 
 ## Eighth Scribd batch: English Indonesian native ledgers
 
-Two independently invented contracts extend the reviewed corpus to63 cases /208 observations. All61 previous sources, expectations and locks remain unchanged. The mandatory held-source worker matrix additionally verifies English labels and bounded split identities, identical purchases as separate occurrences, explicit IDR amounts, complete pages/running balances, durable jobs and unchanged confirmed edits/current accounts through historical imports and retries. Currency/domain/identity/page/arithmetic corruption remains rejected. New v47 cache entries do not refresh old knowledge or sources.
+Two independently invented contracts extend the reviewed corpus to63 cases /208 observations. All61 previous sources, expectations and locks remain unchanged. The mandatory held-source and batch-eight worker checks additionally verify English labels and bounded split identities, identical purchases as separate occurrences, explicit IDR amounts, complete pages/running balances, durable jobs and unchanged confirmed edits/current accounts through historical imports and retries. Currency/domain/identity/page/arithmetic corruption remains rejected. New v47 cache entries do not refresh old knowledge or sources.
 
 The original PDFs and independent labels remain private. A legacy monthly aggregate is not a dated movement; a visually reconciled receipt whose selectable text conflicts with its rendered source requires separate extraction review. Downloads and completed jobs alone do not establish financial fidelity.
+
+The new worker cases run in a separate mandatory script, preserving the complete historical held-source suite and its per-script limit. No assertion, corpus case or source replay is filtered out to accommodate longer verification.
