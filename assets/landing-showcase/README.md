@@ -38,3 +38,20 @@ The jar represents saving; its coins do not depict or imply a real balance.
 Generation prompt:
 
 > Use case: product-mockup. Asset: isolated photorealistic savings prop for Clover personal finance landing page. One simple rounded transparent glass savings jar, three-quarter front view with a small brushed teal metal lid with coin slot, about half full of subtle warm brass coins, with three loose coins resting at its base. Genuinely transparent background, no table, no backdrop, no words, no labels, no logos, no currency symbols. Full jar visible with generous padding. Crisp studio product photography, soft natural daylight upper left, realistic thick glass rim, refraction, fine surface imperfections, gentle mint reflections in glass and soft contact shadows. Understated premium everyday object, not a toy or cartoon, no exaggerated gold shine. Warm ivory highlights, Clover mint and teal accents. Keep the jar upright, nearly front-facing, realistic proportions.
+
+## Production HD captures · 13 October 2026
+
+`accounts-production-hd-20261013.webp` and
+`transactions-production-hd-20261013.webp` are fresh 1206 × 2460 captures,
+with matching 804 × 1640 (`-2x`) and 402 × 820 (`-1x`) WebP derivatives for
+responsive image selection. These were rendered from production deployment
+commit `73ea7693b2aef9d8add1528a3c435b920f6ffde9`, not upscaled from the
+October 9 raster images. A disposable local checkout rendered the actual page
+components inside a 402 × 820 iframe at 3× CSS scale. All API responses and
+authentication hooks used fictional local fixtures; external fetches were
+blocked. The production page, shell and styles were not changed. The local
+wrapper supplied the production fonts and hid only capture-tool/browser
+scrollbar chrome. No harness or authentication stub is shipped with Clover.
+The showcase serves at least the 804-pixel source (about 73 KB for Accounts),
+with `srcSet` selecting the 1206-pixel source for higher pixel densities. The
+high-resolution source is retained for large and Retina displays.

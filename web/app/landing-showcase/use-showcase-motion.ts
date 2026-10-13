@@ -7,10 +7,10 @@ const preferenceKey = "clover-showcase-motion";
 const clamp = (value: number) => Math.max(0, Math.min(1, value));
 const ease = (value: number) => {
   const p = clamp(value);
-  return p * p * (3 - 2 * p);
+  return p * p * p * (p * (p * 6 - 15) + 10);
 };
 
-/** Scroll work is transform-only. Geometry is measured on layout changes, not
+/** Scroll work uses compositor-friendly transforms plus a brief settling pass. Geometry is measured on layout changes, not
  * on every scroll frame; no continuous JavaScript loop runs while idle. */
 export function useShowcaseMotion(root: RefObject<HTMLDivElement | null>) {
   const [mode, updateMode] = useState<MotionMode>("full");
@@ -66,6 +66,7 @@ export function useShowcaseMotion(root: RefObject<HTMLDivElement | null>) {
     let disposed = false;
     let previousY = scrollY;
     let previousTime = performance.now();
+    const sceneProgress = new Map<HTMLElement, number>();
     let impulse = 0;
     let pointerX = 0;
     let pointerY = 0;
@@ -98,6 +99,8 @@ export function useShowcaseMotion(root: RefObject<HTMLDivElement | null>) {
         );
         needsMeasure = false;
       }
+      const elapsed = Math.min(64, Math.max(1, time - previousTime));
+      let settling = false;
       const delta = y - previousY;
       // A small reversible inertia on ornaments; never shake headings or amounts.
       const target = Math.max(
@@ -119,7 +122,13 @@ export function useShowcaseMotion(root: RefObject<HTMLDivElement | null>) {
           (relativeTop + height < -viewport || relativeTop > viewport * 2)
         )
           return;
-        const raw = clamp(-relativeTop / Math.max(1, height - pinHeight));
+        const targetProgress = clamp(-relativeTop / Math.max(1, height - pinHeight));
+        const previousProgress = sceneProgress.get(scene) ?? targetProgress;
+        const raw = animated && pinned && mode === "full"
+          ? previousProgress + (targetProgress - previousProgress) * (1 - Math.exp(-elapsed / 65))
+          : targetProgress;
+        sceneProgress.set(scene, raw);
+        if (Math.abs(targetProgress - raw) > 0.00015) settling = true;
         const p =
           animated && pinned ? (mode === "gentle" ? 0.7 + raw * 0.3 : raw) : 1;
         if (acts.length) {
@@ -137,7 +146,7 @@ export function useShowcaseMotion(root: RefObject<HTMLDivElement | null>) {
           const active = Math.min(acts.length - 1, Math.floor(storyProgress * acts.length));
           acts.forEach((act, actIndex) => {
             const travel = storyProgress * acts.length - actIndex;
-            const fade = mode === "gentle" ? 0.1 : 0.22;
+            const fade = mode === "gentle" ? 0.1 : 0.3;
             write(act, "--act-progress", staticStory ? 1 : ease(travel));
             write(act, "--act-enter", staticStory || actIndex === 0 ? 1 : ease(travel / fade));
             write(act, "--act-leave", staticStory || actIndex === acts.length - 1 ? 1 : ease((1 - travel) / fade));
@@ -169,7 +178,7 @@ export function useShowcaseMotion(root: RefObject<HTMLDivElement | null>) {
       write(element, "--page-travel", clamp(y / maxScroll));
       previousY = y;
       previousTime = time;
-      if (impulse) frame = requestAnimationFrame(draw);
+      if (impulse || settling) frame = requestAnimationFrame(draw);
     };
     const schedule = () => {
       if (!disposed && !frame && !document.hidden)

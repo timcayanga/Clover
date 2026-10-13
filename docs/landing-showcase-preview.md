@@ -130,3 +130,16 @@ The pinned narrative now keeps one Starbucks purchase in a shared DOM layer acro
 ### Screen-centered composition (2026-10-13)
 
 Desktop scroll chapters now reserve the center of the viewport for centered heading/subtext. The production phone capture, receipt, spending report, conversation, person and savings goal use the left/right lanes and lower edge instead of sitting under the heading. Portrait/mobile chapters put visuals above centered copy anchored near the bottom; compact reports use a donut beside category rows to preserve clearance. The shared receipt-to-transaction-to-category handoff remains intact. Motion entrances stay inside the visual lanes. Off/reduced/short-window layouts retain the same order in natural document flow with enough height for the full content. Pricing remains a conventional comparison section after the story.
+
+### Immersive scale and HD screens (2026-10-13)
+
+Supporting objects now occupy larger peripheral lanes while preserving the
+centered desktop and lower mobile copy. The phone, receipts, chart, chat,
+mascots and life image have deeper perspective, dimensional edges and stronger
+contact shadows. The same purchase continues through paper → transaction →
+category. Full motion uses a short, time-based 65 ms scroll settling response
+and quintic easing; frame work stops as soon as scrolling/inertia settles.
+Gentle/Off preferences remain available. Production UI screenshots were freshly
+rendered at 1206 × 2460 from the live production commit with fictional fixtures,
+with responsive 2×/3× WebP sources to avoid serving oversized images to every
+visitor. No new animation dependency or continuous idle loop was introduced.

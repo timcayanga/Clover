@@ -169,7 +169,9 @@ function AppScreen({
     <div className={s.phone}>
       <div className={s.phoneCamera} aria-hidden="true" />
       <img
-        src={`/assets/landing-showcase/${page}-production-20261009.webp`}
+        src={`/assets/landing-showcase/${page}-production-hd-20261013-2x.webp`}
+        srcSet={`/assets/landing-showcase/${page}-production-hd-20261013-2x.webp 804w, /assets/landing-showcase/${page}-production-hd-20261013.webp 1206w`}
+        sizes="(max-width: 900px) 285px, (max-width: 1100px) and (min-height: 1000px) 285px, 310px"
         alt={
           page === "accounts"
             ? "Clover Accounts showing bank, wallet and investment balances with sample data."
@@ -732,6 +734,7 @@ export function Showcase({ initialMarket }: { initialMarket: PricingMarket }) {
               </div>
               <div className={`${s.journeyArt} ${s.journeyClarity}`} data-story-art>
                 <SpendingStory />
+                <div className={s.insightPhone}><AppScreen page="transactions" /></div>
               </div>
             </article>
             <article className={s.journeyBeat} data-story-act>
