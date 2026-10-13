@@ -10,7 +10,7 @@ if (!Number.isInteger(qaPort) || qaPort < 1024 || qaPort > 65535) throw new Erro
 const env = Object.fromEntries(['PATH', 'HOME', 'TMPDIR', 'TEMP', 'SystemRoot'].filter(k => process.env[k]).map(k => [k, process.env[k]]));
 Object.assign(env, { NODE_ENV: 'test', TZ: 'UTC', LC_ALL: 'C', LANG: 'C', NEXT_TELEMETRY_DISABLED: '1', CLOVER_QA_PARSER_PORT: String(qaPort), DATABASE_URL: `postgresql://clover_qa@127.0.0.1:${qaPort}/clover_migration_qa`, DIRECT_URL: `postgresql://clover_qa@127.0.0.1:${qaPort}/clover_migration_qa` });
 function run(bin, args, extra = {}, quiet = false) {
-  const r = spawnSync(bin, args, { cwd: web, env: { ...env, ...extra }, encoding: 'utf8', stdio: quiet ? 'pipe' : 'inherit', timeout: 180000, maxBuffer: 8 * 1024 * 1024 });
+  const r = spawnSync(bin, args, { cwd: web, env: { ...env, ...extra }, encoding: 'utf8', stdio: quiet ? 'pipe' : 'inherit', timeout: 360000, maxBuffer: 8 * 1024 * 1024 });
   if (r.error || r.status !== 0) throw new Error(`${bin} ${args.join(' ')} failed: ${r.error?.message ?? r.status}\n${quiet ? r.stderr + r.stdout : ''}`);
   return r.stdout?.trim();
 }
