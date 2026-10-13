@@ -242,7 +242,7 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
 
       if (confirmationResult.status === "staged" && confirmationResult.imported === 0) {
         if (!localDev) {
-          return processInline("checkpoint_processed_inline");
+          return await processInline("checkpoint_processed_inline");
         }
 
         await updateImportFileCompat(importId, {
@@ -291,7 +291,7 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
     }
 
     if (!localDev) {
-      return processInline("processed_inline");
+      return await processInline("processed_inline");
     }
 
     await updateImportFileCompat(importId, {
