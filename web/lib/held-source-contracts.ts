@@ -98,6 +98,6 @@ export function buildDbsZeroPdfProof(items: Item[]): string[] {
   const [dd,mm,yy]=d.text.split('/');const date=day(dd,months[Number(mm)-1]??'',yy);
   return ['DBS_ZERO_COLUMN_PROOF '+JSON.stringify({product:product.text,accountNumber:id.text.slice(12),date,rows:1,movements:0,balance:0})];
 }
-export function hasVerifiedHeldNativeRows(text: string, rows: Array<{date?: unknown; amount?: unknown; rawPayload?: unknown}>): boolean {
-  try{const source=parseHeldNativeSource(text);return Boolean(source && rows.length===source.rows.length && rows.every((r,i)=>{const raw=r.rawPayload as Record<string,unknown>|null,expected=source.rows[i];return r.date===expected.date && Number(r.amount)===Number(expected.amount) && raw?.source===expected.rawPayload?.source && raw?.line===expected.rawPayload?.line && raw?.sourceRowIndex===i;}));}catch{return false;}
+export function hasVerifiedHeldNativeRows(text: string, rows: Array<{date?: unknown; amount?: unknown; currency?: unknown; type?: unknown; accountNumber?: unknown; rawPayload?: unknown}>): boolean {
+  try{const source=parseHeldNativeSource(text);return Boolean(source && rows.length===source.rows.length && rows.every((r,i)=>{const raw=r.rawPayload as Record<string,unknown>|null,expected=source.rows[i];return r.date===expected.date && Number(r.amount)===Number(expected.amount) && r.currency===expected.currency && r.type===expected.type && r.accountNumber===expected.accountNumber && raw?.source===expected.rawPayload?.source && raw?.line===expected.rawPayload?.line && raw?.sourceRowIndex===i;}));}catch{return false;}
 }

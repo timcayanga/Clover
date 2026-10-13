@@ -4,7 +4,7 @@ import {readFileSync} from 'node:fs';
 import {randomUUID} from 'node:crypto';
 import {encodeNativePdfNullGlyphs} from '../lib/native-pdf-text';
 import {parseGcashBillsReceipt} from '../lib/gcash-bills-receipt';
-import {parseHeldNativeSource,buildSeaBankIndonesiaPdfRows,buildDbsZeroPdfProof} from '../lib/held-source-contracts';
+import {parseHeldNativeSource,hasVerifiedHeldNativeRows,buildSeaBankIndonesiaPdfRows,buildDbsZeroPdfProof} from '../lib/held-source-contracts';
 import {parseBcaTransferProof} from '../lib/bca-transfer-proof';
 import {pdfTextLayerLooksSufficientForParsing} from '../lib/import-file-text.server';
 import {validateParsedImportRows} from '../lib/data-engine-validation';
@@ -20,6 +20,7 @@ async function main(){
  assert.equal(pdfTextLayerLooksSufficientForParsing(recipient.replace('BCA_NATIVE_PAGES 1','BCA_NATIVE_PAGES 2')),true,'Recognized invalid native evidence reaches review unchanged, without OCR promotion');
  assert.throws(()=>parseGcashBillsReceipt(source(ids[4]).replace('Amount Paid PHP 100.00','')),/reconcile/);
  assert.throws(()=>parseHeldNativeSource('GCASH PHILIPPINES PAYMENT RECEIPT CASH IN YOUR GCASH ACCOUNT Total Price USD 0 Amount Paid USD 1000 Balance USD 1000'),/requires review/);
+ const validNativeRows=parseHeldNativeSource(idr)!.rows;assert(hasVerifiedHeldNativeRows(idr,validNativeRows));for(const change of [{currency:'PHP'},{type:'expense'},{accountNumber:'901000000999'}])assert.equal(hasVerifiedHeldNativeRows(idr,[{...validNativeRows[0],...change},...validNativeRows.slice(1)]),false,'Verified proof binds currency, direction and full account identity');
  const row=parseHeldNativeSource(idr)!.rows[0];const grouped={...row,amount:'1250000.00',rawPayload:{...row.rawPayload,amountText:'1.250.000'}};assert(!validateParsedImportRows({rows:[grouped],metadata:null}).findings.some(f=>f.code==='amount.implausible'));assert(validateParsedImportRows({rows:[{...grouped,rawPayload:{...grouped.rawPayload,amountText:'12.00 35.00'}}],metadata:null}).findings.some(f=>f.code==='amount.implausible'));
  const longReceipt=source(ids[4])+'\n'+('Source disclosure line\n'.repeat(100));const receiptRows=parseGcashBillsReceipt(longReceipt)!.rows;assert(!validateParsedImportRows({rows:receiptRows,metadata:null}).findings.some(f=>f.code==='evidence.boilerplate'));assert(validateParsedImportRows({rows:[{...receiptRows[0],amount:'999.00'}],metadata:null}).findings.some(f=>f.code==='evidence.boilerplate'));
  const cell=(str:string,x:number,y:number,width=0)=>({str,transform:[1,0,0,1,x,y],width});
