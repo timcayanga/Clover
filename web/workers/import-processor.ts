@@ -15942,7 +15942,7 @@ export const confirmImportFile = async (
   const verifiedHeldImport = parsedRows.length > 0 && parsedRows.every(row => ['seabank_indonesia_native','dbs_native_zero'].includes(String((row.rawPayload as Record<string, unknown> | null)?.source)));
   const verifiedMariImport = parsedRows.length > 0 && parsedRows.every(row => (row.rawPayload as Record<string, unknown> | null)?.source === "maribank_native_columns");
   const verifiedPosbImport = parsedRows.length > 0 && parsedRows.every(row => { const raw = row.rawPayload as Record<string, unknown> | null; return raw?.source === "posb_pdf_columns" && raw.balanceReconciled === true && (raw.reconciliation as Record<string, unknown> | null)?.version === "posb-column-reconciliation-v1"; });
-  const preserveExistingGcashBalance = verifiedGcashReceiptImport && (account.balance !== null || account.createdAt.getTime() <= importFile.uploadedAt.getTime());
+  const preserveExistingGcashBalance = verifiedGcashReceiptImport && (account.balance !== null || (await tx.account.findUniqueOrThrow({where:{id:resolvedAccountId},select:{createdAt:true}})).createdAt.getTime() <= importFile.uploadedAt.getTime());
   if (preserveExistingGcashBalance || consolidatedCimbImport || ((verifiedHeldImport || verifiedPosbImport || verifiedMariImport || (parsedRows.length > 0 && parsedRows.every(row => (row.rawPayload as Record<string, unknown> | null)?.source === "bca_transfer_proof"))) && account.balance !== null)) {
     reconciledAccountBalance = snapshotBalanceToString(account.balance);
   } else if (parsedRows.length > 0 && parsedRows.every(row => readAppMigration(row.rawPayload))) {
