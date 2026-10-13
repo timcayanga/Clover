@@ -3560,6 +3560,39 @@
           }
         }
       ]
+    },
+    {
+      "id": "bca-compact-current-event",
+      "source": "bca-compact-current-event.txt",
+      "sha256": "5dcc6fe67a26773b8aac184b25d15bdd873d8584cf645513441263c3f8c77ecd",
+      "kind": "statement",
+      "representation": "Independently invented one-page native current-event email print",
+      "provenance": {
+        "origin": "synthetic",
+        "reviewer": "Codex",
+        "reviewedAt": "2026-10-13",
+        "status": "reviewed",
+        "basis": "Invented complete printed1/1 native bilingual current payment. All visible source/recipient/date/clock/reference/status/amount fields match. Current IDR150 is one outgoing event; hidden earlier quoted email is explicitly not parsed/countable, and missing fee/timezone/bank balance remain unknown. Existing incomplete modern one-page fixtures retain their guard."
+      },
+      "expected": [
+        {
+          "date": "2026-01-15",
+          "amount": "150.00",
+          "currency": "IDR",
+          "type": "expense",
+          "accountNumber": "123-0001234",
+          "rawPayload": {
+            "source": "bca_transfer_proof",
+            "fee": null,
+            "reference": "000000000001234567",
+            "parserEvidence": {
+              "version": "bca-compact-current-event-v1",
+              "hiddenQuotedEmail": true,
+              "proofScope": "visible current event only; hidden history is not parsed"
+            }
+          }
+        }
+      ]
     }
   ]
 }

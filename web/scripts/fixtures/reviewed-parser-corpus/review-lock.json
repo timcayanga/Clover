@@ -58,5 +58,6 @@
   "dbs-digivault-zero": "3a38a454c1a5e03fd0ab13980aff60aef2b35be18feaf03ef0561e315cd85424",
   "bca-recipient-income": "d898241a3178c8564fbebefc40bbad5972446139ad605a84d4e5972b27bdc39c",
   "gcash-ocr-wrapped-biller": "e0ad358c0a33a49cc58fb4544530f974c1598047143a31fc066e43ea312ab61a",
-  "bca-legacy-closed-bilingual": "5531df3c893bda4f1d526a31c25b28da2a926384a4086305959ee04b249dc2cb"
+  "bca-legacy-closed-bilingual": "5531df3c893bda4f1d526a31c25b28da2a926384a4086305959ee04b249dc2cb",
+  "bca-compact-current-event": "ebd85ef13594f7bb417cb393cd38196aeb69db0b421a4ee143e160d459fdf551"
 }
