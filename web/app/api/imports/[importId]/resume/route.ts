@@ -1,7 +1,8 @@
 import { isLocalDevHost, requireAuth } from "@/lib/auth";
 import { assertWorkspaceAccess } from "@/lib/workspace-access";
 import { countParsedTransactionRows, countTransactionsByImportFileCompat, fetchImportFileCompat, hasCompatibleTable, updateImportFileCompat } from "@/lib/data-engine";
-import { SOURCE_REVIEW_PHASE, SOURCE_REVIEW_CODE, isSourceReviewRequiredError, sourceReviewFailureReason, sourceReviewUserMessage } from "@/lib/import-source-review";
+import { SOURCE_REVIEW_PHASE, SOURCE_REVIEW_CODE } from "@/lib/import-source-review";
+import { persistSourceReviewFailure } from "@/lib/import-source-review.server";
 import { buildImportTelemetrySnapshot } from "@/lib/import-telemetry";
 import { readCheckpointWorkflowStage } from "@/lib/import-workflow";
 import { enqueueImportProcessing } from "@/lib/import-queue";
@@ -334,20 +335,14 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
     });
   } catch (error) {
     if (authorizedImportId) {
-      const counts = await Promise.all([
-        countTransactionsByImportFileCompat(authorizedImportId).catch(() => -1),
-        countParsedTransactionRows(authorizedImportId).catch(() => -1),
-      ]);
-      const reason = sourceReviewFailureReason(error, { confirmedRows: counts[0], parsedRows: counts[1] });
-      if (isSourceReviewRequiredError(error) && counts.some(count => count < 0)) {
+      const sourceReview = await persistSourceReviewFailure(authorizedImportId, error);
+      if (sourceReview?.kind === "unavailable") {
         return NextResponse.json({ error: "Clover could not verify this import's existing rows. Existing records were not changed.",
           retryable: true, importFileId: authorizedImportId }, { status: 503 });
       }
-      if (reason) {
-        const message = sourceReviewUserMessage(reason);
-        await updateImportFileCompat(authorizedImportId, { status: "failed", processingPhase: SOURCE_REVIEW_PHASE,
-          processingMessage: message, processingCurrentScore: 0, parsedRowsCount: 0, confirmedTransactionsCount: 0 });
-        return NextResponse.json({ error: message, diagnosticReason: reason, code: SOURCE_REVIEW_CODE, stage: "source_review",
+      if (sourceReview?.kind === "missing_import") return NextResponse.json({ error: "Import not found" }, { status: 404 });
+      if (sourceReview?.kind === "review") {
+        return NextResponse.json({ error: sourceReview.message, diagnosticReason: sourceReview.diagnosticReason, code: SOURCE_REVIEW_CODE, stage: "source_review",
           retryable: false, requiresSourceReview: true, importFileId: authorizedImportId }, { status: 422 });
       }
     }

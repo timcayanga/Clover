@@ -42,20 +42,28 @@ async function main(){
 
  }
  const {buildAccountTombstoneKey}=await import('../lib/account-tombstones');
+ const {persistSourceReviewFailure}=await import('../lib/import-source-review.server');
  const refusalWorkspace=await db.workspace.create({data:{userId:user.id,name:'Native source refusal'}});
  const refusalFile=await db.importFile.create({data:{workspaceId:refusalWorkspace.id,fileName:'native-source-review.pdf',fileType:'application/pdf',storageKey:'qa/'+randomUUID()}});
  let refusal:unknown;try{await processImportFileText(refusalFile.id,{text:idr.replace('1.000 | 1.100','1.001 | 1.100'),importMode:'statement',actorUserId:user.clerkUserId});}catch(error){refusal=error;}
  assert(refusal instanceof SourceReviewRequiredError,'Actual worker preserves the deterministic refusal type');
  const refusedRows=await db.parsedTransaction.count({where:{importFileId:refusalFile.id}}),refusedTransactions=await db.transaction.count({where:{importFileId:refusalFile.id}});
  const refusalReason=sourceReviewFailureReason(refusal,{parsedRows:refusedRows,confirmedRows:refusedTransactions});assert(refusalReason);assert.equal(await db.learningJob.count({where:{workspaceId:refusalWorkspace.id}}),0);
- await db.importFile.update({where:{id:refusalFile.id},data:{status:'failed',processingPhase:SOURCE_REVIEW_PHASE,processingMessage:refusalReason,processingCurrentScore:0}});
+ const refusalDecision=await persistSourceReviewFailure(refusalFile.id,refusal);assert.equal(refusalDecision?.kind,'review');
  const refusalBefore=await db.importFile.findUniqueOrThrow({where:{id:refusalFile.id}});
+ assert.equal(refusalBefore.processingPhase,SOURCE_REVIEW_PHASE);assert.equal(refusalBefore.status,'failed');
+ const refusalRepeat=await persistSourceReviewFailure(refusalFile.id,refusal);assert(refusalRepeat?.kind==='review'&&refusalRepeat.noOp);
+ assert.deepEqual(await db.importFile.findUniqueOrThrow({where:{id:refusalFile.id}}),refusalBefore,'Repeated failure persistence is idempotent including timestamps');
  const allConfirmedBefore=await db.transaction.findMany({where:{workspace:{userId:user.id}},orderBy:{id:'asc'}});
  const allAccountsBefore=await db.account.findMany({where:{workspace:{userId:user.id}},orderBy:{id:'asc'}});
- await assert.rejects(confirmImportFile(refusalFile.id),error=>error instanceof SourceReviewRequiredError&&error.message===refusalReason);
+ await assert.rejects(confirmImportFile(refusalFile.id),error=>error instanceof SourceReviewRequiredError&&error.message===refusalBefore.processingMessage);
  assert.deepEqual(await db.importFile.findUniqueOrThrow({where:{id:refusalFile.id}}),refusalBefore,'Refusal confirmation leaves the source and status unchanged');
  assert.deepEqual(await db.transaction.findMany({where:{workspace:{userId:user.id}},orderBy:{id:'asc'}}),allConfirmedBefore);
  assert.deepEqual(await db.account.findMany({where:{workspace:{userId:user.id}},orderBy:{id:'asc'}}),allAccountsBefore);
+ const confirmedSource=allConfirmedBefore.find(t=>t.importFileId);assert(confirmedSource?.importFileId);
+ const confirmedFileBefore=await db.importFile.findUniqueOrThrow({where:{id:confirmedSource.importFileId}});
+ assert.equal((await persistSourceReviewFailure(confirmedSource.importFileId,refusal))?.kind,'existing_rows');
+ assert.deepEqual(await db.importFile.findUniqueOrThrow({where:{id:confirmedSource.importFileId}}),confirmedFileBefore,'A source error cannot reset an existing confirmed import');
  for(const [id,institution] of [['seabank-indonesia-columns','SeaBank'],['dbs-my-account-zero','DBS Bank']]){const c=manifest.cases.find((x:any)=>x.id===id);const workspace=await db.workspace.create({data:{userId:user.id,name:'Tombstone '+id}});const accountNumber=c.expected[0].accountNumber,currency=c.expected[0].currency;const identity={name:'Previously deleted bank',institution,accountNumber,type:'bank',currency};await db.accountTombstone.create({data:{workspaceId:workspace.id,name:identity.name,institution,accountNumber,currency,accountType:'bank',source:'upload',normalizedAccountKey:buildAccountTombstoneKey(identity)}});const file=await db.importFile.create({data:{workspaceId:workspace.id,fileName:id+'.pdf',fileType:'application/pdf',storageKey:'qa/'+randomUUID()}});let error=null;try{await processImportFileText(file.id,{text:source(id),importMode:'statement',actorUserId:user.clerkUserId});await settleTombstone();}catch(e){error=String(e);}async function settleTombstone(){await drain();}assert(error || (await db.importFile.findUniqueOrThrow({where:{id:file.id}})).status!=='done');assert.equal(await db.account.count({where:{workspaceId:workspace.id}}),0,'Historical source cannot resurrect a deleted institution alias');assert.equal(await db.transaction.count({where:{workspaceId:workspace.id}}),0);}
  }finally{await drain();await db.user.delete({where:{id:user.id}});await db.$disconnect();}assert.equal(network,0);console.log('Held sources: Indonesian IDR repeats, DBS zero snapshots, BCA income direction, GCash OCR labels, durable jobs and historical confirmed-data preservation passed.');
 }

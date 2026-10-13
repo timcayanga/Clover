@@ -19,6 +19,8 @@ import { processImportEnrichmentJobs, processImportFileText } from "@/workers/im
 import { summarizeErrorForLog } from "@/lib/security-logging";
 import { purgeExpiredImportFiles } from "@/lib/import-retention";
 import { isNonFinancialUploadError } from "@/lib/financial-upload-scope";
+import { isSourceReviewRequiredError } from "@/lib/import-source-review";
+import { persistSourceReviewFailure } from "@/lib/import-source-review.server";
 
 void purgeExpiredImportFiles({ limit: 50 }).catch((error) => {
   console.warn("Unable to purge expired raw import files at worker startup", { error: summarizeErrorForLog(error) });
@@ -47,6 +49,11 @@ const processJob = async (job: Job) => {
           : null,
       });
     } catch (error) {
+      if (isSourceReviewRequiredError(error)) {
+        const review = await persistSourceReviewFailure(importFileId, error);
+        if (review?.kind === "review" || review?.kind === "missing_import") job.discard();
+        throw error;
+      }
       // The user or an idempotent QA cleanup can remove an import after it was
       // queued. Treat that as successful cancellation so BullMQ does not retry
       // a source that no longer exists or emit a misleading processing error.
@@ -103,6 +110,10 @@ worker.on("failed", async (job, error) => {
   console.error("Import job failed", { jobId: job?.id ?? null, error: summarizeErrorForLog(error) });
   const importFileId = job?.data?.importFileId;
   if (importFileId) {
+    if (isSourceReviewRequiredError(error)) {
+      const review = await persistSourceReviewFailure(importFileId, error);
+      if (review?.kind !== "existing_rows") return;
+    }
     if (job?.data?.adminRetry) {
       await prisma.importFile.updateMany({ where: { id: importFileId, status: "processing", confirmedAt: null, confirmedTransactionsCount: 0, transactions: { none: { reviewStatus: { in: ["confirmed", "edited"] } } } }, data: { status: "failed", processingPhase: "failed", processingMessage: "Support retry failed. Review the import before retrying again." } }).catch(() => null);
       return;
