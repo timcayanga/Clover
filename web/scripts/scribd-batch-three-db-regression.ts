@@ -7,7 +7,7 @@ import {parseBcaTransferProof,buildBcaTransferPdfRows} from '../lib/bca-transfer
 import {buildGcashBillsNativePages,parseGcashBillsReceipt,readGcashBillsBillerAccountEvidence} from '../lib/gcash-bills-receipt';
 import {shouldPersistPublishedAccountSummaries,persistPublishedAccountSummaries} from '../lib/import-checkpoint-publication';
 import {parsePosbStatement,buildPosbPdfRows} from '../lib/posb-statement';
-const url=new URL(process.env.DATABASE_URL??'http://invalid');assert.equal(url.hostname,'127.0.0.1');assert.equal(url.port,'55441');assert.equal(url.pathname,'/clover_migration_qa');assert(process.argv.includes('--execute'));
+const url=new URL(process.env.DATABASE_URL??'http://invalid');assert.equal(url.hostname,'127.0.0.1');assert.equal(url.port,process.env.CLOVER_QA_PARSER_PORT??'55441');assert.equal(url.pathname,'/clover_migration_qa');assert(process.argv.includes('--execute'));
 const require=createRequire(import.meta.url);require('next/cache').revalidateTag=()=>{};const tasks:Array<()=>Promise<void>>=[];require('next/server').after=(t:()=>Promise<void>)=>tasks.push(t);const drain=async()=>{while(tasks.length)await Promise.all(tasks.splice(0).map(t=>t()));};let network=0;globalThis.fetch=async()=>{network++;throw new Error('Batch three regression forbids providers');};
 const root='scripts/fixtures/reviewed-parser-corpus/';
 const ids=['gcash-multiple-native-receipts','gcash-wrapped-zero-fee','cimb-upsave-wrapped-summary','cimb-single-native-interest','posb-negative-zero-interest','bca-alternate-print-footer','bca-same-bank-zero-fee','bca-bilingual-notification'];

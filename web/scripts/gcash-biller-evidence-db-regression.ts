@@ -3,7 +3,7 @@ import {createRequire} from 'node:module';
 import {readFileSync} from 'node:fs';
 import {randomUUID} from 'node:crypto';
 import {parseGcashBillsReceipt,readGcashBillsBillerAccountEvidence} from '../lib/gcash-bills-receipt';
-const url=new URL(process.env.DATABASE_URL??'http://invalid');assert.equal(url.hostname,'127.0.0.1');assert.equal(url.port,'55441');assert.equal(url.pathname,'/clover_migration_qa');assert(process.argv.includes('--execute'));
+const url=new URL(process.env.DATABASE_URL??'http://invalid');assert.equal(url.hostname,'127.0.0.1');assert.equal(url.port,process.env.CLOVER_QA_PARSER_PORT??'55441');assert.equal(url.pathname,'/clover_migration_qa');assert(process.argv.includes('--execute'));
 const require=createRequire(import.meta.url);require('next/cache').revalidateTag=()=>{};const tasks:Array<()=>Promise<void>>=[];require('next/server').after=(t:()=>Promise<void>)=>tasks.push(t);const drain=async()=>{while(tasks.length)await Promise.all(tasks.splice(0).map(t=>t()));};let network=0;globalThis.fetch=async()=>{network++;throw new Error('Biller evidence regression forbids providers');};
 async function main(){
  const text=readFileSync('scripts/fixtures/reviewed-parser-corpus/gcash-split-biller-account.txt','utf8');const parsed=parseGcashBillsReceipt(text)!;assert.equal(parsed.rows.length,1);assert.equal(parsed.rows[0].rawPayload?.billerAccountNumber,'EX0AMPLE');assert.equal(parsed.metadata.accountNumber,null);
