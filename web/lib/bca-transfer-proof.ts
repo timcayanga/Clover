@@ -366,7 +366,7 @@ function parseBcaTransferNotification(text: string): { rows: ParsedImportRow[]; 
     /klikbcabisnis@klikbca\.com/i.test(text) && /PT\.\s*BANK CENTRAL ASIA TBK/i.test(text) &&
     /Catatan:\s*Biaya Termasuk PPN/i.test(text) &&
     [...text.matchAll(/\[Kutipan teks disembunyikan\]/g)].length===1 &&
-    /Status\s*:\s*Success\s*\n\[Kutipan teks disembunyikan\]\s*\nhttps:\/\/mail\.google\.com\/[^\n]+[ \t]1\/1[ \t]*\nBCA_NATIVE_PAGES 1[ \t]*$/i.test(text);
+    /Status\s*:\s*Success\s*\n\[Kutipan teks disembunyikan\]\s*\nhttps:\/\/mail\.google\.com\/[^\n]+[ \t]1\/1[ \t]*\nBCA_NATIVE_PAGES 1[ \t]*$/i.test(text.trimEnd());
   if (physical.length !== 1 || (!compactCurrentEvent && (physical[0][1] !== '2' || (!closedLegacy && (!/klikbcabisnis@klikbca\.com/i.test(text) || !/PT\.\s*BANK CENTRAL ASIA TBK/i.test(text) || !/Notes:\s*Charges VAT Inclusive/i.test(text)))))) return unsafe;
   const languageBlocks=text.split('Thank you for using KlikBCA Bisnis.');
   if(languageBlocks.length!==2) return unsafe;
