@@ -5647,6 +5647,34 @@ const resolveConfirmationAccount = async (params: {
 }) => {
   const workspaceId = String(params.importFile.workspaceId);
   const compatibleAccountColumns = await getCompatibleAccountColumns();
+  const verifiedGcashReceiptRows = params.parsedRows.length > 0 && params.parsedRows.every(row => {
+    const raw = row.rawPayload as Record<string, unknown> | null;
+    return raw?.source === 'gcash_bills_receipt' && (raw.parserEvidence as Record<string, unknown> | null)?.totalReconciled === true;
+  });
+  if (verifiedGcashReceiptRows) {
+    const currency = 'PHP';
+    const owner = await prisma.workspace.findUniqueOrThrow({where:{id:workspaceId},select:{userId:true}});
+    const limits = await getWorkspaceOwnerLimits(workspaceId);
+    const tombstone = await findDeletedAccountTombstoneMatch(workspaceId,{name:'GCash',institution:'GCash',type:'wallet',currency,source:'upload'});
+    return prisma.$transaction(async tx => {
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`verified-proof-accounts:${owner.userId}`}, 0))`;
+      const accounts=await tx.account.findMany({where:{workspaceId},select:getCompatibleAccountSelect(compatibleAccountColumns)});
+      const selected=params.accountId?accounts.find(a=>a.id===params.accountId):null;
+      if(params.accountId && !selected) throw new Error('The selected wallet is not in this Profile.');
+      const isGcash=(a:typeof accounts[number])=>[a.institution,a.importIdentityInstitution,a.name,a.importIdentityName].some(v=>/^GCash(?:\s|$)/i.test(String(v??'')));
+      if(selected && (selected.type!=='wallet' || selected.currency!==currency || !isGcash(selected))) throw new Error('Choose the GCash PHP wallet for this receipt.');
+      if(selected) return selected;
+      const matches=accounts.filter(a=>a.type==='wallet' && a.currency===currency && !a.accountNumber && isGcash(a));
+      if(matches.length>1) throw new Error('More than one wallet matches this receipt. Select the intended GCash wallet.');
+      // A receipt proves a bill, not the payer wallet's current balance.
+      // Existing customized identity and balance remain entirely read-only.
+      if(matches[0]) return matches[0];
+      if(accounts.some(a=>a.currency===currency && isGcash(a))) throw new Error('This receipt does not identify its payer wallet. Select the intended GCash account.');
+      if(tombstone && !params.allowDeletedAccountRecreation) throw new Error('This receipt matches a deleted wallet. Confirm before recreating it.');
+      if(limits?.accountLimit!=null && await tx.account.count({where:{workspace:{userId:owner.userId},type:{not:'cash'}}})>=limits.accountLimit) throw new Error('Choose an existing wallet or change your plan before importing more accounts.');
+      return tx.account.create({data:{workspaceId,name:'GCash',institution:'GCash',type:'wallet',currency,source:'upload',...(compatibleAccountColumns.has('importIdentityName')?{importIdentityName:'GCash'}:{}),...(compatibleAccountColumns.has('importIdentityInstitution')?{importIdentityInstitution:'GCash'}:{}),balance:null},select:getCompatibleAccountSelect(compatibleAccountColumns)});
+    });
+  }
   const consolidatedCimbRows = params.parsedRows.length > 0 && params.parsedRows.every(row =>
     ["cimb_consolidated_ledger", "cimb_consolidated_snapshot"].includes(String((row.rawPayload as Record<string, unknown> | null)?.source)));
   const bcaTransferRows = params.parsedRows.length > 0 && params.parsedRows.every(row => (row.rawPayload as Record<string, unknown> | null)?.source === "bca_transfer_proof");
@@ -15910,10 +15938,12 @@ export const confirmImportFile = async (
     parsedRows.every((row) => (row.rawPayload as Record<string, unknown> | null)?.source === "wide_account_snapshot_csv");
   // App migrations are history, not a balance snapshot. A partial date range
   // must never replace a confirmed balance with its net imported movements.
+  const verifiedGcashReceiptImport = parsedRows.length > 0 && parsedRows.every(row => (row.rawPayload as Record<string, unknown> | null)?.source === 'gcash_bills_receipt');
   const verifiedHeldImport = parsedRows.length > 0 && parsedRows.every(row => ['seabank_indonesia_native','dbs_native_zero'].includes(String((row.rawPayload as Record<string, unknown> | null)?.source)));
   const verifiedMariImport = parsedRows.length > 0 && parsedRows.every(row => (row.rawPayload as Record<string, unknown> | null)?.source === "maribank_native_columns");
   const verifiedPosbImport = parsedRows.length > 0 && parsedRows.every(row => { const raw = row.rawPayload as Record<string, unknown> | null; return raw?.source === "posb_pdf_columns" && raw.balanceReconciled === true && (raw.reconciliation as Record<string, unknown> | null)?.version === "posb-column-reconciliation-v1"; });
-  if (consolidatedCimbImport || ((verifiedHeldImport || verifiedPosbImport || verifiedMariImport || (parsedRows.length > 0 && parsedRows.every(row => (row.rawPayload as Record<string, unknown> | null)?.source === "bca_transfer_proof"))) && account.balance !== null)) {
+  const preserveExistingGcashBalance = verifiedGcashReceiptImport && (account.balance !== null || account.createdAt.getTime() <= importFile.uploadedAt.getTime());
+  if (preserveExistingGcashBalance || consolidatedCimbImport || ((verifiedHeldImport || verifiedPosbImport || verifiedMariImport || (parsedRows.length > 0 && parsedRows.every(row => (row.rawPayload as Record<string, unknown> | null)?.source === "bca_transfer_proof"))) && account.balance !== null)) {
     reconciledAccountBalance = snapshotBalanceToString(account.balance);
   } else if (parsedRows.length > 0 && parsedRows.every(row => readAppMigration(row.rawPayload))) {
     reconciledAccountBalance = snapshotBalanceToString(account.balance);
