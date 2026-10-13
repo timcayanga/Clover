@@ -44,7 +44,7 @@ function parseSeaBankIndonesia(text: string) {
   if(!(english ? /BANK STATEMENT/.test(text) && /SAVINGS\s*-\s*TRANSACTION DETAILS/.test(text) : /REKENING KORAN/.test(text) && /TABUNGAN\s*-\s*RINCIAN TRANSAKSI/.test(text)) || !/cs@seabank\.co\.id/.test(text)) fail('Indonesian SeaBank source family');
   // A native font run can split exactly three plus nine digits. Do not
   // join arbitrary numbers, lines, adjacent balances or masked identities.
-  const ids=[...text.matchAll(english ? /SEABANK ACCOUNT:[ \t]*(\d{12}|\d{3}[ \t]+\d{9})(?!\d)/g : /NO\. REKENING SEABANK:[ \t]*(\d{12}|\d{3}[ \t]+\d{9})(?!\d)/g)].map(m=>m[1].replace(/[ \t]/g,''));
+  const ids=[...text.matchAll(english ? /SEABANK ACCOUNT:[ \t]*(\d{12}|\d{3}[ \t]+\d{9})(?![\dA-Za-z_])/g : /NO\. REKENING SEABANK:[ \t]*(\d{12}|\d{3}[ \t]+\d{9})(?![\dA-Za-z_])/g)].map(m=>m[1].replace(/[ \t]/g,''));
   if(ids.length!==1) fail('full twelve-digit Indonesian account');
   const periods=[...text.matchAll(english ? /(\d{2}) ([A-Z]{3}) (\d{4}) to (\d{2}) ([A-Z]{3}) (\d{4})/g : /(\d{2}) ([A-Z]{3}) (\d{4}) sampai (\d{2}) ([A-Z]{3}) (\d{4})/g)];
   if(periods.length!==1) fail('one Indonesian statement period');
