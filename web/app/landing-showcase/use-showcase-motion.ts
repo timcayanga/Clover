@@ -122,11 +122,16 @@ export function useShowcaseMotion(root: RefObject<HTMLDivElement | null>) {
           (relativeTop + height < -viewport || relativeTop > viewport * 2)
         )
           return;
-        const targetProgress = clamp(-relativeTop / Math.max(1, height - pinHeight));
+        const targetProgress = clamp(
+          -relativeTop / Math.max(1, height - pinHeight),
+        );
         const previousProgress = sceneProgress.get(scene) ?? targetProgress;
-        const raw = animated && pinned && mode === "full"
-          ? previousProgress + (targetProgress - previousProgress) * (1 - Math.exp(-elapsed / 65))
-          : targetProgress;
+        const raw =
+          animated && pinned && mode === "full"
+            ? previousProgress +
+              (targetProgress - previousProgress) *
+                (1 - Math.exp(-elapsed / 65))
+            : targetProgress;
         sceneProgress.set(scene, raw);
         if (Math.abs(targetProgress - raw) > 0.00015) settling = true;
         const p =
@@ -139,19 +144,40 @@ export function useShowcaseMotion(root: RefObject<HTMLDivElement | null>) {
           // remounting or resetting: receipt → transaction → category insight.
           const purchaseTravel = storyProgress * acts.length;
           write(scene, "--paper-fold", ease((purchaseTravel - 0.18) / 0.55));
-          write(scene, "--category-join", ease((purchaseTravel - 0.85) / 0.65));
-          write(scene, "--purchase-away", ease((purchaseTravel - 1.25) / 0.18));
-          write(scene, "--report-reveal", ease((purchaseTravel - 0.85) / 0.55));
-          write(scene, "--category-glow", ease((purchaseTravel - 1.1) / 0.3) * (1 - ease((purchaseTravel - 1.75) / 0.2)));
-          const active = Math.min(acts.length - 1, Math.floor(storyProgress * acts.length));
+          // Descend in the left lane before expanding across the lower edge.
+          write(scene, "--paper-expand", ease((purchaseTravel - 0.5) / 0.24));
+          write(scene, "--category-join", ease((purchaseTravel - 1.85) / 0.65));
+          write(scene, "--purchase-away", ease((purchaseTravel - 2.25) / 0.18));
+          write(scene, "--report-reveal", ease((purchaseTravel - 1.85) / 0.55));
+          write(
+            scene,
+            "--category-glow",
+            ease((purchaseTravel - 2.1) / 0.3) *
+              (1 - ease((purchaseTravel - 2.75) / 0.2)),
+          );
+          const active = Math.min(
+            acts.length - 1,
+            Math.floor(storyProgress * acts.length),
+          );
           acts.forEach((act, actIndex) => {
             const travel = storyProgress * acts.length - actIndex;
             const fade = mode === "gentle" ? 0.1 : 0.3;
             write(act, "--act-progress", staticStory ? 1 : ease(travel));
-            write(act, "--act-enter", staticStory || actIndex === 0 ? 1 : ease(travel / fade));
-            write(act, "--act-leave", staticStory || actIndex === acts.length - 1 ? 1 : ease((1 - travel) / fade));
+            write(
+              act,
+              "--act-enter",
+              staticStory || actIndex === 0 ? 1 : ease(travel / fade),
+            );
+            write(
+              act,
+              "--act-leave",
+              staticStory || actIndex === acts.length - 1
+                ? 1
+                : ease((1 - travel) / fade),
+            );
             const activeValue = String(staticStory || active === actIndex);
-            if (act.dataset.storyActive !== activeValue) act.dataset.storyActive = activeValue;
+            if (act.dataset.storyActive !== activeValue)
+              act.dataset.storyActive = activeValue;
             const art = act.querySelector<HTMLElement>("[data-story-art]");
             if (art && art.inert !== (!staticStory && active !== actIndex))
               art.inert = !staticStory && active !== actIndex;
@@ -250,13 +276,16 @@ export function useShowcaseMotion(root: RefObject<HTMLDivElement | null>) {
       const positions = scenes.flatMap((scene) => {
         const top = scene.getBoundingClientRect().top + scrollY;
         const pin = scene.firstElementChild as HTMLElement;
-        const acts = [...scene.querySelectorAll<HTMLElement>("[data-story-act]")];
+        const acts = [
+          ...scene.querySelectorAll<HTMLElement>("[data-story-act]"),
+        ];
         if (!acts.length) return [{ start: top, destination: top }];
         if (animated && getComputedStyle(pin).position === "sticky") {
           const distance = Math.max(0, scene.offsetHeight - pin.offsetHeight);
           return acts.map((_, index) => ({
-            start: top + distance * index / acts.length,
-            destination: top + distance * (index + (index ? 0.16 : 0)) / acts.length,
+            start: top + (distance * index) / acts.length,
+            destination:
+              top + (distance * (index + (index ? 0.16 : 0))) / acts.length,
           }));
         }
         return acts.map((act) => {
@@ -268,7 +297,10 @@ export function useShowcaseMotion(root: RefObject<HTMLDivElement | null>) {
       positions.forEach(({ start }, index) => {
         if (start <= scrollY + 2) current = index;
       });
-      const target = Math.max(0, Math.min(positions.length - 1, current + direction));
+      const target = Math.max(
+        0,
+        Math.min(positions.length - 1, current + direction),
+      );
       scrollTo({
         top: positions[target].destination,
         behavior: animated ? "smooth" : "instant",

@@ -143,3 +143,11 @@ Gentle/Off preferences remain available. Production UI screenshots were freshly
 rendered at 1206 × 2460 from the live production commit with fictional fixtures,
 with responsive 2×/3× WebP sources to avoid serving oversized images to every
 visitor. No new animation dependency or continuous idle loop was introduced.
+
+### Production story alignment, 14 October 2026
+
+The showcase follows the production narrative: choose how to start, keep control of your records, understand finances and habits, ask what is possible, manage shared money, and build confidence. Privacy and shared-money chapters reuse the production marketing photographs. The Connect illustration shows six supported Philippine banks; the shared-expense illustration includes GCash and Maya.
+
+The hero uses a fresh 3× capture of the production Accounts UI (production commit `73ea7693b2aef9d8add1528a3c435b920f6ffde9`), cropped to the account lists only. BPI, UnionBank, BDO, Maya, GCash, GoTrade, and ATRAM use fictional balances. Header, overview totals, and navigation are outside the crop. The source capture never contacts production customer APIs. Responsive 804px and 1206px WebP assets retain sharp logos without shipping the raw PNG.
+
+Copy has no opaque panel, blur, or shadow. The receipt descends in the peripheral lane before widening below the copy; report entry happens after the privacy chapter. Desktop copy remains centered in the middle, and phone copy remains centered below the art. Motion Off and short viewports use natural document flow across all six chapters.

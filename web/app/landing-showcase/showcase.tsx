@@ -169,12 +169,12 @@ function AppScreen({
     <div className={s.phone}>
       <div className={s.phoneCamera} aria-hidden="true" />
       <img
-        src={`/assets/landing-showcase/${page}-production-hd-20261013-2x.webp`}
-        srcSet={`/assets/landing-showcase/${page}-production-hd-20261013-2x.webp 804w, /assets/landing-showcase/${page}-production-hd-20261013.webp 1206w`}
+        src={`/assets/landing-showcase/${page === "accounts" ? "accounts-sections-production-20261014" : "transactions-production-hd-20261013"}-2x.webp`}
+        srcSet={`/assets/landing-showcase/${page === "accounts" ? "accounts-sections-production-20261014" : "transactions-production-hd-20261013"}-2x.webp 804w, /assets/landing-showcase/${page === "accounts" ? "accounts-sections-production-20261014" : "transactions-production-hd-20261013"}.webp 1206w`}
         sizes="(max-width: 900px) 285px, (max-width: 1100px) and (min-height: 1000px) 285px, 310px"
         alt={
           page === "accounts"
-            ? "Clover Accounts showing bank, wallet and investment balances with sample data."
+            ? "Clover account lists with BPI, UnionBank, BDO, Maya, GCash, GoTrade and ATRAM, using fictional balances."
             : "Clover Transactions showing categorized purchases, dates, amounts and bank logos with sample data."
         }
         width={402}
@@ -188,12 +188,27 @@ function AppScreen({
 }
 function Receipt({ small = false }: { small?: boolean }) {
   return (
-    <div className={`${s.receipt} ${small ? s.smallReceipt : ""}`} aria-hidden="true">
-      <img src="/figma-icons/categories/food-dining.svg" className={s.receiptLogo} width={38} height={38} alt="" />
+    <div
+      className={`${s.receipt} ${small ? s.smallReceipt : ""}`}
+      aria-hidden="true"
+    >
+      <img
+        src="/figma-icons/categories/food-dining.svg"
+        className={s.receiptLogo}
+        width={38}
+        height={38}
+        alt=""
+      />
       <strong>STARBUCKS</strong>
       <span>October 5, 2026 · 9:41 AM</span>
-      <div><span>Caffè Latte</span><span>₱190.00</span></div>
-      <div className={s.receiptTotal}><strong>Total</strong><strong>₱190.00</strong></div>
+      <div>
+        <span>Caffè Latte</span>
+        <span>₱190.00</span>
+      </div>
+      <div className={s.receiptTotal}>
+        <strong>Total</strong>
+        <strong>₱190.00</strong>
+      </div>
       <div className={s.barcode} />
     </div>
   );
@@ -205,71 +220,60 @@ function PurchaseThroughline() {
   return (
     <div className={s.purchaseThroughline} aria-hidden="true">
       <div className={s.purchasePaper}>
-        <div className={s.purchaseReceiptHead}>STARBUCKS<small>October 5, 2026 · 9:41 AM</small></div>
+        <div className={s.purchaseReceiptHead}>
+          STARBUCKS<small>October 5, 2026 · 9:41 AM</small>
+        </div>
         <div className={s.purchaseIdentity}>
-          <img src="/figma-icons/categories/food-dining.svg" width={44} height={44} alt="" />
-          <div><strong>Coffee at Starbucks</strong><small>Food & dining · BPI</small></div>
+          <img
+            src="/figma-icons/categories/food-dining.svg"
+            width={44}
+            height={44}
+            alt=""
+          />
+          <div>
+            <strong>Coffee at Starbucks</strong>
+            <small>Food & dining · BPI</small>
+          </div>
           <b>₱190.00</b>
         </div>
-        <div className={s.purchaseReceiptTail}><span>Caffè Latte</span><span>Total paid</span><div className={s.barcode} /></div>
+        <div className={s.purchaseReceiptTail}>
+          <span>Caffè Latte</span>
+          <span>Total paid</span>
+          <div className={s.barcode} />
+        </div>
       </div>
     </div>
   );
 }
 
-const everydayPurchases = [
-  {
-    merchant: "Jollibee",
-    item: "Lunch",
-    amount: "₱250.00",
-    icon: "food-dining",
-    color: "#be1830",
-  },
-  {
-    merchant: "Puregold",
-    item: "Groceries",
-    amount: "₱1,250.00",
-    icon: "groceries",
-    color: "#187942",
-  },
-  {
-    merchant: "McDonald’s",
-    item: "Breakfast",
-    amount: "₱180.00",
-    icon: "food-dining",
-    color: "#b9430b",
-  },
-];
-function EverydayRecords() {
+function ConnectionOptions() {
+  const banks = [
+    ["BDO", "bdo.png"],
+    ["BPI", "bpi.png"],
+    ["LandBank", "landbank.png"],
+    ["Metrobank", "metrobank.png"],
+    ["RCBC", "rcbc.png"],
+    ["Security Bank", "security bank.png"],
+  ];
   return (
-    <div
-      className={s.everydayRecords}
-      aria-label="Illustrative everyday purchases"
-    >
-      {everydayPurchases.map((purchase, index) => (
-        <div
-          className={s.everydayRecord}
-          key={purchase.merchant}
-          style={
-            {
-              "--record-index": index,
-              "--merchant-color": purchase.color,
-            } as CSSProperties
-          }
-        >
-          <img
-            src={`/figma-icons/categories/${purchase.icon}.svg`}
-            width={32}
-            height={32}
-            alt=""
-          />
-          <div>
-            <strong>{purchase.merchant}</strong>
-            <span>{purchase.item}</span>
+    <div className={s.connectionOptions}>
+      <div className={s.miniHeader}>
+        <strong>Connect</strong>
+        <span>Philippines</span>
+      </div>
+      <div className={s.connectionGrid}>
+        {banks.map(([name, file]) => (
+          <div key={name}>
+            <img
+              src={`/assets/banks/philippines/${file}`}
+              width="42"
+              height="42"
+              alt=""
+            />
+            <span>{name}</span>
           </div>
-          <b>−{purchase.amount}</b>
-        </div>
-      ))}
+        ))}
+      </div>
     </div>
   );
 }
@@ -679,7 +683,7 @@ export function Showcase({ initialMarket }: { initialMarket: PricingMarket }) {
             <div className={s.copy}>
               <Heading
                 hero
-                text="A coffee, a bill, a plan for later. Bring your money together, and make room for what matters."
+                text="Connect supported banks, upload statements and receipts, or add details manually. Understand your money and take one clearer step at a time."
               >
                 Months of finances.
                 <br />
@@ -716,47 +720,182 @@ export function Showcase({ initialMarket }: { initialMarket: PricingMarket }) {
             <PurchaseThroughline />
             <article className={s.journeyBeat} data-story-act>
               <div className={s.journeyCopy}>
-                <Heading text="A coffee on the way. Groceries for home. Life keeps moving, and the little moments add up.">
-                  A coffee. A bill.<br /><em>A month gone by.</em>
+                <Heading text="Connect supported banks. Upload statements, receipts, screenshots, or spreadsheets. Choose what works for you.">
+                  Start with
+                  <br />
+                  <em>what suits you.</em>
                 </Heading>
               </div>
-              <div className={`${s.journeyArt} ${s.journeyRecords}`} data-story-art>
-                <div className={s.journeyReceipt}><Receipt /></div>
-                <EverydayRecords />
-                <div className={s.journeyTransaction}><TransactionMoment /></div>
+              <div
+                className={`${s.journeyArt} ${s.journeyRecords}`}
+                data-story-art
+              >
+                <div className={s.journeyReceipt}>
+                  <Receipt />
+                </div>
+                <ConnectionOptions />
+                <div className={s.journeyTransaction}>
+                  <TransactionMoment />
+                </div>
               </div>
             </article>
             <article className={s.journeyBeat} data-story-act>
               <div className={s.journeyCopy}>
-                <Heading text="Bring those moments into Clover. Review the details, and the scattered pieces become a picture you can understand.">
-                  Less to piece together.<br /><em>More to see.</em>
+                <Heading text="Your financial records are private, reviewable, and traceable. Edit, export, or delete your data through your account.">
+                  Your financial data stays
+                  <br />
+                  <em>under your control.</em>
                 </Heading>
               </div>
-              <div className={`${s.journeyArt} ${s.journeyClarity}`} data-story-art>
+              <div
+                className={`${s.journeyArt} ${s.journeyPrivacy}`}
+                data-story-art
+              >
+                <div className={s.privacyPhoto}>
+                  <StoryPhoto
+                    desktop="landing-story-v3/07-private-review"
+                    mobile="landing-story-v3/07-private-review-mobile"
+                    alt="Reviewing personal financial records at home."
+                  />
+                </div>
+                <div className={s.controlCard}>
+                  <span className={s.controlSeal}>
+                    <Icon kind="lock" />
+                  </span>
+                  <strong>Your records. Your choice.</strong>
+                  <div>
+                    <Icon kind="edit" />
+                    <span>Review and edit</span>
+                    <Icon kind="check" />
+                  </div>
+                  <div>
+                    <Icon kind="export" />
+                    <span>Export your data</span>
+                    <Icon kind="check" />
+                  </div>
+                  <div>
+                    <Icon kind="lock" />
+                    <span>Private to you</span>
+                    <Icon kind="check" />
+                  </div>
+                </div>
+              </div>
+            </article>
+            <article className={s.journeyBeat} data-story-act>
+              <div className={s.journeyCopy}>
+                <Heading text="Your financial life in one view. Track accounts, balances, recurring obligations, investments, and trends across your accounts.">
+                  Understand your finances.
+                  <br />
+                  <em>Build better habits.</em>
+                </Heading>
+              </div>
+              <div
+                className={`${s.journeyArt} ${s.journeyClarity}`}
+                data-story-art
+              >
                 <SpendingStory />
-                <div className={s.insightPhone}><AppScreen page="transactions" /></div>
+                <div className={s.insightPhone}>
+                  <AppScreen page="transactions" />
+                </div>
               </div>
             </article>
             <article className={s.journeyBeat} data-story-act>
               <div className={s.journeyCopy}>
-                <Heading text="Now the question is easier to ask. Clover helps you understand what changed, so you can decide what comes next.">
-                  From “where did it go?”<br /><em>To “what’s next?”</em>
+                <Heading text="Ask what changed this month, what you can safely spend, or get help creating a budget and a goal.">
+                  Ask what your money
+                  <br />
+                  can make <em>possible.</em>
                 </Heading>
               </div>
-              <div className={`${s.journeyArt} ${s.journeyConversation}`} data-story-art>
+              <div
+                className={`${s.journeyArt} ${s.journeyConversation}`}
+                data-story-art
+              >
                 <Conversation />
-                <div className={s.journeyMascot}><Mascot pose="chat" size={150} /></div>
+                <div className={s.journeyMascot}>
+                  <Mascot pose="chat" size={150} />
+                </div>
+              </div>
+            </article>
+            <article className={s.journeyBeat} data-story-act>
+              <div className={s.journeyCopy}>
+                <Heading text="Split expenses with friends on Split Bills. Manage household expenses with a partner on Circles.">
+                  Manage money together.
+                  <br />
+                  <em>With less effort.</em>
+                </Heading>
+              </div>
+              <div
+                className={`${s.journeyArt} ${s.journeyShared}`}
+                data-story-art
+              >
+                <div className={s.sharedPhoto}>
+                  <StoryPhoto
+                    desktop="landing-story-v3/05-plan"
+                    mobile="landing-story-v3/05-plan-mobile"
+                    alt="Friends making plans together over a laptop."
+                  />
+                </div>
+                <div className={s.sharedCard}>
+                  <div className={s.miniHeader}>
+                    <strong>Weekend with friends</strong>
+                    <span>Split Bills</span>
+                  </div>
+                  <strong className={s.sharedTotal}>₱1,200.00</strong>
+                  <div className={s.sharedMember}>
+                    <span>A</span>
+                    <div>
+                      Alex<small>Paid with GCash</small>
+                    </div>
+                    <img
+                      src="/assets/banks/philippines/gcash.png"
+                      width="32"
+                      height="32"
+                      alt="GCash"
+                    />
+                    <strong>₱400</strong>
+                  </div>
+                  <div className={s.sharedMember}>
+                    <span>J</span>
+                    <div>
+                      Jamie<small>Paid with Maya</small>
+                    </div>
+                    <img
+                      src="/assets/banks/philippines/maya.png"
+                      width="32"
+                      height="32"
+                      alt="Maya"
+                    />
+                    <strong>₱400</strong>
+                  </div>
+                  <div className={s.sharedMember}>
+                    <span>S</span>
+                    <div>
+                      Sam<small>Still to settle</small>
+                    </div>
+                    <strong>₱400</strong>
+                  </div>
+                </div>
               </div>
             </article>
             <article className={s.journeyBeat} data-story-act>
               <div className={s.journeyCopy}>
                 <Heading text="A little more peace of mind. A plan you can grow. Less time untangling your money, and more time living your life.">
-                  Your money, clearer.<br /><em>Your life, a little lighter.</em>
+                  Feel clearer about your money.
+                  <br />
+                  <em>More confident about what’s next.</em>
                 </Heading>
               </div>
-              <div className={`${s.journeyArt} ${s.journeyLife}`} data-story-art>
+              <div
+                className={`${s.journeyArt} ${s.journeyLife}`}
+                data-story-art
+              >
                 <div className={s.lifePhoto}>
-                  <StoryPhoto desktop="landing-story-v3/07-records-away" mobile="landing-story-v3/07-records-away-mobile" alt="Putting the paperwork away and closing the laptop at home." />
+                  <StoryPhoto
+                    desktop="landing-story-v3/07-records-away"
+                    mobile="landing-story-v3/07-records-away-mobile"
+                    alt="Putting the paperwork away and closing the laptop at home."
+                  />
                 </div>
                 <GoalMoment />
               </div>
@@ -766,9 +905,9 @@ export function Showcase({ initialMarket }: { initialMarket: PricingMarket }) {
 
         <section id="plans" className={s.plans} data-scroll-scene>
           <Heading text="Start free. Choose Plus or Pro when your finances need a little more room.">
-            At your pace.
+            Do more as your finances
             <br />
-            <em>At every stage.</em>
+            <em>get more complex.</em>
           </Heading>
           <Plans initialMarket={initialMarket} />
         </section>

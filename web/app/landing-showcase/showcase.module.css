@@ -2794,7 +2794,7 @@
 @media (prefers-reduced-motion: reduce) { .site .journey { height: auto; } }
 @media (max-height: 659px) and (min-width: 901px), (max-height: 739px) and (max-width: 900px) { .site .journey { height: auto; } }
 
-.journeyCopy { background: #f5faf9; padding-bottom: 20px; }
+.journeyCopy { padding-bottom: 20px; }
 .journeyConversation .chatTop { padding-bottom: 8px; }
 .journeyConversation .question { margin: 12px 0 12px 25px; padding: 10px 15px; }
 .journeyConversation .answer { line-height: 1.6; }
@@ -2837,7 +2837,7 @@
 
 /* Frame the story around a quiet center on desktop, and below the art on phones. */
 .hero .storyGrid { position: relative; display: block; padding: 0; }
-.hero .copy, .journeyCopy { position: absolute; left: 29%; width: 42%; top: 50%; transform: translateY(-50%); padding: 24px 0; text-align: center; background: #f5faf9; }
+.hero .copy, .journeyCopy { position: absolute; left: 29%; width: 42%; top: 50%; transform: translateY(-50%); padding: 24px 0; text-align: center; background: transparent; }
 .hero .copy { align-items: center; gap: 24px; }
 .hero .heading p, .journeyCopy .heading p { max-width: 520px; margin-inline: auto; font-size: 15px; line-height: 1.75; }
 .hero .heading h1, .journeyCopy .heading h2 { font-size: clamp(34px, 3.3vw, 52px); }
@@ -2974,4 +2974,84 @@
 @media (max-width: 900px), (max-width: 1100px) and (min-height: 1000px) {
   .insightPhone { display: none; }
   .purchasePaper { top: calc(6% + var(--fold) * 52% - var(--join) * 28%); }
+}
+
+/* The production narrative, with open text and peripheral choreography. */
+.site .journey { height: 850svh; }
+.hero .copy, .journeyCopy { background: transparent; box-shadow: none; backdrop-filter: none; }
+.journeyArt { transform: translateY(calc((1 - var(--act-enter)) * 24px - (1 - var(--act-leave)) * 20px)); }
+.purchasePaper { top: calc(14% + var(--fold) * 68% - var(--join) * 24%); }
+.privacyPhoto, .sharedPhoto { position: absolute; left: 0; top: 14%; bottom: 14%; width: 27%; border-radius: 38px; overflow: hidden; box-shadow: 0 7px 0 #d1e6df, 0 36px 65px -24px #13605b50; transform: perspective(1200px) rotateY(calc((1 - var(--act-progress)) * -9deg)); }
+.privacyPhoto img, .sharedPhoto img { width: 100%; height: 100%; object-fit: cover; object-position: 72% center; }
+.controlCard, .sharedCard { position: absolute; right: 0; top: 50%; width: 27%; padding: 24px; border: 1px solid #cce5df; border-bottom-width: 7px; border-radius: 28px; background: linear-gradient(140deg,#fff,#edf9f5); box-shadow: 0 6px 0 #cce5df, 0 36px 65px -24px #13605b50; transform: translateY(-50%) perspective(1200px) rotateY(calc((1 - var(--act-progress)) * 9deg)); }
+.controlSeal { display: grid; place-items: center; width: 68px; height: 68px; margin-bottom: 24px; color: #008f9e; background: #c4f2e4; border-radius: 22px; box-shadow: 0 5px 0 #9ed8cd; }
+.controlSeal svg { width: 34px; height: 34px; }
+.controlCard > strong { display: block; font-size: 20px; line-height: 1.35; margin-bottom: 20px; }
+.controlCard > div { display: flex; align-items: center; gap: 10px; padding: 15px 0; border-top: 1px solid #d6e9e3; font-size: 13px; }
+.controlCard > div svg { width: 20px; height: 20px; flex-shrink: 0; color: #008f9e; }
+.controlCard > div svg:last-child { margin-left: auto; }
+.sharedTotal { display: block; font-size: 32px; margin: 25px 0; color: #008f9e; }
+.sharedMember { display: flex; align-items: center; gap: 10px; padding: 16px 0; border-top: 1px solid #d6e9e3; font-size: 13px; }
+.sharedMember > span { display: grid; place-items: center; width: 32px; height: 32px; border-radius: 50%; background: #c6eee1; color: #286757; flex-shrink: 0; }
+.sharedMember small { display: block; margin-top: 4px; font-size: 10px; color: #607878; }
+.sharedMember img { border-radius: 50%; margin-left: auto; object-fit: contain; }
+.sharedMember > strong { margin-left: auto; white-space: nowrap; }
+.sharedCard .miniHeader { gap: 10px; font-size: 13px; }
+@media (max-width: 900px), (max-width: 1100px) and (min-height: 1000px) {
+  .purchasePaper { top: calc(6% + var(--fold) * 52% - var(--join) * 28%); }
+  .privacyPhoto, .sharedPhoto { left: 0; top: 0; bottom: 0; width: 58%; border-radius: 24px; }
+  .controlCard, .sharedCard { right: 0; width: 58%; padding: 16px; border-radius: 22px; }
+  .controlCard > strong { font-size: 16px; margin-bottom: 12px; }
+  .controlSeal { width: 48px; height: 48px; margin-bottom: 16px; border-radius: 16px; }
+  .controlSeal svg { width: 26px; height: 26px; }
+  .controlCard > div { font-size: 11px; padding: 12px 0; gap: 7px; }
+  .sharedTotal { font-size: 24px; margin: 16px 0; }
+  .sharedMember { gap: 7px; padding: 12px 0; font-size: 11px; }
+  .sharedMember > span { display: none; }
+  .sharedMember img { width: 22px; height: 22px; }
+  .sharedMember small { font-size: 9px; }
+  .sharedCard .miniHeader { font-size: 11px; flex-wrap: wrap; }
+}
+
+.connectionOptions { position: absolute; right: 0; top: 50%; width: 27%; padding: 24px; border: 1px solid #cce5df; border-bottom-width: 7px; border-radius: 28px; background: linear-gradient(140deg,#fff,#edf9f5); box-shadow: 0 6px 0 #cce5df, 0 36px 65px -24px #13605b50; transform: translateY(-50%) perspective(1200px) rotateY(calc((1 - var(--act-progress)) * 9deg)); }
+.connectionOptions .miniHeader { gap: 8px; font-size: 13px; }
+.connectionGrid { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 12px 8px; margin-top: 22px; }
+.connectionGrid > div { display: flex; flex-direction: column; align-items: center; justify-content: flex-start; gap: 10px; padding: 14px 3px; border: 1px solid #d3e7e1; border-radius: 16px; background: #fff; }
+.connectionGrid img { object-fit: contain; border-radius: 10px; }
+.connectionGrid span { font-size: 10px; line-height: 1.4; text-align: center; }
+@media (max-width: 900px), (max-width: 1100px) and (min-height: 1000px) {
+  .connectionOptions { top: 4%; right: 0; width: 60%; padding: 14px; transform: perspective(1200px) rotateY(calc((1 - var(--act-progress)) * 6deg)); }
+  .connectionOptions .miniHeader { font-size: 10px; flex-wrap: wrap; }
+  .connectionGrid { margin-top: 14px; gap: 8px 5px; }
+  .connectionGrid > div { padding: 10px 2px; gap: 6px; border-radius: 10px; }
+  .connectionGrid img { width: 30px; height: 30px; }
+  .connectionGrid span { font-size: 8px; }
+}
+
+.site .journey[data-story-static="true"] { height: auto; }
+.purchasePaper { --expand: var(--paper-expand, 0); left: calc(1% + var(--expand) * 20% - var(--join) * 21%); width: calc(280px + var(--expand) * (60% - 280px)); }
+@media (max-width: 900px), (max-width: 1100px) and (min-height: 1000px) {
+  .purchasePaper { left: calc(3% - var(--expand) * 3% + var(--join) * 18%); width: calc(210px + var(--expand) * (100% - 210px)); }
+}
+@media (max-width: 900px), (max-width: 1100px) and (min-height: 1000px) {
+  .hero .heroTransaction { display: none; }
+  .connectionOptions { top: 47%; width: 94%; padding: 14px; }
+  .connectionGrid { margin-top: 10px; }
+  .connectionGrid > div { padding: 8px 2px; }
+  .connectionGrid img { width: 32px; height: 32px; }
+  .connectionGrid span { font-size: 9px; }
+  .purchasePaper { width: calc(170px + var(--expand) * (100% - 170px)); }
+}
+
+@media (max-width: 900px), (max-width: 1100px) and (min-height: 1000px) {
+  .connectionOptions { top: 57%; }
+  .journey[data-story-static="true"] .connectionOptions { top: 48%; z-index: 2; }
+  .journey[data-story-static="true"] .journeyReceipt { left: 0; top: 0; width: 145px; }
+}
+@media (max-width: 900px), (max-width: 1100px) and (min-height: 1000px) {
+  .purchasePaper { top: calc(6% + var(--fold) * 78% - var(--join) * 54%); }
+}
+.site .journey[data-story-static="true"] > .pin { height: auto; min-height: 0; overflow: visible; }
+@media (max-width: 900px), (max-width: 1100px) and (min-height: 1000px) {
+  .journey[data-story-static="true"] .journeyRecords .journeyTransaction { display: none; }
 }

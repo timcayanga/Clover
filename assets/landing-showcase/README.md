@@ -61,3 +61,5 @@ The final fictional transaction fixture keeps Starbucks at PHP 190 on
 scroll narrative. Jollibee, Puregold and McDonald's samples also match the
 illustrative purchase props. All logos and interface icons were checked before
 capture.
+
+`accounts-sections-production-20261014{,-2x}.webp`: actual production Accounts UI at commit `73ea7693`, captured at 3× in an isolated local harness with fictional BPI, UnionBank, BDO, Maya, GCash, GoTrade, and ATRAM records. Cropped from y=325 CSS px through Investments, excluding summary cards and app chrome. 1206×2616 and 804×1744 WebP. No customer information or credentials are included.
