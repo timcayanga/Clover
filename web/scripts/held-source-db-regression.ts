@@ -6,6 +6,7 @@ import {encodeNativePdfNullGlyphs} from '../lib/native-pdf-text';
 import {parseGcashBillsReceipt} from '../lib/gcash-bills-receipt';
 import {parseHeldNativeSource,buildSeaBankIndonesiaPdfRows,buildDbsZeroPdfProof} from '../lib/held-source-contracts';
 import {parseBcaTransferProof} from '../lib/bca-transfer-proof';
+import {pdfTextLayerLooksSufficientForParsing} from '../lib/import-file-text.server';
 import {validateParsedImportRows} from '../lib/data-engine-validation';
 import {shouldPersistPublishedAccountSummaries,persistPublishedAccountSummaries} from '../lib/import-checkpoint-publication';
 const url=new URL(process.env.DATABASE_URL??'http://invalid');assert.equal(url.hostname,'127.0.0.1');assert.equal(url.port,'55441');assert.equal(url.pathname,'/clover_migration_qa');assert(process.argv.includes('--execute'));
@@ -16,6 +17,7 @@ async function main(){
  for(const bad of [idr.replace('halaman 2 dr 2','halaman 2 dr 3'),idr.replace('901000000123','90100000012'),idr.replace('1.000 | 1.100','1.001 | 1.100'),idr.replace('100 | 900','100 | 901'),idr.replace('SEABANK_ID_ROW_COUNT 5','SEABANK_ID_ROW_COUNT 4'),idr.replace('cs@seabank.co.id','contact@seabank.com.ph')])assert.throws(()=>parseHeldNativeSource(bad),/requires review/);
  for(const id of ids.slice(1,3)){const zero=source(id);for(const bad of [zero.replace('SGD 0.00','SGD 1.00'),zero.replace('Page 3 of 3',''),zero.replace('CURRENCY: SINGAPORE DOLLAR','CURRENCY: US DOLLAR'),zero.replace('"movements":0','"movements":1'),zero.replace('Account No.','Account No. 999-000000-0\nAccount No.')])assert.throws(()=>parseHeldNativeSource(bad),/requires review/);}
  const recipient=source(ids[3]);for(const bad of [recipient.replace('To Account : 123-0004567','To Account : 123-0004568'),recipient.replace('Amount : Rp 12.345','Amount : Rp 12.346'),recipient.replace('BCA_NATIVE_PAGES 1','BCA_NATIVE_PAGES 2'),recipient.replace('Notes:\nCharges VAT Inclusive','Missing notes')])assert.equal(parseBcaTransferProof(bad)?.rows.length,0);
+ assert.equal(pdfTextLayerLooksSufficientForParsing(recipient.replace('BCA_NATIVE_PAGES 1','BCA_NATIVE_PAGES 2')),true,'Recognized invalid native evidence reaches review unchanged, without OCR promotion');
  assert.throws(()=>parseGcashBillsReceipt(source(ids[4]).replace('Amount Paid PHP 100.00','')),/reconcile/);
  assert.throws(()=>parseHeldNativeSource('GCASH PHILIPPINES PAYMENT RECEIPT CASH IN YOUR GCASH ACCOUNT Total Price USD 0 Amount Paid USD 1000 Balance USD 1000'),/requires review/);
  const row=parseHeldNativeSource(idr)!.rows[0];const grouped={...row,amount:'1250000.00',rawPayload:{...row.rawPayload,amountText:'1.250.000'}};assert(!validateParsedImportRows({rows:[grouped],metadata:null}).findings.some(f=>f.code==='amount.implausible'));assert(validateParsedImportRows({rows:[{...grouped,rawPayload:{...grouped.rawPayload,amountText:'12.00 35.00'}}],metadata:null}).findings.some(f=>f.code==='amount.implausible'));

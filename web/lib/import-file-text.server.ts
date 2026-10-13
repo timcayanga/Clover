@@ -1169,6 +1169,7 @@ const scoreStatementTextCandidate = (text: string) => {
 
 export const pdfTextLayerLooksSufficientForParsing = (text: string, fileName?: string | null) => {
   if (/^(?:SEABANK_ID_NATIVE_PAGES|DBS_NATIVE_PAGES) \d+$/m.test(text)) return true;
+  if (/^BCA_NATIVE_PAGES \d+$/m.test(text) && parseBcaTransferProof(text)) return true;
   // A captured Grab proof retains failed validation for the parser review gate.
   if (text.split(/\r?\n/).some(line => line.startsWith("GRAB_RECEIPT_NATIVE "))) return true;
   // Preserve recognized empty native statements, including failed proofs, for
@@ -2264,7 +2265,9 @@ const extractTextFromPdfBytes = async (data: Uint8Array, password?: string, base
       const cimbText = `${extractedText}\nCIMB_NATIVE_PAGES ${pdf.numPages}`;
       if (parseCimbConsolidatedStatement(cimbText)) return cimbText;
       const bcaText = `${extractedText}\nBCA_NATIVE_PAGES ${pdf.numPages}\n${bcaProofRows.flat().filter(Boolean).join("\n")}`;
-      if (parseBcaTransferProof(bcaText)?.rows.length) return bcaText;
+      // Keep recognized incomplete proofs for the strict review gate; OCR
+      // must not discard their physical-page evidence and promote a guess.
+      if (parseBcaTransferProof(bcaText)) return bcaText;
       const structuredPosbRows = posbTransactionRows.flat().filter(Boolean);
       if (POSB_NATIVE_ACCOUNT_HEADING.test(extractedText) && structuredPosbRows.length > 0) return `${extractedText}\n${structuredPosbRows.join('\n')}`;
       const structuredMariBankRows = mariBankTransactionRows.flat().filter(Boolean);
