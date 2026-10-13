@@ -22,39 +22,49 @@ const missingCategoryId = (runId: string) => `learning-verification-category-${r
 const tables = ["Workspace", "Account", "AccountTombstone", "Category", "Transaction", "ImportFile", "ParsedTransaction", "DocumentImport", "AccountStatementCheckpoint", "ReceiptDocument", "MerchantRule", "AccountRule", "TrainingSignal", "StatementTemplate", "DataQaRun", "DataQaFinding", "ImportFileExtractionCache", "ImportEnrichmentJob", "LearningJob", "DocumentImportPage", "LearningJobAttempt"] as const;
 type Manifest = Record<string, { count: number; sha256: string }>;
 const financialTables = new Set<string>(["Account", "AccountTombstone", "Transaction", "ImportFile", "ParsedTransaction", "DocumentImport", "AccountStatementCheckpoint", "ReceiptDocument", "DocumentImportPage"]);
-export async function checkpointPreservationManifest(checkpointId: string, db: Prisma.TransactionClient, excludedWorkspaceIds: string[] = []): Promise<Manifest> {
+const readSnapshotTimeout = 240_000;
+
+async function readManifest(db: Prisma.TransactionClient, selectedTables: readonly string[], predicates: string[], params: unknown[]): Promise<Manifest> {
+  // The table list and predicates are built only from the fixed diagnostic lists.
+  // Keep the original complete-row PostgreSQL hashes; batch round trips, not evidence.
+  const query = selectedTables.map((table, index) => `SELECT '${table}'::text AS "table", count(*)::int AS count,
+    encode(sha256(convert_to(COALESCE(string_agg(encode(sha256(convert_to(to_jsonb(t)::text, 'UTF8')), 'hex'), '' ORDER BY t."id"), ''), 'UTF8')), 'hex') AS sha256
+    FROM "${table}" t ${predicates[index]}`).join(" UNION ALL ");
+  const rows = await db.$queryRawUnsafe<Array<{ table: string; count: number; sha256: string }>>(query, ...params);
+  const byTable = new Map(rows.map(row => [row.table, row]));
   const result: Manifest = {};
-  for (const table of tables) {
-    const conditions: string[] = [], params: unknown[] = [];
-    if (table === "AccountStatementCheckpoint") { params.push(checkpointId); conditions.push('t."id" <> $1'); }
-    if (excludedWorkspaceIds.length) {
-      const expression = table === "Workspace" ? 't."id"' : table === "DocumentImportPage" ? '(SELECT p."workspaceId" FROM "DocumentImport" p WHERE p."id" = t."documentImportId")' : table === "LearningJobAttempt" ? '(SELECT j."workspaceId" FROM "LearningJob" j WHERE j."id" = t."jobId")' : 't."workspaceId"';
-      params.push(excludedWorkspaceIds);
-      conditions.push(`(${expression} IS NULL OR NOT (${expression} = ANY($${params.length}::text[])))`);
-    }
-    const predicate = conditions.length ? 'WHERE ' + conditions.join(' AND ') : '';
-    const rows = await db.$queryRawUnsafe<Array<{ count: number; sha256: string }>>(`SELECT count(*)::int AS count,
-      encode(sha256(convert_to(COALESCE(string_agg(encode(sha256(convert_to(to_jsonb(t)::text, 'UTF8')), 'hex'), '' ORDER BY t."id"), ''), 'UTF8')), 'hex') AS sha256
-      FROM "${table}" t ${predicate}`, ...params);
-    result[table] = rows[0];
+  for (const table of selectedTables) {
+    const row = byTable.get(table);
+    if (!row || rows.length !== selectedTables.length) throw new Error("VERIFICATION_MANIFEST_INCOMPLETE");
+    result[table] = { count: row.count, sha256: row.sha256 };
   }
   return result;
 }
+
+export async function checkpointPreservationManifest(checkpointId: string, db: Prisma.TransactionClient, excludedWorkspaceIds: string[] = []): Promise<Manifest> {
+  const params: unknown[] = [checkpointId];
+  if (excludedWorkspaceIds.length) params.push(excludedWorkspaceIds);
+  const predicates = tables.map(table => {
+    const conditions: string[] = [];
+    if (table === "AccountStatementCheckpoint") conditions.push('t."id" <> $1');
+    if (excludedWorkspaceIds.length) {
+      const expression = table === "Workspace" ? 't."id"' : table === "DocumentImportPage" ? '(SELECT p."workspaceId" FROM "DocumentImport" p WHERE p."id" = t."documentImportId")' : table === "LearningJobAttempt" ? '(SELECT j."workspaceId" FROM "LearningJob" j WHERE j."id" = t."jobId")' : 't."workspaceId"';
+      conditions.push(`(${expression} IS NULL OR NOT (${expression} = ANY($2::text[])))`);
+    }
+    return conditions.length ? 'WHERE ' + conditions.join(' AND ') : '';
+  });
+  return readManifest(db, tables, predicates, params);
+}
 export async function learningVerificationManifest(workspaceId: string, own = false, db: Prisma.TransactionClient = prisma): Promise<Manifest> {
-  const result: Manifest = {};
-  for (const table of tables) {
-    if (own && !financialTables.has(table)) continue;
+  const selectedTables = tables.filter(table => !own || financialTables.has(table));
+  const predicates = selectedTables.map(table => {
     const workspaceExpression = table === "Workspace" ? 't."id"'
       : table === "DocumentImportPage" ? '(SELECT p."workspaceId" FROM "DocumentImport" p WHERE p."id" = t."documentImportId")'
       : table === "LearningJobAttempt" ? '(SELECT j."workspaceId" FROM "LearningJob" j WHERE j."id" = t."jobId")'
       : 't."workspaceId"';
-    // Identifiers and operators are exclusively from the fixed list above.
-    const rows = await db.$queryRawUnsafe<Array<{ count: number; sha256: string }>>(`SELECT count(*)::int AS count,
-      encode(sha256(convert_to(COALESCE(string_agg(encode(sha256(convert_to(to_jsonb(t)::text, 'UTF8')), 'hex'), '' ORDER BY t."id"), ''), 'UTF8')), 'hex') AS sha256
-      FROM "${table}" t WHERE ${workspaceExpression} ${own ? "=" : "<>"} $1`, workspaceId);
-    result[table] = rows[0];
-  }
-  return result;
+    return `WHERE ${workspaceExpression} ${own ? "=" : "<>"} $1`;
+  });
+  return readManifest(db, selectedTables, predicates, [workspaceId]);
 }
 type RunState = { baseline: Manifest; protectedFinancial?: Manifest; failureJobId?: string; interruptionJobId?: string };
 async function loadRun(runId: string, actor: string) {
@@ -125,7 +135,7 @@ export async function inspectLearningVerification(runId: string, actor: string) 
   const { outside, financial } = await prisma.$transaction(async db => ({
     outside: await learningVerificationManifest(run.workspace.id, false, db),
     financial: await learningVerificationManifest(run.workspace.id, true, db),
-  }), { isolationLevel: "RepeatableRead", timeout: 45_000 });
+  }), { isolationLevel: "RepeatableRead", timeout: readSnapshotTimeout });
   const [accounts, transactions, files, parsedRows, rules, signals, accountRules, templates, jobs] = await Promise.all([
     prisma.account.findMany({ where }), prisma.transaction.findMany({ where, orderBy: { id: "asc" } }), prisma.importFile.findMany({ where }), prisma.parsedTransaction.findMany({ where }),
     prisma.merchantRule.findMany({ where }), prisma.trainingSignal.findMany({ where }), prisma.accountRule.findMany({ where }), prisma.statementTemplate.findMany({ where }),
@@ -173,7 +183,6 @@ export async function repairVerificationBpiCheckpoint(runId: string, actor: stri
 export async function previewLearningBatchPreservation(runIds: string[], actor: string) {
   assertLearningVerificationEnvironment();
   if (!Array.isArray(runIds) || runIds.length < 1 || runIds.length > 32 || new Set(runIds).size !== runIds.length || runIds.some(id => !/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i.test(id))) throw new Error('VERIFICATION_NOT_FOUND');
-  const workspaces: string[] = [];
-  for (const id of runIds) workspaces.push((await loadRun(id, actor)).workspace.id);
-  return prisma.$transaction(async db => ({ runIds, excludedProfiles: workspaces, preservation: await checkpointPreservationManifest('cmv29w3r4002806ictv6bmnfp', db, workspaces), retainedCheckpoint: await db.accountStatementCheckpoint.findUnique({ where: { id: 'cmv29w3r4002806ictv6bmnfp' } }) }), { isolationLevel: 'RepeatableRead', timeout: 45_000 });
+  const workspaces = await Promise.all(runIds.map(async id => (await loadRun(id, actor)).workspace.id));
+  return prisma.$transaction(async db => ({ runIds, excludedProfiles: workspaces, preservation: await checkpointPreservationManifest('cmv29w3r4002806ictv6bmnfp', db, workspaces), retainedCheckpoint: await db.accountStatementCheckpoint.findUnique({ where: { id: 'cmv29w3r4002806ictv6bmnfp' } }) }), { isolationLevel: 'RepeatableRead', timeout: readSnapshotTimeout });
 }

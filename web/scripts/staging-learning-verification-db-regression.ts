@@ -12,6 +12,31 @@ async function main() {
   const user = await db.user.create({ data: { clerkUserId: v.LEARNING_QA_USER, email: "staging-learning-regression@example.invalid", environment: "staging" } });
   const original = await db.workspace.create({ data: { userId: user.id, name: "Existing knowledge" } });
   const oldRule = await db.merchantRule.create({ data: { workspaceId: original.id, merchantKey: "old rule", normalizedName: "Do not change" } });
+  const originalAccount = await db.account.create({ data: { workspaceId: original.id, name: "Confirmed foreign account", type: "bank", currency: "EUR", accountNumber: "000009876543", balance: "321.09" } });
+  await db.accountStatementCheckpoint.create({ data: { id: "cmv29w3r4002806ictv6bmnfp", workspaceId: original.id, accountId: originalAccount.id, endingBalance: "321.09", status: "pending", sourceMetadata: { independentlyInvented: true, evidence: "Retained checkpoint" } } });
+  const sourceEvidence = "Independently invented multi-page source evidence. ".repeat(2700);
+  const retainedRows = await Promise.all(Array.from({ length: 32 }, (_, index) => db.transaction.create({ data: {
+    workspaceId: original.id, accountId: originalAccount.id, merchantRaw: "Repeated original merchant", merchantClean: "Confirmed edit",
+    date: new Date("2026-09-14T12:00:00Z"), amount: "25.55", currency: "EUR", type: "expense", reviewStatus: "edited",
+    rawPayload: { nativeRow: index, sourceDocumentText: sourceEvidence, confidence: 100, originalReference: `SYNTHETIC-${index}` },
+  } })));
+  const manifestTables = ["Workspace", "Account", "AccountTombstone", "Category", "Transaction", "ImportFile", "ParsedTransaction", "DocumentImport", "AccountStatementCheckpoint", "ReceiptDocument", "MerchantRule", "AccountRule", "TrainingSignal", "StatementTemplate", "DataQaRun", "DataQaFinding", "ImportFileExtractionCache", "ImportEnrichmentJob", "LearningJob", "DocumentImportPage", "LearningJobAttempt"];
+  const financialTables = new Set(["Account", "AccountTombstone", "Transaction", "ImportFile", "ParsedTransaction", "DocumentImport", "AccountStatementCheckpoint", "ReceiptDocument", "DocumentImportPage"]);
+  // Compatibility oracle: the previous released per-table PostgreSQL statement.
+  // All complete rows, decimals, source JSON, timestamps and ownership predicates must match it exactly.
+  const releasedManifest = async (tx: typeof db, checkpointId: string | null, excluded: string[], own = false) => {
+    const result: Record<string, { count: number; sha256: string }> = {};
+    for (const table of manifestTables.filter(table => checkpointId !== null || !own || financialTables.has(table))) {
+      const expression = table === "Workspace" ? 't."id"' : table === "DocumentImportPage" ? '(SELECT p."workspaceId" FROM "DocumentImport" p WHERE p."id" = t."documentImportId")' : table === "LearningJobAttempt" ? '(SELECT j."workspaceId" FROM "LearningJob" j WHERE j."id" = t."jobId")' : 't."workspaceId"';
+      const conditions: string[] = [], params: unknown[] = [];
+      if (checkpointId !== null && table === "AccountStatementCheckpoint") { params.push(checkpointId); conditions.push('t."id" <> $1'); }
+      if (checkpointId !== null && excluded.length) { params.push(excluded); conditions.push(`(${expression} IS NULL OR NOT (${expression} = ANY($${params.length}::text[])))`); }
+      if (checkpointId === null) { params.push(excluded[0]); conditions.push(`${expression} ${own ? "=" : "<>"} $1`); }
+      const rows = await tx.$queryRawUnsafe<Array<{ count: number; sha256: string }>>(`SELECT count(*)::int AS count, encode(sha256(convert_to(COALESCE(string_agg(encode(sha256(convert_to(to_jsonb(t)::text, 'UTF8')), 'hex'), '' ORDER BY t."id"), ''), 'UTF8')), 'hex') AS sha256 FROM "${table}" t ${conditions.length ? "WHERE " + conditions.join(" AND ") : ""}`, ...params);
+      result[table] = rows[0];
+    }
+    return result;
+  };
   const runId = randomUUID(), actor = "verification-regression";
   try {
     const start = await v.startLearningVerification(runId, actor);
@@ -49,6 +74,18 @@ async function main() {
     const completeBaseline = await db.$transaction(tx => v.checkpointPreservationManifest("cmv29w3r4002806ictv6bmnfp", tx, [start.workspaceId]));
     const secondRunId = randomUUID();
     const secondRun = await v.startLearningVerification(secondRunId, actor);
+    for (const excluded of [[], [start.workspaceId], [start.workspaceId, secondRun.workspaceId]]) {
+      assert.deepEqual(await v.checkpointPreservationManifest("cmv29w3r4002806ictv6bmnfp", db, excluded), await releasedManifest(db, "cmv29w3r4002806ictv6bmnfp", excluded), "Batched snapshot retains the released complete-row hashes for every exclusion set");
+    }
+    for (const own of [false, true]) assert.deepEqual(await v.learningVerificationManifest(start.workspaceId, own, db), await releasedManifest(db, null, [start.workspaceId], own), "Financial-only and outside-Profile hashes remain exactly compatible");
+    const beforeRawEdit = await v.checkpointPreservationManifest("cmv29w3r4002806ictv6bmnfp", db, [start.workspaceId, secondRun.workspaceId]);
+    await db.transaction.update({ where: { id: retainedRows[0].id }, data: { rawPayload: { nativeRow: 0, sourceDocumentText: sourceEvidence + " changed source evidence" }, updatedAt: retainedRows[0].updatedAt } });
+    assert.notDeepEqual((await v.checkpointPreservationManifest("cmv29w3r4002806ictv6bmnfp", db, [start.workspaceId, secondRun.workspaceId])).Transaction, beforeRawEdit.Transaction, "The full preservation check detects source-only changes to confirmed records, even with unchanged amounts and identity");
+    await db.transaction.update({ where: { id: retainedRows[0].id }, data: { rawPayload: retainedRows[0].rawPayload!, updatedAt: retainedRows[0].updatedAt } });
+    assert.deepEqual(await v.checkpointPreservationManifest("cmv29w3r4002806ictv6bmnfp", db, [start.workspaceId, secondRun.workspaceId]), beforeRawEdit, "Restoring every fixture field restores the exact released manifest");
+    await db.transaction.update({ where: { id: retainedRows[0].id }, data: { updatedAt: new Date(retainedRows[0].updatedAt.getTime() + 1000) } });
+    assert.notDeepEqual((await v.checkpointPreservationManifest("cmv29w3r4002806ictv6bmnfp", db, [start.workspaceId, secondRun.workspaceId])).Transaction, beforeRawEdit.Transaction, "Timestamp-only changes remain visible to preservation checks");
+    await db.transaction.update({ where: { id: retainedRows[0].id }, data: { updatedAt: retainedRows[0].updatedAt } });
     const batch = await v.previewLearningBatchPreservation([runId, secondRunId], actor);
     assert.deepEqual(batch.preservation, completeBaseline, "Exclude only newly allocated owned QA Profiles; retain all historical and null-Profile rows");
     await assert.rejects(v.previewLearningBatchPreservation([runId, secondRunId], "another-admin"), /VERIFICATION_NOT_FOUND/);
@@ -60,6 +97,7 @@ async function main() {
     require.cache[adminPath] = { id: adminPath, filename: adminPath, loaded: true, exports: { requireAdminAuth: async () => { if (permission === "anonymous") throw new Error("UNAUTHORIZED"); if (permission === "reader") throw new Error("FORBIDDEN"); return { userId: actor }; } } } as NodeModule;
     try {
       const route = await import("../app/api/admin/learning-verification/route");
+      assert.equal(route.maxDuration, 300, "Complete staging snapshots retain enough request time without affecting parser or learning writes");
       const request = (body: unknown = { runId, action: "inspect" }, origin = "https://staging.clover.ph") => new Request("https://staging.clover.ph/api/admin/learning-verification", { method: "POST", headers: { origin, "content-type": "application/json" }, body: JSON.stringify(body) });
       permission = "anonymous"; assert.equal((await route.POST(request())).status, 401);
       permission = "reader"; assert.equal((await route.POST(request())).status, 403);
