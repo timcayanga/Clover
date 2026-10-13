@@ -57,6 +57,7 @@ export function useShowcaseMotion(root: RefObject<HTMLDivElement | null>) {
       height: number;
       pinHeight: number;
       pinned: boolean;
+      acts: HTMLElement[];
     }[] = [];
     let viewport = innerHeight;
     let maxScroll = 1;
@@ -88,6 +89,7 @@ export function useShowcaseMotion(root: RefObject<HTMLDivElement | null>) {
             height: box.height,
             pinHeight: pin.offsetHeight,
             pinned,
+            acts: [...scene.querySelectorAll<HTMLElement>("[data-story-act]")],
           };
         });
         maxScroll = Math.max(
@@ -106,7 +108,7 @@ export function useShowcaseMotion(root: RefObject<HTMLDivElement | null>) {
         mode === "full" && animated ? impulse * 0.78 + target * 0.22 : 0;
       if (Math.abs(impulse) < 0.002) impulse = 0;
       scenes.forEach((scene, index) => {
-        const { top, height, pinHeight, pinned } = geometry[index];
+        const { top, height, pinHeight, pinned, acts } = geometry[index];
         const relativeTop = top - y;
         const visible = String(
           relativeTop < viewport && relativeTop + height > 0,
@@ -120,6 +122,22 @@ export function useShowcaseMotion(root: RefObject<HTMLDivElement | null>) {
         const raw = clamp(-relativeTop / Math.max(1, height - pinHeight));
         const p =
           animated && pinned ? (mode === "gentle" ? 0.7 + raw * 0.3 : raw) : 1;
+        if (acts.length) {
+          const staticStory = !animated || !pinned;
+          scene.dataset.storyStatic = String(staticStory);
+          const storyProgress = mode === "gentle" ? raw : p;
+          const active = Math.min(acts.length - 1, Math.floor(storyProgress * acts.length));
+          acts.forEach((act, actIndex) => {
+            const travel = storyProgress * acts.length - actIndex;
+            const fade = mode === "gentle" ? 0.06 : 0.14;
+            write(act, "--act-progress", staticStory ? 1 : ease(travel));
+            write(act, "--act-enter", staticStory || actIndex === 0 ? 1 : ease(travel / fade));
+            write(act, "--act-leave", staticStory || actIndex === acts.length - 1 ? 1 : ease((1 - travel) / fade));
+            act.dataset.storyActive = String(staticStory || active === actIndex);
+            const art = act.querySelector<HTMLElement>("[data-story-art]");
+            if (art) art.inert = !staticStory && active !== actIndex;
+          });
+        }
         write(scene, "--p", p);
         write(scene, "--a", ease((p - 0.03) / 0.68));
         write(scene, "--b", ease((p - 0.18) / 0.57));
@@ -210,19 +228,30 @@ export function useShowcaseMotion(root: RefObject<HTMLDivElement | null>) {
         ) ?? []),
       ];
       if (!scenes.length) return;
-      const positions = scenes.map(
-        (scene) => scene.getBoundingClientRect().top + scrollY,
-      );
-      let current = 0;
-      positions.forEach((top, index) => {
-        if (top <= scrollY + innerHeight * 0.4) current = index;
+      const positions = scenes.flatMap((scene) => {
+        const top = scene.getBoundingClientRect().top + scrollY;
+        const pin = scene.firstElementChild as HTMLElement;
+        const acts = [...scene.querySelectorAll<HTMLElement>("[data-story-act]")];
+        if (!acts.length) return [{ start: top, destination: top }];
+        if (animated && getComputedStyle(pin).position === "sticky") {
+          const distance = Math.max(0, scene.offsetHeight - pin.offsetHeight);
+          return acts.map((_, index) => ({
+            start: top + distance * index / acts.length,
+            destination: top + distance * (index + (index ? 0.16 : 0)) / acts.length,
+          }));
+        }
+        return acts.map((act) => {
+          const start = act.getBoundingClientRect().top + scrollY;
+          return { start, destination: start };
+        });
       });
-      const target = Math.max(
-        0,
-        Math.min(scenes.length - 1, current + direction),
-      );
+      let current = 0;
+      positions.forEach(({ start }, index) => {
+        if (start <= scrollY + 2) current = index;
+      });
+      const target = Math.max(0, Math.min(positions.length - 1, current + direction));
       scrollTo({
-        top: positions[target],
+        top: positions[target].destination,
         behavior: animated ? "smooth" : "instant",
       });
     },

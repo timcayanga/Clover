@@ -184,91 +184,6 @@ function AppScreen({
     </div>
   );
 }
-const sampleAccounts = [
-  { name: "BPI", type: "Bank", amount: 124861, logo: "bpi", color: "#b9152e" },
-  {
-    name: "GCash",
-    type: "Wallet",
-    amount: 3600,
-    logo: "gcash",
-    color: "#1677dd",
-  },
-  {
-    name: "Maya",
-    type: "Wallet",
-    amount: 36500,
-    logo: "maya",
-    color: "#117549",
-  },
-  {
-    name: "UnionBank",
-    type: "Bank",
-    amount: 120000,
-    logo: "unionbank",
-    color: "#da6b12",
-  },
-];
-const sampleMoney = (amount: number) => `₱${amount.toLocaleString("en-PH")}`;
-function MoneySculpture() {
-  const [selected, setSelected] = useState<number | null>(null);
-  const current = selected === null ? null : sampleAccounts[selected];
-  return (
-    <div className={s.moneySculpture}>
-      {sampleAccounts.map((account, index) => (
-        <button
-          key={account.name}
-          className={s.bankTile}
-          style={
-            { "--tile": index, "--bank-color": account.color } as CSSProperties
-          }
-          data-position={index}
-          aria-pressed={selected === index}
-          aria-label={`Explore ${account.name}, ${account.type}, ${sampleMoney(account.amount)}. Select again to see all accounts.`}
-          onClick={() => setSelected(selected === index ? null : index)}
-        >
-          <img
-            src={`/assets/landing-showcase/${account.logo}.webp`}
-            width={40}
-            height={40}
-            alt=""
-            loading="lazy"
-          />
-          <span>
-            <strong>{account.name}</strong>
-            <small>{account.type}</small>
-          </span>
-          <b>{sampleMoney(account.amount)}</b>
-          <svg viewBox="0 0 100 22" aria-hidden="true">
-            <path
-              d="M0 20 15 17 30 19 45 9 60 11 75 3 100 1"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-            />
-          </svg>
-        </button>
-      ))}
-      <div className={s.moneyCenter} aria-live="polite" aria-atomic="true">
-        <img src="/clover-mark.svg" width={26} height={26} alt="" />
-        <span>
-          {current ? `${current.name} balance` : "Your money together"}
-        </span>
-        <strong>
-          {sampleMoney(
-            current
-              ? current.amount
-              : sampleAccounts.reduce(
-                  (sum, account) => sum + account.amount,
-                  0,
-                ),
-          )}
-        </strong>
-        <small>Sample balances · PHP</small>
-      </div>
-    </div>
-  );
-}
-
 function Receipt({ small = false }: { small?: boolean }) {
   return (
     <div className={`${s.receipt} ${small ? s.smallReceipt : ""}`} aria-hidden="true">
@@ -744,7 +659,7 @@ export function Showcase({ initialMarket }: { initialMarket: PricingMarket }) {
             <div className={s.copy}>
               <Heading
                 hero
-                text="Your banks, receipts, and everyday spending. A clearer picture of your money, with Clover."
+                text="A coffee, a bill, a plan for later. Bring your money together, and make room for what matters."
               >
                 Months of finances.
                 <br />
@@ -776,113 +691,54 @@ export function Showcase({ initialMarket }: { initialMarket: PricingMarket }) {
           </a>
         </ScrollScene>
 
-        <ScrollScene id="one-picture" className={s.togetherScene}>
-          <div className={`${s.storyGrid} ${s.reverse}`}>
-            <div className={s.copy}>
-              <Heading text="Across your banks and wallets, see what you have. One clearer picture, without the mental juggling.">
-                Many places.
-                <br />
-                <em>One picture.</em>
-              </Heading>
-            </div>
-            <div className={`${s.stage} ${s.moneyStage}`}>
-              <MoneySculpture />
-            </div>
-          </div>
-        </ScrollScene>
-
-        <ScrollScene id="breathing-room" className={s.evening}>
-          <div className={s.storyGrid}>
-            <div className={s.copy}>
-              <Heading text="Bring the records you already have. Clover finds and organizes the transactions, ready for your confirmation.">
-                Start with what
-                <br />
-                <em>suits you.</em>
-              </Heading>
-            </div>
-            <div className={`${s.stage} ${s.importStage}`}>
-              <div className={s.paperStatement} aria-hidden="true">
-                <img
-                  src="/assets/landing-showcase/bpi.webp"
-                  width={36}
-                  height={36}
-                  alt=""
-                />
-                <strong>Account statement</strong>
-                <span>September 2026</span>
-                <div />
-                <div />
-                <div />
-                <div />
+        <ScrollScene id="one-picture" className={s.journey}>
+          <div className={s.journeyWorld}>
+            <article className={s.journeyBeat} data-story-act>
+              <div className={s.journeyCopy}>
+                <Heading text="A coffee on the way. Groceries for home. Life keeps moving, and the little moments add up.">
+                  A coffee. A bill.<br /><em>A month gone by.</em>
+                </Heading>
               </div>
-              <EverydayRecords />
-              <div className={s.importReceipt}>
-                <Receipt />
+              <div className={`${s.journeyArt} ${s.journeyRecords}`} data-story-art>
+                <div className={s.journeyReceipt}><Receipt /></div>
+                <EverydayRecords />
+                <div className={s.journeyTransaction}><TransactionMoment /></div>
               </div>
-              <div className={s.importPhone}>
-                <AppScreen page="transactions" />
+            </article>
+            <article className={s.journeyBeat} data-story-act>
+              <div className={s.journeyCopy}>
+                <Heading text="Bring those moments into Clover. Review the details, and the scattered pieces become a picture you can understand.">
+                  Less to piece together.<br /><em>More to see.</em>
+                </Heading>
               </div>
-              <div className={s.importTransaction}>
-                <TransactionMoment />
+              <div className={`${s.journeyArt} ${s.journeyClarity}`} data-story-art>
+                <SpendingStory />
               </div>
-              <div className={s.scanLine} aria-hidden="true" />
-            </div>
-          </div>
-        </ScrollScene>
-
-        <ScrollScene id="a-little-clarity" className={s.clarity}>
-          <div className={`${s.storyGrid} ${s.reverse}`}>
-            <div className={s.copy}>
-              <Heading text="The little purchases. The regular bills. See the patterns behind your spending, and understand what changed.">
-                Understand your money.
-                <br />
-                <em>Build better habits.</em>
-              </Heading>
-            </div>
-            <div className={`${s.stage} ${s.reportStage}`}>
-              <SpendingStory />
-            </div>
-          </div>
-        </ScrollScene>
-
-        <ScrollScene id="looking-forward" className={s.ask}>
-          <div className={s.storyGrid}>
-            <div className={s.copy}>
-              <Heading text="Ask the question on your mind. Clover brings your own records into the conversation, so the numbers make sense.">
-                Your money.
-                <br />
-                <em>Let’s talk about it.</em>
-              </Heading>
-            </div>
-            <div className={`${s.stage} ${s.chatStage}`}>
-              <Conversation />
-              <div className={s.chatMascot}>
-                <Mascot pose="chat" size={190} />
+            </article>
+            <article className={s.journeyBeat} data-story-act>
+              <div className={s.journeyCopy}>
+                <Heading text="Now the question is easier to ask. Clover helps you understand what changed, so you can decide what comes next.">
+                  From “where did it go?”<br /><em>To “what’s next?”</em>
+                </Heading>
               </div>
-            </div>
-          </div>
-        </ScrollScene>
-
-        <ScrollScene id="more-living" className={s.living}>
-          <div className={s.storyGrid}>
-            <div className={s.copy}>
-              <Heading text="A buffer for the unexpected. A little more freedom every month. Give your plans a place to grow.">
-                Make room.
-                <br />
-                <em>For what matters.</em>
-              </Heading>
-              <Action>Start my story</Action>
-            </div>
-            <div className={`${s.stage} ${s.lifeStage}`}>
-              <div className={s.lifePhoto}>
-                <StoryPhoto
-                  desktop="landing-story-v3/07-records-away"
-                  mobile="landing-story-v3/07-records-away-mobile"
-                  alt="Putting the paperwork away and closing the laptop at home."
-                />
+              <div className={`${s.journeyArt} ${s.journeyConversation}`} data-story-art>
+                <Conversation />
+                <div className={s.journeyMascot}><Mascot pose="chat" size={150} /></div>
               </div>
-              <GoalMoment />
-            </div>
+            </article>
+            <article className={s.journeyBeat} data-story-act>
+              <div className={s.journeyCopy}>
+                <Heading text="A little more peace of mind. A plan you can grow. Less time untangling your money, and more time living your life.">
+                  Your money, clearer.<br /><em>Your life, a little lighter.</em>
+                </Heading>
+              </div>
+              <div className={`${s.journeyArt} ${s.journeyLife}`} data-story-art>
+                <div className={s.lifePhoto}>
+                  <StoryPhoto desktop="landing-story-v3/07-records-away" mobile="landing-story-v3/07-records-away-mobile" alt="Putting the paperwork away and closing the laptop at home." />
+                </div>
+                <GoalMoment />
+              </div>
+            </article>
           </div>
         </ScrollScene>
 

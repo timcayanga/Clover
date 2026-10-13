@@ -2730,3 +2730,78 @@
 }
 
 .importStage::before { display: none; }
+
+/* One continuous narrative, rather than a sequence of feature tiles. */
+.site .journey { height: 590svh; background: #f5faf9; }
+.journeyWorld { position: relative; width: min(1400px, 100%); height: 100%; margin: auto; perspective: 1400px; }
+.journeyBeat { position: absolute; inset: 0; --act-progress: 0; --act-enter: 0; --act-leave: 1; pointer-events: none; }
+.journeyBeat:first-child { --act-enter: 1; }
+.journeyCopy { position: absolute; left: 8%; width: 84%; top: 115px; transform: none; z-index: 8; opacity: 0; text-align: center; }
+.journeyCopy .heading p { max-width: 650px; margin-inline: auto; }
+.journeyBeat:first-child .journeyCopy, .journeyBeat[data-story-active="true"] .journeyCopy { opacity: 1; }
+.journeyBeat[data-story-active="false"] .journeyCopy { opacity: 0; }
+.journeyBeat[data-story-active="true"] { pointer-events: auto; }
+.journeyCopy .heading h2 { font-size: clamp(38px, 4vw, 60px); }
+.journeyCopy .action { margin-top: 26px; }
+.journeyArt { position: absolute; left: 12%; top: 43%; width: 76%; height: 52%; perspective: 1200px; --a: var(--act-progress); --b: var(--act-progress); --c: var(--act-progress); opacity: min(var(--act-enter), var(--act-leave)); transform: translateX(calc((1 - var(--act-enter)) * 140px - (1 - var(--act-leave)) * 85px)) translateZ(calc((1 - var(--act-enter)) * -300px + (1 - var(--act-leave)) * 180px)) rotateY(calc((1 - var(--act-enter)) * -18deg + (1 - var(--act-leave)) * 14deg)); transform-origin: center; }
+.journeyRecords .everydayRecords { inset: 4% 3% auto 44%; opacity: calc(1 - var(--act-progress) * .75); transform: translateY(calc(var(--act-progress) * -85px)) rotateY(calc(var(--act-progress) * -8deg)); }
+.journeyReceipt { position: absolute; width: 190px; left: 19%; top: 0; transform: translateY(calc(var(--act-progress) * -50px)) rotateZ(calc(-12deg + var(--act-progress) * 16deg)) rotateY(calc(18deg - var(--act-progress) * 18deg)); }
+.journeyTransaction { position: absolute; width: 68%; left: 16%; bottom: 0; transform: translateY(calc((1 - var(--act-progress)) * 110px)) translateZ(calc(var(--act-progress) * 65px)) rotateX(calc((1 - var(--act-progress)) * 20deg)); }
+.journeyClarity .reportCard { width: 72%; left: 14%; display: grid; grid-template-columns: 1fr 1fr; gap: 12px 28px; transform: translateY(-50%) rotateY(calc((1 - var(--act-progress)) * -8deg)); }
+.journeyClarity .miniHeader { grid-column: 1 / -1; }
+.journeyClarity .donut { width: 220px; margin: 12px auto; }
+.journeyClarity .spendingRows { align-self: center; }
+.journeyClarity .donut svg { transform: rotate(-90deg); }
+.journeyConversation .conversation { left: 50%; width: 76%; max-width: 640px; top: 50%; padding: 22px; transform: translate(-50%, -50%) rotateY(calc((1 - var(--act-progress)) * 8deg)); }
+.journeyMascot { position: absolute; right: 1%; bottom: 0; width: 130px; transform: translateY(calc((1 - var(--act-progress)) * 35px)); }
+.journeyLife .lifePhoto { top: 0; bottom: 0; left: 0; right: 0; transform: rotateY(calc((1 - var(--act-progress)) * -12deg)) scale(calc(.94 + var(--act-progress) * .06)); }
+.journeyLife .goalMoment { width: 320px; left: 2%; right: auto; bottom: -2%; transform: translateY(calc((1 - var(--act-progress)) * 35px)) rotateX(calc((1 - var(--act-progress)) * 8deg)); }
+.journey[data-story-static="true"] .journeyWorld { height: auto; }
+.journey[data-story-static="true"] .journeyBeat { position: relative; min-height: 720px; display: grid; grid-template-columns: 46% 54%; padding: 100px 5% 60px; align-items: center; }
+.journey[data-story-static="true"] .journeyCopy { position: relative; left: auto; top: auto; width: 100%; transform: none; opacity: 1; padding-right: 25px; text-align: left; }
+.journey[data-story-static="true"] .journeyArt { position: relative; left: auto; top: auto; width: 100%; height: 550px; opacity: 1; transform: none; }
+@media (max-width: 900px), (max-width: 1100px) and (min-height: 1000px) {
+  .site .journey { height: 610svh; }
+  .journeyCopy { left: 7%; width: 86%; top: 94px; transform: none; text-align: left; }
+  .journeyCopy .heading p { margin-inline: 0; }
+  .journeyCopy .heading h2 { font-size: clamp(30px, 5vw, 48px); line-height: 1.12; }
+  .journeyCopy .heading p { font-size: 14px; line-height: 1.7; margin-top: 20px; max-width: 540px; }
+  .journeyArt { left: 7%; width: 86%; top: 42%; height: 53%; }
+  .journeyReceipt { width: 145px; top: 3%; }
+  .journeyRecords .everydayRecords { inset: 6% 0 auto 44%; }
+  .journeyRecords .everydayRecord { padding: 12px 10px; }
+  .journeyTransaction { width: 100%; left: 0; bottom: 12%; }
+  .journeyClarity .reportCard { width: 94%; left: 3%; padding: 18px; display: block; }
+  .journeyClarity .donut { width: min(200px, 65%); margin: 15px auto; }
+  .journeyClarity .spendingRows > button { padding: 10px 0; }
+  .journeyConversation .conversation { width: 98%; left: 1%; padding: 18px; transform: translateY(-50%); }
+  .journeyMascot { width: 80px; bottom: -2%; right: -2%; }
+  .journeyLife .lifePhoto { bottom: 22%; }
+  .journeyLife .goalMoment { width: 94%; left: 3%; right: auto; }
+  .journey[data-story-static="true"] .journeyBeat { min-height: 0; display: block; padding: 80px 7% 30px; }
+  .journey[data-story-static="true"] .journeyCopy { padding: 0; }
+  .journey[data-story-static="true"] .journeyArt { height: 430px; margin-top: 35px; }
+}
+@media (max-width: 360px) {
+  .journeyCopy { top: 85px; }
+  .journeyCopy .heading h2 { font-size: 28px; }
+  .journeyCopy .heading p { font-size: 13px; }
+  .journeyArt { top: 44%; height: 52%; }
+  .journeyClarity .donut { width: 145px; margin: 10px auto; }
+  .journeyClarity .spendingRows > button { padding: 8px 0; }
+}
+.site[data-motion="off"] .journey { height: auto; }
+@media (prefers-reduced-motion: reduce) { .site .journey { height: auto; } }
+@media (max-height: 659px) and (min-width: 901px), (max-height: 739px) and (max-width: 900px) { .site .journey { height: auto; } }
+
+.journeyCopy { background: #f5faf9; padding-bottom: 20px; }
+.journeyConversation .chatTop { padding-bottom: 8px; }
+.journeyConversation .question { margin: 12px 0 12px 25px; padding: 10px 15px; }
+.journeyConversation .answer { line-height: 1.6; }
+.journeyConversation .chatChart { margin: 12px 0; padding: 10px 12px; gap: 8px; }
+.journeyConversation .chatChart i { height: 16px; }
+.journeyConversation .chatInput { margin-top: 10px; padding: 8px 15px; }
+
+.site[data-motion="gentle"] .journeyArt { transform: translateY(calc((1 - var(--act-enter)) * 12px)); }
+.journey[data-story-static="true"] .journeyRecords .everydayRecords { opacity: 1; transform: none; }
+.journey[data-story-static="true"] .journeyReceipt { transform: rotateZ(-6deg); }
