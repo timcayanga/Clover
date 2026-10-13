@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { requireAdminAuth } from "@/lib/admin";
 import { assertTrustedRequestOrigin } from "@/lib/request-security";
+import { learningVerificationResponse } from "@/lib/learning-verification-response.server";
 import { assertLearningVerificationEnvironment, startLearningVerification, prepareLearningVerificationCheckpoints, repairLearningVerificationReference, inspectLearningVerification, repairVerificationBpiCheckpoint, previewLearningBatchPreservation } from "@/lib/staging-learning-verification";
 
 export const dynamic = "force-dynamic";
@@ -21,7 +22,7 @@ export async function POST(request: Request) {
       : action === "repair-reference" ? await repairLearningVerificationReference(runId, admin.userId)
       : action === "preview-bpi-checkpoint" || action === "repair-bpi-checkpoint" ? await repairVerificationBpiCheckpoint(runId, admin.userId, expectedPlanHash)
       : await inspectLearningVerification(runId, admin.userId);
-    return NextResponse.json(result, { headers: { "Cache-Control": "no-store" } });
+    return learningVerificationResponse(result, request.headers.get("accept-encoding"));
   } catch (error) {
     const code = error instanceof Error ? error.message : "";
     const status = code === "VERIFICATION_UNAVAILABLE" || code === "VERIFICATION_NOT_FOUND" ? 404
