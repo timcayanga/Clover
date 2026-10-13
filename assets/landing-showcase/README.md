@@ -55,3 +55,9 @@ scrollbar chrome. No harness or authentication stub is shipped with Clover.
 The showcase serves at least the 804-pixel source (about 73 KB for Accounts),
 with `srcSet` selecting the 1206-pixel source for higher pixel densities. The
 high-resolution source is retained for large and Retina displays.
+
+The final fictional transaction fixture keeps Starbucks at PHP 190 on
+5 October 2026 in BPI, matching the receipt and moving transaction in the
+scroll narrative. Jollibee, Puregold and McDonald's samples also match the
+illustrative purchase props. All logos and interface icons were checked before
+capture.
