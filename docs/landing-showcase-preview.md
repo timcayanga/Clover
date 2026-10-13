@@ -88,3 +88,20 @@ Local verification covered ten viewport sizes from 320 × 740 through
 1920 × 1080, Full/Gentle/Off modes, account selection, report category selection
 and reset, and phone/desktop compositions. No horizontal overflow or broken
 images were observed. Production remains unchanged; the preview is staging only.
+
+### Clover editorial revision (13 October 2026)
+
+This supersedes the decorative-material treatment above. Removed all rendered
+ribbons, orbits, pearls, connecting lines, the account platform and chat halo.
+The receipt is now lightweight HTML with stylized paper depth; the realistic
+receipt and glass jar assets are no longer requested by the page. Human imagery
+remains photographic. Accounts use recognizable institution-colored Clover
+rows rather than a scattered sculpture. The report stays assembled throughout
+scrolling, with one readable panel and interactive category selection.
+
+Sticky chapters retain reversible product entrances, receipt-to-transaction
+reveals, chat comparison bars and goal progress. Chapter durations are shorter,
+with natural flow for small landscape screens, disabled motion and reduced
+motion. Copy is limited to a heading and one paragraph per chapter, drawing on
+the production story's start-your-way and financial-habits language.
+No new raster assets, WebGL runtime or animation packages were introduced.

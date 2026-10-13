@@ -6,7 +6,7 @@ import { prisma } from "@/lib/prisma";
 import { processImportFileText } from "@/workers/import-processor";
 import { AI_CONSENT_VERSION } from "../../shared/ai-consent";
 const url = new URL(process.env.DATABASE_URL ?? "http://invalid");
-assert.equal(url.hostname, "127.0.0.1"); assert.equal(url.port, "55441"); assert.equal(url.pathname, "/clover_migration_qa"); assert(process.argv.includes("--execute"));
+assert.equal(url.hostname, "127.0.0.1"); assert.equal(url.port, process.env.CLOVER_QA_PARSER_PORT ?? "55441"); assert.equal(url.pathname, "/clover_migration_qa"); assert(process.argv.includes("--execute"));
 createRequire(import.meta.url)("next/cache").revalidateTag = () => {};
 const postTasks: Array<() => Promise<void>> = [];
 createRequire(import.meta.url)("next/server").after = (task: () => Promise<void>) => { postTasks.push(task); };
