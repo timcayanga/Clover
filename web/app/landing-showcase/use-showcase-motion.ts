@@ -126,16 +126,26 @@ export function useShowcaseMotion(root: RefObject<HTMLDivElement | null>) {
           const staticStory = !animated || !pinned;
           scene.dataset.storyStatic = String(staticStory);
           const storyProgress = mode === "gentle" ? raw : p;
+          // Shared purchase choreography crosses the scene boundary without
+          // remounting or resetting: receipt → transaction → category insight.
+          const purchaseTravel = storyProgress * acts.length;
+          write(scene, "--paper-fold", ease((purchaseTravel - 0.18) / 0.55));
+          write(scene, "--category-join", ease((purchaseTravel - 0.85) / 0.65));
+          write(scene, "--purchase-away", ease((purchaseTravel - 1.25) / 0.18));
+          write(scene, "--report-reveal", ease((purchaseTravel - 0.85) / 0.55));
+          write(scene, "--category-glow", ease((purchaseTravel - 1.1) / 0.3) * (1 - ease((purchaseTravel - 1.75) / 0.2)));
           const active = Math.min(acts.length - 1, Math.floor(storyProgress * acts.length));
           acts.forEach((act, actIndex) => {
             const travel = storyProgress * acts.length - actIndex;
-            const fade = mode === "gentle" ? 0.06 : 0.14;
+            const fade = mode === "gentle" ? 0.1 : 0.22;
             write(act, "--act-progress", staticStory ? 1 : ease(travel));
             write(act, "--act-enter", staticStory || actIndex === 0 ? 1 : ease(travel / fade));
             write(act, "--act-leave", staticStory || actIndex === acts.length - 1 ? 1 : ease((1 - travel) / fade));
-            act.dataset.storyActive = String(staticStory || active === actIndex);
+            const activeValue = String(staticStory || active === actIndex);
+            if (act.dataset.storyActive !== activeValue) act.dataset.storyActive = activeValue;
             const art = act.querySelector<HTMLElement>("[data-story-art]");
-            if (art) art.inert = !staticStory && active !== actIndex;
+            if (art && art.inert !== (!staticStory && active !== actIndex))
+              art.inert = !staticStory && active !== actIndex;
           });
         }
         write(scene, "--p", p);
