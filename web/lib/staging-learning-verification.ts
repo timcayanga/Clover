@@ -39,12 +39,29 @@ function manifestParentJoin(table: string) {
 }
 
 async function readManifest(db: Prisma.TransactionClient, selectedTables: readonly string[], predicates: string[], params: unknown[]): Promise<Manifest> {
+  if (db === prisma) return prisma.$transaction(
+    tx => readManifest(tx, selectedTables, predicates, params),
+    { isolationLevel: "RepeatableRead", timeout: readSnapshotTimeout },
+  );
   // The table list and predicates are built only from the fixed diagnostic lists.
   // Keep the original complete-row PostgreSQL hashes; batch round trips, not evidence.
-  const query = selectedTables.map((table, index) => `SELECT '${table}'::text AS "table", count(*)::int AS count,
+  const statements = selectedTables.map((table, index) => `SELECT '${table}'::text AS "table", count(*)::int AS count,
     encode(sha256(convert_to(COALESCE(string_agg(encode(sha256(convert_to(to_jsonb(t)::text, 'UTF8')), 'hex'), '' ORDER BY t."id"), ''), 'UTF8')), 'hex') AS sha256
-    FROM "${table}" t ${manifestParentJoin(table)} ${predicates[index]}`).join(" UNION ALL ");
-  const rows = await db.$queryRawUnsafe<Array<{ table: string; count: number; sha256: string }>>(query, ...params);
+    FROM "${table}" t ${manifestParentJoin(table)} ${predicates[index]}`);
+  const rows: Array<{ table: string; count: number; sha256: string }> = [];
+  // Some groups do not reference the retained checkpoint parameter. Bind its
+  // type explicitly without adding it to a predicate or any hashed row.
+  const bindings = `WITH manifest_parameters AS (SELECT ${params.map((value, index) =>
+    `$${index + 1}::${Array.isArray(value) ? "text[]" : "text"} AS p${index + 1}`,
+  ).join(", ")}) `;
+  // Keep all tables in the caller's same repeatable-read snapshot. Bound each
+  // statement's work as retained source evidence grows; do not shorten hashes,
+  // drop tables or change the read/write transaction budgets.
+  for (let offset = 0; offset < statements.length; offset += 4) {
+    rows.push(...await db.$queryRawUnsafe<Array<{ table: string; count: number; sha256: string }>>(
+      bindings + statements.slice(offset, offset + 4).join(" UNION ALL "), ...params,
+    ));
+  }
   const byTable = new Map(rows.map(row => [row.table, row]));
   const result: Manifest = {};
   for (const table of selectedTables) {
