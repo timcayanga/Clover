@@ -24,12 +24,26 @@ type Manifest = Record<string, { count: number; sha256: string }>;
 const financialTables = new Set<string>(["Account", "AccountTombstone", "Transaction", "ImportFile", "ParsedTransaction", "DocumentImport", "AccountStatementCheckpoint", "ReceiptDocument", "DocumentImportPage"]);
 const readSnapshotTimeout = 240_000;
 
+function manifestWorkspaceExpression(table: string) {
+  return table === "Workspace" ? 't."id"'
+    : table === "DocumentImportPage" || table === "LearningJobAttempt" ? 'manifest_parent."workspaceId"'
+    : 't."workspaceId"';
+}
+
+function manifestParentJoin(table: string) {
+  // These parent IDs are unique. A left join preserves the scalar lookup's
+  // null semantics without repeating a correlated lookup for every child row.
+  return table === "DocumentImportPage" ? 'LEFT JOIN "DocumentImport" manifest_parent ON manifest_parent."id" = t."documentImportId"'
+    : table === "LearningJobAttempt" ? 'LEFT JOIN "LearningJob" manifest_parent ON manifest_parent."id" = t."jobId"'
+    : "";
+}
+
 async function readManifest(db: Prisma.TransactionClient, selectedTables: readonly string[], predicates: string[], params: unknown[]): Promise<Manifest> {
   // The table list and predicates are built only from the fixed diagnostic lists.
   // Keep the original complete-row PostgreSQL hashes; batch round trips, not evidence.
   const query = selectedTables.map((table, index) => `SELECT '${table}'::text AS "table", count(*)::int AS count,
     encode(sha256(convert_to(COALESCE(string_agg(encode(sha256(convert_to(to_jsonb(t)::text, 'UTF8')), 'hex'), '' ORDER BY t."id"), ''), 'UTF8')), 'hex') AS sha256
-    FROM "${table}" t ${predicates[index]}`).join(" UNION ALL ");
+    FROM "${table}" t ${manifestParentJoin(table)} ${predicates[index]}`).join(" UNION ALL ");
   const rows = await db.$queryRawUnsafe<Array<{ table: string; count: number; sha256: string }>>(query, ...params);
   const byTable = new Map(rows.map(row => [row.table, row]));
   const result: Manifest = {};
@@ -48,7 +62,7 @@ export async function checkpointPreservationManifest(checkpointId: string, db: P
     const conditions: string[] = [];
     if (table === "AccountStatementCheckpoint") conditions.push('t."id" <> $1');
     if (excludedWorkspaceIds.length) {
-      const expression = table === "Workspace" ? 't."id"' : table === "DocumentImportPage" ? '(SELECT p."workspaceId" FROM "DocumentImport" p WHERE p."id" = t."documentImportId")' : table === "LearningJobAttempt" ? '(SELECT j."workspaceId" FROM "LearningJob" j WHERE j."id" = t."jobId")' : 't."workspaceId"';
+      const expression = manifestWorkspaceExpression(table);
       conditions.push(`(${expression} IS NULL OR NOT (${expression} = ANY($2::text[])))`);
     }
     return conditions.length ? 'WHERE ' + conditions.join(' AND ') : '';
@@ -58,10 +72,7 @@ export async function checkpointPreservationManifest(checkpointId: string, db: P
 export async function learningVerificationManifest(workspaceId: string, own = false, db: Prisma.TransactionClient = prisma): Promise<Manifest> {
   const selectedTables = tables.filter(table => !own || financialTables.has(table));
   const predicates = selectedTables.map(table => {
-    const workspaceExpression = table === "Workspace" ? 't."id"'
-      : table === "DocumentImportPage" ? '(SELECT p."workspaceId" FROM "DocumentImport" p WHERE p."id" = t."documentImportId")'
-      : table === "LearningJobAttempt" ? '(SELECT j."workspaceId" FROM "LearningJob" j WHERE j."id" = t."jobId")'
-      : 't."workspaceId"';
+    const workspaceExpression = manifestWorkspaceExpression(table);
     return `WHERE ${workspaceExpression} ${own ? "=" : "<>"} $1`;
   });
   return readManifest(db, selectedTables, predicates, [workspaceId]);

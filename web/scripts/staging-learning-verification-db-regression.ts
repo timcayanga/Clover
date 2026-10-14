@@ -15,6 +15,22 @@ async function main() {
   const originalAccount = await db.account.create({ data: { workspaceId: original.id, name: "Confirmed foreign account", type: "bank", currency: "EUR", accountNumber: "000009876543", balance: "321.09" } });
   await db.accountStatementCheckpoint.create({ data: { id: "cmv29w3r4002806ictv6bmnfp", workspaceId: original.id, accountId: originalAccount.id, endingBalance: "321.09", status: "pending", sourceMetadata: { independentlyInvented: true, evidence: "Retained checkpoint" } } });
   const sourceEvidence = "Independently invented multi-page source evidence. ".repeat(2700);
+  const originalDocument = await db.documentImport.create({ data: {
+    workspaceId: original.id, documentFamily: "synthetic-regression", pageCount: 48,
+    rawPayload: { independentlyInvented: true, sourceEvidence },
+  } });
+  await db.documentImportPage.createMany({ data: Array.from({ length: 48 }, (_, index) => ({
+    documentImportId: originalDocument.id, pageNumber: index + 1, rawOcrText: sourceEvidence,
+    rawPayload: { independentlyInvented: true, pageOccurrence: index, repeatedEvidence: "Keep each page" },
+  })) });
+  const originalJob = await db.learningJob.create({ data: {
+    workspaceId: original.id, dedupeKey: "synthetic-retained-parent", source: "synthetic-regression",
+    totalItems: 0, status: "completed", payload: { independentlyInvented: true, sourceEvidence },
+  } });
+  await db.learningJobAttempt.createMany({ data: Array.from({ length: 8 }, (_, index) => ({
+    jobId: originalJob.id, attempt: index + 1, status: "completed", startIndex: 0, endIndex: 0,
+    errorMessage: `Retained attempt ${index}: ${sourceEvidence}`,
+  })) });
   const retainedRows = await Promise.all(Array.from({ length: 32 }, (_, index) => db.transaction.create({ data: {
     workspaceId: original.id, accountId: originalAccount.id, merchantRaw: "Repeated original merchant", merchantClean: "Confirmed edit",
     date: new Date("2026-09-14T12:00:00Z"), amount: "25.55", currency: "EUR", type: "expense", reviewStatus: "edited",
@@ -74,10 +90,32 @@ async function main() {
     const completeBaseline = await db.$transaction(tx => v.checkpointPreservationManifest("cmv29w3r4002806ictv6bmnfp", tx, [start.workspaceId]));
     const secondRunId = randomUUID();
     const secondRun = await v.startLearningVerification(secondRunId, actor);
+    for (const workspaceId of [start.workspaceId, secondRun.workspaceId]) {
+      const document = await db.documentImport.create({ data: { workspaceId, documentFamily: "synthetic-regression", pageCount: 3 } });
+      await db.documentImportPage.createMany({ data: Array.from({ length: 3 }, (_, index) => ({
+        documentImportId: document.id, pageNumber: index + 1, rawOcrText: sourceEvidence,
+        rawPayload: { independentlyInvented: true, repeatedOccurrence: index },
+      })) });
+      const job = await db.learningJob.create({ data: {
+        workspaceId, dedupeKey: "synthetic-parent-scope", source: "synthetic-regression", totalItems: 0,
+        status: "completed", payload: { independentlyInvented: true },
+      } });
+      await db.learningJobAttempt.create({ data: { jobId: job.id, attempt: 1, status: "completed", startIndex: 0, endIndex: 0 } });
+    }
     for (const excluded of [[], [start.workspaceId], [start.workspaceId, secondRun.workspaceId]]) {
       assert.deepEqual(await v.checkpointPreservationManifest("cmv29w3r4002806ictv6bmnfp", db, excluded), await releasedManifest(db, "cmv29w3r4002806ictv6bmnfp", excluded), "Batched snapshot retains the released complete-row hashes for every exclusion set");
     }
-    for (const own of [false, true]) assert.deepEqual(await v.learningVerificationManifest(start.workspaceId, own, db), await releasedManifest(db, null, [start.workspaceId], own), "Financial-only and outside-Profile hashes remain exactly compatible");
+    for (const workspaceId of [start.workspaceId, secondRun.workspaceId, original.id]) {
+      for (const own of [false, true]) assert.deepEqual(await v.learningVerificationManifest(workspaceId, own, db), await releasedManifest(db, null, [workspaceId], own), "Financial-only and outside-Profile hashes retain every child occurrence and the exact released ownership semantics");
+    }
+    const parentScopeBefore = await v.checkpointPreservationManifest("cmv29w3r4002806ictv6bmnfp", db, [start.workspaceId, secondRun.workspaceId]);
+    assert.equal(parentScopeBefore.DocumentImportPage.count, 48, "Exclude only both new QA parents; keep every retained page");
+    assert.equal(parentScopeBefore.LearningJobAttempt.count, 8, "Keep every retained attempt independently of the new QA parents");
+    await db.documentImport.update({ where: { id: originalDocument.id }, data: { institution: "Changed synthetic parent metadata" } });
+    const changedParent = await v.checkpointPreservationManifest("cmv29w3r4002806ictv6bmnfp", db, [start.workspaceId, secondRun.workspaceId]);
+    assert.deepEqual(changedParent.DocumentImportPage, parentScopeBefore.DocumentImportPage, "Parent fields do not enter the complete child-row hash");
+    assert.notDeepEqual(changedParent.DocumentImport, parentScopeBefore.DocumentImport, "The complete parent-row hash still detects its own change");
+    await db.documentImport.update({ where: { id: originalDocument.id }, data: { institution: originalDocument.institution, updatedAt: originalDocument.updatedAt } });
     const beforeRawEdit = await v.checkpointPreservationManifest("cmv29w3r4002806ictv6bmnfp", db, [start.workspaceId, secondRun.workspaceId]);
     await db.transaction.update({ where: { id: retainedRows[0].id }, data: { rawPayload: { nativeRow: 0, sourceDocumentText: sourceEvidence + " changed source evidence" }, updatedAt: retainedRows[0].updatedAt } });
     assert.notDeepEqual((await v.checkpointPreservationManifest("cmv29w3r4002806ictv6bmnfp", db, [start.workspaceId, secondRun.workspaceId])).Transaction, beforeRawEdit.Transaction, "The full preservation check detects source-only changes to confirmed records, even with unchanged amounts and identity");

@@ -45,6 +45,8 @@ The private suite also checks every field of all 104 China Bank rows against the
 
 Local PostgreSQL 16 or newer is required. The runner discovers `pg_config`/Homebrew/Ubuntu binaries; `CLOVER_QA_PG_BIN` can select a binary directory. Port 55441 must be free. It creates a fresh temporary cluster and schema, runs all checks and stops/removes its cluster even when a test fails. No environment file or live database is required.
 
+Staging preservation snapshots hash complete rows with the same fixed table lists, ownership predicates and PostgreSQL encoding as the released verifier. Document-page and learning-attempt ownership uses one-to-one left joins instead of repeated correlated parent lookups; joined parent fields never enter a child hash. The isolated regression compares every result against the previous scalar-query oracle across retained and multiple QA parents, including repeated pages, long evidence, all attempts and parent-only edits. Parser, extraction, confirmation and learning writes remain unchanged. Raw-query failures log only the bounded SQLSTATE alongside the existing safe error code, never the SQL text or source data.
+
 ## Historical repairs in this release
 
 - Replaced the obsolete exact v13 cache assertion with a version-floor contract, so normal future cache invalidations do not suppress thousands of historical checks.

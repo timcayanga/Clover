@@ -34,7 +34,9 @@ export async function POST(request: Request) {
       : code === "UNAUTHORIZED" ? 401 : code === "FORBIDDEN" || code === "Untrusted request origin." ? 403 : error instanceof z.ZodError ? 400 : 503;
     const message = /^(VERIFICATION_[A-Z_]+|UNAUTHORIZED|FORBIDDEN)$/.test(code) ? code : "Staging verification could not complete. Existing records were not reset.";
     const databaseCode = typeof (error as { code?: unknown })?.code === "string" ? (error as { code: string }).code : "";
-    console.error("[staging-learning-verification]", { action: requestedAction, durationMs: Date.now() - startedAt, code: /^P\d{4}$/.test(databaseCode) ? databaseCode : status });
+    const databaseState = (error as { meta?: { code?: unknown } })?.meta?.code;
+    const sqlState = databaseCode === "P2010" && typeof databaseState === "string" && /^[A-Z0-9]{5}$/.test(databaseState) ? databaseState : undefined;
+    console.error("[staging-learning-verification]", { action: requestedAction, durationMs: Date.now() - startedAt, code: /^P\d{4}$/.test(databaseCode) ? databaseCode : status, ...(sqlState ? { sqlState } : {}) });
     return NextResponse.json({ error: message }, { status, headers: { "Cache-Control": "no-store" } });
   }
 }
