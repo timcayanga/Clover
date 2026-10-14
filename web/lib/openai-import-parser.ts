@@ -1,3 +1,4 @@
+import { DEFAULT_IMPORT_TEXT_MODEL, isFastTextImportModel } from "./openai-model-policy";
 import { maySendToCloudAi } from "./ai-consent";
 import { calculateModelCloverTokens, mayUseImportCloudAi } from "./clover-token-usage";
 import { RECEIPT_MONEY_GUIDANCE } from "./receipt-money-guidance";
@@ -38,6 +39,7 @@ export type OpenAIImportModelUsage = {
   requestNumber: number | null;
   inputTokens: number;
   cachedInputTokens: number;
+  cacheWriteTokens?: number;
   outputTokens: number;
   reasoningTokens: number;
   totalTokens: number;
@@ -64,8 +66,10 @@ export const extractOpenAIImportUsage = (payload: Record<string, unknown>) => {
       : {};
   const inputTokens = Math.max(0, Math.round(Number(usage.input_tokens ?? 0) || 0));
   const outputTokens = Math.max(0, Math.round(Number(usage.output_tokens ?? 0) || 0));
+  const cachedInputTokens = Math.min(inputTokens, Math.max(0, Math.round(Number(inputDetails.cached_tokens ?? 0) || 0)));
   return {
     inputTokens,
+    cacheWriteTokens: Math.min(inputTokens - cachedInputTokens, Math.max(0, Math.round(Number(inputDetails.cache_write_tokens ?? 0) || 0))),
     cachedInputTokens: Math.min(inputTokens, Math.max(0, Math.round(Number(inputDetails.cached_tokens ?? 0) || 0))),
     outputTokens,
     reasoningTokens: Math.max(0, Math.round(Number(outputDetails.reasoning_tokens ?? 0) || 0)),
@@ -2975,12 +2979,12 @@ const parseImportTextWithOpenAIFallbackImpl = async (params: {
       );
   const fastModel = resolveOpenAIImportModel(
     (env as { OPENAI_IMPORT_PARSER_MODEL?: string }).OPENAI_IMPORT_PARSER_MODEL,
-    OPENAI_IMPORT_FAST_MODEL_FALLBACK,
+    DEFAULT_IMPORT_TEXT_MODEL,
     "fast model",
   );
   const imageModel = resolveOpenAIImportModel(
     (env as { OPENAI_IMPORT_PARSER_IMAGE_MODEL?: string }).OPENAI_IMPORT_PARSER_IMAGE_MODEL,
-    fastModel,
+    OPENAI_IMPORT_FAST_MODEL_FALLBACK,
     "image model",
   );
   const textModel = fastModel;
@@ -3115,7 +3119,7 @@ const parseImportTextWithOpenAIFallbackImpl = async (params: {
       ...extractOpenAIImportUsage(usageParams.payload),
       imageCount: pageImagesToSend.length,
       maxOutputTokens,
-      reasoningEffort: receiptReasoningEffort,
+      reasoningEffort: receiptReasoningEffort ?? (isFastTextImportModel(usageParams.model) && pageImagesToSend.length === 0 && !pdfFileDataBase64 ? "none" : null),
       imageDetail: responseImageDetails.get(usageParams.response) ?? "auto",
       allowanceChargeable,
       ...(!allowanceChargeable ? { allowanceCreditReason: "ai_extraction_failed" as const } : {}),
@@ -3156,7 +3160,9 @@ const parseImportTextWithOpenAIFallbackImpl = async (params: {
           max_output_tokens: maxOutputTokens,
           ...(receiptReasoningEffort
             ? { reasoning: { effort: receiptReasoningEffort } }
-            : {}),
+            : isFastTextImportModel(selectedModel) && pageImages.length === 0 && !pdfFileDataBase64
+              ? { reasoning: { effort: "none" } }
+              : {}),
           input: [
             {
               role: "system",

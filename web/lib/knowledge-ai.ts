@@ -1,4 +1,5 @@
 import "server-only";
+import { DEFAULT_CONTENT_MODEL, openAIInteractiveOptions } from "./openai-model-policy";
 import { createHash } from "node:crypto";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
@@ -95,6 +96,7 @@ export async function generateKnowledgeDraft() {
         summary: entry.content.summary,
       }))
       .slice(0, 90);
+    const model = process.env.CLOVER_CONTENT_MODEL?.trim() || DEFAULT_CONTENT_MODEL;
     const response = await fetch("https://api.openai.com/v1/responses", {
       method: "POST",
       signal: AbortSignal.timeout(100000),
@@ -103,7 +105,8 @@ export async function generateKnowledgeDraft() {
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: process.env.CLOVER_CONTENT_MODEL?.trim() || "gpt-4.1-mini",
+        model,
+        ...openAIInteractiveOptions(model),
         store: false,
         max_output_tokens: 4000,
         max_tool_calls: 2,

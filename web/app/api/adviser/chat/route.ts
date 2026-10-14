@@ -1,3 +1,4 @@
+import { DEFAULT_ADVISER_MODEL, openAIInteractiveOptions } from "@/lib/openai-model-policy";
 import { buildBudgetOverview } from "@/lib/budgeting";
 import { spendingRoomOptions, spendingRoomReply, spendingRoomChart } from "@/lib/adviser-spending-room";
 import { adviserCurrency, adviserMonthRange, isSpendingSummaryQuestion, commitmentInstallment, upcomingBillsReply } from "@/lib/adviser-analysis";
@@ -3137,7 +3138,7 @@ export async function POST(request: Request) {
     // the model turns those grounded results into a concise explanation. The
     // mini model is the safer default cost tier, while an environment override
     // can still opt selected deployments into a larger model after evals.
-    const model = env.OPENAI_ADVISER_MODEL?.trim() || "gpt-4.1-mini";
+    const model = env.OPENAI_ADVISER_MODEL?.trim() || DEFAULT_ADVISER_MODEL;
     const recordModelUsage = (
       payload: unknown,
       stage: AdviserModelCallStage,
@@ -3454,7 +3455,7 @@ export async function POST(request: Request) {
           body: JSON.stringify({
             model,
             prompt_cache_key: "clover-adviser-v1",
-            temperature: 0.2,
+            ...openAIInteractiveOptions(model),
             max_output_tokens: entryRequested ? 12000 : 450,
             tools: relevantTools,
             tool_choice: "required",
@@ -4083,7 +4084,7 @@ export async function POST(request: Request) {
           upstreamResponse = await fetch("https://api.openai.com/v1/responses", {
             method: "POST",
             headers: { Authorization: `Bearer ${env.OPENAI_API_KEY}`, "Content-Type": "application/json" },
-            body: JSON.stringify({ model, prompt_cache_key: "clover-adviser-v1", stream: true, temperature: 0.2, max_output_tokens: 900, tools: [], input: modelInput }),
+            body: JSON.stringify({ model, prompt_cache_key: "clover-adviser-v1", stream: true, ...openAIInteractiveOptions(model), max_output_tokens: 900, tools: [], input: modelInput }),
           });
         } catch (error) {
           console.error("Adviser upstream stream failed", error instanceof Error ? error.message : error);
@@ -4205,7 +4206,7 @@ export async function POST(request: Request) {
       finalResponse = await fetch("https://api.openai.com/v1/responses", {
         method: "POST",
         headers: { Authorization: `Bearer ${env.OPENAI_API_KEY}`, "Content-Type": "application/json" },
-        body: JSON.stringify({ model, prompt_cache_key: "clover-adviser-v1", temperature: 0.2, max_output_tokens: 900, tools: [], input: modelInput }),
+        body: JSON.stringify({ model, prompt_cache_key: "clover-adviser-v1", ...openAIInteractiveOptions(model), max_output_tokens: 900, tools: [], input: modelInput }),
         signal: finalController.signal,
       });
     } catch (error) {
