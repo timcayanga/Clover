@@ -3180,3 +3180,37 @@
 .phoneIndicators svg { width: 28%; height: auto; }
 .phoneIndicators i { position: relative; width: 38%; height: 6px; padding: 1px; border: 1px solid #52616a; border-radius: 2px; background: linear-gradient(90deg,#142630 0 85%,transparent 85%); background-clip: content-box; }
 .phoneIndicators i::after { content: ""; position: absolute; top: 1px; right: -3px; width: 1px; height: 3px; background: #52616a; }
+
+/* One paper surface becomes a row, then the report's teal category mark.
+   Its path stays below the desktop caption and inside the upper mobile stage. */
+.purchasePaper {
+  --merge: var(--purchase-merge,0);
+  left: calc(1% + var(--expand) * 20% - var(--join) * 3%);
+  top: calc(14% + var(--fold) * 68% - var(--join) * 47%);
+  width: calc((280px + var(--expand) * (60% - 280px)) * (1 - var(--merge)) + 36px * var(--merge));
+  padding: calc(22px - var(--merge) * 18px);
+  border-radius: calc(6px + var(--fold) * 18px + var(--merge) * 80px);
+  background: linear-gradient(140deg, rgb(calc(255 - var(--merge) * 251) calc(255 - var(--merge) * 83) calc(255 - var(--merge) * 63)), rgb(calc(244 - var(--merge) * 240) calc(251 - var(--merge) * 79) calc(250 - var(--merge) * 58)));
+  border-color: rgb(calc(212 - var(--merge) * 208) calc(232 - var(--merge) * 60) calc(228 - var(--merge) * 36));
+  overflow: hidden;
+  transform: perspective(1400px) rotateZ(calc((1 - var(--fold)) * 8deg)) rotateY(calc((1 - var(--fold)) * 10deg)) rotateX(calc(sin(var(--fold) * 180deg) * 10deg));
+}
+.purchaseIdentity { height: calc(44px - var(--merge) * 22px); opacity: calc(1 - var(--merge)); }
+.purchaseIdentity > div { white-space: nowrap; }
+.purchaseIdentity strong { overflow: hidden; text-overflow: ellipsis; }
+.journey:not([data-story-static="true"]) .journeyClarity .donut circle:nth-child(2) { stroke-dasharray: calc(39.2 * var(--category-fill,0)) 100; }
+.site[data-motion="gentle"] .purchasePaper { transform: none; }
+@media (max-width:900px), (max-width:1100px) and (min-height:1000px) {
+ .purchasePaper { left: calc(3% - var(--expand) * 3% + var(--join) * 33%); top: calc(6% + var(--fold) * 78% - var(--join) * 40%); width: calc((170px + var(--expand) * (100% - 170px)) * (1 - var(--merge)) + 30px * var(--merge)); padding: calc(16px - var(--merge) * 12px); }
+ .purchaseIdentity { height: calc(44px - var(--merge) * 28px); }
+}
+.journeyBeat[data-story-active="false"] .journeyCopy { visibility: hidden; }
+@media (max-width:900px), (max-width:1100px) and (min-height:1000px) {
+ .goalCompact .goalTitle img { width: 35px; height: 35px; }
+ .goalCompact .goalTitle { gap: 10px; }
+ .goalCompact .goalTitle strong { font-size: 14px; }
+ .goalCompact .goalTitle span { font-size: 10px; }
+ .goalCompact .goalAmount { margin: 10px 0 0; }
+ .goalCompact .goalAmount strong { font-size: 23px; }
+ .goalCompact .goalTrack,.goalCompact .goalFooter { display: none; }
+}

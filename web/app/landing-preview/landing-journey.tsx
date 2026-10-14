@@ -132,7 +132,7 @@ export function LandingTransactionPhone({ market, style, screen = "transactions"
       </div>;
 }
 
-export function JourneyHeader() {
+export function JourneyHeader({ featureBasePath = "/features", homeHref = "/" }: { featureBasePath?: string; homeHref?: string } = {}) {
   const drawerRef = useRef<HTMLDivElement>(null);
   const headerRef = useRef<HTMLElement>(null);
   const featuresRef = useRef<HTMLDivElement>(null);
@@ -200,7 +200,7 @@ export function JourneyHeader() {
     };
   }, []);
   return <>      <header ref={headerRef} className={styles.header}>
-        <Link href="/" className={styles.brand} aria-label="Clover home">
+        <Link href={homeHref} className={styles.brand} aria-label="Clover home">
           <Image src="/clover-mark.svg" alt="" width={44} height={44} priority />
           <Image src="/clover-name-teal.svg" alt="Clover" width={132} height={32} priority />
         </Link>
@@ -216,7 +216,7 @@ export function JourneyHeader() {
               Features <span aria-hidden="true">▾</span>
             </button>
             {featuresOpen ? <div className={styles.featuresDropdown} id="preview-features-menu">
-              {FEATURE_LINKS.map((item) => <Link key={item.href} href={item.href} onClick={() => setFeaturesOpen(false)}><strong>{item.label}</strong>{item.products ? <small>{item.products}</small> : null}</Link>)}
+              {FEATURE_LINKS.map((item) => <Link key={item.href} href={`${featureBasePath}/${item.href.split("/").pop()}`} onClick={() => setFeaturesOpen(false)}><strong>{item.label}</strong>{item.products ? <small>{item.products}</small> : null}</Link>)}
             </div> : null}
           </div>
           <Link href="/help">Help</Link>
@@ -248,7 +248,7 @@ export function JourneyHeader() {
           </div>
           <div className={styles.mobileDrawerLinks}>
             <p>Features</p>
-            {FEATURE_LINKS.map((item) => <Link key={item.href} href={item.href} onClick={() => setMobileMenuOpen(false)}><strong>{item.label}</strong>{item.products ? <small>{item.products}</small> : null}</Link>)}
+            {FEATURE_LINKS.map((item) => <Link key={item.href} href={`${featureBasePath}/${item.href.split("/").pop()}`} onClick={() => setMobileMenuOpen(false)}><strong>{item.label}</strong>{item.products ? <small>{item.products}</small> : null}</Link>)}
             <span />
             <Link href="/help" onClick={() => setMobileMenuOpen(false)}>Help</Link>
             <Link href="/contact-us" onClick={() => setMobileMenuOpen(false)}>Contact</Link>

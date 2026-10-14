@@ -311,6 +311,8 @@ export const FEATURE_LINKS: PublicNavLink[] = [
       "understand-your-money": "Ask Clover · Reports",
       "plan-ahead": "Investments · Budgeting · Goals",
       "manage-money-together": "Circles · Split Bills",
+      "security": "Privacy · Source records · Data controls",
+      "pro": "Plus · Pro · Plans & benefits",
     } as Record<string, string>)[page.slug],
     href: `/features/${page.slug}`,
     description: page.overview,

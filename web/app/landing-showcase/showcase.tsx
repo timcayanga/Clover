@@ -12,7 +12,7 @@ import {
 import s from "./showcase.module.css";
 import { JourneyHeader } from "@/app/landing-preview/landing-journey";
 
-function Icon({
+export function Icon({
   kind = "arrow",
 }: {
   kind?:
@@ -53,7 +53,7 @@ function Icon({
     </svg>
   );
 }
-function Brand() {
+export function Brand() {
   return (
     <span className={s.brand}>
       <img src="/clover-mark.svg" width="28" height="28" alt="" />
@@ -61,7 +61,7 @@ function Brand() {
     </span>
   );
 }
-function Action({
+export function Action({
   children = "Start free",
   href = "/sign-up",
 }: {
@@ -75,7 +75,7 @@ function Action({
     </Link>
   );
 }
-function Mascot({ pose, size = 160 }: { pose: string; size?: number }) {
+export function Mascot({ pose, size = 160 }: { pose: string; size?: number }) {
   return (
     <img
       className={s.mascot}
@@ -87,7 +87,7 @@ function Mascot({ pose, size = 160 }: { pose: string; size?: number }) {
     />
   );
 }
-function Heading({
+export function Heading({
   children,
   text,
   hero = false,
@@ -103,7 +103,7 @@ function Heading({
     </div>
   );
 }
-function ScrollScene({
+export function ScrollScene({
   id,
   className,
   children,
@@ -121,7 +121,7 @@ function ScrollScene({
 
 // Reuse the people and locations from Clover's production story. These are
 // marketing images, not screenshots or customer records.
-function StoryPhoto({
+export function StoryPhoto({
   desktop,
   mobile,
   alt,
@@ -153,7 +153,7 @@ function StoryPhoto({
 
 // Screens are captured from the production UI with fictional data. The layered
 // cards are lightweight editorial illustrations, never a live financial account.
-function AppScreen({
+export function AppScreen({
   page,
   eager = false,
 }: {
@@ -206,7 +206,7 @@ function AppScreen({
     </div>
   );
 }
-function Receipt({ small = false }: { small?: boolean }) {
+export function Receipt({ small = false }: { small?: boolean }) {
   return (
     <div
       className={`${s.receipt} ${small ? s.smallReceipt : ""}`}
@@ -236,9 +236,9 @@ function Receipt({ small = false }: { small?: boolean }) {
 
 // One purchase stays in the same DOM node as paper becomes a row, then joins
 // its category. The labels are illustrative; no customer data is processed here.
-function PurchaseThroughline() {
+export function PurchaseThroughline() {
   return (
-    <div className={s.purchaseThroughline} aria-hidden="true">
+    <div className={s.purchaseThroughline} data-purchase-throughline aria-hidden="true">
       <div className={s.purchasePaper}>
         <div className={s.purchaseReceiptHead}>
           STARBUCKS<small>October 5, 2026 · 9:41 AM</small>
@@ -254,7 +254,7 @@ function PurchaseThroughline() {
             <strong>Coffee at Starbucks</strong>
             <small>Food & dining · BPI</small>
           </div>
-          <b>₱190.00</b>
+          <b>−₱190.00</b>
         </div>
         <div className={s.purchaseReceiptTail}>
           <span>Caffè Latte</span>
@@ -266,7 +266,7 @@ function PurchaseThroughline() {
   );
 }
 
-function ConnectionOptions() {
+export function ConnectionOptions() {
   const banks = [
     ["BDO", "bdo.png"],
     ["BPI", "bpi.png"],
@@ -297,7 +297,7 @@ function ConnectionOptions() {
     </div>
   );
 }
-function TransactionMoment() {
+export function TransactionMoment() {
   return (
     <div className={s.transactionMoment}>
       <img
@@ -344,7 +344,7 @@ const spending = [
     icon: "shopping",
   },
 ];
-function SpendingStory() {
+export function SpendingStory() {
   const [selected, setSelected] = useState<string | null>(null);
   const current = spending.find((item) => item.name === selected);
   return (
@@ -416,7 +416,7 @@ function SpendingStory() {
     </div>
   );
 }
-function Conversation() {
+export function Conversation() {
   return (
     <div className={s.conversation}>
       <div className={s.chatTop}>
@@ -457,9 +457,9 @@ function Conversation() {
     </div>
   );
 }
-function GoalMoment() {
+export function GoalMoment({ compact = false }: { compact?: boolean } = {}) {
   return (
-    <div className={s.goalMoment}>
+    <div className={`${s.goalMoment} ${compact ? s.goalCompact : ""}`}>
       <div className={s.goalTitle}>
         <Mascot pose="savings" size={70} />
         <div>
@@ -482,7 +482,7 @@ function GoalMoment() {
   );
 }
 
-function StoreAvailability() {
+export function StoreAvailability() {
   return (
     <div
       className={s.storeAvailability}
@@ -514,7 +514,7 @@ function StoreAvailability() {
     </div>
   );
 }
-function Plans({ initialMarket }: { initialMarket: PricingMarket }) {
+export function Plans({ initialMarket }: { initialMarket: PricingMarket }) {
   const [annual, setAnnual] = useState(true);
   const [active, setActive] = useState(0);
   const plans = [
@@ -659,6 +659,142 @@ function Plans({ initialMarket }: { initialMarket: PricingMarket }) {
   );
 }
 
+export function ControlCard() {
+  return (
+    <div className={s.controlCard}>
+      <span className={s.controlSeal}>
+        <Icon kind="lock" />
+      </span>
+      <strong>Your records. Your choice.</strong>
+      <div>
+        <Icon kind="edit" />
+        <span>Review and edit</span>
+        <Icon kind="check" />
+      </div>
+      <div>
+        <Icon kind="export" />
+        <span>Export your data</span>
+        <Icon kind="check" />
+      </div>
+      <div>
+        <Icon kind="lock" />
+        <span>Private to you</span>
+        <Icon kind="check" />
+      </div>
+    </div>
+  );
+}
+
+export function CircleCard() {
+  return (
+    <div className={s.circleCard}>
+      <div className={s.miniHeader}>
+        <strong>
+          <img
+            src="/assets/3d icons/navigation/figma-v7/circles.webp"
+            width="28"
+            height="28"
+            alt=""
+            loading="lazy"
+          />
+          Our home
+        </strong>
+        <span>Circles</span>
+      </div>
+      <div className={s.circlePeople}>
+        <span>A</span>
+        <span>J</span>
+        <span>S</span>
+      </div>
+      <strong>One home. One shared view.</strong>
+      <div>
+        <span>Groceries budget</span>
+        <b>₱4,500 / ₱6,000</b>
+      </div>
+      <div className={s.circleTrack}>
+        <i />
+      </div>
+      <small>Household expenses · Shared budgets · Goals</small>
+    </div>
+  );
+}
+
+export function SplitCard() {
+  return (
+    <div className={s.sharedCard}>
+      <div className={s.miniHeader}>
+        <strong>
+          <img
+            src="/assets/3d icons/navigation/figma-v7/splitBills.webp"
+            width="28"
+            height="28"
+            alt=""
+            loading="lazy"
+          />
+          Weekend with friends
+        </strong>
+        <span>Split Bills</span>
+      </div>
+      <strong className={s.sharedTotal}>₱1,200.00</strong>
+      <small className={s.splitPeople}>3 people · ₱400 each</small>
+      <div className={s.sharedMember}>
+        <span>A</span>
+        <div>
+          Alex<small>Paid with GCash</small>
+        </div>
+        <img
+          src="/assets/banks/philippines/gcash.png"
+          width="32"
+          height="32"
+          alt="GCash"
+        />
+        <strong>₱400</strong>
+      </div>
+      <div className={s.sharedMember}>
+        <span>J</span>
+        <div>
+          Jamie<small>Paid with Maya</small>
+        </div>
+        <img
+          src="/assets/banks/philippines/maya.png"
+          width="32"
+          height="32"
+          alt="Maya"
+        />
+        <strong>₱400</strong>
+      </div>
+      <div className={s.sharedMember}>
+        <span>S</span>
+        <div>
+          Sam<small>Still to settle</small>
+        </div>
+        <strong>₱400</strong>
+      </div>
+    </div>
+  );
+}
+
+export function BudgetMoment() {
+  return (
+    <div className={s.budgetMoment}>
+      <div className={s.miniHeader}>
+        <strong>Everyday spending</strong>
+        <span>Budgeting</span>
+      </div>
+      <div>
+        <span>Food & dining</span>
+        <strong>
+          ₱6,000 <small>/ ₱8,000</small>
+        </strong>
+      </div>
+      <div className={s.circleTrack}>
+        <i />
+      </div>
+      <small>₱2,000 left in your budget</small>
+    </div>
+  );
+}
+
 export function Showcase({ initialMarket }: { initialMarket: PricingMarket }) {
   const root = useRef<HTMLDivElement>(null);
   const { mode, reduced } = useShowcaseMotion(root);
@@ -673,7 +809,7 @@ export function Showcase({ initialMarket }: { initialMarket: PricingMarket }) {
         Skip to content
       </a>
       <div className={s.productionHeader}>
-        <JourneyHeader />
+        <JourneyHeader featureBasePath="/landing-showcase/features" homeHref="/landing-showcase" />
       </div>
       <main id="showcase-main">
         <ScrollScene id="together" className={s.hero}>
@@ -740,6 +876,24 @@ export function Showcase({ initialMarket }: { initialMarket: PricingMarket }) {
             </article>
             <article className={s.journeyBeat} data-story-act>
               <div className={s.journeyCopy}>
+                <Heading text="Your financial life in one view. Track accounts, balances, recurring obligations, investments, and trends across your accounts.">
+                  Understand your finances.
+                  <br />
+                  <em>Build better habits.</em>
+                </Heading>
+              </div>
+              <div
+                className={`${s.journeyArt} ${s.journeyClarity}`}
+                data-story-art
+              >
+                <SpendingStory />
+                <div className={s.insightPhone}>
+                  <AppScreen page="transactions" />
+                </div>
+              </div>
+            </article>
+            <article className={s.journeyBeat} data-story-act>
+              <div className={s.journeyCopy}>
                 <Heading text="Your financial records are private, reviewable, and traceable. Edit, export, or delete your data through your account.">
                   Your financial data stays
                   <br />
@@ -757,45 +911,7 @@ export function Showcase({ initialMarket }: { initialMarket: PricingMarket }) {
                     alt="Reviewing personal financial records at home."
                   />
                 </div>
-                <div className={s.controlCard}>
-                  <span className={s.controlSeal}>
-                    <Icon kind="lock" />
-                  </span>
-                  <strong>Your records. Your choice.</strong>
-                  <div>
-                    <Icon kind="edit" />
-                    <span>Review and edit</span>
-                    <Icon kind="check" />
-                  </div>
-                  <div>
-                    <Icon kind="export" />
-                    <span>Export your data</span>
-                    <Icon kind="check" />
-                  </div>
-                  <div>
-                    <Icon kind="lock" />
-                    <span>Private to you</span>
-                    <Icon kind="check" />
-                  </div>
-                </div>
-              </div>
-            </article>
-            <article className={s.journeyBeat} data-story-act>
-              <div className={s.journeyCopy}>
-                <Heading text="Your financial life in one view. Track accounts, balances, recurring obligations, investments, and trends across your accounts.">
-                  Understand your finances.
-                  <br />
-                  <em>Build better habits.</em>
-                </Heading>
-              </div>
-              <div
-                className={`${s.journeyArt} ${s.journeyClarity}`}
-                data-story-art
-              >
-                <SpendingStory />
-                <div className={s.insightPhone}>
-                  <AppScreen page="transactions" />
-                </div>
+                <ControlCard />
               </div>
             </article>
             <article className={s.journeyBeat} data-story-act>
@@ -835,85 +951,8 @@ export function Showcase({ initialMarket }: { initialMarket: PricingMarket }) {
                     alt="Friends making plans together over a laptop."
                   />
                 </div>
-                <div className={s.circleCard}>
-                  <div className={s.miniHeader}>
-                    <strong>
-                      <img
-                        src="/assets/3d icons/navigation/figma-v7/circles.webp"
-                        width="28"
-                        height="28"
-                        alt=""
-                        loading="lazy"
-                      />
-                      Our home
-                    </strong>
-                    <span>Circles</span>
-                  </div>
-                  <div className={s.circlePeople}>
-                    <span>A</span>
-                    <span>J</span>
-                    <span>S</span>
-                  </div>
-                  <strong>One home. One shared view.</strong>
-                  <div>
-                    <span>Groceries budget</span>
-                    <b>₱4,500 / ₱6,000</b>
-                  </div>
-                  <div className={s.circleTrack}>
-                    <i />
-                  </div>
-                  <small>Household expenses · Shared budgets · Goals</small>
-                </div>
-                <div className={s.sharedCard}>
-                  <div className={s.miniHeader}>
-                    <strong>
-                      <img
-                        src="/assets/3d icons/navigation/figma-v7/splitBills.webp"
-                        width="28"
-                        height="28"
-                        alt=""
-                        loading="lazy"
-                      />
-                      Weekend with friends
-                    </strong>
-                    <span>Split Bills</span>
-                  </div>
-                  <strong className={s.sharedTotal}>₱1,200.00</strong>
-                  <small className={s.splitPeople}>3 people · ₱400 each</small>
-                  <div className={s.sharedMember}>
-                    <span>A</span>
-                    <div>
-                      Alex<small>Paid with GCash</small>
-                    </div>
-                    <img
-                      src="/assets/banks/philippines/gcash.png"
-                      width="32"
-                      height="32"
-                      alt="GCash"
-                    />
-                    <strong>₱400</strong>
-                  </div>
-                  <div className={s.sharedMember}>
-                    <span>J</span>
-                    <div>
-                      Jamie<small>Paid with Maya</small>
-                    </div>
-                    <img
-                      src="/assets/banks/philippines/maya.png"
-                      width="32"
-                      height="32"
-                      alt="Maya"
-                    />
-                    <strong>₱400</strong>
-                  </div>
-                  <div className={s.sharedMember}>
-                    <span>S</span>
-                    <div>
-                      Sam<small>Still to settle</small>
-                    </div>
-                    <strong>₱400</strong>
-                  </div>
-                </div>
+                <CircleCard />
+                <SplitCard />
               </div>
             </article>
             <article className={s.journeyBeat} data-story-act>
@@ -936,22 +975,7 @@ export function Showcase({ initialMarket }: { initialMarket: PricingMarket }) {
                   />
                 </div>
                 <GoalMoment />
-                <div className={s.budgetMoment}>
-                  <div className={s.miniHeader}>
-                    <strong>Everyday spending</strong>
-                    <span>Budgeting</span>
-                  </div>
-                  <div>
-                    <span>Food & dining</span>
-                    <strong>
-                      ₱6,000 <small>/ ₱8,000</small>
-                    </strong>
-                  </div>
-                  <div className={s.circleTrack}>
-                    <i />
-                  </div>
-                  <small>₱2,000 left in your budget</small>
-                </div>
+                <BudgetMoment />
               </div>
             </article>
           </div>

@@ -1,0 +1,131 @@
+/* The quiet centre is reserved for the story. Product depth stays at the edges. */
+.feature { background: #f5faf9; }
+.feature .hero { height: 165svh; }
+.feature .journey { height: 510svh; }
+.art { position: absolute; inset: 0; perspective: 1400px; --turn: calc(1 - var(--act-progress, var(--a, 0))); }
+.heroArt { --act-progress: var(--a); }
+.left, .right, .leftPhone, .leftReport, .rightChat, .rightReceipt, .leftReceipt, .rightGoal, .rightBudget, .rightControl, .rightSplit, .leftCircle, .leftMascot { position: absolute; top: 50%; width: 27%; transform: translateY(-50%) rotateY(calc(var(--turn) * 12deg)) rotateZ(calc(var(--turn) * 4deg)); }
+.left, .leftReport { left: 0; }
+.right, .rightChat, .rightGoal, .rightBudget, .rightControl, .rightSplit { right: 0; transform: translateY(-50%) rotateY(calc(var(--turn) * -12deg)) rotateZ(calc(var(--turn) * -4deg)); }
+.leftPhone { left: 4%; width: clamp(210px,min(22vw,calc((100svh - 180px) * .46)),300px); }
+.leftMascot { left: 4%; width: 21%; }
+.leftMascot img { width: 100%; height: auto; }
+.rightReceipt { right: 5%; width: 210px; transform: translateY(-50%) rotateZ(calc(var(--turn) * -8deg)); }
+.leftReceipt { left: 3%; width: 240px; }
+.bottomRow { position: absolute; bottom: 10%; left: 32%; width: 36%; transform: translateY(calc(var(--turn) * 35px)) rotateX(calc(var(--turn) * 10deg)); }
+.bottomRow > div { position: static; width: 100%; transform: none; }
+.right > div, .rightGoal > div, .rightBudget > div, .rightControl > div, .rightSplit > div, .leftCircle > div, .rightChat > div { position: relative; inset: auto; top: auto; width: 100%; max-width: none; transform: none; }
+.leftReport > div { position: relative; inset: auto; width: 100%; height: auto; }
+.leftReport > div > div:first-child { position: relative; inset: auto; width: 100%; padding: 22px; transform: none; display: block; }
+.leftReport > div > div:last-child:not(:first-child) { display: none; }
+.leftReport svg { transform: rotate(-90deg); }
+.leftReport button { font-size: 11px; }
+.leftCircle { left: 0; top: 23%; z-index: 2; }
+.lifePhoto { position: absolute; left: 0; top: 20%; bottom: 15%; width: 27%; overflow: hidden; border-radius: 30px; box-shadow: 0 7px 0 #d1e6df,0 35px 65px -25px #13605b45; transform: perspective(1400px) rotateY(calc(var(--turn) * 10deg)) rotateZ(calc(var(--turn) * 3deg)); }
+.lifePhoto img { width: 100%; height: 100%; object-fit: cover; object-position: 72% center; }
+.art[data-feature-art=circles] .lifePhoto,.art[data-feature-art=split] .lifePhoto { top: 47%; bottom: 10%; }
+.surface { padding: 24px; background: linear-gradient(140deg,#fff,#edf9f5); border: 1px solid #cce5df; border-bottom: 7px solid #cce5df; border-radius: 28px; box-shadow: 0 6px 0 #cce5df,0 36px 65px -24px #13605b50; }
+.row { display: flex; align-items: center; gap: 10px; justify-content: space-between; padding: 17px 0; border-top: 1px solid #d9eae5; font-size: 13px; }
+.row small { display: block; font-size: 10px; color: #5c7779; margin-top: 5px; }
+.row b { white-space: nowrap; }
+.row svg { width: 20px; height: 20px; flex-shrink: 0; color: #008f9e; }
+.calendar { margin: 24px 0; display: grid; justify-items: center; color: #008f9e; }
+.calendar span { font-size: 12px; letter-spacing: .14em; }
+.calendar strong { font-size: 60px; line-height: 1.2; }
+.calendar small { font-size: 11px; color: #5c7779; }
+.value { display: grid; gap: 10px; margin: 26px 0; }
+.value small { font-size: 12px; color: #5c7779; }
+.value strong { font-size: clamp(28px,3vw,42px); color: #008f9e; }
+.trend { width: 100%; margin-bottom: 20px; overflow: visible; }
+.comparison > div { display: grid; grid-template-columns: 1fr auto; gap: 12px; margin: 20px 0; font-size: 12px; }
+.comparison i { grid-row: 2; grid-column: 1 / -1; display: block; height: 28px; background: linear-gradient(90deg,#03a8c0,#8ce1be); border-radius: 5px 12px 12px 5px; transform-origin: left; transform: scaleX(calc(.8 + var(--act-progress,1) * .2)); }
+.surface p { font-size: 12px; line-height: 1.8; color: #5c7779; }
+.proCard { background: linear-gradient(140deg,#c8f2e7,#7fd8db); }
+.proCard h3 { font-size: 25px; line-height: 1.35; margin: 10px 0 24px; }
+.proCard .row { justify-content: flex-start; border-color: #71c8cb; }
+.contextLink { display: inline-block; margin-top: 24px; color: #008f9e; font-size: 13px; text-underline-offset: 5px; }
+.closing { padding: 110px 7% 70px; text-align: center; }
+.closing > a { margin-top: 25px; }
+.related { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 18px; max-width: 1080px; margin: 75px auto 0; text-align: left; }
+.related a { position: relative; padding: 24px 40px 24px 24px; border-top: 1px solid #cce5df; text-decoration: none; color: #243c40; }
+.related small { display: block; margin-top: 10px; font-size: 11px; line-height: 1.6; color: #5c7779; }
+.related svg { position: absolute; right: 10px; top: 24px; width: 20px; height: 20px; color: #008f9e; }
+@media (max-width:900px), (max-width:1100px) and (min-height:1000px) {
+ .feature .journey { height: 500svh; }
+ .heroArt { left: 7%; top: 90px; width: 86%; height: calc(100% - 420px); }
+ .art:not(.heroArt) { inset: 0; }
+ .leftPhone { left: 6%; top: 50%; width: min(195px,47%); }
+ .right { width: 62%; right: 0; top: 58%; }
+ .rightReceipt { right: 0; top: 30%; width: 44%; }
+ .bottomRow { left: 1%; width: 98%; bottom: 0; }
+ .bottomRow > div { font-size: 10px; padding: 16px 12px; }
+ .bottomRow strong { font-size: 12px; }
+ .left, .leftReport { left: 0; top: 41%; width: 80%; }
+ .leftReport > div > div:first-child { padding: 16px; }
+ .leftReport > div > div:first-child > div:nth-child(2) { width: 135px; margin: 10px auto; }
+ .leftReport button { padding: 8px 0; font-size: 10px; }
+ .art[data-feature-art=reports] .right { width: 53%; top: 70%; }
+ .art[data-feature-art=reports] .right .value { margin: 14px 0; }
+ .art[data-feature-art=reports] .right .value strong { font-size: 24px; }
+ .art[data-feature-art=reports] .right .comparison, .art[data-feature-art=reports] .right p { display: none; }
+ .leftMascot { left: 0; top: 25%; width: 32%; }
+ .rightChat { width: 87%; right: 0; top: 57%; }
+ .rightChat > div { padding: 16px; }
+ .lifePhoto { top: 0; bottom: 5%; width: 70%; border-radius: 24px; }
+ .rightGoal,.rightBudget,.rightControl,.rightSplit { width: 72%; top: auto; bottom: 0; transform: rotateY(calc(var(--turn) * -8deg)) rotateZ(calc(var(--turn) * -3deg)); }
+ .leftCircle { top: 0; left: auto; right: 0; width: 72%; transform: rotateY(calc(var(--turn) * -8deg)); }
+ .art[data-feature-art=circles] .lifePhoto,.art[data-feature-art=split] .lifePhoto { top: 0; bottom: 8%; }
+ .rightControl > div,.leftCircle > div,.rightSplit > div { padding: 16px; }
+ .leftReceipt { left: 0; top: 35%; width: 47%; }
+ .art[data-feature-art=source] .rightControl { bottom: 16%; }
+ .surface { padding: 17px; border-radius: 22px; }
+ .row { font-size: 11px; padding: 12px 0; }
+ .row small { font-size: 9px; }
+ .calendar { margin: 18px 0; }
+ .calendar strong { font-size: 40px; }
+ .value { margin: 20px 0; }
+ .trend { margin-bottom: 10px; }
+ .proCard img { width: 60px; height: 60px; }
+ .proCard h3 { font-size: 18px; margin-bottom: 18px; }
+ .proCard .row { font-size: 10px; }
+ .related { grid-template-columns: 1fr; margin-top: 50px; gap: 0; }
+ .related a { padding: 20px 30px 20px 10px; }
+ .closing { padding: 70px 7% 45px; }
+ .contextLink { font-size: 11px; margin-top: 18px; }
+}
+@media (max-width:360px), (max-width:900px) and (max-height:819px) {
+ .feature .hero,.feature .journey { height: auto; }
+}
+@media(prefers-reduced-motion:reduce) { .feature .hero,.feature .journey { height: auto; } }
+.feature[data-motion=off] .hero,.feature[data-motion=off] .journey { height: auto; }
+@media (max-width:900px), (max-width:1100px) and (min-height:1000px) {
+ .art[data-feature-art=reports] .leftReport { width: 100%; top: 33%; }
+ .art[data-feature-art=reports] .leftReport > div > div:first-child { display: grid; grid-template-columns: minmax(0,.85fr) minmax(0,1.15fr); gap: 10px; }
+ .leftReport > div > div:first-child > div:first-child { grid-column: 1 / -1; }
+ .art[data-feature-art=reports] .leftReport > div > div:first-child > div:nth-child(2) { width: 100%; margin: auto; }
+ .art[data-feature-art=reports] .right { width: 80%; top: 82%; }
+ .art[data-feature-art=reports] .right .surface { padding: 14px 18px; }
+ .art[data-feature-art=reports] .right .value { margin: 12px 0 0; }
+ .art[data-feature-art=investments] .left { top: 0; width: 100%; transform: rotateY(calc(var(--turn) * 8deg)); }
+ .art[data-feature-art=investments] .left .surface { padding: 14px 18px; }
+ .art[data-feature-art=investments] .value { margin: 12px 0; gap: 5px; }
+ .art[data-feature-art=investments] .value strong { font-size: 28px; }
+ .art[data-feature-art=investments] .trend { height: 45px; margin-bottom: 5px; }
+ .art[data-feature-art=investments] .row { padding: 8px 0; }
+ .art[data-feature-art=investments] .rightGoal { width: 80%; }
+ .art[data-feature-art=investments] .rightGoal > div { padding: 15px; }
+}
+.feature .surface > .trend { width: 100%; }
+@media (max-width:900px), (max-width:1100px) and (min-height:1000px) {
+ .art[data-feature-art=source] .leftReceipt { display: none; }
+ .art[data-feature-art=source] .rightControl { width: 100%; top: 37%; bottom: auto; transform: translateY(-50%); }
+ .leftCircle > div > strong, .leftCircle > div > small { display: none; }
+ .leftCircle > div > div:nth-child(2) { margin-top: 9px; margin-bottom: 12px; }
+ .rightSplit > div > div:not(:first-child) { padding-top: 8px; padding-bottom: 8px; }
+}
+@media (max-width:900px), (max-width:1100px) and (min-height:1000px) {
+ .heroArt[data-feature-art=source] .bottomRow { bottom: 40px; }
+}
+@media (min-width:1101px), (min-width:901px) and (max-height:999px) {
+ .heroArt { inset: 0 auto auto 50%; width: min(1400px,94%); height: 100%; transform: translateX(-50%); }
+}

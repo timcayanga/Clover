@@ -161,3 +161,37 @@ The opening phone leans right and the Transactions phone leans left into the tex
 Input copy explicitly says “Connect. Upload. Or add it yourself.” Circles and Split Bills each have their own named, icon-bearing illustration. The planning chapter names goals and budgeting and shows both. Narrow/short phones use natural flow with sufficient room for the shared-money cards.
 
 Pricing starts with Pro centered and Yearly selected. Arrow buttons and keyboard left/right cycle Pro, Plus and Free; only the active card is focusable. Currency uses the request's country (PH → PHP, otherwise USD) with no currency filter. iOS and Android icons appear in the opening and footer; Android links to `https://play.google.com/store/apps/details?id=ph.clover.app`, while iOS has a plain availability label. The illustrative-data footer sentence is removed.
+
+### Connected feature stories and a continuous handoff (14 October 2026)
+
+The main preview now goes directly from choosing an input method to understanding
+spending, followed by privacy. One persistent paper folds into the Starbucks
+transaction, collapses before travelling across the report, and joins its teal
+Food & dining segment as that segment draws. Forward and reverse scroll use the
+same bounded progress functions. The wide row stays below the desktop caption
+and inside the upper mobile art stage. A regression checks ranges, sequencing,
+readable report arrival, and exact reverse frames; it runs with browser QA.
+
+Six independent, noindex previews are linked from the shared Features dropdown:
+
+- `/landing-showcase/features/manage-money`: transactions, accounts, recurring.
+- `/landing-showcase/features/understand-your-money`: reports, comparisons, chats.
+- `/landing-showcase/features/plan-ahead`: portfolio, budgets, savings goals.
+- `/landing-showcase/features/manage-money-together`: Circles and Split Bills.
+- `/landing-showcase/features/security`: source records, review and data controls.
+- `/landing-showcase/features/pro`: wider financial context and the regional,
+  yearly-first Pro/Plus/Free carousel.
+
+These reuse the main preview's HD production UI captures, branded mascot assets,
+physical card edges, reversible depth and passive, measured scroll renderer.
+Human photos remain photographic; financial examples use fictional data. No new
+animation package, WebGL runtime, photo payload or financial API is introduced.
+Each page keeps a centred desktop caption with art at the edges, and a centred
+mobile caption beneath the art. Narrow/short devices and reduced-motion users
+get every chapter in document flow. Route changes remount the motion observer,
+and inactive caption links cannot take keyboard focus.
+
+The shared navigation accepts optional preview destinations; production defaults
+remain intact. All six dropdown entries include descriptive subtext, including
+Security and Pro. The production homepage and `/features/*` presentations remain
+unchanged. Review this family on staging before deciding on a production switch.

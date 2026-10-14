@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, type RefObject } from "react";
+import { purchaseChoreography } from "./showcase-choreography";
 
 export type MotionMode = "full" | "gentle" | "off";
 const clamp = (value: number) => Math.max(0, Math.min(1, value));
@@ -45,6 +46,7 @@ export function useShowcaseMotion(root: RefObject<HTMLDivElement | null>) {
       pinHeight: number;
       pinned: boolean;
       acts: HTMLElement[];
+      hasPurchase: boolean;
     }[] = [];
     let viewport = innerHeight;
     let frame = 0;
@@ -77,6 +79,7 @@ export function useShowcaseMotion(root: RefObject<HTMLDivElement | null>) {
             pinHeight: pin.offsetHeight,
             pinned,
             acts: [...scene.querySelectorAll<HTMLElement>("[data-story-act]")],
+            hasPurchase: Boolean(scene.querySelector("[data-purchase-throughline]")),
           };
         });
         needsMeasure = false;
@@ -93,7 +96,7 @@ export function useShowcaseMotion(root: RefObject<HTMLDivElement | null>) {
         mode === "full" && animated ? impulse * 0.78 + target * 0.22 : 0;
       if (Math.abs(impulse) < 0.002) impulse = 0;
       scenes.forEach((scene, index) => {
-        const { top, height, pinHeight, pinned, acts } = geometry[index];
+        const { top, height, pinHeight, pinned, acts, hasPurchase } = geometry[index];
         const relativeTop = top - y;
         const visible = String(
           relativeTop < viewport && relativeTop + height > 0,
@@ -124,19 +127,11 @@ export function useShowcaseMotion(root: RefObject<HTMLDivElement | null>) {
           const storyProgress = mode === "gentle" ? raw : p;
           // Shared purchase choreography crosses the scene boundary without
           // remounting or resetting: receipt → transaction → category insight.
-          const purchaseTravel = storyProgress * acts.length;
-          write(scene, "--paper-fold", ease((purchaseTravel - 0.18) / 0.55));
-          // Descend in the left lane before expanding across the lower edge.
-          write(scene, "--paper-expand", ease((purchaseTravel - 0.5) / 0.24));
-          write(scene, "--category-join", ease((purchaseTravel - 1.85) / 0.65));
-          write(scene, "--purchase-away", ease((purchaseTravel - 2.25) / 0.18));
-          write(scene, "--report-reveal", ease((purchaseTravel - 1.85) / 0.55));
-          write(
-            scene,
-            "--category-glow",
-            ease((purchaseTravel - 2.1) / 0.3) *
-              (1 - ease((purchaseTravel - 2.75) / 0.2)),
-          );
+          if (hasPurchase) {
+            for (const [property, value] of Object.entries(
+              purchaseChoreography(storyProgress * acts.length),
+            )) write(scene, property, value);
+          }
           const active = Math.min(
             acts.length - 1,
             Math.floor(storyProgress * acts.length),
