@@ -31,14 +31,14 @@ export const FEATURE_STORIES: FeatureStory[] = [
     { id: "privacy", title: "Shared moments.", accent: "Personal boundaries.", copy: "Your group does not need your entire financial history. Keep personal finances private while sharing only what makes sense.", visual: "circles", link: { href: "/features/security", label: "Explore your data controls →" } },
     { id: "start", title: "Enjoy the shared moments.", accent: "Keep the money clear." },
   ] },
-  { slug: "security", title: "Security", asset: "security", chapters: [
+  { slug: "security", title: "Security", products: "Privacy · Source records · Data controls", asset: "security", chapters: [
     { id: "overview", title: "Your financial data stays", accent: "under your control.", copy: "Choose which supported banks to connect through Finverse. Keep connected, uploaded, and manually entered records reviewable and under your control.", visual: "source" },
     { id: "uploaded-files", title: "Keep the record", accent: "behind the transaction.", copy: "Imported details stay connected to their source. Review the original evidence when something needs a closer look.", visual: "source" },
     { id: "review", title: "AI suggests.", accent: "You confirm.", copy: "Review extracted details and correct what needs attention. Your confirmed records should reflect your decisions—not an unexplained guess.", visual: "transactions" },
     { id: "private-account", title: "Your account.", accent: "Your choices.", copy: "Use your account controls to edit, export, or delete your data. Read how Clover handles your information before you bring in your records.", visual: "control", link: { href: "/privacy-policy", label: "Read the Privacy Policy →" } },
     { id: "start", title: "Your money. Your records.", accent: "Your control." },
   ] },
-  { slug: "pro", title: "Pro", asset: "pro", chapters: [
+  { slug: "pro", title: "Pro", products: "Plus · Pro · Plans & benefits", asset: "pro", chapters: [
     { id: "overview", title: "More perspective as", accent: "your finances grow.", copy: "Start free with uploads and manual entry. Connect up to 2 bank accounts on Plus or 5 on Pro, with more room for your finances.", visual: "accounts" },
     { id: "deeper-guidance", title: "Look beyond", accent: "the immediate question.", copy: "Explore advanced Ask Clover guidance to help connect spending, plans, and the wider financial picture. You choose which suggestions to act on.", visual: "adviser" },
     { id: "investment-context", title: "Keep the bigger", accent: "picture in view.", copy: "Bring investment tracking into the same financial picture, alongside the accounts, reports, budgets, and goals you already use.", visual: "reports" },

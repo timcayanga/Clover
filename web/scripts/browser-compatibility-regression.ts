@@ -118,7 +118,8 @@ async function main() {
   assert.doesNotMatch(landingJourneySource, /chapterMotion[\s\S]{0,500}filter:/, "Landing copy must not blur during chapter transitions.");
   assert.match(landingJourneySource, /Organize my finances for free[\s\S]*?→[\s\S]*?href="\/sign-in"/, "The landing actions must lead with the arrow-led organization CTA before Log in.");
   assert.match(landingJourneySource, /FEATURE_LINKS\.map[\s\S]*?href="\/pricing"/, "The public header must expose Features and Pricing.");
-  const publicHeaderSource = landingJourneySource.split("export function JourneyHeader()")[1].split("export function LandingJourney")[0];
+  const publicHeaderSource = landingJourneySource.split("export function JourneyHeader(")[1]?.split("export function LandingJourney")[0];
+  assert.ok(publicHeaderSource, "The shared public header must exist, including when it accepts preview destinations.");
   assert.doesNotMatch(publicHeaderSource, /href="\/(privacy-policy|terms-of-service)"/, "Legal links belong in the footer, not the journey header.");
   assert.match(landingJourneySource, /aria-expanded=\{featuresOpen\}[\s\S]*?preview-features-menu/, "The preview Features dropdown must expose its expanded state to assistive technology.");
   assert.match(landingJourneySource, /aria-label=\{mobileMenuOpen \? "Close menu" : "Open menu"\}[\s\S]*?role="dialog"[\s\S]*?Clover navigation/, "Mobile navigation must use an accessible burger-triggered drawer.");
