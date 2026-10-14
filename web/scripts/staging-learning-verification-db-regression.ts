@@ -108,6 +108,33 @@ async function main() {
     for (const workspaceId of [start.workspaceId, secondRun.workspaceId, original.id]) {
       for (const own of [false, true]) assert.deepEqual(await v.learningVerificationManifest(workspaceId, own, db), await releasedManifest(db, null, [workspaceId], own), "Financial-only and outside-Profile hashes retain every child occurrence and the exact released ownership semantics");
     }
+    const snapshotOracle = await releasedManifest(db, null, [original.id], true);
+    let snapshotQueries = 0;
+    try {
+      const concurrentSnapshot = await db.$transaction(async tx => {
+        const reader = new Proxy(tx, {
+          get(target, property) {
+            if (property === "$queryRawUnsafe") return async (...args: unknown[]) => {
+              const result = await (target.$queryRawUnsafe as (...values: unknown[]) => Promise<unknown>)(...args);
+              if (++snapshotQueries === 1) await db.documentImport.update({
+                where: { id: originalDocument.id }, data: { institution: "Concurrent source metadata change" },
+              });
+              return result;
+            };
+            const value = Reflect.get(target, property);
+            return typeof value === "function" ? value.bind(target) : value;
+          },
+        });
+        return v.learningVerificationManifest(original.id, true, reader);
+      }, { isolationLevel: "RepeatableRead", timeout: 240_000 });
+      assert(snapshotQueries > 1, "Exercise source changes between actual read statements");
+      assert.equal((await db.documentImport.findUniqueOrThrow({ where: { id: originalDocument.id } })).institution, "Concurrent source metadata change");
+      assert.deepEqual(concurrentSnapshot, snapshotOracle, "Every table must describe the same snapshot despite a concurrent committed source edit");
+    } finally {
+      await db.documentImport.update({ where: { id: originalDocument.id }, data: {
+        institution: originalDocument.institution, updatedAt: originalDocument.updatedAt,
+      } });
+    }
     const parentScopeBefore = await v.checkpointPreservationManifest("cmv29w3r4002806ictv6bmnfp", db, [start.workspaceId, secondRun.workspaceId]);
     assert.equal(parentScopeBefore.DocumentImportPage.count, 48, "Exclude only both new QA parents; keep every retained page");
     assert.equal(parentScopeBefore.LearningJobAttempt.count, 8, "Keep every retained attempt independently of the new QA parents");

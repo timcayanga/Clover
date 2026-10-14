@@ -1,5 +1,7 @@
 # Parser and enrichment release contract
 
+Growing retained evidence is hashed in groups of four fixed tables inside one repeatable-read snapshot. Counts, complete-row SHA-256 inputs, table order, ownership predicates and read/write budgets remain unchanged. The database regression compares every result with the released per-table oracle and commits a source metadata edit between read statements to prove that the manifest cannot combine different database snapshots. This changes only the read-only staging diagnostic; parsing, learning writes, source caches and confirmed finance remain unchanged.
+
 `npm run qa:prepush` is the required local and CI release gate. Its `qa:release` now includes `qa:parsers`: historical inline contracts, the reviewed portable corpus, merchant/learning/account-identity checks, and actual worker persistence against a new disposable PostgreSQL database. A missing fixture, changed checksum, failed assertion, missing PostgreSQL binary, occupied test port, or database test failure fails the gate. There are no release skip/filter/update modes. The runner discards the caller's database URLs and cloud credentials; it never initializes, migrates, or deletes a shared database.
 
 The frozen knowledge baseline remains commit `901b242f1bce74ebf73fabdff3608c30ead6e03a` and the independently sealed 9 October preservation archive. This work does not rewrite that archive, load it into production, reprocess existing imports, or promote past machine suggestions into user confirmations.
