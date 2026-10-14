@@ -27,6 +27,8 @@ assert.equal(calculateModelCloverTokens({
   totalTokens: 1_100,
 }), 747);
 
+assert.equal(calculateModelCloverTokens({ model: "gpt-6-luna", inputTokens: 1000, cachedInputTokens: 200, cacheWriteTokens: 100, outputTokens: 100 }), 180, "Use actual Luna cost weighting, including cache writes, instead of raw tokens");
+
 const startsAt = new Date("2026-09-01T00:00:00.000Z");
 const parts = calculateUsageParts([
   {

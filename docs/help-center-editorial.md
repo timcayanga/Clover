@@ -33,7 +33,7 @@ The normal Vercel prebuild migration step applies migrations to the deployment's
 
 AI is paused by default. Configure in Admin → Content → AI drafting after reviewing the editorial rules.
 
-Requirements: `OPENAI_API_KEY`, `CRON_SECRET`, and optionally `CLOVER_CONTENT_MODEL` (default `gpt-4.1-mini`). Use a provider/project spending cap in addition to the app's attempt and token limits.
+Requirements: `OPENAI_API_KEY`, `CRON_SECRET`, and optionally `CLOVER_CONTENT_MODEL` (default `gpt-6-luna`). Use a provider/project spending cap in addition to the app's attempt and token limits.
 
 - Production cron checks `/api/cron/content-drafts` daily; Vercel preview deployments do not run cron. Admin's manual check follows the same cadence and limits.
 - Default cadence: one attempt every three days, eight attempts per month, maximum eight articles awaiting review. Failed attempts also count; no automatic paid retry loop.

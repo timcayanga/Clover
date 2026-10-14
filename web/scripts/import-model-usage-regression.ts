@@ -14,12 +14,14 @@ const usage = extractOpenAIImportUsage({
 
 assert.deepEqual(usage, {
   inputTokens: 6_000,
+  cacheWriteTokens: 0,
   cachedInputTokens: 2_500,
   outputTokens: 900,
   reasoningTokens: 120,
   totalTokens: 6_900,
 });
 assert.equal(extractOpenAIImportUsage({ usage: {} }).totalTokens, 0);
+assert.equal(extractOpenAIImportUsage({ usage: { input_tokens: 100, input_tokens_details: { cached_tokens: 80, cache_write_tokens: 90 } } }).cacheWriteTokens, 20);
 
 const parserSource = readFileSync(new URL("../lib/openai-import-parser.ts", import.meta.url), "utf8");
 const workerSource = readFileSync(new URL("../workers/import-processor.ts", import.meta.url), "utf8");

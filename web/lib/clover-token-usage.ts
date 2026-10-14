@@ -1,3 +1,4 @@
+import { isLunaModel, LUNA_PRICING } from "./openai-model-policy";
 import type { PlanTier, Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { hasUnlimitedPlanLimits } from "@/lib/user-limits";
@@ -63,6 +64,7 @@ const asCount = (value: unknown) => {
 
 const getModelRates = (model: string) => {
   const normalized = model.trim().toLowerCase();
+  if (isLunaModel(normalized)) return LUNA_PRICING;
   if (normalized === "gpt-5.5" || normalized.startsWith("gpt-5.5-")) {
     return { input: 5, cached: 0.5, output: 30 };
   }
@@ -92,8 +94,10 @@ export const calculateModelCloverTokens = (metadata: unknown) => {
 
   if (!rates) return totalTokens;
 
+  const cacheWriteTokens = isLunaModel(model) ? Math.min(inputTokens - cachedInputTokens, asCount(usage.cacheWriteTokens)) : 0;
   const normalizedCost =
-    ((inputTokens - cachedInputTokens) * rates.input
+    ((inputTokens - cachedInputTokens - cacheWriteTokens) * rates.input
+      + cacheWriteTokens * LUNA_PRICING.cacheWrite
       + cachedInputTokens * rates.cached
       + outputTokens * rates.output)
     / BASE_INPUT_PRICE_PER_MILLION_USD;

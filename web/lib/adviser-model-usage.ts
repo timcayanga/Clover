@@ -1,3 +1,4 @@
+import { isLunaModel, LUNA_PRICING } from "./openai-model-policy";
 export type AdviserModelCallStage = "tool_selection" | "final_response";
 export type AdviserModelCallStatus = "completed" | "failed" | "aborted";
 
@@ -49,9 +50,10 @@ type Pricing = {
   inputPerMillionUsd: number;
   cachedInputPerMillionUsd: number;
   outputPerMillionUsd: number;
+  cacheWritePerMillionUsd?: number;
 };
 
-const PRICING_VERSION = "openai-model-pricing-2026-08-31";
+const PRICING_VERSION = "openai-model-pricing-2026-10-14";
 
 const asRecord = (value: unknown): Record<string, unknown> | null =>
   value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : null;
@@ -63,6 +65,9 @@ const asNonNegativeInteger = (value: unknown) => {
 
 export const getAdviserModelPricing = (model: string): Pricing | null => {
   const normalized = model.trim().toLowerCase();
+  if (isLunaModel(normalized)) {
+    return { inputPerMillionUsd: LUNA_PRICING.input, cachedInputPerMillionUsd: LUNA_PRICING.cached, outputPerMillionUsd: LUNA_PRICING.output, cacheWritePerMillionUsd: LUNA_PRICING.cacheWrite };
+  }
   if (normalized === "gpt-4.1-mini" || normalized.startsWith("gpt-4.1-mini-")) {
     return { inputPerMillionUsd: 0.4, cachedInputPerMillionUsd: 0.1, outputPerMillionUsd: 1.6 };
   }
@@ -97,9 +102,11 @@ export const extractAdviserModelUsage = (
   const responseStatus = typeof response.status === "string" ? response.status.toLowerCase() : "";
   const status = options.status
     ?? (responseStatus === "failed" || responseStatus === "incomplete" || responseStatus === "cancelled" ? "failed" : "completed");
+  const billedCacheWriteTokens = pricing?.cacheWritePerMillionUsd ? Math.min(inputTokens - cachedInputTokens, cacheWriteTokens) : 0;
   const estimatedCostUsd = pricing
     ? Number((
-        ((inputTokens - cachedInputTokens) * pricing.inputPerMillionUsd
+        ((inputTokens - cachedInputTokens - billedCacheWriteTokens) * pricing.inputPerMillionUsd
+          + billedCacheWriteTokens * (pricing.cacheWritePerMillionUsd ?? 0)
           + cachedInputTokens * pricing.cachedInputPerMillionUsd
           + outputTokens * pricing.outputPerMillionUsd) / 1_000_000
       ).toFixed(8))
