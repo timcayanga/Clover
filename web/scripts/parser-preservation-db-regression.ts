@@ -4,7 +4,7 @@ import { createRequire } from "node:module";
 
 const url = new URL(process.env.DATABASE_URL ?? "http://invalid");
 assert.equal(url.hostname, "127.0.0.1");
-assert.equal(url.port, "55441");
+assert.equal(url.port, process.env.CLOVER_QA_PARSER_PORT ?? "55441");
 assert.equal(url.pathname, "/clover_migration_qa");
 assert(process.argv.includes("--execute"));
 const require = createRequire(import.meta.url);

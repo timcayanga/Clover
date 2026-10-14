@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
 const url = new URL(process.env.DATABASE_URL ?? "http://invalid");
-assert.equal(url.hostname, "127.0.0.1"); assert.equal(url.port, "55441"); assert.equal(url.pathname, "/clover_migration_qa"); assert(process.argv.includes("--execute"));
+assert.equal(url.hostname, "127.0.0.1"); assert.equal(url.port, process.env.CLOVER_QA_PARSER_PORT ?? "55441"); assert.equal(url.pathname, "/clover_migration_qa"); assert(process.argv.includes("--execute"));
 async function main() {
   const { prisma: db } = await import("../lib/prisma");
   // First fixture in the fresh-database gate. Refuse a reused database.

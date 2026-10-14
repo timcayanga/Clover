@@ -5,7 +5,7 @@ import {randomUUID} from 'node:crypto';
 import {parseMariBankNativeLedger} from '../lib/maribank-native-ledger';
 import {parsePosbStatement} from '../lib/posb-statement';
 import {shouldPersistPublishedAccountSummaries} from '../lib/import-checkpoint-publication';
-const url=new URL(process.env.DATABASE_URL??'http://invalid');assert.equal(url.hostname,'127.0.0.1');assert.equal(url.port,'55441');assert.equal(url.pathname,'/clover_migration_qa');assert(process.argv.includes('--execute'));
+const url=new URL(process.env.DATABASE_URL??'http://invalid');assert.equal(url.hostname,'127.0.0.1');assert.equal(url.port,process.env.CLOVER_QA_PARSER_PORT??'55441');assert.equal(url.pathname,'/clover_migration_qa');assert(process.argv.includes('--execute'));
 const require=createRequire(import.meta.url);require('next/cache').revalidateTag=()=>{};const tasks:Array<()=>Promise<void>>=[];require('next/server').after=(t:()=>Promise<void>)=>tasks.push(t);const drain=async()=>{while(tasks.length)await Promise.all(tasks.splice(0).map(t=>t()));};let network=0;globalThis.fetch=async()=>{network++;throw new Error('Sixth batch regression prohibits providers');};
 const source=(id:string)=>readFileSync('scripts/fixtures/reviewed-parser-corpus/'+id+'.txt','utf8');
 async function main(){
