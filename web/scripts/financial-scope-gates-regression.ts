@@ -1,3 +1,4 @@
+import { DEFAULT_ADVISER_MODEL } from "../lib/openai-model-policy";
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
@@ -130,7 +131,8 @@ const adviserModelIndex = adviserRouteSource.indexOf('fetch("https://api.openai.
 assert.ok(adviserGuardIndex >= 0, "Adviser route must call the deterministic scope gate.");
 assert.ok(adviserGuardIndex < adviserWorkspaceIndex, "Adviser scope gate must run before workspace financial queries.");
 assert.ok(adviserGuardIndex < adviserModelIndex, "Adviser scope gate must run before any OpenAI request.");
-assert.match(adviserRouteSource, /OPENAI_ADVISER_MODEL\?\.trim\(\) \|\| "gpt-4\.1-mini"/);
+assert.equal(DEFAULT_ADVISER_MODEL, "gpt-6-luna");
+assert.match(adviserRouteSource, /OPENAI_ADVISER_MODEL\?\.trim\(\) \|\| DEFAULT_ADVISER_MODEL/);
 assert.match(adviserRouteSource, /prompt_cache_key: "clover-adviser-v1"/);
 
 const importParserSource = fs.readFileSync(path.join(process.cwd(), "lib/openai-import-parser.ts"), "utf8");
