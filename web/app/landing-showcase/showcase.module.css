@@ -3204,7 +3204,7 @@
  .purchasePaper { left: calc(3% - var(--expand) * 3% + var(--join) * 33%); top: calc(6% + var(--fold) * 78% - var(--join) * 40%); width: calc((170px + var(--expand) * (100% - 170px)) * (1 - var(--merge)) + 30px * var(--merge)); padding: calc(16px - var(--merge) * 12px); }
  .purchaseIdentity { height: calc(44px - var(--merge) * 28px); }
 }
-.journeyBeat[data-story-active="false"] .journeyCopy { visibility: hidden; }
+.journeyBeat[data-story-active="false"] .journeyCopy > a { visibility: hidden; }
 @media (max-width:900px), (max-width:1100px) and (min-height:1000px) {
  .goalCompact .goalTitle img { width: 35px; height: 35px; }
  .goalCompact .goalTitle { gap: 10px; }
