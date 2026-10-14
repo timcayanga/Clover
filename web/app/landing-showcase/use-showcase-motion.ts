@@ -102,8 +102,11 @@ export function useShowcaseMotion(root: RefObject<HTMLDivElement | null>) {
           relativeTop < viewport && relativeTop + height > 0,
         );
         if (scene.dataset.visible !== visible) scene.dataset.visible = visible;
+        // Natural-flow chapters must initialize offscreen: their relative
+        // layout supplies the height that would otherwise remain zero.
         if (
           animated &&
+          pinned &&
           (relativeTop + height < -viewport || relativeTop > viewport * 2)
         )
           return;

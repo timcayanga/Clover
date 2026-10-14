@@ -195,3 +195,7 @@ The shared navigation accepts optional preview destinations; production defaults
 remain intact. All six dropdown entries include descriptive subtext, including
 Security and Pro. The production homepage and `/features/*` presentations remain
 unchanged. Review this family on staging before deciding on a production switch.
+
+Optimized-build rotation checks also cover offscreen chapters: natural-flow
+scenes initialize before entering the viewport, so short landscape rotation
+cannot leave a zero-height story. Rotating back restores the pinned composition.
