@@ -1,9 +1,8 @@
 "use client";
 
-import { useCallback, useEffect, useState, type RefObject } from "react";
+import { useEffect, useState, type RefObject } from "react";
 
 export type MotionMode = "full" | "gentle" | "off";
-const preferenceKey = "clover-showcase-motion";
 const clamp = (value: number) => Math.max(0, Math.min(1, value));
 const ease = (value: number) => {
   const p = clamp(value);
@@ -21,27 +20,15 @@ export function useShowcaseMotion(root: RefObject<HTMLDivElement | null>) {
     change();
     media.addEventListener("change", change);
     try {
-      const saved = localStorage.getItem(preferenceKey);
-      if (saved === "full" || saved === "gentle" || saved === "off") {
-        updateMode(saved);
-      } else if (
+      if (
         (navigator as Navigator & { connection?: { saveData?: boolean } })
           .connection?.saveData
-      ) {
+      )
         updateMode("gentle");
-      }
     } catch {
-      /* Storage is optional, including in private browsers. */
+      /* Connection preferences are optional. */
     }
     return () => media.removeEventListener("change", change);
-  }, []);
-  const setMode = useCallback((value: MotionMode) => {
-    updateMode(value);
-    try {
-      localStorage.setItem(preferenceKey, value);
-    } catch {
-      /* Optional preference. */
-    }
   }, []);
   const animated = mode !== "off" && !reduced;
 
@@ -60,7 +47,6 @@ export function useShowcaseMotion(root: RefObject<HTMLDivElement | null>) {
       acts: HTMLElement[];
     }[] = [];
     let viewport = innerHeight;
-    let maxScroll = 1;
     let frame = 0;
     let needsMeasure = true;
     let disposed = false;
@@ -93,10 +79,6 @@ export function useShowcaseMotion(root: RefObject<HTMLDivElement | null>) {
             acts: [...scene.querySelectorAll<HTMLElement>("[data-story-act]")],
           };
         });
-        maxScroll = Math.max(
-          1,
-          document.documentElement.scrollHeight - viewport,
-        );
         needsMeasure = false;
       }
       const elapsed = Math.min(64, Math.max(1, time - previousTime));
@@ -201,7 +183,6 @@ export function useShowcaseMotion(root: RefObject<HTMLDivElement | null>) {
         write(scene, "--pointer-x", animated && mode === "full" ? pointerX : 0);
         write(scene, "--pointer-y", animated && mode === "full" ? pointerY : 0);
       });
-      write(element, "--page-travel", clamp(y / maxScroll));
       previousY = y;
       previousTime = time;
       if (impulse || settling) frame = requestAnimationFrame(draw);
@@ -265,48 +246,5 @@ export function useShowcaseMotion(root: RefObject<HTMLDivElement | null>) {
     };
   }, [animated, mode, root]);
 
-  const navigateScene = useCallback(
-    (direction: -1 | 0 | 1) => {
-      const scenes = [
-        ...(root.current?.querySelectorAll<HTMLElement>(
-          "[data-scroll-scene]",
-        ) ?? []),
-      ];
-      if (!scenes.length) return;
-      const positions = scenes.flatMap((scene) => {
-        const top = scene.getBoundingClientRect().top + scrollY;
-        const pin = scene.firstElementChild as HTMLElement;
-        const acts = [
-          ...scene.querySelectorAll<HTMLElement>("[data-story-act]"),
-        ];
-        if (!acts.length) return [{ start: top, destination: top }];
-        if (animated && getComputedStyle(pin).position === "sticky") {
-          const distance = Math.max(0, scene.offsetHeight - pin.offsetHeight);
-          return acts.map((_, index) => ({
-            start: top + (distance * index) / acts.length,
-            destination:
-              top + (distance * (index + (index ? 0.16 : 0))) / acts.length,
-          }));
-        }
-        return acts.map((act) => {
-          const start = act.getBoundingClientRect().top + scrollY;
-          return { start, destination: start };
-        });
-      });
-      let current = 0;
-      positions.forEach(({ start }, index) => {
-        if (start <= scrollY + 2) current = index;
-      });
-      const target = Math.max(
-        0,
-        Math.min(positions.length - 1, current + direction),
-      );
-      scrollTo({
-        top: positions[target].destination,
-        behavior: animated ? "smooth" : "instant",
-      });
-    },
-    [animated, root],
-  );
-  return { mode, setMode, reduced, navigateScene };
+  return { mode, reduced };
 }
