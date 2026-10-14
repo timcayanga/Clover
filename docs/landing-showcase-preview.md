@@ -151,3 +151,13 @@ The showcase follows the production narrative: choose how to start, keep control
 The hero uses a fresh 3× capture of the production Accounts UI (production commit `73ea7693b2aef9d8add1528a3c435b920f6ffde9`), cropped to the account lists only. BPI, UnionBank, BDO, Maya, GCash, GoTrade, and ATRAM use fictional balances. Header, overview totals, and navigation are outside the crop. The source capture never contacts production customer APIs. Responsive 804px and 1206px WebP assets retain sharp logos without shipping the raw PNG.
 
 Copy has no opaque panel, blur, or shadow. The receipt descends in the peripheral lane before widening below the copy; report entry happens after the privacy chapter. Desktop copy remains centered in the middle, and phone copy remains centered below the art. Motion Off and short viewports use natural document flow across all six chapters.
+
+### iPhone framing, clearer actions, and regional plan carousel
+
+The preview now reuses production's `JourneyHeader` directly, including the Features dropdown, Help, Contact, Pricing and mobile navigation. The header progress indicator and custom motion/settings UI are removed. Device reduced-motion and Save Data preferences remain automatic; old locally saved showcase motion settings are ignored.
+
+The opening phone leans right and the Transactions phone leans left into the text lane. Other peripheral cards enter tilted inward and normalize with scroll. Both phones have an iPhone-proportioned frame, status area, island and home indicator; screenshots fit without stretching or cropping account content. A fresh account-list capture uses the production 32px brand-mark / 9px corner-radius tokens with matching name spacing. This is an isolated marketing presentation adjustment, not a change to account records or app layout.
+
+Input copy explicitly says “Connect. Upload. Or add it yourself.” Circles and Split Bills each have their own named, icon-bearing illustration. The planning chapter names goals and budgeting and shows both. Narrow/short phones use natural flow with sufficient room for the shared-money cards.
+
+Pricing starts with Pro centered and Yearly selected. Arrow buttons and keyboard left/right cycle Pro, Plus and Free; only the active card is focusable. Currency uses the request's country (PH → PHP, otherwise USD) with no currency filter. iOS and Android icons appear in the opening and footer; Android links to `https://play.google.com/store/apps/details?id=ph.clover.app`, while iOS has a plain availability label. The illustrative-data footer sentence is removed.

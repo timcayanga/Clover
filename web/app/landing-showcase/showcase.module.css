@@ -3055,3 +3055,128 @@
 @media (max-width: 900px), (max-width: 1100px) and (min-height: 1000px) {
   .journey[data-story-static="true"] .journeyRecords .journeyTransaction { display: none; }
 }
+/* Shared production navigation; no progress indicator or motion settings. */
+.productionHeader { position: fixed; inset: 0 0 auto; height: 0; z-index: 100; pointer-events: none; }
+.productionHeader > header, .productionHeader > [data-mobile-navigation] { pointer-events: auto; }
+.productionHeader > header { --teal: #03a8c0; --ink: #24343d; }
+.storeAvailability { display: flex; align-items: center; justify-content: center; gap: 22px; font-size: 12px; color: #45636a; }
+.storeAvailability > span, .storeAvailability > a { display: inline-flex; gap: 7px; align-items: center; color: inherit; text-decoration: none; }
+.storeAvailability svg { width: 19px; height: 19px; }
+.storeAvailability a > svg:last-child { width: 14px; height: 14px; }
+.storeAvailability a:hover { color: #008f9e; }
+.hero .copy { gap: 20px; }
+.phone { aspect-ratio: 71.9 / 150; padding: 0; border-radius: 17% / 8.15%; background: linear-gradient(105deg,#78868d,#f4f8fa 3%,#aec0c5 6%,#edf5f4 50%,#9baeb5 96%,#f8fafc 98%); }
+.phone::before { content: ""; position: absolute; inset: .7% 1.5%; border-radius: inherit; background: #13212a; }
+.phoneDisplay { position: absolute; inset: 1.3% 3.3%; overflow: hidden; border-radius: 15.5% / 7.15%; background: #f6f8f9; }
+.phoneDisplay > img { position: absolute; top: 7.1%; left: 0; width: 100%; height: 89%; object-fit: contain; border-radius: 0; }
+.phoneStatus { position: absolute; inset: 0 0 auto; height: 7.1%; display: flex; align-items: center; justify-content: space-between; padding: 0 8%; color: #142630; font-family: Arial,sans-serif; font-size: clamp(7px,.7vw,10px); }
+.phoneStatus > span:last-child { font-size: 8px; letter-spacing: -1px; }
+.phoneStatus .phoneCamera { position: absolute; left: 50%; top: 20%; width: 25%; height: 57%; transform: translateX(-50%); border-radius: 99px; background: #070c12; }
+.phoneHome { position: absolute; bottom: 1%; left: 34%; width: 32%; height: .55%; border-radius: 99px; background: #142630; }
+.hero .heroPhone { transform: translateY(-50%) perspective(1400px) rotateY(calc((1 - var(--a)) * 12deg)) rotateZ(calc((1 - var(--a)) * 6deg)); }
+.insightPhone { transform: translateY(-50%) perspective(1400px) rotateY(calc((1 - var(--act-progress)) * -12deg)) rotateZ(calc((1 - var(--act-progress)) * -6deg)); }
+.hero .heroReceipt { transform: translateY(calc(var(--a) * -20px)) rotateZ(calc((1 - var(--a)) * -8deg)) rotateY(calc((1 - var(--a)) * -12deg)); }
+.journeyClarity .reportCard { transform: translateY(-50%) perspective(1400px) rotateY(calc((1 - var(--act-progress)) * 10deg)) rotateZ(calc((1 - var(--act-progress)) * 4deg)); }
+.connectionOptions, .controlCard, .sharedCard, .journeyConversation .conversation { transform: translateY(-50%) perspective(1400px) rotateY(calc((1 - var(--act-progress)) * -10deg)) rotateZ(calc((1 - var(--act-progress)) * -4deg)); }
+.privacyPhoto, .sharedPhoto, .journeyLife .lifePhoto { transform: perspective(1400px) rotateY(calc((1 - var(--act-progress)) * 10deg)) rotateZ(calc((1 - var(--act-progress)) * 4deg)); }
+.journeyLife .goalMoment { transform: perspective(1400px) rotateY(calc((1 - var(--act-progress)) * -10deg)) rotateZ(calc((1 - var(--act-progress)) * -4deg)); }
+.connectionGrid img { width: 42px; height: 42px; border-radius: 12px; object-fit: contain; }
+.sharedMember img { border-radius: 9px; object-fit: contain; }
+.journeyShared .sharedPhoto { top: 40%; bottom: 10%; width: 27%; }
+.circleCard { position: absolute; left: 0; top: 12%; width: 27%; padding: 24px; border: 1px solid #cce5df; border-bottom-width: 7px; border-radius: 28px; background: linear-gradient(140deg,#fff,#e9f9f2); box-shadow: 0 6px 0 #cce5df,0 30px 55px -26px #13605b50; transform: perspective(1400px) rotateY(calc((1 - var(--act-progress)) * 10deg)) rotateZ(calc((1 - var(--act-progress)) * 4deg)); z-index: 2; }
+.circleCard > strong { display: block; margin: 16px 0; font-size: 15px; }
+.circlePeople { display: flex; margin-top: 18px; padding-left: 6px; }
+.circlePeople span { display: grid; place-items: center; width: 36px; height: 36px; margin-left: -6px; border: 3px solid #fff; border-radius: 50%; background: #b5ebd9; color: #21594e; font-size: 12px; }
+.circlePeople span:nth-child(2) { background: #cde6f3; }
+.circlePeople span:nth-child(3) { background: #f7dfc1; }
+.circleCard > div:not([class]) { display: flex; justify-content: space-between; gap: 10px; font-size: 11px; }
+.circleCard > small, .budgetMoment > small { display: block; font-size: 10px; color: #5f7879; }
+.circleTrack { height: 8px; background: #dceee7; border-radius: 99px; overflow: hidden; margin: 12px 0; }
+.circleTrack i { display: block; height: 100%; width: 75%; border-radius: inherit; background: linear-gradient(90deg,#08aec0,#83dfb7); }
+.budgetMoment { position: absolute; left: 0; bottom: 12%; width: 28%; padding: 22px; border: 1px solid #cce5df; border-bottom-width: 7px; border-radius: 26px; background: #fff; box-shadow: 0 6px 0 #cce5df,0 30px 55px -26px #13605b50; transform: perspective(1400px) rotateY(calc((1 - var(--act-progress)) * 10deg)) rotateZ(calc((1 - var(--act-progress)) * 4deg)); }
+.budgetMoment .miniHeader { font-size: 12px; }
+.budgetMoment > div:nth-child(2) { display: flex; justify-content: space-between; gap: 10px; margin-top: 20px; font-size: 12px; }
+.budgetMoment small { font-size: 10px; font-weight: 400; }
+.journeyLife .lifePhoto { bottom: 37%; }
+.planCarousel { position: relative; width: min(1080px,100%); margin: 0 auto; outline-offset: 7px; }
+.planCarousel .planCards { display: block; position: relative; height: 440px; perspective: 1400px; overflow: clip; }
+.planCarousel .planCard { position: absolute; top: 12px; left: 50%; width: min(430px,70%); min-height: 400px; margin: 0; padding: 32px; transform: translateX(calc(-50% + var(--position) * 98%)) translateZ(calc(var(--distance) * -160px)) rotateY(calc(var(--position) * -14deg)) scale(calc(1 - var(--distance) * .1)); opacity: calc(1 - var(--distance) * .55); z-index: calc(3 - var(--distance)); transition: transform .6s cubic-bezier(.2,.7,.2,1),opacity .5s; }
+.planCarousel .planCard[data-plan-active="true"] { box-shadow: 0 30px 60px -30px #155b6666; }
+.planCarousel .price { min-height: 62px; }
+.carouselControls { display: flex; justify-content: center; align-items: center; gap: 28px; margin-top: 18px; }
+.carouselControls > button { display: grid; place-items: center; width: 44px; height: 44px; border: 1px solid #c6dfdf; border-radius: 50%; background: #fff; color: #048f9f; cursor: pointer; }
+.carouselControls svg { width: 20px; height: 20px; }
+.carouselControls > span { min-width: 95px; text-align: center; font-weight: 600; }
+.carouselControls small { display: block; margin-top: 4px; font-size: 11px; font-weight: 400; color: #5f7879; }
+.footer .storeAvailability { margin-top: 8px; }
+@media (max-width: 900px), (max-width: 1100px) and (min-height: 1000px) {
+  .hero .heroStage { height: calc(100% - 425px); }
+  .hero .copy { gap: 14px; }
+  .storeAvailability { font-size: 11px; gap: 20px; }
+  .storeAvailability svg { width: 17px; height: 17px; }
+  .connectionOptions { transform: perspective(1400px) rotateY(calc((1 - var(--act-progress)) * -8deg)) rotateZ(calc((1 - var(--act-progress)) * -3deg)); }
+  .connectionGrid img { width: 32px; height: 32px; border-radius: 9px; }
+  .journeyClarity .reportCard { transform: translateY(-50%) rotateX(calc((1 - var(--act-progress)) * 5deg)); }
+  .journeyShared .sharedPhoto { left: 0; top: 0; bottom: 8%; width: 70%; }
+  .journeyShared .sharedCard { width: 64%; top: 66%; padding: 15px; }
+  .circleCard { left: auto; right: 0; top: 0; width: 64%; padding: 16px; border-radius: 22px; }
+  .circleCard .miniHeader { font-size: 12px; }
+  .circleCard > strong { margin: 10px 0; font-size: 12px; }
+  .circlePeople { margin-top: 12px; }
+  .circlePeople span { width: 28px; height: 28px; font-size: 10px; }
+  .circleCard > div:not([class]), .circleCard > small { font-size: 9px; }
+  .circleTrack { margin: 9px 0; }
+  .budgetMoment { left: 0; top: 0; bottom: auto; width: 64%; padding: 16px; z-index: 2; }
+  .journeyLife .lifePhoto { width: 70%; left: 0; bottom: 15%; }
+  .journeyLife .goalMoment { left: auto; right: 0; width: 70%; bottom: 0; }
+  .planCarousel .planCards { height: 430px; }
+  .planCarousel .planCard { width: 80%; padding: 26px 22px; min-height: 395px; }
+}
+@media (prefers-reduced-motion: reduce) { .planCarousel .planCard { transition: none; } }
+.hero .heroPhone { left: 4.5%; }
+@media (max-width: 900px), (max-width: 1100px) and (min-height: 1000px) { .hero .heroPhone { left: 30%; } }
+.planCarousel .planCard[data-tier="Pro"] .action { background: #fff; color: #126571; }
+@media (max-width: 900px), (max-width: 1100px) and (min-height: 1000px) { .hero .heroPhone { top: 54%; } }
+.purchasePaper { transform: rotateZ(calc(8deg - var(--fold) * 8deg)) rotateY(calc((1 - var(--fold)) * 10deg + var(--join) * -12deg)) rotateX(calc(sin(var(--fold) * 180deg) * 12deg)) translateZ(calc(var(--fold) * 80px - var(--join) * 150px)) scale(calc(1 - var(--join) * .62)); }
+.hero .heroMascot { transform: translateY(calc(var(--a) * -20px)) rotateZ(calc((1 - var(--a)) * -6deg)); }
+.journeyMascot { transform: translateY(calc((1 - var(--act-progress)) * 35px)) rotateZ(calc((1 - var(--act-progress)) * 6deg)); }
+.journeyClarity .reportMascot { transform: translateY(calc(var(--act-progress) * -24px)) rotateZ(calc((1 - var(--act-progress)) * -6deg)); }
+.circleCard .miniHeader strong, .sharedCard .miniHeader strong { display: flex; align-items: center; gap: 7px; }
+.circleCard .miniHeader strong img, .sharedCard .miniHeader strong img { flex-shrink: 0; object-fit: contain; }
+.circleCard .miniHeader > span, .sharedCard .miniHeader > span { padding: 5px 8px; border-radius: 8px; background: #d9f3e8; color: #087c83; font-weight: 600; }
+.sharedCard .miniHeader > span { background: #eee6f8; color: #795399; }
+@media (max-width: 900px), (max-width: 1100px) and (min-height: 1000px) {
+ .circleCard .miniHeader strong img, .sharedCard .miniHeader strong img { width: 22px; height: 22px; }
+ .circleCard .miniHeader, .sharedCard .miniHeader { gap: 6px; flex-wrap: wrap; }
+ .circleCard .miniHeader > span, .sharedCard .miniHeader > span { padding: 4px 6px; font-size: 10px; }
+ .journeyMascot { transform: translateY(calc((1 - var(--act-progress)) * 25px)) rotateZ(calc((1 - var(--act-progress)) * -5deg)); }
+}
+.splitPeople { display: none; }
+@media (max-width: 900px), (max-width: 1100px) and (min-height: 1000px) {
+  .hero .heroPhone { top: 52%; }
+  .journeyShared .sharedCard { top: auto; bottom: 0; width: 72%; padding: 12px 15px; transform: perspective(1400px) rotateY(calc((1 - var(--act-progress)) * -8deg)) rotateZ(calc((1 - var(--act-progress)) * -3deg)); }
+  .journeyShared .circleCard { width: 72%; }
+  .sharedCard .miniHeader { font-size: 10px; }
+  .sharedCard .miniHeader strong img { width: 20px; height: 20px; }
+  .sharedCard .sharedTotal { font-size: 23px; margin: 12px 0 4px; }
+  .splitPeople { display: block; font-size: 10px; color: #607878; margin-bottom: 10px; }
+  .sharedCard .sharedMember { padding: 10px 0; }
+  .sharedCard .sharedMember:last-child { display: none; }
+}
+/* Narrow and short phones use generous natural flow instead of overlapping pinned cards. */
+@media (max-width: 360px), (max-width: 900px) and (max-height: 819px) {
+  .site .hero { height: auto; }
+  .hero > .pin { position: relative; height: max(850px,100svh); }
+  .site .journey { height: auto; }
+  .journey > .pin { position: relative; height: auto; min-height: 0; overflow: visible; }
+}
+@media (max-width: 900px), (max-width: 1100px) and (min-height: 1000px) {
+  .journey[data-story-static="true"] .journeyShared { height: 550px; flex-basis: 550px; }
+}
+@media (max-width: 900px), (max-width: 1100px) and (min-height: 1000px) {
+  .journey[data-story-static="true"] .journeyLife { height: 440px; flex-basis: 440px; }
+}
+.phoneIndicators { display: flex; align-items: center; gap: 3px; width: 23%; }
+.phoneIndicators svg { width: 28%; height: auto; }
+.phoneIndicators i { position: relative; width: 38%; height: 6px; padding: 1px; border: 1px solid #52616a; border-radius: 2px; background: linear-gradient(90deg,#142630 0 85%,transparent 85%); background-clip: content-box; }
+.phoneIndicators i::after { content: ""; position: absolute; top: 1px; right: -3px; width: 1px; height: 3px; background: #52616a; }

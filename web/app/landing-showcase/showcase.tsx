@@ -1,14 +1,8 @@
 "use client";
 
-import {
-  useEffect,
-  useRef,
-  useState,
-  type CSSProperties,
-  type ReactNode,
-} from "react";
+import { useRef, useState, type CSSProperties, type ReactNode } from "react";
 import Link from "next/link";
-import { useShowcaseMotion, type MotionMode } from "./use-showcase-motion";
+import { useShowcaseMotion } from "./use-showcase-motion";
 import { SwitchOfferNotice } from "@/components/switch-campaign";
 import {
   plannedPremiumPrices,
@@ -16,6 +10,7 @@ import {
   type PricingMarket,
 } from "@/lib/public-plan-comparison";
 import s from "./showcase.module.css";
+import { JourneyHeader } from "@/app/landing-preview/landing-journey";
 
 function Icon({
   kind = "arrow",
@@ -167,22 +162,47 @@ function AppScreen({
 }) {
   return (
     <div className={s.phone}>
-      <div className={s.phoneCamera} aria-hidden="true" />
-      <img
-        src={`/assets/landing-showcase/${page === "accounts" ? "accounts-sections-production-20261014" : "transactions-production-hd-20261013"}-2x.webp`}
-        srcSet={`/assets/landing-showcase/${page === "accounts" ? "accounts-sections-production-20261014" : "transactions-production-hd-20261013"}-2x.webp 804w, /assets/landing-showcase/${page === "accounts" ? "accounts-sections-production-20261014" : "transactions-production-hd-20261013"}.webp 1206w`}
-        sizes="(max-width: 900px) 285px, (max-width: 1100px) and (min-height: 1000px) 285px, 310px"
-        alt={
-          page === "accounts"
-            ? "Clover account lists with BPI, UnionBank, BDO, Maya, GCash, GoTrade and ATRAM, using fictional balances."
-            : "Clover Transactions showing categorized purchases, dates, amounts and bank logos with sample data."
-        }
-        width={402}
-        height={820}
-        loading={eager ? "eager" : "lazy"}
-        fetchPriority={eager ? "high" : "auto"}
-        decoding="async"
-      />
+      <div className={s.phoneDisplay}>
+        <div className={s.phoneStatus} aria-hidden="true">
+          <b>9:41</b>
+          <span className={s.phoneCamera} />
+          <span className={s.phoneIndicators}>
+            <svg viewBox="0 0 18 12">
+              <path
+                d="M1 11V8h2v3M5 11V6h2v5M9 11V3h2v8M13 11V1h2v10"
+                stroke="currentColor"
+                strokeWidth="1.5"
+              />
+            </svg>
+            <svg viewBox="0 0 16 12">
+              <path
+                d="M1 3q7-5 14 0M4 6q4-3 8 0M7 9q1-1 2 0"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+              />
+            </svg>
+            <i />
+          </span>
+        </div>
+        <img
+          src={`/assets/landing-showcase/${page === "accounts" ? "accounts-iphone-squircle-20261014" : "transactions-production-hd-20261013"}-2x.webp`}
+          srcSet={`/assets/landing-showcase/${page === "accounts" ? "accounts-iphone-squircle-20261014" : "transactions-production-hd-20261013"}-2x.webp 804w, /assets/landing-showcase/${page === "accounts" ? "accounts-iphone-squircle-20261014" : "transactions-production-hd-20261013"}.webp 1206w`}
+          sizes="(max-width: 900px) 285px, (max-width: 1100px) and (min-height: 1000px) 285px, 310px"
+          alt={
+            page === "accounts"
+              ? "Clover account lists with BPI, UnionBank, BDO, Maya, GCash, GoTrade and ATRAM, using fictional balances."
+              : "Clover Transactions showing categorized purchases, dates, amounts and bank logos with sample data."
+          }
+          width={402}
+          height={page === "accounts" ? 872 : 820}
+          loading={eager ? "eager" : "lazy"}
+          fetchPriority={eager ? "high" : "auto"}
+          decoding="async"
+        />
+        <span className={s.phoneHome} aria-hidden="true" />
+      </div>
     </div>
   );
 }
@@ -443,7 +463,7 @@ function GoalMoment() {
       <div className={s.goalTitle}>
         <Mascot pose="savings" size={70} />
         <div>
-          <span>A little peace of mind</span>
+          <span>Savings goal</span>
           <strong>Emergency fund</strong>
         </div>
       </div>
@@ -462,21 +482,54 @@ function GoalMoment() {
   );
 }
 
+function StoreAvailability() {
+  return (
+    <div
+      className={s.storeAvailability}
+      aria-label="Available on iOS and Android"
+    >
+      <span>
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path
+            fill="currentColor"
+            d="M16.7 12.7c0-2 1.6-3 1.7-3.1-1-1.4-2.5-1.6-3-1.6-1.3-.2-2.6.8-3.3.8-.7 0-1.8-.8-3-.8-1.5 0-2.8.8-3.6 2.1-1.5 2.6-.4 6.5 1.1 8.6.7 1 1.5 2.1 2.6 2.1 1.1 0 1.5-.7 2.9-.7s1.8.7 3 .7 1.9-1 2.6-2c.8-1.2 1.2-2.4 1.2-2.5-.1 0-2.2-.8-2.2-3.6ZM14.5 6.6c.6-.8 1.1-1.8 1-2.9-1 .1-2.1.7-2.8 1.4-.6.7-1.2 1.7-1.1 2.8 1.1.1 2.2-.5 2.9-1.3Z"
+          />
+        </svg>
+        iOS
+      </span>
+      <a
+        href="https://play.google.com/store/apps/details?id=ph.clover.app"
+        target="_blank"
+        rel="noopener noreferrer"
+      >
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path
+            fill="currentColor"
+            d="m17.5 7 1.4-2.4-.9-.5-1.4 2.4a9.9 9.9 0 0 0-9.2 0L6 4.1l-.9.5L6.5 7A8.4 8.4 0 0 0 3 14h18a8.4 8.4 0 0 0-3.5-7ZM7.5 11a1 1 0 1 1 0-2 1 1 0 0 1 0 2Zm9 0a1 1 0 1 1 0-2 1 1 0 0 1 0 2ZM4 15h16v4a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2Z"
+          />
+        </svg>
+        Android
+        <Icon />
+      </a>
+    </div>
+  );
+}
 function Plans({ initialMarket }: { initialMarket: PricingMarket }) {
-  const [annual, setAnnual] = useState(false);
-  const [market, setMarket] = useState(initialMarket);
-  const prices = [null, plannedProPrices(market), plannedPremiumPrices(market)];
+  const [annual, setAnnual] = useState(true);
+  const [active, setActive] = useState(0);
   const plans = [
     {
-      name: "Free",
+      name: "Pro",
+      price: plannedPremiumPrices(initialMarket),
       features: [
-        "Statement & receipt uploads",
-        "10 financial accounts",
-        "Essential reports & Ask Clover",
+        "40 financial accounts",
+        "5 linked bank accounts",
+        "Higher limits for Ask Clover",
       ],
     },
     {
       name: "Plus",
+      price: plannedProPrices(initialMarket),
       features: [
         "20 financial accounts",
         "2 linked bank accounts",
@@ -484,25 +537,21 @@ function Plans({ initialMarket }: { initialMarket: PricingMarket }) {
       ],
     },
     {
-      name: "Pro",
+      name: "Free",
+      price: null,
       features: [
-        "40 financial accounts",
-        "5 linked bank accounts",
-        "Higher limits for Ask Clover",
+        "Statement & receipt uploads",
+        "10 financial accounts",
+        "Essential reports & Ask Clover",
       ],
     },
   ];
+  const move = (direction: number) =>
+    setActive((value) => (value + direction + plans.length) % plans.length);
   return (
     <div className={s.pricing}>
       <div className={s.priceControls}>
         <div role="group" aria-label="Billing period">
-          <button
-            type="button"
-            aria-pressed={!annual}
-            onClick={() => setAnnual(false)}
-          >
-            Monthly
-          </button>
           <button
             type="button"
             aria-pressed={annual}
@@ -510,44 +559,97 @@ function Plans({ initialMarket }: { initialMarket: PricingMarket }) {
           >
             Yearly
           </button>
-        </div>
-        <select
-          aria-label="Pricing currency"
-          value={market}
-          onChange={(e) => setMarket(e.target.value as PricingMarket)}
-        >
-          <option value="ph">PHP</option>
-          <option value="global">USD</option>
-        </select>
-      </div>
-      <div className={s.planCards}>
-        {plans.map((plan, i) => (
-          <article
-            key={plan.name}
-            className={s.planCard}
-            data-tier={plan.name}
-            style={{ "--card": i } as CSSProperties}
+          <button
+            type="button"
+            aria-pressed={!annual}
+            onClick={() => setAnnual(false)}
           >
-            <h3>{plan.name}</h3>
-            <div className={s.price} aria-live="polite">
-              <strong>
-                {i === 0 ? "Free" : prices[i]![annual ? "annual" : "monthly"]}
-              </strong>
-              {i > 0 && <span>/ {annual ? "year" : "month"}</span>}
-            </div>
-            <ul>
-              {plan.features.map((f) => (
-                <li key={f}>
-                  <Icon kind="check" />
-                  {f}
-                </li>
-              ))}
-            </ul>
-            <Action href={i === 0 ? "/sign-up" : "/pricing"}>
-              {i === 0 ? "Start free" : `Explore ${plan.name}`}
-            </Action>
-          </article>
-        ))}
+            Monthly
+          </button>
+        </div>
+      </div>
+      <div
+        className={s.planCarousel}
+        role="region"
+        aria-roledescription="carousel"
+        aria-label="Clover plans"
+        tabIndex={0}
+        onKeyDown={(event) => {
+          if (event.target !== event.currentTarget) return;
+          if (event.key === "ArrowLeft") {
+            event.preventDefault();
+            move(-1);
+          }
+          if (event.key === "ArrowRight") {
+            event.preventDefault();
+            move(1);
+          }
+        }}
+      >
+        <div className={s.planCards}>
+          {plans.map((plan, i) => {
+            const offset = (i - active + plans.length) % plans.length;
+            const position = offset === 2 ? -1 : offset;
+            return (
+              <article
+                key={plan.name}
+                className={s.planCard}
+                data-tier={plan.name}
+                data-plan-active={i === active}
+                aria-hidden={i !== active}
+                inert={i !== active}
+                style={
+                  {
+                    "--card": i,
+                    "--position": position,
+                    "--distance": Math.abs(position),
+                  } as CSSProperties
+                }
+              >
+                <h3>{plan.name}</h3>
+                <div className={s.price}>
+                  <strong>
+                    {plan.price?.[annual ? "annual" : "monthly"] ?? "Free"}
+                  </strong>
+                  {plan.price ? (
+                    <span>/ {annual ? "year" : "month"}</span>
+                  ) : (
+                    <span>No subscription needed</span>
+                  )}
+                </div>
+                <ul>
+                  {plan.features.map((feature) => (
+                    <li key={feature}>
+                      <Icon kind="check" />
+                      {feature}
+                    </li>
+                  ))}
+                </ul>
+                <Action href={plan.name === "Free" ? "/sign-up" : "/pricing"}>
+                  {plan.name === "Free" ? "Start free" : `Explore ${plan.name}`}
+                </Action>
+              </article>
+            );
+          })}
+        </div>
+        <div className={s.carouselControls}>
+          <button
+            type="button"
+            aria-label="Previous plan"
+            onClick={() => move(-1)}
+          >
+            <Icon kind="back" />
+          </button>
+          <span role="status" aria-live="polite">
+            {plans[active].name}{" "}
+            <small>
+              {active + 1} / {plans.length}
+            </small>
+          </span>
+          <button type="button" aria-label="Next plan" onClick={() => move(1)}>
+            <Icon />
+          </button>
+        </div>
       </div>
       <Link className={s.compare} href="/pricing">
         Compare all features <Icon />
@@ -559,29 +661,7 @@ function Plans({ initialMarket }: { initialMarket: PricingMarket }) {
 
 export function Showcase({ initialMarket }: { initialMarket: PricingMarket }) {
   const root = useRef<HTMLDivElement>(null);
-  const { mode, setMode, reduced, navigateScene } = useShowcaseMotion(root);
-  const [controlsOpen, setControlsOpen] = useState(false);
-  const controls = useRef<HTMLDivElement>(null);
-  const motionTrigger = useRef<HTMLButtonElement>(null);
-  useEffect(() => {
-    if (!controlsOpen) return;
-    const closeOutside = (event: PointerEvent) => {
-      if (!controls.current?.contains(event.target as Node))
-        setControlsOpen(false);
-    };
-    const escape = (event: KeyboardEvent) => {
-      if (event.key === "Escape") {
-        setControlsOpen(false);
-        motionTrigger.current?.focus();
-      }
-    };
-    document.addEventListener("pointerdown", closeOutside);
-    document.addEventListener("keydown", escape);
-    return () => {
-      document.removeEventListener("pointerdown", closeOutside);
-      document.removeEventListener("keydown", escape);
-    };
-  }, [controlsOpen]);
+  const { mode, reduced } = useShowcaseMotion(root);
   return (
     <div
       ref={root}
@@ -592,91 +672,9 @@ export function Showcase({ initialMarket }: { initialMarket: PricingMarket }) {
       <a href="#showcase-main" className={s.skip}>
         Skip to content
       </a>
-      <header className={s.nav}>
-        <a href="#together" aria-label="Clover, back to top">
-          <Brand />
-        </a>
-        <nav aria-label="Main navigation">
-          <a href="#one-picture">Discover Clover</a>
-          <a href="#plans">Plans</a>
-        </nav>
-        <div className={s.navActions}>
-          <div className={s.motionControls} ref={controls}>
-            <button
-              ref={motionTrigger}
-              className={s.motionButton}
-              type="button"
-              onClick={() => setControlsOpen((open) => !open)}
-              aria-label="Motion controls"
-              aria-expanded={controlsOpen}
-              aria-controls="showcase-motion-controls"
-            >
-              <Icon kind="motion" />
-            </button>
-            {controlsOpen && (
-              <div className={s.motionPanel} id="showcase-motion-controls">
-                <strong>Motion</strong>
-                <div
-                  className={s.motionModes}
-                  role="group"
-                  aria-label="Animation amount"
-                >
-                  {(["full", "gentle", "off"] as MotionMode[]).map((value) => (
-                    <button
-                      type="button"
-                      key={value}
-                      aria-pressed={(reduced ? "off" : mode) === value}
-                      disabled={reduced && value !== "off"}
-                      onClick={() => setMode(value)}
-                    >
-                      {value === "full"
-                        ? "Full"
-                        : value === "gentle"
-                          ? "Gentle"
-                          : "Off"}
-                    </button>
-                  ))}
-                </div>
-                {reduced && (
-                  <p>Following your device’s reduced motion setting.</p>
-                )}
-                <div
-                  className={s.sceneControls}
-                  role="group"
-                  aria-label="Explore scenes"
-                >
-                  <button
-                    type="button"
-                    aria-label="Previous scene"
-                    onClick={() => navigateScene(-1)}
-                  >
-                    <Icon kind="back" />
-                  </button>
-                  <button
-                    type="button"
-                    aria-label="Restart current scene"
-                    onClick={() => navigateScene(0)}
-                  >
-                    <Icon kind="replay" />
-                  </button>
-                  <button
-                    type="button"
-                    aria-label="Next scene"
-                    onClick={() => navigateScene(1)}
-                  >
-                    <Icon />
-                  </button>
-                </div>
-              </div>
-            )}
-          </div>
-          <Link className={s.login} prefetch={false} href="/sign-in">
-            Log in
-          </Link>
-          <Action />
-        </div>
-        <div className={s.pageProgress} />
-      </header>
+      <div className={s.productionHeader}>
+        <JourneyHeader />
+      </div>
       <main id="showcase-main">
         <ScrollScene id="together" className={s.hero}>
           <div className={s.storyGrid}>
@@ -690,6 +688,7 @@ export function Showcase({ initialMarket }: { initialMarket: PricingMarket }) {
                 <em>Organized in minutes.</em>
               </Heading>
               <Action />
+              <StoreAvailability />
             </div>
             <div className={`${s.stage} ${s.heroStage}`}>
               <div className={s.heroPhone}>
@@ -721,9 +720,9 @@ export function Showcase({ initialMarket }: { initialMarket: PricingMarket }) {
             <article className={s.journeyBeat} data-story-act>
               <div className={s.journeyCopy}>
                 <Heading text="Connect supported banks. Upload statements, receipts, screenshots, or spreadsheets. Choose what works for you.">
-                  Start with
+                  Connect. Upload.
                   <br />
-                  <em>what suits you.</em>
+                  <em>Or add it yourself.</em>
                 </Heading>
               </div>
               <div
@@ -836,12 +835,51 @@ export function Showcase({ initialMarket }: { initialMarket: PricingMarket }) {
                     alt="Friends making plans together over a laptop."
                   />
                 </div>
+                <div className={s.circleCard}>
+                  <div className={s.miniHeader}>
+                    <strong>
+                      <img
+                        src="/assets/3d icons/navigation/figma-v7/circles.webp"
+                        width="28"
+                        height="28"
+                        alt=""
+                        loading="lazy"
+                      />
+                      Our home
+                    </strong>
+                    <span>Circles</span>
+                  </div>
+                  <div className={s.circlePeople}>
+                    <span>A</span>
+                    <span>J</span>
+                    <span>S</span>
+                  </div>
+                  <strong>One home. One shared view.</strong>
+                  <div>
+                    <span>Groceries budget</span>
+                    <b>₱4,500 / ₱6,000</b>
+                  </div>
+                  <div className={s.circleTrack}>
+                    <i />
+                  </div>
+                  <small>Household expenses · Shared budgets · Goals</small>
+                </div>
                 <div className={s.sharedCard}>
                   <div className={s.miniHeader}>
-                    <strong>Weekend with friends</strong>
+                    <strong>
+                      <img
+                        src="/assets/3d icons/navigation/figma-v7/splitBills.webp"
+                        width="28"
+                        height="28"
+                        alt=""
+                        loading="lazy"
+                      />
+                      Weekend with friends
+                    </strong>
                     <span>Split Bills</span>
                   </div>
                   <strong className={s.sharedTotal}>₱1,200.00</strong>
+                  <small className={s.splitPeople}>3 people · ₱400 each</small>
                   <div className={s.sharedMember}>
                     <span>A</span>
                     <div>
@@ -880,10 +918,10 @@ export function Showcase({ initialMarket }: { initialMarket: PricingMarket }) {
             </article>
             <article className={s.journeyBeat} data-story-act>
               <div className={s.journeyCopy}>
-                <Heading text="A little more peace of mind. A plan you can grow. Less time untangling your money, and more time living your life.">
-                  Feel clearer about your money.
+                <Heading text="Give each goal a plan. Set budgets for everyday spending, follow your savings progress, and make room for what matters.">
+                  Set your goals.
                   <br />
-                  <em>More confident about what’s next.</em>
+                  <em>Make a budget to get there.</em>
                 </Heading>
               </div>
               <div
@@ -898,6 +936,22 @@ export function Showcase({ initialMarket }: { initialMarket: PricingMarket }) {
                   />
                 </div>
                 <GoalMoment />
+                <div className={s.budgetMoment}>
+                  <div className={s.miniHeader}>
+                    <strong>Everyday spending</strong>
+                    <span>Budgeting</span>
+                  </div>
+                  <div>
+                    <span>Food & dining</span>
+                    <strong>
+                      ₱6,000 <small>/ ₱8,000</small>
+                    </strong>
+                  </div>
+                  <div className={s.circleTrack}>
+                    <i />
+                  </div>
+                  <small>₱2,000 left in your budget</small>
+                </div>
               </div>
             </article>
           </div>
@@ -922,10 +976,8 @@ export function Showcase({ initialMarket }: { initialMarket: PricingMarket }) {
           <Link href="/privacy-policy">Privacy</Link>
           <Link href="/terms-of-service">Terms</Link>
         </div>
-        <small>
-          Product screens use fictional data. Other visuals are illustrative. ©{" "}
-          {new Date().getFullYear()} Clover.
-        </small>
+        <StoreAvailability />
+        <small>© {new Date().getFullYear()} Clover.</small>
       </footer>
     </div>
   );

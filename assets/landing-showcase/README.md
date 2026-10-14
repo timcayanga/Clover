@@ -63,3 +63,5 @@ illustrative purchase props. All logos and interface icons were checked before
 capture.
 
 `accounts-sections-production-20261014{,-2x}.webp`: actual production Accounts UI at commit `73ea7693`, captured at 3× in an isolated local harness with fictional BPI, UnionBank, BDO, Maya, GCash, GoTrade, and ATRAM records. Cropped from y=325 CSS px through Investments, excluding summary cards and app chrome. 1206×2616 and 804×1744 WebP. No customer information or credentials are included.
+
+`accounts-iphone-squircle-20261014{,-2x}.webp`: refreshed version of the fictional production Accounts capture above. The isolated marketing capture applies the existing production 32px / 9px squircle logo token consistently and aligns names at 50px. The app source, balances, institutions and records are unchanged. 1206×2616 and 804×1744, encoded at quality 92. The preview preserves each screenshot's aspect ratio inside an iPhone-proportioned display.
