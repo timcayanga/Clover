@@ -245,6 +245,16 @@ export function resolveMerchantIdentity(input: MerchantIdentityInput, entries = 
   if (identityConflict) { selectable = false; reason = "independent_identity_evidence_conflicts"; }
   if (parentMatchesOnly(viable)) { selectable = false; reason = "parent_company_does_not_identify_trading_brand"; }
   if (!selectable && !identityConflict && top?.evidence.includes("identifier_namespace_incomplete") && top.score < 84) reason = "identifier_context_required";
+  // A common verb phrase is not enough to identify the Grab platform.
+  const grabPhrase = /^grab (?:lunch|dinner|breakfast|coffee|a bite|some food)[.!?]*$/i.test((input.merchantRaw ?? "").trim());
+  const explicitGrab = observations.some(o => o.field === "tradeName" && identityText(o.value) === "grab" && o.confidence >= 84)
+    || !!input.merchantNameConfirmed && clean === "grab";
+  const distinctiveGrab = top?.evidence.some(e => e === "exact_merchant_domain" || e.startsWith("verified_"));
+  if (selectable && top?.e.brandId === "grab" && grabPhrase && !explicitGrab && !distinctiveGrab) {
+    selectable = false;
+    reason = "ambiguous_merchant_phrase";
+  }
+
   const representatives = [...perBrand.values()];
   const list = [...representatives, ...viable.filter(c => !representatives.includes(c)), ...ranked.filter(c => c.conflicts.length)].slice(0,8);
   const status = selectable ? "suggested" : ranked.length ? "needs_review" : "unmatched";

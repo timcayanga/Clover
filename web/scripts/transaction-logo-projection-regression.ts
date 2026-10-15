@@ -17,4 +17,8 @@ assert.ok(!("normalizedPayload" in projected.transactions[0]));
 assert.ok(!("rawPayload" in projected.transactions[0]));
 const ambiguous = { legalName: "First Financial Bank", merchantCountry: "US", industry: "financial-services" };
 assert.equal(transactionMerchantLogo(ambiguous).merchantLogoUrl, null);
+for (const merchantRaw of ["grab lunch", "Apple juice", "Target savings", "Shellfish lunch", "Transfer to John"]) {
+  assert.equal(transactionMerchantLogo({ merchantRaw, currency: "PHP", categoryName: "Food & Dining" }).merchantLogoUrl, null, merchantRaw);
+}
+assert.ok(transactionMerchantLogo({ merchantRaw: "GRAB *GRABFOOD", currency: "PHP" }).merchantLogoUrl, "An explicit Grab descriptor keeps its logo");
 console.log("Transaction logo projection passed: confident match, stale edits, ambiguous merchant, provider safety, compact native response.");

@@ -223,7 +223,7 @@ export function collectMerchantIdentityContext(input: MerchantIdentityInput) {
 export const merchantIdentityInputKey = (input: MerchantIdentityInput) => {
   const date = identityDay(input.date) ?? "";
   const context = collectMerchantIdentityContext(input);
-  return JSON.stringify({ policyVersion:31, text: [input.merchantRaw ?? "", input.merchantClean ?? "", input.description ?? "", input.currency ?? "", input.categoryName ?? "", date].map(identityLegalText),
+  return JSON.stringify({ policyVersion:32, text: [input.merchantRaw ?? "", input.merchantClean ?? "", input.description ?? "", input.currency ?? "", input.categoryName ?? "", date].map(identityLegalText),
     descriptorEvidence:context.rawNameDescriptors,
     originalDescriptorEvidence:context.rawOriginalDescriptors,
     nameEvidence:context.rawNames.map((name,index)=>[identityLegalText(name),context.rawNameConfidences[index],context.rawNameRoles[index]]),
