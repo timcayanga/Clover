@@ -16756,7 +16756,7 @@ const parseGcashCompleteNativeLedger = (text: string, metadata: DetectedStatemen
     row.accountNumber = account;
     row.accountName = `GCash ${account.slice(-4)}`;
     row.currency = "PHP";
-    row.rawPayload = { ...raw, reconstructedDescription, line: native.parts.join("\n"), sourceLineParts: native.parts, sourceTimestamp, accountType: "wallet", completeNativeLedger: true, balanceReconciled: true };
+    row.rawPayload = { ...raw, reconstructedDescription, nativeDescription: native.description, line: native.parts.join("\n"), sourceLineParts: native.parts, sourceTimestamp, accountType: "wallet", completeNativeLedger: true, balanceReconciled: true };
     balance = next;
     references.add(reference);
   }

@@ -41,6 +41,7 @@ async function main() {
     assert(transactions.every(row => row.accountId === account.id && row.currency === 'PHP'));
     assert.deepEqual(transactions.map(row => row.date.toISOString()).sort(), [7, 8, 9, 10, 11, 12].map(hour => `2026-08-${hour === 7 ? '09' : '10'}T${String((hour - 8 + 24) % 24).padStart(2, '0')}:02:00.000Z`).sort());
     assert(parsed.every(row => (row.rawPayload as Record<string, unknown>)?.completeNativeLedger === true));
+    assert.deepEqual(parsed.map(row => row.date.toISOString()).sort(), transactions.map(row => row.date.toISOString()).sort(), 'Parsed source clocks must match normalized transaction clocks');
     const checkpoint = await db.accountStatementCheckpoint.findFirstOrThrow({ where: { importFileId: file.id } });
     assert.equal(Number(checkpoint.openingBalance), 100);
     assert.equal(Number(checkpoint.endingBalance), 100);
