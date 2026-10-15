@@ -47,7 +47,85 @@ function paymentDate(text: string): { date: string; sourceTimestamp: string | nu
   return { date: new Date(sourceTimestamp).toISOString(), sourceTimestamp, sourceClock: m[0] };
 }
 
+/** These regional receipts use whole THB or dot-grouped whole IDR, not decimal pesos. */
+function oneRegionalRide(text: string, fullText: string): ParsedImportRow {
+  // Some native PDF layers split a rendered IDR digit into separate glyphs.
+  // Normalize only dot-grouped numeric tokens for comparison; retain the
+  // original native page verbatim in rawPayload and sourceDocumentText.
+  const amountText = text.replace(/\b\d{1,2}(?:\s+\d){1,3}\.\d{3}\b/g, token => token.replace(/\s+/g, ''));
+  const thb = /\bTotal Paid\s+THB\s+\d+\b/i.test(amountText);
+  const idr = /\bTotal Paid\s+RP\s+\d{1,3}(?:\.\d{3})+\b/i.test(amountText);
+  if (thb === idr) fail('one supported regional headline currency is required');
+  const currency = thb ? 'THB' : 'IDR';
+  if (thb ? !(/\bYour Trip\b[\s\S]*\bBangkok\b[\s\S]*\bGrab Thailand\b/i.test(text) && /\bGrab Thailand\b[\s\S]*\bBangkok\b/i.test(text)) : !/\bPT Grab Teknologi Indonesia\b[\s\S]*\bNPWP\b/i.test(text)) fail('independent regional issuer evidence is missing');
+  if (/(?:PHP|₱|MYR|\bRM\b|SGD|S\$|VND|₫)\s*\d/i.test(text) || (thb && /\bRP\s*\d/i.test(text)) || (idr && /\bTHB\s*\d/i.test(text))) fail('mixed source currency');
+  const amountToken = thb ? '\\d{1,6}' : '\\d{1,3}(?:\\.\\d{3})+';
+  const units = (value: string) => Number(thb ? value : value.replaceAll('.', ''));
+  const headings = [...amountText.matchAll(new RegExp(`\\bTotal Paid\\s+(?:${thb ? 'THB' : 'RP'}\\s+)?(${amountToken})\\b`, 'gi'))];
+  const reversedSummary = [...amountText.matchAll(new RegExp(`^(${amountToken})\\s*\\nTotal Paid\\s*$`, 'gim'))];
+  if (headings.length + reversedSummary.length !== 2 || headings.length < 1 || headings[0][0].search(new RegExp(thb ? 'THB' : 'RP', 'i')) < 0) fail('regional headline and summary totals are required');
+  const total = units(headings[0][1]);
+  const summary = headings[1]?.[1] ?? reversedSummary[0]?.[1];
+  if (!Number.isSafeInteger(total) || total <= 0 || !summary || units(summary) !== total) fail('regional headline and summary totals disagree');
+  const refs = [...new Set([...text.matchAll(/\bA-[A-Z0-9]{8,}\b/g)].map(m => m[0]))];
+  if (!/\bBooking ID\b/i.test(text) || refs.length !== 1) fail('one complete regional booking reference is required');
+  const date = paymentDate(text);
+  const paymentRegion = amountText.match(/\bPaid by\b([\s\S]{0,250}?)(?=\b(?:Profile|Inclusive of VAT|Got an issue)\b|$)/i)?.[1] ?? '';
+  const method = thb ? 'Cash' : 'OVO Cash';
+  const paid = paymentRegion.match(new RegExp(`\\b${method}\\s+(${amountToken})\\b`, 'i'));
+  const reversedPaid = paymentRegion.match(new RegExp(`^(${amountToken})\\s*\\n${method}\\s*$`, 'im'));
+  if ((paid ? 1 : 0) + (reversedPaid ? 1 : 0) !== 1 || units((paid?.[1] ?? reversedPaid?.[1])!) !== total || /\b(?:MasterCard|Visa|Amex)\b/i.test(text)) fail('regional payment method or amount is unsupported');
+  const breakdown = amountText.match(/\bBreakdown\b([\s\S]*?)\bTotal Paid\b/i)?.[1]?.replace(new RegExp(`\\n${amountToken}\\s*$`), '');
+  if (!breakdown) fail('regional fare breakdown is missing');
+  const items = breakdown.split(/\r?\n/).map(s => s.trim()).filter(Boolean).map(line => {
+    const match = line.match(new RegExp(`^(Metered fare|Fare|Discount|Promo|Toll|Platform Fee|Others|Tax Base|VAT)\\s+(-?${amountToken})$`, 'i'));
+    if (!match) fail('unsupported regional fare component');
+    return { label: match[1], amount: (match[2].startsWith('-') ? -1 : 1) * units(match[2].replace(/^-/, '')) };
+  });
+  if (!items.length) fail('regional fare components are missing');
+  const find = (label: string) => items.filter(i => i.label.toLowerCase() === label.toLowerCase());
+  const fare = find('Fare'), metered = find('Metered fare');
+  if (fare.length + metered.length < 1 || metered.length > 1 || (metered.length && fare.length) || fare.length > 2) fail('regional fare evidence is ambiguous');
+  const discount = [...find('Discount'), ...find('Promo')];
+  if (discount.length > 1 || discount.some(i => i.amount >= 0)) fail('regional discount is ambiguous');
+  const otherLabels = ['Toll', 'Platform Fee', 'Others'];
+  if (otherLabels.some(label => find(label).length > 1)) fail('duplicate regional component');
+  let fareItem = metered[0] ?? fare[0];
+  let adjustedFareEvidence: { displayedFare: number; grossFare: number; discount: number } | null = null;
+  if (fare.length === 2) {
+    if (discount.length !== 1) fail('second fare requires one explicit discount');
+    const gross = Math.max(fare[0].amount, fare[1].amount);
+    const net = Math.min(fare[0].amount, fare[1].amount);
+    if (gross + discount[0].amount !== net) fail('gross, discount and displayed net fare disagree');
+    fareItem = { label: 'Fare', amount: gross };
+    adjustedFareEvidence = { displayedFare: net, grossFare: gross, discount: discount[0].amount };
+  }
+  const components = [fareItem, ...discount, ...otherLabels.flatMap(find)];
+  if (components.some(i => !Number.isSafeInteger(i.amount)) || components.reduce((n, i) => n + i.amount, 0) !== total) fail('regional fare components do not reconcile');
+  const taxDisclosure = (label: string) => {
+    const inBreakdown = find(label);
+    if (inBreakdown.length) return inBreakdown;
+    return [...amountText.matchAll(new RegExp(`^${label}\\s+(${amountToken})$`, 'gim'))].map(match => ({ label, amount: units(match[1]) }));
+  };
+  const taxBase = taxDisclosure('Tax Base'), vat = taxDisclosure('VAT');
+  const inclusive = amountText.match(new RegExp(`\\bInclusive of VAT\\s+(${amountToken})\\b`, 'i'));
+  let taxEvidence: { taxBase: number | null; vat: number; inclusiveOfVat: number | null } | null = null;
+  if (taxBase.length || vat.length || inclusive) {
+    if (vat.length !== 1 || taxBase.length > 1) fail('regional tax disclosure is incomplete or contradictory');
+    if (taxBase.length === 1 && (inclusive ? taxBase[0].amount + vat[0].amount !== units(inclusive[1]) : taxBase[0].amount + vat[0].amount !== find('Platform Fee')[0]?.amount)) fail('regional tax disclosure is incomplete or contradictory');
+    if (taxBase.length === 0 && (!inclusive || !idr || !reversedSummary.length)) fail('regional tax disclosure is incomplete or contradictory');
+    taxEvidence = { taxBase: taxBase[0]?.amount ?? null, vat: vat[0].amount, inclusiveOfVat: inclusive ? units(inclusive[1]) : null };
+  }
+  const cash = thb;
+  const accountName = cash ? 'Cash' : 'OVO Cash';
+  return { date: date.date, amount: total.toFixed(2), currency, type: 'expense', merchantRaw: 'Grab', merchantClean: 'Grab',
+    description: `Grab ride • ${refs[0]}`, categoryName: 'Transport', accountName, institution: cash ? null : accountName, confidence: 95,
+    rawPayload: { source: 'grab_email_receipt', kind: cash ? 'cash_transaction' : 'wallet_transaction', line: text, referenceNumber: refs[0], paymentMethod: accountName, accountType: cash ? 'cash' : 'wallet', payerAccountNumber: null, sourceTimestamp: null, sourceClock: null, components, adjustedFareEvidence, taxEvidence, nativeAmountGlyphsNormalized: amountText !== text, totalAmount: total,
+      parserEvidence: { currency, reconciled: true, noBankBalanceAnchor: true, fullNativePages: true }, sourceDocumentText: fullText } };
+}
+
 function oneReceipt(text: string, fullText: string, pickupFields?: PickupField[]): ParsedImportRow {
+  if (/\bTotal Paid\s+(?:THB|RP)\s*\d/i.test(text)) return oneRegionalRide(text, fullText);
   const explicitPhp = /₱|\bPHP\b|Philippines|Metro Manila|Quezon City|Makati|Taguig|Caloocan/i.test(text);
   // Older Philippine email receipts print only "P" at the headline. Require a
   // matching peso headline and a Philippine trip location, not a generic P.

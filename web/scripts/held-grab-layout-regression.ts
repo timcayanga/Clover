@@ -68,4 +68,32 @@ assert.throws(() => parseGrabEmailReceipt(buildGrabReceiptNativePages([malaysia.
 assert.throws(() => parseGrabEmailReceipt(buildGrabReceiptNativePages([malaysia.replace('Toll 4.51', 'Toll 4.52')])!), /components do not reconcile/);
 assert.throws(() => parseGrabEmailReceipt(buildGrabReceiptNativePages([malaysia + '\nPHP 1.00'])!), /mixed source currency/);
 
-console.log('Held Grab layouts: local peso proof, merged heading, split wallet payer, two-message legacy food/ride, Malaysian cash currency, and unsafe negatives passed.');
+const thai = ['Your Grab E-Receipt\n1 message\nHope you enjoyed your ride!\nPicked up on 8 September 2025\nBooking ID: A-INVENTEDTHAI001\nTotal Paid THB 240\nBreakdown\nFare 180\nPlatform Fee 10\nToll 50\nTotal Paid 240\nPaid by\nCash 240', 'Got an issue?\nYour Trip\nBangkok\nGrab Thailand\nBangkok'];
+const thaiParsed = parseGrabEmailReceipt(buildGrabReceiptNativePages(thai)!);
+assert.deepEqual(thaiParsed?.rows.map(row => [row.amount, row.currency, row.accountName]), [['240.00', 'THB', 'Cash']]);
+assert(hasVerifiedGrabReceiptRows(buildGrabReceiptNativePages(thai)!, thaiParsed.rows));
+assert.throws(() => parseGrabEmailReceipt(buildGrabReceiptNativePages([thai[0].replace('Toll 50', 'Toll 51'), thai[1]])!), /components do not reconcile/);
+assert.throws(() => parseGrabEmailReceipt(buildGrabReceiptNativePages([thai[0], thai[1].replaceAll('Bangkok', 'Singapore').replace('Grab Thailand', 'Grab HQ')])!), /issuer evidence is missing/);
+
+const indoAdjusted = ['Your Grab E-Receipt\n1 message\nHope you enjoyed your ride!\nPicked up on 17 May 2024\nBooking ID: A-INVENTEDIDR001\nTotal Paid RP 189.000\nBreakdown\nFare 159.000\nFare 184.000\nDiscount -25.000\nToll 20.000\nPlatform Fee 10.000\nTotal Paid 189.000\nPaid by\nOVO Cash 189.000', 'Inclusive of VAT 21.800\nTax Base 19.640\nVAT 2.160\nGot an issue?\nYour Trip\nPT Grab Teknologi Indonesia\nNPWP 123'];
+const indo = parseGrabEmailReceipt(buildGrabReceiptNativePages(indoAdjusted)!);
+assert.deepEqual(indo?.rows.map(row => [row.amount, row.currency, row.accountName, row.rawPayload?.adjustedFareEvidence]), [['189000.00', 'IDR', 'OVO Cash', { displayedFare: 159000, grossFare: 184000, discount: -25000 }]]);
+assert.equal(indo.metadata.accountType, 'wallet');
+assert(hasVerifiedGrabReceiptRows(buildGrabReceiptNativePages(indoAdjusted)!, indo.rows));
+assert.throws(() => parseGrabEmailReceipt(buildGrabReceiptNativePages([indoAdjusted[0].replace('Discount -25.000', 'Discount -24.000'), indoAdjusted[1]])!), /gross, discount and displayed net fare disagree/);
+assert.throws(() => parseGrabEmailReceipt(buildGrabReceiptNativePages([indoAdjusted[0], indoAdjusted[1].replace('VAT 2.160', 'VAT 2.161')])!), /tax disclosure is incomplete or contradictory/);
+assert.throws(() => parseGrabEmailReceipt(buildGrabReceiptNativePages([indoAdjusted[0].replace('OVO Cash 189.000', 'Visa 1234 189.000'), indoAdjusted[1]])!), /payment method or amount is unsupported/);
+
+const indoMetered = ['Your Grab E-Receipt\n1 message\nHope you enjoyed your ride!\nPicked up on 8 September 2023\nBooking ID: A-INVENTEDIDR002\nTotal Paid RP 378.500\nBreakdown\nMetered fare 324.000\nPlatform Fee 15.000\nTax Base 13.514\nVAT 1.486\nToll 39.500\nTotal Paid 378.500\nPaid by\nOVO Cash 378.500', 'Got an issue?\nYour Trip\nPT Grab Teknologi Indonesia\nNPWP 123'];
+const metered = parseGrabEmailReceipt(buildGrabReceiptNativePages(indoMetered)!);
+assert.deepEqual(metered?.rows.map(row => [row.amount, row.currency, row.rawPayload?.taxEvidence]), [['378500.00', 'IDR', { taxBase: 13514, vat: 1486, inclusiveOfVat: null }]]);
+assert.throws(() => parseGrabEmailReceipt(buildGrabReceiptNativePages([indoMetered[0].replace('VAT 1.486', 'VAT 1.487'), indoMetered[1]])!), /tax disclosure is incomplete or contradictory/);
+
+const splitIdr = 'Your Grab E-Receipt\n1 message\nHope you enjoyed your ride!\nPicked up on 28 February 2025\nBooking ID: A-INVENTEDSPLITIDR\nTotal Paid\nRP 1 0 0.500\nBreakdown\nFare 70.500\nFare 80.500\nPromo -10.000\nToll 15.500\nOthers 5.000\nPlatform Fee 9.500\n1 0 0.500\nTotal Paid\nPassenger Paid by\nExample Person\n1 0 0.500\nOVO Cash\nProfile\nPERSONAL\nInclusive of VAT 12.000\nVAT 1.000\nGot an issue?\nYour Trip\nPT Grab Teknologi Indonesia\nNPWP 123';
+const splitIdrParsed = parseGrabEmailReceipt(buildGrabReceiptNativePages([splitIdr])!);
+assert.deepEqual(splitIdrParsed?.rows.map(row => [row.amount, row.currency, row.accountName, row.rawPayload?.nativeAmountGlyphsNormalized, row.rawPayload?.taxEvidence]), [['100500.00', 'IDR', 'OVO Cash', true, { taxBase: null, vat: 1000, inclusiveOfVat: 12000 }]]);
+assert.throws(() => parseGrabEmailReceipt(buildGrabReceiptNativePages([splitIdr.replace('1 0 0.500\nTotal Paid', '1 0 0.501\nTotal Paid')])!), /headline and summary totals disagree/);
+assert.throws(() => parseGrabEmailReceipt(buildGrabReceiptNativePages([splitIdr.replace('1 0 0.500\nOVO Cash', '1 0 0.501\nOVO Cash')])!), /payment method or amount is unsupported/);
+assert.throws(() => parseGrabEmailReceipt(buildGrabReceiptNativePages([splitIdr.replace('Others 5.000', 'Unlabeled charge 5.000')])!), /unsupported regional fare component/);
+
+console.log('Held Grab layouts: PHP/MYR/THB/IDR, legacy food, adjusted fares, split IDR glyphs, inclusive tax disclosures, and unsafe negatives passed.');
