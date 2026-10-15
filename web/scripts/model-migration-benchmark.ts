@@ -6,6 +6,7 @@ import {readFileSync,writeFileSync,mkdirSync} from 'node:fs';
 import {resolve,dirname} from 'node:path';
 import {AsyncLocalStorage} from 'node:async_hooks';
 import ts from 'typescript';
+import {extractFinalOpenAIText} from '../lib/openai-response-text';
 import {openAIInteractiveOptions} from '../lib/openai-model-policy';
 import {parseImportTextWithOpenAIFallback} from '../lib/openai-import-parser';
 import {normalizeEntryProposal} from '../lib/adviser-entry-schema';
@@ -26,7 +27,7 @@ const adviser=source('app/api/adviser/chat/route.ts'),tools=evaluate(variable(ad
 function literals(n:ts.Node){if(ts.isStringLiteral(n))strings.push(n.text);else ts.forEachChild(n,literals)}literals(variable(adviser,'systemPrompt'));
 const system=strings.join('\n')+'\nToday is 2026-10-14. Default currency PHP. Authorized account: bpi-qa (BPI Personal, bank, PHP). Authorized category: food-qa (Food & Dining). No other records. Do not execute writes.';
 const editorial=source('lib/knowledge-ai.ts');let instruction:ts.Node|undefined;function find(n:ts.Node){if(ts.isPropertyAssignment(n)&&n.name.getText(editorial)==='instructions')instruction=n.initializer;ts.forEachChild(n,find)}find(editorial);assert.ok(instruction);const contentInstructions=evaluate(instruction,editorial,{knowledgeCategories});
-const text=(p:any)=>(p.output??[]).flatMap((x:any)=>x.content??[]).filter((x:any)=>x.type==='output_text').map((x:any)=>x.text).join('');
+const text=(p:any)=>extractFinalOpenAIText(p)??'';
 async function call(body:any){const r=await fetch('https://api.openai.com/v1/responses',{method:'POST',headers:{Authorization:'Bearer '+key,'Content-Type':'application/json'},body:JSON.stringify(body)}),p=await r.json();assert.ok(r.ok,p.error?.message);assert.equal(p.status,'completed');return p;}
 const results:any[]=[];
 function save(){mkdirSync(dirname(output),{recursive:true});writeFileSync(output,JSON.stringify({date:new Date().toISOString(),method:'Synthetic provider benchmark. Actual parser normalization/validation; source-extracted Ask static instructions/tools and editorial instructions. No production route/DB/UI latency measured. No customer data. Candidate reasoning none. Costs estimated at standard short-context rates plus $0.01/web-search call; not invoice reconciliation.',rounds,results},null,2)+'\n')}

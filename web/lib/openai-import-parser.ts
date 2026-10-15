@@ -1,3 +1,4 @@
+import { extractFinalOpenAIText } from "@/lib/openai-response-text";
 import { DEFAULT_IMPORT_TEXT_MODEL, isFastTextImportModel } from "./openai-model-policy";
 import { maySendToCloudAi } from "./ai-consent";
 import { calculateModelCloverTokens, mayUseImportCloudAi } from "./clover-token-usage";
@@ -2012,40 +2013,7 @@ const deriveWiseScreenshotTypeAndCategory = (params: {
   return { type, category };
 };
 
-const extractOutputText = (payload: Record<string, unknown>) => {
-  if (typeof payload.output_text === "string" && payload.output_text.trim()) {
-    return payload.output_text.trim();
-  }
-
-  const output = payload.output;
-  if (!Array.isArray(output)) {
-    return null;
-  }
-
-  for (const item of output) {
-    if (!item || typeof item !== "object") {
-      continue;
-    }
-
-    const content = (item as { content?: unknown }).content;
-    if (!Array.isArray(content)) {
-      continue;
-    }
-
-    for (const contentItem of content) {
-      if (!contentItem || typeof contentItem !== "object") {
-        continue;
-      }
-
-      const typedContent = contentItem as { type?: unknown; text?: unknown };
-      if (typedContent.type === "output_text" && typeof typedContent.text === "string" && typedContent.text.trim()) {
-        return typedContent.text.trim();
-      }
-    }
-  }
-
-  return null;
-};
+const extractOutputText = extractFinalOpenAIText;
 
 const parseStructuredJsonText = (text: string) => {
   const trimmed = text.trim();

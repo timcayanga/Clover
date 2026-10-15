@@ -81,3 +81,24 @@ assert.equal((route.match(/openAIInteractiveOptions\(model\)/g) ?? []).length, 3
 const editorial = readFileSync(new URL("../lib/knowledge-ai.ts", import.meta.url), "utf8");
 assert.match(editorial, /openAIInteractiveOptions\(model\)/);
 assert.match(editorial, /DEFAULT_CONTENT_MODEL/);
+
+import { extractFinalOpenAIText, createOpenAIFinalTextStream } from "../lib/openai-response-text";
+const phased = { output_text: "Checking…Final answer", output: [
+  { type: "message", phase: "commentary", content: [{ type: "output_text", text: "Checking…" }] },
+  { type: "message", phase: "final_answer", content: [{ type: "output_text", text: "PHP " }, { type: "output_text", text: "6,000" }] },
+] };
+const beforePhases = JSON.stringify(phased);
+assert.equal(extractFinalOpenAIText(phased), "PHP 6,000");
+assert.equal(JSON.stringify(phased), beforePhases, "Provider phase/state must survive upstream replay intact");
+assert.equal(extractFinalOpenAIText({ output_text: "Checking…", output: [phased.output[0]] }), null);
+assert.equal(extractFinalOpenAIText({ output_text: " legacy " }), "legacy");
+assert.equal(extractFinalOpenAIText({ output: [{ content: [{ type: "output_text", text: "legacy" }] }] }), "legacy");
+const filter = createOpenAIFinalTextStream();
+assert.equal(filter({ type: "response.output_item.added", output_index: 0, item: { id: "pre", phase: "commentary" } }), null);
+assert.equal(filter({ type: "response.output_text.delta", item_id: "pre", output_index: 0, delta: "Checking…" }), null);
+assert.equal(filter({ type: "response.output_item.added", output_index: 1, item: { id: "final", phase: "final_answer" } }), null);
+assert.equal(filter({ type: "response.output_text.delta", item_id: "final", output_index: 1, delta: "PHP 6,000" }), "PHP 6,000");
+assert.equal(filter({ type: "response.output_text.delta", output_index: 0, delta: "Still checking…" }), null);
+assert.equal(createOpenAIFinalTextStream()({ type: "response.output_text.delta", delta: "legacy" }), "legacy");
+assert.match(route, /message\.role === "assistant" \? \{ phase: "final_answer" \}/);
+assert.match(route, /createOpenAIFinalTextStream\(\)/);
