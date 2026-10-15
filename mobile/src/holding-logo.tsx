@@ -5,7 +5,7 @@ import type { PortfolioHolding } from "../../shared/investment-portfolio";
 import { investmentIcons } from "./investment-icons";
 import { apiBase } from "./api";
 export function HoldingLogo({ holding }: { holding: PortfolioHolding }) {
-  const [failed, setFailed] = useState(false);
+  const [failedPath, setFailedPath] = useState<string | null>(null);
   const path = holding.logoUrl;
   return (
     <View
@@ -18,12 +18,12 @@ export function HoldingLogo({ holding }: { holding: PortfolioHolding }) {
         padding: 0,
       }}
     >
-      {!failed && path?.startsWith("/assets/investments/") ? (
+      {failedPath !== path && path?.startsWith("/assets/investments/") ? (
         <SvgUri
           uri={`${apiBase()}${path}`}
           width={44}
           height={44}
-          onError={() => setFailed(true)}
+          onError={() => setFailedPath(path!)}
         />
       ) : (
         <Image

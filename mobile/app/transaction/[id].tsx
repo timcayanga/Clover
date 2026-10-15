@@ -1,3 +1,4 @@
+import { MerchantLogo } from "../../src/merchant-logo";
 import { transactionReviewReasons } from "../../src/transaction-review";
 import { InlineDetailRow } from "../../src/inline-detail-row";
 import { TransactionRelatedActions } from "../../src/transaction-related-actions";
@@ -17,7 +18,6 @@ import { useSession } from "../../src/session";
 import type { Transaction } from "../../src/types";
 import {
   Icon,
-  CategoryMark,
   Body,
   Button,
   Card,
@@ -227,7 +227,7 @@ export default function TransactionDetail() {
                     paddingVertical: 16,
                   }}
                 >
-                  <CategoryMark name={row.categoryName} size={32} />
+                  <MerchantLogo transaction={row} size={32} />
                   <View style={{ flex: 1, gap: 4 }}>
                     <Text
                       style={{

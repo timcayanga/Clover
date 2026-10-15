@@ -1,4 +1,6 @@
 export type Transaction = {
+  merchantLogoUrl?: string | null;
+  merchantLogoNameKey?: string;
   splitBill?: { id: string; title: string } | null;
   source?: string;
   userNote?: string | null;

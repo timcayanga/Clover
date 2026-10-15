@@ -91,7 +91,7 @@
     "qa:context-corpus-learning": "tsx scripts/context-corpus-learning-regression.ts",
     "qa:data-loop": "tsx scripts/data-qa-regression.ts",
     "qa:budgeting": "tsx scripts/budgeting-regression.ts && tsx scripts/collection-loading-regression.ts",
-    "qa:investments": "tsx scripts/investments-regression.ts && tsx scripts/investment-institution-summary-regression.ts",
+    "qa:investments": "tsx scripts/investments-regression.ts && tsx scripts/investment-institution-summary-regression.ts && npm run qa:logos",
     "qa:adviser-everyday": "tsx scripts/adviser-everyday-regression.ts",
     "qa:adviser-model-usage": "tsx scripts/adviser-model-usage-regression.ts",
     "qa:clover-token-usage": "tsx scripts/clover-token-usage-regression.ts",
@@ -208,7 +208,8 @@
     "qa:app-migrations": "tsx scripts/app-migration-regression.ts",
     "qa:contextual-upgrades": "tsx scripts/contextual-upgrades-regression.ts",
     "qa:wallet-motion": "tsx scripts/wallet-motion-regression.ts",
-    "qa:learning-verification-response": "tsx scripts/learning-verification-response-regression.ts"
+    "qa:learning-verification-response": "tsx scripts/learning-verification-response-regression.ts",
+    "qa:logos": "tsx scripts/investment-logo-matching-regression.ts && tsx scripts/merchant-logo-ui-regression.ts && tsx scripts/transaction-logo-projection-regression.ts"
   },
   "dependencies": {
     "@apple/app-store-server-library": "3.1.0",

@@ -11,6 +11,7 @@ import {
 
 const sourceRoot = fileURLToPath(new URL("../../assets/", import.meta.url));
 const destinationRoot = fileURLToPath(new URL("../public/assets/", import.meta.url));
+const logoLibraryRoot = fileURLToPath(new URL("../../assets/logo-library/", import.meta.url));
 const navigationSourceRoot = fileURLToPath(new URL("../../assets/3d icons/", import.meta.url));
 const navigationDestinationRoot = fileURLToPath(new URL(`../public${decodeURIComponent(NAVIGATION_ICON_ASSET_ROOT)}/`, import.meta.url));
 const errorSourcePath = fileURLToPath(new URL("../../assets/3d icons/error.png", import.meta.url));
@@ -69,4 +70,6 @@ const main = async () => {
   }
 };
 
-void main();
+// The reviewed runtime snapshot contains icon artwork only, without downloaded
+// originals or research documents. Public assets are generated, not Git-tracked.
+void main().then(() => cp(logoLibraryRoot, destinationRoot, { recursive: true }));

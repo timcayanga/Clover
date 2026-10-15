@@ -1,3 +1,5 @@
+import { transactionMerchantLogo } from "./transaction-merchant-logo";
+import type { MerchantIdentityInput } from "./logo-identity-types";
 import { parseAddFormDraft } from "../../shared/add-form-draft";
 import { resolveImportModalStatusDecision } from "./import-modal-status";
 import { parseAdviserChart } from "../../shared/adviser-chart";
@@ -50,7 +52,7 @@ const transactionFields = [
 const transactionReview = (value: unknown) => {
   const row = record(value);
   // Project only actionable review labels; source payloads stay on the server.
-  return { reviewReasons: getTransactionReviewReasons(row), confidenceScore: getRecordedTransactionConfidence(row) };
+  return { ...transactionMerchantLogo(row as MerchantIdentityInput), reviewReasons: getTransactionReviewReasons(row), confidenceScore: getRecordedTransactionConfidence(row) };
 };
 const rows = (value: unknown, fields: string[]) => Array.isArray(value) ? value.map(row => pick(row, fields)) : [];
 const circleSummary = (value: unknown) => {

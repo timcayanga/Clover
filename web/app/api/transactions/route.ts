@@ -1,3 +1,4 @@
+import { enrichMerchantIdentityPayload } from "@/lib/merchant-identity";
 import { getAccountBrand } from "@/lib/account-brand";
 import { planTransactionAccountPage, compareTransactionsByAccount } from "@/lib/transaction-account-sort";
 import { Prisma } from "@prisma/client";
@@ -627,7 +628,19 @@ const mapTransactionRow = (transaction: {
     createdAt: transaction.createdAt.toISOString(),
     warningReason: transaction.warningReason,
     rawPayload: transaction.rawPayload,
-    normalizedPayload: transaction.normalizedPayload,
+    normalizedPayload: enrichMerchantIdentityPayload({
+      merchantRaw: transaction.merchantRaw,
+      merchantClean: userEdited ? transaction.merchantClean : getEffectiveTransactionMerchantName({ merchantClean: transaction.merchantClean, merchantRaw: transaction.merchantRaw, institution: transaction.account.institution }),
+      description: transaction.description,
+      currency: userEdited ? transaction.currency : normalizedCurrency,
+      date: transaction.date,
+      institution: transaction.account.institution,
+      accountId: transaction.accountId,
+      reviewStatus: transaction.reviewStatus,
+      categoryName: userEdited ? transaction.category?.name ?? null : categoryName,
+      rawPayload: transaction.rawPayload,
+      normalizedPayload: transaction.normalizedPayload,
+    }) as Prisma.JsonObject,
     importFileId: transaction.importFileId ?? null,
     source,
     splitBill: transaction.splitBill,

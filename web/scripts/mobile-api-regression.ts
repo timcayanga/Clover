@@ -259,7 +259,7 @@ async function main() {
     totalCount: 1,
   });
   assert.deepEqual(result, {
-    transactions: [{ id: "t", amount: "500.00", reviewReasons: ["Needs category review", "Could not identify merchant"], confidenceScore: null }],
+    transactions: [{ id: "t", amount: "500.00", merchantLogoUrl: null, reviewReasons: ["Needs category review", "Could not identify merchant"], confidenceScore: null }],
     page: 1,
     totalCount: 1,
   });

@@ -1,7 +1,7 @@
+import { resolveGotradeSecuritySymbol } from "./gotrade-securities";
 import { getAccountBrand, type AccountBrand } from "@/lib/account-brand";
 import { isFixedIncomeInvestmentSubtype, type InvestmentSubtype } from "@/lib/investments";
-import { INVESTMENT_LOGO_SYMBOLS } from "@/lib/investment-logo-catalog";
-import { resolveGotradeSecuritySymbol } from "@/lib/gotrade-securities";
+import { matchInvestmentLogo } from "./investment-logo-matching";
 
 type InvestmentAssetBrandInput = {
   symbol?: string | null;
@@ -13,32 +13,8 @@ type InvestmentAssetBrandInput = {
   market?: "ph" | "us" | "crypto" | "japan" | "indices" | null;
 };
 
-const logoSets = Object.fromEntries(Object.entries(INVESTMENT_LOGO_SYMBOLS).map(([market, symbols]) => [market, new Set<string>(symbols)]));
-
-export const getLocalInvestmentLogo = (params: InvestmentAssetBrandInput): string | null => {
-  if (Boolean(isFixedIncomeInvestmentSubtype(params.subtype)) || params.subtype === "real_world_asset") return null;
-  let symbol = (resolveGotradeSecuritySymbol(params) || params.name || "").trim().toUpperCase();
-  let market: string | null = params.market ?? (params.subtype === "crypto" ? "crypto" : null);
-  const prefix = symbol.match(/^(PSE|NASDAQ|NYSE|AMEX|TYO|JPX|INDEX):(.+)$/);
-  if (prefix) {
-    market = ({ PSE: "philippines", NASDAQ: "us", NYSE: "us", AMEX: "us", TYO: "japan", JPX: "japan", INDEX: "indices" } as Record<string,string>)[prefix[1]];
-    symbol = prefix[2];
-  } else if (symbol.endsWith(".PS")) { market = "philippines"; symbol = symbol.slice(0, -3); }
-  else if (symbol.endsWith(".T")) { market = "japan"; symbol = symbol.slice(0, -2); }
-  else if (symbol.startsWith("^")) { market = "indices"; symbol = symbol.slice(1); }
-  if (market === "ph") market = "philippines";
-  if (market === "crypto") {
-    symbol = symbol.replace(/[-/]?(USDT|USD|PHP)$/, (suffix) => logoSets.crypto.has(symbol) ? suffix : "");
-    symbol = ({ BITCOIN: "BTC", ETHEREUM: "ETH", SOLANA: "SOL", RIPPLE: "XRP", DOGECOIN: "DOGE" } as Record<string,string>)[symbol] ?? symbol;
-  }
-  market ??= params.currency?.toUpperCase() === "PHP" ? "philippines" : params.currency?.toUpperCase() === "USD" ? "us" : params.currency?.toUpperCase() === "JPY" ? "japan" : null;
-  if (market !== "crypto" && logoSets.indices.has(symbol) && !logoSets[market ?? ""]?.has(symbol)) market = "indices";
-  // Alphabet's two share classes use the same company artwork.
-  if (market === "us" && symbol === "GOOGL" && !logoSets.us.has(symbol)) symbol = "GOOG";
-  if (market === "us" && ["BRK-B", "BRK.B", "BRK-A"].includes(symbol)) symbol = "BRK.A";
-  if (!market || !logoSets[market]?.has(symbol)) return null;
-  return `/assets/investments/${market}/${encodeURIComponent(symbol)}.svg`;
-};
+// One conservative asset resolver is shared by web and native responses.
+export const getLocalInvestmentLogo = (params: InvestmentAssetBrandInput) => matchInvestmentLogo({ ...params, symbol: params.symbol || resolveGotradeSecuritySymbol(params) });
 
 const uniqueValues = (values: string[]) => Array.from(new Set(values.filter((value) => value.length > 0)));
 
@@ -56,36 +32,23 @@ export const getInvestmentAssetBrand = (params: InvestmentAssetBrandInput): Acco
   const isCrypto = params.subtype === "crypto";
   const isRealWorldAsset = params.subtype === "real_world_asset";
   const isFixedIncome = isFixedIncomeInvestmentSubtype(params.subtype);
-  const isGSaveAsset = /\bgsave\b/i.test(params.name ?? "");
-  const isGotradeAsset = /\bgo\s*trade\b/i.test(params.institution ?? "");
-  const brandingInstitution = isGSaveAsset ? "GSave" : params.institution;
-  const institutionBrand = brandingInstitution
-    ? getAccountBrand({
-        institution: brandingInstitution,
-        name: isGSaveAsset ? "GSave" : params.name ?? null,
-        type: "investment",
-      })
-    : null;
   const localLogo = getLocalInvestmentLogo(params);
-  const shouldPreferInstitutionLogo = !localLogo && (
-    isGotradeAsset || !params.symbol?.trim() || !params.subtype || params.subtype === "other" || isFixedIncome);
-  const institutionLogoCandidates = uniqueValues([
-    ...(institutionBrand?.logoSrcs ?? []),
-    ...(institutionBrand?.logoSrc ? [institutionBrand.logoSrc] : []),
-  ]);
   const assetLogoCandidates = getInvestmentAssetLogoCandidates(params);
-  const logoSrcs = shouldPreferInstitutionLogo
-    ? uniqueValues([...institutionLogoCandidates, ...assetLogoCandidates])
-    : uniqueValues([...assetLogoCandidates, ...institutionLogoCandidates]);
+  // A deposit itself belongs to its issuer; an unknown security must never use its broker.
+  const isGSave = /\bgsave\b/i.test(params.name ?? "");
+  const namesIssuer = !!params.institution && (params.name ?? "").toLowerCase().includes(params.institution.toLowerCase());
+  const issuerBrand = !localLogo && (isFixedIncome || ["other", "savings"].includes(params.subtype ?? "")) && params.institution && (namesIssuer || isGSave)
+    ? getAccountBrand({ institution: isGSave ? "GSave" : params.institution, name: isGSave ? "GSave" : params.name, type: "investment" }) : null;
+  const logoSrcs = assetLogoCandidates.length ? assetLogoCandidates : uniqueValues([...(issuerBrand?.logoSrcs ?? []), ...(issuerBrand?.logoSrc ? [issuerBrand.logoSrc] : [])]);
 
   const brand: AccountBrand = {
     label,
     logoSrc: null,
     logoSrcs,
     fallbackIconSrc: `/assets/investment-types/${params.subtype ?? "other"}.png`,
-    logoBackground: localLogo ? "#ffffff" : shouldPreferInstitutionLogo ? institutionBrand?.logoBackground : undefined,
-    logoFit: shouldPreferInstitutionLogo ? institutionBrand?.logoFit ?? "contain" : "contain",
-    logoPadding: localLogo ? "4px" : shouldPreferInstitutionLogo ? institutionBrand?.logoPadding : undefined,
+    logoBackground: localLogo ? "#ffffff" : undefined,
+    logoFit: "contain",
+    logoPadding: localLogo ? "4px" : undefined,
     accent: isCrypto ? "#22c55e" : isRealWorldAsset ? "#d69e2e" : isFixedIncome ? "#2563eb" : "#14b8a6",
     background: isCrypto
       ? "linear-gradient(135deg, rgba(34, 197, 94, 0.16), rgba(14, 165, 233, 0.06))"

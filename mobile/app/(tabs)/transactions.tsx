@@ -1,3 +1,4 @@
+import { MerchantLogo } from "../../src/merchant-logo";
 import { SwipeDeleteRow } from "../../src/swipe-delete-row";
 import { reportTransactionFilters } from "../../src/report-drilldown";
 import { AdaptiveDetail, useDetailPane } from "../../src/adaptive-detail";
@@ -20,7 +21,6 @@ import {
   Screen,
   Heading,
   Card,
-  CategoryMark,
   Icon,
   Body,
   Button,
@@ -236,7 +236,7 @@ export default function Transactions() {
               opacity: pressed ? 0.6 : 1,
             })}
           >
-            <CategoryMark name={item.categoryName} size={24} />
+            <MerchantLogo transaction={item} size={24} />
             <View style={{ flex: 1, minWidth: 0, gap: 4 }}>
               <View style={{ flexDirection: "row", alignItems: "center", gap: 5 }}>
               <Text

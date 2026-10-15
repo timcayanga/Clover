@@ -47,6 +47,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { CloverShell, useCloverChrome } from "@/components/clover-shell";
 import { ContextualAskClover } from "@/components/contextual-ask-clover";
 import { AccountBrandMark } from "@/components/account-brand-mark";
+import { MerchantLogo } from "@/components/merchant-logo";
 import { CategoryBrandMark } from "@/components/category-brand-mark";
 import { CurrencySelector } from "@/components/currency-selector";
 import { PlanLimitNudge } from "@/components/plan-limit-nudge";
@@ -8050,7 +8051,7 @@ function TransactionsPageContent() {
                         inlineCategoryPickerButtonRefs.current.get(transaction.id)?.click();
                       }}
                     >
-                      <CategoryBrandMark categoryName={categoryLabel} size={24} radius={8} />
+                      <MerchantLogo transaction={transaction} size={24} fallback={<CategoryBrandMark categoryName={categoryLabel} size={24} radius={8} />} />
                     </button>
                     <div className="transaction-name-cell">
                       <InlineEditableCell
@@ -8306,12 +8307,12 @@ function TransactionsPageContent() {
                               <input type="checkbox" checked={selectedTransactionIds.includes(transaction.id)} onChange={(event) => toggleSelectedTransaction(transaction.id, event.target.checked)} aria-label={`Select ${merchantSummary}`} />
                             </label> : null}
                             <div className="transactions-mobile-simple-row__name">
-                              <CategoryBrandMark
+                              <MerchantLogo transaction={transaction} size={20} fallback={<CategoryBrandMark
                                 categoryName={categoryLabel}
                                 size={20}
                                 radius={7}
                                 className="transactions-mobile-simple-row__category-icon"
-                              />
+                              />} />
                               <span className="transactions-mobile-simple-row__text"><span className="transactions-mobile-simple-row__title-line"><span className="transactions-mobile-simple-row__name-main">{merchantSummary}</span>{warningReasonFor(transaction) ? <button type="button" className="transactions-mobile-warning-button" aria-label={warningReasonFor(transaction) ?? "Needs review"} onPointerDown={(event) => event.stopPropagation()} onClick={(event) => { event.stopPropagation(); openTransactionDetail(transaction); }}><span className="warning-mark warning-mark--small" aria-hidden="true" /></button> : null}</span><span className="transactions-mobile-simple-row__meta"><span className="transactions-mobile-simple-row__account-brand" aria-hidden="true"><AccountBrandMark accountBrand={accountBrand} label={accountDisplayName} /></span><span>{accountDisplayName} · {formatDate(transaction.date)}</span></span></span>
                             </div>
                             <div className={`transactions-mobile-simple-row__amount-group ${amountToneClass}`}>
