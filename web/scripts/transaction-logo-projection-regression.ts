@@ -21,4 +21,5 @@ for (const merchantRaw of ["grab lunch", "Apple juice", "Target savings", "Shell
   assert.equal(transactionMerchantLogo({ merchantRaw, currency: "PHP", categoryName: "Food & Dining" }).merchantLogoUrl, null, merchantRaw);
 }
 assert.ok(transactionMerchantLogo({ merchantRaw: "GRAB *GRABFOOD", currency: "PHP" }).merchantLogoUrl, "An explicit Grab descriptor keeps its logo");
+assert.equal(transactionMerchantLogo({ ...row, merchantClean: "Unidentified seller", reviewStatus: "edited" }).merchantLogoUrl, null, "A user correction must not inherit the imported merchant logo");
 console.log("Transaction logo projection passed: confident match, stale edits, ambiguous merchant, provider safety, compact native response.");

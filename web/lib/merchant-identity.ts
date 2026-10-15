@@ -30,7 +30,7 @@ function getIndex(entries: LogoIdentity[]) {
 
 /** Pure advisory resolution. No transaction writes, category changes or automatic confirmations. */
 export function resolveMerchantIdentity(input: MerchantIdentityInput, entries = defaultCatalog): MerchantIdentityResult {
-  input = { ...input, merchantNameConfirmed: input.merchantNameConfirmed ?? input.reviewStatus === "confirmed" };
+  input = { ...input, merchantNameConfirmed: input.merchantNameConfirmed ?? ["confirmed", "edited"].includes(input.reviewStatus ?? "") };
   const { observations, rawNames, rawNameDescriptors, rawOriginalDescriptors, rawNameRoles, rawNameConfidences, cleanName, nameConfidence } = collectMerchantIdentityContext(input);
   const countries = [...new Set(observations.filter(o => o.field === "merchantCountry" && o.confidence >= 70).map(o => o.value))];
   const registeredCountries = [...new Set(observations.filter(o=>o.field === "registeredCountry" && o.confidence >= 80).map(o=>o.value))];

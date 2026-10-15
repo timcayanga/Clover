@@ -229,7 +229,7 @@ export const merchantIdentityInputKey = (input: MerchantIdentityInput) => {
     nameEvidence:context.rawNames.map((name,index)=>[identityLegalText(name),context.rawNameConfidences[index],context.rawNameRoles[index]]),
     receiptCleanName:identityLegalText(context.cleanName ?? ""),
     accountId: input.accountId ?? null,
-    merchantNameConfirmed: input.merchantNameConfirmed ?? input.reviewStatus === "confirmed",
+    merchantNameConfirmed: input.merchantNameConfirmed ?? ["confirmed", "edited"].includes(input.reviewStatus ?? ""),
     observations: context.observations.map(o => [o.field, identityLegalText(o.value), o.source, o.confidence, o.evidence, o.group ?? o.source]).sort((a,b) => JSON.stringify(a).localeCompare(JSON.stringify(b))),
   });
 };
