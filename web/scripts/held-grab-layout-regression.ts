@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { buildGrabReceiptNativePages, parseGrabEmailReceipt } from '../lib/grab-email-receipt';
+import { buildGrabReceiptNativePages, hasVerifiedGrabReceiptRows, parseGrabEmailReceipt } from '../lib/grab-email-receipt';
 
 // Invented amounts and references; layouts are reviewed against private originals.
 const ride = (opts: { headline: string; place: string; paid: string; merged?: boolean; extra?: string; amount?: number }) => {
@@ -44,4 +44,28 @@ for (const bad of [
   split('GCash 119.00'),
 ]) assert.throws(() => parseGrabEmailReceipt(bad), /source review/);
 
-console.log('Held Grab layouts: local peso proof, merged heading, split wallet payer, and unsafe negatives passed.');
+const legacyPages = [
+  'Your Grab E-Receipt\n2 messages\nHope you had an enjoyable ride!\nTOTAL DATE | TIME\nPick-up time: 14 Aug 26 09:47 +0800\nP 120.00\nBooking Details Receipt Summary\nPayment Method:\nGrabCar\nCash\nBooking code\nIOS-1234567-8-901\nBase Fare P 40.00\nDistance P 30.00\nTime P 20.00\nSurge Charges P 30.00\nPick up location:\nCebu City\nTOTAL P 120.00',
+  'Your Grab E-Receipt\nHope you enjoyed your food!\nTOTAL DATE | TIME\nPick-up time: 14 Aug 26 21:03 +0800\nP 99.00\nBooking Details Receipt Summary\nPayment Method:\nGrabFood\nCash\nBooking code\nIOS-1234567-8-902\n1x Sample Meal\nRide Fare P 49.00\nBooking Fee P 50.00\nPick up location:\nCebu City\nTOTAL P 99.00',
+];
+const legacy = parseGrabEmailReceipt(buildGrabReceiptNativePages(legacyPages)!);
+assert.deepEqual(legacy?.rows.map(row => [row.amount, row.currency, row.merchantRaw, row.accountName, row.rawPayload?.referenceNumber]), [
+  ['120.00', 'PHP', 'Grab', 'Cash', 'IOS-1234567-8-901'],
+  ['99.00', 'PHP', 'GrabFood', 'Cash', 'IOS-1234567-8-902'],
+]);
+assert.deepEqual(legacy.rows[1].rawPayload?.components, [{ label: 'Ride Fare', amount: 49 }, { label: 'Booking Fee', amount: 50 }]);
+assert.throws(() => parseGrabEmailReceipt(buildGrabReceiptNativePages(legacyPages.slice(0, 1))!), /declared receipts are missing/);
+assert.throws(() => parseGrabEmailReceipt(buildGrabReceiptNativePages([legacyPages[0], legacyPages[1].replace('TOTAL P 99.00', 'TOTAL P 98.00')])!), /headline and summary totals must agree/);
+assert.throws(() => parseGrabEmailReceipt(buildGrabReceiptNativePages([legacyPages[0], legacyPages[1].replace('Cebu City', 'Singapore')])!), /supported currency evidence is missing/);
+
+const malaysia = 'Your Grab E-Receipt\n1 message\nHope you enjoyed your ride!\nPicked up on 19 January 2024\nBooking ID: A-INVENTEDMYR001\nTotal Paid RM 69.51\nBreakdown\nFare 65.00\nToll 4.51\nTotal Paid 69.51\nPaid by\nCash 69.51\nGot an issue?\nYour Trip\nKLIA Terminal 1\nGrab HQ Singapore';
+const myr = parseGrabEmailReceipt(buildGrabReceiptNativePages([malaysia])!);
+assert.equal(myr?.metadata.currency, 'MYR');
+assert.deepEqual(myr.rows.map(row => [row.amount, row.currency, row.accountName, row.rawPayload?.parserEvidence?.currency]), [['69.51', 'MYR', 'Cash', 'MYR']]);
+assert(hasVerifiedGrabReceiptRows(buildGrabReceiptNativePages([malaysia])!, myr.rows));
+assert.equal(hasVerifiedGrabReceiptRows(buildGrabReceiptNativePages([malaysia])!, myr.rows.map(row => ({ ...row, currency: 'PHP' }))), false);
+assert.throws(() => parseGrabEmailReceipt(buildGrabReceiptNativePages([malaysia.replace('KLIA Terminal 1', 'Singapore')])!), /supported currency evidence is missing/);
+assert.throws(() => parseGrabEmailReceipt(buildGrabReceiptNativePages([malaysia.replace('Toll 4.51', 'Toll 4.52')])!), /components do not reconcile/);
+assert.throws(() => parseGrabEmailReceipt(buildGrabReceiptNativePages([malaysia + '\nPHP 1.00'])!), /mixed source currency/);
+
+console.log('Held Grab layouts: local peso proof, merged heading, split wallet payer, two-message legacy food/ride, Malaysian cash currency, and unsafe negatives passed.');
