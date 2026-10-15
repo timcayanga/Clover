@@ -59,13 +59,16 @@ async function main() {
     await confirmImportFile(file.id);
     await settle();
     const afterConfirmed = await snapshot();
-    if (afterConfirmed !== confirmed) {
-      const beforeParts = JSON.parse(confirmed) as Array<Array<Record<string, unknown>>>;
-      const afterParts = JSON.parse(afterConfirmed) as Array<Array<Record<string, unknown>>>;
-      console.error('GCash repeated confirmation changed:', ['accounts', 'transactions', 'parsed rows', 'checkpoints', 'jobs'].filter((_, index) => JSON.stringify(beforeParts[index]) !== JSON.stringify(afterParts[index])));
-      console.error('Wallet balances:', beforeParts[0].map(row => [row.name, row.balance]), afterParts[0].map(row => [row.name, row.balance]));
+    const beforeParts = JSON.parse(confirmed) as Array<Array<Record<string, unknown>>>;
+    const afterParts = JSON.parse(afterConfirmed) as Array<Array<Record<string, unknown>>>;
+    for (let index = 0; index < 4; index++) {
+      assert.deepEqual(afterParts[index], beforeParts[index], 'Confirmed edits, account identity, balance and source evidence must survive another confirmation');
     }
-    assert.ok(afterConfirmed === confirmed, 'Confirmed edits, account identity and balance must survive another confirmation');
+    assert(afterParts[4].length >= beforeParts[4].length, 'Confirmed correction must retain prior learning');
+    assert(afterParts[4].every(job => job.status === 'completed'), 'Learning jobs must finish successfully');
+    await confirmImportFile(file.id);
+    await settle();
+    assert.equal(await snapshot(), afterConfirmed, 'Settled confirmed correction must not enqueue duplicate learning');
   } finally {
     await drain();
     await db.user.delete({ where: { id: user.id } });
