@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { buildGrabReceiptNativePages, hasVerifiedGrabReceiptRows, parseGrabEmailReceipt } from '../lib/grab-email-receipt';
+import { buildGrabReceiptNativePages, buildGrabTwoMessagePanelBodies, hasVerifiedGrabReceiptRows, parseGrabEmailReceipt } from '../lib/grab-email-receipt';
 import { formatUploadAccountDisplayName, getAccountCardName } from '../lib/account-display';
 
 // Invented amounts and references; layouts are reviewed against private originals.
@@ -98,5 +98,24 @@ assert.deepEqual(splitIdrParsed?.rows.map(row => [row.amount, row.currency, row.
 assert.throws(() => parseGrabEmailReceipt(buildGrabReceiptNativePages([splitIdr.replace('1 0 0.500\nTotal Paid', '1 0 0.501\nTotal Paid')])!), /headline and summary totals disagree/);
 assert.throws(() => parseGrabEmailReceipt(buildGrabReceiptNativePages([splitIdr.replace('1 0 0.500\nOVO Cash', '1 0 0.501\nOVO Cash')])!), /payment method or amount is unsupported/);
 assert.throws(() => parseGrabEmailReceipt(buildGrabReceiptNativePages([splitIdr.replace('Others 5.000', 'Unlabeled charge 5.000')])!), /unsupported regional fare component/);
+
+// A single printed sheet can contain two messages, each flowing left then right.
+const printedLines = [
+  ['Your Grab E-Receipt\n2 messages\nHope you enjoyed your ride!\nPicked up on 14 August 2026\nBooking ID: A-INVENTEDPANEL01\nTotal Paid\nP 120.00\nBreakdown\nBase fare 40.00\nDistance 30.00\nTime 20.00\nSurge charges 30.00\nTotal Paid\n120.00\nPassenger Paid by', 50, 700],
+  ['Cash 120.00\nGot an issue?\nYour Trip\nChino Roces Ave', 360, 700],
+  ['Hope you enjoyed your ride!\nPicked up on 14 August 2026\nBooking ID: A-INVENTEDPANEL02\nTotal Paid\nP 90.00\nBreakdown\nBase fare 40.00\nDistance 30.00\nTime 20.00\nTotal Paid\n90.00\nPassenger Paid by\nCash 90.00', 50, 300],
+  ['Your Trip\nQuezon Ave', 360, 300],
+] as const;
+const printedItems = printedLines.map(([str, x, y]) => ({ str, transform: [1, 0, 0, 1, x, y] }));
+const panels = buildGrabTwoMessagePanelBodies(printedItems, 612, 792);
+assert.equal(panels?.length, 2);
+const panelRows = parseGrabEmailReceipt(buildGrabReceiptNativePages([printedLines.map(line => line[0]).join('\n')], [], panels!)!);
+assert.deepEqual(panelRows?.rows.map(row => [row.amount, row.currency, row.accountName, row.rawPayload?.referenceNumber]), [
+  ['120.00', 'PHP', 'Cash', 'A-INVENTEDPANEL01'], ['90.00', 'PHP', 'Cash', 'A-INVENTEDPANEL02'],
+]);
+assert(hasVerifiedGrabReceiptRows(buildGrabReceiptNativePages([printedLines.map(line => line[0]).join('\n')], [], panels!)!, panelRows!.rows));
+assert.throws(() => parseGrabEmailReceipt(buildGrabReceiptNativePages([printedLines.map(line => line[0]).join('\n')], [], [panels![0], panels![1].replace('Cash 90.00', 'Cash 80.00')])!), /source review/);
+assert.equal(buildGrabTwoMessagePanelBodies(printedItems.slice(0, 3), 612, 792), null, 'Missing right panel cannot create panel proof');
+assert.equal(buildGrabTwoMessagePanelBodies(printedItems.slice(1), 612, 792), null, 'Missing two-message header cannot create panel proof');
 
 console.log('Held Grab layouts: PHP/MYR/THB/IDR, legacy food, adjusted fares, split IDR glyphs, inclusive tax disclosures, and unsafe negatives passed.');
