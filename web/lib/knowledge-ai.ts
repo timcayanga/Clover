@@ -1,4 +1,6 @@
 import "server-only";
+import { extractFinalOpenAIText } from "./openai-response-text";
+import { DEFAULT_CONTENT_MODEL, openAIInteractiveOptions } from "./openai-model-policy";
 import { createHash } from "node:crypto";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
@@ -95,6 +97,7 @@ export async function generateKnowledgeDraft() {
         summary: entry.content.summary,
       }))
       .slice(0, 90);
+    const model = process.env.CLOVER_CONTENT_MODEL?.trim() || DEFAULT_CONTENT_MODEL;
     const response = await fetch("https://api.openai.com/v1/responses", {
       method: "POST",
       signal: AbortSignal.timeout(100000),
@@ -103,7 +106,8 @@ export async function generateKnowledgeDraft() {
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: process.env.CLOVER_CONTENT_MODEL?.trim() || "gpt-4.1-mini",
+        model,
+        ...openAIInteractiveOptions(model),
         store: false,
         max_output_tokens: 4000,
         max_tool_calls: 2,
@@ -128,12 +132,7 @@ export async function generateKnowledgeDraft() {
     };
     if (payload.status !== "completed")
       throw new Error("The draft was incomplete. No article was published.");
-    const output =
-      payload.output
-        ?.flatMap((item) => item.content ?? [])
-        .filter((item) => item.type === "output_text")
-        .map((item) => item.text ?? "")
-        .join("") ?? "";
+    const output = extractFinalOpenAIText(payload) ?? "";
     const parsed = JSON.parse(
       output.replace(/^```json\s*/i, "").replace(/\s*```$/, ""),
     );

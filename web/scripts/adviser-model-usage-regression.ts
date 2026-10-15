@@ -65,3 +65,40 @@ assert.match(usageRouteSource, /summarizeAdviserUsageAuditLogs/);
 assert.match(usageRouteSource, /"adviser\.model_call"/);
 
 console.log("Adviser exact model usage regression passed.");
+
+// A model migration must keep all request stages and accounting compatible.
+import { DEFAULT_ADVISER_MODEL, DEFAULT_CONTENT_MODEL, DEFAULT_IMPORT_TEXT_MODEL, openAIInteractiveOptions } from "../lib/openai-model-policy";
+assert.equal(DEFAULT_ADVISER_MODEL, "gpt-6-luna");
+assert.equal(DEFAULT_CONTENT_MODEL, "gpt-6-luna");
+assert.equal(DEFAULT_IMPORT_TEXT_MODEL, "gpt-5.4-mini");
+assert.deepEqual(openAIInteractiveOptions("gpt-6-luna"), { reasoning: { effort: "none" }, temperature: 0.2 });
+assert.deepEqual(openAIInteractiveOptions("gpt-4.1-mini"), { temperature: 0.2 });
+assert.deepEqual(openAIInteractiveOptions("gpt-6.1-sol"), { reasoning: { effort: "low" } });
+const luna = extractAdviserModelUsage({ model: "gpt-6-luna", usage: { input_tokens: 1000, input_tokens_details: { cached_tokens: 200, cache_write_tokens: 100 }, output_tokens: 100 } }, { fallbackModel: "gpt-6-luna", stage: "final_response", latencyMs: 1000 });
+assert.equal(luna.estimatedCostUsd, 0.0001345);
+const route = readFileSync(new URL("../app/api/adviser/chat/route.ts", import.meta.url), "utf8");
+assert.equal((route.match(/openAIInteractiveOptions\(model\)/g) ?? []).length, 3, "Tool selection, streaming and ordinary replies must all disable reasoning explicitly");
+const editorial = readFileSync(new URL("../lib/knowledge-ai.ts", import.meta.url), "utf8");
+assert.match(editorial, /openAIInteractiveOptions\(model\)/);
+assert.match(editorial, /DEFAULT_CONTENT_MODEL/);
+
+import { extractFinalOpenAIText, createOpenAIFinalTextStream } from "../lib/openai-response-text";
+const phased = { output_text: "Checking…Final answer", output: [
+  { type: "message", phase: "commentary", content: [{ type: "output_text", text: "Checking…" }] },
+  { type: "message", phase: "final_answer", content: [{ type: "output_text", text: "PHP " }, { type: "output_text", text: "6,000" }] },
+] };
+const beforePhases = JSON.stringify(phased);
+assert.equal(extractFinalOpenAIText(phased), "PHP 6,000");
+assert.equal(JSON.stringify(phased), beforePhases, "Provider phase/state must survive upstream replay intact");
+assert.equal(extractFinalOpenAIText({ output_text: "Checking…", output: [phased.output[0]] }), null);
+assert.equal(extractFinalOpenAIText({ output_text: " legacy " }), "legacy");
+assert.equal(extractFinalOpenAIText({ output: [{ content: [{ type: "output_text", text: "legacy" }] }] }), "legacy");
+const filter = createOpenAIFinalTextStream();
+assert.equal(filter({ type: "response.output_item.added", output_index: 0, item: { id: "pre", phase: "commentary" } }), null);
+assert.equal(filter({ type: "response.output_text.delta", item_id: "pre", output_index: 0, delta: "Checking…" }), null);
+assert.equal(filter({ type: "response.output_item.added", output_index: 1, item: { id: "final", phase: "final_answer" } }), null);
+assert.equal(filter({ type: "response.output_text.delta", item_id: "final", output_index: 1, delta: "PHP 6,000" }), "PHP 6,000");
+assert.equal(filter({ type: "response.output_text.delta", output_index: 0, delta: "Still checking…" }), null);
+assert.equal(createOpenAIFinalTextStream()({ type: "response.output_text.delta", delta: "legacy" }), "legacy");
+assert.match(route, /message\.role === "assistant" \? \{ phase: "final_answer" \}/);
+assert.match(route, /createOpenAIFinalTextStream\(\)/);

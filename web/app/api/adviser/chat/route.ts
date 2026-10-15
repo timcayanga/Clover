@@ -1,3 +1,5 @@
+import { extractFinalOpenAIText, createOpenAIFinalTextStream } from "@/lib/openai-response-text";
+import { DEFAULT_ADVISER_MODEL, openAIInteractiveOptions } from "@/lib/openai-model-policy";
 import { buildBudgetOverview } from "@/lib/budgeting";
 import { spendingRoomOptions, spendingRoomReply, spendingRoomChart } from "@/lib/adviser-spending-room";
 import { adviserCurrency, adviserMonthRange, isSpendingSummaryQuestion, commitmentInstallment, upcomingBillsReply } from "@/lib/adviser-analysis";
@@ -871,40 +873,7 @@ const buildFinancialPersona = (
     strength: clamp(persona.strength),
   };
 };
-const extractOutputText = (payload: Record<string, unknown>) => {
-  if (typeof payload.output_text === "string" && payload.output_text.trim()) {
-    return payload.output_text.trim();
-  }
-
-  const output = payload.output;
-  if (!Array.isArray(output)) {
-    return null;
-  }
-
-  for (const item of output) {
-    if (!item || typeof item !== "object") {
-      continue;
-    }
-
-    const content = (item as { content?: unknown }).content;
-    if (!Array.isArray(content)) {
-      continue;
-    }
-
-    for (const contentItem of content) {
-      if (!contentItem || typeof contentItem !== "object") {
-        continue;
-      }
-
-      const typedContent = contentItem as { type?: unknown; text?: unknown };
-      if (typedContent.type === "output_text" && typeof typedContent.text === "string" && typedContent.text.trim()) {
-        return typedContent.text.trim();
-      }
-    }
-  }
-
-  return null;
-};
+const extractOutputText = extractFinalOpenAIText;
 
 export async function POST(request: Request) {
   try {
@@ -3137,7 +3106,7 @@ export async function POST(request: Request) {
     // the model turns those grounded results into a concise explanation. The
     // mini model is the safer default cost tier, while an environment override
     // can still opt selected deployments into a larger model after evals.
-    const model = env.OPENAI_ADVISER_MODEL?.trim() || "gpt-4.1-mini";
+    const model = env.OPENAI_ADVISER_MODEL?.trim() || DEFAULT_ADVISER_MODEL;
     const recordModelUsage = (
       payload: unknown,
       stage: AdviserModelCallStage,
@@ -3438,7 +3407,7 @@ export async function POST(request: Request) {
 
     const baseInput: unknown[] = [
       { role: "system", content: [{ type: "input_text", text: `${systemPrompt}\n\nRequest routing hint: ${requestRoutingHint}\n\nTool rules: ${focusedToolRule}` }] },
-      ...incomingMessages.map((message) => ({ role: message.role, content: [{ type: "input_text", text: message.content }] })),
+      ...incomingMessages.map((message) => ({ role: message.role, ...(message.role === "assistant" ? { phase: "final_answer" } : {}), content: [{ type: "input_text", text: message.content }] })),
     ];
     let modelInput = baseInput;
     if (relevantTools.length > 0) {
@@ -3454,7 +3423,7 @@ export async function POST(request: Request) {
           body: JSON.stringify({
             model,
             prompt_cache_key: "clover-adviser-v1",
-            temperature: 0.2,
+            ...openAIInteractiveOptions(model),
             max_output_tokens: entryRequested ? 12000 : 450,
             tools: relevantTools,
             tool_choice: "required",
@@ -4083,7 +4052,7 @@ export async function POST(request: Request) {
           upstreamResponse = await fetch("https://api.openai.com/v1/responses", {
             method: "POST",
             headers: { Authorization: `Bearer ${env.OPENAI_API_KEY}`, "Content-Type": "application/json" },
-            body: JSON.stringify({ model, prompt_cache_key: "clover-adviser-v1", stream: true, temperature: 0.2, max_output_tokens: 900, tools: [], input: modelInput }),
+            body: JSON.stringify({ model, prompt_cache_key: "clover-adviser-v1", stream: true, ...openAIInteractiveOptions(model), max_output_tokens: 900, tools: [], input: modelInput }),
           });
         } catch (error) {
           console.error("Adviser upstream stream failed", error instanceof Error ? error.message : error);
@@ -4115,6 +4084,9 @@ export async function POST(request: Request) {
               const decoder = new TextDecoder();
               let buffer = "";
               let usageRecorded = false;
+              let textEmitted = false;
+              let completedPayload: Record<string, unknown> | null = null;
+              const finalTextDelta = createOpenAIFinalTextStream();
               try {
                 while (true) {
                   const { value, done } = await reader.read();
@@ -4126,9 +4098,12 @@ export async function POST(request: Request) {
                     if (!dataLine || dataLine.slice(6).trim() === "[DONE]") continue;
                     try {
                       const data = JSON.parse(dataLine.slice(6)) as { type?: string; delta?: string; response?: Record<string, unknown> };
-                      if (data.type === "response.output_text.delta" && data.delta) {
-                        controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: "delta", text: data.delta })}\n\n`));
+                      const delta = finalTextDelta(data);
+                      if (delta) {
+                        textEmitted = true;
+                        controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: "delta", text: delta })}\n\n`));
                       } else if (["response.completed", "response.incomplete", "response.failed"].includes(data.type ?? "") && data.response && !usageRecorded) {
+                        completedPayload = data.response;
                         await recordModelUsage(data.response, "final_response", streamStartedAt, {
                           status: data.type === "response.completed" ? "completed" : "failed",
                           httpStatus: upstreamResponse.status,
@@ -4141,6 +4116,10 @@ export async function POST(request: Request) {
                     }
                   }
                   if (done) break;
+                }
+                if (!textEmitted) {
+                  const text = extractFinalOpenAIText(completedPayload) || fallbackReply;
+                  controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: "delta", text })}\n\n`));
                 }
                 if (!usageRecorded) {
                   await recordModelUsage({}, "final_response", streamStartedAt, {
@@ -4205,7 +4184,7 @@ export async function POST(request: Request) {
       finalResponse = await fetch("https://api.openai.com/v1/responses", {
         method: "POST",
         headers: { Authorization: `Bearer ${env.OPENAI_API_KEY}`, "Content-Type": "application/json" },
-        body: JSON.stringify({ model, prompt_cache_key: "clover-adviser-v1", temperature: 0.2, max_output_tokens: 900, tools: [], input: modelInput }),
+        body: JSON.stringify({ model, prompt_cache_key: "clover-adviser-v1", ...openAIInteractiveOptions(model), max_output_tokens: 900, tools: [], input: modelInput }),
         signal: finalController.signal,
       });
     } catch (error) {
