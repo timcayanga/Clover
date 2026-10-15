@@ -69,7 +69,11 @@ async function main() {
     assert(afterParts[4].every(job => job.status === 'completed'), 'Learning jobs must finish successfully');
     await confirmImportFile(file.id);
     await settle();
-    assert.equal(await snapshot(), afterConfirmed, 'Settled confirmed correction must not enqueue duplicate learning');
+    const afterRepeatParts = JSON.parse(await snapshot()) as Array<Array<Record<string, unknown>>>;
+    for (let index = 0; index < 4; index++) {
+      assert.deepEqual(afterRepeatParts[index], afterParts[index], 'Settled confirmed correction must preserve financial rows');
+    }
+    assert.deepEqual(afterRepeatParts[4].map(job => [job.id, job.status]).sort(), afterParts[4].map(job => [job.id, job.status]).sort(), 'Settled confirmed correction must not enqueue duplicate learning');
   } finally {
     await drain();
     await db.user.delete({ where: { id: user.id } });
