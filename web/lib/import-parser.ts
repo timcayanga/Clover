@@ -7724,8 +7724,25 @@ const parseBpiCreditCardImportText = (
   const ledgerLines = ledgerBoundaryIndex >= 0 ? lines.slice(0, ledgerBoundaryIndex) : lines;
   const segments: string[][] = [];
   let current: string[] = [];
+  let inUnbilledInstallmentPurchase = false;
 
   for (const line of ledgerLines) {
+    const compactHeading = line.replace(/[^a-z]/gi, "").toUpperCase();
+    if (compactHeading === "INSTALLMENTPURCHASE") {
+      if (current.length > 0) segments.push(current);
+      current = [];
+      inUnbilledInstallmentPurchase = true;
+      continue;
+    }
+    if (compactHeading === "INSTALLMENTAMORTIZATION") {
+      if (current.length > 0) segments.push(current);
+      current = [];
+      inUnbilledInstallmentPurchase = false;
+      continue;
+    }
+    // The purchase principal is an unbilled disclosure. Only its later
+    // amortization rows participate in this statement's payable ledger.
+    if (inUnbilledInstallmentPurchase) continue;
     if (isBpiCreditCardBoilerplateLine(line)) {
       if (current.length > 0) {
         segments.push(current);

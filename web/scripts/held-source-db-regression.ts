@@ -4,7 +4,7 @@ import {readFileSync} from 'node:fs';
 import {randomUUID} from 'node:crypto';
 import {encodeNativePdfNullGlyphs} from '../lib/native-pdf-text';
 import {parseGcashBillsReceipt} from '../lib/gcash-bills-receipt';
-import {parseHeldNativeSource,hasVerifiedHeldNativeRows,buildSeaBankIndonesiaPdfRows,buildDbsZeroPdfProof} from '../lib/held-source-contracts';
+import {parseHeldNativeSource,hasVerifiedHeldNativeRows,buildSeaBankIndonesiaPdfRows,buildDbsZeroPdfProof,hasSeaBankIndonesiaEnglishHeader} from '../lib/held-source-contracts';
 import {parseBcaTransferProof} from '../lib/bca-transfer-proof';
 import {pdfTextLayerLooksSufficientForParsing} from '../lib/import-file-text.server';
 import {validateParsedImportRows} from '../lib/data-engine-validation';
@@ -18,6 +18,8 @@ async function main(){
  const idr=source(ids[0]);
  for(const id of ['seabank-id-english-columns','seabank-id-spaced-identity']){const text=source(id);assert.equal(parseHeldNativeSource(text)!.rows.length,5);for(const bad of [text.replaceAll('(IDR)','(USD)'),text.replace('901 000000456','901 ***000456'),text.replace('901 000000456','901\n000000456'),text.replace('901 000000456','901 0000004567'),text.replace('901 000000456','901 000000456A'),text.replace('40 | 570','40 | 571'),text.replace('SEABANK_ID_ROW_COUNT 5','SEABANK_ID_ROW_COUNT 4')])assert.throws(()=>parseHeldNativeSource(bad),/requires review/);}
  const english=source('seabank-id-english-columns');assert.throws(()=>parseHeldNativeSource(english.replace('SEABANK_ID_NATIVE_LANGUAGE EN','')),/requires review/);assert.throws(()=>parseHeldNativeSource(english.replace('page 2 of 2','page 2 of 3')),/requires review/);
+ const compactEnglish=english.replace('SEABANK ACCOUNT:','SEABANKACCOUNT:');assert(hasSeaBankIndonesiaEnglishHeader(compactEnglish));assert.equal(parseHeldNativeSource(compactEnglish)!.rows.length,5);assert(!hasSeaBankIndonesiaEnglishHeader(compactEnglish.replace('cs@seabank.co.id','contact@seabank.com.ph')));assert.throws(()=>parseHeldNativeSource(compactEnglish.replace('SEABANKACCOUNT: 901 000000456','SEABANKACCOUNT: 901 0000004567')),/requires review/);
+ const stackedEnglish=compactEnglish.replace('ACCOUNT STARTING BALANCE (IDR) TOTAL OUTGOING (IDR) TOTAL INCOMING (IDR) ENDING BALANCE (IDR)','STARTING BALANCE TOTAL OUTGOING TOTAL INCOMING ENDING BALANCE\nACCOUNT (IDR) (IDR) (IDR) (IDR)');assert.notEqual(stackedEnglish,compactEnglish);assert.equal(parseHeldNativeSource(stackedEnglish)!.rows.length,5);assert.throws(()=>parseHeldNativeSource(stackedEnglish.replace('ACCOUNT (IDR) (IDR) (IDR) (IDR)','ACCOUNT (IDR) (USD) (IDR) (IDR)')),/requires review/);
 
  for(const bad of [idr.replace('halaman 2 dr 2','halaman 2 dr 3'),idr.replace('901000000123','90100000012'),idr.replace('1.000 | 1.100','1.001 | 1.100'),idr.replace('100 | 900','100 | 901'),idr.replace('SEABANK_ID_ROW_COUNT 5','SEABANK_ID_ROW_COUNT 4'),idr.replace('cs@seabank.co.id','contact@seabank.com.ph')])assert.throws(()=>parseHeldNativeSource(bad),/requires review/);
  for(const id of ids.slice(1,3)){const zero=source(id);for(const bad of [zero.replace('SGD 0.00','SGD 1.00'),zero.replace('Page 3 of 3',''),zero.replace('CURRENCY: SINGAPORE DOLLAR','CURRENCY: US DOLLAR'),zero.replace('"movements":0','"movements":1'),zero.replace('Account No.','Account No. 999-000000-0\nAccount No.')])assert.throws(()=>parseHeldNativeSource(bad),/requires review/);}
