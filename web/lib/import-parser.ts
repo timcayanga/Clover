@@ -4341,26 +4341,38 @@ const parseBpiMonthDay = (value: string, yearHint: number) => {
   return new Date(Date.UTC(year, monthIndex, Number(monthDayMatch[2]), 12));
 };
 
-const parseBpiCardDateToken = (tokens: string[], startIndex: number, yearHint: number) => {
+const parseBpiCardDateToken = (tokens: string[], startIndex: number, yearHint: number, statementDate: string | null) => {
   const token = tokens[startIndex];
   const nextToken = tokens[startIndex + 1];
   if (!token) {
     return null;
   }
 
+  const alignUnyearredMonth = (date: Date) => {
+    const statement = statementDate ? new Date(statementDate) : null;
+    if (statement && !Number.isNaN(statement.getTime()) &&
+        date.getUTCFullYear() === statement.getUTCFullYear() &&
+        date.getUTCMonth() - statement.getUTCMonth() >= 6) {
+      return new Date(Date.UTC(date.getUTCFullYear() - 1, date.getUTCMonth(), date.getUTCDate(), 12));
+    }
+    return date;
+  };
+
   if (/^\d{1,2}[/-]\d{1,2}(?:[/-]\d{2,4})?$/.test(token)) {
     const date = parseDateValue(token);
-    return date ? { date, nextIndex: startIndex + 1 } : null;
+    const explicitYear = token.split(/[/-]/).length === 3;
+    const resolved = date && !explicitYear ? new Date(Date.UTC(yearHint, date.getUTCMonth(), date.getUTCDate(), 12)) : date;
+    return resolved ? { date: explicitYear ? resolved : alignUnyearredMonth(resolved), nextIndex: startIndex + 1 } : null;
   }
 
   if (/^\d{1,2}$/.test(token) && nextToken && new RegExp(`^${monthNamePattern}$`, "i").test(nextToken)) {
     const date = parseBpiMonthDay(`${nextToken} ${token}`, yearHint);
-    return date ? { date, nextIndex: startIndex + 2 } : null;
+    return date ? { date: alignUnyearredMonth(date), nextIndex: startIndex + 2 } : null;
   }
 
   if (new RegExp(`^${monthNamePattern}$`, "i").test(token) && /^\d{1,2}$/.test(nextToken ?? "")) {
     const date = parseBpiMonthDay(`${token} ${nextToken}`, yearHint);
-    return date ? { date, nextIndex: startIndex + 2 } : null;
+    return date ? { date: alignUnyearredMonth(date), nextIndex: startIndex + 2 } : null;
   }
 
   return null;
@@ -7574,12 +7586,12 @@ const parseBpiCreditCardTransactionLine = (
 ) => {
   const normalized = normalizeWhitespace(line);
   const tokens = normalized.split(" ");
-  const saleDateResult = parseBpiCardDateToken(tokens, 0, state.year);
+  const saleDateResult = parseBpiCardDateToken(tokens, 0, state.year, state.statementDate);
   if (!saleDateResult) {
     return null;
   }
 
-  const postDateResult = parseBpiCardDateToken(tokens, saleDateResult.nextIndex, state.year);
+  const postDateResult = parseBpiCardDateToken(tokens, saleDateResult.nextIndex, state.year, state.statementDate);
   if (!postDateResult) {
     return null;
   }

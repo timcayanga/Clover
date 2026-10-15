@@ -79,6 +79,37 @@ const creditCard = assessImportCandidate({
 });
 assert.equal(creditCard.balanceReconciliation.reconciled, true, "card expenses increase the liability balance");
 
+const bpiSignedPayment = assessImportCandidate({
+  source: "trained",
+  rows: [
+    row({ date: "2025-12-17", amount: "100.00", merchantRaw: "Statement Payment Credit", categoryName: "Financial", rawPayload: { kind: "bpi_credit_card_transaction", amountText: "-100.00", line: "December 17 December 17 Payment -Thank You -100.00" } }),
+    row({ date: "2026-01-15", amount: "20.00", merchantRaw: "Card purchase", rawPayload: { kind: "bpi_credit_card_transaction", amountText: "20.00", line: "January 14 January 15 Card purchase 20.00" } }),
+  ],
+  metadata: { accountType: "credit_card", openingBalance: 100, endingBalance: 20, currency: "PHP", confidence: 98 },
+});
+assert.equal(bpiSignedPayment.balanceReconciliation.reconciled, true, "BPI's printed negative payment must reduce the debt without changing its established expense classification");
+assert.equal(bpiSignedPayment.critical, false);
+
+const mismatchedBpiSourceAmount = assessImportCandidate({
+  source: "trained",
+  rows: [row({ date: "2026-01-15", amount: "20.00", merchantRaw: "Card purchase", rawPayload: { kind: "bpi_credit_card_transaction", amountText: "200.00", line: "January 14 January 15 Card purchase 200.00" } })],
+  metadata: { accountType: "credit_card", openingBalance: 100, endingBalance: 120, currency: "PHP", confidence: 98 },
+});
+assert.equal(mismatchedBpiSourceAmount.critical, true, "A source amount that conflicts with the normalized amount remains review-required");
+const onePesoBpiMismatch = assessImportCandidate({
+  source: "trained",
+  rows: [row({ date: "2026-01-15", amount: "1000.00", merchantRaw: "Card purchase", rawPayload: { kind: "bpi_credit_card_transaction", amountText: "1001.00", line: "January 14 January 15 Card purchase 1001.00" } })],
+  metadata: { accountType: "credit_card", openingBalance: 100, endingBalance: 1100, currency: "PHP", confidence: 98 },
+});
+assert.equal(onePesoBpiMismatch.critical, true, "A small source-to-normalized mismatch must not be hidden by the balance tolerance");
+
+const recoveredBpiApprovalAmount = assessImportCandidate({
+  source: "trained",
+  rows: [row({ date: "2026-01-15", amount: "604.99", merchantRaw: "Card purchase", rawPayload: { kind: "bpi_credit_card_transaction", amountText: "4029357733604.99", recoveredAmountText: "604.99", approvalCode: "4029357733", line: "January 14 January 15 Card purchase 4029357733604.99" } })],
+  metadata: { accountType: "credit_card", openingBalance: 0, endingBalance: 604.99, currency: "PHP", confidence: 98 },
+});
+assert.equal(recoveredBpiApprovalAmount.critical, false, "A recovered trailing amount with retained approval-code evidence remains usable");
+
 const disagreement = arbitrateImportCandidates({
   candidates: [
     { source: "trained", rows: safeGenericRows, metadata: { currency: "PHP" } },
