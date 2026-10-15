@@ -1,4 +1,5 @@
 import "server-only";
+import { extractFinalOpenAIText } from "./openai-response-text";
 import { DEFAULT_CONTENT_MODEL, openAIInteractiveOptions } from "./openai-model-policy";
 import { createHash } from "node:crypto";
 import { Prisma } from "@prisma/client";
@@ -131,12 +132,7 @@ export async function generateKnowledgeDraft() {
     };
     if (payload.status !== "completed")
       throw new Error("The draft was incomplete. No article was published.");
-    const output =
-      payload.output
-        ?.flatMap((item) => item.content ?? [])
-        .filter((item) => item.type === "output_text")
-        .map((item) => item.text ?? "")
-        .join("") ?? "";
+    const output = extractFinalOpenAIText(payload) ?? "";
     const parsed = JSON.parse(
       output.replace(/^```json\s*/i, "").replace(/\s*```$/, ""),
     );
