@@ -94,6 +94,12 @@ export async function learningVerificationManifest(workspaceId: string, own = fa
   });
   return readManifest(db, selectedTables, predicates, [workspaceId]);
 }
+// The full inspect response can repeat the complete source document in every
+// parsed row and transaction. Compare all fields on the database side when a
+// caller only needs to prove that an already reviewed report stayed unchanged.
+export async function learningVerificationOwnCompleteManifest(workspaceId: string, db: Prisma.TransactionClient = prisma): Promise<Manifest> {
+  return readManifest(db, tables, tables.map(table => `WHERE ${manifestWorkspaceExpression(table)} = $1`), [workspaceId]);
+}
 type RunState = { baseline: Manifest; protectedFinancial?: Manifest; failureJobId?: string; interruptionJobId?: string };
 async function loadRun(runId: string, actor: string) {
   assertLearningVerificationEnvironment();
@@ -175,6 +181,32 @@ export async function inspectLearningVerification(runId: string, actor: string) 
     failureJobId: run.state.failureJobId, interruptionJobId: run.state.interruptionJobId,
     accounts, transactions, files, parsedRows, rules, signals, accountRules, templates, jobs,
     retrievedSourceEvidence: parsedRows.flatMap(row => { const evidence = readGcashBillsBillerAccountEvidence(row.rawPayload); return evidence ? [{ parsedRowId: row.id, ...evidence }] : []; }) };
+}
+
+/** Small polling response. It never retrieves raw source or normalized payloads. */
+export async function inspectLearningVerificationStatus(runId: string, actor: string) {
+  const run = await loadRun(runId, actor);
+  const where = { workspaceId: run.workspace.id };
+  const [files, jobs, transactionCount, parsedRowCount] = await Promise.all([
+    prisma.importFile.findMany({ where, select: { id: true, status: true, processingPhase: true, processingMessage: true } }),
+    prisma.learningJob.findMany({ where, select: { id: true, status: true, nextIndex: true, totalItems: true, errorCode: true } }),
+    prisma.transaction.count({ where }),
+    prisma.parsedTransaction.count({ where }),
+  ]);
+  return { runId, workspaceId: run.workspace.id, files, jobs, transactionCount, parsedRowCount };
+}
+
+/** Complete-row proof for repeat reads and final audits, with only hashes on the wire. */
+export async function inspectLearningVerificationDigest(runId: string, actor: string) {
+  const run = await loadRun(runId, actor);
+  const { outside, own } = await prisma.$transaction(async db => ({
+    outside: await learningVerificationManifest(run.workspace.id, false, db),
+    own: await learningVerificationOwnCompleteManifest(run.workspace.id, db),
+  }), { isolationLevel: "RepeatableRead", timeout: readSnapshotTimeout });
+  const changed = (before: Manifest, after: Manifest) => Object.keys(before).filter(table => before[table].count !== after[table]?.count || before[table].sha256 !== after[table]?.sha256);
+  return { runId, workspaceId: run.workspace.id, outside, own,
+    changedOutsideProfile: changed(run.state.baseline, outside),
+    changedProtectedFinancial: run.state.protectedFinancial ? changed(run.state.protectedFinancial, Object.fromEntries(Object.entries(own).filter(([table]) => financialTables.has(table)))) : null };
 }
 
 // A reviewed retained fixture in the already-owned verification Profile only.

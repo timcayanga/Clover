@@ -66,6 +66,21 @@ async function main() {
     const legacyReceipt = await db.parsedTransaction.create({data:{workspaceId:start.workspaceId,importFileId:legacyFile.id,amount:"155.00",date:new Date("2022-09-07T05:06:22Z"),type:"expense",rawPayload:{source:"gcash_bills_receipt",line:"GCash Bills Pay Receipt\nAccount 09000000000\nAccount\nEX0AMPLE\nNumber",billerAccountNumber:null}}});
     const prepared = await v.prepareLearningVerificationCheckpoints(runId, actor);
     const report = await v.inspectLearningVerification(runId, actor);
+    const compactStatus = await v.inspectLearningVerificationStatus(runId, actor);
+    assert.equal(compactStatus.transactionCount, report.transactions.length);
+    assert.equal(compactStatus.parsedRowCount, report.parsedRows.length);
+    assert.equal(compactStatus.jobs.length, report.jobs.length);
+    assert(!JSON.stringify(compactStatus).includes(sourceEvidence), "Polling never returns repeated raw source evidence");
+    const compactDigest = await v.inspectLearningVerificationDigest(runId, actor);
+    assert.equal(Object.keys(compactDigest.own).length, manifestTables.length, "Every source, financial, learning and job table is hashed");
+    assert.deepEqual(compactDigest.outside, report.current);
+    assert.deepEqual(compactDigest.changedOutsideProfile, []);
+    assert.deepEqual(compactDigest.changedProtectedFinancial, []);
+    assert.deepEqual(Object.fromEntries(Object.entries(compactDigest.own).filter(([table]) => financialTables.has(table))), report.financial);
+    await db.parsedTransaction.update({ where: { id: legacyReceipt.id }, data: { rawPayload: { source: "gcash_bills_receipt", sourceEvidence: "changed" }, updatedAt: legacyReceipt.updatedAt } });
+    assert.notDeepEqual((await v.inspectLearningVerificationDigest(runId, actor)).own.ParsedTransaction, compactDigest.own.ParsedTransaction, "Compact read detects source-only edits");
+    await db.parsedTransaction.update({ where: { id: legacyReceipt.id }, data: { rawPayload: legacyReceipt.rawPayload!, updatedAt: legacyReceipt.updatedAt } });
+    assert.deepEqual((await v.inspectLearningVerificationDigest(runId, actor)).own, compactDigest.own, "Restored source fields restore the digest");
     assert.deepEqual(report.changedOutsideProfile, []); assert.deepEqual(report.changedProtectedFinancial, []);
     assert.equal(report.retrievedSourceEvidence.find(row=>row.parsedRowId===legacyReceipt.id)?.billerAccountNumber,"EX0AMPLE");
     assert.deepEqual(await db.parsedTransaction.findUniqueOrThrow({where:{id:legacyReceipt.id}}),legacyReceipt,"Read-only source retrieval preserves every original field and timestamp");
@@ -175,6 +190,10 @@ async function main() {
       assert.equal((await route.POST(request({runId,action:"preview-batch-preservation",runIds:[runId,runId]}))).status,400);
       assert.equal((await route.POST(request({runId,action:"preview-batch-preservation",runIds:[randomUUID()]}))).status,404);
       assert.equal((await route.POST(request({runId,action:"inspect",runIds:[runId]}))).status,400);
+      const statusResponse = await route.POST(request({runId,action:"inspect-status"})); assert.equal(statusResponse.status,200);
+      assert(!JSON.stringify(await statusResponse.json()).includes(sourceEvidence), "Route polling omits raw source payloads");
+      const digestResponse = await route.POST(request({runId,action:"inspect-digest"})); assert.equal(digestResponse.status,200);
+      assert.equal(Object.keys((await digestResponse.json()).own).length, manifestTables.length);
       assert.equal((await route.POST(request())).status, 200);
       process.env.VERCEL_ENV = "production"; assert.equal((await route.POST(request())).status, 404);
     } finally { if (prior) require.cache[adminPath] = prior; else delete require.cache[adminPath]; }
