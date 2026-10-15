@@ -18,12 +18,19 @@ export function HoldingLogo({ holding }: { holding: PortfolioHolding }) {
         padding: 0,
       }}
     >
-      {failedPath !== path && path?.startsWith("/assets/investments/") ? (
+      {failedPath !== path && path?.startsWith("/assets/") && !path.includes("..") ? path.endsWith(".svg") ? (
         <SvgUri
           uri={`${apiBase()}${path}`}
           width={44}
           height={44}
           onError={() => setFailedPath(path!)}
+        />
+      ) : (
+        <Image
+          source={{ uri: `${apiBase()}${path}` }}
+          style={{ width: 44, height: 44 }}
+          resizeMode="contain"
+          onError={() => setFailedPath(path)}
         />
       ) : (
         <Image

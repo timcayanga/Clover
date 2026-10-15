@@ -1,5 +1,5 @@
 import { listInvestmentPositions } from "./investment-position-store";
-import { getLocalInvestmentLogo } from "./investment-assets";
+import { getInvestmentAssetBrand } from "./investment-assets";
 import type { InvestmentSubtype } from "./investments";
 import { prisma } from "./prisma";
 import { hasCompatibleTable } from "./data-engine";
@@ -133,7 +133,7 @@ export async function loadMobileInvestments(workspaceId: string) {
   for(const p of positions)holdings.push({id:p.id,positionId:p.id,positionRevision:p.revision,accountId:p.accountId,accountType:"investment",source:"snapshot",name:p.assetName,institution:p.institution??null,subtype:p.subtype,symbol:p.symbol,currency:p.currency,quantity:p.quantity,cost:p.costBasis,value:p.value,date:p.valueDate});
   return {
     accounts,
-    holdings: holdings.map(holding=>({...holding,logoUrl:getLocalInvestmentLogo({name:holding.name,symbol:holding.symbol,currency:holding.currency,subtype:holding.subtype as InvestmentSubtype})})),
+    holdings: holdings.map(holding=>({...holding,logoUrl:getInvestmentAssetBrand({name:holding.name,symbol:holding.symbol,institution:holding.institution,currency:holding.currency,subtype:holding.subtype as InvestmentSubtype}).logoSrcs[0] ?? null})),
     history,
     limited: rows.length > 1000 || snapshots.length > 200,
   };
