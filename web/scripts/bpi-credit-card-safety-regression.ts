@@ -67,3 +67,8 @@ assert.equal(paginatedRows.length,2);
 assert.deepEqual(paginatedRows.map(r=>Number(r.amount)),[10,20]);
 assert.ok(paginatedRows.every(r=>!/page|statement of account/i.test(r.merchantRaw ?? '')));
 assert.match(paginatedRows[1].merchantRaw ?? '',/Branch East/i,'Legitimate wrapped merchant text must remain');
+
+const yearBoundaryText = `BPI\nSTATEMENT OF ACCOUNT\nSTATEMENT DATE JANUARY 18, 2026\nPAYMENT DUE DATE FEBRUARY 9, 2026\nCREDIT LIMIT 10,000.00\nCUSTOMER NUMBER 12349001\nTRANSACTION POST DATE DESCRIPTION AMOUNT\nDecember 17 December 17 Payment -Thank You -100.00\nJanuary 14 January 15 Card purchase 20.00\nPrevious Balance 100.00\nEnding Balance 20.00`;
+const yearBoundaryRows = parseImportText(yearBoundaryText, 'bpi-year-boundary.pdf', 'application/pdf');
+assert.deepEqual(yearBoundaryRows.map(row => row.date), ['2025-12-17','2026-01-15'], 'Unyearred December rows in a January statement belong to the previous year; post dates remain authoritative');
+assert.equal((yearBoundaryRows[0].rawPayload as Record<string, unknown>).amountText, '-100.00');

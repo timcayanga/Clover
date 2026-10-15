@@ -53,6 +53,7 @@ const normalizeCurrency = (value: unknown) =>
   typeof value === "string" && value.trim() ? value.trim().toUpperCase() : null;
 
 const amountTolerance = (left: number, right: number) => Math.max(0.02, Math.max(Math.abs(left), Math.abs(right)) * 0.001);
+const sameMagnitudeCents = (left: number, right: number) => Math.round(Math.abs(left) * 100) === Math.round(Math.abs(right) * 100);
 
 const assessBalanceReconciliation = (
   rows: ParsedImportRow[],
@@ -74,6 +75,11 @@ const assessBalanceReconciliation = (
       ? directionalRows.reduce((balance, row) => {
           const amount = Math.abs(rowAmount(row) ?? 0);
           if (accountType === "credit_card") {
+            const payload = asRecord(row.rawPayload);
+            const sourceAmount = payload?.kind === "bpi_credit_card_transaction" ? readNumber(payload.recoveredAmountText ?? payload.amountText) : null;
+            if (sourceAmount !== null && sameMagnitudeCents(sourceAmount, amount)) {
+              return balance + sourceAmount;
+            }
             return row.type === "expense" ? balance + amount : balance - amount;
           }
           return row.type === "income" ? balance + amount : balance - amount;
@@ -139,7 +145,15 @@ export const assessImportCandidate = (params: {
     balanceReconciled: balanceReconciliation.reconciled,
   });
   const currencyConsistency = assessCurrencyConsistency(params.rows, params.metadata);
+  const bpiSourceAmountMismatch = params.rows.some(row => {
+    const payload = asRecord(row.rawPayload);
+    if (payload?.kind !== "bpi_credit_card_transaction" || payload.amountText === undefined) return false;
+    const sourceAmount = readNumber(payload.recoveredAmountText ?? payload.amountText);
+    const normalizedAmount = rowAmount(row);
+    return sourceAmount === null || normalizedAmount === null || !sameMagnitudeCents(sourceAmount, normalizedAmount);
+  });
   const reasons = [...evidenceSafety.reasons, ...validation.findings.map((finding) => finding.code), ...extraction.reasons];
+  if (bpiSourceAmountMismatch) reasons.push("bpi_source_amount_mismatch");
   if (balanceReconciliation.reconciled === false) reasons.push("balance_not_reconciled");
   if (balanceReconciliation.runningBalanceCoverage > 0 && balanceReconciliation.runningBalanceCoverage < 0.75) {
     reasons.push("running_balance_mismatch");
@@ -160,7 +174,7 @@ export const assessImportCandidate = (params: {
       Math.round(validation.score * 0.45 + extraction.score * 0.3 + reconciliationScore * 0.15 + currencyConsistency * 10)
     )
   );
-  const critical = evidenceSafety.reasons.length > 0 || validation.critical || extraction.critical || balanceReconciliation.reconciled === false;
+  const critical = evidenceSafety.reasons.length > 0 || validation.critical || extraction.critical || balanceReconciliation.reconciled === false || bpiSourceAmountMismatch;
 
   return {
     source: params.source,
