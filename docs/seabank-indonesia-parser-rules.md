@@ -18,4 +18,6 @@ An English PDF text layer may stack the four summary labels on one line and prin
 
 Future narrowly named SeaBank statement PDFs use additional v47 extraction entries. Retain v46 and every preceding cache version, learned rule, label and confirmed record. Legacy monthly interest/tax aggregates without exact movement dates or running balances remain outside this ledger contract; zero daily interest disclosures are not financial transactions.
 
+For a large reconciled native ledger, the original file and extraction cache retain the full source, and the first parsed row retains one full transcript. Every row retains its own printed line, amount, direction, running balance, source index and reconciliation proof; subsequent rows point to the first transcript row using its persisted one-based occurrence index. Do not copy the same multi-page text into hundreds of parsed and normalized rows. The bounded representation changes only future writes and must not rewrite prior source evidence, historical transactions or learned rules.
+
 A voucher or promotion word in a counterparty description cannot reject an otherwise complete, independently reconciled native ledger. The scope check reparses and validates the full SeaBank source before giving it precedence; a marker, institution guess, row count or broken proof does not exempt a standalone promotion.

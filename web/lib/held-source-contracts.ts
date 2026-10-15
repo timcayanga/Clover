@@ -66,14 +66,20 @@ function parseSeaBankIndonesia(text: string) {
   if(text.includes('SEABANK_ID_INVALID_COLUMNS') || counts.length!==pages || counts.reduce((a,b)=>a+b,0)!==lines.length || !lines.length) fail('complete native IDR row coverage');
   let running=opening,actualIn=0,actualOut=0;
   const accountNumber=ids[0],accountName=`SeaBank Indonesia ${accountNumber.slice(-4)}`;
+  // The original PDF and extraction cache retain the complete source. Large
+  // ledgers keep one transcript copy on their first row instead of writing the
+  // same multi-page text into every parsed and normalized transaction.
+  const fullTextPerRow=text.length*lines.length<=2_000_000;
+  let sourcePageIndex=0,sourcePageEnd=counts[0]??0;
   const rows=lines.map((line,sourceRowIndex): ParsedImportRow=>{
+    while(sourceRowIndex>=sourcePageEnd && sourcePageIndex<counts.length-1){sourcePageIndex++;sourcePageEnd+=counts[sourcePageIndex];}
     const parts=line.split(/\s*\|\s*/);if(parts.length!==6) fail('IDR row shape');
     const [,stamp,direction,amountText,balanceText,description]=parts;const dm=stamp.match(/^(\d{2}) ([A-Z]{3})$/);if(!dm || !['incoming','outgoing'].includes(direction)) fail('IDR date/direction');
     const date=day(dm[1],dm[2],p[3]),amount=rupiah(amountText),balance=rupiah(balanceText);if(date<start || date>end || amount<=0 || !Number.isSafeInteger(amount*100)) fail('IDR movement outside period');
     running+=direction==='incoming'?amount:-amount;if(running!==balance) fail('IDR running balance');
     if(direction==='incoming')actualIn+=amount;else actualOut+=amount;
     const categoryName=/^(?:Biaya|Fee)\b/.test(description)?'Financial':/^(?:Bunga Tabungan|Savings Interest)\b/.test(description)?'Income':/\bTransfer\b|Top Up - eWallet/.test(description)?'Transfers':/Top Up - Paket Data/.test(description)?'Bills & Utilities':'Other';
-    return {date,amount:amount.toFixed(2),currency:'IDR',type:direction==='incoming'?'income':'expense',categoryName,merchantRaw:description,merchantClean:description,description,accountNumber,accountName,institution:'SeaBank Indonesia',confidence:95,balance,rawPayload:{source:'seabank_indonesia_native',kind:'bank_transaction',line,sourceRowIndex,accountNumber,accountCurrency:'IDR',accountType:'bank',direction,notes:description,amountText,balance,balanceReconciled:true,reconciliation:{version:'seabank-id-native-v1',openingBalance:opening,endingBalance:closing,totalIncoming:incoming,totalOutgoing:outgoing,physicalPages:pages},sourceDocumentText:text}};
+    return {date,amount:amount.toFixed(2),currency:'IDR',type:direction==='incoming'?'income':'expense',categoryName,merchantRaw:description,merchantClean:description,description,accountNumber,accountName,institution:'SeaBank Indonesia',confidence:95,balance,rawPayload:{source:'seabank_indonesia_native',kind:'bank_transaction',line,sourceRowIndex,accountNumber,accountCurrency:'IDR',accountType:'bank',direction,notes:description,amountText,balance,balanceReconciled:true,reconciliation:{version:'seabank-id-native-v1',openingBalance:opening,endingBalance:closing,totalIncoming:incoming,totalOutgoing:outgoing,physicalPages:pages},...(!fullTextPerRow?{physicalPage:sourcePageIndex+1}:{}),...(fullTextPerRow||sourceRowIndex===0?{sourceDocumentText:text}:{sourceDocumentTextRowIndex:1})}};
   });
   if(actualIn!==incoming || actualOut!==outgoing || running!==closing) fail('IDR complete movement totals');
   return {rows,metadata:{institution:'SeaBank Indonesia',accountName,accountNumber,accountType:'bank' as const,currency:'IDR',openingBalance:opening,endingBalance:closing,startDate:start,endDate:end,confidence:95,currencyConfidence:100,institutionConfidence:100,identityEvidence:['seabank-id-native-v1','Full twelve-digit account, IDR columns, complete pages and running balances']}};
