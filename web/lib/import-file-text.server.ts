@@ -1,5 +1,5 @@
 import {buildSeaBankIndonesiaPdfRows, buildDbsZeroPdfProof, hasSeaBankIndonesiaEnglishHeader} from '@/lib/held-source-contracts';
-import { buildGrabReceiptNativePages, buildGrabPickupFields, buildGrabTwoMessagePanelBodies } from '@/lib/grab-email-receipt';
+import { buildGrabReceiptNativePages, buildGrabPickupFields, buildGrabTwoMessagePanelBodies, type GrabVisualHeadline } from '@/lib/grab-email-receipt';
 import { parseCimbConsolidatedStatement } from "@/lib/import-parser";
 import { buildBcaTransferPdfRows, parseBcaTransferProof } from "@/lib/bca-transfer-proof";
 import { hasReconciledBdoInlineLedger } from "@/lib/import-parser";
@@ -2233,6 +2233,7 @@ const extractTextFromPdfBytes = async (data: Uint8Array, password?: string, base
     // avoiding the avoidable page-by-page wait on normal SOAs.
     const grabPickupFields: ReturnType<typeof buildGrabPickupFields>[] = new Array(pdf.numPages);
     const grabPanelBodies: Array<string[] | null> = new Array(pdf.numPages);
+    const grabHeadlineSlots: Array<{ page: number; reference: string; x: number; y: number } | null> = new Array(pdf.numPages).fill(null);
     const readerCount = Math.min(4, pdf.numPages);
     await Promise.all(
       Array.from({ length: readerCount }, async () => {
@@ -2248,6 +2249,19 @@ const extractTextFromPdfBytes = async (data: Uint8Array, password?: string, base
           const simpleText = buildSimplePdfTextFromContentItems(content.items as PdfTextContentItemLike[]);
           const layoutAwareText = buildLayoutAwarePdfTextFromContentItems(content.items as PdfTextContentItemLike[]);
           pages[pageIndex] = encodeNativePdfNullGlyphs(pickBetterPdfTextLayerCandidate(simpleText, layoutAwareText));
+          if (pdf.numPages <= 3 && /Your\s+Grab\s+E-?Receipt/i.test(pages[pageIndex]) && /Hope\s+you\s+had\s+an\s+enjoyable\s+ride/i.test(pages[pageIndex]) && /\bTOTAL\s+DATE\s*\|\s*TIME/i.test(pages[pageIndex])) {
+            const references = [...new Set([...pages[pageIndex].matchAll(/\bADR-?[A-Z0-9]+(?:-[A-Z0-9]+)+\b/g)].map(match => match[0]))];
+            const header = pages[pageIndex].match(/\bTOTAL\s+DATE\s*\|\s*TIME/i);
+            const nativeHeadline = header && /\bP\s*\d[\d,]*\.\d{2}\b/i.test(pages[pageIndex].slice(header.index! + header[0].length, header.index! + header[0].length + 180));
+            const summary = [...pages[pageIndex].matchAll(/\bTOTAL\s+P\s*\d[\d,]*\.\d{2}\b/gi)];
+            const items = content.items as PdfTextContentItemLike[];
+            const label = items.find(item => String(item.str ?? '').trim() === 'TOTAL' && Number(item.transform?.[4]) < page.view[2] / 2 && Number(item.transform?.[5]) > page.view[3] / 2);
+            const timeLabel = items.find(item => /^DATE\s*\|\s*TIME$/.test(String(item.str ?? '').trim()) && Math.abs(Number(item.transform?.[5]) - Number(label?.transform?.[5])) < 3);
+            if (!nativeHeadline && references.length === 1 && summary.length === 1 && label?.transform && timeLabel && /Payment Method:/i.test(pages[pageIndex])) {
+              const [x, y] = page.getViewport({ scale: 1 }).convertToViewportPoint(label.transform[4], label.transform[5]);
+              grabHeadlineSlots[pageIndex] = { page: pageIndex + 1, reference: references[0], x, y };
+            }
+          }
           mariBankTransactionRows[pageIndex] = buildMariBankTransactionRowsFromContentItems(
             content.items as PdfTextContentItemLike[]
           );
@@ -2263,7 +2277,30 @@ const extractTextFromPdfBytes = async (data: Uint8Array, password?: string, base
       if (/REKENING KORAN/.test(extractedText) && /NO\. REKENING SEABANK:/.test(extractedText)) return `${extractedText}\nSEABANK_ID_NATIVE_PAGES ${pdf.numPages}\n${heldNativeRows.flat().join('\n')}`;
       if (hasSeaBankIndonesiaEnglishHeader(extractedText)) return `${extractedText}\nSEABANK_ID_NATIVE_PAGES ${pdf.numPages}\nSEABANK_ID_NATIVE_LANGUAGE EN\n${heldNativeRows.flat().join('\n')}`;
       if (/Consolidated Statement/.test(extractedText) && /DBS/.test(extractedText)) return `${extractedText}\nDBS_NATIVE_PAGES ${pdf.numPages}\n${heldNativeRows.flat().join('\n')}`;
-      const grabPages = buildGrabReceiptNativePages(pages, grabPickupFields.flat(), pdf.numPages === 1 ? grabPanelBodies[0] ?? undefined : undefined);
+      const visualHeadlines: GrabVisualHeadline[] = [];
+      for (const slot of grabHeadlineSlots.filter((value): value is NonNullable<typeof value> => value !== null)) {
+        try {
+          const images = await renderPdfPageImagesFromBytes(data, password, slot.page, 3.5, false, true);
+          const image = images.find(item => item.page === slot.page);
+          if (!image) continue;
+          const sharp = (await import('sharp')).default;
+          const bytes = Buffer.from(image.dataUrl.split(',')[1] ?? '', 'base64');
+          const size = await sharp(bytes).metadata();
+          const left = Math.max(0, Math.round((slot.x - 15) * 3.5));
+          const top = Math.max(0, Math.round((slot.y - 16) * 3.5));
+          const width = Math.min(Math.round(180 * 3.5), Number(size.width) - left);
+          const height = Math.min(Math.round(64 * 3.5), Number(size.height) - top);
+          if (width < 100 || height < 80) continue;
+          const crop = await sharp(bytes).extract({ left, top, width, height }).png().toBuffer();
+          const ocrText = (await extractTextFromImageBufferWithOcr(crop, '6', 'eng')).trim();
+          const amounts = [...ocrText.matchAll(/\bP\s*(\d[\d,]*\.\d{2})\b/gi)];
+          if (amounts.length !== 1 || ocrText.length > 200) continue;
+          visualHeadlines.push({ reference: slot.reference, page: slot.page, amountText: `P ${amounts[0][1]}`, ocrText, cropSha256: createHash('sha256').update(crop).digest('hex') });
+        } catch (error) {
+          console.warn('Grab visual headline recovery failed; keeping source review required', { page: slot.page, error });
+        }
+      }
+      const grabPages = buildGrabReceiptNativePages(pages, grabPickupFields.flat(), pdf.numPages === 1 ? grabPanelBodies[0] ?? undefined : undefined, visualHeadlines);
       if (grabPages) return `${extractedText}\n${grabPages}`;
       const gcashPages = buildGcashBillsNativePages(pages);
       if (gcashPages) return `${extractedText}\n${gcashPages}`;

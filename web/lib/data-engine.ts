@@ -44,6 +44,7 @@ export const resolveImportFileExtractionCacheVersion = (fileName?: string | null
   if (/\.pdf$/i.test(normalizedFileName) && /gcash/i.test(normalizedFileName) && /(?:history|statement|new-gcash)/i.test(normalizedFileName) && !/bill|receipt/i.test(normalizedFileName)) return "v51-gcash-complete-ledger-clocks";
   if (/\.pdf$/i.test(normalizedFileName) && /(?:Receipt[-_\s]*Gcash|Seabank[-_\s]*Statement|DBS|(?:^|[-_])Statement\.pdf$|Sfs[-_]Bank|BCA|Notification(?:[-_\s]|\.pdf)|\d{10,25}[-_]\d+\.pdf)/i.test(normalizedFileName)) return "v46-held-native-sources";
   if (/(?:mari[-_\s]*bank|sea[-_\s]*bank).*statement/i.test(normalizedFileName)) return "v44-maribank-native-snapshot";
+  if (/\.pdf$/i.test(normalizedFileName) && /grab[-_\s]*receipt/i.test(normalizedFileName) && !/grab.*(?:e[-_\s]*receipt|receipts)/i.test(normalizedFileName)) return "v52-grab-visual-headline";
   if (/grab.*(?:e[-_\s]*receipt|receipts)/i.test(normalizedFileName)) return "v50-grab-printed-panels";
   if (/cimb[-_\s]*conso[-_\s]*statement/i.test(normalizedFileName)) return "v41-cimb-consolidated";
   if (/bukti[-_\s]*trf/i.test(normalizedFileName)) return "v41-bca-transfer-proof";

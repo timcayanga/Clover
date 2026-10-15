@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { buildGrabReceiptNativePages, buildGrabTwoMessagePanelBodies, hasVerifiedGrabReceiptRows, parseGrabEmailReceipt } from '../lib/grab-email-receipt';
 import { formatUploadAccountDisplayName, getAccountCardName } from '../lib/account-display';
+import { resolveImportFileExtractionCacheVersion } from '../lib/data-engine';
 
 // Invented amounts and references; layouts are reviewed against private originals.
 const ride = (opts: { headline: string; place: string; paid: string; merged?: boolean; extra?: string; amount?: number }) => {
@@ -50,6 +51,17 @@ const legacyPages = [
   'Your Grab E-Receipt\nHope you enjoyed your food!\nTOTAL DATE | TIME\nPick-up time: 14 Aug 26 21:03 +0800\nP 99.00\nBooking Details Receipt Summary\nPayment Method:\nGrabFood\nCash\nBooking code\nIOS-1234567-8-902\n1x Sample Meal\nRide Fare P 49.00\nBooking Fee P 50.00\nPick up location:\nCebu City\nTOTAL P 99.00',
 ];
 const legacy = parseGrabEmailReceipt(buildGrabReceiptNativePages(legacyPages)!);
+const visualPage = legacyPages[0].replace('2 messages', '1 message').replace('IOS-1234567-8-901', 'ADR-76543210-8-901').replace('\nP 120.00\nBooking Details', '\nBooking Details').replace('Booking Details Receipt Summary', `Booking Details Receipt Summary\n${'Issued by driver Example. '.repeat(10)}`).replace('Cebu City', 'Metro Manila');
+assert.equal(resolveImportFileExtractionCacheVersion('Grab Receipt ADR-76543210.pdf'), 'v52-grab-visual-headline');
+const visualEvidence = { reference: 'ADR-76543210-8-901', page: 1, amountText: 'P 120.00', ocrText: 'P 120.00', cropSha256: 'a'.repeat(64) };
+assert.throws(() => parseGrabEmailReceipt(buildGrabReceiptNativePages([visualPage])!), /headline total is missing/);
+const visualReceipt = buildGrabReceiptNativePages([visualPage], undefined, undefined, [visualEvidence])!;
+const visualParsed = parseGrabEmailReceipt(visualReceipt);
+assert.equal(visualParsed?.rows[0].amount, '120.00');
+assert.deepEqual(visualParsed?.rows[0].rawPayload?.visualHeadlineEvidence, visualEvidence);
+assert(hasVerifiedGrabReceiptRows(visualReceipt, visualParsed!.rows));
+assert.throws(() => parseGrabEmailReceipt(buildGrabReceiptNativePages([visualPage], undefined, undefined, [{ ...visualEvidence, amountText: 'P 121.00' }])!), /totals must agree/);
+assert.throws(() => parseGrabEmailReceipt(buildGrabReceiptNativePages([visualPage], undefined, undefined, [{ ...visualEvidence, reference: 'ADR-00000000-8-901' }])!), /headline total is missing/);
 assert.deepEqual(legacy?.rows.map(row => [row.amount, row.currency, row.merchantRaw, row.accountName, row.rawPayload?.referenceNumber]), [
   ['120.00', 'PHP', 'Grab', 'Cash', 'IOS-1234567-8-901'],
   ['99.00', 'PHP', 'GrabFood', 'Cash', 'IOS-1234567-8-902'],

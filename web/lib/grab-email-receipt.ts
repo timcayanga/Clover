@@ -4,15 +4,16 @@ const prefix = 'GRAB_RECEIPT_NATIVE ';
 const amountPattern = '(\\d{1,3}(?:,\\d{3})*\\.\\d{2}|\\d+\\.\\d{2})';
 const months = ['jan','feb','mar','apr','may','jun','jul','aug','sep','oct','nov','dec'];
 type PickupField = { reference: string; merchant: string; page: number };
+export type GrabVisualHeadline = { reference: string; page: number; amountText: string; ocrText: string; cropSha256: string };
 function fail(reason: string): never { throw new Error(`Grab receipt requires source review: ${reason}`); }
 const cents = (text: string) => Math.round(Number(text.replaceAll(',', '')) * 100);
 
-export function buildGrabReceiptNativePages(pages: string[], pickupFields?: PickupField[], panelBodies?: string[]): string | null {
+export function buildGrabReceiptNativePages(pages: string[], pickupFields?: PickupField[], panelBodies?: string[], visualHeadlines?: GrabVisualHeadline[]): string | null {
   const text = pages.join('\n');
   if (!/Your\s+Grab\s+E-?Receipt/i.test(text) || !/Hope\s*you\s*(?:enjoyed|had an enjoyable)/i.test(text)) return null;
   // Preserve every physical page, including incomplete/unsupported receipts.
   // Validation happens before financial persistence, never by inventing fields.
-  return prefix + JSON.stringify({ physicalPages: pages.length, pages: pages.map((text, index) => ({ page: index + 1, text })), ...(pickupFields ? { pickupFields } : {}), ...(panelBodies ? { panelBodies } : {}) });
+  return prefix + JSON.stringify({ physicalPages: pages.length, pages: pages.map((text, index) => ({ page: index + 1, text })), ...(pickupFields ? { pickupFields } : {}), ...(panelBodies ? { panelBodies } : {}), ...(visualHeadlines?.length ? { visualHeadlines } : {}) });
 }
 
 /** A printed Gmail sheet can put two messages into left/right, top/bottom panels. */
@@ -147,12 +148,14 @@ function oneRegionalRide(text: string, fullText: string): ParsedImportRow {
       parserEvidence: { currency, reconciled: true, noBankBalanceAnchor: true, fullNativePages: true }, sourceDocumentText: fullText } };
 }
 
-function oneReceipt(text: string, fullText: string, pickupFields?: PickupField[]): ParsedImportRow {
+function oneReceipt(text: string, fullText: string, pickupFields?: PickupField[], visualHeadlines?: GrabVisualHeadline[]): ParsedImportRow {
   if (/\bTotal Paid\s+(?:THB|RP)\s*\d/i.test(text)) return oneRegionalRide(text, fullText);
+  const visualHeadline = visualHeadlines?.length === 1 ? visualHeadlines[0] : null;
+  const visualPesoHeadline = Boolean(visualHeadline && /^P\s*\d[\d,]*\.\d{2}$/i.test(visualHeadline.amountText));
   const explicitPhp = /₱|\bPHP\b|Philippines|Metro Manila|Quezon City|Makati|Taguig|Caloocan/i.test(text);
   // Older Philippine email receipts print only "P" at the headline. Require a
   // matching peso headline and a Philippine trip location, not a generic P.
-  const localPesoHeadline = /\bTotal Paid\s+P\s*\d[\d,]*\.\d{2}\b/i.test(text)
+  const localPesoHeadline = visualPesoHeadline || /\bTotal Paid\s+P\s*\d[\d,]*\.\d{2}\b/i.test(text)
     || /\bTOTAL\s+DATE\s*\|\s*TIME\s*\nPick-up time:[^\n]*\nP\s*\d[\d,]*\.\d{2}\b/i.test(text);
   const localPeso = localPesoHeadline && /\b(?:NAIA|Pasay|Manila|Cebu|Davao|Chino Roces|Pasong Tamo|Quezon Ave)\b/i.test(text);
   const localMyr = /\bTotal Paid\s+(?:RM|MYR)\s*\d[\d,]*\.\d{2}\b/i.test(text) && /\b(?:KLIA|Kuala Lumpur|Malaysia)\b/i.test(text);
@@ -166,14 +169,16 @@ function oneReceipt(text: string, fullText: string, pickupFields?: PickupField[]
   const refs = [...new Set([...text.matchAll(/\b(?:A-[A-Z0-9]{8,}|(?:ADR|IOS)-?[A-Z0-9]+(?:-[A-Z0-9]+)+)\b/g)].map(m => m[0]))];
   if (!/Booking\s+(?:ID|code)/i.test(text)) fail('booking label is missing');
   if (refs.length !== 1) fail('one complete booking reference is required');
+  if (visualHeadlines?.length && (!visualHeadline || visualHeadline.reference !== refs[0])) fail('visual headline must identify one booking');
   const date = paymentDate(text);
   const totalLabels = food && !legacyFood ? 'TOTAL\\s*\\(INCL\\.\\s*TAX\\)' : 'Total Paid|TOTAL';
   const totals = [...text.matchAll(new RegExp(`\\b(?:${totalLabels})\\s+(?:${currencyPattern}\\s*)?${amountPattern}\\b`, 'gi'))].map(m => cents(m[1]));
   // Older receipts put the headline amount below TOTAL / DATE | TIME.
   for (const m of text.matchAll(/\bTOTAL\s+DATE\s*\|\s*TIME/gi)) {
     const headline = text.slice(m.index! + m[0].length, m.index! + m[0].length + 180).match(new RegExp(`${currencyPattern}\\s*${amountPattern}\\b`, 'i'));
-    if (!headline) fail('headline total is missing');
-    totals.push(cents(headline[1]));
+    if (headline && visualHeadline) fail('visual headline duplicates native headline');
+    if (!headline && !visualHeadline) fail('headline total is missing');
+    totals.push(cents(headline?.[1] ?? visualHeadline!.amountText.match(/\d[\d,]*\.\d{2}/)![0]));
   }
   if (totals.length < 2 || new Set(totals).size !== 1 || totals[0] <= 0) fail('headline and summary totals must agree');
   const total = totals[0];
@@ -222,17 +227,24 @@ function oneReceipt(text: string, fullText: string, pickupFields?: PickupField[]
   return { date: date.date, amount: (total / 100).toFixed(2), currency, type: 'expense', merchantRaw: merchant, merchantClean: merchant,
     description: `${food ? 'GrabFood' : 'Grab ride'} • ${refs[0]}`, categoryName: food ? 'Food & Dining' : 'Transport', accountName, institution: cash ? null : accountName, confidence: 95,
     rawPayload: { source: 'grab_email_receipt', kind: cash ? 'cash_transaction' : 'wallet_transaction', line: text, referenceNumber: refs[0], paymentMethod: accountName, accountType: cash ? 'cash' : 'wallet', payerAccountNumber: null, sourceTimestamp: date.sourceTimestamp, sourceClock: date.sourceClock, components, totalAmount: total / 100,
-      parserEvidence: { currency, reconciled: true, noBankBalanceAnchor: true, fullNativePages: true }, sourceDocumentText: fullText } };
+      ...(visualHeadline ? { visualHeadlineEvidence: visualHeadline } : {}),
+      parserEvidence: { currency, reconciled: true, noBankBalanceAnchor: true, fullNativePages: true, visualHeadlineRecovered: Boolean(visualHeadline) }, sourceDocumentText: fullText } };
 }
 
 export function parseGrabEmailReceipt(text: string): { metadata: DetectedStatementMetadata; rows: ParsedImportRow[] } | null {
   const markers = text.split(/\r?\n/).filter(line => line.startsWith(prefix));
   if (!markers.length) return null;
   if (markers.length !== 1) fail('duplicate native-page proof');
-  let proof: { physicalPages: number; pages: Array<{ page: number; text: string }>; pickupFields?: PickupField[]; panelBodies?: string[] };
+  let proof: { physicalPages: number; pages: Array<{ page: number; text: string }>; pickupFields?: PickupField[]; panelBodies?: string[]; visualHeadlines?: GrabVisualHeadline[] };
   try { proof = JSON.parse(markers[0].slice(prefix.length)); } catch { return fail('invalid native-page proof'); }
   if (!Number.isInteger(proof.physicalPages) || proof.physicalPages < 1 || proof.physicalPages > 100 || !Array.isArray(proof.pages) || proof.pages.length !== proof.physicalPages || proof.pages.some((p, i) => p.page !== i + 1 || typeof p.text !== 'string' || !p.text.trim())) fail('missing native pages');
   if (proof.pickupFields && (!Array.isArray(proof.pickupFields) || proof.pickupFields.some(f => typeof f.reference !== 'string' || typeof f.merchant !== 'string' || !Number.isInteger(f.page) || f.page < 1 || f.page > proof.physicalPages))) fail('invalid native restaurant column evidence');
+  if (proof.visualHeadlines && (!Array.isArray(proof.visualHeadlines) || proof.visualHeadlines.length > proof.physicalPages || proof.visualHeadlines.some(f =>
+    typeof f.reference !== 'string' || !/\b(?:ADR|IOS)-?[A-Z0-9]+(?:-[A-Z0-9]+)+\b/.test(f.reference) ||
+    !Number.isInteger(f.page) || f.page < 1 || f.page > proof.physicalPages ||
+    typeof f.amountText !== 'string' || !/^P\s*\d[\d,]*\.\d{2}$/i.test(f.amountText) ||
+    typeof f.ocrText !== 'string' || f.ocrText.length > 200 ||
+    typeof f.cropSha256 !== 'string' || !/^[a-f0-9]{64}$/.test(f.cropSha256)))) fail('invalid visual headline evidence');
   const body = proof.pages.map(p => p.text).join('\n').replace(/\u00a0|\u202f/g, ' ');
   if (proof.panelBodies && (proof.physicalPages !== 1 || proof.panelBodies.length !== 2 || proof.panelBodies.some(p => typeof p !== 'string' || !p.trim()))) fail('invalid native panel proof');
   const readingOrder = proof.panelBodies?.join('\n') ?? body;
@@ -240,7 +252,10 @@ export function parseGrabEmailReceipt(text: string): { metadata: DetectedStateme
   if (!starts.length) fail('receipt body is missing');
   const declared = [...body.matchAll(/\b(\d+)\s+messages?\b/gi)].map(m => Number(m[1]));
   if (declared.some(n => n > starts.length)) fail('declared receipts are missing');
-  const rows = starts.map((s, i) => oneReceipt(readingOrder.slice(s.index!, starts[i + 1]?.index ?? readingOrder.length), body, proof.pickupFields));
+  const rows = starts.map((s, i) => {
+    const receiptText = readingOrder.slice(s.index!, starts[i + 1]?.index ?? readingOrder.length);
+    return oneReceipt(receiptText, body, proof.pickupFields, proof.visualHeadlines?.filter(evidence => receiptText.includes(evidence.reference)));
+  });
   const seen = new Map<string, string>();
   const unique = rows.filter(row => {
     const key = String(row.rawPayload!.referenceNumber);
@@ -266,7 +281,7 @@ export function hasVerifiedGrabReceiptRows(text: string, rows: Array<{ amount?: 
       const expected = source.rows[i].rawPayload!;
       const components = raw?.components as Array<{ label?: unknown; amount?: unknown }> | undefined;
       const required = expected.components as Array<{ label: string; amount: number }>;
-      return Number(r.amount) === Number(source.rows[i].amount) && r.date === source.rows[i].date && r.currency === source.rows[i].currency && raw?.source === 'grab_email_receipt' && raw.referenceNumber === expected.referenceNumber && raw.paymentMethod === expected.paymentMethod && raw.sourceTimestamp === expected.sourceTimestamp && raw.line === expected.line && (raw.parserEvidence as { currency?: unknown } | undefined)?.currency === source.rows[i].currency && Array.isArray(components) && components.length === required.length && components.every((c, j) => c.label === required[j].label && Number(c.amount) === required[j].amount);
+      return Number(r.amount) === Number(source.rows[i].amount) && r.date === source.rows[i].date && r.currency === source.rows[i].currency && raw?.source === 'grab_email_receipt' && raw.referenceNumber === expected.referenceNumber && raw.paymentMethod === expected.paymentMethod && raw.sourceTimestamp === expected.sourceTimestamp && raw.line === expected.line && JSON.stringify(raw.visualHeadlineEvidence ?? null) === JSON.stringify(expected.visualHeadlineEvidence ?? null) && (raw.parserEvidence as { currency?: unknown } | undefined)?.currency === source.rows[i].currency && Array.isArray(components) && components.length === required.length && components.every((c, j) => c.label === required[j].label && Number(c.amount) === required[j].amount);
     }));
   } catch { return false; }
 }
