@@ -1,11 +1,13 @@
-import { resolveMerchantIdentity } from "./merchant-identity";
 import { asIdentityRecord, merchantIdentityInputKey } from "./merchant-identity-context";
 import type { MerchantIdentityInput } from "./logo-identity-types";
 
 /** Compact presentation metadata only; the native response never exposes the evidence payload. */
 export function transactionMerchantLogo(row: MerchantIdentityInput) {
   const stored = asIdentityRecord(asIdentityRecord(row.normalizedPayload).merchantIdentity);
-  const result = stored.inputKey === merchantIdentityInputKey(row) ? stored : resolveMerchantIdentity(row);
+  // Other mobile routes share this projector. Load the research catalog only
+  // when a transaction actually needs fresh matching, never during Home bootstrap.
+  const result = stored.inputKey === merchantIdentityInputKey(row) ? stored
+    : (require("./merchant-identity") as typeof import("./merchant-identity")).resolveMerchantIdentity(row);
   const candidates = Array.isArray(result.candidates) ? result.candidates : [];
   const candidate = asIdentityRecord(candidates.find(c => asIdentityRecord(c).entryId === result.entryId));
   const path = result.logoPath;
