@@ -61,5 +61,6 @@
   "bca-legacy-closed-bilingual": "5531df3c893bda4f1d526a31c25b28da2a926384a4086305959ee04b249dc2cb",
   "bca-compact-current-event": "ebd85ef13594f7bb417cb393cd38196aeb69db0b421a4ee143e160d459fdf551",
   "seabank-id-english-columns": "1650aa05c54b96b4e79cdfcdb733df28dbb630c743fbcad211139730c3ac0aad",
-  "seabank-id-spaced-identity": "67435555ec04cb6883dd01c5aa764eb6ca5b552215e7e2257925a02cb51294a2"
+  "seabank-id-spaced-identity": "67435555ec04cb6883dd01c5aa764eb6ca5b552215e7e2257925a02cb51294a2",
+  "grab-split-grabpay-wallet": "5b67b9fa033266c5caee6905f9a2bc2d0ec19a2cafdafa003033d26632dd18f9"
 }

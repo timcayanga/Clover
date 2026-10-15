@@ -2191,6 +2191,29 @@ const main = async () => {
   }
   console.log("[PASS] BPI classification | statement payment credit rows normalize as Financial expense");
 
+  const bpiInstallmentSections = [
+    "Statement of Account",
+    "Customer Number 020100-4-20-0731588",
+    "Transaction PostDate Description Amount",
+    "Date",
+    "December 13 December 15 Payment - Thank You -100.00",
+    "Installment Purchase:",
+    "December 21 December 23 Example Store: ( 6 Mos.) 600.00",
+    "Installment Amortization:",
+    "December 26 December 26 Example Store: 01/06 100.00",
+    "December 26 December 26 Loan A: 18/18 25.00",
+    "December 26 December 26 Loan B: 18/18 25.00",
+  ].join("\n");
+  const bpiInstallmentRows = parser.parseImportText(bpiInstallmentSections, "bpi-installment.pdf", "application/pdf", {
+    institution: "BPI",
+    accountName: "BPI 1588",
+    accountNumber: "0201004200731588",
+  });
+  if (bpiInstallmentRows.length !== 4 || bpiInstallmentRows.some((row) => row.amount === "600.00") || bpiInstallmentRows.filter((row) => row.amount === "25.00").length !== 2) {
+    throw new Error("BPI installment purchase principal must stay unbilled evidence while every amortization occurrence remains");
+  }
+  console.log("[PASS] BPI installment sections | unbilled principal excluded, repeated billed amortizations retained");
+
   const unionBankMarchPath = join(root, "Actual SOAs/UnionBank/Unlocked/UnionBank SOA March 2026_unlocked.pdf");
   const unionBankMarchBytes = await readFile(unionBankMarchPath);
   const unionBankMarchText = await readUploadedFileText({

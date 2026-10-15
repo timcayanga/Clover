@@ -35,6 +35,9 @@ export function parseHeldNativeSource(text: string): {metadata: DetectedStatemen
   if(/^DBS_NATIVE_PAGES /m.test(text)) return parseDbsZeroSnapshot(text);
   return null;
 }
+export function hasSeaBankIndonesiaEnglishHeader(text: string): boolean {
+  return /BANK STATEMENT/.test(text) && /SEABANK ?ACCOUNT:/.test(text) && /cs@seabank\.co\.id/.test(text);
+}
 function parseSeaBankIndonesia(text: string) {
   const english=/^SEABANK_ID_NATIVE_LANGUAGE EN$/m.test(text);
   const physical=[...text.matchAll(/^SEABANK_ID_NATIVE_PAGES (\d+)$/gm)];
@@ -44,7 +47,7 @@ function parseSeaBankIndonesia(text: string) {
   if(!(english ? /BANK STATEMENT/.test(text) && /SAVINGS\s*-\s*TRANSACTION DETAILS/.test(text) : /REKENING KORAN/.test(text) && /TABUNGAN\s*-\s*RINCIAN TRANSAKSI/.test(text)) || !/cs@seabank\.co\.id/.test(text)) fail('Indonesian SeaBank source family');
   // A native font run can split exactly three plus nine digits. Do not
   // join arbitrary numbers, lines, adjacent balances or masked identities.
-  const ids=[...text.matchAll(english ? /SEABANK ACCOUNT:[ \t]*(\d{12}|\d{3}[ \t]+\d{9})(?![\dA-Za-z_])/g : /NO\. REKENING SEABANK:[ \t]*(\d{12}|\d{3}[ \t]+\d{9})(?![\dA-Za-z_])/g)].map(m=>m[1].replace(/[ \t]/g,''));
+  const ids=[...text.matchAll(english ? /SEABANK ?ACCOUNT:[ \t]*(\d{12}|\d{3}[ \t]+\d{9})(?![\dA-Za-z_])/g : /NO\. REKENING SEABANK:[ \t]*(\d{12}|\d{3}[ \t]+\d{9})(?![\dA-Za-z_])/g)].map(m=>m[1].replace(/[ \t]/g,''));
   if(ids.length!==1) fail('full twelve-digit Indonesian account');
   const periods=[...text.matchAll(english ? /(\d{2}) ([A-Z]{3}) (\d{4}) to (\d{2}) ([A-Z]{3}) (\d{4})/g : /(\d{2}) ([A-Z]{3}) (\d{4}) sampai (\d{2}) ([A-Z]{3}) (\d{4})/g)];
   if(periods.length!==1) fail('one Indonesian statement period');
@@ -52,7 +55,8 @@ function parseSeaBankIndonesia(text: string) {
   if(start>end || p[2]!==p[5] || p[3]!==p[6]) fail('monthly Indonesian period');
   const summary=text.slice(text.indexOf(english?'ACCOUNT SUMMARY':'RINGKASAN REKENING'),text.indexOf(english?'SAVINGS - TRANSACTION DETAILS':'TABUNGAN - RINCIAN TRANSAKSI'));
   const labels=english?['STARTING BALANCE','TOTAL OUTGOING','TOTAL INCOMING','ENDING BALANCE']:['SALDO AWAL','TRANSAKSI KELUAR','TRANSAKSI MASUK','SALDO AKHIR'];
-  if(labels.some(label=>!new RegExp(label+'\\s*\\(IDR\\)').test(summary))) fail('IDR summary columns');
+  const stackedEnglishColumns=english && /STARTING BALANCE TOTAL OUTGOING TOTAL INCOMING ENDING BALANCE\s+ACCOUNT \(IDR\) \(IDR\) \(IDR\) \(IDR\)/.test(summary);
+  if(!stackedEnglishColumns && labels.some(label=>!new RegExp(label+'\\s*\\(IDR\\)').test(summary))) fail('IDR summary columns');
   const values=summary.match(english ? /SAVINGS\s+([\d.]+)\s+([\d.]+)\s+([\d.]+)\s+([\d.]+)\s+TOTAL:\s*([\d.]+)/ : /TABUNGAN\s+([\d.]+)\s+([\d.]+)\s+([\d.]+)\s+([\d.]+)\s+TOTAL:\s*([\d.]+)/);
   if(!values) fail('complete IDR summary');
   const [opening,outgoing,incoming,closing,total]=values.slice(1).map(rupiah);

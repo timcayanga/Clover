@@ -12,6 +12,10 @@ The English BANK STATEMENT / SAVINGS - TRANSACTION DETAILS export remains an Ind
 
 A native account header may split exactly three plus nine digits with horizontal whitespace. Join only that bounded header identity and retain the original document/transcript unchanged. Masks, line breaks, other groupings, extra digits and adjacent balances do not qualify. This does not repair split periods, amounts or running-balance columns; those still require complete independent proof. Counterparties inside descriptions are distinct identities.
 
+Some complete English exports print `SEABANKACCOUNT:` without the single usual space. Recognize only that exact compact header variant with the existing Indonesian domain, full account and complete native page/row reconciliation; retain the original spelling in source evidence. Other merged words or account-number repairs remain outside the contract.
+
+An English PDF text layer may stack the four summary labels on one line and print `ACCOUNT (IDR) (IDR) (IDR) (IDR)` immediately below. Accept that exact four-column order only when the same source passes full opening/closing, movement-total and every-row running-balance checks.
+
 Future narrowly named SeaBank statement PDFs use additional v47 extraction entries. Retain v46 and every preceding cache version, learned rule, label and confirmed record. Legacy monthly interest/tax aggregates without exact movement dates or running balances remain outside this ledger contract; zero daily interest disclosures are not financial transactions.
 
 A voucher or promotion word in a counterparty description cannot reject an otherwise complete, independently reconciled native ledger. The scope check reparses and validates the full SeaBank source before giving it precedence; a marker, institution guess, row count or broken proof does not exempt a standalone promotion.
