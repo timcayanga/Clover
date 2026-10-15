@@ -7,12 +7,35 @@ type PickupField = { reference: string; merchant: string; page: number };
 function fail(reason: string): never { throw new Error(`Grab receipt requires source review: ${reason}`); }
 const cents = (text: string) => Math.round(Number(text.replaceAll(',', '')) * 100);
 
-export function buildGrabReceiptNativePages(pages: string[], pickupFields?: PickupField[]): string | null {
+export function buildGrabReceiptNativePages(pages: string[], pickupFields?: PickupField[], panelBodies?: string[]): string | null {
   const text = pages.join('\n');
   if (!/Your\s+Grab\s+E-?Receipt/i.test(text) || !/Hope\s*you\s*(?:enjoyed|had an enjoyable)/i.test(text)) return null;
   // Preserve every physical page, including incomplete/unsupported receipts.
   // Validation happens before financial persistence, never by inventing fields.
-  return prefix + JSON.stringify({ physicalPages: pages.length, pages: pages.map((text, index) => ({ page: index + 1, text })), ...(pickupFields ? { pickupFields } : {}) });
+  return prefix + JSON.stringify({ physicalPages: pages.length, pages: pages.map((text, index) => ({ page: index + 1, text })), ...(pickupFields ? { pickupFields } : {}), ...(panelBodies ? { panelBodies } : {}) });
+}
+
+/** A printed Gmail sheet can put two messages into left/right, top/bottom panels. */
+export function buildGrabTwoMessagePanelBodies(items: Array<{ str?: string; transform?: number[] }>, width: number, height: number): string[] | null {
+  if (!Number.isFinite(width) || !Number.isFinite(height) || width < 400 || height < 500) return null;
+  const cells = items.map(item => ({ text: String(item.str ?? '').replace(/\u00a0|\u202f/g, ' ').trim(), x: Number(item.transform?.[4]), y: Number(item.transform?.[5]) }))
+    .filter(cell => cell.text && Number.isFinite(cell.x) && Number.isFinite(cell.y));
+  const panel = (right: boolean, bottom: boolean) => {
+    const selected = cells.filter(cell => (cell.x >= width / 2) === right && (cell.y < height / 2) === bottom).sort((a, b) => b.y - a.y || a.x - b.x);
+    const lines: Array<{ y: number; parts: string[] }> = [];
+    for (const cell of selected) {
+      const last = lines.at(-1);
+      if (last && Math.abs(last.y - cell.y) <= 2) last.parts.push(cell.text);
+      else lines.push({ y: cell.y, parts: [cell.text] });
+    }
+    return lines.map(line => line.parts.join(' ')).join('\n');
+  };
+  const topLeft = panel(false, false), topRight = panel(true, false);
+  const bottomLeft = panel(false, true), bottomRight = panel(true, true);
+  if (!/\b2 messages\b/i.test(topLeft) || !/Hope\s*you\s*enjoyed\s+your\s+ride/i.test(topLeft) || !/Hope\s*you\s*enjoyed\s+your\s+ride/i.test(bottomLeft)) return null;
+  if (!/\bYour Trip\b/i.test(topRight) || !/\bYour Trip\b/i.test(bottomRight)) return null;
+  if ([topLeft, bottomLeft].some(text => [...text.matchAll(/\bBooking ID:\s*A-[A-Z0-9]{8,}/gi)].length !== 1) || [topRight, bottomRight].some(text => /Hope\s*you\s*enjoyed/i.test(text))) return null;
+  return [topLeft + '\n' + topRight, bottomLeft + '\n' + bottomRight];
 }
 
 /** Keep restaurant names in their own native column, away from item options. */
@@ -131,7 +154,7 @@ function oneReceipt(text: string, fullText: string, pickupFields?: PickupField[]
   // matching peso headline and a Philippine trip location, not a generic P.
   const localPesoHeadline = /\bTotal Paid\s+P\s*\d[\d,]*\.\d{2}\b/i.test(text)
     || /\bTOTAL\s+DATE\s*\|\s*TIME\s*\nPick-up time:[^\n]*\nP\s*\d[\d,]*\.\d{2}\b/i.test(text);
-  const localPeso = localPesoHeadline && /\b(?:NAIA|Pasay|Manila|Cebu|Davao)\b/i.test(text);
+  const localPeso = localPesoHeadline && /\b(?:NAIA|Pasay|Manila|Cebu|Davao|Chino Roces|Pasong Tamo|Quezon Ave)\b/i.test(text);
   const localMyr = /\bTotal Paid\s+(?:RM|MYR)\s*\d[\d,]*\.\d{2}\b/i.test(text) && /\b(?:KLIA|Kuala Lumpur|Malaysia)\b/i.test(text);
   if (localMyr && (explicitPhp || localPeso)) fail('mixed source currency');
   if (!localMyr && !explicitPhp && !localPeso) fail('supported currency evidence is missing');
@@ -206,16 +229,18 @@ export function parseGrabEmailReceipt(text: string): { metadata: DetectedStateme
   const markers = text.split(/\r?\n/).filter(line => line.startsWith(prefix));
   if (!markers.length) return null;
   if (markers.length !== 1) fail('duplicate native-page proof');
-  let proof: { physicalPages: number; pages: Array<{ page: number; text: string }>; pickupFields?: PickupField[] };
+  let proof: { physicalPages: number; pages: Array<{ page: number; text: string }>; pickupFields?: PickupField[]; panelBodies?: string[] };
   try { proof = JSON.parse(markers[0].slice(prefix.length)); } catch { return fail('invalid native-page proof'); }
   if (!Number.isInteger(proof.physicalPages) || proof.physicalPages < 1 || proof.physicalPages > 100 || !Array.isArray(proof.pages) || proof.pages.length !== proof.physicalPages || proof.pages.some((p, i) => p.page !== i + 1 || typeof p.text !== 'string' || !p.text.trim())) fail('missing native pages');
   if (proof.pickupFields && (!Array.isArray(proof.pickupFields) || proof.pickupFields.some(f => typeof f.reference !== 'string' || typeof f.merchant !== 'string' || !Number.isInteger(f.page) || f.page < 1 || f.page > proof.physicalPages))) fail('invalid native restaurant column evidence');
   const body = proof.pages.map(p => p.text).join('\n').replace(/\u00a0|\u202f/g, ' ');
-  const starts = [...body.matchAll(/Hope\s*you\s*(?:enjoyed|had an enjoyable)\s+(?:your\s+)?(?:food|ride)\s*!/gi)];
+  if (proof.panelBodies && (proof.physicalPages !== 1 || proof.panelBodies.length !== 2 || proof.panelBodies.some(p => typeof p !== 'string' || !p.trim()))) fail('invalid native panel proof');
+  const readingOrder = proof.panelBodies?.join('\n') ?? body;
+  const starts = [...readingOrder.matchAll(/Hope\s*you\s*(?:enjoyed|had an enjoyable)\s+(?:your\s+)?(?:food|ride)\s*!/gi)];
   if (!starts.length) fail('receipt body is missing');
   const declared = [...body.matchAll(/\b(\d+)\s+messages?\b/gi)].map(m => Number(m[1]));
   if (declared.some(n => n > starts.length)) fail('declared receipts are missing');
-  const rows = starts.map((s, i) => oneReceipt(body.slice(s.index!, starts[i + 1]?.index ?? body.length), body, proof.pickupFields));
+  const rows = starts.map((s, i) => oneReceipt(readingOrder.slice(s.index!, starts[i + 1]?.index ?? readingOrder.length), body, proof.pickupFields));
   const seen = new Map<string, string>();
   const unique = rows.filter(row => {
     const key = String(row.rawPayload!.referenceNumber);

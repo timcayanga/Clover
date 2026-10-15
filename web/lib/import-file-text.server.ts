@@ -1,5 +1,5 @@
 import {buildSeaBankIndonesiaPdfRows, buildDbsZeroPdfProof, hasSeaBankIndonesiaEnglishHeader} from '@/lib/held-source-contracts';
-import { buildGrabReceiptNativePages, buildGrabPickupFields } from '@/lib/grab-email-receipt';
+import { buildGrabReceiptNativePages, buildGrabPickupFields, buildGrabTwoMessagePanelBodies } from '@/lib/grab-email-receipt';
 import { parseCimbConsolidatedStatement } from "@/lib/import-parser";
 import { buildBcaTransferPdfRows, parseBcaTransferProof } from "@/lib/bca-transfer-proof";
 import { hasReconciledBdoInlineLedger } from "@/lib/import-parser";
@@ -2232,6 +2232,7 @@ const extractTextFromPdfBytes = async (data: Uint8Array, password?: string, base
     // a long statement does not monopolize a serverless invocation, while
     // avoiding the avoidable page-by-page wait on normal SOAs.
     const grabPickupFields: ReturnType<typeof buildGrabPickupFields>[] = new Array(pdf.numPages);
+    const grabPanelBodies: Array<string[] | null> = new Array(pdf.numPages);
     const readerCount = Math.min(4, pdf.numPages);
     await Promise.all(
       Array.from({ length: readerCount }, async () => {
@@ -2241,6 +2242,9 @@ const extractTextFromPdfBytes = async (data: Uint8Array, password?: string, base
           const page = await pdf.getPage(pageIndex + 1);
           const content = await page.getTextContent();
           grabPickupFields[pageIndex] = buildGrabPickupFields(content.items as PdfTextContentItemLike[], pageIndex + 1);
+          grabPanelBodies[pageIndex] = pdf.numPages === 1
+            ? buildGrabTwoMessagePanelBodies(content.items as PdfTextContentItemLike[], page.view[2] - page.view[0], page.view[3] - page.view[1])
+            : null;
           const simpleText = buildSimplePdfTextFromContentItems(content.items as PdfTextContentItemLike[]);
           const layoutAwareText = buildLayoutAwarePdfTextFromContentItems(content.items as PdfTextContentItemLike[]);
           pages[pageIndex] = encodeNativePdfNullGlyphs(pickBetterPdfTextLayerCandidate(simpleText, layoutAwareText));
@@ -2259,7 +2263,7 @@ const extractTextFromPdfBytes = async (data: Uint8Array, password?: string, base
       if (/REKENING KORAN/.test(extractedText) && /NO\. REKENING SEABANK:/.test(extractedText)) return `${extractedText}\nSEABANK_ID_NATIVE_PAGES ${pdf.numPages}\n${heldNativeRows.flat().join('\n')}`;
       if (hasSeaBankIndonesiaEnglishHeader(extractedText)) return `${extractedText}\nSEABANK_ID_NATIVE_PAGES ${pdf.numPages}\nSEABANK_ID_NATIVE_LANGUAGE EN\n${heldNativeRows.flat().join('\n')}`;
       if (/Consolidated Statement/.test(extractedText) && /DBS/.test(extractedText)) return `${extractedText}\nDBS_NATIVE_PAGES ${pdf.numPages}\n${heldNativeRows.flat().join('\n')}`;
-      const grabPages = buildGrabReceiptNativePages(pages, grabPickupFields.flat());
+      const grabPages = buildGrabReceiptNativePages(pages, grabPickupFields.flat(), pdf.numPages === 1 ? grabPanelBodies[0] ?? undefined : undefined);
       if (grabPages) return `${extractedText}\n${grabPages}`;
       const gcashPages = buildGcashBillsNativePages(pages);
       if (gcashPages) return `${extractedText}\n${gcashPages}`;
