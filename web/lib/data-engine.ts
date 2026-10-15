@@ -40,6 +40,7 @@ export const IMPORT_FILE_EXTRACTION_CACHE_VERSION = "v39";
 export const resolveImportFileExtractionCacheVersion = (fileName?: string | null) => {
   const normalizedFileName = String(fileName ?? "");
   if (/\.pdf$/i.test(normalizedFileName) && /(?:Seabank[-_\s]*Statement|E[-_\s]*steatmen[-_\s]*seabank)/i.test(normalizedFileName)) return "v47-seabank-native-language";
+  if (/\.pdf$/i.test(normalizedFileName) && /gcash/i.test(normalizedFileName) && /(?:history|statement|new-gcash)/i.test(normalizedFileName) && !/bill|receipt/i.test(normalizedFileName)) return "v50-gcash-complete-ledger";
   if (/\.pdf$/i.test(normalizedFileName) && /(?:Receipt[-_\s]*Gcash|Seabank[-_\s]*Statement|DBS|(?:^|[-_])Statement\.pdf$|Sfs[-_]Bank|BCA|Notification(?:[-_\s]|\.pdf)|\d{10,25}[-_]\d+\.pdf)/i.test(normalizedFileName)) return "v46-held-native-sources";
   if (/(?:mari[-_\s]*bank|sea[-_\s]*bank).*statement/i.test(normalizedFileName)) return "v44-maribank-native-snapshot";
   if (/grab.*(?:e[-_\s]*receipt|receipts)/i.test(normalizedFileName)) return "v50-grab-printed-panels";

@@ -1,0 +1,34 @@
+import assert from 'node:assert/strict';
+import { detectStatementMetadata, hasVerifiedGcashWalletHistoryRows, parseImportText } from '../lib/import-parser';
+import { resolveImportFileExtractionCacheVersion } from '../lib/data-engine';
+
+const account = '09050000001', counterparty = '09170000002';
+const movements = Array.from({ length: 6 }, (_, index) => {
+  const outgoing = index % 2 === 0;
+  const from = outgoing ? account : counterparty;
+  const to = outgoing ? counterparty : account;
+  const hour = String(7 + index).padStart(2, '0');
+  return `2026-08-10 ${hour}:02 ${Number(hour) === 12 ? 'PM' : 'AM'} Transfer from ${from} to ${to} ${String(1000000000001 + index)} 10.00 ${outgoing ? '90.00' : '100.00'}`;
+});
+export const completeGcashStatement = `GCash Transaction History\nGCash Mobile Number: ${account}\n2026-08-10 to 2026-08-10\nDate and Time Description Reference No. Debit Credit Balance\nSTARTING BALANCE 100.00\n${movements.join('\n')}\nENDING BALANCE 100.00`;
+const source = completeGcashStatement;
+const rows = parseImportText(source, 'GCash Transaction History.pdf', 'application/pdf');
+const metadata = detectStatementMetadata(source, 'GCash Transaction History.pdf');
+assert.equal(rows.length, 6);
+assert.equal(metadata?.accountNumber, account);
+assert.equal(metadata?.openingBalance, 100);
+assert.equal(metadata?.endingBalance, 100);
+assert.equal(resolveImportFileExtractionCacheVersion('GCash Transaction History.pdf'), 'v50-gcash-complete-ledger');
+assert.deepEqual(rows.map(row => row.type), ['expense', 'income', 'expense', 'income', 'expense', 'income']);
+assert(rows.every(row => row.accountNumber === account && row.accountName === 'GCash 0001' && row.currency === 'PHP'));
+assert.equal(rows[0].date, '2026-08-09T23:02:00.000Z');
+assert.equal(rows[0].rawPayload?.sourceTimestamp, '2026-08-10T07:02:00+08:00');
+assert(hasVerifiedGcashWalletHistoryRows(source, rows));
+assert(!hasVerifiedGcashWalletHistoryRows(source, rows.map((row, i) => i ? row : { ...row, amount: '11.00' })));
+assert(!hasVerifiedGcashWalletHistoryRows(source, rows.map((row, i) => i ? row : { ...row, accountNumber: counterparty })));
+assert(!hasVerifiedGcashWalletHistoryRows(source.replace('STARTING BALANCE 100.00', 'STARTING BALANCE 99.00'), rows));
+assert(!hasVerifiedGcashWalletHistoryRows(source.replace('ENDING BALANCE 100.00', 'ENDING BALANCE 101.00'), rows));
+assert(!hasVerifiedGcashWalletHistoryRows(source.replace('GCash Transaction History', 'Generic Wallet History'), rows));
+assert.throws(() => parseImportText(source.replace('STARTING BALANCE 100.00', 'STARTING BALANCE 99.00'), 'GCash Transaction History.pdf', 'application/pdf'), /source review/);
+assert.throws(() => parseImportText(source.replace('ENDING BALANCE 100.00', 'ENDING BALANCE 101.00'), 'GCash Transaction History.pdf', 'application/pdf'), /source review/);
+console.log('Complete GCash ledger: clocks, exact balances, wallet identity, repeats and unsafe negatives passed.');

@@ -62,6 +62,14 @@ This document captures the GCash parsing rules learned from the training bundles
 - GCash imports should preserve wallet movement, merchant payments, and transfer direction cleanly.
 - Time-stamped wallet activity should remain distinct from bank-style statement ledgers.
 
+## Complete native wallet ledgers
+
+For a text-native GCash Transaction History PDF with a printed starting balance, ending balance, dates, clocks, references, and running balances, keep the Philippine +08:00 transaction clock in the normalized timestamp and preserve the original clock and source line separately. A wallet number inferred from repeated transfer descriptions may identify the statement account only when that same number appears repeatedly on both sides of transfers and every parsed movement reconciles from the printed starting balance to the ending balance. Incomplete or contradictory native evidence requires source review; it must not silently fall through to a looser parser. Keep the full source PDF, raw descriptions and reference numbers. Do not infer a wallet number or balance for mobile screenshots and bill receipts.
+
+Reconstruct descriptions split around PDF text rows using the source's reference/amount/balance cells, without borrowing a neighboring transaction's description or dropping a printed merchant transaction number. Distinct references remain distinct even when date, merchant and amount repeat. Only after the whole ledger validates may the worker retain source-proven identity and publish a reconciled checkpoint. Future named history PDFs use the additive `v50-gcash-complete-ledger` extraction namespace; existing caches, rules, labels, corrections and confirmed transactions remain unchanged.
+
+The printed closing balance anchors the historical checkpoint. A repeat confirmation or historical import must not replace an existing wallet's confirmed current balance, even if that balance differs from the old statement. An empty new wallet may initialize from the fully reconciled closing balance. Preserve edited transactions and customized account names on repeat confirmation.
+
 ## Bills-payment email receipts
 
 A receipt labeled `GCash Bills Pay Receipt` with a GCash reference is a single payment document, not a wallet history table. Preserve the printed bill and fee as separate PHP expense components; together they must equal `Total Amount`. Repeated email/visual/OCR copies of identical totals do not create additional purchases. Missing/conflicting values require source review. Use the payment `Date/Time` in Philippine time rather than the email delivery timestamp.

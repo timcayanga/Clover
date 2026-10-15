@@ -1,4 +1,5 @@
 import {parseHeldNativeSource} from '@/lib/held-source-contracts';
+import { SourceReviewRequiredError } from '@/lib/import-source-review';
 import { parseMariBankNativeLedger } from '@/lib/maribank-native-ledger';
 import { parseGrabEmailReceipt } from '@/lib/grab-email-receipt';
 import { parseAppMigrationTable, readAppMigration } from "@/lib/app-migration-import";
@@ -16593,6 +16594,14 @@ const parseGcashTransactionRecord = (record: string, institution?: string | null
   }
   const timeTextMatch = dateMatch[0].match(/\b(\d{2}:\d{2})(?::\d{2})?\s*([AP]M)?\b/i);
   const timeText = timeTextMatch ? `${timeTextMatch[1]}${timeTextMatch[2] ? ` ${timeTextMatch[2].toUpperCase()}` : ""}` : null;
+  const sourceClock = dateMatch[0].match(/^(\d{4}-\d{2}-\d{2})\s+(\d{2}):(\d{2})(?::(\d{2}))?\s*([AP]M)?$/i);
+  const clockHour = Number(sourceClock?.[2]);
+  const hour24 = sourceClock?.[5]
+    ? clockHour % 12 + (sourceClock[5].toUpperCase() === "PM" ? 12 : 0)
+    : clockHour;
+  const sourceTimestamp = sourceClock && clockHour <= (sourceClock[5] ? 12 : 23) && clockHour >= (sourceClock[5] ? 1 : 0) && Number(sourceClock[3]) < 60 && Number(sourceClock[4] ?? 0) < 60
+    ? `${sourceClock[1]}T${String(hour24).padStart(2, "0")}:${sourceClock[3]}:${sourceClock[4] ?? "00"}+08:00`
+    : null;
 
   const moneyMatches = Array.from(normalized.matchAll(/\b\d[\d,]*\.\d{2}\b/g));
   if (moneyMatches.length < 2) {
@@ -16662,7 +16671,7 @@ const parseGcashTransactionRecord = (record: string, institution?: string | null
   }
 
   return {
-    date: date.toISOString().slice(0, 10),
+    date: sourceTimestamp ? new Date(sourceTimestamp).toISOString() : date.toISOString().slice(0, 10),
     amount: amount.toFixed(2),
     merchantRaw: humanizeMerchantText(description),
     merchantClean: summarizeMerchantText(merchantClean, institution),
@@ -16676,6 +16685,7 @@ const parseGcashTransactionRecord = (record: string, institution?: string | null
       amountText,
       balanceText,
       timeText,
+      sourceTimestamp,
       balance: parseMoney(balanceText),
       transferFromAccountNumber,
       transferToAccountNumber,
@@ -16689,10 +16699,86 @@ const parseGcashTransactionRecord = (record: string, institution?: string | null
   } satisfies ParsedImportRow;
 };
 
-const parseGcashImportText = (text: string) => {
+const parseGcashCompleteNativeLedger = (text: string, metadata: DetectedStatementMetadata): ParsedImportRow[] | null => {
+  if (!/\bGCash Transaction History\b/i.test(text) || !/\bSTARTING BALANCE\b/i.test(text) || !/\bENDING BALANCE\b/i.test(text)) return null;
+  const account = metadata.accountNumber;
+  if (!account || !/^09\d{9}$/.test(account) || metadata.openingBalance === null || metadata.endingBalance === null) return null;
+  const reconstructed = reconstructGenericWalletHistoryRows(text, metadata, true);
+  if (!reconstructed || reconstructed.rows.length < 6) return null;
+  const completeRows = reconstructed.rows;
+  const nativeLines = text.replace(/\u00a0/g, " ").split(/\r?\n/).map(line => normalizeWhitespace(line));
+  const descriptions = new Map<string, { description: string; parts: string[] }>();
+  for (let index = 0; index < nativeLines.length; index++) {
+    const line = nativeLines[index];
+    const cells = line.match(/^(.*?)\s+(\d{12,})\s+([\d,]+\.\d{2})\s+([\d,]+\.\d{2})$/);
+    if (!cells) continue;
+    const reference = cells[2];
+    let description = cells[1].replace(/^\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}(?::\d{2})?\s+[AP]M\s*/i, "").trim();
+    const parts = [line];
+    if (!description) {
+      const before = nativeLines[index - 1] ?? "";
+      if (!gcashRecordStarterPattern.test(before)) return null;
+      description = before;
+      parts.unshift(before);
+    }
+    const after = nativeLines[index + 1] ?? "";
+    if (/^invno:[A-Z0-9]+$/i.test(after) && /\band$/i.test(description) || /\bTransaction Number:\s*$/i.test(description) && /^[A-Z0-9-]{8,}$/i.test(after)) {
+      description += ` ${after}`;
+      parts.push(after);
+    }
+    if (descriptions.has(reference)) return null;
+    descriptions.set(reference, { description, parts });
+  }
+  if (descriptions.size !== completeRows.length) return null;
+  let balance = Math.round(metadata.openingBalance * 100);
+  const references = new Set<string>();
+  for (const row of completeRows) {
+    const raw = row.rawPayload as Record<string, unknown>;
+    const next = Math.round(Number(raw.balance) * 100);
+    const amount = Math.round(Number(row.amount) * 100);
+    const reference = String(raw.referenceNo ?? "");
+    const native = descriptions.get(reference);
+    const clock = `${row.date ?? ""} ${raw.timeText ?? ""}`.match(/^(\d{4}-\d{2}-\d{2})\s+(\d{2}):(\d{2})(?::(\d{2}))?\s*([AP]M)$/i);
+    if (!clock) return null;
+    const hour = Number(clock[2]);
+    if (hour < 1 || hour > 12 || Number(clock[3]) > 59 || Number(clock[4] ?? 0) > 59) return null;
+    const hour24 = hour % 12 + (clock[5].toUpperCase() === "PM" ? 12 : 0);
+    const sourceTimestamp = `${clock[1]}T${String(hour24).padStart(2, "0")}:${clock[3]}:${clock[4] ?? "00"}+08:00`;
+    const timestamp = new Date(sourceTimestamp);
+    if (!native || Number.isNaN(timestamp.getTime()) || !/^\d{12,}$/.test(reference) || references.has(reference) || !Number.isSafeInteger(next) || !Number.isSafeInteger(amount) || amount <= 0 || Math.abs(next - balance) !== amount) return null;
+    const reconstructedDescription = row.description;
+    row.type = next > balance ? "income" : "expense";
+    row.date = timestamp.toISOString();
+    row.description = native.description;
+    row.merchantRaw = humanizeMerchantText(native.description);
+    row.merchantClean = summarizeMerchantText(native.description, "GCash");
+    row.accountNumber = account;
+    row.accountName = `GCash ${account.slice(-4)}`;
+    row.currency = "PHP";
+    row.rawPayload = { ...raw, reconstructedDescription, line: native.parts.join("\n"), sourceLineParts: native.parts, sourceTimestamp, accountType: "wallet", completeNativeLedger: true, balanceReconciled: true };
+    balance = next;
+    references.add(reference);
+  }
+  if (balance !== Math.round(metadata.endingBalance * 100)) return null;
+  return completeRows;
+};
+
+export const parseGcashImportText = (text: string) => {
   const metadata = gcashStatementMetadata(text);
   if (!metadata) {
     return null;
+  }
+
+  const account = metadata.accountNumber;
+  const completeNativeCandidate = account && /^09\d{9}$/.test(account) && metadata.openingBalance !== null && metadata.endingBalance !== null &&
+    /\bSTARTING BALANCE\b/i.test(text) && /\bENDING BALANCE\b/i.test(text) &&
+    [...text.matchAll(new RegExp(`\\bTransfer from ${account} to 09\\d{9}\\b`, "g"))].length >= 3 &&
+    [...text.matchAll(new RegExp(`\\bTransfer from 09\\d{9} to ${account}\\b`, "g"))].length >= 3 &&
+    [...text.matchAll(/\b\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}\s+[AP]M\b/gi)].length >= 6;
+  if (completeNativeCandidate) {
+    const nativeRows = parseGcashCompleteNativeLedger(text, metadata);
+    if (!nativeRows) throw new SourceReviewRequiredError("GCash complete wallet ledger requires source review: native references, clocks, descriptions, account identity or running balances do not reconcile");
+    return { metadata: { ...metadata, currency: "PHP", confidence: Math.max(metadata.confidence, 95) }, rows: nativeRows };
   }
 
   const baseLines = text
@@ -16861,6 +16947,11 @@ const parseGcashImportText = (text: string) => {
   const inferredAccountNumber = inferGcashAccountNumberFromRows(rows, metadata.accountNumber);
   const endingBalance = getTrailingBalanceFromParsedRows(rows);
   const accountNumber = metadata.accountNumber ?? inferredAccountNumber;
+  for (const row of rows) {
+    row.accountNumber = accountNumber ?? undefined;
+    row.accountName = accountNumber ? `GCash ${accountNumber.slice(-4)}` : metadata.accountName ?? undefined;
+    row.currency = "PHP";
+  }
 
   return {
     metadata: {
@@ -16872,6 +16963,39 @@ const parseGcashImportText = (text: string) => {
     },
     rows,
   };
+};
+
+/** Full wallet-history proof: exact references, clocks, identity and every running balance. */
+export const hasVerifiedGcashWalletHistoryRows = (text: string, rows: ParsedImportRow[]): boolean => {
+  const metadata = gcashStatementMetadata(text);
+  const account = metadata?.accountNumber;
+  if (!metadata || !account || !/^09\d{9}$/.test(account) || rows.length < 6 || metadata.openingBalance === null || metadata.endingBalance === null) return false;
+  if (!/\bGCash Transaction History\b/i.test(text) || !/\bDate and Time\b/i.test(text) || !/\bSTARTING BALANCE\b/i.test(text) || !/\bENDING BALANCE\b/i.test(text)) return false;
+  const escaped = account.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  if ([new RegExp(`\\bTransfer from ${escaped} to 09\\d{9}\\b`, "g"), new RegExp(`\\bTransfer from 09\\d{9} to ${escaped}\\b`, "g")].some(pattern => [...text.matchAll(pattern)].length < 3)) return false;
+  const references = new Set<string>();
+  let balance = Math.round(metadata.openingBalance * 100);
+  for (const row of rows) {
+    const raw = row.rawPayload as Record<string, unknown> | null | undefined;
+    const reference = raw?.referenceNo;
+    const printedBalance = Number(raw?.balance);
+    const amount = Number(row.amount);
+    if (raw?.bank !== "GCash" || raw.completeNativeLedger !== true || raw.balanceReconciled !== true || typeof reference !== "string" || !/^\d{12,}$/.test(reference) || references.has(reference) || raw?.sourceTimestamp == null || Number.isNaN(new Date(String(raw.sourceTimestamp)).getTime()) || row.date !== new Date(String(raw.sourceTimestamp)).toISOString() || row.accountNumber !== account || row.accountName !== `GCash ${account.slice(-4)}` || row.currency !== "PHP") return false;
+    if (!Number.isFinite(printedBalance) || !Number.isFinite(amount) || amount <= 0) return false;
+    const next = Math.round(printedBalance * 100);
+    if (Math.abs(next - balance) !== Math.round(amount * 100)) return false;
+    balance = next;
+    references.add(reference);
+  }
+  return balance === Math.round(metadata.endingBalance * 100);
+};
+
+export const readGcashWalletHistoryTimestamp = (payload: unknown): Date | null => {
+  if (!payload || typeof payload !== "object" || Array.isArray(payload)) return null;
+  const raw = payload as Record<string, unknown>;
+  if (raw.bank !== "GCash" || raw.completeNativeLedger !== true || typeof raw.sourceTimestamp !== "string" || !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\+08:00$/.test(raw.sourceTimestamp)) return null;
+  const date = new Date(raw.sourceTimestamp);
+  return Number.isNaN(date.getTime()) ? null : date;
 };
 
 const cimbDatePattern = `(?:${monthNamePattern}\\s+\\d{1,2},\\s*\\d{4}|\\d{1,2}\\s+${monthNamePattern}\\s+\\d{4}|\\d{4}-\\d{2}-\\d{2})`;
