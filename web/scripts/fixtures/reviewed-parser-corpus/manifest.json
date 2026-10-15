@@ -2981,7 +2981,7 @@
           "rawPayload": {
             "source": "maribank_native_columns",
             "kind": "account_snapshot_marker",
-            "balance": 0.0,
+            "balance": 0,
             "sourceEmptyLedgerLabel": "NO RECENT TRANSACTION",
             "sourceRowIndex": 0,
             "balanceReconciled": true
@@ -2992,8 +2992,8 @@
         "institution": "MariBank",
         "accountNumber": "00123456789",
         "currency": "PHP",
-        "openingBalance": 0.0,
-        "endingBalance": 0.0
+        "openingBalance": 0,
+        "endingBalance": 0
       }
     },
     {
@@ -3769,6 +3769,52 @@
         "currency": "IDR",
         "openingBalance": 250,
         "endingBalance": 561
+      }
+    },
+    {
+      "id": "grab-split-grabpay-wallet",
+      "kind": "statement",
+      "source": "grab-split-grabpay-wallet.txt",
+      "sha256": "a6e4fd07564efcbd469dc9814b513071e02384e5b74618852189cf8cb5bf5c95",
+      "representation": "Independently invented complete native receipt pages",
+      "provenance": {
+        "origin": "synthetic",
+        "reviewer": "Codex",
+        "reviewedAt": "2026-10-15",
+        "status": "reviewed",
+        "basis": "Invented P-only Philippine GrabPay Wallet ride; paid-by label crosses native PDF page boundary; fare100+toll20 equals gross120. Payer wallet number and bank balances are absent."
+      },
+      "expected": [
+        {
+          "date": "2026-08-14T12:00:00.000Z",
+          "amount": "120.00",
+          "currency": "PHP",
+          "type": "expense",
+          "merchantRaw": "Grab",
+          "accountName": "GrabPay Wallet",
+          "rawPayload": {
+            "source": "grab_email_receipt",
+            "referenceNumber": "A-INVENTEDSPLIT001",
+            "paymentMethod": "GrabPay Wallet",
+            "payerAccountNumber": null,
+            "components": [
+              {
+                "label": "Fare",
+                "amount": "100.00"
+              },
+              {
+                "label": "Toll",
+                "amount": "20.00"
+              }
+            ]
+          }
+        }
+      ],
+      "expectedMetadata": {
+        "currency": "PHP",
+        "accountNumber": null,
+        "openingBalance": null,
+        "endingBalance": null
       }
     }
   ]
