@@ -1,6 +1,7 @@
 import {parseHeldNativeSource} from '@/lib/held-source-contracts';
 import { SourceReviewRequiredError } from '@/lib/import-source-review';
 import { parseMariBankNativeLedger } from '@/lib/maribank-native-ledger';
+import { parseMaybankIslamicStatement } from '@/lib/maybank-islamic-statement';
 import { parseGrabEmailReceipt } from '@/lib/grab-email-receipt';
 import { parseAppMigrationTable, readAppMigration } from "@/lib/app-migration-import";
 import { parseBcaTransferProof } from "@/lib/bca-transfer-proof";
@@ -26496,6 +26497,8 @@ export const detectStatementMetadata = (text: string, fileName = ""): DetectedSt
 
   const heldNative = parseHeldNativeSource(text);
   if (heldNative) return heldNative.metadata;
+  const maybankIslamic = parseMaybankIslamicStatement(text);
+  if (maybankIslamic) return maybankIslamic.metadata;
   const nativeMari = parseMariBankNativeLedger(text);
   if (nativeMari) return nativeMari.metadata;
   const consolidatedCimb = parseCimbConsolidatedStatement(text);
@@ -27402,6 +27405,8 @@ export const parseImportText = (
   }
   const heldNative = parseHeldNativeSource(text);
   if (heldNative) return heldNative.rows;
+  const maybankIslamic = parseMaybankIslamicStatement(text);
+  if (maybankIslamic) return maybankIslamic.rows;
   const nativeMari = parseMariBankNativeLedger(text);
   if (nativeMari) return nativeMari.rows;
   const consolidatedCimb = parseCimbConsolidatedStatement(text);

@@ -159,4 +159,8 @@ Two independently invented contracts extend the reviewed corpus to63 cases /208 
 
 The original PDFs and independent labels remain private. A legacy monthly aggregate is not a dated movement; a visually reconciled receipt whose selectable text conflicts with its rendered source requires separate extraction review. Downloads and completed jobs alone do not establish financial fidelity.
 
+## Maybank Islamic savings native ledger
+
+The mandatory Maybank Islamic portable and disposable-database checks use an invented two-page MYR savings statement with two legitimate identical purchases, a description continued onto the next page, signed amounts, and exact running/summary balances. Missing fields, account changes, page changes, currency evidence loss, and balance contradictions require source review. The worker check preserves a confirmed edit, customized account identity, and current balance on repeated confirmation, while retaining the historical statement checkpoint and durable learning jobs. The actual eleven-page PDF and independent 108-row arithmetic review stay in the private knowledge archive and must pass stored-file extraction and isolated staging verification before its training status changes. No existing reviewed case, label, or knowledge archive is rewritten.
+
 The new worker cases run in a separate mandatory script, preserving the complete historical held-source suite and its per-script limit. No assertion, corpus case or source replay is filtered out to accommodate longer verification.

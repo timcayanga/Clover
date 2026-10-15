@@ -1,5 +1,6 @@
 import {hasVerifiedHeldNativeRows} from '@/lib/held-source-contracts';
 import { hasVerifiedMariBankNativeRows } from '@/lib/maribank-native-ledger';
+import { hasVerifiedMaybankIslamicRows } from '@/lib/maybank-islamic-statement';
 import { hasVerifiedGrabReceiptRows, readGrabReceiptTimestamp } from '@/lib/grab-email-receipt';
 import { hasVerifiedGcashWalletHistoryRows, readGcashWalletHistoryTimestamp } from '@/lib/import-parser';
 import { hasVerifiedBcaTransferRows, parseBcaTransferProof } from "@/lib/bca-transfer-proof";
@@ -1855,6 +1856,12 @@ const isVerifiedGcashCompleteLedgerRowSet = (rows: Array<{ rawPayload?: unknown 
   rows.length > 0 && rows.every(row => {
     const raw = row.rawPayload as Record<string, unknown> | null;
     return raw?.bank === "GCash" && raw.completeNativeLedger === true && raw.balanceReconciled === true && typeof raw.sourceTimestamp === "string";
+  });
+
+const isVerifiedMaybankIslamicRowSet = (rows: Array<{ rawPayload?: unknown }>) =>
+  rows.length > 0 && rows.every(row => {
+    const raw = row.rawPayload as Record<string, unknown> | null;
+    return raw?.source === 'maybank_islamic_native' && raw.version === 'maybank-islamic-savings-native-v1' && raw.balanceReconciled === true;
   });
 
 const sanitizeCachedStatementMetadata = (params: {
@@ -6034,7 +6041,7 @@ const resolveConfirmationAccount = async (params: {
     if (next.currency && next.currency !== account.currency && account.source !== "manual") {
       data.currency = next.currency;
     }
-    if (typeof next.balance === "number" && Number.isFinite(next.balance) && !(isVerifiedGcashCompleteLedgerRowSet(params.parsedRows) && account.balance !== null)) {
+    if (typeof next.balance === "number" && Number.isFinite(next.balance) && !((isVerifiedGcashCompleteLedgerRowSet(params.parsedRows) || isVerifiedMaybankIslamicRowSet(params.parsedRows)) && account.balance !== null)) {
       const currentBalance =
         account.balance && typeof account.balance.toString === "function" ? Number(account.balance.toString()) : Number.NaN;
       const shouldUpdateBalance =
@@ -10103,6 +10110,7 @@ const processImportFileTextImpl = async (
       preliminaryHasStrongWisePdfDeterministicParse ||
       hasVerifiedHeldNativeRows(textForParse, parsedRows) ||
       hasVerifiedMariBankNativeRows(textForParse, parsedRows) ||
+      hasVerifiedMaybankIslamicRows(textForParse, parsedRows) ||
       hasVerifiedGrabReceiptRows(textForParse, parsedRows) ||
       hasVerifiedGcashWalletHistoryRows(textForParse, parsedRows) ||
       hasVerifiedGcashBillsRows(textForParse, parsedRows) ||
@@ -10596,6 +10604,7 @@ const processImportFileTextImpl = async (
     Boolean(textForParse.trim()) &&
     !hasVerifiedHeldNativeRows(textForParse, parsedRows) &&
     !hasVerifiedMariBankNativeRows(textForParse, parsedRows) &&
+    !hasVerifiedMaybankIslamicRows(textForParse, parsedRows) &&
     !hasVerifiedGrabReceiptRows(textForParse, parsedRows) &&
     !hasVerifiedGcashWalletHistoryRows(textForParse, parsedRows) &&
     !hasVerifiedGcashBillsRows(textForParse, parsedRows) &&
@@ -10775,6 +10784,7 @@ const processImportFileTextImpl = async (
   const hasReliableDeterministicStatementParse =
     hasVerifiedHeldNativeRows(textForParse, parsedRows) ||
     hasVerifiedMariBankNativeRows(textForParse, parsedRows) ||
+    hasVerifiedMaybankIslamicRows(textForParse, parsedRows) ||
       hasVerifiedGrabReceiptRows(textForParse, parsedRows) ||
       hasVerifiedGcashWalletHistoryRows(textForParse, parsedRows) ||
       hasVerifiedGcashBillsRows(textForParse, parsedRows) ||
@@ -15976,8 +15986,9 @@ export const confirmImportFile = async (
   const verifiedGcashLedgerImport = isVerifiedGcashCompleteLedgerRowSet(parsedRows);
   const verifiedHeldImport = parsedRows.length > 0 && parsedRows.every(row => ['seabank_indonesia_native','dbs_native_zero'].includes(String((row.rawPayload as Record<string, unknown> | null)?.source)));
   const verifiedMariImport = parsedRows.length > 0 && parsedRows.every(row => (row.rawPayload as Record<string, unknown> | null)?.source === "maribank_native_columns");
+  const verifiedMaybankIslamicImport = isVerifiedMaybankIslamicRowSet(parsedRows);
   const verifiedPosbImport = parsedRows.length > 0 && parsedRows.every(row => { const raw = row.rawPayload as Record<string, unknown> | null; return raw?.source === "posb_pdf_columns" && raw.balanceReconciled === true && (raw.reconciliation as Record<string, unknown> | null)?.version === "posb-column-reconciliation-v1"; });
-  const verifiedReadOnlyAccountImport = verifiedGcashReceiptImport || verifiedGcashLedgerImport || verifiedHeldImport || verifiedPosbImport || verifiedMariImport || (parsedRows.length > 0 && parsedRows.every(row => (row.rawPayload as Record<string, unknown> | null)?.source === 'bca_transfer_proof'));
+  const verifiedReadOnlyAccountImport = verifiedGcashReceiptImport || verifiedGcashLedgerImport || verifiedMaybankIslamicImport || verifiedHeldImport || verifiedPosbImport || verifiedMariImport || (parsedRows.length > 0 && parsedRows.every(row => (row.rawPayload as Record<string, unknown> | null)?.source === 'bca_transfer_proof'));
   const preserveExistingVerifiedBalance = verifiedReadOnlyAccountImport && (account.balance !== null || (await tx.account.findUniqueOrThrow({where:{id:resolvedAccountId},select:{createdAt:true}})).createdAt.getTime() <= importFile.uploadedAt.getTime());
   if (preserveExistingVerifiedBalance || consolidatedCimbImport) {
     reconciledAccountBalance = snapshotBalanceToString(account.balance);
@@ -16066,7 +16077,7 @@ export const confirmImportFile = async (
   // projection after the existing balance calculation, in this transaction,
   // so the first settled GET need not repair a stale pre-confirmation value.
   if (!multiAccountImport && parsedRows.length > 0 && parsedRows.every(row =>
-    ["gcash_bills_receipt", "bca_transfer_proof", "grab_email_receipt", "maribank_native_columns", "seabank_indonesia_native", "dbs_native_zero"].includes(String((row.rawPayload as Record<string, unknown> | null)?.source)))) {
+    ["gcash_bills_receipt", "bca_transfer_proof", "grab_email_receipt", "maribank_native_columns", "maybank_islamic_native", "seabank_indonesia_native", "dbs_native_zero"].includes(String((row.rawPayload as Record<string, unknown> | null)?.source)))) {
     const storedAccount = await tx.account.findUniqueOrThrow({ where: { id: resolvedAccountId }, select: { balance: true } });
     const storedBalance = snapshotBalanceToString(storedAccount.balance);
     const summary = accountSummaries.find(entry => entry.accountId === resolvedAccountId);
@@ -16995,7 +17006,7 @@ export const confirmImportFile = async (
       (await preexistingImportAccountIdsPromise)
         .filter((accountId) => !resolvedAccountIdSetForCleanup.has(accountId))
     );
-    const preserveVerifiedGcashLedgerBalance = isVerifiedGcashCompleteLedgerRowSet(parsedRows);
+    const preserveVerifiedSourceLedgerBalance = isVerifiedGcashCompleteLedgerRowSet(parsedRows) || isVerifiedMaybankIslamicRowSet(parsedRows);
     await Promise.allSettled(
       Array.from(resolvedAccountSummaryById.entries()).map(([accountId, summary]) => {
         // Account resolution already updates inferred labels while honoring
@@ -17004,7 +17015,7 @@ export const confirmImportFile = async (
         return prisma.account.update({
           where: { id: accountId },
           data: {
-            ...(summary.balance && !preserveVerifiedGcashLedgerBalance ? { balance: summary.balance } : {}),
+            ...(summary.balance && !preserveVerifiedSourceLedgerBalance ? { balance: summary.balance } : {}),
             ...(summary.accountNumber ? { accountNumber: summary.accountNumber } : {}),
             ...(summary.accountType ? { type: summary.accountType } : {}),
           },
