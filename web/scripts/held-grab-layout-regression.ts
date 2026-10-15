@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { buildGrabReceiptNativePages, hasVerifiedGrabReceiptRows, parseGrabEmailReceipt } from '../lib/grab-email-receipt';
+import { formatUploadAccountDisplayName, getAccountCardName } from '../lib/account-display';
 
 // Invented amounts and references; layouts are reviewed against private originals.
 const ride = (opts: { headline: string; place: string; paid: string; merged?: boolean; extra?: string; amount?: number }) => {
@@ -79,6 +80,8 @@ const indoAdjusted = ['Your Grab E-Receipt\n1 message\nHope you enjoyed your rid
 const indo = parseGrabEmailReceipt(buildGrabReceiptNativePages(indoAdjusted)!);
 assert.deepEqual(indo?.rows.map(row => [row.amount, row.currency, row.accountName, row.rawPayload?.adjustedFareEvidence]), [['189000.00', 'IDR', 'OVO Cash', { displayedFare: 159000, grossFare: 184000, discount: -25000 }]]);
 assert.equal(indo.metadata.accountType, 'wallet');
+assert.equal(formatUploadAccountDisplayName('OVO Cash', 'OVO Cash', null, 'wallet'), 'OVO Cash');
+assert.equal(getAccountCardName({ name: 'OVO Cash', institution: 'OVO Cash', type: 'wallet', source: 'upload' }), 'OVO Cash');
 assert(hasVerifiedGrabReceiptRows(buildGrabReceiptNativePages(indoAdjusted)!, indo.rows));
 assert.throws(() => parseGrabEmailReceipt(buildGrabReceiptNativePages([indoAdjusted[0].replace('Discount -25.000', 'Discount -24.000'), indoAdjusted[1]])!), /gross, discount and displayed net fare disagree/);
 assert.throws(() => parseGrabEmailReceipt(buildGrabReceiptNativePages([indoAdjusted[0], indoAdjusted[1].replace('VAT 2.160', 'VAT 2.161')])!), /tax disclosure is incomplete or contradictory/);

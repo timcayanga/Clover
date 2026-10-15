@@ -69,6 +69,15 @@ const resolveBankLabel = (input: AccountDisplayInput) => {
     rawSafeName && isGenericScreenshotLikeName(rawSafeName) && (safeInstitution || input.accountNumber)
       ? null
       : rawSafeName;
+  // An Indonesian Grab ride names its payer wallet "OVO Cash". Keep that
+  // explicit source identity instead of collapsing it to a generic Wallet.
+  if (
+    input.type === "wallet" &&
+    /^OVO Cash$/i.test(safeName ?? "") &&
+    /^OVO Cash$/i.test(safeInstitution ?? "")
+  ) {
+    return "OVO Cash";
+  }
   const brand = getAccountBrand({
     institution: safeInstitution,
     name: safeName,
