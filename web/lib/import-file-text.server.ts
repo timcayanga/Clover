@@ -1,4 +1,4 @@
-import {buildSeaBankIndonesiaPdfRows, buildSeaBankIndonesiaPdfSummary, buildDbsZeroPdfProof, hasSeaBankIndonesiaEnglishHeader} from '@/lib/held-source-contracts';
+import {buildSeaBankIndonesiaPdfRows, buildSeaBankIndonesiaPdfSummary, buildSeaBankIndonesiaLegacyPdfEvidence, buildDbsZeroPdfProof, hasSeaBankIndonesiaEnglishHeader} from '@/lib/held-source-contracts';
 import { buildGrabReceiptNativePages, buildGrabPickupFields, buildGrabTwoMessagePanelBodies, type GrabVisualHeadline } from '@/lib/grab-email-receipt';
 import { parseCimbConsolidatedStatement } from "@/lib/import-parser";
 import { buildBcaTransferPdfRows, parseBcaTransferProof } from "@/lib/bca-transfer-proof";
@@ -2227,6 +2227,7 @@ const extractTextFromPdfBytes = async (data: Uint8Array, password?: string, base
     const posbTransactionRows = new Array<string[]>(pdf.numPages);
     const bcaProofRows = new Array<string[]>(pdf.numPages);
     const heldNativeRows = new Array<string[]>(pdf.numPages);
+    const heldNativeItems = new Array<PdfTextContentItemLike[]>(pdf.numPages);
     let nextPageIndex = 0;
     // PDF.js can read independent text layers concurrently. Bound the work so
     // a long statement does not monopolize a serverless invocation, while
@@ -2267,6 +2268,8 @@ const extractTextFromPdfBytes = async (data: Uint8Array, password?: string, base
           );
           posbTransactionRows[pageIndex] = buildPosbPdfRows(content.items as PdfTextContentItemLike[]);
           heldNativeRows[pageIndex] = [...buildSeaBankIndonesiaPdfRows(content.items as PdfTextContentItemLike[]), ...buildSeaBankIndonesiaPdfSummary(content.items as PdfTextContentItemLike[]), ...buildDbsZeroPdfProof(content.items as PdfTextContentItemLike[])];
+          heldNativeItems[pageIndex] = content.items.some(item => /^(?:REKENING KORAN|BANK STATEMENT)$/.test(String((item as PdfTextContentItemLike).str ?? '').trim()))
+            ? content.items as PdfTextContentItemLike[] : [];
           bcaProofRows[pageIndex] = buildBcaTransferPdfRows(content.items as PdfTextContentItemLike[], pdf.numPages);
         }
       })
@@ -2274,8 +2277,21 @@ const extractTextFromPdfBytes = async (data: Uint8Array, password?: string, base
 
     try {
       const extractedText = pages.join("\n");
-      if (/REKENING KORAN/.test(extractedText) && /NO\. REKENING SEABANK:/.test(extractedText)) return `${extractedText}\nSEABANK_ID_NATIVE_PAGES ${pdf.numPages}\n${heldNativeRows.flat().join('\n')}`;
-      if (hasSeaBankIndonesiaEnglishHeader(extractedText)) return `${extractedText}\nSEABANK_ID_NATIVE_PAGES ${pdf.numPages}\nSEABANK_ID_NATIVE_LANGUAGE EN\n${heldNativeRows.flat().join('\n')}`;
+      const seaBankSource=(/REKENING KORAN/.test(extractedText) && /NO\. REKENING SEABANK:/.test(extractedText)) || hasSeaBankIndonesiaEnglishHeader(extractedText);
+      const legacyColumns=seaBankSource && heldNativeItems.some(items=>items.some(date=>{
+        if(!/^(?:DATE|TANGGAL)$/.test(String(date.str??'').trim()) || Number(date.transform?.[4])>=110) return false;
+        const sameLine=items.filter(item=>Math.abs(Number(item.transform?.[5])-Number(date.transform?.[5]))<2.5 && String(item.str??'').trim());
+        return sameLine.some(item=>/^(?:TRANSACTION|TRANSAKSI)$/.test(String(item.str).trim())) &&
+          sameLine.some(item=>/^(?:OUTGOING|KELUAR)$/.test(String(item.str).trim()) && Number(item.transform?.[4])>350) &&
+          sameLine.some(item=>/^(?:INCOMING|MASUK)$/.test(String(item.str).trim()) && Number(item.transform?.[4])>480) &&
+          !sameLine.some(item=>/^(?:BALANCE|SALDO)/.test(String(item.str).trim()));
+      }));
+      const legacySeaBank=legacyColumns && /(?:PREVIOUS DAY BALANCE|SALDO HARI SEBELUMNYA)\s*\(IDR\)/.test(extractedText) && !heldNativeRows.flat().some(row=>row.startsWith('SEABANK_ID_TXN |'));
+      let legacySection: Parameters<typeof buildSeaBankIndonesiaLegacyPdfEvidence>[1]='none';
+      const legacyProof=legacySeaBank ? heldNativeItems.flatMap(items=>{const result=buildSeaBankIndonesiaLegacyPdfEvidence(items,legacySection);legacySection=result.section;return result.lines;}) : [];
+      const seaBankProof=legacySeaBank ? [...heldNativeRows.flat().filter(row=>row.startsWith('SEABANK_ID_SUMMARY') || row==='SEABANK_ID_INVALID_SUMMARY'),...legacyProof,'SEABANK_ID_LEGACY_LAYOUT'] : heldNativeRows.flat();
+      if (/REKENING KORAN/.test(extractedText) && /NO\. REKENING SEABANK:/.test(extractedText)) return `${extractedText}\nSEABANK_ID_NATIVE_PAGES ${pdf.numPages}\n${seaBankProof.join('\n')}`;
+      if (hasSeaBankIndonesiaEnglishHeader(extractedText)) return `${extractedText}\nSEABANK_ID_NATIVE_PAGES ${pdf.numPages}\nSEABANK_ID_NATIVE_LANGUAGE EN\n${seaBankProof.join('\n')}`;
       if (/Consolidated Statement/.test(extractedText) && /DBS/.test(extractedText)) return `${extractedText}\nDBS_NATIVE_PAGES ${pdf.numPages}\n${heldNativeRows.flat().join('\n')}`;
       const visualHeadlines: GrabVisualHeadline[] = [];
       for (const slot of grabHeadlineSlots.filter((value): value is NonNullable<typeof value> => value !== null)) {

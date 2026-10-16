@@ -64,9 +64,47 @@ export function buildSeaBankIndonesiaPdfRows(items: Item[]): string[] {
   return [`SEABANK_ID_ROW_COUNT ${dates.length}`,...rows];
 }
 
+type LegacySeaBankSection = 'none' | 'transactions' | 'daily-interest' | 'done';
+/** The older Indonesian layout omits per-movement balances but prints a daily balance/interest proof. */
+export function buildSeaBankIndonesiaLegacyPdfEvidence(items: Item[], previous: LegacySeaBankSection): {lines:string[]; section:LegacySeaBankSection} {
+  const cells=nativeCells(items).sort((a,b)=>b.y-a.y || a.x-b.x);
+  const money=nativeIdrAmounts(cells);
+  const lines:string[]=[];
+  let section=previous, transactions=0, daily=0;
+  const markers=cells.filter(c=>/^(?:SAVINGS - TRANSACTION DETAILS|TABUNGAN - RINCIAN TRANSAKSI|SAVINGS - INTEREST & TAX DETAILS|TABUNGAN - RINCIAN BUNGA & PAJAK|TIME DEPOSIT - INTEREST & TAX DETAILS|DEPOSITO - RINCIAN BUNGA & PAJAK)$/.test(c.text) || (c.x<110 && /^(?:\d{2} )?[A-Z]{3}$/.test(c.text)));
+  for(const c of markers){
+    if(/^(?:SAVINGS - TRANSACTION DETAILS|TABUNGAN - RINCIAN TRANSAKSI)$/.test(c.text)){section='transactions';continue;}
+    if(/^(?:SAVINGS - INTEREST & TAX DETAILS|TABUNGAN - RINCIAN BUNGA & PAJAK)$/.test(c.text)){section='daily-interest';continue;}
+    if(/^(?:TIME DEPOSIT - INTEREST & TAX DETAILS|DEPOSITO - RINCIAN BUNGA & PAJAK)$/.test(c.text)){section='done';continue;}
+    const stamp=c.text;
+    if(section==='transactions' && /^[A-Z]{3}$/.test(stamp)){
+      const near=money.filter(v=>Math.abs(v.y-c.y)<2.5);
+      const outgoing=near.filter(v=>Math.abs(v.end-419.7)<5),incoming=near.filter(v=>Math.abs(v.end-544.77)<5);
+      lines.push(outgoing.length+incoming.length===1 && near.length===1
+        ? ['SEABANK_ID_LEGACY_MONTH',stamp,outgoing.length?'tax':'interest',(outgoing[0]??incoming[0]).text].join(' | ')
+        : 'SEABANK_ID_LEGACY_INVALID_COLUMNS');continue;
+    }
+    if(section==='transactions'){
+      const near=money.filter(v=>Math.abs(v.y-c.y)<2.5);
+      const outgoing=near.filter(v=>Math.abs(v.end-419.7)<5),incoming=near.filter(v=>Math.abs(v.end-544.77)<5);
+      const description=cells.filter(v=>v.x>110 && v.x<300 && v.y<c.y+21 && v.y>c.y-20).sort((a,b)=>b.y-a.y || a.x-b.x).map(v=>v.text).filter(v=>!/^\s*$/.test(v)).join(' ').replaceAll('|',' / ');
+      lines.push(outgoing.length+incoming.length===1 && near.length===1 && description
+        ? ['SEABANK_ID_LEGACY_TXN',stamp,outgoing.length?'outgoing':'incoming',(outgoing[0]??incoming[0]).text,description].join(' | ')
+        : 'SEABANK_ID_LEGACY_INVALID_COLUMNS');transactions++;
+    }else if(section==='daily-interest'){
+      const near=money.filter(v=>Math.abs(v.y-c.y)<2.5);
+      const previousBalance=near.filter(v=>Math.min(Math.abs(v.end-238.48),Math.abs(v.end-228.5))<5),interest=near.filter(v=>Math.abs(v.end-304.77)<5),tax=near.filter(v=>Math.abs(v.end-544.77)<5);
+      lines.push(previousBalance.length===1 && interest.length===1 && tax.length===1 && near.length===3
+        ? ['SEABANK_ID_LEGACY_DAY',stamp,previousBalance[0].text,interest[0].text,tax[0].text].join(' | ')
+        : 'SEABANK_ID_LEGACY_INVALID_COLUMNS');daily++;
+    }
+  }
+  return {lines:[`SEABANK_ID_LEGACY_COUNTS ${transactions} ${daily}`,...lines],section};
+}
+
 export function parseHeldNativeSource(text: string): {metadata: DetectedStatementMetadata; rows: ParsedImportRow[]} | null {
   if (/GCASH\s*PHILIPPINES/i.test(text) && /CASH IN YOUR GCASH ACCOUNT/i.test(text) && /USD/i.test(text)) fail('GCash payment template mixes currencies and an unverified cash-in instruction; no reliable payment established');
-  if(/^SEABANK_ID_NATIVE_PAGES /m.test(text)) return parseSeaBankIndonesia(text);
+  if(/^SEABANK_ID_NATIVE_PAGES /m.test(text)) return /^SEABANK_ID_LEGACY_LAYOUT$/m.test(text) ? parseSeaBankIndonesiaLegacy(text) : parseSeaBankIndonesia(text);
   if(/^DBS_NATIVE_PAGES /m.test(text)) return parseDbsZeroSnapshot(text);
   return null;
 }
@@ -129,6 +167,57 @@ function parseSeaBankIndonesia(text: string) {
   });
   if(actualIn!==incoming || actualOut!==outgoing || running!==closing) fail('IDR complete movement totals');
   return {rows,metadata:{institution:'SeaBank Indonesia',accountName,accountNumber,accountType:'bank' as const,currency:'IDR',openingBalance:opening,endingBalance:closing,startDate:start,endDate:end,confidence:sourceHeaderDateConflict?85:95,currencyConfidence:100,institutionConfidence:100,identityEvidence:['seabank-id-native-v1','Full twelve-digit account, IDR columns, complete pages and running balances',...(sourceHeaderDateConflict?['Conflicting publication headers retained; no transaction date inferred from them']:[])]}};
+}
+
+function parseSeaBankIndonesiaLegacy(text: string) {
+  const english=/^SEABANK_ID_NATIVE_LANGUAGE EN$/m.test(text);
+  const physical=[...text.matchAll(/^SEABANK_ID_NATIVE_PAGES (\d+)$/gm)];
+  const pages=Number(physical[0]?.[1]);
+  const printed=[...text.matchAll(english ? /page\s+(\d+)\s+of\s+(\d+)/gi : /halaman\s+(\d+)\s+dr\s+(\d+)/gi)];
+  if(physical.length!==1 || pages<2 || pages>100 || printed.length!==pages || printed.some((m,i)=>Number(m[1])!==i+1 || Number(m[2])!==pages)) fail('legacy Indonesian page coverage');
+  if(!(english ? /BANK STATEMENT/.test(text) && /SAVINGS - INTEREST & TAX DETAILS/.test(text) : /REKENING KORAN/.test(text) && /TABUNGAN - RINCIAN BUNGA & PAJAK/.test(text)) || !/cs@seabank\.co\.id/.test(text)) fail('legacy Indonesian source family');
+  const ids=[...text.matchAll(english ? /SEABANK ?ACCOUNT:[ \t]*(\d{12})(?![\dA-Za-z_])/g : /NO\. REKENING SEABANK:[ \t]*(\d{12})(?![\dA-Za-z_])/g)];
+  if(ids.length!==1) fail('legacy full twelve-digit account');
+  const periods=[...text.matchAll(english ? /(\d{2}) ([A-Z]{3}) (\d{4}) to (\d{2}) ([A-Z]{3}) (\d{4})/g : /(\d{2}) ([A-Z]{3}) (\d{4}) sampai (\d{2}) ([A-Z]{3}) (\d{4})/g)];
+  if(periods.length!==1) fail('legacy one statement period');
+  const p=periods[0],start=day(p[1],p[2],p[3]),end=day(p[4],p[5],p[6]);
+  const periodDays=Math.round((Date.parse(end)-Date.parse(start))/86400000)+1;
+  if(start>end || p[1]!=='01' || p[2]!==p[5] || p[3]!==p[6] || periodDays<28 || periodDays>31) fail('legacy complete monthly period');
+  const serials=[...text.matchAll(/S\/N\s+S01-(\d{2})(\d{2})(\d{2})[A-Z]+/g)];
+  if(serials.length!==pages || serials.some(m=>m[1]!==p[3].slice(-2) || Number(m[2])!==months.indexOf(p[2])+1 || m[3]!==p[4] || m[0]!==serials[0][0])) fail('legacy serial/period contradiction');
+  const sourceHeader=text.slice(0,text.indexOf(english?'ACCOUNT SUMMARY':'RINGKASAN REKENING'));
+  if(!/^INDONESIA$/m.test(sourceHeader) || /^PHILIPPINES$/m.test(sourceHeader)) fail('legacy Indonesian account jurisdiction');
+  const publicationDates=[...text.matchAll(/^\d{2} [A-Z]{3} \d{4}$/gm)].map(m=>m[0]);
+  const nextDate=new Date(Date.parse(end)+86400000).toISOString().slice(0,10);
+  if(publicationDates.length!==pages || publicationDates.some(value=>day(value.slice(0,2),value.slice(3,6),value.slice(7))!==nextDate)) fail('legacy publication dates');
+  const summary=text.slice(text.indexOf(english?'ACCOUNT SUMMARY':'RINGKASAN REKENING'),text.indexOf(english?'SAVINGS - TRANSACTION DETAILS':'TABUNGAN - RINCIAN TRANSAKSI'));
+  const values=summary.match(english ? /SAVINGS\s+([\d.]+)\s+([\d.]+)\s+([\d.]+)\s+([\d.]+)\s+TOTAL:\s*([\d.]+)/ : /TABUNGAN\s+([\d.]+)\s+([\d.]+)\s+([\d.]+)\s+([\d.]+)\s+TOTAL:\s*([\d.]+)/);
+  const nativeSummary=[...text.matchAll(/^SEABANK_ID_SUMMARY \| (.+)$/gm)];
+  if(text.includes('SEABANK_ID_INVALID_SUMMARY') || nativeSummary.length!==1 || !values) fail('legacy complete native summary');
+  const printedValues=values.slice(1,6).map(rupiah),geometry=nativeSummary[0][1].split(/\s*\|\s*/).map(rupiah);
+  if(geometry.length!==4 || geometry.some((v,i)=>v!==printedValues[i]) || printedValues[3]!==printedValues[4]) fail('legacy summary cell disagreement');
+  const [opening,outgoing,incoming,closing]=geometry;
+  if(opening+incoming-outgoing!==closing) fail('legacy summary arithmetic');
+  const counts=[...text.matchAll(/^SEABANK_ID_LEGACY_COUNTS (\d+) (\d+)$/gm)].map(m=>[Number(m[1]),Number(m[2])]);
+  const transactions=[...text.matchAll(/^SEABANK_ID_LEGACY_TXN \| (.+)$/gm)],daily=[...text.matchAll(/^SEABANK_ID_LEGACY_DAY \| (.+)$/gm)],monthly=[...text.matchAll(/^SEABANK_ID_LEGACY_MONTH \| (.+)$/gm)];
+  if(text.includes('SEABANK_ID_LEGACY_INVALID_COLUMNS') || counts.length!==pages || counts.reduce((n,c)=>n+c[0],0)!==transactions.length || counts.reduce((n,c)=>n+c[1],0)!==daily.length || daily.length!==periodDays || monthly.length!==2) fail('legacy complete native table coverage');
+  const aggregates=new Map<string,number>();
+  for(const m of monthly){const cells=m[1].split(/\s*\|\s*/);if(cells.length!==3 || cells[0]!==p[2] || !['interest','tax'].includes(cells[1]) || aggregates.has(cells[1])) fail('legacy monthly interest/tax');aggregates.set(cells[1],rupiah(cells[2]));}
+  if(!aggregates.has('interest') || !aggregates.has('tax')) fail('legacy monthly interest/tax coverage');
+  const dailyRows=daily.map((m,i)=>{const cells=m[1].split(/\s*\|\s*/);if(cells.length!==4) fail('legacy daily row shape');const stamp=cells[0].match(/^(\d{2}) ([A-Z]{3})$/);if(!stamp) fail('legacy daily date');const date=day(stamp[1],stamp[2],p[3]);if(date!==new Date(Date.parse(start)+i*86400000).toISOString().slice(0,10)) fail('legacy daily date sequence');return {date,previous:rupiah(cells[1]),interest:rupiah(cells[2]),tax:rupiah(cells[3]),interestText:cells[2],taxText:cells[3],line:m[0]};});
+  if(dailyRows[0].previous!==opening || dailyRows.reduce((n,r)=>n+r.interest,0)!==aggregates.get('interest') || dailyRows.reduce((n,r)=>n+r.tax,0)!==aggregates.get('tax')) fail('legacy daily/monthly interest reconciliation');
+  let lastMovementDate='';
+  const movements=transactions.map(m=>{const cells=m[1].split(/\s*\|\s*/);if(cells.length!==4 || !['incoming','outgoing'].includes(cells[1]) || !cells[3]) fail('legacy transaction row shape');const stamp=cells[0].match(/^(\d{2}) ([A-Z]{3})$/);if(!stamp) fail('legacy movement date');const date=day(stamp[1],stamp[2],p[3]),amount=rupiah(cells[2]);if(date<start || date>end || amount<=0 || date<lastMovementDate) fail('legacy movement/date order');lastMovementDate=date;return {date,direction:cells[1],amount,amountText:cells[2],description:cells[3],line:m[0]};});
+  const totalIn=movements.filter(r=>r.direction==='incoming').reduce((n,r)=>n+r.amount,0)+aggregates.get('interest')!;
+  const totalOut=movements.filter(r=>r.direction==='outgoing').reduce((n,r)=>n+r.amount,0)+aggregates.get('tax')!;
+  if(totalIn!==incoming || totalOut!==outgoing) fail('legacy monthly movement totals');
+  const byDate=new Map<string,number>();for(const r of movements)byDate.set(r.date,(byDate.get(r.date)??0)+(r.direction==='incoming'?r.amount:-r.amount));
+  for(let i=0;i<dailyRows.length;i++){const r=dailyRows[i],next=r.previous+(byDate.get(r.date)??0)+r.interest-r.tax;if(i<dailyRows.length-1 && next!==dailyRows[i+1].previous) fail('legacy daily balance roll-forward');if(i===dailyRows.length-1 && next!==closing) fail('legacy closing balance');}
+  const accountNumber=ids[0][1],accountName=`SeaBank Indonesia ${accountNumber.slice(-4)}`;
+  const all=[...movements.map((m,i)=>({...m,sourceRowIndex:i,kind:'bank_transaction'})),...dailyRows.flatMap((r,i)=>[r.interest>0?{date:r.date,direction:'incoming',amount:r.interest,amountText:r.interestText,description:english?'Savings Interest':'Bunga Tabungan',line:r.line,sourceRowIndex:movements.length+i*2,kind:'daily_interest'}:null,r.tax>0?{date:r.date,direction:'outgoing',amount:r.tax,amountText:r.taxText,description:english?'Savings Withholding Tax':'Pajak Bunga Tabungan',line:r.line,sourceRowIndex:movements.length+i*2+1,kind:'daily_tax'}:null].filter((v):v is NonNullable<typeof v>=>v!==null))];
+  all.sort((a,b)=>a.date.localeCompare(b.date) || a.sourceRowIndex-b.sourceRowIndex);
+  const rows:ParsedImportRow[]=all.map((r,i)=>({date:r.date,amount:r.amount.toFixed(2),currency:'IDR',type:r.direction==='incoming'?'income':'expense',categoryName:r.kind==='daily_interest'?'Income':r.kind==='daily_tax'?'Financial':/\bCash Withdrawal\b/i.test(r.description)?'Cash & ATM':/^(?:Biaya|Fee)\b/.test(r.description)?'Financial':/\bTransfer\b|Top Up - eWallet/.test(r.description)?'Transfers':'Other',merchantRaw:r.description,merchantClean:r.description,description:r.description,accountNumber,accountName,institution:'SeaBank Indonesia',confidence:90,rawPayload:{source:'seabank_indonesia_legacy_daily',kind:r.kind,line:r.line,sourceRowIndex:i,originalTableIndex:r.sourceRowIndex,accountNumber,accountCurrency:'IDR',accountType:'bank',direction:r.direction,notes:r.description,amountText:r.amountText,balanceReconciled:true,reconciliation:{version:'seabank-id-legacy-daily-v1',openingBalance:opening,endingBalance:closing,totalIncoming:incoming,totalOutgoing:outgoing,dailyRows:daily.length,physicalPages:pages},...(i===0?{sourceDocumentText:text}:{sourceDocumentTextRowIndex:1})}}));
+  return {rows,metadata:{institution:'SeaBank Indonesia',accountName,accountNumber,accountType:'bank' as const,currency:'IDR',openingBalance:opening,endingBalance:closing,startDate:start,endDate:end,confidence:90,currencyConfidence:100,institutionConfidence:100,identityEvidence:['seabank-id-legacy-daily-v1','Full account, IDR source columns, complete pages, daily interest and previous-day balance reconciliation']}};
 }
 
 /** Only the completely empty, single SGD My Account layout; never generic DBS. */

@@ -91,7 +91,7 @@ const unsafeRowFinding = (row: ParsedImportRow): ImportValidationFinding | null 
   const rawAmountText = text(payload?.amountText);
   // One native Indonesian integer uses dots for thousands, not several PHP
   // decimal values. Keep the generic merged-number guard for every other shape.
-  const singleNativeRupiah = payload?.source === 'seabank_indonesia_native' && row.currency === 'IDR' &&
+  const singleNativeRupiah = ['seabank_indonesia_native','seabank_indonesia_legacy_daily'].includes(String(payload?.source)) && row.currency === 'IDR' &&
     /^(?:0|[1-9]\d*|[1-9]\d{0,2}(?:\.\d{3})+)$/.test(rawAmountText) &&
     Number(rawAmountText.replaceAll('.', '')) === Number(row.amount);
   const sourceAmounts = singleNativeRupiah ? [Number(row.amount)] : Array.from(rawAmountText.matchAll(/[0-9][0-9,]*\.\d{2}/g))

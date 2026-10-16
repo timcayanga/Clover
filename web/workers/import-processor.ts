@@ -5714,8 +5714,8 @@ const resolveConfirmationAccount = async (params: {
   const bcaTransferRows = params.parsedRows.length > 0 && params.parsedRows.every(row => (row.rawPayload as Record<string, unknown> | null)?.source === "bca_transfer_proof");
   const mariStatementRows = params.parsedRows.length > 0 && params.parsedRows.every(row => (row.rawPayload as Record<string, unknown> | null)?.source === "maribank_native_columns");
   const posbStatementRows = params.parsedRows.length > 0 && params.parsedRows.every(row => { const raw = row.rawPayload as Record<string, unknown> | null; return raw?.source === "posb_pdf_columns" && raw.balanceReconciled === true && (raw.reconciliation as Record<string, unknown> | null)?.version === "posb-column-reconciliation-v1"; });
-  const heldNativeRows = params.parsedRows.length > 0 && params.parsedRows.every(row => ['seabank_indonesia_native','dbs_native_zero'].includes(String((row.rawPayload as Record<string, unknown> | null)?.source)));
-  const indonesianSeaBank = heldNativeRows && (params.parsedRows[0].rawPayload as Record<string, unknown>).source === 'seabank_indonesia_native';
+  const heldNativeRows = params.parsedRows.length > 0 && params.parsedRows.every(row => ['seabank_indonesia_native','seabank_indonesia_legacy_daily','dbs_native_zero'].includes(String((row.rawPayload as Record<string, unknown> | null)?.source)));
+  const indonesianSeaBank = heldNativeRows && ['seabank_indonesia_native','seabank_indonesia_legacy_daily'].includes(String((params.parsedRows[0].rawPayload as Record<string, unknown>).source));
   if (consolidatedCimbRows || bcaTransferRows || posbStatementRows || mariStatementRows || heldNativeRows) {
     const institution = heldNativeRows ? (indonesianSeaBank ? "SeaBank Indonesia" : "DBS") : consolidatedCimbRows ? "CIMB" : posbStatementRows ? "POSB" : mariStatementRows ? "MariBank" : "BCA";
     const currency = heldNativeRows ? (indonesianSeaBank ? "IDR" : "SGD") : consolidatedCimbRows || mariStatementRows ? "PHP" : posbStatementRows ? "SGD" : "IDR";
@@ -15984,7 +15984,7 @@ export const confirmImportFile = async (
   // must never replace a confirmed balance with its net imported movements.
   const verifiedGcashReceiptImport = parsedRows.length > 0 && parsedRows.every(row => (row.rawPayload as Record<string, unknown> | null)?.source === 'gcash_bills_receipt');
   const verifiedGcashLedgerImport = isVerifiedGcashCompleteLedgerRowSet(parsedRows);
-  const verifiedHeldImport = parsedRows.length > 0 && parsedRows.every(row => ['seabank_indonesia_native','dbs_native_zero'].includes(String((row.rawPayload as Record<string, unknown> | null)?.source)));
+  const verifiedHeldImport = parsedRows.length > 0 && parsedRows.every(row => ['seabank_indonesia_native','seabank_indonesia_legacy_daily','dbs_native_zero'].includes(String((row.rawPayload as Record<string, unknown> | null)?.source)));
   const verifiedMariImport = parsedRows.length > 0 && parsedRows.every(row => (row.rawPayload as Record<string, unknown> | null)?.source === "maribank_native_columns");
   const verifiedMaybankIslamicImport = isVerifiedMaybankIslamicRowSet(parsedRows);
   const verifiedPosbImport = parsedRows.length > 0 && parsedRows.every(row => { const raw = row.rawPayload as Record<string, unknown> | null; return raw?.source === "posb_pdf_columns" && raw.balanceReconciled === true && (raw.reconciliation as Record<string, unknown> | null)?.version === "posb-column-reconciliation-v1"; });
@@ -16077,7 +16077,7 @@ export const confirmImportFile = async (
   // projection after the existing balance calculation, in this transaction,
   // so the first settled GET need not repair a stale pre-confirmation value.
   if (!multiAccountImport && parsedRows.length > 0 && parsedRows.every(row =>
-    ["gcash_bills_receipt", "bca_transfer_proof", "grab_email_receipt", "maribank_native_columns", "maybank_islamic_native", "seabank_indonesia_native", "dbs_native_zero"].includes(String((row.rawPayload as Record<string, unknown> | null)?.source)))) {
+    ["gcash_bills_receipt", "bca_transfer_proof", "grab_email_receipt", "maribank_native_columns", "maybank_islamic_native", "seabank_indonesia_native", "seabank_indonesia_legacy_daily", "dbs_native_zero"].includes(String((row.rawPayload as Record<string, unknown> | null)?.source)))) {
     const storedAccount = await tx.account.findUniqueOrThrow({ where: { id: resolvedAccountId }, select: { balance: true } });
     const storedBalance = snapshotBalanceToString(storedAccount.balance);
     const summary = accountSummaries.find(entry => entry.accountId === resolvedAccountId);
@@ -16137,7 +16137,7 @@ export const confirmImportFile = async (
   for (const [index, originalRow] of parsedRows.entries()) {
     // POSB's amountColumn="withdrawal" is column evidence, not an ATM
     // description. Its dedicated parser already distinguishes FAST and cash.
-    const row = readAppMigration(originalRow.rawPayload) || ["posb_pdf_columns", "bca_transfer_proof", "cimb_consolidated_ledger", "cimb_consolidated_snapshot", "grab_email_receipt", "maribank_native_columns", "seabank_indonesia_native", "dbs_native_zero"].includes(String((originalRow.rawPayload as Record<string, unknown> | null)?.source))
+    const row = readAppMigration(originalRow.rawPayload) || ["posb_pdf_columns", "bca_transfer_proof", "cimb_consolidated_ledger", "cimb_consolidated_snapshot", "grab_email_receipt", "maribank_native_columns", "seabank_indonesia_native", "seabank_indonesia_legacy_daily", "dbs_native_zero"].includes(String((originalRow.rawPayload as Record<string, unknown> | null)?.source))
       ? originalRow : normalizeLandbankImportedRow(originalRow as ImportInsightSourceRow, statementInstitution);
     const migration = readAppMigration(row.rawPayload);
     const rowAccount = rowAccountFor(row as Record<string, unknown>);

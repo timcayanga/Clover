@@ -3,6 +3,102 @@
   "baselineCommit": "901b242f1bce74ebf73fabdff3608c30ead6e03a",
   "cases": [
     {
+      "id": "seabank-id-legacy-daily",
+      "source": "seabank-id-legacy-daily.txt",
+      "sha256": "164a59d7cdbe3ba5b002616271ea89ec20658c31ff29f06bc2a10aa4cb8fa02f",
+      "kind": "statement",
+      "representation": "synthetic PDF text-layer transcription plus reviewed native column proof",
+      "provenance": {
+        "origin": "synthetic",
+        "reviewer": "Codex",
+        "reviewedAt": "2026-10-16",
+        "status": "reviewed",
+        "basis": "Full February calendar, two exact repeated payments, daily interest credited on its explicit date, 28 previous-day balances, both monthly totals and closing balance. Layout checked against three retained SeaBank Indonesia PDFs; no personal source data in fixture."
+      },
+      "expected": [
+        {
+          "date": "2026-02-01",
+          "amount": "1000.00",
+          "currency": "IDR",
+          "type": "income",
+          "accountNumber": "901000000789",
+          "rawPayload": {
+            "source": "seabank_indonesia_legacy_daily",
+            "sourceRowIndex": 0,
+            "reconciliation": {
+              "version": "seabank-id-legacy-daily-v1",
+              "openingBalance": 100,
+              "endingBalance": 101,
+              "totalIncoming": 1001,
+              "totalOutgoing": 1000,
+              "dailyRows": 28,
+              "physicalPages": 2
+            }
+          }
+        },
+        {
+          "date": "2026-02-01",
+          "amount": "1.00",
+          "currency": "IDR",
+          "type": "income",
+          "accountNumber": "901000000789",
+          "rawPayload": {
+            "source": "seabank_indonesia_legacy_daily",
+            "sourceRowIndex": 1,
+            "reconciliation": {
+              "version": "seabank-id-legacy-daily-v1",
+              "openingBalance": 100,
+              "endingBalance": 101,
+              "totalIncoming": 1001,
+              "totalOutgoing": 1000,
+              "dailyRows": 28,
+              "physicalPages": 2
+            }
+          }
+        },
+        {
+          "date": "2026-02-02",
+          "amount": "500.00",
+          "currency": "IDR",
+          "type": "expense",
+          "accountNumber": "901000000789",
+          "rawPayload": {
+            "source": "seabank_indonesia_legacy_daily",
+            "sourceRowIndex": 2,
+            "reconciliation": {
+              "version": "seabank-id-legacy-daily-v1",
+              "openingBalance": 100,
+              "endingBalance": 101,
+              "totalIncoming": 1001,
+              "totalOutgoing": 1000,
+              "dailyRows": 28,
+              "physicalPages": 2
+            }
+          }
+        },
+        {
+          "date": "2026-02-02",
+          "amount": "500.00",
+          "currency": "IDR",
+          "type": "expense",
+          "accountNumber": "901000000789",
+          "rawPayload": {
+            "source": "seabank_indonesia_legacy_daily",
+            "sourceRowIndex": 3,
+            "reconciliation": {
+              "version": "seabank-id-legacy-daily-v1",
+              "openingBalance": 100,
+              "endingBalance": 101,
+              "totalIncoming": 1001,
+              "totalOutgoing": 1000,
+              "dailyRows": 28,
+              "physicalPages": 2
+            }
+          }
+        }
+      ]
+    },
+    {
       "id": "bdo-full-month-ledger",
       "source": "bdo-full-month-ledger.txt",
       "sha256": "a87866f65e442740d56570acbfcc5a54aac0910f59e5241cdf51c54e26f7ffe6",

@@ -38,7 +38,7 @@ export const assessFinancialUploadScope = (params: {
   if (/^SEABANK_ID_NATIVE_PAGES \d+$/m.test(params.text ?? "")) {
     try {
       const native = parseHeldNativeSource(params.text ?? "");
-      if (native?.rows.length && native.rows.every(row => row.rawPayload?.source === "seabank_indonesia_native")) {
+      if (native?.rows.length && native.rows.every(row => ["seabank_indonesia_native", "seabank_indonesia_legacy_daily"].includes(String(row.rawPayload?.source)))) {
         return { decision: "financial", confidence: 95, reasons: ["complete reconciled native Indonesian SeaBank ledger"] };
       }
     } catch { /* Incomplete proofs retain the ordinary scope/review guards. */ }

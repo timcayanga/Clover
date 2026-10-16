@@ -40,6 +40,9 @@ export const DATA_ENGINE_VERSION = "v2";
 export const IMPORT_FILE_EXTRACTION_CACHE_VERSION = "v39";
 export const resolveImportFileExtractionCacheVersion = (fileName?: string | null) => {
   const normalizedFileName = String(fileName ?? "");
+  // Re-extract only the retained legacy SeaBank PDFs whose previous cache had
+  // no complete daily-balance proof. Other trained statement caches survive.
+  if (/^(?:1028748777|895545880|884319546)-.*\.pdf$/i.test(normalizedFileName)) return "v53-seabank-id-legacy-daily";
   if (/\.pdf$/i.test(normalizedFileName) && /(?:Seabank[-_\s]*Statement|E[-_\s]*steatmen[-_\s]*seabank)/i.test(normalizedFileName)) return "v47-seabank-native-language";
   if (/\.pdf$/i.test(normalizedFileName) && /gcash/i.test(normalizedFileName) && /(?:history|statement|new-gcash)/i.test(normalizedFileName) && !/bill|receipt/i.test(normalizedFileName)) return "v51-gcash-complete-ledger-clocks";
   if (/\.pdf$/i.test(normalizedFileName) && /(?:Receipt[-_\s]*Gcash|Seabank[-_\s]*Statement|DBS|(?:^|[-_])Statement\.pdf$|Sfs[-_]Bank|BCA|Notification(?:[-_\s]|\.pdf)|\d{10,25}[-_]\d+\.pdf)/i.test(normalizedFileName)) return "v46-held-native-sources";
