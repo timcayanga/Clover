@@ -1,4 +1,4 @@
-import {buildSeaBankIndonesiaPdfRows, buildDbsZeroPdfProof, hasSeaBankIndonesiaEnglishHeader} from '@/lib/held-source-contracts';
+import {buildSeaBankIndonesiaPdfRows, buildSeaBankIndonesiaPdfSummary, buildDbsZeroPdfProof, hasSeaBankIndonesiaEnglishHeader} from '@/lib/held-source-contracts';
 import { buildGrabReceiptNativePages, buildGrabPickupFields, buildGrabTwoMessagePanelBodies, type GrabVisualHeadline } from '@/lib/grab-email-receipt';
 import { parseCimbConsolidatedStatement } from "@/lib/import-parser";
 import { buildBcaTransferPdfRows, parseBcaTransferProof } from "@/lib/bca-transfer-proof";
@@ -2266,7 +2266,7 @@ const extractTextFromPdfBytes = async (data: Uint8Array, password?: string, base
             content.items as PdfTextContentItemLike[]
           );
           posbTransactionRows[pageIndex] = buildPosbPdfRows(content.items as PdfTextContentItemLike[]);
-          heldNativeRows[pageIndex] = [...buildSeaBankIndonesiaPdfRows(content.items as PdfTextContentItemLike[]), ...buildDbsZeroPdfProof(content.items as PdfTextContentItemLike[])];
+          heldNativeRows[pageIndex] = [...buildSeaBankIndonesiaPdfRows(content.items as PdfTextContentItemLike[]), ...buildSeaBankIndonesiaPdfSummary(content.items as PdfTextContentItemLike[]), ...buildDbsZeroPdfProof(content.items as PdfTextContentItemLike[])];
           bcaProofRows[pageIndex] = buildBcaTransferPdfRows(content.items as PdfTextContentItemLike[], pdf.numPages);
         }
       })

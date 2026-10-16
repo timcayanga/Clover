@@ -2,6 +2,7 @@ import type { DetectedStatementMetadata, ParsedImportRow } from './import-parser
 import { SourceReviewRequiredError } from './import-source-review';
 
 type Item = { str?: unknown; transform?: number[]; width?: number };
+type NativeCell = { text: string; x: number; y: number; end: number };
 const months = ['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC'];
 function fail(why: string): never { throw new SourceReviewRequiredError(`Native source requires review: ${why}`); }
 const rupiah = (s: string) => /^(?:0|[1-9]\d*|[1-9]\d{0,2}(?:\.\d{3})+)$/.test(s) ? Number(s.replaceAll('.','')) : fail('invalid IDR grouping');
@@ -10,18 +11,52 @@ const day = (d: string, m: string, y: string) => {
   if(n<0 || result.getUTCFullYear()!==Number(y) || result.getUTCMonth()!==n || result.getUTCDate()!==Number(d)) fail('invalid calendar date');
   return result.toISOString().slice(0,10);
 };
+function nativeCells(items: Item[]): NativeCell[] {
+  return items.map(i=>({text:String(i.str??'').trim(),x:Number(i.transform?.[4]),y:Number(i.transform?.[5]),end:Number(i.transform?.[4])+Number(i.width??0)})).filter(i=>i.text && Number.isFinite(i.x) && Number.isFinite(i.y));
+}
+function nativeIdrAmounts(cells: NativeCell[]): NativeCell[] {
+  const amounts: NativeCell[]=[];
+  for(const c of cells.filter(c=>c.x>180 && /^[\d.]+$/.test(c.text)).sort((a,b)=>b.y-a.y || a.x-b.x)){
+    const prior=amounts.at(-1);
+    if(prior && Math.abs(prior.y-c.y)<0.5 && c.x-prior.end>=-0.5 && c.x-prior.end<=1.5 && /\./.test(prior.text+c.text)){
+      prior.text+=c.text;prior.end=c.end;
+    }else amounts.push({...c});
+  }
+  return amounts.filter(c=>/^(?:\d+|\d{1,3}(?:\.\d{3})+)$/.test(c.text));
+}
+
+/** A split PDF font can scatter summary digits while the table cells remain exact. */
+export function buildSeaBankIndonesiaPdfSummary(items: Item[]): string[] {
+  const cells=nativeCells(items);
+  if(!cells.some(c=>c.text==='RINGKASAN REKENING' || c.text==='ACCOUNT SUMMARY')) return [];
+  const account=cells.filter(c=>c.text==='TABUNGAN' || c.text==='SAVINGS');
+  if(account.length!==1) return ['SEABANK_ID_INVALID_SUMMARY'];
+  const values=nativeIdrAmounts(cells).filter(c=>Math.abs(c.y-account[0].y)<2.5);
+  const ends=[240.84,342.84,445.28,544.77];
+  if(values.length!==4 || ends.some((end,i)=>!values.some(c=>Math.abs(c.end-end)<7.5)) ||
+      ends.some(end=>values.filter(c=>Math.abs(c.end-end)<7.5).length!==1)) return ['SEABANK_ID_INVALID_SUMMARY'];
+  return ['SEABANK_ID_SUMMARY | '+ends.map(end=>values.find(c=>Math.abs(c.end-end)<7.5)!.text).join(' | ')];
+}
 
 /** Keep Indonesian integer grouping, empty columns and every native occurrence. */
 export function buildSeaBankIndonesiaPdfRows(items: Item[]): string[] {
-  const cells=items.map(i=>({text:String(i.str??'').trim(),x:Number(i.transform?.[4]),y:Number(i.transform?.[5]),end:Number(i.transform?.[4])+Number(i.width??0)})).filter(i=>i.text && Number.isFinite(i.x) && Number.isFinite(i.y));
+  const cells=nativeCells(items);
   if(!cells.some(c=>c.text==='REKENING KORAN' || c.text==='BANK STATEMENT')) return [];
   const header=cells.find(c=>c.text==='TANGGAL' || c.text==='DATE');
   if(!header) return ['SEABANK_ID_ROW_COUNT 0'];
+  // A PDF font can emit one printed IDR value as "168", ".", "000".
+  // Rejoin only touching numeric glyphs in the monetary columns on one
+  // baseline; gaps, neighboring rows and descriptions stay separate.
+  const moneyCells=nativeIdrAmounts(cells);
   const dates=cells.filter(c=>c.x<110 && c.y<header.y && /^\d{2} [A-Z]{3}$/.test(c.text)).sort((a,b)=>b.y-a.y);
   const rows=dates.map((d,index)=>{
-    const amounts=cells.filter(c=>Math.abs(c.y-d.y)<=2.25 && c.x>270 && /^(?:\d+|\d{1,3}(?:\.\d{3})+)$/.test(c.text));
-    const out=amounts.filter(c=>Math.abs(c.end-342.84)<4),incoming=amounts.filter(c=>Math.abs(c.end-445.28)<4),balance=amounts.filter(c=>Math.abs(c.end-544.77)<4);
+    // The amount and balance sit at the row's vertical center, while a
+    // wrapped counterparty can push its date onto a different baseline.
+    // Bound the search by neighboring dates rather than borrowing a value
+    // from the next movement or an interest/disclosure table.
     const upper=index===0?header.y-3:(dates[index-1].y+d.y)/2,lower=dates[index+1]?(dates[index+1].y+d.y)/2:d.y-30;
+    const amounts=moneyCells.filter(c=>c.y<upper && c.y>lower && /^(?:\d+|\d{1,3}(?:\.\d{3})+)$/.test(c.text));
+    const out=amounts.filter(c=>Math.abs(c.end-342.84)<7.5),incoming=amounts.filter(c=>Math.abs(c.end-445.28)<4),balance=amounts.filter(c=>Math.abs(c.end-544.77)<4);
     const description=cells.filter(c=>c.x>110 && c.x<270 && c.y<upper && c.y>lower).sort((a,b)=>b.y-a.y || a.x-b.x).map(c=>c.text).join(' ').replaceAll('|',' / ');
     if(out.length+incoming.length!==1 || balance.length!==1 || !description) return 'SEABANK_ID_INVALID_COLUMNS';
     return ['SEABANK_ID_TXN',d.text,out.length?'outgoing':'incoming',(out[0]??incoming[0]).text,balance[0].text,description].join(' | ');
@@ -53,13 +88,24 @@ function parseSeaBankIndonesia(text: string) {
   if(periods.length!==1) fail('one Indonesian statement period');
   const p=periods[0],start=day(p[1],p[2],p[3]),end=day(p[4],p[5],p[6]);
   if(start>end || p[2]!==p[5] || p[3]!==p[6]) fail('monthly Indonesian period');
+  const sourceHeaderDates=[...new Set([...text.matchAll(/^\d{2} (?:[A-Z]{3}|JU NI|JUNI) \d{4}$/gm)].map(m=>m[0]))];
+  const sourceHeaderDateConflict=new Set(sourceHeaderDates.map(value=>value.replace(/\bJU NI\b|\bJUNI\b/g,'JUN'))).size>1;
   const summary=text.slice(text.indexOf(english?'ACCOUNT SUMMARY':'RINGKASAN REKENING'),text.indexOf(english?'SAVINGS - TRANSACTION DETAILS':'TABUNGAN - RINCIAN TRANSAKSI'));
   const labels=english?['STARTING BALANCE','TOTAL OUTGOING','TOTAL INCOMING','ENDING BALANCE']:['SALDO AWAL','TRANSAKSI KELUAR','TRANSAKSI MASUK','SALDO AKHIR'];
   const stackedEnglishColumns=english && /STARTING BALANCE TOTAL OUTGOING TOTAL INCOMING ENDING BALANCE\s+ACCOUNT \(IDR\) \(IDR\) \(IDR\) \(IDR\)/.test(summary);
   if(!stackedEnglishColumns && labels.some(label=>!new RegExp(label+'\\s*\\(IDR\\)').test(summary))) fail('IDR summary columns');
   const values=summary.match(english ? /SAVINGS\s+([\d.]+)\s+([\d.]+)\s+([\d.]+)\s+([\d.]+)\s+TOTAL:\s*([\d.]+)/ : /TABUNGAN\s+([\d.]+)\s+([\d.]+)\s+([\d.]+)\s+([\d.]+)\s+TOTAL:\s*([\d.]+)/);
-  if(!values) fail('complete IDR summary');
-  const [opening,outgoing,incoming,closing,total]=values.slice(1).map(rupiah);
+  const nativeSummary=[...text.matchAll(/^SEABANK_ID_SUMMARY \| (.+)$/gm)];
+  if(text.includes('SEABANK_ID_INVALID_SUMMARY') || nativeSummary.length>1) fail('unambiguous native IDR summary');
+  const nativeValues=nativeSummary[0]?.[1].split(/\s*\|\s*/).map(rupiah);
+  if(nativeValues && nativeValues.length!==4) fail('four native IDR summary amounts');
+  if(!values && !nativeValues) fail('complete IDR summary');
+  const textValues=values?.slice(1,5).map(rupiah);
+  if(nativeValues && textValues && nativeValues.some((n,i)=>n!==textValues[i])) fail('native/text IDR summary disagreement');
+  const [opening,outgoing,incoming,closing]=(nativeValues??textValues)!;
+  const totalMatch=summary.match(/TOTAL:\s*([\d.]+)/);
+  if(!totalMatch) fail('IDR summary total');
+  const total=rupiah(totalMatch[1]);
   if(opening+incoming-outgoing!==closing || closing!==total) fail('IDR summary arithmetic');
   const lines=text.split(/\r?\n/).filter(l=>l.startsWith('SEABANK_ID_TXN |'));
   const counts=[...text.matchAll(/^SEABANK_ID_ROW_COUNT (\d+)$/gm)].map(m=>Number(m[1]));
@@ -79,10 +125,10 @@ function parseSeaBankIndonesia(text: string) {
     running+=direction==='incoming'?amount:-amount;if(running!==balance) fail('IDR running balance');
     if(direction==='incoming')actualIn+=amount;else actualOut+=amount;
     const categoryName=/^(?:Biaya|Fee)\b/.test(description)?'Financial':/^(?:Bunga Tabungan|Savings Interest)\b/.test(description)?'Income':/\bTransfer\b|Top Up - eWallet/.test(description)?'Transfers':/Top Up - Paket Data/.test(description)?'Bills & Utilities':'Other';
-    return {date,amount:amount.toFixed(2),currency:'IDR',type:direction==='incoming'?'income':'expense',categoryName,merchantRaw:description,merchantClean:description,description,accountNumber,accountName,institution:'SeaBank Indonesia',confidence:95,balance,rawPayload:{source:'seabank_indonesia_native',kind:'bank_transaction',line,sourceRowIndex,accountNumber,accountCurrency:'IDR',accountType:'bank',direction,notes:description,amountText,balance,balanceReconciled:true,reconciliation:{version:'seabank-id-native-v1',openingBalance:opening,endingBalance:closing,totalIncoming:incoming,totalOutgoing:outgoing,physicalPages:pages},...(!fullTextPerRow?{physicalPage:sourcePageIndex+1}:{}),...(fullTextPerRow||sourceRowIndex===0?{sourceDocumentText:text}:{sourceDocumentTextRowIndex:1})}};
+    return {date,amount:amount.toFixed(2),currency:'IDR',type:direction==='incoming'?'income':'expense',categoryName,merchantRaw:description,merchantClean:description,description,accountNumber,accountName,institution:'SeaBank Indonesia',confidence:sourceHeaderDateConflict?85:95,balance,rawPayload:{source:'seabank_indonesia_native',kind:'bank_transaction',line,sourceRowIndex,accountNumber,accountCurrency:'IDR',accountType:'bank',direction,notes:description,amountText,balance,balanceReconciled:true,sourceHeaderDates,sourceHeaderDateConflict,reconciliation:{version:'seabank-id-native-v1',openingBalance:opening,endingBalance:closing,totalIncoming:incoming,totalOutgoing:outgoing,physicalPages:pages},...(!fullTextPerRow?{physicalPage:sourcePageIndex+1}:{}),...(fullTextPerRow||sourceRowIndex===0?{sourceDocumentText:text}:{sourceDocumentTextRowIndex:1})}};
   });
   if(actualIn!==incoming || actualOut!==outgoing || running!==closing) fail('IDR complete movement totals');
-  return {rows,metadata:{institution:'SeaBank Indonesia',accountName,accountNumber,accountType:'bank' as const,currency:'IDR',openingBalance:opening,endingBalance:closing,startDate:start,endDate:end,confidence:95,currencyConfidence:100,institutionConfidence:100,identityEvidence:['seabank-id-native-v1','Full twelve-digit account, IDR columns, complete pages and running balances']}};
+  return {rows,metadata:{institution:'SeaBank Indonesia',accountName,accountNumber,accountType:'bank' as const,currency:'IDR',openingBalance:opening,endingBalance:closing,startDate:start,endDate:end,confidence:sourceHeaderDateConflict?85:95,currencyConfidence:100,institutionConfidence:100,identityEvidence:['seabank-id-native-v1','Full twelve-digit account, IDR columns, complete pages and running balances',...(sourceHeaderDateConflict?['Conflicting publication headers retained; no transaction date inferred from them']:[])]}};
 }
 
 /** Only the completely empty, single SGD My Account layout; never generic DBS. */
