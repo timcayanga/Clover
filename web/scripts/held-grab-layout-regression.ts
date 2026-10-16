@@ -21,6 +21,12 @@ const cashWithoutRepeatedPaymentAmount = ride({ headline: 'P', place: 'NAIA Term
 assert.equal(parseGrabEmailReceipt(cashWithoutRepeatedPaymentAmount)?.rows.length, 1, 'Previously supported explicit Cash remains valid');
 assert.equal(parseGrabEmailReceipt(ride({ headline: 'P', place: 'Manila Doctors Hospital', paid: 'Cash', merged: true }))?.rows.length, 1);
 assert.equal(parseGrabEmailReceipt(ride({ headline: 'P', place: 'Pasay Terminal', paid: 'Cash' }))?.rows.length, 1);
+const centralRide = parseGrabEmailReceipt(ride({ headline: 'P', place: '11-C Marunong St, Central', paid: 'GrabPay Wallet' }));
+assert.equal(centralRide?.rows.length, 1);
+assert.equal(centralRide.rows[0].currency, 'PHP');
+assert.equal(centralRide.rows[0].accountName, 'GrabPay Wallet');
+assert.throws(() => parseGrabEmailReceipt(ride({ headline: 'P', place: 'Singapore', paid: 'GrabPay Wallet', extra: '11-C Marunong St, Central' })), /supported currency evidence is missing/);
+assert.throws(() => parseGrabEmailReceipt(ride({ headline: 'P', place: 'Marunong St, Central', paid: 'GrabPay Wallet' })), /supported currency evidence is missing/);
 
 const split = (paid: string) => {
   const pages = [

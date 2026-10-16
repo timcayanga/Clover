@@ -157,7 +157,10 @@ function oneReceipt(text: string, fullText: string, pickupFields?: PickupField[]
   // matching peso headline and a Philippine trip location, not a generic P.
   const localPesoHeadline = visualPesoHeadline || /\bTotal Paid\s+P\s*\d[\d,]*\.\d{2}\b/i.test(text)
     || /\bTOTAL\s+DATE\s*\|\s*TIME\s*\nPick-up time:[^\n]*\nP\s*\d[\d,]*\.\d{2}\b/i.test(text);
-  const localPeso = localPesoHeadline && /\b(?:NAIA|Pasay|Manila|Cebu|Davao|Chino Roces|Pasong Tamo|Quezon Ave)\b/i.test(text);
+  // Marunong Street in Barangay Central is a reviewed Quezon City route cue.
+  // Bound it to Your Trip so a sender's address or footer cannot supply it.
+  const centralMarunongTrip = /\bYour Trip\b[\s\S]{0,160}\b\d{1,3}(?:-[A-Z])?\s+Marunong\s+(?:St\.?|Street),\s*Central\b/i.test(text);
+  const localPeso = localPesoHeadline && (/\b(?:NAIA|Pasay|Manila|Cebu|Davao|Chino Roces|Pasong Tamo|Quezon Ave)\b/i.test(text) || centralMarunongTrip);
   const localMyr = /\bTotal Paid\s+(?:RM|MYR)\s*\d[\d,]*\.\d{2}\b/i.test(text) && /\b(?:KLIA|Kuala Lumpur|Malaysia)\b/i.test(text);
   if (localMyr && (explicitPhp || localPeso)) fail('mixed source currency');
   if (!localMyr && !explicitPhp && !localPeso) fail('supported currency evidence is missing');
