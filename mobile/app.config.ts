@@ -6,7 +6,7 @@ const config: ExpoConfig = {
   owner: "clover-innovations",
   extra: { eas: { projectId: "742a3fe2-1cb2-4d71-8ed7-bc7e2e89b0ff" } },
   scheme: process.env.CLOVER_APP_SCHEME || "clover-preview",
-  version: "0.1.0",
+  version: "1.0.1",
   icon: "./assets/clover-icon-dark.png",
   userInterfaceStyle: "automatic",
   orientation: "default",
