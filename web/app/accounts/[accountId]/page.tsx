@@ -4092,8 +4092,6 @@ function AccountDetailPageContent() {
               </div>
             ) : null}
 
-            {account.bankBalanceAt?<p className="panel-muted">{account.bankConnectionStatus==='disconnected'?'Disconnected · Historical bank balance':account.bankConnectionStatus==='disconnect_pending'?'Disconnection pending · Bank balance':'Bank balance'} · Last synced {new Date(account.bankBalanceAt).toLocaleString()}</p>:null}
-            <FinverseConnectButton mode="sync" accountId={account.id} workspaceId={account.workspaceId} />
             <div className={`accounts-detail__hero-layout${isCreditAccount ? " is-credit-account" : ""}`}>
               <div className="accounts-detail__hero-card-row">
                 <FinancialAccountCard
@@ -4117,6 +4115,8 @@ function AccountDetailPageContent() {
                   showChevron={false}
                   showEditAction
                 />
+
+                <FinverseConnectButton key={`${account.workspaceId}:${account.id}`} mode="sync" accountId={account.id} workspaceId={account.workspaceId} />
 
                 <div className="accounts-detail__card-text-actions">
                   <button

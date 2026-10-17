@@ -141,3 +141,13 @@
 .finverse-pending-chip button:disabled { opacity:.5; cursor:wait; }
 .finverse-pending-chip button:focus-visible { outline:2px solid currentColor; outline-offset:-3px; border-radius:22px; }
 .finverse-cancel-link { background:none; border:0; color:var(--danger,#c6283d); font:inherit; font-size:13px; min-height:44px; padding:8px 12px; cursor:pointer; }
+
+/* Connection metadata belongs to the account card, without a second bank tile. */
+.account-bank-link { display:grid; justify-items:center; gap:6px; width:100%; color:var(--text); text-align:center; }
+.account-bank-link small { color:var(--muted); font-size:12px; }
+.account-bank-link__status { font-size:13px; }
+.account-bank-link__actions { display:flex; justify-content:center; align-items:center; flex-wrap:wrap; gap:12px; }
+.account-bank-link__actions button { min-height:44px; }
+.account-bank-link__unlink { border:0; background:none; box-shadow:none; color:var(--danger,#c6283d); font:inherit; font-size:13px; cursor:pointer; padding:8px 12px; }
+.account-bank-link__unlink:focus-visible { outline:2px solid var(--teal); outline-offset:2px; border-radius:8px; }
+.account-bank-link__message { margin:0; overflow-wrap:anywhere; font-size:12px; }

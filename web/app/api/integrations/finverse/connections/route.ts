@@ -1,3 +1,4 @@
+import { preferredBankLinks } from "../../../../../../shared/bank-link-presentation";
 import { finverseBankPresentation } from "@/lib/finverse-bank-presentation";
 import { cleanBankNumber } from "@/lib/finverse-matching";
 import { isPendingBankSelection } from "../../../../../../shared/finverse-lifecycle";
@@ -15,15 +16,16 @@ export async function GET(request: Request) {
     const workspaceId = new URL(request.url).searchParams.get("workspaceId");
     if (!workspaceId) return NextResponse.json({error:"Choose a Profile first."},{status:400});
     const workspace=await assertWorkspaceAccess(userId,workspaceId);
+    const accountId = new URL(request.url).searchParams.get("accountId") || undefined;
     const picker = new URL(request.url).searchParams.get("view") === "picker";
     const [details, connections] = await Promise.all([
       picker ? getProAccess(workspace.userId).then(access => ({ upgradeRequired: access.planTier === "free" }))
         : bankLifecycleOverview(workspace.userId).then(lifecycle => ({ lifecycle })),
-      prisma.finverseConnection.findMany({where:{workspaceId,user:{clerkUserId:userId},status:{not:"disconnected"},encryptedRefreshToken:{not:null}},select:{id:true,status:true,institutionName:true,institutionId:true,lastSyncedAt:true,syncError:true,accountLinks:{where:{accountId:{not:null},unlinkedAt:null},select:{account:{select:{id:true,name:true,institution:true,accountNumber:true,logoUrl:true,type:true}}}}}}),
+      prisma.finverseConnection.findMany({where:{workspaceId,user:{clerkUserId:userId},...(accountId ? { accountLinks: { some: { accountId } } } : { status:{not:"disconnected"},encryptedRefreshToken:{not:null} })},select:{id:true,status:true,institutionName:true,institutionId:true,lastSyncedAt:true,syncError:true,encryptedRefreshToken:true,accountLinks:{where:accountId ? { accountId } : {accountId:{not:null},unlinkedAt:null},select:{unlinkedAt:true,account:{select:{id:true,name:true,institution:true,accountNumber:true,logoUrl:true,type:true}}}}}}),
     ]);
     return NextResponse.json({ ...details,
       pending:connections.filter(c=>isPendingBankSelection(c.status, c.accountLinks.length > 0, c.lastSyncedAt)).map(c=>{const bank=finverseBankPresentation({id:c.institutionId??undefined,name:c.institutionName||"Linked bank",countries:[]});return {id:c.id,name:bank.name,logoUrl:bank.logoUrl,status:c.status};}),
-      accounts:connections.flatMap(c=>c.accountLinks.flatMap(link=>{const a=link.account;if(!a)return [];const brand=getAccountBrand(a);return [{id:a.id,connectionId:c.id,name:a.name,status:c.status,syncError:c.syncError??null,last4:cleanBankNumber(a.accountNumber).slice(-4)||null,logoUrl:brand.logoSrc||brand.logoSrcs?.[0]||brand.fallbackIconSrc,lastSyncedAt:c.lastSyncedAt}];})),
+      accounts:preferredBankLinks(connections.flatMap(c=>c.accountLinks.flatMap(link=>{const a=link.account;if(!a)return [];const brand=getAccountBrand(a);return [{id:a.id,connectionId:c.id,name:a.name,status:c.status,syncError:c.syncError??null,institutionId:c.institutionId,unlinkedAt:link.unlinkedAt?.toISOString()??null,authorizationAvailable:!!c.encryptedRefreshToken,last4:cleanBankNumber(a.accountNumber).slice(-4)||null,logoUrl:brand.logoSrc||brand.logoSrcs?.[0]||brand.fallbackIconSrc,lastSyncedAt:c.lastSyncedAt?.toISOString()??null}];}))),
     },{headers:{"Cache-Control":"private, no-store"}});
   } catch(error) {
     const message=error instanceof Error?error.message:"";

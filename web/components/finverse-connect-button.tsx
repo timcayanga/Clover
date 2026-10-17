@@ -4,6 +4,7 @@ import { ResourceUpgradeNotice } from "./contextual-upgrade";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { FinverseBankOption } from "../../shared/finverse-bank-options";
 import { CANCEL_BANK_LINK_MESSAGE, type PendingBankConnection } from "../../shared/finverse-pending";
+import { bankLinkPresentation, bankSyncDate, type BankLinkCard } from "../../shared/bank-link-presentation";
 import { FinversePendingChip } from "./finverse-pending-chip";
 import { FinverseBankPicker } from "./finverse-bank-picker";
 import "./add-entry-methods.css";
@@ -54,7 +55,7 @@ export function FinverseConnectButton({
   const allowed = access?.workspaceId === workspaceId && !access.upgradeRequired;
   const [banksLoaded, setBanksLoaded] = useState(false);
   const [banks, setBanks] = useState<FinverseBankOption[]>([]);
-  const [linked, setLinked] = useState<{id:string;connectionId:string;name:string;last4:string|null;logoUrl:string;lastSyncedAt:string|null;status:string;syncError:string|null}[]>([]);
+  const [linked, setLinked] = useState<BankLinkCard[]>([]);
   const [pending, setPending] = useState<PendingBankConnection[]>([]);
   const [progressOpen, setProgressOpen] = useState(false);
   const [retry, setRetry] = useState<{id?:string;ids?:string[];refresh:boolean}|null>(null);
@@ -100,12 +101,12 @@ export function FinverseConnectButton({
     setAccess(null);
     const controller = new AbortController();
     setConnectionsLoaded(false); setConnectionsError(""); setLinked([]);
-    void fetch(`/api/integrations/finverse/connections?view=picker&workspaceId=${encodeURIComponent(workspaceId)}`,{signal:controller.signal,cache:"no-store"})
+    void fetch(`/api/integrations/finverse/connections?view=picker&workspaceId=${encodeURIComponent(workspaceId)}${accountId ? `&accountId=${encodeURIComponent(accountId)}` : ""}`,{signal:controller.signal,cache:"no-store"})
       .then(async response => { if(!response.ok) throw new Error("Unable to load linked accounts.");return response.json(); })
       .then(data => {if(!controller.signal.aborted){setLinked(data.accounts);setPending(data.pending);setAccess({ workspaceId, upgradeRequired: data.upgradeRequired === true });setConnectionsLoaded(true);}})
       .catch(error => {if(!controller.signal.aborted)setConnectionsError(error.message);});
     return () => controller.abort();
-  }, [workspaceId, bankRevision, mode]);
+  }, [workspaceId, bankRevision, mode, accountId]);
 
   const clearCallback = () => {
     const url = new URL(window.location.href);
@@ -211,13 +212,13 @@ export function FinverseConnectButton({
       const response = await fetch("/api/integrations/finverse/unlink", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ workspaceId, accountId: unlinkTarget.id }) });
       const body = await response.json();
       if (!response.ok) throw new Error(body.error || "Unable to unlink.");
-      setUnlinkTarget(null); setBankRevision(v => v + 1); setMessage(body.message || "Bank disconnected. Your account and history are preserved.");
+      setUnlinkTarget(null); setBankRevision(v => v + 1); setMessage("Bank unlinked. Your account and history are preserved.");
       window.dispatchEvent(new Event("finverse-updated"));notifyInAppNotificationsChanged(); await onSyncedRef.current?.();
     } catch (error) { setMessage(error instanceof Error ? error.message : "Unable to unlink."); }
     finally { actionRef.current = null; setAction(null); }
   };
 
-  const connect = async (institutionId: string) => {
+  const connect = async (institutionId?: string) => {
     if (!allowed || !workspaceId || actionRef.current) return;
     actionRef.current = "connecting";
     setAction("connecting");
@@ -238,7 +239,7 @@ export function FinverseConnectButton({
     }
   };
 
-  if (unlinkTarget) return <div role="alertdialog" aria-label="Unlink bank account" className="finverse-connect__selection"><h4>Unlink {unlinkTarget.name}?</h4><p>Your Clover accounts and history will stay. All accounts sharing this bank login will disconnect: {linked.filter(a=>a.connectionId===unlinkTarget.connectionId).map(a=>`${a.name}${a.last4?` •••• ${a.last4}`:""}`).join(", ")}. Reconnection requires bank authentication. Used slots remain reserved until the monthly reset.</p><button type="button" className="button button-secondary" disabled={action !== null} autoFocus onClick={() => setUnlinkTarget(null)}>Keep linked</button><button type="button" className="button button-secondary" disabled={action !== null} onClick={() => void unlink()}>Unlink account</button></div>;
+  if (unlinkTarget) return <div role="alertdialog" aria-label="Unlink bank account" className="finverse-connect__selection"><h4>Unlink {unlinkTarget.name}?</h4><p>Your Clover accounts and history will stay. All accounts sharing this bank login will be unlinked: {linked.filter(a=>a.connectionId===unlinkTarget.connectionId).map(a=>`${a.name}${a.last4?` •••• ${a.last4}`:""}`).join(", ")}. Reconnection requires bank authentication. Used slots remain reserved until the monthly reset.</p><button type="button" className="button button-secondary" disabled={action !== null} autoFocus onClick={() => setUnlinkTarget(null)}>Keep linked</button><button type="button" className="button button-secondary" disabled={action !== null} onClick={() => void unlink()}>Unlink account</button></div>;
   const selectionPanel = selection ? <fieldset className="finverse-connect__selection"><legend>Select bank accounts</legend><p>Choose which accounts to link. Matching Clover accounts keep their history.</p><p>{selection.remaining} new account slots available. Previously used accounts can be reconnected.</p>{selection.accounts.map(account => {
         const newSelected = selection.accounts.filter(a => selected.includes(a.id) && !a.reserved).length;
         return <label key={account.id}><input type="checkbox" checked={selected.includes(account.id)} disabled={action !== null || (!selected.includes(account.id) && !account.reserved && newSelected >= selection.remaining)} onChange={event => setSelected(current => event.target.checked ? [...current,account.id] : current.filter(id => id !== account.id))}/><span>{account.name}{account.existingAccountName ? <small> · Reuse {account.existingAccountName}; keep all history</small> : null}{account.reserved ? <small> · Already included this period</small> : null}<select aria-label={`Destination for ${account.name}`} disabled={action!==null} value={mappings[account.id]??''} onChange={event=>setMappings(current=>({...current,[account.id]:event.target.value}))}><option value="">{account.suggestedAccountId?'Use matching existing account':'Create a new account card'}</option>{account.candidates?.map(c=><option key={c.id} value={c.id}>Link to {c.name}{c.last4?` •••• ${c.last4}`:''}</option>)}</select></span></label>;
@@ -266,6 +267,22 @@ export function FinverseConnectButton({
 
   const syncAccounts = linked.filter(a=>!accountId || a.id===accountId);
   if (mode === "sync" && accountId && !syncAccounts.length) return null;
+  if (mode === "sync" && accountId) {
+    const account = syncAccounts[0];
+    const presentation = bankLinkPresentation(account);
+    return <section className="account-bank-link" aria-label="Bank connection">
+      <span className="account-bank-link__status" role="status">{presentation.label}</span>
+      {bankSyncDate(account.lastSyncedAt) ? <small>Last synced {bankSyncDate(account.lastSyncedAt)}</small> : null}
+      <div className="account-bank-link__actions">
+        {presentation.relink ? <button type="button" className="button button-secondary" disabled={action !== null || !allowed} onClick={() => void connect(account.institutionId ?? undefined)}>Relink</button> : <>
+          <button type="button" className="button button-secondary" disabled={action !== null || !allowed || presentation.pending} onClick={() => void sync(account.connectionId, [], true)}>{action === "syncing" ? "Syncing…" : "Sync"}</button>
+          <button type="button" className="account-bank-link__unlink" disabled={action !== null || presentation.pending} onClick={() => setUnlinkTarget(account)}>Unlink</button>
+        </>}
+      </div>
+      {!allowed ? <ResourceUpgradeNotice resource="linkedBanks" /> : null}
+      {message ? <p className="account-bank-link__message" role="status">{message}</p> : null}
+    </section>;
+  }
   return (
     <div className="finverse-connect finverse-connect--picker">
       {mode === "connect" ? <ResourceUpgradeNotice resource="linkedBanks" /> : null}
