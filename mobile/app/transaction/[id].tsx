@@ -184,6 +184,14 @@ export default function TransactionDetail() {
       setBusy(false);
     }
   };
+  const keep = async () => {
+    if(!row || busy || session.demo) return;
+    setBusy(true);setError("");
+    try {
+      await session.request(`transactions/review?workspaceId=${encodeURIComponent(session.profileId)}`,{method:"POST",body:JSON.stringify({workspaceId:session.profileId,transactionIds:[row.id]})});
+      setReload(n=>n+1);
+    } catch(cause) {setError((cause as Error).message);} finally {setBusy(false);}
+  };
   const remove = async () => {
     if (!row || busy) return;
     setBusy(true);
@@ -268,7 +276,9 @@ export default function TransactionDetail() {
                 {reviewReasons.length > 0 ? <Card>
                   <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}><Icon line name="warning-outline" size={18} color="#D6A226"/><Heading>Review transaction</Heading></View>
                   {reviewReasons.map(reason => <Body key={reason}>{reason}</Body>)}
-                  <Button secondary title="Review details" onPress={() => setEditing(true)} />
+                  <Button title={busy ? "Saving…" : "Keep"} disabled={busy || session.demo} onPress={()=>void keep()}/>
+                  <Button secondary danger title="Delete" disabled={busy || session.demo} onPress={()=>Alert.alert("Delete transaction?","This cannot be undone.",[{text:"Cancel",style:"cancel"},{text:"Delete",style:"destructive",onPress:()=>void remove()}])}/>
+                  <Button secondary title="Edit details" onPress={() => setEditing(true)} />
                 </Card> : null}
                 <TransactionRelatedActions key={row.id} transaction={row} />
                 <Pressable
@@ -424,7 +434,7 @@ export default function TransactionDetail() {
                 />
               </>
             )}
-            {!session.demo ? (
+            {!session.demo && reviewReasons.length === 0 ? (
               <Button
                 secondary
                 title="Delete transaction"

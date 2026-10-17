@@ -1,3 +1,6 @@
+import { actionableReviewIds } from "@/lib/actionable-transaction-review";
+import { includedTransactionWhere } from "@/lib/transaction-review-inclusion-where";
+import { isAutomaticReviewExclusion } from "@/lib/transaction-review-inclusion";
 import { enrichMerchantIdentityPayload } from "@/lib/merchant-identity";
 import { getAccountBrand } from "@/lib/account-brand";
 import { planTransactionAccountPage, compareTransactionsByAccount } from "@/lib/transaction-account-sort";
@@ -65,6 +68,7 @@ const resolveTransactionsRouteUserId = async () => {
 };
 
 type TransactionApiRow = {
+  reviewReasons?: Prisma.JsonValue;
   id: string;
   workspaceId: string;
   accountId: string;
@@ -100,6 +104,8 @@ type TransactionApiRow = {
 };
 
 type TransactionSummaryRow = {
+  reviewReasons?: Prisma.JsonValue;
+  normalizedPayload?: Prisma.JsonValue;
   id: string;
   importFileId?: string | null;
   date: Date;
@@ -508,15 +514,18 @@ const getTransactionWarningReason = (transaction: TransactionSummaryRow, duplica
 
   const warningReasons = getTransactionReviewReasons({
     reviewStatus: transaction.reviewStatus,
+    reviewReasons: transaction.reviewReasons,
+    normalizedPayload: transaction.normalizedPayload,
     isExcluded: transaction.isExcluded,
     categoryId: transaction.categoryId,
     categoryName: transaction.category?.name ?? getRawPayloadCategoryName(transaction.rawPayload) ?? null,
     parserConfidence: transaction.parserConfidence,
     categoryConfidence: transaction.categoryConfidence,
     accountMatchConfidence: transaction.accountMatchConfidence,
-    duplicateConfidence: (duplicateCounts.get(signature) ?? 0) > 1 ? 70 : transaction.duplicateConfidence,
+    duplicateConfidence: transaction.duplicateConfidence,
     merchantRaw: transaction.merchantRaw,
     merchantClean: transaction.merchantClean,
+    description: transaction.description,
     rawPayload: transaction.rawPayload,
   });
 
@@ -524,6 +533,7 @@ const getTransactionWarningReason = (transaction: TransactionSummaryRow, duplica
 };
 
 const mapTransactionRow = (transaction: {
+  reviewReasons?: Prisma.JsonValue;
   id: string;
   workspaceId: string;
   accountId: string;
@@ -624,7 +634,8 @@ const mapTransactionRow = (transaction: {
     }),
     description: transaction.description,
     isTransfer: (userEdited ? transaction.type : effectiveType) === "transfer",
-    isExcluded: transaction.isExcluded,
+    isExcluded: transaction.isExcluded && !isAutomaticReviewExclusion(transaction),
+    reviewReasons: transaction.reviewReasons,
     createdAt: transaction.createdAt.toISOString(),
     warningReason: transaction.warningReason,
     rawPayload: transaction.rawPayload,
@@ -779,13 +790,24 @@ export async function GET(request: Request) {
         ? { account: { is: { type: "investment" as const } } }
         : {}),
     };
-    const financialWhere = { ...visibleWhere, isExcluded: false };
+    const financialWhere = { AND: [visibleWhere, includedTransactionWhere()] };
     const orderBy = buildTransactionQueryOrderBy(filters);
     const pageSizeParam = searchParams.get("pageSize");
     const includeAll = pageSizeParam === "all";
     const summaryMode = searchParams.get("summaryMode") === "light" ? "light" : "full";
     const requestedPage = Math.max(1, Number(searchParams.get("page") ?? "1") || 1);
     const requestedPageSize = includeAll ? null : Math.max(1, Number(pageSizeParam ?? "25") || 25);
+    if (searchParams.get("summaryMode") === "rows" && !hasEffectiveCategoryFilters && filters.sortField !== "account") {
+      const reviewIds = filters.reviewFilter === "pending" ? await actionableReviewIds(visibleWhere) : null;
+      const scope = reviewIds ? {AND:[visibleWhere,{id:{in:reviewIds}}]} : visibleWhere;
+      const take = Math.min(requestedPageSize ?? 30, 100);
+      const [pageRows, count] = await Promise.all([
+        prisma.transaction.findMany({where:scope, include:{account:true,category:true,splitBill:{select:{id:true,title:true}}}, orderBy, skip:(requestedPage-1)*take, take}),
+        reviewIds ? Promise.resolve(reviewIds.length) : prisma.transaction.count({where:scope}),
+      ]);
+      const mapped = pageRows.map(row => mapTransactionRow({...row,accountNumber:row.account.accountNumber,warningReason:null}, workspaceAccounts));
+      return NextResponse.json({transactions:await withTransactionTags(mapped,workspaceId),totalCount:count,totalCountIsExact:true,page:requestedPage,pageSize:take});
+    }
     const [currencyCodes, totalCount] = await Promise.all([
       getWorkspaceCurrencyCodes(workspaceId),
       prisma.transaction.count({ where: visibleWhere }),
@@ -857,6 +879,7 @@ export async function GET(request: Request) {
             rawPayload: true,
             normalizedPayload: true,
             reviewStatus: true,
+          reviewReasons: true,
             parserConfidence: true,
             categoryConfidence: true,
             accountMatchConfidence: true,
@@ -1029,6 +1052,7 @@ export async function GET(request: Request) {
           normalizedPayload: transaction.normalizedPayload,
           category: transaction.category,
           reviewStatus: transaction.reviewStatus,
+          reviewReasons: transaction.reviewReasons,
           parserConfidence: transaction.parserConfidence,
           categoryConfidence: transaction.categoryConfidence,
           accountMatchConfidence: transaction.accountMatchConfidence,
@@ -1177,6 +1201,7 @@ export async function GET(request: Request) {
           rawPayload: true,
           normalizedPayload: true,
           reviewStatus: true,
+          reviewReasons: true,
           parserConfidence: true,
           categoryConfidence: true,
           accountMatchConfidence: true,
@@ -1269,6 +1294,7 @@ export async function GET(request: Request) {
           normalizedPayload: transaction.normalizedPayload,
           category: transaction.category,
           reviewStatus: transaction.reviewStatus,
+          reviewReasons: transaction.reviewReasons,
           parserConfidence: transaction.parserConfidence,
           categoryConfidence: transaction.categoryConfidence,
           accountMatchConfidence: transaction.accountMatchConfidence,

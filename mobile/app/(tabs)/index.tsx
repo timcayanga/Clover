@@ -315,14 +315,14 @@ export default function Home() {
           <HomeQuickAccess />
           <HomeAdviser insights={data.insights ?? []} hidden={hidden} />
           {detailsError ? <Body>Budgets and suggestions could not load. Pull down to retry.</Body> : data.detailsPending ? <Body>Loading budgets and suggestions…</Body> : null}
-          {Boolean(data.nextSteps?.length) && (
+          {Boolean(data.nextSteps?.some(step => step.id !== "transactions")) && (
             <Card>
               <Text style={styles.sectionTitle}>Next Steps</Text>
-              {data.nextSteps?.map((step) => <View key={step.id} style={{ gap: 6 }}>
+              {data.nextSteps?.filter(step => step.id !== "transactions").map((step) => <View key={step.id} style={{ gap: 6 }}>
                 <Text style={{ color: colors.ink, fontFamily: "Poppins-SemiBold", fontSize: 13 }}>{step.title} · {step.count} pending</Text>
                 <Body>{step.description}</Body>
                 <Button title="Review" secondary onPress={() => step.id === "transactions"
-                  ? router.navigate({ pathname: "/(tabs)/transactions", params: { review: "pending_review" } })
+                  ? router.navigate({ pathname: "/(tabs)/transactions", params: { review: "pending_review",currency:currency === "ALL" ? "" : currency,reviewRequest:String(Date.now()) } })
                   : router.navigate("/(tabs)/recurring")} />
               </View>)}
             </Card>
@@ -474,7 +474,7 @@ export default function Home() {
               onPress={() =>
                 router.navigate({
                   pathname: "/(tabs)/transactions",
-                  params: { review: "pending_review" },
+                  params: { review: "pending_review",currency:currency === "ALL" ? "" : currency,reviewRequest:String(Date.now()) },
                 })
               }
             />

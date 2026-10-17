@@ -1,3 +1,4 @@
+import { transactionReviewDisplayFields } from "../lib/actionable-transaction-review";
 import assert from "node:assert/strict";
 import { mock } from "node:test";
 import { prisma } from "../lib/prisma";
@@ -23,6 +24,14 @@ async function main() {
   const resume = mobileApiResponse("import-status", {canResume:true, statementSelfHeal:{reason:"stale_statement_image_queue",rawPayload:"private"}, importFile:{status:"failed",processingPhase:"queued_retry",processingMessage:"Waiting to resume"}}) as {canResume:boolean;statementSelfHeal:{reason:string}};
   assert.equal(resume.canResume,true);
   const cleanReceipt = { id: "receipt", reviewStatus: "pending_review", merchantRaw: "Cafe", categoryId: "food", categoryName: "Food & Dining", parserConfidence: 98, categoryConfidence: 98, accountMatchConfidence: 98 };
+  const inferred = { ...cleanReceipt, categoryId:null, merchantClean:"Cafe", category:null, type:"expense", importFileId:"receipt-file", rawPayload:{categoryName:"Food & Dining"}, normalizedPayload:{}, account:{institution:null}, reviewReasons:[] };
+  const display = transactionReviewDisplayFields(inferred as Parameters<typeof transactionReviewDisplayFields>[0]);
+  assert.equal(display.categoryName,"Food & Dining");
+  const confirmedDisplay=transactionReviewDisplayFields({...inferred,reviewStatus:"confirmed",merchantClean:"My confirmed label"} as Parameters<typeof transactionReviewDisplayFields>[0]);
+  assert.equal(confirmedDisplay.merchantClean,"My confirmed label");
+  assert.equal(confirmedDisplay.categoryName,undefined,"Confirmed category choices are never reinterpreted from import evidence");
+  const inferredDetail=mobileApiResponse("transaction",{transaction:{...inferred,...display}}) as {transaction:{reviewReasons:string[]}};
+  assert.deepEqual(inferredDetail.transaction.reviewReasons,[],"Details must use the same effective category as Home and the list, rather than inventing an unresolvable warning");
   for (const operation of ["transactions", "transaction"] as const) {
     const project = (row: object) => {
       const result = mobileApiResponse(operation, operation === "transactions" ? { transactions: [row] } : { transaction: row }) as { transaction?: { reviewReasons: string[]; confidenceScore: number }; transactions?: { reviewReasons: string[]; confidenceScore: number }[] };

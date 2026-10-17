@@ -24,7 +24,16 @@ async function main(){
  assert.equal(JSON.stringify(await db.transaction.findUnique({where:{id:transaction.id}})),before,'Bank row must be byte-for-byte unchanged');
  const uncertain=await makeFile('uncertain.csv','Unrecognized narration');await confirmImportFile(uncertain.id,account.id);
  const review=await db.transaction.findFirstOrThrow({where:{importFileId:uncertain.id}});
- assert.equal(review.isExcluded,true);assert.equal(review.reviewStatus,'pending_review');
+ assert.equal(review.isExcluded,false);assert.equal(review.reviewStatus,'pending_review');
+ const {buildActiveWorkspaceTransactionWhere}=await import('../lib/transaction-query');
+ const base={workspaceId:ws.id,accountId:account.id,date:new Date('2026-09-21'),amount:80,currency:'PHP',type:'expense' as const,merchantRaw:'Test overlap',isExcluded:true,reviewStatus:'pending_review' as const,reviewReasons:['finverse_possible_duplicate']};
+ const legacy=await db.transaction.create({data:{...base,normalizedPayload:{}}});
+ const legacyNull=await db.transaction.create({data:base});
+ const ignored=await db.transaction.create({data:{...base,normalizedPayload:{source:'manual_edit'}}});
+ const confirmed=await db.transaction.create({data:{...base,reviewStatus:'confirmed'}});
+ const active=await db.transaction.findMany({where:buildActiveWorkspaceTransactionWhere(ws.id),select:{id:true}});
+ for(const id of [review.id,legacy.id,legacyNull.id]) assert(active.some(row=>row.id===id),'Pending bank review must stay included, including legacy automatic exclusions');
+ for(const id of [ignored.id,confirmed.id]) assert(!active.some(row=>row.id===id),'Explicit ignores and confirmed exclusions are preserved');
  // Reprocess the same source with altered values after the user confirmed it.
  await db.transaction.update({where:{id:review.id},data:{reviewStatus:'confirmed',amount:135,date:new Date('2026-09-22'),merchantClean:'User corrected',description:'Confirmed note',isExcluded:false}});
  const protectedBefore=JSON.stringify(await db.transaction.findUnique({where:{id:review.id}}));
@@ -37,7 +46,7 @@ async function main(){
  const attempts=await Promise.allSettled(Array.from({length:8},()=>reserveBankRefresh(conn)));
  assert.equal(attempts.filter(r=>r.status==='fulfilled').length,4);
  assert.equal(await db.auditLog.count({where:{entityId:conn.id,action:'bank.refresh_attempt'}}),4);
- console.log('PASS real PostgreSQL: bank-first upload dedupe, review exclusion, confirmed re-import preservation, account reuse and concurrent refresh reservations.');
+ console.log('PASS real PostgreSQL: bank-first upload dedupe, review inclusion, confirmed re-import preservation, account reuse and concurrent refresh reservations.');
  } finally { await db.user.delete({where:{id:user.id}});await db.$disconnect(); }
 }
 main().then(()=>process.exit(0)).catch(e=>{console.error(e);process.exit(1);});

@@ -799,6 +799,20 @@ test("presentation cache hydrates recent authorized Profile data and excludes in
   await assert.rejects(() => e.presentationCache("p"), /refresh your secure offline access/);
 });
 
+test("cold Home snapshots stay warm after list caches expire and never survive financial writes",async()=>{
+ let now=Date.parse(version);
+ const e=setup(async()=>({balance:123}),memory(),()=>now);
+ await e.init();await e.request("bootstrap");
+ await e.request("home?workspaceId=p&currency=PHP&section=overview");
+ now+=6*60_000;
+ const snapshot=await e.presentationCache("p");assert.equal(snapshot.length,1);assert.equal((snapshot[0].value as any).balance,123);
+ await assert.rejects(()=>e.presentationCache("other"),/not available offline/);
+ now++;await e.request("settings/preferences",{method:"PATCH",body:"{}"});
+ assert.equal((await e.presentationCache("p")).length,0);
+ await e.request("home?workspaceId=p&currency=PHP&section=overview");
+ now+=31*60_000;assert.equal((await e.presentationCache("p")).length,0);
+});
+
 (async () => {
   let failures = 0;
   for (const c of cases) {

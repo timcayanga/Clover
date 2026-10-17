@@ -12,8 +12,8 @@ async function main() {
     assert.equal(args.where.workspaceId,'qa-home');
     return [{id:'bank',type:'bank',currency:'PHP',source:'import',balance:'123',transactions:[],statementCheckpoints:[]}];
   });
-  stub(prisma.transaction, 'findMany', async () => []);
-  stub(prisma.transaction, 'count', async () => 2);
+  stub(prisma.transaction, 'findMany', async (args) => args.select?.merchantRaw ? [0,1].map(index=>({id:`review-${index}`,reviewStatus:'pending_review',reviewReasons:[],categoryId:null,category:null,merchantRaw:'Lunch',merchantClean:'Lunch',account:{institution:'BPI'},type:'expense',rawPayload:{},normalizedPayload:{},parserConfidence:98,categoryConfidence:30,accountMatchConfidence:100,isExcluded:false})) : []);
+  stub(prisma.transaction, 'groupBy', async () => []);
   stub(prisma.financialCommitment, 'findMany', async () => []);
   stub(prisma.importFile, 'findFirst', async () => null);
   stub(prisma.finverseAccountLink, 'findMany', async () => []);

@@ -4,7 +4,7 @@ import { buildHomeNextSteps } from "./home-next-steps";
 import { convertHomeWindow } from "./home-currency-total";
 import { finverseBalances } from "./finverse-balances";
 import { mobileHomePeriods, homeDateKey } from "./mobile-home-periods";
-import { buildReviewQueueWhere } from "./review-queue";
+import { actionableReviewIds } from "./actionable-transaction-review";
 import { serializeFinancialCommitment } from "./commitments";
 import { mobileHomePayments } from "./mobile-home-payments";
 import { prisma } from "./prisma";
@@ -99,11 +99,10 @@ export async function mobileHome(workspaceId: string, selectedCurrency: string, 
       include: { occurrences: { select: { dueDate: true } } },
     }),
     overviewOnly ? Promise.resolve(null) : import("./budgeting-data").then(module => module.loadCachedBudgetWorkspaceData(workspaceId, { directory: true })),
-    prisma.transaction.count({ where: { AND: [buildReviewQueueWhere(workspaceId), ...(allCurrencies ? [] : [{ currency }])] } }),
-    prisma.transaction.findMany({
+    actionableReviewIds({workspaceId,deletedAt:null,...(allCurrencies ? {} : {currency})}).then(ids=>ids.length),
+    prisma.transaction.groupBy({
+      by: ["currency"],
       where: buildActiveWorkspaceTransactionWhere(workspaceId),
-      distinct: ["currency"],
-      select: { currency: true },
     }),
     prisma.importFile.findFirst({ where: { workspaceId }, orderBy: { uploadedAt: "desc" }, select: { uploadedAt: true } }),
     overviewOnly ? Promise.resolve([]) : import("./planned-payment-suggestions").then(module => module.getPlannedPaymentSuggestions(workspaceId)),
@@ -276,7 +275,7 @@ export async function mobileHome(workspaceId: string, selectedCurrency: string, 
   return {
     ...(overviewOnly ? { insightInput, detailsPending: true } : {}),
     insights: buildHomeAdviserInsights(insightInput),
-    nextSteps: buildHomeNextSteps({ transactionCount: reviewCount, recurringCount, statementCount: suggestions.filter((s) => s.sourceKind === "statement_reminder").length }),
+    nextSteps: buildHomeNextSteps({ transactionCount: 0, recurringCount, statementCount: suggestions.filter((s) => s.sourceKind === "statement_reminder").length }),
     currencyReports: (allCurrencies ? currencies : [currency]).map((c) => ({ currency: c, weekly: report(7, c), monthly: report(30, c) })),
     heroTotals: { current: convertHomeWindow(transactions, month, tomorrow, Object.fromEntries(rates)), previous: convertHomeWindow(transactions, previousMonth, month, Object.fromEntries(rates)) },
     currencies,

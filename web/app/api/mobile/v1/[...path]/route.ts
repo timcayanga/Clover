@@ -282,6 +282,14 @@ async function handle(
       const response = await withMobileRequestContext(userId,request,async()=> (await import("@/app/api/adviser/attachments/route")).POST(request));
       return reply(await response.json(),response.status);
     }
+    if (operation === "transaction-review" || operation === "transaction-bulk-delete") {
+      const body = await request.clone().json();
+      if(body.workspaceId !== workspaceId) return reply({error:"This selection belongs to a different Profile."},403);
+      const response = await withMobileRequestContext(userId,request,async()=> operation === "transaction-review"
+        ? (await import("@/app/api/transactions/review/route")).POST(request)
+        : (await import("@/app/api/transactions/bulk-delete/route")).POST(request));
+      return reply(await response.json(),response.status);
+    }
     if (operation === "transaction-batch") {
       const response = await withMobileRequestContext(userId, request, async () => (await import("@/app/api/transactions/batch/route")).POST(request));
       return reply(await response.json(), response.status);
@@ -700,7 +708,7 @@ async function handle(
     if (["transactions", "accounts", "imports"].includes(operation)) {
       // Do not expose unbounded list queries to mobile.
       url.searchParams.set("pageSize", "30");
-      url.searchParams.set("summaryMode", "light");
+      url.searchParams.set("summaryMode", operation === "transactions" ? "rows" : "light");
       const page = Number(url.searchParams.get("page") ?? 1);
       url.searchParams.set(
         "page",

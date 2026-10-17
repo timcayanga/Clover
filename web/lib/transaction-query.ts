@@ -1,4 +1,5 @@
 import { Prisma } from "@prisma/client";
+import { includedTransactionWhere } from "./transaction-review-inclusion-where";
 
 export type DateFilterMode = "ltd" | "day" | "week" | "month" | "quarter" | "year" | "custom";
 export type TransactionSortField = "date" | "name" | "account" | "category" | "amount";
@@ -140,7 +141,10 @@ export const buildActiveWorkspaceTransactionWhere = (
 ): Prisma.TransactionWhereInput =>
   buildVisibleWorkspaceTransactionWhere(workspaceId, {
     ...filters,
-    isExcluded: filters.isExcluded ?? false,
+    AND: [
+      ...(Array.isArray(filters.AND) ? filters.AND : filters.AND ? [filters.AND] : []),
+      ...(filters.isExcluded === undefined ? [includedTransactionWhere()] : []),
+    ],
   });
 
 const splitFilterValues = (value: string) =>

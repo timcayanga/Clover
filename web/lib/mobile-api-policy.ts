@@ -46,6 +46,7 @@ export function mobileOperation(method: string, segments: string[]) {
   if (segments.length === 2 && segments[0] === "recurring" && ["PATCH", "DELETE"].includes(method)) return "recurring-edit";
   if (segments.length === 3 && segments[0] === "recurring" && segments[2] === "completion" && method === "PATCH") return "recurring-completion";
   if (path === "adviser/attachments" && method === "POST") return "adviser-attachments";
+  if (["transactions/review", "transactions/bulk-delete"].includes(path) && method === "POST") return path === "transactions/review" ? "transaction-review" : "transaction-bulk-delete";
   if (path === "transactions/batch") return method === "POST" ? "transaction-batch" : null;
   if (path === "transaction-category-suggestions" && method === "POST") return "transaction-category-suggestions";
   if (path === "adviser/entries" && ["GET", "POST"].includes(method)) return "adviser-entries";

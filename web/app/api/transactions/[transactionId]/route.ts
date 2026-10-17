@@ -1,3 +1,5 @@
+import { transactionReviewDisplayFields } from "@/lib/actionable-transaction-review";
+import { isAutomaticReviewExclusion, exclusionAfterTransactionEdit } from "@/lib/transaction-review-inclusion";
 import { enqueueLearningJob, processPendingLearningJobs } from "@/lib/learning-jobs";
 import { getTransactionReviewReason } from "@/lib/transaction-review-reasons";
 import { Prisma } from "@prisma/client";
@@ -141,22 +143,8 @@ export async function GET(_request: Request, { params }: { params: Promise<{ tra
       }),
     ]);
 
-    // The detail endpoint must retain warnings that were discovered by list
-    // duplicate matching, not only confidence scores recorded by the parser.
-    let duplicateConfidence = transaction.duplicateConfidence;
-    if (!["confirmed", "edited", "rejected", "duplicate_skipped"].includes(transaction.reviewStatus ?? "")) {
-      const day = new Date(transaction.date.toISOString().slice(0, 10) + "T00:00:00Z");
-      const peers = await prisma.transaction.findMany({
-        where: { workspaceId: transaction.workspaceId, deletedAt: null,
-          id: { not: transaction.id }, amount: transaction.amount,
-          date: { gte: day, lt: new Date(day.getTime() + 86400000) } },
-        select: { merchantRaw: true, merchantClean: true },
-      });
-      const merchant = (transaction.merchantClean ?? transaction.merchantRaw).trim().toLowerCase();
-      if (peers.some(peer => (peer.merchantClean ?? peer.merchantRaw).trim().toLowerCase() === merchant)) duplicateConfidence = 70;
-    }
-    const warningReason = getTransactionReviewReason({ ...transaction,
-      categoryName: transaction.category?.name, duplicateConfidence });
+    const display = transactionReviewDisplayFields(transaction);
+    const warningReason = getTransactionReviewReason({...transaction,...display});
 
     return NextResponse.json({
       transaction: {
@@ -170,8 +158,9 @@ export async function GET(_request: Request, { params }: { params: Promise<{ tra
         institution: transaction.account.institution,
         accountNumber: transaction.account.accountNumber,
         categoryId: transaction.categoryId,
-        categoryName: transaction.category?.name ?? null,
+        categoryName: display.categoryName ?? null,
         reviewStatus: transaction.reviewStatus,
+        reviewReasons: transaction.reviewReasons,
         parserConfidence: transaction.parserConfidence,
         categoryConfidence: transaction.categoryConfidence,
         accountMatchConfidence: transaction.accountMatchConfidence,
@@ -182,10 +171,10 @@ export async function GET(_request: Request, { params }: { params: Promise<{ tra
         currency: transaction.currency,
         type: transaction.type,
         merchantRaw: transaction.merchantRaw,
-        merchantClean: transaction.merchantClean,
+        merchantClean: display.merchantClean,
         description: transaction.description,
         isTransfer: transaction.isTransfer,
-        isExcluded: transaction.isExcluded,
+        isExcluded: transaction.isExcluded && !isAutomaticReviewExclusion(transaction),
         source: transaction.importFileId ? "upload" : "manual",
         importFileId: transaction.importFileId,
         importFileName: transaction.importFile?.fileName ?? null,
@@ -257,13 +246,15 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ tr
       payload.receiptLineItems !== undefined ||
       payload.tags !== undefined;
 
+    const resolvedExclusion = exclusionAfterTransactionEdit(transaction, payload.isExcluded,
+      editedFields || payload.reviewStatus === "confirmed" || payload.reviewStatus === "edited");
     const { updated, account } = await prisma.$transaction(async db => {
       const updated = await db.transaction.update({
         where: { id: transactionId },
         data: {
           categoryId: payload.categoryId === undefined ? undefined : payload.categoryId,
           accountId: payload.accountId,
-          isExcluded: payload.isExcluded ?? ((payload.reviewStatus === "confirmed" || payload.reviewStatus === "edited") && Array.isArray(transaction.reviewReasons) && transaction.reviewReasons.includes("finverse_possible_duplicate") ? false : undefined),
+          isExcluded: resolvedExclusion,
           isTransfer: resolvedIsTransfer,
           type: resolvedType,
           merchantRaw: payload.merchantRaw,
@@ -274,8 +265,8 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ tr
           currency: payload.currency ? payload.currency.toUpperCase() : undefined,
           rawPayload: payload.rawPayload === undefined ? undefined : (payload.rawPayload as Prisma.InputJsonValue),
           reviewStatus: payload.reviewStatus ?? (editedFields ? "edited" : undefined),
-          reviewPriority: editedFields && payload.reviewStatus !== "pending_review" ? "none" : undefined,
-          reviewReasons: editedFields && payload.reviewStatus !== "pending_review" ? Prisma.DbNull : undefined,
+          reviewPriority: (editedFields || payload.reviewStatus === "confirmed") && payload.reviewStatus !== "pending_review" ? "none" : undefined,
+          reviewReasons: (editedFields || payload.reviewStatus === "confirmed") && payload.reviewStatus !== "pending_review" ? Prisma.DbNull : undefined,
           parserConfidence: transaction.parserConfidence,
           categoryConfidence: payload.categoryId ? 100 : transaction.categoryConfidence,
           accountMatchConfidence: payload.accountId ? 100 : transaction.accountMatchConfidence,
@@ -307,7 +298,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ tr
                 currency: payload.currency ? payload.currency.toUpperCase() : transaction.currency,
                 rawPayload: payload.rawPayload === undefined ? transaction.rawPayload : (payload.rawPayload as Prisma.JsonValue),
                 isTransfer: resolvedIsTransfer,
-                isExcluded: payload.isExcluded ?? transaction.isExcluded,
+                isExcluded: resolvedExclusion,
                 tags: nextTagNames,
                 reviewStatus: payload.reviewStatus ?? (editedFields ? "edited" : transaction.reviewStatus),
                 editedAt: new Date().toISOString(),

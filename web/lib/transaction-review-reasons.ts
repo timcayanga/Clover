@@ -1,5 +1,9 @@
+import { isAutomaticReviewExclusion } from "./transaction-review-inclusion";
+
 export type TransactionReviewReasonInput = {
   warningReason?: string | null;
+  reviewReasons?: unknown;
+  normalizedPayload?: unknown;
   reviewStatus?: string | null;
   isExcluded?: boolean;
   categoryId?: string | null;
@@ -8,6 +12,7 @@ export type TransactionReviewReasonInput = {
   categoryConfidence?: number | null;
   accountMatchConfidence?: number | null;
   duplicateConfidence?: number | null;
+  description?: string | null;
   merchantRaw?: string | null;
   merchantClean?: string | null;
   rawPayload?: unknown;
@@ -97,12 +102,16 @@ export const getTransactionReviewReasons = (transaction: TransactionReviewReason
     reasons.add(explicitReason);
   }
 
-  if (transaction.isExcluded) {
+  if (transaction.isExcluded && !isAutomaticReviewExclusion(transaction)) {
     reasons.add("Ignored from totals");
   }
 
   const duplicateScore = normalizeConfidenceScore(transaction.duplicateConfidence) ?? 0;
-  if (duplicateScore >= REVIEW_THRESHOLD) {
+  const bankOverlap = Array.isArray(transaction.reviewReasons) && transaction.reviewReasons.includes("finverse_possible_duplicate");
+  // Legacy bank overlap checks assigned 60 from amount/date alone. Separate
+  // transfers are valid occurrences; retain other actionable reasons unchanged.
+  const weakTransferOverlap = bankOverlap && duplicateScore <= 60 && /transfer|insta\s*pay|peso\s*net|cash[ -]?(in|out)/i.test([transaction.merchantRaw,transaction.merchantClean,transaction.description].join(" "));
+  if (duplicateScore >= REVIEW_THRESHOLD || (bankOverlap && !weakTransferOverlap)) {
     reasons.add("Review similar transaction");
   }
 

@@ -88,13 +88,14 @@ export class OfflineEngine {
   async presentationCache(profile: string) {
     await this.assertLocalAccess(profile);
     const invalidatedAt = await this.store.get<number>("presentation-invalidated-at") ?? 0;
-    const keys = (await this.store.keys("cache:")).filter(key => workspace(key.slice(6)) === profile).slice(-40);
+    const allKeys = (await this.store.keys("cache:")).filter(key => workspace(key.slice(6)) === profile);
+    const keys = [...new Set([...allKeys.filter(key => key.startsWith("cache:home?")), ...allKeys.slice(-40)])];
     const recent = await Promise.all(keys.map(async key => {
       const entry = await this.store.get<CacheEntry<unknown>>(key);
-      if (!entry || entry.savedAt <= invalidatedAt || this.now() < entry.savedAt || this.now() - entry.savedAt > 5 * 60_000) return null;
+      if (!entry || entry.savedAt <= invalidatedAt || this.now() < entry.savedAt || this.now() - entry.savedAt > (key.startsWith("cache:home?") ? 30 : 5) * 60_000) return null;
       return { path: key.slice(6), savedAt: entry.savedAt, value: await this.overlay(key.slice(6), entry.value) };
     }));
-    return recent.filter(entry => entry !== null).sort((a, b) => b.savedAt - a.savedAt).slice(0, 20);
+    return recent.filter(entry => entry !== null).sort((a,b)=>Number(b.path.startsWith("home?"))-Number(a.path.startsWith("home?")) || b.savedAt-a.savedAt).slice(0,20);
   }
   async request<T>(path: string, options: RequestInit = {}): Promise<T> {
     if (!this.active) throw new Error("This session is closed.");

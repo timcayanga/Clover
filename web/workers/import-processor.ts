@@ -16630,7 +16630,7 @@ export const confirmImportFile = async (
       continue;
     }
     if (bankOverlap === "ambiguous") {
-      insertRow.isExcluded = true;
+      insertRow.isExcluded = false;
       insertRow.reviewStatus = "pending_review";
       insertRow.reviewPriority = "high";
       insertRow.duplicateConfidence = 60;

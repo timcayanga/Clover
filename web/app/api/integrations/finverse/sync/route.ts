@@ -7,7 +7,7 @@ import { enforceBankAllowance } from "@/lib/finverse-lifecycle";
 import { refreshProAccess } from "@/lib/pro-access";
 import { getActiveFinverseToken } from "@/lib/finverse-access-token";
 import { bankLinkAllowance } from "@/lib/bank-link-usage";
-import { matchingBankAccounts, bankTransactionMatches, bankLinkUsageIdentity, cleanBankNumber } from "@/lib/finverse-matching";
+import { matchingBankAccounts, bankTransactionMatches, bankTransactionsNeedReview, bankLinkUsageIdentity, cleanBankNumber } from "@/lib/finverse-matching";
 import { randomBytes } from "node:crypto";
 import { getMobileRequestContext } from "@/lib/mobile-request-context";
 import { PlanQuotaError } from "@/lib/plan-quota";
@@ -116,10 +116,11 @@ const importTransaction = async (connectionId: string, workspaceId: string, tran
     const candidates = await tx.transaction.findMany({ where: { workspaceId, accountId: link.accountId, currency: normalized.currency, amount: normalized.amount, type: normalized.type as TransactionType, date: { gte: from, lt: to }, id: { notIn: [...claimedTransactionIds] }, OR: [{ finverseTransactionRecord: null }, { finverseTransactionRecord: { connectionId: { not: connectionId } } }] }, include: { finverseTransactionRecord: true }, orderBy: [{ createdAt: "asc" }, { id: "asc" }] });
     // Claim one matching occurrence, not every payment with the same amount.
     const match = candidates.find(candidate => bankTransactionMatches(candidate, normalized));
+    const possibleDuplicate = candidates.some(candidate => bankTransactionsNeedReview(candidate, normalized));
     const created = match ?? await tx.transaction.create({ data: {
-      workspaceId, accountId: link.accountId, reviewStatus: candidates.length ? "pending_review" : suggestion?.reviewStatus ?? "pending_review",
-      isExcluded: candidates.length > 0, duplicateConfidence: candidates.length ? 60 : 0,
-      reviewPriority: candidates.length ? "high" : suggestion?.reviewPriority ?? "medium", reviewReasons: json([...(candidates.length ? ["finverse_possible_duplicate"] : []), ...(suggestion?.reviewReasons ?? ["category_low_confidence"])]),
+      workspaceId, accountId: link.accountId, reviewStatus: possibleDuplicate ? "pending_review" : suggestion?.reviewStatus ?? "pending_review",
+      isExcluded: false, duplicateConfidence: possibleDuplicate ? 60 : 0,
+      reviewPriority: possibleDuplicate ? "high" : suggestion?.reviewPriority ?? "medium", reviewReasons: json([...(possibleDuplicate ? ["finverse_possible_duplicate"] : []), ...(suggestion?.reviewReasons ?? ["category_low_confidence"])]),
       parserConfidence: 100, categoryConfidence: suggestion?.categoryConfidence ?? 0, categoryId: suggestion?.categoryId, accountMatchConfidence: 100,
       learnedRuleIdsApplied: json(suggestion?.learnedRuleIdsApplied ?? []),
       rawPayload: json(transaction), normalizedPayload: json({ ...normalizedJson, enrichment: suggestion?.enrichment ?? null }), sourceRowKey: `finverse:${transaction.transaction_id}`,

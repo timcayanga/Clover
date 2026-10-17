@@ -1,4 +1,4 @@
-import { bankTransactionMatches } from "./finverse-matching";
+import { bankTransactionMatches, bankTransactionsNeedReview } from "./finverse-matching";
 
 type Row = {
   accountId: unknown; date: unknown; amount: unknown; currency: unknown; type: unknown;
@@ -23,6 +23,6 @@ export function createBankImportOverlapMatcher(rows: Array<Row & { id: string }>
     const fields = (row: Row) => ({ merchantRaw: text(row.merchantRaw), merchantClean: text(row.merchantClean), description: text(row.description) });
     const match = candidates.find(row => bankTransactionMatches(fields(row), fields(incoming)));
     if (match) { claimed.add(match.id); return "matched"; }
-    return candidates.length ? "ambiguous" : "new";
+    return candidates.some(row => bankTransactionsNeedReview(fields(row), fields(incoming))) ? "ambiguous" : "new";
   };
 }

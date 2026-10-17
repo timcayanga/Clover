@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import path from "node:path";
+import { includedTransactionWhere } from "../lib/transaction-review-inclusion-where";
 import { buildActiveWorkspaceTransactionWhere, buildTransactionQueryWhere } from "../lib/transaction-query";
 import {
   classifyWorkspaceMutation,
@@ -10,13 +11,16 @@ import {
 const workspaceId = "workspace-consistency";
 const activeWhere = buildActiveWorkspaceTransactionWhere(workspaceId, { currency: "PHP" });
 assert.equal(activeWhere.deletedAt, null);
-assert.equal(activeWhere.isExcluded, false);
+assert.equal(activeWhere.isExcluded, undefined, "Automatic bank-review exclusions must not be filtered out before the inclusion predicate");
+assert.deepEqual((activeWhere.AND as unknown[])[0], includedTransactionWhere(), "Financial reads include regular rows plus the protected unconfirmed bank-overlap exception");
+const explicitlyFiltered = buildActiveWorkspaceTransactionWhere(workspaceId, {isExcluded:false});
+assert.equal(explicitlyFiltered.isExcluded,false,"An explicit exclusion filter is preserved");
 assert.equal(activeWhere.currency, "PHP");
 assert.ok(Array.isArray(activeWhere.AND), "The active ledger must retain the workspace fallback scope.");
 
 const transactionPageWhere = buildTransactionQueryWhere(workspaceId, {});
 assert.equal(transactionPageWhere.deletedAt, null);
-assert.equal(transactionPageWhere.isExcluded, false);
+assert.deepEqual((transactionPageWhere.AND as unknown[])[0],includedTransactionWhere(),"Transaction totals and the other pages must share the identical inclusion rule");
 
 assert.equal(classifyWorkspaceMutation("/api/transactions", "POST"), "transactions");
 assert.equal(classifyWorkspaceMutation("/api/accounts/account-1", "PATCH"), "accounts");
