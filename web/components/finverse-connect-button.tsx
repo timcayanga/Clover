@@ -4,7 +4,7 @@ import { ResourceUpgradeNotice } from "./contextual-upgrade";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { FinverseBankOption } from "../../shared/finverse-bank-options";
 import { CANCEL_BANK_LINK_MESSAGE, type PendingBankConnection } from "../../shared/finverse-pending";
-import { bankLinkPresentation, bankSyncDate, type BankLinkCard } from "../../shared/bank-link-presentation";
+import { bankLinkPresentation, bankSyncDate, bankUnlinkMessage, type BankLinkCard } from "../../shared/bank-link-presentation";
 import { FinversePendingChip } from "./finverse-pending-chip";
 import { FinverseBankPicker } from "./finverse-bank-picker";
 import "./add-entry-methods.css";
@@ -212,7 +212,7 @@ export function FinverseConnectButton({
       const response = await fetch("/api/integrations/finverse/unlink", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ workspaceId, accountId: unlinkTarget.id }) });
       const body = await response.json();
       if (!response.ok) throw new Error(body.error || "Unable to unlink.");
-      setUnlinkTarget(null); setBankRevision(v => v + 1); setMessage("Bank unlinked. Your account and history are preserved.");
+      setUnlinkTarget(null); setBankRevision(v => v + 1); setMessage(bankUnlinkMessage(body.status));
       window.dispatchEvent(new Event("finverse-updated"));notifyInAppNotificationsChanged(); await onSyncedRef.current?.();
     } catch (error) { setMessage(error instanceof Error ? error.message : "Unable to unlink."); }
     finally { actionRef.current = null; setAction(null); }

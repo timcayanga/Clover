@@ -28,3 +28,9 @@ export function preferredBankLinks<T extends BankLinkCard>(links: T[]): T[] {
   }
   return [...cards.values()];
 }
+
+export function bankUnlinkMessage(status?: string) {
+  return status === "disconnect_pending"
+    ? "Unlinking your bank. Your account and history are preserved."
+    : "Bank unlinked. Your account and history are preserved.";
+}
