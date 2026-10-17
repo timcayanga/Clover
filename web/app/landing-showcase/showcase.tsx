@@ -539,6 +539,9 @@ export function Plans({ initialMarket }: { initialMarket: PricingMarket }) {
           </button>
         </div>
       </div>
+      <div className={s.planSelectors} role="group" aria-label="Choose a plan">
+        {["Free", "Plus", "Pro"].map(name => <button key={name} type="button" aria-pressed={plans[active].name === name} onClick={() => setActive(plans.findIndex(plan => plan.name === name))}>{name}</button>)}
+      </div>
       <div
         className={s.planCarousel}
         role="region"
@@ -772,7 +775,7 @@ export function Showcase({ initialMarket }: { initialMarket: PricingMarket }) {
   return (
     <div
       ref={root}
-      className={s.site}
+      className={`${s.site} ${s.revisedStory}`}
       data-motion={reduced ? "off" : mode}
       data-reduced={reduced}
     >
@@ -794,8 +797,8 @@ export function Showcase({ initialMarket }: { initialMarket: PricingMarket }) {
                 <br />
                 <em>Organized in minutes.</em>
               </Heading>
-              <Action />
-              <StoreAvailability />
+              <Action>Organize my finances for free</Action>
+              <StoreAvailability variant="badges" />
             </div>
             <div className={`${s.stage} ${s.heroStage}`}>
               <div className={s.heroPhone}>
@@ -824,13 +827,16 @@ export function Showcase({ initialMarket }: { initialMarket: PricingMarket }) {
         <ScrollScene id="one-picture" className={s.journey}>
           <div className={s.journeyWorld}>
             <PurchaseThroughline />
-            <article className={s.journeyBeat} data-story-act>
+            <article className={s.journeyBeat} data-story-act data-story-weight="1" data-chapter="organize">
               <div className={s.journeyCopy}>
-                <Heading text="Connect supported banks. Upload statements, receipts, screenshots, or spreadsheets. Choose what works for you.">
+                <Heading text="Stop piecing your history together by hand. Bring your accounts and records into one organized view.">
                   Connect. Upload.
                   <br />
                   <em>Or add it yourself.</em>
                 </Heading>
+                <ol className={s.organizeSteps} aria-label="From scattered records to a clearer picture">
+                  <li>Bring together</li><li>Organize</li><li>Understand</li><li>Improve</li>
+                </ol>
               </div>
               <div
                 className={`${s.journeyArt} ${s.journeyRecords}`}
@@ -845,25 +851,7 @@ export function Showcase({ initialMarket }: { initialMarket: PricingMarket }) {
                 </div>
               </div>
             </article>
-            <article className={s.journeyBeat} data-story-act>
-              <div className={s.journeyCopy}>
-                <Heading text="Your financial life in one view. Track accounts, balances, recurring obligations, investments, and trends across your accounts.">
-                  Understand your finances.
-                  <br />
-                  <em>Build better habits.</em>
-                </Heading>
-              </div>
-              <div
-                className={`${s.journeyArt} ${s.journeyClarity}`}
-                data-story-art
-              >
-                <SpendingStory />
-                <div className={s.insightPhone}>
-                  <AppScreen page="transactions" />
-                </div>
-              </div>
-            </article>
-            <article className={s.journeyBeat} data-story-act>
+            <article className={s.journeyBeat} data-story-act data-story-weight="0.55" data-chapter="trust">
               <div className={s.journeyCopy}>
                 <Heading text="Your financial records are private, reviewable, and traceable. Edit, export, or delete your data through your account.">
                   Your financial data stays
@@ -885,7 +873,25 @@ export function Showcase({ initialMarket }: { initialMarket: PricingMarket }) {
                 <ControlCard />
               </div>
             </article>
-            <article className={s.journeyBeat} data-story-act>
+            <article className={s.journeyBeat} data-story-act data-story-weight="0.85" data-chapter="understand">
+              <div className={s.journeyCopy}>
+                <Heading text="See where your money stands and what changed. Bring spending, accounts, obligations, and investments into focus.">
+                  Understand your finances.
+                  <br />
+                  <em>Build better habits.</em>
+                </Heading>
+              </div>
+              <div
+                className={`${s.journeyArt} ${s.journeyClarity}`}
+                data-story-art
+              >
+                <SpendingStory />
+                <div className={s.insightPhone}>
+                  <AppScreen page="transactions" />
+                </div>
+              </div>
+            </article>
+            <article className={s.journeyBeat} data-story-act data-story-weight="1.2" data-chapter="ask">
               <div className={s.journeyCopy}>
                 <Heading text="Ask what changed this month, what you can safely spend, or get help creating a budget and a goal.">
                   Ask what your money
@@ -903,7 +909,7 @@ export function Showcase({ initialMarket }: { initialMarket: PricingMarket }) {
                 </div>
               </div>
             </article>
-            <article className={s.journeyBeat} data-story-act>
+            <article className={s.journeyBeat} data-story-act data-story-weight="1.2" data-chapter="together">
               <div className={s.journeyCopy}>
                 <Heading text="Split expenses with friends on Split Bills. Manage household expenses with a partner on Circles.">
                   Manage money together.
@@ -926,7 +932,7 @@ export function Showcase({ initialMarket }: { initialMarket: PricingMarket }) {
                 <SplitCard />
               </div>
             </article>
-            <article className={s.journeyBeat} data-story-act>
+            <article className={s.journeyBeat} data-story-act data-story-weight="0.7" data-chapter="plan">
               <div className={s.journeyCopy}>
                 <Heading text="Give each goal a plan. Set budgets for everyday spending, follow your savings progress, and make room for what matters.">
                   Set your goals.
@@ -960,6 +966,13 @@ export function Showcase({ initialMarket }: { initialMarket: PricingMarket }) {
           </Heading>
           <Plans initialMarket={initialMarket} />
         </section>
+        <section id="start-with-clover" className={s.finalCta} aria-labelledby="final-cta-title">
+          <div className={s.finalMascot}><Mascot pose="welcome" size={156} /></div>
+          <h2 id="final-cta-title">Know where you stand.<br /><em>Build toward what matters next.</em></h2>
+          <p>Bring your money together with Clover. Start free, your way.</p>
+          <Action>Organize my finances for free</Action>
+          <StoreAvailability variant="badges" />
+        </section>
       </main>
       <footer className={s.footer}>
         <a href="#together" aria-label="Clover, back to top">
@@ -971,7 +984,6 @@ export function Showcase({ initialMarket }: { initialMarket: PricingMarket }) {
           <Link href="/privacy-policy">Privacy</Link>
           <Link href="/terms-of-service">Terms</Link>
         </div>
-        <StoreAvailability />
         <small>© {new Date().getFullYear()} Clover.</small>
       </footer>
     </div>

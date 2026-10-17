@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { purchaseChoreography } from "../app/landing-showcase/showcase-choreography";
+import { purchaseChoreography, storyTravel } from "../app/landing-showcase/showcase-choreography";
 
 const start = purchaseChoreography(0);
 assert.equal(start["--paper-fold"], 0);
@@ -24,3 +24,31 @@ assert.equal(previous["--category-fill"], 1);
 for (let index = 300; index >= 0; index--) assert.deepEqual(purchaseChoreography(index / 100), forward.get(index));
 assert.deepEqual(purchaseChoreography(0), start);
 console.log("Showcase choreography: bounded, reversible, readable handoff passed.");
+
+const weights = [1, .55, .85, 1.2, 1.2, .7];
+assert.equal(storyTravel(0, weights), 0);
+assert.equal(storyTravel(1, weights), 6);
+assert.equal(storyTravel(-1, weights), 0);
+assert.equal(storyTravel(2, weights), 6);
+assert.equal(storyTravel(.5, []), 0);
+let lastTravel = 0;
+const timeline = new Map<number, number>();
+for (let index = 0; index <= 1000; index++) {
+  const travel = storyTravel(index / 1000, weights);
+  assert.ok(travel >= lastTravel && travel - lastTravel < .02, "Weighted chapters jump or reverse");
+  timeline.set(index, travel);
+  const frame = purchaseChoreography(travel, { trustInterlude: true });
+  for (const value of Object.values(frame)) assert.ok(Number.isFinite(value) && value >= 0 && value <= 1);
+  if (travel >= 1.1 && travel <= 1.85) {
+    assert.equal(frame["--purchase-presence"], 0, "Purchase obscures early trust content");
+    assert.equal(frame["--category-join"], 0, "Purchase enters report during trust chapter");
+  }
+  if (frame["--category-join"] > .01) assert.ok(frame["--purchase-merge"] > .95);
+  lastTravel = travel;
+}
+for (let index = 1000; index >= 0; index--) assert.equal(storyTravel(index / 1000, weights), timeline.get(index));
+// The same row resumes after trust, then joins its category and disappears.
+assert.equal(purchaseChoreography(1.5, {trustInterlude:true})["--paper-fold"], 1);
+assert.equal(purchaseChoreography(2.2, {trustInterlude:true})["--purchase-presence"], 1);
+assert.equal(purchaseChoreography(3, {trustInterlude:true})["--purchase-away"], 1);
+console.log("Weighted story: compact chapters, trust isolation and reversible purchase continuity passed.");

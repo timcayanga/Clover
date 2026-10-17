@@ -4,7 +4,17 @@ function StoreArrow() {
   return <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><path d="M4 12h15m-6-6 6 6-6 6" /></svg>;
 }
 
-export function StoreAvailability() {
+export function StoreAvailability({ variant = "text" }: { variant?: "text" | "badges" }) {
+  if (variant === "badges") {
+    return <div className={styles.badges} aria-label="Download Clover">
+      <a href="https://apps.apple.com/ph/app/clover-personal-finance/id6811711508" target="_blank" rel="noopener noreferrer" aria-label="Download Clover on the App Store">
+        <img src="/assets/store-badges/app-store.svg" width="144" height="48" alt="Download on the App Store" decoding="async" />
+      </a>
+      <a className={styles.googleBadge} href="https://play.google.com/store/apps/details?id=ph.clover.app" target="_blank" rel="noopener noreferrer" aria-label="Get Clover on Google Play">
+        <img src="/assets/store-badges/google-play.png" width="186" height="72" alt="Get it on Google Play" decoding="async" />
+      </a>
+    </div>;
+  }
   return (
     <div
       className={styles.links}

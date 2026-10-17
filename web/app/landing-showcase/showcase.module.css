@@ -3214,3 +3214,124 @@
  .goalCompact .goalAmount strong { font-size: 23px; }
  .goalCompact .goalTrack,.goalCompact .goalFooter { display: none; }
 }
+
+/* Conversion anchors frame the product narrative, without adding background panels. */
+.revisedStory .hero { height:145svh; }
+.revisedStory .journey { height:760svh; }
+.revisedStory .hero .copy { gap:16px; }
+.revisedStory .hero .heroTransaction { bottom:6%; }
+.organizeSteps { display:flex; flex-wrap:wrap; justify-content:center; gap:8px 14px; list-style:none; margin:22px 0 0; padding:0; font-size:11px; font-weight:500; color:#28777b; }
+.organizeSteps li:not(:last-child)::after { content:'→'; margin-left:14px; color:#66a9a3; }
+.revisedStory .purchaseThroughline { opacity:calc((1 - var(--purchase-away,0)) * var(--purchase-presence,1)); }
+.revisedStory .journey:not([data-story-static="true"]) .journeyClarity { opacity:calc(min(var(--act-enter),var(--act-leave)) * var(--report-reveal,0)); }
+.finalCta { position:relative; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:24px; padding:80px 24px 90px; background:linear-gradient(180deg,#f5faf9,#e9f8f2); text-align:center; }
+.finalCta h2 { margin:0; max-width:850px; font-size:clamp(32px,4vw,58px); font-weight:600; letter-spacing:-.045em; line-height:1.15; color:#213b41; text-wrap:balance; }
+.finalCta h2 em { font-style:normal; color:#008f9e; }
+.finalCta p { margin:0; max-width:480px; font-size:15px; line-height:1.7; color:#506971; }
+.finalMascot { width:120px; height:120px; }
+.finalMascot img { width:100%; height:100%; object-fit:contain; }
+.finalCta .action { min-height:48px; }
+/* CSS-first fallback remains readable before hydration, on slow devices, and without JS. */
+.revisedStory:not([data-enhanced="true"]) .scene,
+.revisedStory[data-motion="gentle"] .scene { height:auto; min-height:0; }
+.revisedStory:not([data-enhanced="true"]) .pin,
+.revisedStory[data-motion="gentle"] .pin { position:relative; height:auto; min-height:0; overflow:visible; }
+.revisedStory:not([data-enhanced="true"]) .hero .pin,
+.revisedStory[data-motion="gentle"] .hero .pin { height:max(760px,100svh); }
+.revisedStory:not([data-enhanced="true"]) .journeyWorld { height:auto; }
+.revisedStory:not([data-enhanced="true"]) .journeyBeat { position:relative; display:grid; grid-template-columns:46% 54%; align-items:center; min-height:600px; padding:90px 5% 50px; pointer-events:auto; }
+.revisedStory:not([data-enhanced="true"]) .journeyCopy { position:relative; inset:auto; width:100%; transform:none; opacity:1; padding:0 24px 0 0; }
+.revisedStory:not([data-enhanced="true"]) .journeyArt { position:relative; inset:auto; width:100%; height:460px; opacity:1; transform:none; }
+.revisedStory:not([data-enhanced="true"]) .purchaseThroughline { display:none; }
+.revisedStory:not([data-enhanced="true"]) .journeyReceipt,
+.revisedStory:not([data-enhanced="true"]) .journeyTransaction { visibility:visible; }
+.revisedStory:not([data-enhanced="true"]) .journeyClarity .donut circle:nth-child(2) { stroke-dasharray:39.2 100; }
+@media(max-width:900px), (max-width:1100px) and (min-height:1000px) {
+  .revisedStory .journey { height:640svh; }
+  .revisedStory .hero .copy { left:6%; width:88%; bottom:24px; top:auto; transform:none; gap:12px; padding:0; }
+  .revisedStory .hero .heading h1 { font-size:clamp(28px,6.2vw,40px); }
+  .revisedStory .hero .heading p { margin-top:16px; font-size:13px; line-height:1.6; }
+  .revisedStory .hero .heroStage { top:80px; height:calc(100% - 455px); }
+  .revisedStory .hero .action { padding:13px 20px; font-size:13px; }
+  .revisedStory .hero .heroPhone { top:50%; width:clamp(135px,calc((100svh - 490px) * .46),240px); }
+  .revisedStory .hero .heroReceipt { width:125px; top:5%; }
+  .revisedStory .hero .heroMascot { width:80px; bottom:0; }
+  .organizeSteps { gap:6px 9px; font-size:10px; margin-top:14px; }
+  .organizeSteps li:not(:last-child)::after { margin-left:9px; }
+  .revisedStory .journey[data-story-static="true"] .journeyBeat,
+  .revisedStory:not([data-enhanced="true"]) .journeyBeat { display:flex; flex-direction:column; min-height:0; padding:36px 6% 44px; gap:26px; }
+  .revisedStory .journey[data-story-static="true"] .journeyCopy,
+  .revisedStory:not([data-enhanced="true"]) .journeyCopy { position:relative; inset:auto; width:100%; padding:0; transform:none; text-align:center; }
+  .revisedStory .journey[data-story-static="true"] .journeyCopy .heading p { margin-inline:auto; }
+  .revisedStory .journey[data-story-static="true"] .journeyArt,
+  .revisedStory:not([data-enhanced="true"]) .journeyArt { position:relative; inset:auto; width:100%; height:410px; flex-basis:410px; margin:0; }
+  .revisedStory .journey[data-story-static="true"] [data-chapter="trust"] .journeyArt { height:275px; flex-basis:275px; }
+  .revisedStory .journey[data-story-static="true"] [data-chapter="understand"] .journeyArt { height:330px; flex-basis:330px; }
+  .revisedStory .journey[data-story-static="true"] [data-chapter="plan"] .journeyArt { height:340px; flex-basis:340px; }
+  .revisedStory .journey[data-story-static="true"] .journeyShared { height:470px; flex-basis:470px; }
+  .revisedStory .journeyPrivacy .controlCard { width:70%; }
+  .revisedStory .journeyPrivacy .privacyPhoto { width:58%; }
+  .finalCta { padding:52px 24px 60px; gap:20px; }
+  .finalCta h2 { font-size:clamp(29px,6.5vw,42px); }
+  .finalCta p { font-size:14px; }
+  .finalMascot { width:96px; height:96px; }
+}
+@media(max-width:360px), (max-width:900px) and (max-height:819px) {
+  .revisedStory .hero { height:auto; }
+  .revisedStory .hero > .pin { height:max(760px,100svh); }
+  .revisedStory .journey { height:auto; }
+}
+@media(prefers-reduced-motion:reduce) {
+  .revisedStory .scene { height:auto; }
+  .revisedStory .pin { position:relative; }
+}
+
+.revisedStory:not([data-enhanced="true"]) .journey .journeyClarity { opacity:1; }
+@media(max-width:900px), (max-width:1100px) and (min-height:1000px) {
+  .revisedStory:not([data-enhanced="true"]) [data-chapter="trust"] .journeyArt { height:275px; flex-basis:275px; }
+  .revisedStory:not([data-enhanced="true"]) [data-chapter="understand"] .journeyArt { height:330px; flex-basis:330px; }
+  .revisedStory:not([data-enhanced="true"]) [data-chapter="plan"] .journeyArt { height:340px; flex-basis:340px; }
+}
+
+.planSelectors { display:flex; justify-content:center; gap:8px; margin:0 0 16px; }
+.planSelectors button { min-height:44px; min-width:72px; padding:10px 20px; border:1px solid #c6dfdf; border-radius:99px; background:transparent; color:#28616b; font:inherit; font-size:13px; cursor:pointer; }
+.planSelectors button[aria-pressed="true"] { background:#d6f3e9; border-color:#7ccfbe; color:#125f66; }
+.planSelectors button:focus-visible { outline:2px solid #008f9e; outline-offset:3px; }
+
+@media(max-width:900px), (max-width:1100px) and (min-height:1000px) {
+  .revisedStory .journey[data-story-static="true"] .journeyCopy,
+  .revisedStory:not([data-enhanced="true"]) .journeyCopy { order:2; }
+  .revisedStory .journey[data-story-static="true"] .journeyArt,
+  .revisedStory:not([data-enhanced="true"]) .journeyArt { order:1; }
+}
+@media(max-width:900px) and (max-height:700px) {
+  .revisedStory .hero > .pin { height:max(680px,100svh); }
+  .revisedStory .hero .heroStage { height:calc(100% - 400px); }
+  .revisedStory .hero .heroPhone { width:110px; }
+  .revisedStory .hero .heroReceipt { width:100px; }
+}
+/* On short/narrow phones the hero uses normal flow, so large text can never collide with the phone. */
+@media(max-width:360px), (max-width:900px) and (max-height:700px) {
+  .revisedStory[data-motion] .hero > .pin { height:auto; min-height:0; }
+  .revisedStory .hero .storyGrid { display:flex; flex-direction:column; align-items:center; gap:18px; height:auto; min-height:0; }
+  .revisedStory .hero .heroStage { position:relative; inset:auto; order:1; width:94%; height:270px; margin:76px 0 0; }
+  .revisedStory .hero .copy { position:relative; inset:auto; order:2; width:calc(100% - 20px); padding:0 0 32px; }
+  .revisedStory .hero .heading { padding-inline:8px; }
+  .revisedStory .hero .heroPhone { width:110px; }
+  .revisedStory .hero .heroReceipt { width:100px; }
+  .revisedStory .hero .heroMascot { width:60px; }
+  .revisedStory .hero .scrollArrow { display:none; }
+}
+@media(max-width:360px), (max-width:900px) and (max-height:700px) {
+  .revisedStory .hero .heroStage { flex:0 0 270px; }
+  .revisedStory .hero .copy { flex:0 0 auto; }
+}
+.revisedStory .plans { padding:88px 6% 72px; scroll-margin-top:88px; }
+.revisedStory .finalCta { scroll-margin-top:80px; }
+@media(max-width:900px), (max-width:1100px) and (min-height:1000px) {
+  .revisedStory .plans { padding:56px 6% 48px; }
+  .revisedStory .plans > .heading { margin-bottom:28px; }
+  .revisedStory .plans > .heading h2 { font-size:clamp(30px,5vw,40px); line-height:1.15; }
+  .revisedStory .plans > .heading p { margin-top:18px; font-size:14px; line-height:1.6; }
+  .revisedStory .priceControls { margin-bottom:16px; }
+}

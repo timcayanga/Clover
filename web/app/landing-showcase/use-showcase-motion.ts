@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, type RefObject } from "react";
-import { purchaseChoreography } from "./showcase-choreography";
+import { purchaseChoreography, storyTravel } from "./showcase-choreography";
 
 export type MotionMode = "full" | "gentle" | "off";
 const clamp = (value: number) => Math.max(0, Math.min(1, value));
@@ -21,9 +21,13 @@ export function useShowcaseMotion(root: RefObject<HTMLDivElement | null>) {
     change();
     media.addEventListener("change", change);
     try {
-      if (
-        (navigator as Navigator & { connection?: { saveData?: boolean } })
-          .connection?.saveData
+      const requested = new URL(location.href).searchParams.get("motion");
+      if (requested === "off" || requested === "gentle") {
+        updateMode(requested);
+      } else if (
+        (navigator as Navigator & { connection?: { saveData?: boolean } }).connection?.saveData ||
+        /(^|-)2g$/.test((navigator as Navigator & { connection?: { effectiveType?: string } }).connection?.effectiveType ?? "") ||
+        ((navigator as Navigator & { deviceMemory?: number }).deviceMemory ?? 8) <= 4
       )
         updateMode("gentle");
     } catch {
@@ -47,6 +51,7 @@ export function useShowcaseMotion(root: RefObject<HTMLDivElement | null>) {
       pinned: boolean;
       acts: HTMLElement[];
       hasPurchase: boolean;
+      weights: number[];
     }[] = [];
     let viewport = innerHeight;
     let frame = 0;
@@ -80,6 +85,7 @@ export function useShowcaseMotion(root: RefObject<HTMLDivElement | null>) {
             pinned,
             acts: [...scene.querySelectorAll<HTMLElement>("[data-story-act]")],
             hasPurchase: Boolean(scene.querySelector("[data-purchase-throughline]")),
+            weights: [...scene.querySelectorAll<HTMLElement>("[data-story-act]")].map(act => Number(act.dataset.storyWeight ?? 1)),
           };
         });
         needsMeasure = false;
@@ -96,7 +102,7 @@ export function useShowcaseMotion(root: RefObject<HTMLDivElement | null>) {
         mode === "full" && animated ? impulse * 0.78 + target * 0.22 : 0;
       if (Math.abs(impulse) < 0.002) impulse = 0;
       scenes.forEach((scene, index) => {
-        const { top, height, pinHeight, pinned, acts, hasPurchase } = geometry[index];
+        const { top, height, pinHeight, pinned, acts, hasPurchase, weights } = geometry[index];
         const relativeTop = top - y;
         const visible = String(
           relativeTop < viewport && relativeTop + height > 0,
@@ -128,19 +134,20 @@ export function useShowcaseMotion(root: RefObject<HTMLDivElement | null>) {
           const staticStory = !animated || !pinned;
           scene.dataset.storyStatic = String(staticStory);
           const storyProgress = mode === "gentle" ? raw : p;
+          const chapterTravel = storyTravel(storyProgress, weights);
           // Shared purchase choreography crosses the scene boundary without
           // remounting or resetting: receipt → transaction → category insight.
           if (hasPurchase) {
             for (const [property, value] of Object.entries(
-              purchaseChoreography(storyProgress * acts.length),
+              purchaseChoreography(chapterTravel, { trustInterlude: true }),
             )) write(scene, property, value);
           }
           const active = Math.min(
             acts.length - 1,
-            Math.floor(storyProgress * acts.length),
+            Math.floor(chapterTravel),
           );
           acts.forEach((act, actIndex) => {
-            const travel = storyProgress * acts.length - actIndex;
+            const travel = chapterTravel - actIndex;
             const fade = mode === "gentle" ? 0.1 : 0.3;
             write(act, "--act-progress", staticStory ? 1 : ease(travel));
             write(
@@ -158,6 +165,7 @@ export function useShowcaseMotion(root: RefObject<HTMLDivElement | null>) {
             const activeValue = String(staticStory || active === actIndex);
             if (act.dataset.storyActive !== activeValue)
               act.dataset.storyActive = activeValue;
+            act.inert = !staticStory && active !== actIndex;
             const art = act.querySelector<HTMLElement>("[data-story-art]");
             if (art && art.inert !== (!staticStory && active !== actIndex))
               art.inert = !staticStory && active !== actIndex;
@@ -225,6 +233,7 @@ export function useShowcaseMotion(root: RefObject<HTMLDivElement | null>) {
     resize.observe(element);
     scenes.forEach((scene) => resize.observe(scene));
     element.dataset.awake = "true";
+    element.dataset.enhanced = "true";
     schedule();
     document.fonts.ready.then(measure);
     addEventListener("scroll", schedule, { passive: true });
@@ -234,6 +243,8 @@ export function useShowcaseMotion(root: RefObject<HTMLDivElement | null>) {
     document.addEventListener("visibilitychange", visibility);
     return () => {
       disposed = true;
+      delete element.dataset.enhanced;
+      scenes.forEach(scene => scene.querySelectorAll<HTMLElement>("[data-story-act]").forEach(act => { act.inert = false; }));
       cancelAnimationFrame(frame);
       removeEventListener("scroll", schedule);
       removeEventListener("resize", measure);
