@@ -38,7 +38,10 @@ const config: ExpoConfig = {
       },
     ],
     "expo-localization",
-    ["expo-build-properties", { android: {
+    ["expo-build-properties", { ios: {
+      // iOS 27 rejects Xcode 27 builds that still use the application lifecycle.
+      enableSceneSupport: true,
+    }, android: {
       minSdkVersion: 26,
       enableMinifyInReleaseBuilds: true,
       enableShrinkResourcesInReleaseBuilds: true,
