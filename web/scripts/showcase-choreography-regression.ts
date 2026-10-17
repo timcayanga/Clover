@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { planSwipeDirection } from "../app/landing-showcase/showcase-interactions";
 import { purchaseChoreography, storyTravel } from "../app/landing-showcase/showcase-choreography";
 
 const start = purchaseChoreography(0);
@@ -52,3 +53,13 @@ assert.equal(purchaseChoreography(1.5, {trustInterlude:true})["--paper-fold"], 1
 assert.equal(purchaseChoreography(2.2, {trustInterlude:true})["--purchase-presence"], 1);
 assert.equal(purchaseChoreography(3, {trustInterlude:true})["--purchase-away"], 1);
 console.log("Weighted story: compact chapters, trust isolation and reversible purchase continuity passed.");
+
+// Gesture intent must not turn an ordinary page scroll or a short tap into a plan change.
+assert.equal(planSwipeDirection(-80, 8), 1);
+assert.equal(planSwipeDirection(80, 8), -1);
+assert.equal(planSwipeDirection(-20, 1), 0);
+assert.equal(planSwipeDirection(60, 100), 0);
+assert.equal(planSwipeDirection(50, 50), 0);
+assert.equal(planSwipeDirection(NaN, 0), 0);
+assert.equal(planSwipeDirection(0, Infinity), 0);
+console.log("Plan swipes: forward/backward intent, short taps and native vertical scrolling passed.");

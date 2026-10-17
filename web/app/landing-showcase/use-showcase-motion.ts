@@ -52,6 +52,7 @@ export function useShowcaseMotion(root: RefObject<HTMLDivElement | null>) {
       acts: HTMLElement[];
       hasPurchase: boolean;
       weights: number[];
+      actTops: number[];
     }[] = [];
     let viewport = innerHeight;
     let frame = 0;
@@ -86,6 +87,7 @@ export function useShowcaseMotion(root: RefObject<HTMLDivElement | null>) {
             acts: [...scene.querySelectorAll<HTMLElement>("[data-story-act]")],
             hasPurchase: Boolean(scene.querySelector("[data-purchase-throughline]")),
             weights: [...scene.querySelectorAll<HTMLElement>("[data-story-act]")].map(act => Number(act.dataset.storyWeight ?? 1)),
+            actTops: [...scene.querySelectorAll<HTMLElement>("[data-story-act]")].map(act => act.getBoundingClientRect().top + y),
           };
         });
         needsMeasure = false;
@@ -102,7 +104,7 @@ export function useShowcaseMotion(root: RefObject<HTMLDivElement | null>) {
         mode === "full" && animated ? impulse * 0.78 + target * 0.22 : 0;
       if (Math.abs(impulse) < 0.002) impulse = 0;
       scenes.forEach((scene, index) => {
-        const { top, height, pinHeight, pinned, acts, hasPurchase, weights } = geometry[index];
+        const { top, height, pinHeight, pinned, acts, hasPurchase, weights, actTops } = geometry[index];
         const relativeTop = top - y;
         const visible = String(
           relativeTop < viewport && relativeTop + height > 0,
@@ -149,7 +151,9 @@ export function useShowcaseMotion(root: RefObject<HTMLDivElement | null>) {
           acts.forEach((act, actIndex) => {
             const travel = chapterTravel - actIndex;
             const fade = mode === "gentle" ? 0.1 : 0.3;
-            write(act, "--act-progress", staticStory ? 1 : ease(travel));
+            const naturalEnter = staticStory && animated ? ease((viewport - (actTops[actIndex] - y)) / (viewport * .65)) : 1;
+            write(act, "--natural-enter", naturalEnter);
+            write(act, "--act-progress", staticStory ? naturalEnter : ease(travel));
             write(
               act,
               "--act-enter",

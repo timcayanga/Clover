@@ -1,7 +1,8 @@
 "use client";
 
-import { useRef, useState, type CSSProperties, type ReactNode } from "react";
+import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import Link from "next/link";
+import { planSwipeDirection } from "./showcase-interactions";
 import { useShowcaseMotion } from "./use-showcase-motion";
 import { SwitchOfferNotice } from "@/components/switch-campaign";
 import {
@@ -11,7 +12,7 @@ import {
 } from "@/lib/public-plan-comparison";
 import s from "./showcase.module.css";
 import { StoreAvailability } from "@/components/app-store-links";
-import { JourneyHeader } from "@/app/landing-preview/landing-journey";
+import { JourneyHeader, JourneyActions } from "@/app/landing-preview/landing-journey";
 
 export function Icon({
   kind = "arrow",
@@ -161,6 +162,15 @@ export function AppScreen({
   page: "accounts" | "transactions";
   eager?: boolean;
 }) {
+  const dialog = useRef<HTMLDialogElement>(null);
+  const [expanded, setExpanded] = useState(false);
+  const capture = `/assets/landing-showcase/${page === "accounts" ? "accounts-iphone-squircle-20261014" : "transactions-production-hd-20261013"}.webp`;
+  useEffect(() => {
+    if (!expanded) return;
+    const previous = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => { document.body.style.overflow = previous; };
+  }, [expanded]);
   return (
     <div className={s.phone}>
       <div className={s.phoneDisplay}>
@@ -188,9 +198,8 @@ export function AppScreen({
           </span>
         </div>
         <img
-          src={`/assets/landing-showcase/${page === "accounts" ? "accounts-iphone-squircle-20261014" : "transactions-production-hd-20261013"}-2x.webp`}
-          srcSet={`/assets/landing-showcase/${page === "accounts" ? "accounts-iphone-squircle-20261014" : "transactions-production-hd-20261013"}-2x.webp 804w, /assets/landing-showcase/${page === "accounts" ? "accounts-iphone-squircle-20261014" : "transactions-production-hd-20261013"}.webp 1206w`}
-          sizes="(max-width: 900px) 285px, (max-width: 1100px) and (min-height: 1000px) 285px, 310px"
+          src={capture}
+          className={page === "accounts" ? s.accountCapture : s.transactionCapture}
           alt={
             page === "accounts"
               ? "Clover account lists with BPI, UnionBank, BDO, Maya, GCash, GoTrade and ATRAM, using fictional balances."
@@ -204,6 +213,13 @@ export function AppScreen({
         />
         <span className={s.phoneHome} aria-hidden="true" />
       </div>
+      <button className={s.phoneExpand} type="button" aria-label={`Enlarge Clover ${page} screenshot`} onClick={() => { setExpanded(true); dialog.current?.showModal(); }}>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true"><circle cx="10" cy="10" r="6"/><path d="m15 15 6 6M7 10h6M10 7v6"/></svg>
+      </button>
+      <dialog ref={dialog} className={s.captureDialog} aria-label={`Clover ${page} screenshot`} onClose={() => setExpanded(false)} onClick={(event) => { if (event.target === event.currentTarget) dialog.current?.close(); }}>
+        <header><strong>{page === "accounts" ? "Accounts" : "Transactions"}</strong><button type="button" onClick={() => dialog.current?.close()} aria-label="Close screenshot">×</button></header>
+        {expanded ? <img src={capture} width={1206} height={page === "accounts" ? 2616 : 2460} alt={`Full-resolution Clover ${page} screen with sample data`} /> : null}
+      </dialog>
     </div>
   );
 }
@@ -383,7 +399,7 @@ export function SpendingStory() {
             ))}
           </svg>
           <div>
-            <span>{current ? current.name : "Total spending"}</span>
+            {current ? <span>{current.name}</span> : null}
             <strong>{current ? current.amount : "₱15,000"}</strong>
           </div>
         </div>
@@ -488,6 +504,8 @@ export { StoreAvailability } from "@/components/app-store-links";
 export function Plans({ initialMarket }: { initialMarket: PricingMarket }) {
   const [annual, setAnnual] = useState(true);
   const [active, setActive] = useState(0);
+  const swipe = useRef<{ id: number; x: number; y: number; horizontal: boolean } | null>(null);
+  const suppressClickUntil = useRef(0);
   const plans = [
     {
       name: "Pro",
@@ -548,6 +566,46 @@ export function Plans({ initialMarket }: { initialMarket: PricingMarket }) {
         aria-roledescription="carousel"
         aria-label="Clover plans"
         tabIndex={0}
+        onPointerDown={(event) => {
+          if (!event.isPrimary || event.pointerType === "mouse") return;
+          swipe.current = { id:event.pointerId, x:event.clientX, y:event.clientY, horizontal:false };
+        }}
+        onPointerMove={(event) => {
+          const start = swipe.current;
+          if (!start || start.id !== event.pointerId) return;
+          const dx = event.clientX - start.x;
+          const dy = event.clientY - start.y;
+          if (!start.horizontal && Math.abs(dy) > 12 && Math.abs(dy) > Math.abs(dx)) { swipe.current = null; return; }
+          if (!start.horizontal && Math.abs(dx) > 12 && Math.abs(dx) > Math.abs(dy) * 1.2) {
+            start.horizontal = true;
+            event.currentTarget.setPointerCapture(event.pointerId);
+          }
+          if (start.horizontal) {
+            event.currentTarget.dataset.dragging = "true";
+            event.currentTarget.style.setProperty("--swipe-x", `${Math.max(-180,Math.min(180,dx))}px`);
+          }
+        }}
+        onPointerUp={(event) => {
+          const start = swipe.current;
+          if (!start || start.id !== event.pointerId) return;
+          if (start.horizontal) {
+            const direction = planSwipeDirection(event.clientX-start.x, event.clientY-start.y);
+            if (direction) move(direction);
+            suppressClickUntil.current = performance.now() + 350;
+          }
+          swipe.current = null;
+          event.currentTarget.dataset.dragging = "false";
+          event.currentTarget.style.setProperty("--swipe-x", "0px");
+          if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId);
+        }}
+        onPointerCancel={(event) => {
+          swipe.current = null;
+          event.currentTarget.dataset.dragging = "false";
+          event.currentTarget.style.setProperty("--swipe-x", "0px");
+        }}
+        onClickCapture={(event) => {
+          if (performance.now() < suppressClickUntil.current) { event.preventDefault(); event.stopPropagation(); }
+        }}
         onKeyDown={(event) => {
           if (event.target !== event.currentTarget) return;
           if (event.key === "ArrowLeft") {
@@ -769,7 +827,7 @@ export function BudgetMoment() {
   );
 }
 
-export function Showcase({ initialMarket }: { initialMarket: PricingMarket }) {
+export function Showcase({ initialMarket, authEnabled = false }: { initialMarket: PricingMarket; authEnabled?: boolean }) {
   const root = useRef<HTMLDivElement>(null);
   const { mode, reduced } = useShowcaseMotion(root);
   return (
@@ -797,7 +855,7 @@ export function Showcase({ initialMarket }: { initialMarket: PricingMarket }) {
                 <br />
                 <em>Organized in minutes.</em>
               </Heading>
-              <Action>Organize my finances for free</Action>
+              <div className={s.signupAction}><JourneyActions authEnabled={authEnabled} final /></div>
               <StoreAvailability variant="badges" />
             </div>
             <div className={`${s.stage} ${s.heroStage}`}>
@@ -970,7 +1028,7 @@ export function Showcase({ initialMarket }: { initialMarket: PricingMarket }) {
           <div className={s.finalMascot}><Mascot pose="welcome" size={156} /></div>
           <h2 id="final-cta-title">Know where you stand.<br /><em>Build toward what matters next.</em></h2>
           <p>Bring your money together with Clover. Start free, your way.</p>
-          <Action>Organize my finances for free</Action>
+          <div className={s.signupAction}><JourneyActions authEnabled={authEnabled} final /></div>
           <StoreAvailability variant="badges" />
         </section>
       </main>
@@ -984,6 +1042,11 @@ export function Showcase({ initialMarket }: { initialMarket: PricingMarket }) {
           <Link href="/privacy-policy">Privacy</Link>
           <Link href="/terms-of-service">Terms</Link>
         </div>
+        <nav className={s.socialLinks} aria-label="Follow Clover">
+          <a href="https://www.instagram.com/cloverpersonalfinance/" target="_blank" rel="noopener noreferrer" aria-label="Clover on Instagram"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="5"/><circle cx="12" cy="12" r="4"/><circle cx="17.5" cy="6.5" r="1" fill="currentColor" stroke="none"/></svg></a>
+          <a href="https://www.facebook.com/cloverpersonalfinance" target="_blank" rel="noopener noreferrer" aria-label="Clover on Facebook"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M13.5 22v-9h3l.5-3.5h-3.5V7.3c0-1 .3-1.8 1.8-1.8H17V2.4c-.8-.1-1.6-.2-2.5-.2-2.5 0-4.2 1.5-4.2 4.4v2.9H7.5V13h2.8v9z"/></svg></a>
+          <a href="https://www.tiktok.com/@cloverpersonalfinance" target="_blank" rel="noopener noreferrer" aria-label="Clover on TikTok"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M16.5 2c.4 2.7 1.9 4.3 4.5 4.5V10a10 10 0 0 1-4.5-1.4v7.2a6.2 6.2 0 1 1-5.3-6.1v3.6a2.7 2.7 0 1 0 1.8 2.5V2z"/></svg></a>
+        </nav>
         <small>© {new Date().getFullYear()} Clover.</small>
       </footer>
     </div>

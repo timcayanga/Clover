@@ -11,5 +11,5 @@ export const metadata: Metadata = {
 
 export default async function ShowcasePage() {
   const country = (await headers()).get("x-vercel-ip-country");
-  return <Showcase initialMarket={country === "PH" ? "ph" : "global"} />;
+  return <Showcase authEnabled={Boolean(process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY ?? process.env.CLERK_PUBLISHABLE_KEY)} initialMarket={country === "PH" ? "ph" : "global"} />;
 }
