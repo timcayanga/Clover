@@ -33,7 +33,12 @@ async function main() {
   stub(prisma, "$queryRaw", async () => [{ currency: "PHP" }]);
   stub(prisma.transaction, "count", async () => fixtures.length);
   stub(prisma.transaction, "findFirst", async () => null);
-  stub(prisma.transaction, "groupBy", async () => [{ type: "expense", isTransfer: false, categoryId: "food", accountId: account.id, currency: "PHP", _sum: { amount: 303 } }]);
+  stub(prisma.transaction, "groupBy", async (query: Record<string, any>) => {
+    // All fixtures are positive. Respect the separate negative-only aggregate
+    // instead of returning the full sum for every WHERE clause.
+    if (query.where?.AND?.some((condition: any) => condition.amount?.lt === 0)) return [];
+    return [{ type: "expense", isTransfer: false, categoryId: "food", accountId: account.id, currency: "PHP", _sum: { amount: 303 } }];
+  });
   stub(prisma.transaction, "findMany", async (query: Record<string, any>) => {
     // Summary adjustment/counterpart reads have no matching synthetic rows.
     if (!query.orderBy && !query.select?.createdAt) return [];

@@ -69,9 +69,8 @@ assert.equal(classifiedPaymentCredit.categoryName, "Transfers");
 assert.equal(classifiedPaymentCredit.preferredType, "income");
 
 const pageSource = readFileSync(path.join(process.cwd(), "app/transactions/page.tsx"), "utf8");
-const footerSnapshot = pageSource.match(
-  /<div className="transactions-footer-snapshot"[\s\S]*?<\/div>\s*<\/div>\s*\) : null}/
-)?.[0] ?? "";
+const footerStart = pageSource.indexOf('<section className="transactions-footer-snapshot"');
+const footerSnapshot = pageSource.slice(footerStart, pageSource.indexOf('</section>', footerStart));
 assert.match(footerSnapshot, /"Est\. Income" : "Income"/);
 assert.match(footerSnapshot, /"Est\. Spending" : "Spending"/);
 assert.match(footerSnapshot, /"Est\. Net Cash Flow" : "Net Cash Flow"/);

@@ -47,7 +47,6 @@ import {
   type GuidanceMenuVisibility,
 } from "@/lib/guidance-menu";
 import { installClientDiagnostics, recordClientDiagnostic } from "@/lib/client-diagnostics";
-import { BugReportWidget } from "@/components/bug-report-widget";
 import { FEATURE_NAVIGATION } from "@/lib/feature-navigation";
 import { getNavigationIconSrc, type NavigationIconName } from "@/lib/navigation-icons";
 import { OnboardingMissions } from "@/components/onboarding-missions";
@@ -798,7 +797,6 @@ export function CloverShell({
   const [notifications, setNotifications] = useState<InAppNotification[]>([]);
   const [notificationCount, setNotificationCount] = useState(0);
   const [cachedProfileImage, setCachedProfileImage] = useState<string | null>(null);
-  const [cachedReporterEmail, setCachedReporterEmail] = useState("");
   const [hasMounted, setHasMounted] = useState(false);
   const [isBottomNavCompact, setIsBottomNavCompact] = useState(false);
   const [mobilePullDistance, setMobilePullDistance] = useState(0);
@@ -819,12 +817,10 @@ export function CloverShell({
   const displayName = hasMounted
     ? user?.firstName ?? user?.username ?? user?.primaryEmailAddress?.emailAddress?.split("@")[0] ?? "Account"
     : "Account";
-  const reporterEmail = hasMounted ? user?.primaryEmailAddress?.emailAddress ?? cachedReporterEmail : "";
 
   useEffect(() => {
     const cachedIdentity = readAccountIdentityCache();
     setCachedProfileImage(cachedIdentity?.imageUrl ?? null);
-    setCachedReporterEmail(cachedIdentity?.email ?? "");
     setHasMounted(true);
   }, []);
 
@@ -2345,18 +2341,7 @@ export function CloverShell({
         )
       ) : null}
 
-      {searchWorkspaceId && reporterEmail ? (
-        <BugReportWidget
-          workspaceId={searchWorkspaceId}
-          reporterName={displayName}
-          reporterEmail={reporterEmail}
-          onOpenChange={(reportOpen) => {
-            if (reportOpen) {
-              setIsQuickAddOpen(false);
-            }
-          }}
-        />
-      ) : null}
+
 
       <button
         ref={quickAddButtonRef}

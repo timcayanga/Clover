@@ -2271,6 +2271,10 @@ function TransactionsPageContent() {
     })
   );
   const [transactionsPageSize, setTransactionsPageSize] = useState(25);
+  const [isPageLoading, setIsPageLoading] = useState(false);
+  const [isSummaryLoading, setIsSummaryLoading] = useState(false);
+  const [summaryScope, setSummaryScope] = useState("");
+  const transactionTableRef = useRef<HTMLDivElement>(null);
   const [transactionsPage, setTransactionsPage] = useState(1);
   const transactionPrefetchRef = useRef<Map<string, TransactionPrefetchEntry>>(new Map());
   const inlineCategoryPickerButtonRefs = useRef<Map<string, HTMLButtonElement>>(new Map());
@@ -2425,6 +2429,11 @@ function TransactionsPageContent() {
   const requestGateRef = useRef(createTransactionRequestGate());
   const hasActiveTransactionFilters = Boolean(reportMerchants.length || query.trim() || currencyFilter || categoryFilters.length || tagFilters.length ||
     accountFilters.length || typeFilters.length || dateFilterMode !== "ltd" || customStart || customEnd || amountMin || amountMax || reviewFilter || sourceFilter || confidenceFilter);
+  const financialScopeKey = JSON.stringify([
+    selectedWorkspaceId, query, currencyFilter, categoryFilters, tagFilters, reportMerchants,
+    accountFilters, typeFilters, dateFilterMode, dateFilterAnchor, customStart, customEnd,
+    sortField, sortDirection, amountMin, amountMax, reviewFilter, sourceFilter, confidenceFilter,
+  ]);
   const transactionQueryKey = JSON.stringify([
     selectedWorkspaceId, query, currencyFilter, categoryFilters, tagFilters, reportMerchants,
     accountFilters, typeFilters, dateFilterMode, dateFilterAnchor, customStart,
@@ -2851,14 +2860,17 @@ function TransactionsPageContent() {
       pageOverride?: number;
       pageSizeOverride?: number;
       summaryMode?: "light" | "full";
+      summaryOnly?: boolean;
       prefetchOnly?: boolean;
       preserveKnownTotal?: boolean;
     }
   ) => {
     if (dateFilterMode === "custom" && customStart && customEnd && customStart > customEnd) return;
-    const requestToken = options?.prefetchOnly ? null : requestGateRef.current.begin(transactionQueryKey, Boolean(options?.append));
-    if (!options?.prefetchOnly && !requestToken) return;
-    const requestId = options?.prefetchOnly ? transactionsLoadRequestRef.current : ++transactionsLoadRequestRef.current;
+    const requestToken = options?.prefetchOnly || options?.summaryOnly ? null : requestGateRef.current.begin(transactionQueryKey, Boolean(options?.append));
+    if (!options?.prefetchOnly && !options?.summaryOnly && !requestToken) return;
+    const requestId = options?.prefetchOnly || options?.summaryOnly ? transactionsLoadRequestRef.current : ++transactionsLoadRequestRef.current;
+    if (!options?.background && !options?.prefetchOnly && !options?.summaryOnly) setIsPageLoading(true);
+    if (options?.summaryOnly) setIsSummaryLoading(true);
     const hasResilientFallbackEvidence = () =>
       hasCachedTransactionsWorkspaceEvidence(workspaceId) ||
       hasRecentWorkspaceImportEvidence(importActivitySnapshot, workspaceId);
@@ -2892,6 +2904,11 @@ function TransactionsPageContent() {
       setIsWorkspaceDataReady(hasImmediateFallbackRows);
     }
 
+    // Explicit background refreshes follow imports/edits and must bypass the
+    // short navigation cache. Summary-only requests still share it across pages.
+    if (options?.background && !options?.summaryOnly && !options?.prefetchOnly) {
+      clearJsonRequestCache(`transactions:list:${workspaceId}:`);
+    }
     const requestPage = options?.pageOverride ?? transactionsPage;
     // The Rows selector must remain stable across numbered pages. Mobile load-more
     // requests pass their smaller batch explicitly through pageSizeOverride.
@@ -2932,7 +2949,8 @@ function TransactionsPageContent() {
         pageSize: requestPageSize,
       }
     );
-    searchParams.set("summaryMode", summaryOpen ? "full" : options?.summaryMode ?? "light");
+    searchParams.set("summaryMode", options?.includeAll || summaryOpen ? "full" : options?.summaryOnly ? "light" : "rows");
+    if (options?.summaryOnly) { searchParams.set("page", "1"); searchParams.set("pageSize", "1"); }
     const largePageSearchParams = buildTransactionQuerySearchParams(
       workspaceId,
       {
@@ -2972,6 +2990,23 @@ function TransactionsPageContent() {
     }
 
     try {
+      if (!options?.background && !options?.append && !options?.includeAll && !options?.prefetchOnly && !options?.summaryOnly
+        && !summaryOpen && !categoryFilters.length && sortField !== "account" && Number(requestPageSize) > 50) {
+        const previewParams = new URLSearchParams(searchParams);
+        previewParams.set("previewSize", "25");
+        const preview = await fetchJsonOnce<TransactionListPayload>({
+          key: `transactions:list:${workspaceId}:${previewParams.toString()}`,
+          route: "transactions.list", workspaceId,
+          input: `/api/transactions?${previewParams}`, timeoutMs: 10_000, cacheTtlMs: 15_000,
+        });
+        if (requestId !== transactionsLoadRequestRef.current || requestToken && !requestGateRef.current.isCurrent(requestToken)) return;
+        if (preview.ok && preview.json?.transactions) {
+          const hiddenAccounts = new Set([...getDeletedWorkspaceAccountIds(workspaceId), ...getDeletingWorkspaceAccountIds(workspaceId)]);
+          setTransactions(preview.json.transactions.filter(row => !hiddenAccounts.has(row.accountId) && !deletedTransactionIdsRef.current.has(row.id)));
+          setTransactionsSummary(current => ({ ...current, totalCount: preview.json?.totalCount ?? current.totalCount }));
+          setIsWorkspaceDataReady(true); setHasInitialTransactionsLoaded(true);
+        }
+      }
       const response = usableCachedPrefetch
         ? { ok: true, json: usableCachedPrefetch.payload }
         : await fetchJsonOnce<TransactionListPayload>({
@@ -2980,7 +3015,8 @@ function TransactionsPageContent() {
             workspaceId,
             detail: options?.background ? "background" : options?.append ? "append" : "foreground",
             input: `/api/transactions?${searchParams?.toString() ?? ""}`,
-            timeoutMs: options?.background ? null : 6500,
+            timeoutMs: options?.summaryOnly ? 20_000 : 10_000,
+            cacheTtlMs: 15_000,
           });
       if (!response.ok) {
         throw new Error("Unable to load transactions.");
@@ -3000,8 +3036,17 @@ function TransactionsPageContent() {
         return;
       }
 
-      setTransactionsLoadFailed(false);
       const payload = response.json;
+      if (options?.summaryOnly) {
+        if (payload?.summary) {
+          setTransactionsSummary(current => ({ ...current, ...payload.summary!, totalCount: current.totalCount }));
+          setSummaryScope(financialScopeKey);
+        }
+        return;
+      }
+      setTransactionsLoadFailed(false);
+      setMessage(current => current === "Clover is checking the latest transactions again." || current === "Unable to load transactions." ? "" : current);
+      if (payload?.summary) setSummaryScope(financialScopeKey);
       const deletedAccountIds = new Set([
         ...getDeletedWorkspaceAccountIds(workspaceId),
         ...getDeletingWorkspaceAccountIds(workspaceId),
@@ -3166,6 +3211,7 @@ function TransactionsPageContent() {
           setIsWorkspaceDataReady(true);
           setHasInitialTransactionsLoaded(true);
           window.setTimeout(() => {
+            if (requestId !== transactionsLoadRequestRef.current || requestToken && !requestGateRef.current.isCurrent(requestToken)) return;
             void loadTransactionsPage(workspaceId, {
               background: true,
               includeAll: options?.includeAll,
@@ -3246,6 +3292,7 @@ function TransactionsPageContent() {
             firstReviewTransactionIndex: null,
           };
       setTransactionsSummary((currentSummary) => {
+        if (!summaryPayload) return { ...currentSummary, totalCount: displayedTotalCount, currencyCodes: nextCurrencyCodes };
         const nextFinancialsAreEmpty =
           nextTransactionsSummary.income === 0 &&
           nextTransactionsSummary.spending === 0 &&
@@ -3292,10 +3339,13 @@ function TransactionsPageContent() {
         setIsMobileLoadingMore(false);
       }
 
-      // The lightweight response already contains the visible page and
-      // database-side financial totals. Do not immediately repeat the request
-      // with a full-history scan or a hidden 200-row prefetch; both multiplied
-      // Supabase egress whenever Transactions opened or refreshed after import.
+      if (!summaryPayload && !options?.append) {
+        // Rows paint first. The exact filtered summary runs separately and is
+        // shared across numbered pages; an old scope can never overwrite a new one.
+        void loadTransactionsPage(workspaceId, { background: true, summaryOnly: true });
+      }
+      // Keep the visible-page budget bounded. Totals use their own grouped
+      // request; do not prefetch an unrequested 200-row history in the background.
     } catch {
       if (requestId !== transactionsLoadRequestRef.current || (requestToken && !requestGateRef.current.isCurrent(requestToken))) {
         return;
@@ -3311,7 +3361,7 @@ function TransactionsPageContent() {
         const hadFallbackRows = transactionsRef.current.length > 0 || hydrateWorkspaceFromCache(workspaceId);
         const shouldSuppressFailure = hadFallbackRows || hasResilientFallbackEvidence();
 
-        if (!shouldSuppressFailure && transactionsAutoRetryRef.current < 3) {
+        if (!shouldSuppressFailure && transactionsAutoRetryRef.current < 1) {
           const retryAttempt = transactionsAutoRetryRef.current;
           transactionsAutoRetryRef.current += 1;
           setTransactionsLoadFailed(false);
@@ -3319,6 +3369,7 @@ function TransactionsPageContent() {
           setHasInitialTransactionsLoaded(false);
           setMessage("Clover is checking the latest transactions again.");
           window.setTimeout(() => {
+            if (requestId !== transactionsLoadRequestRef.current || requestToken && !requestGateRef.current.isCurrent(requestToken)) return;
             void loadTransactionsPage(workspaceId, {
               pageOverride: options?.pageOverride ?? transactionsPage,
               pageSizeOverride: options?.pageSizeOverride ?? transactionsPageSize,
@@ -3341,6 +3392,9 @@ function TransactionsPageContent() {
           });
         }, shouldSuppressFailure ? WORKSPACE_RETRY_AFTER_TRANSIENT_FAILURE_MS : 3500);
       }
+    } finally {
+      if (options?.summaryOnly && requestId === transactionsLoadRequestRef.current) setIsSummaryLoading(false);
+      if (!options?.summaryOnly && !options?.prefetchOnly && requestId === transactionsLoadRequestRef.current) setIsPageLoading(false);
     }
   };
 
@@ -4732,6 +4786,14 @@ function TransactionsPageContent() {
     isCompactViewport &&
     (mobileVisibleTransactions.length < visibleTransactions.length ||
       (!mobilePaginationExhausted && !searchText && transactions.length < transactionsSummary.totalCount));
+
+  const changeTransactionPage = (page: number) => {
+    if (page === transactionsPage) return;
+    setIsPageLoading(true);
+    setTransactionsPage(page);
+    transactionTableRef.current?.scrollTo({ top: 0, behavior: "instant" });
+    transactionTableRef.current?.scrollIntoView({ block: "start", behavior: "instant" });
+  };
 
   const currentPageLabel = useMemo(() => {
     if (totalTransactionCountForDisplay === 0) {
@@ -7880,7 +7942,8 @@ function TransactionsPageContent() {
           {!isCompactViewport ? (
             <div
               className={`table-wrap transactions-table-wrap${!hasVisibleTransactions && !showTransactionsLoadingState ? " transactions-table-wrap--empty" : ""}`}
-              aria-busy={showTransactionsLoadingState}
+              ref={transactionTableRef}
+              aria-busy={showTransactionsLoadingState || isPageLoading}
               data-columns-date={columnSettings.columns.date}
               data-columns-account={columnSettings.columns.account}
               data-columns-category={columnSettings.columns.category}
@@ -7891,6 +7954,7 @@ function TransactionsPageContent() {
                   <input
                     ref={selectAllRef}
                     type="checkbox"
+                    disabled={isPageLoading}
                     checked={allVisibleSelected}
                     onChange={(event) => {
                       const shouldSelect = event.target.checked;
@@ -8404,12 +8468,13 @@ function TransactionsPageContent() {
                 ) : null}
               </div>
               <nav className="transactions-pagination" aria-label="Transaction pages">
+                {isPageLoading ? <span className="transactions-page-loading" role="status"><span className="spinner" aria-hidden="true" /> Loading</span> : null}
                 <div className="transactions-pagination__nav">
                   <button
                     className="button button-secondary button-small transactions-action-button"
                     type="button"
-                    onClick={() => setTransactionsPage((current) => Math.max(1, current - 1))}
-                    disabled={currentTransactionPage <= 1}
+                    onClick={() => changeTransactionPage(Math.max(1, currentTransactionPage - 1))}
+                    disabled={isPageLoading || currentTransactionPage <= 1}
                   >
                     Prev
                   </button>
@@ -8425,7 +8490,8 @@ function TransactionsPageContent() {
                           page === currentTransactionPage ? "is-active" : ""
                         }`}
                         type="button"
-                        onClick={() => setTransactionsPage(page)}
+                        onClick={() => changeTransactionPage(page)}
+                        disabled={isPageLoading}
                         aria-current={page === currentTransactionPage ? "page" : undefined}
                       >
                         {page}
@@ -8435,8 +8501,8 @@ function TransactionsPageContent() {
                   <button
                     className="button button-secondary button-small transactions-action-button"
                     type="button"
-                    onClick={() => setTransactionsPage((current) => Math.min(totalTransactionPages, current + 1))}
-                    disabled={currentTransactionPage >= totalTransactionPages}
+                    onClick={() => changeTransactionPage(Math.min(totalTransactionPages, currentTransactionPage + 1))}
+                    disabled={isPageLoading || currentTransactionPage >= totalTransactionPages}
                   >
                     Next
                   </button>
@@ -8460,27 +8526,29 @@ function TransactionsPageContent() {
                 </label>
               </nav>
               <section className="transactions-footer-snapshot" aria-label="Cash flow snapshot for all filtered transactions">
+                {summaryScope !== financialScopeKey ? <span className="transactions-totals-status" role="status">{isSummaryLoading ? "Updating totals…" : ""}</span> : null}
                 <div className="transactions-footer-snapshot__metrics">
                   <div className="transactions-footer-snapshot__metric">
                     <span className="transactions-footer-snapshot__metric-label">{isAllCurrenciesView && transactionSummaryCurrencies.length > 1 ? "Est. Income" : "Income"}</span>
                     <span className="transactions-footer-snapshot__metric-value positive">
-                      {formatTransactionSummary(estimatedTransactionTotals.income)}
+                      {summaryScope === financialScopeKey ? formatTransactionSummary(estimatedTransactionTotals.income) : "—"}
                     </span>
                   </div>
                   <div className="transactions-footer-snapshot__metric">
                     <span className="transactions-footer-snapshot__metric-label">{isAllCurrenciesView && transactionSummaryCurrencies.length > 1 ? "Est. Spending" : "Spending"}</span>
                     <span className="transactions-footer-snapshot__metric-value negative">
-                      {formatTransactionSummary(estimatedTransactionTotals.spending)}
+                      {summaryScope === financialScopeKey ? formatTransactionSummary(estimatedTransactionTotals.spending) : "—"}
                     </span>
                   </div>
                   <div className="transactions-footer-snapshot__metric transactions-footer-snapshot__metric--net" style={transactionsFooterNetMetricStyle}>
                     <span className="transactions-footer-snapshot__metric-label">{isAllCurrenciesView && transactionSummaryCurrencies.length > 1 ? "Est. Net Cash Flow" : "Net Cash Flow"}</span>
                     <span className={`transactions-footer-snapshot__metric-value ${netCashFlow >= 0 ? "positive" : "negative"}`}>
-                      {formatTransactionSummary(netCashFlow)}
+                      {summaryScope === financialScopeKey ? formatTransactionSummary(netCashFlow) : "—"}
                     </span>
                   </div>
                 </div>
               </section>
+              <button className="transactions-footer-add" type="button" onClick={() => void openManualAdd()} aria-label="Add transaction"><ActionIcon name="plus" /></button>
             </div>
           ) : null}
         </div>
@@ -8505,11 +8573,11 @@ function TransactionsPageContent() {
             </div>
             <div>
               <dt>{isAllCurrenciesView && transactionSummaryCurrencies.length > 1 ? "Est. Income" : "Income"}</dt>
-              <dd className="positive">{formatTransactionSummary(estimatedTransactionTotals.income)}</dd>
+              <dd className="positive">{summaryScope === financialScopeKey ? formatTransactionSummary(estimatedTransactionTotals.income) : "—"}</dd>
             </div>
             <div>
               <dt>{isAllCurrenciesView && transactionSummaryCurrencies.length > 1 ? "Est. Spending" : "Spending"}</dt>
-              <dd className="negative">{formatTransactionSummary(estimatedTransactionTotals.spending)}</dd>
+              <dd className="negative">{summaryScope === financialScopeKey ? formatTransactionSummary(estimatedTransactionTotals.spending) : "—"}</dd>
             </div>
             <div>
               <dt>Transfers</dt>
@@ -8517,7 +8585,7 @@ function TransactionsPageContent() {
             </div>
             <div>
               <dt>{isAllCurrenciesView && transactionSummaryCurrencies.length > 1 ? "Est. Net cash flow" : "Net cash flow"}</dt>
-              <dd className={netCashFlow >= 0 ? "positive" : "negative"}>{formatTransactionSummary(netCashFlow)}</dd>
+              <dd className={netCashFlow >= 0 ? "positive" : "negative"}>{summaryScope === financialScopeKey ? formatTransactionSummary(netCashFlow) : "—"}</dd>
             </div>
             <div>
               <dt>Review items</dt>

@@ -4,6 +4,11 @@ import { identityCountry, identityLegalText, identityText } from "./merchant-ide
 /** A legal-name field is a complete entity name; descriptor-only country tails are separate. */
 export function matchesLogoAlias(name:string, alias:LogoAlias, role:"descriptor"|"legalName"|"tradeName" = "descriptor", countries:string[] = []) {
   if (alias.kind === "statement_descriptor" && role !== "descriptor") return false;
+  if (alias.merchantPosition) {
+    const merchant = identityText(name).replace(/^(?:payment to|refund from|paid to|purchase at) /, "");
+    const key = identityText(alias.value);
+    if (merchant !== key && !merchant.startsWith(key + " ")) return false;
+  }
   if (alias.pattern === "literal_token") {
     if (alias.kind !== "statement_descriptor" || !alias.primarySourceVerified) return false;
     const literal=alias.value.normalize("NFKC").toLowerCase().replace(/[.*+?^${}()|[\]\\]/g,"\\$&").split("\\*").join("\\s*\\*\\s*");

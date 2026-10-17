@@ -501,16 +501,10 @@ const dedupeImportedTransactionRows = (transactions: TransactionApiRow[]) => {
   return next;
 };
 
-const getTransactionWarningReason = (transaction: TransactionSummaryRow, duplicateCounts: Map<string, number>) => {
+const getTransactionWarningReason = (transaction: TransactionSummaryRow) => {
   if (isResolvedReviewStatus(transaction.reviewStatus)) {
     return null;
   }
-
-  const signature = [
-    transaction.date.toISOString().slice(0, 10),
-    Number(transaction.amount).toFixed(2),
-    normalizeTransactionKey(transaction.merchantClean ?? transaction.merchantRaw),
-  ].join("|");
 
   const warningReasons = getTransactionReviewReasons({
     reviewStatus: transaction.reviewStatus,
@@ -562,7 +556,7 @@ const mapTransactionRow = (transaction: {
   isExcluded: boolean;
   warningReason: string | null;
   splitBill: { id: string; title: string } | null;
-}, workspaceAccounts: Array<{ id: string; accountNumber: string | null }>): TransactionApiRow => {
+}, workspaceAccounts: Array<{ id: string; accountNumber: string | null }>, enrichLogo = true): TransactionApiRow => {
   const userEdited = hasTransactionUserEdits(transaction);
   const normalizedCurrency =
     normalizeInstitutionCurrency(
@@ -639,7 +633,7 @@ const mapTransactionRow = (transaction: {
     createdAt: transaction.createdAt.toISOString(),
     warningReason: transaction.warningReason,
     rawPayload: transaction.rawPayload,
-    normalizedPayload: enrichMerchantIdentityPayload({
+    normalizedPayload: (enrichLogo ? enrichMerchantIdentityPayload({
       merchantRaw: transaction.merchantRaw,
       merchantClean: userEdited ? transaction.merchantClean : getEffectiveTransactionMerchantName({ merchantClean: transaction.merchantClean, merchantRaw: transaction.merchantRaw, institution: transaction.account.institution }),
       description: transaction.description,
@@ -651,7 +645,7 @@ const mapTransactionRow = (transaction: {
       categoryName: userEdited ? transaction.category?.name ?? null : categoryName,
       rawPayload: transaction.rawPayload,
       normalizedPayload: transaction.normalizedPayload,
-    }) as Prisma.JsonObject,
+    }) : transaction.normalizedPayload) as Prisma.JsonObject,
     importFileId: transaction.importFileId ?? null,
     source,
     splitBill: transaction.splitBill,
@@ -799,14 +793,26 @@ export async function GET(request: Request) {
     const requestedPageSize = includeAll ? null : Math.max(1, Number(pageSizeParam ?? "25") || 25);
     if (searchParams.get("summaryMode") === "rows" && !hasEffectiveCategoryFilters && filters.sortField !== "account") {
       const reviewIds = filters.reviewFilter === "pending" ? await actionableReviewIds(visibleWhere) : null;
-      const scope = reviewIds ? {AND:[visibleWhere,{id:{in:reviewIds}}]} : visibleWhere;
-      const take = Math.min(requestedPageSize ?? 30, 100);
+      const scope = reviewIds ? { AND: [visibleWhere, { id: { in: reviewIds } }] } : visibleWhere;
+      const take = Math.min(requestedPageSize ?? 30, 200);
+      const previewTake = Math.min(take, Math.max(1, Math.floor(Number(searchParams.get("previewSize"))) || take));
       const [pageRows, count] = await Promise.all([
-        prisma.transaction.findMany({where:scope, include:{account:true,category:true,splitBill:{select:{id:true,title:true}}}, orderBy, skip:(requestedPage-1)*take, take}),
-        reviewIds ? Promise.resolve(reviewIds.length) : prisma.transaction.count({where:scope}),
+        prisma.transaction.findMany({
+          where: scope,
+          include: { account: true, category: true, splitBill: { select: { id: true, title: true } } },
+          orderBy,
+          skip: (requestedPage - 1) * take,
+          take: previewTake,
+        }),
+        reviewIds ? Promise.resolve(reviewIds.length) : prisma.transaction.count({ where: scope }),
       ]);
-      const mapped = pageRows.map(row => mapTransactionRow({...row,accountNumber:row.account.accountNumber,warningReason:null}, workspaceAccounts));
-      return NextResponse.json({transactions:await withTransactionTags(mapped,workspaceId),totalCount:count,totalCountIsExact:true,page:requestedPage,pageSize:take});
+      const mapped = pageRows.map(row => mapTransactionRow({
+        ...row, accountNumber: row.account.accountNumber, warningReason: null,
+      }, workspaceAccounts));
+      return NextResponse.json({
+        transactions: await withTransactionTags(mapped, workspaceId),
+        totalCount: count, totalCountIsExact: true, page: requestedPage, pageSize: take,
+      });
     }
     const [currencyCodes, totalCount] = await Promise.all([
       getWorkspaceCurrencyCodes(workspaceId),
@@ -837,13 +843,10 @@ export async function GET(request: Request) {
       });
     }
 
-    // Review navigation needs the complete filtered scope, including unloaded rows.
-    // Reuse full mapping for unresolved records so heuristic reasons stay consistent.
-    const hasReviewCandidates = summaryMode === "light" && await prisma.transaction.findFirst({
-      where: { AND: [visibleWhere, { reviewStatus: { notIn: ["confirmed", "edited", "rejected", "duplicate_skipped"] } }] },
-      select: { id: true },
-    });
-    if (summaryMode === "light" && filters.reviewFilter !== "pending" && !hasEffectiveCategoryFilters && !hasReviewCandidates) {
+    // Pending review must not force a complete ledger projection. Its compact,
+    // unresolved-only selection uses the same predicate as Home/native review.
+    if (summaryMode === "light" && filters.reviewFilter !== "pending" && !hasEffectiveCategoryFilters) {
+      const reviewIds = await actionableReviewIds(visibleWhere);
       const pageStart = (requestedPage - 1) * (requestedPageSize ?? 25);
       const bdoAccountIds = workspaceAccountRows
         .filter((account) => /\bbdo\b|\bbanco de oro\b/i.test(account.institution ?? ""))
@@ -863,7 +866,7 @@ export async function GET(request: Request) {
         })));
         return pages.flat().map(row => row.id);
       })() : null;
-      const [pageRows, duplicateRows, summaryGroups, summaryCategories, bdoSummaryRows, summaryAdjustmentRows, summaryMatchingRows] = await Promise.all([
+      const [pageRows, summaryGroups, negativeGroups, summaryCategories, bdoSummaryRows, summaryAdjustmentRows, summaryMatchingRows] = await Promise.all([
         prisma.transaction.findMany({
           where: accountPageIds ? { AND: [visibleWhere, { id: { in: accountPageIds } }] } : visibleWhere,
           select: {
@@ -914,29 +917,17 @@ export async function GET(request: Request) {
           skip: accountPageIds ? 0 : pageStart,
           take: includeAll ? totalCount : requestedPageSize ?? 25,
         }),
-        prisma.transaction.findMany({
-          where: {
-            ...visibleWhere,
-            OR: [
-              { reviewStatus: { notIn: ["confirmed", "edited", "rejected", "duplicate_skipped"] } },
-              { categoryId: null },
-            ],
-          },
-          select: {
-            date: true,
-            amount: true,
-            merchantRaw: true,
-            merchantClean: true,
-          },
-          orderBy,
-          take: 250,
-        }),
         prisma.transaction.groupBy({
           where: financialWhere,
           by: ["type", "isTransfer", "categoryId", "accountId", "currency"],
           _sum: {
             amount: true,
           },
+        }),
+        prisma.transaction.groupBy({
+          where: { AND: [financialWhere, { amount: { lt: 0 } }] },
+          by: ["type", "isTransfer", "categoryId", "accountId", "currency"],
+          _sum: { amount: true },
         }),
         prisma.category.findMany({
           where: { workspaceId },
@@ -1028,17 +1019,6 @@ export async function GET(request: Request) {
         pageRows.sort((a, b) => position.get(a.id)! - position.get(b.id)!);
       }
 
-      const duplicateCounts = new Map<string, number>();
-      for (const transaction of duplicateRows) {
-        const signature = [
-          transaction.date.toISOString().slice(0, 10),
-          Number(transaction.amount).toFixed(2),
-          normalizeTransactionKey(transaction.merchantClean ?? transaction.merchantRaw),
-        ].join("|");
-
-        duplicateCounts.set(signature, (duplicateCounts.get(signature) ?? 0) + 1);
-      }
-
       const transactions = pageRows.map((transaction) =>
         mapTransactionRow({
           id: transaction.id,
@@ -1068,7 +1048,7 @@ export async function GET(request: Request) {
           isTransfer: transaction.isTransfer,
           isExcluded: transaction.isExcluded,
           createdAt: transaction.createdAt,
-          warningReason: getTransactionWarningReason(transaction, duplicateCounts),
+          warningReason: getTransactionWarningReason(transaction),
           splitBill: transaction.splitBill,
         }, workspaceAccounts)
       );
@@ -1087,9 +1067,11 @@ export async function GET(request: Request) {
       };
       const categoryNameById = new Map(summaryCategories.map((category) => [category.id, category.name] as const));
       const bdoAccountIdSet = new Set(bdoAccountIds);
+      const groupKey = (group: { type: string; isTransfer: boolean; categoryId: string | null; accountId: string; currency: string }) => JSON.stringify([group.type,group.isTransfer,group.categoryId,group.accountId,group.currency]);
+      const negativeAmountByGroup = new Map(negativeGroups.map(group => [groupKey(group), Number(group._sum.amount ?? 0)]));
       for (const group of summaryGroups) {
         if (bdoAccountIdSet.has(group.accountId)) continue;
-        const amount = Math.abs(Number(group._sum.amount ?? 0));
+        const amount = Number(group._sum.amount ?? 0) - 2 * (negativeAmountByGroup.get(groupKey(group)) ?? 0);
         if (!Number.isFinite(amount)) {
           continue;
         }
@@ -1160,6 +1142,10 @@ export async function GET(request: Request) {
         addCurrencyTotal(transaction.currency, overrideType, amount);
       }
 
+      const firstReviewId = reviewIds[0];
+      const firstReviewRow = firstReviewId ? pageRows.find(row => row.id === firstReviewId)
+        ?? await prisma.transaction.findFirst({ where: { AND: [visibleWhere, { id: firstReviewId }] }, include: { account: true, category: true, splitBill: { select: { id: true, title: true } } } }) : null;
+      const firstReviewTransaction = firstReviewRow ? mapTransactionRow({ ...firstReviewRow, workspaceId, accountNumber: workspaceAccountRows.find(account => account.id === firstReviewRow.accountId)?.accountNumber ?? null, warningReason: null }, workspaceAccounts) : null;
       return NextResponse.json({
         transactions: await withTransactionTags(transactions, workspaceId),
         totalCountIsExact: true,
@@ -1172,14 +1158,14 @@ export async function GET(request: Request) {
           income: lightSummary.income,
           spending: lightSummary.spending,
           transfers: lightSummary.transfers,
-          review: 0,
+          review: reviewIds.length,
           currencyCodes,
           currencyTotals,
           topCategory: null,
           topAccount: null,
           firstTransactionDate: null,
           lastTransactionDate: null,
-          firstReviewTransaction: null,
+          firstReviewTransaction,
           firstReviewTransactionIndex: null,
         },
       });
@@ -1266,19 +1252,8 @@ export async function GET(request: Request) {
       }),
     ]);
 
-    const duplicateCounts = new Map<string, number>();
-    for (const transaction of summaryRows) {
-      const signature = [
-        transaction.date.toISOString().slice(0, 10),
-        Number(transaction.amount).toFixed(2),
-        normalizeTransactionKey(transaction.merchantClean ?? transaction.merchantRaw),
-      ].join("|");
-
-      duplicateCounts.set(signature, (duplicateCounts.get(signature) ?? 0) + 1);
-    }
-
     const mappedSummaryRows = summaryRows.map((transaction) => {
-      const warningReason = getTransactionWarningReason(transaction, duplicateCounts);
+      const warningReason = getTransactionWarningReason(transaction);
       return {
         transaction,
         warningReason,
@@ -1312,7 +1287,7 @@ export async function GET(request: Request) {
           createdAt: transaction.createdAt,
           warningReason,
           splitBill: transaction.splitBill,
-        }, workspaceAccounts),
+        }, workspaceAccounts, false),
       };
     });
     const transactions = dedupeImportedTransactionRows(
@@ -1428,7 +1403,7 @@ export async function GET(request: Request) {
     const topCategory = Array.from(summaryState.topCategories.entries()).sort((a, b) => b[1] - a[1])[0] ?? null;
     const topAccount = Array.from(summaryState.topAccounts.entries()).sort((a, b) => b[1] - a[1])[0] ?? null;
     const pageStart = (requestedPage - 1) * (requestedPageSize ?? 25);
-    const pageTransactions = includeAll ? transactions : transactions.slice(pageStart, pageStart + (requestedPageSize ?? 25));
+    const pageTransactions = (includeAll ? transactions : transactions.slice(pageStart, pageStart + (requestedPageSize ?? 25))).map(row => ({ ...row, normalizedPayload: enrichMerchantIdentityPayload(row) as Prisma.JsonObject }));
 
     return NextResponse.json({
       transactions: await withTransactionTags(pageTransactions, workspaceId),

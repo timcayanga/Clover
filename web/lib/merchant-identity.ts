@@ -1,3 +1,4 @@
+import { MERCHANT_LOGO_REVISION } from "./merchant-logo-revision";
 
 import { collectMerchantIdentityContext, identityText, identityLegalText, merchantIdentityInputKey, identityNeedsAdditionalContext, institutionIdentityContextKey } from "./merchant-identity-context";
 import type { LogoAlias, LogoIdentity, MerchantIdentityInput, MerchantIdentityResult } from "./logo-identity-types";
@@ -9,8 +10,12 @@ import { matchesLogoAlias } from "./logo-alias-matching";
 // Keep the large research catalog server-side without inferring thousands of JSON literal types.
 const catalog = require("./generated/logo-identity-catalog.json") as { version: string; catalogDigest: string; entries: LogoIdentity[] };
 
-export const LOGO_IDENTITY_VERSION = catalog.version;
-const defaultCatalog = catalog.entries as LogoIdentity[];
+export const LOGO_IDENTITY_VERSION = `${catalog.version}.${MERCHANT_LOGO_REVISION}`;
+const additions = require("./merchant-logo-additions.json") as { version: string; entries: LogoIdentity[]; aliases: Record<string, LogoAlias[]> };
+const defaultCatalog = [
+  ...catalog.entries.map(entry => ({ ...entry, aliases: [...entry.aliases, ...(additions.aliases[entry.entryId] ?? [])] })),
+  ...additions.entries,
+] as LogoIdentity[];
 const bounded = (value: string, alias: string) => (` ${value} `).includes(` ${alias} `);
 const legalEntityText = (value: string) => /\b(?:corporation|corp|incorporated|inc|limited|ltd|llc|plc|gmbh|holdings|group|pte|sarl)\b/.test(value);
 const indexes = new WeakMap<LogoIdentity[], Map<string, LogoIdentity[]>>();
@@ -100,7 +105,11 @@ export function resolveMerchantIdentity(input: MerchantIdentityInput, entries = 
       let s = rawMatch ? 84 : 70;
       if (cleanMatch && input.merchantNameConfirmed && (a.kind !== "trade_name" || confirmedTradingName)) s = 95;
       if (alias.length < 5 && !fullShortTradeName) s = rawMatch ? 55 : 45;
-      if (qualified) s -= 4;
+      if (qualified && !(a.primarySourceVerified && a.kind === "trade_name")) s -= 4;
+      // A sourced brand at the merchant position outranks an incidental venue or
+      // product name later in a bank descriptor. Ambiguity/conflict guards below
+      // still apply, and this changes artwork only.
+      if (rawMatch && a.primarySourceVerified && a.merchantPosition && a.kind === "trade_name") s += 6;
       if (scopeMissing && a.kind !== "trade_name") s = Math.min(s, 55);
       if (!scopeMissing && (a.countryCodes.length || a.registeredCountryCode || a.primarySourceVerified) && a.kind !== "trade_name" && rawMatch) s = Math.max(s + 10, 88);
       if (historic) s = Math.min(s, 55); // No unverified effective dates invented from acquisition aliases.
@@ -140,6 +149,7 @@ export function resolveMerchantIdentity(input: MerchantIdentityInput, entries = 
       else evidence.push("operator_registration_country_matches");
     }
     if (rawTradeMatches.length) evidence.push("direct_trade_name_supported");
+    if (rawTradeMatches.some(a => a.primarySourceVerified && a.merchantPosition)) evidence.push("merchant_position_supported");
     if (matchedOperatorAliases.length) evidence.push("legal_operator_supported");
     if (matchedScopedAliases.some(a => a.countryCodes.length && !a.registeredCountryCode && countries.length === 1 && !a.countryCodes.includes(countries[0]) && !aliasHasActiveEquivalent(a))) conflicts.push("scoped_alias_country_mismatch");
     const operatorIds = new Set(matchedOperatorAliases.map(a => a.entityId).filter(Boolean));
@@ -223,6 +233,12 @@ export function resolveMerchantIdentity(input: MerchantIdentityInput, entries = 
   });
   // More specific merchant names beat a contained parent name (Uber Eats vs Uber).
   let viable = ranked.filter(c => !c.conflicts.length).filter(c => !ranked.some(other => !other.conflicts.length && other.rawMatched && c.rawMatched && other.alias.length > c.alias.length && bounded(other.alias,c.alias)));
+  // Do not mistake a trailing venue/product for a second merchant when a
+  // distinctive sourced brand explicitly occupies the merchant position.
+  if (viable.some(c => c.score >= 84 && c.evidence.includes("merchant_position_supported"))) {
+    viable = viable.filter(c => c.evidence.includes("merchant_position_supported") || !c.rawMatched
+      || c.evidence.some(e => /^(?:exact_merchant_domain|verified_)/.test(e)));
+  }
   if (input.merchantNameConfirmed && clean) viable = viable.filter(c => c.e.aliases.some(a => matchesLogoAlias(cleanName ?? "",a,a.kind === "legal_operator" ? "legalName" : "tradeName",countries)
     && (!confirmedLegalLabel || clean === identityText(c.e.name) || a.kind === "legal_operator" && factAppliesOnDate(a,date) && aliasScopeMatches(a))));
   const supportFamilies = ["exact_merchant_domain", "verified_tax_id:", "verified_merchant_id:", "verified_business_registration:", "verified_branch_address", "direct_trade_name_supported", "legal_operator_supported"];

@@ -41,6 +41,36 @@ async function main() {
   assert.equal(new Set(all.map(row=>row.id)).size,57,"Every pending row is reachable exactly once");
   assert.equal(first.summary,undefined,"A native row request must not calculate the whole-ledger financial summary");
   assert.equal((await get(1,false)).totalCount,307);
+  // Desktop must honor the full Rows selection rather than silently returning
+  // the native 30-row batch or the old 25-row default.
+  const desktop = async (page: number, size: number) => {
+    const response = await GET(new Request(`https://clover.test/api/transactions?workspaceId=${workspace.id}&summaryMode=rows&pageSize=${size}&page=${page}`));
+    assert.equal(response.status,200); return response.json();
+  };
+  for (const size of [25,50,100,200]) {
+    const a=await desktop(1,size),b=await desktop(2,size);
+    assert.equal(a.pageSize,size); assert.equal(a.transactions.length,size);
+    assert.equal(b.transactions.length,Math.min(size,307-size));
+    assert(!a.transactions.some(row=>b.transactions.some(other=>other.id===row.id)),"Numbered pages never overlap");
+  }
+  const previewResponse=await GET(new Request(`https://clover.test/api/transactions?workspaceId=${workspace.id}&summaryMode=rows&pageSize=200&page=2&previewSize=25`));
+  assert.equal(previewResponse.status,200);
+  const preview=await previewResponse.json(),complete=await desktop(2,200);
+  assert.equal(preview.transactions.length,25); assert.equal(preview.pageSize,200);
+  assert.deepEqual(preview.transactions.map(row=>row.id),complete.transactions.slice(0,25).map(row=>row.id),"Preview uses the full page offset, never the 25-row offset");
+  const lightResponse=await GET(new Request(`https://clover.test/api/transactions?workspaceId=${workspace.id}&summaryMode=light&pageSize=1`));
+  assert.equal(lightResponse.status,200); const light=await lightResponse.json();
+  assert.equal(light.summary.spending,30700); assert.equal(light.summary.review,57);
+  assert(light.summary.firstReviewTransaction,"Warnings remain reachable without scanning/mapping the full ledger");
+  const summaryResponse=await GET(new Request(`https://clover.test/api/transactions?workspaceId=${workspace.id}&summaryMode=full&pageSize=1`));
+  assert.equal(summaryResponse.status,200);
+  const exactSummary=await summaryResponse.json();
+  assert.equal(exactSummary.transactions.length,1);
+  assert.equal(exactSummary.summary.spending,30700,"A separate one-row summary still covers the entire filtered history");
+  const negative=await db.transaction.create({data:{...base,merchantRaw:"Signed amount example",amount:-10,categoryConfidence:100,reviewStatus:"confirmed"}});
+  const signedTotals=await GET(new Request(`https://clover.test/api/transactions?workspaceId=${workspace.id}&summaryMode=light&pageSize=1`));
+  assert.equal((await signedTotals.json()).summary.spending,30710,"Aggregate totals must sum individual magnitudes, not cancel opposite signed amounts");
+  await db.transaction.delete({where:{id:negative.id}});
   const {mobileHome}=await import("../lib/mobile-home");
   const home=await mobileHome(workspace.id,"PHP","PHP",true);
   assert.equal(home.reviewCount,57,"Home count and filtered list share the same actionable predicate");

@@ -66980,3 +66980,32 @@ html[data-theme="dark"] .content--accounts .accounts-overview-card:first-child {
   .wallet-pocket__sleeve::before { content:""; position:absolute; left:0; right:0; bottom:100%; height:5px; background:linear-gradient(transparent,rgb(0 0 0 / var(--sleeve-shadow))); }
   .wallet-pocket [inert] { pointer-events:none; }
 }
+
+/* The desktop ledger owns one balanced footer, including its add action. */
+@media (min-width: 1101px) {
+  .app-shell:has(.content--transactions) > .shell-quick-add-button { display: none; }
+  .content.content--transactions .transactions-footer {
+    display: grid; grid-template-columns: auto auto minmax(310px, 1fr) 48px;
+    align-items: center; gap: 10px; padding: 10px 0 2px;
+  }
+  .content.content--transactions .transactions-footer-snapshot { min-width: 0; width: 100%; margin: 0; }
+  .transactions-footer-add { width: 48px; height: 48px; border: 0; border-radius: 50%; color: white; background: var(--brand-gradient); display: grid; place-items: center; cursor: pointer; }
+  .transactions-footer-add svg { width: 24px; height: 24px; }
+  .transactions-table-wrap > .line-item { content-visibility: auto; contain-intrinsic-block-size: auto 44px; }
+  .transactions-page-loading { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; color: var(--muted); }
+  .transactions-page-loading .spinner { width: 14px; height: 14px; border: 2px solid var(--stroke); border-top-color: var(--teal); border-radius: 50%; animation: transaction-page-spin 800ms linear infinite; }
+}
+@media (min-width: 1101px) and (max-width: 1500px) {
+  .content.content--transactions .transactions-footer { grid-template-columns: minmax(0,1fr) auto 48px; }
+  .content--transactions .transactions-footer__showing { grid-column: 1; }
+  .content--transactions .transactions-pagination { grid-column: 2; }
+  .content.content--transactions .transactions-footer-snapshot { grid-column: 1 / 3; grid-row: 2; }
+  .transactions-footer-add { grid-column: 3; grid-row: 2; }
+}
+
+@keyframes transaction-page-spin { to { transform: rotate(360deg); } }
+
+@media (min-width: 1101px) {
+  .transactions-table-wrap { overflow-anchor: none; scroll-margin-top: 96px; }
+  .transactions-totals-status { font-size: 11px; color: var(--muted); }
+}

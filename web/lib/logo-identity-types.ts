@@ -1,6 +1,8 @@
 /** Artwork identity confidence is separate from transaction/parser confidence. */
 export type LogoAlias = {
   value: string;
+  /** Venues/payment rails must identify the merchant, never a shop location suffix. */
+  merchantPosition?: boolean;
   kind: "trade_name" | "legal_operator" | "statement_descriptor" | "historical_name";
   countryCodes: string[];
   sourceUrl: string | null;
