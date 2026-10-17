@@ -788,7 +788,8 @@ export async function GET(request: Request) {
     const orderBy = buildTransactionQueryOrderBy(filters);
     const pageSizeParam = searchParams.get("pageSize");
     const includeAll = pageSizeParam === "all";
-    const summaryMode = searchParams.get("summaryMode") === "light" ? "light" : "full";
+    const requestedSummaryMode = searchParams.get("summaryMode");
+    const summaryMode = requestedSummaryMode === "light" || requestedSummaryMode === "rows" ? "light" : "full";
     const requestedPage = Math.max(1, Number(searchParams.get("page") ?? "1") || 1);
     const requestedPageSize = includeAll ? null : Math.max(1, Number(pageSizeParam ?? "25") || 25);
     if (searchParams.get("summaryMode") === "rows" && !hasEffectiveCategoryFilters && filters.sortField !== "account") {

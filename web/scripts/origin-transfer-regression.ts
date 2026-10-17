@@ -16,13 +16,21 @@ const main = async () => {
   const fullSummaryRequests = transactionsPage.match(/summaryMode:\s*"full"/g) ?? [];
   assert.equal(fullSummaryRequests.length, 1, "Only explicit expanded summary may request full aggregation.");
   assert.match(transactionsPage, /if \(summaryOpen && selectedWorkspaceId\) \{\s*void loadTransactionsPage\(selectedWorkspaceId, \{ background: true, summaryMode: "full" \}\)/);
-  assert.match(transactionsPage, /summaryMode: options\?\.summaryMode \?\? "light"/, "Ordinary pagination and refresh default to light summaries.");
+  assert.match(transactionsPage, /searchParams.set\("summaryMode", options\?\.includeAll \|\| summaryOpen \? "full" : options\?\.summaryOnly \? "light" : "rows"\)/, "Visible pages use bounded rows; totals load separately with the light summary.");
   assert.match(transactionsPage, /summaryMode:\s*"light"/);
+  const rowStart = transactionsRoute.indexOf('if (searchParams.get("summaryMode") === "rows"');
+  const rowPath = transactionsRoute.slice(rowStart, transactionsRoute.indexOf('const [currencyCodes, totalCount]', rowStart));
+  assert(rowStart >= 0);
+  assert.match(rowPath, /Math.min\(requestedPageSize \?\? 30, 200\)/, "Visible requests are bounded, including 200-row desktop pages.");
+  assert.match(rowPath, /skip: \(requestedPage - 1\) \* take/, "A preview retains the selected page's full offset.");
+  assert.match(rowPath, /take: previewTake/);
+  assert.match(rowPath, /actionableReviewIds\(visibleWhere\)/, "Review pages use the same actionable scope as Home.");
   assert.match(
     transactionsRoute,
-    /if \(summaryMode === "light" && filters.reviewFilter !== "pending" && !hasEffectiveCategoryFilters && !hasReviewCandidates\)/,
-    "The lightweight transaction path stays database-paginated when no derived category/review normalization is needed."
+    /if \(summaryMode === "light" && filters.reviewFilter !== "pending" && !hasEffectiveCategoryFilters\)/,
+    "Unresolved review rows must not force ordinary grouped totals through a full-history projection."
   );
+  assert.doesNotMatch(transactionsRoute, /!hasReviewCandidates/);
   assert.match(eventRoute, /const compactImportSnapshot/);
   assert.doesNotMatch(eventRoute, /send\("snapshot", snapshot\)/);
 

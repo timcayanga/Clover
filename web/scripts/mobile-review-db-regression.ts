@@ -53,6 +53,14 @@ async function main() {
     assert.equal(b.transactions.length,Math.min(size,307-size));
     assert(!a.transactions.some(row=>b.transactions.some(other=>other.id===row.id)),"Numbered pages never overlap");
   }
+  const accountPages=[];
+  for (const page of [1,2]) {
+    const response=await GET(new Request(`https://clover.test/api/transactions?workspaceId=${workspace.id}&summaryMode=rows&sortField=account&pageSize=200&page=${page}`));
+    assert.equal(response.status,200); const data=await response.json();
+    assert.equal(data.transactions.length,page===1?200:107);
+    accountPages.push(...data.transactions.map(row=>row.id));
+  }
+  assert.equal(new Set(accountPages).size,307,"Account sorting also remains globally paginated without overlaps");
   const previewResponse=await GET(new Request(`https://clover.test/api/transactions?workspaceId=${workspace.id}&summaryMode=rows&pageSize=200&page=2&previewSize=25`));
   assert.equal(previewResponse.status,200);
   const preview=await previewResponse.json(),complete=await desktop(2,200);
