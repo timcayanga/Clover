@@ -796,7 +796,7 @@ export async function GET(request: Request) {
       const scope = reviewIds ? { AND: [visibleWhere, { id: { in: reviewIds } }] } : visibleWhere;
       const take = Math.min(requestedPageSize ?? 30, 200);
       const previewTake = Math.min(take, Math.max(1, Math.floor(Number(searchParams.get("previewSize"))) || take));
-      const [pageRows, count] = await Promise.all([
+      const [pageRows, count, currencyCodes] = await Promise.all([
         prisma.transaction.findMany({
           where: scope,
           include: { account: true, category: true, splitBill: { select: { id: true, title: true } } },
@@ -805,13 +805,14 @@ export async function GET(request: Request) {
           take: previewTake,
         }),
         reviewIds ? Promise.resolve(reviewIds.length) : prisma.transaction.count({ where: scope }),
+        getWorkspaceCurrencyCodes(workspaceId),
       ]);
       const mapped = pageRows.map(row => mapTransactionRow({
         ...row, accountNumber: row.account.accountNumber, warningReason: null,
       }, workspaceAccounts));
       return NextResponse.json({
         transactions: await withTransactionTags(mapped, workspaceId),
-        totalCount: count, totalCountIsExact: true, page: requestedPage, pageSize: take,
+        totalCount: count, totalCountIsExact: true, page: requestedPage, pageSize: take, currencyCodes,
       });
     }
     const [currencyCodes, totalCount] = await Promise.all([

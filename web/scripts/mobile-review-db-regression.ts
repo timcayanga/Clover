@@ -71,6 +71,11 @@ async function main() {
   const signedTotals=await GET(new Request(`https://clover.test/api/transactions?workspaceId=${workspace.id}&summaryMode=light&pageSize=1`));
   assert.equal((await signedTotals.json()).summary.spending,30710,"Aggregate totals must sum individual magnitudes, not cancel opposite signed amounts");
   await db.transaction.delete({where:{id:negative.id}});
+  const olderUsd=await db.transaction.create({data:{...base,merchantRaw:"Older USD example",date:new Date("1900-01-01T00:00:00Z"),currency:"USD",amount:0,categoryConfidence:100,reviewStatus:"confirmed"}});
+  const currencyPage=await get(1,false);
+  assert(currencyPage.transactions.every(row=>row.currency==="PHP"));
+  assert.deepEqual(currencyPage.currencyCodes,["PHP","USD"],"Currencies absent from the visible page remain available in Filters");
+  await db.transaction.delete({where:{id:olderUsd.id}});
   const {mobileHome}=await import("../lib/mobile-home");
   const home=await mobileHome(workspace.id,"PHP","PHP",true);
   assert.equal(home.reviewCount,57,"Home count and filtered list share the same actionable predicate");

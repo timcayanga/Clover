@@ -1,6 +1,6 @@
 # Transaction list paging and presentation
 
-The visible ledger uses `summaryMode=rows`: a bounded, authenticated, Profile-scoped database page and exact count. Desktop supports 25, 50, 100 and 200 rows. Native clients retain their existing 30-row requests. Category interpretation and account-display sorting retain their established full mapping paths.
+The visible ledger uses `summaryMode=rows`: a bounded, authenticated, Profile-scoped database page and exact count. Desktop supports 25, 50, 100 and 200 rows. Native clients retain their existing 30-row requests. Currency filter metadata still covers the entire Profile, including currencies absent from the visible page. Category interpretation and account-display sorting retain their established full mapping paths.
 
 For large desktop pages, `previewSize=25` paints the first rows while the complete page loads. The database offset always uses the selected page size, including page two and later. The preview is never stored as a complete workspace snapshot. Loading feedback remains visible until the full request settles; changing pages resets the table scroll position.
 
