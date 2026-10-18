@@ -3435,7 +3435,7 @@
 .revisedStory .journeyRecords .connectionOptions { right:1%; width:28%; top:25%; }
 .revisedStory .journeyRecords .journeyReceipt { display:none; }
 .revisedStory .journeyRecords .journeyTransaction { left:29%; width:42%; bottom:8%; }
-.person { display:inline-block; flex-shrink:0; width:36px; height:36px; border-radius:50%; background-image:url('/assets/landing-showcase/friends-portraits-20261018.webp'); background-size:300% 100%; background-position:calc(var(--face) * 50%) center; border:2px solid #fff; }
+.person { display:inline-block; flex-shrink:0; width:36px; height:36px; border-radius:50%; object-fit:cover; object-position:center; background:#e9f8f3; border:2px solid #fff; }
 .circlePeople .person { width:42px; height:42px; }
 .splitHint { font-size:11px; color:#5b6c75; margin:8px 0!important; }
 .splitItems > div { display:flex; align-items:center; justify-content:space-between; gap:8px; padding:9px 0; border-bottom:1px solid #deebe9; font-size:12px; }
@@ -3491,7 +3491,6 @@
  .revisedStory .plans > .heading { margin-bottom:10px; }
  .plans .planCards { height:300px; }.plans .planCard { min-height:280px; padding:20px 26px; }
 }
-.site .circlePeople .person:nth-child(n) { background-image:url('/assets/landing-showcase/friends-portraits-20261018.webp'); background-size:300% 100%; background-position:calc(var(--face) * 50%) center; }
 @media(min-width:901px) and (max-height:999px), (min-width:1101px) { .revisedStory .hero .heroMascot { right:22%; bottom:5%; } }
 
 @media(max-width:900px), (max-width:1100px) and (min-height:1000px) { .revisedStory .journeyShared .circleCard > div:nth-of-type(3), .revisedStory .journeyShared .circleCard .circleTrack { display:none; } .revisedStory .journeyShared .circleCard { padding:12px; } }

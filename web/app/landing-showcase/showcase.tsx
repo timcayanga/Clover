@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import Link from "next/link";
 import { planSwipeDirection } from "./showcase-interactions";
+import { splitBillProfileAvatarUrls } from "@/lib/split-bill-avatars";
 import { useShowcaseMotion } from "./use-showcase-motion";
 import { SwitchOfferNotice } from "@/components/switch-campaign";
 import {
@@ -750,8 +751,9 @@ export function CircleCard() {
   );
 }
 
-function Person({face, name}: {face:number; name:string}) {
-  return <span className={s.person} role="img" aria-label={name} style={{"--face":face} as CSSProperties} />;
+function Person({ face, name }: { face: number; name: string }) {
+  const avatars = [splitBillProfileAvatarUrls[0], splitBillProfileAvatarUrls[5], splitBillProfileAvatarUrls[2]];
+  return <img className={s.person} src={avatars[face] ?? avatars[0]} alt={name} width={42} height={42} loading="lazy" />;
 }
 
 export function SplitCard() {
