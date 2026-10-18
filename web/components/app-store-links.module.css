@@ -15,6 +15,6 @@
 @media(max-width:600px) { .badges { column-gap:4px; } .badges img { height:40px; } .badges .googleBadge img { height:60px; } }
 
 .white { gap:12px; padding:8px 0; }
-.white > a { min-width:128px; justify-content:center; padding:9px 18px; background:#03a8c0; border:1px solid #03a8c0; border-radius:99px; color:#fff; font-size:14px; font-weight:600; }
-.white > a:hover { background:#009bb2; color:#fff; }
+.links.white > a { min-width:128px; justify-content:center; padding:9px 18px; background:#03a8c0; border:1px solid #03a8c0; border-radius:99px; color:#fff; font-size:14px; font-weight:600; }
+.links.white > a:hover { background:#009bb2; color:#fff; }
 .white a > svg:last-child { display:none; }

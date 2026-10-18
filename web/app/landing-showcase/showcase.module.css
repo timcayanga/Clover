@@ -3512,3 +3512,5 @@
  .revisedStory .hero .heroReceipt { width:90px; top:0; }
  .revisedStory .hero .heroReceipt .receipt { min-height:190px; padding:12px 9px; }
 }
+/* Natural-flow chapters must own their full height, including on short phones. */
+.revisedStory[data-motion] .journey[data-story-static="true"] { height:auto; }
