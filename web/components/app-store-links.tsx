@@ -4,7 +4,7 @@ function StoreArrow() {
   return <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><path d="M4 12h15m-6-6 6 6-6 6" /></svg>;
 }
 
-export function StoreAvailability({ variant = "text" }: { variant?: "text" | "badges" }) {
+export function StoreAvailability({ variant = "text" }: { variant?: "text" | "badges" | "white" }) {
   if (variant === "badges") {
     return <div className={styles.badges} aria-label="Download Clover">
       <a href="https://apps.apple.com/ph/app/clover-personal-finance/id6811711508" target="_blank" rel="noopener noreferrer" aria-label="Download Clover on the App Store">
@@ -17,7 +17,7 @@ export function StoreAvailability({ variant = "text" }: { variant?: "text" | "ba
   }
   return (
     <div
-      className={styles.links}
+      className={`${styles.links} ${variant === "white" ? styles.white : ""}`}
       aria-label="Available on iOS and Android"
     >
       <a

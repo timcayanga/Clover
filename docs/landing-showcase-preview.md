@@ -199,3 +199,11 @@ unchanged. Review this family on staging before deciding on a production switch.
 Optimized-build rotation checks also cover offscreen chapters: natural-flow
 scenes initialize before entering the viewport, so short landscape rotation
 cannot leave a zero-height story. Rotating back restores the pinned composition.
+
+### 18 October: concise motion and shared-money story
+
+The preview now follows input → insights → Ask Clover → Security → shared money. The separate goal/budget chapter is removed from this page; the feature previews remain available. The hero has a branded Starbucks itemized receipt and a bank statement with complementary ingestion motion, plus a higher-resolution welcome mascot. Phone input scenes omit the moving receipt and use the bank grid plus a manual-entry example. Five chapters share a shorter, reversible scroll timeline. Hero, plans and final CTA have motion on desktop and mobile, with reduced-motion fallbacks.
+
+Plan and CTA headings use the chapter scale. Both conversion areas include a plain Log in link, white platform symbols on Clover teal, and the final caption has no subtext. The shared production footer is reused with an optional TikTok link, leaving production footer defaults unchanged.
+
+Shared-money examples use generated fictional photographic portraits (friends-portraits-20261018.webp), not customer photos. The split example assigns individual line items and opens an illustrative message/QR preview; nothing is sent and the QR is deliberately nonfunctional. The production app already supports item allocation and payment requests. All example amounts remain fictional.

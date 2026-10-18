@@ -3403,3 +3403,112 @@
 @media(min-width:901px) and (max-height:999px), (min-width:1101px) {
   .revisedStory .hero .heroPhone,.revisedStory .insightPhone { top:54%; }
 }
+
+/* October 18: a shorter, continuous story with readable conversion scenes. */
+.site { --teal:#03a8c0; }
+.site h1 em,.site h2 em,.finalCta h2 em { color:var(--teal); }
+.signupAction { flex-direction:column; align-items:center; gap:8px; }
+.site .loginLink { display:inline-flex; min-height:32px; align-items:center; font-size:13px; color:#007e91; text-decoration:underline; text-underline-offset:4px; }
+.smallReceipt > div:not(.receiptTotal):not(.barcode) { display:flex; }
+.receipt .receiptNote { display:flex; justify-content:space-between; gap:10px; font-size:10px; margin-top:8px; }
+.receiptLogo { border-radius:50%; object-fit:contain; }
+.purchaseReceiptHead > img { margin:0 auto 8px; border-radius:50%; }
+.hero .heroReceipt { width:230px; top:18%; }
+.ingestStatement { position:absolute; right:0; top:calc(100% + 22px); width:230px; display:grid; gap:10px; padding:20px; border:1px solid #c8e3df; border-radius:12px; background:white; box-shadow:0 6px 0 #d9eee8,0 20px 35px #164d4c16; text-align:left; font-size:11px; transform:rotate(-6deg); }
+.ingestStatement span { color:#03a8c0; font-weight:600; }
+.ingestStatement i { height:5px; width:100%; border-radius:5px; background:linear-gradient(90deg,#d5eee7 65%,#edf6f4 65%); }
+.ingestStatement small { color:#5b6c75; }
+.revisedStory .hero .heroMascot { width:130px; right:3%; bottom:3%; }
+.hero .heroReceipt > .receipt { animation:paperIngest 7s ease-in-out infinite; transform-origin:center; }
+.hero .ingestStatement { animation:statementIngest 7s 1.4s ease-in-out infinite; }
+.hero .heroPhone > .phone { animation:accountArrival 7s ease-in-out infinite; }
+@keyframes paperIngest { 0%,35%,100% { opacity:1; transform:translateY(0) rotate(3deg) scale(1); } 57%,69% { opacity:.2; transform:translate(-50px,45px) rotate(-8deg) scale(.76); } 80% { opacity:0; transform:translateY(-18px) scale(.95); } }
+@keyframes statementIngest { 0%,25%,100% { opacity:1; transform:rotate(-6deg); } 48%,62% { opacity:.2; transform:translate(-45px,25px) rotate(5deg) scale(.78); } 75% { opacity:0; transform:translateY(-20px) rotate(-6deg); } }
+@keyframes accountArrival { 0%,40%,75%,100% { box-shadow:3px 5px 0 #a8cdcd,10px 12px 0 #c9e5e1,24px 42px 65px -28px #13464d80; } 58% { box-shadow:3px 5px 0 #a8cdcd,10px 12px 0 #c9e5e1,0 0 40px #03a8c055; } }
+.site[data-awake="false"] .hero *,.hero[data-visible="false"] *,.site[data-awake="false"] .finalMascot img,.finalCta[data-visible="false"] .finalMascot img { animation-play-state:paused!important; }
+.revisedStory:is([data-motion="full"],[data-motion="gentle"]) .hero { height:115svh; }
+.revisedStory:is([data-motion="full"],[data-motion="gentle"]) .journey { height:400svh; }
+.manualPreview { position:absolute; left:3%; bottom:12%; width:24%; display:grid; gap:10px; padding:22px; background:white; border:1px solid #cce6e1; border-radius:22px; box-shadow:0 6px 0 #d2eae4,0 25px 50px #164d4c18; transform:perspective(1100px) rotateY(calc((1 - var(--act-progress)) * 9deg)); font-size:12px; }
+.manualPreview > span { color:#03a8c0; font-weight:600; }
+.manualPreview b { font-size:26px; }
+.manualPreview small { color:#5b6c75; }
+.revisedStory .journeyRecords .connectionOptions { right:1%; width:28%; top:25%; }
+.revisedStory .journeyRecords .journeyReceipt { display:none; }
+.revisedStory .journeyRecords .journeyTransaction { left:29%; width:42%; bottom:8%; }
+.person { display:inline-block; flex-shrink:0; width:36px; height:36px; border-radius:50%; background-image:url('/assets/landing-showcase/friends-portraits-20261018.webp'); background-size:300% 100%; background-position:calc(var(--face) * 50%) center; border:2px solid #fff; }
+.circlePeople .person { width:42px; height:42px; }
+.splitHint { font-size:11px; color:#5b6c75; margin:8px 0!important; }
+.splitItems > div { display:flex; align-items:center; justify-content:space-between; gap:8px; padding:9px 0; border-bottom:1px solid #deebe9; font-size:12px; }
+.splitItems > div > div { display:flex; }
+.splitItems button { border:0; padding:1px; background:transparent; border-radius:50%; }
+.splitItems button[aria-pressed="true"] { outline:2px solid #03a8c0; outline-offset:1px; }
+.splitItems .person { width:30px; height:30px; }
+.requestPreview { display:flex; align-items:center; justify-content:space-between; gap:10px; width:100%; padding:12px 0 0; border:0; background:transparent; color:#007e91; font-size:12px!important; font-weight:600!important; text-align:left; }
+.paymentPreview { display:flex; align-items:center; gap:12px; margin-top:12px; padding:12px; background:#e9f8f3; border-radius:12px; font-size:11px; }
+.paymentPreview p { margin:5px 0!important; line-height:1.5; }
+.paymentPreview small { color:#5b6c75; font-size:9px; }
+.sampleQr { position:relative; width:70px; height:70px; flex:0 0 70px; background:repeating-conic-gradient(#163c42 0 25%,#fff 0 50%) 0 0/9px 9px; border:5px solid white; }
+.sampleQr i { position:absolute; width:20px; height:20px; background:#fff; border:5px solid #163c42; }
+.sampleQr i:nth-child(1) { top:0; left:0; }.sampleQr i:nth-child(2) { top:0; right:0; }.sampleQr i:nth-child(3) { bottom:0; left:0; }
+.revisedStory .plans { min-height:100svh; padding:95px 6% 35px; display:flex; flex-direction:column; justify-content:center; }
+.revisedStory .plans > .heading { margin-bottom:16px; }
+.revisedStory .plans > .heading h2,.revisedStory .finalCta h2 { font-size:clamp(32px,3.3vw,48px); line-height:1.12; }
+.revisedStory .plans > .heading p { margin-top:14px; font-size:14px; }
+.plans .priceControls { margin-bottom:8px; }.plans .planSelectors { margin:8px 0; }
+.plans .planCards { height:330px; }.plans .planCard { min-height:310px; padding:24px; }.plans .planCard h3 { font-size:27px; }.plans .planCard .price { margin:12px 0; min-height:45px; }.plans .planCard ul { margin:14px 0; gap:10px; }.plans .planCard li { font-size:13px; }.plans .planCard .action { min-height:40px; }
+.plans .carouselControls { margin-top:8px; gap:18px; }.plans .compare { margin-top:12px; }
+.revisedStory .finalCta { min-height:85svh; padding:80px 24px 60px; gap:20px; }.finalCta h2 { max-width:840px; }.finalMascot { width:130px; height:130px; }
+.plans > .heading,.plans .pricing,.finalCta > * { opacity:calc(.65 + var(--enter,1) * .35); transform:translateY(calc((1 - var(--enter,1)) * 30px)); transition:opacity .2s; }
+.finalMascot img { animation:mascotHello 4s ease-in-out infinite; } @keyframes mascotHello { 0%,100% { transform:translateY(0) rotate(-3deg); } 50% { transform:translateY(-9px) rotate(3deg); } }
+@media(max-width:900px), (max-width:1100px) and (min-height:1000px) {
+ .revisedStory:is([data-motion="full"],[data-motion="gentle"]) .journey { height:360svh; }
+ .revisedStory .hero .copy { gap:8px; bottom:25px; }
+ .revisedStory .hero .heroStage { top:80px; height:calc(100% - 410px); }
+ .revisedStory .hero .heroReceipt { top:4%; width:112px; }
+ .hero .heroReceipt .receiptNote { display:none!important; }.hero .heroReceipt .receipt { padding:15px 12px; min-height:210px; }
+ .ingestStatement { width:115px; top:calc(100% + 12px); padding:12px; gap:6px; font-size:8px; }.ingestStatement i:nth-of-type(3) { display:none; }
+ .revisedStory .hero .heroMascot { width:78px; bottom:8%; right:0; }
+ .revisedStory .journeyRecords .connectionOptions { left:0; right:auto; width:100%; top:0; padding:20px; }
+ .revisedStory .journeyRecords .connectionGrid { gap:10px; }.revisedStory .journeyRecords .connectionGrid > div { padding:15px 6px; }
+ .revisedStory .journeyRecords .manualPreview { width:72%; left:14%; bottom:0; padding:14px; gap:6px; }
+ .revisedStory .journeyRecords .journeyTransaction,.revisedStory .purchaseThroughline { display:none; }
+ .revisedStory .journeyRecords { top:85px; height:calc(100% - 310px); }
+ .revisedStory .journeyShared .sharedPhoto { display:none; }
+ .revisedStory .journeyShared .circleCard { width:70%; right:0; top:0; padding:15px; }
+ .revisedStory .journeyShared .sharedCard { width:82%; left:0; right:auto; bottom:0; top:auto; padding:14px; }
+ .revisedStory .journeyShared .circlePeople { margin-top:8px; }.circlePeople .person { width:32px; height:32px; }
+ .revisedStory .plans { padding:85px 5% 30px; min-height:100svh; }.revisedStory .plans > .heading h2,.revisedStory .finalCta h2 { font-size:clamp(28px,6vw,36px); }
+ .revisedStory .plans > .heading p { margin-top:10px; font-size:12px; }.revisedStory .plans .planCards { height:310px; }.revisedStory .plans .planCard { min-height:290px; padding:20px; }.plans .planCard h3 { font-size:25px; }.plans .planCard ul { margin:12px 0; }
+ .revisedStory .finalCta { min-height:85svh; }.revisedStory .finalCta h2 { max-width:600px; }
+}
+@media(max-height:650px) { .revisedStory .plans { min-height:auto; }.revisedStory .journeyShared .sharedCard { font-size:11px; } }
+.revisedStory[data-motion="off"] .hero *,.revisedStory[data-motion="off"] .finalMascot img { animation:none!important; }
+@media(prefers-reduced-motion:reduce) { .hero *,.finalMascot img { animation:none!important; }.plans > .heading,.plans .pricing,.finalCta > * { transform:none; opacity:1; } }
+
+@media(max-width:900px), (max-width:1100px) and (min-height:1000px) { .revisedStory .journeyRecords .manualPreview { top:58%; bottom:auto; } }
+@media(min-width:901px) and (max-height:999px), (min-width:1101px) {
+ .revisedStory .plans { padding-top:85px; padding-bottom:20px; }
+ .revisedStory .plans > .heading { margin-bottom:10px; }
+ .plans .planCards { height:300px; }.plans .planCard { min-height:280px; padding:20px 26px; }
+}
+.site .circlePeople .person:nth-child(n) { background-image:url('/assets/landing-showcase/friends-portraits-20261018.webp'); background-size:300% 100%; background-position:calc(var(--face) * 50%) center; }
+@media(min-width:901px) and (max-height:999px), (min-width:1101px) { .revisedStory .hero .heroMascot { right:22%; bottom:5%; } }
+
+@media(max-width:900px), (max-width:1100px) and (min-height:1000px) { .revisedStory .journeyShared .circleCard > div:nth-of-type(3), .revisedStory .journeyShared .circleCard .circleTrack { display:none; } .revisedStory .journeyShared .circleCard { padding:12px; } }
+/* Keep the entire card and its action inside the short carousel viewport. */
+.plans .planCard .price { margin:8px 0; min-height:40px; }
+.plans .planCard .price strong { font-size:32px; line-height:1.1; }
+.plans .planCard ul { margin:12px 0; gap:8px; }
+.plans .planCard .action { padding:9px 16px; line-height:20px; min-height:40px; }
+/* Preserve normal flow on narrow/short phones after the enhanced-scene overrides. */
+@media(max-width:360px), (max-width:900px) and (max-height:700px) {
+ .revisedStory[data-motion] .hero { height:auto; min-height:0; }
+ .revisedStory[data-motion] .hero > .pin { position:relative; height:auto; min-height:0; overflow:visible; }
+ .revisedStory .hero .storyGrid { display:flex; flex-direction:column; gap:24px; height:auto; }
+ .revisedStory .hero .heroStage { position:relative; inset:auto; height:300px; flex:0 0 300px; margin-top:76px; }
+ .revisedStory .hero .heroPhone { width:124px; top:50%; }
+ .revisedStory .hero .copy { position:relative; inset:auto; flex:0 0 auto; padding-bottom:32px; }
+ .revisedStory .hero .ingestStatement { display:none; }
+ .revisedStory .hero .heroReceipt { width:90px; top:0; }
+ .revisedStory .hero .heroReceipt .receipt { min-height:190px; padding:12px 9px; }
+}

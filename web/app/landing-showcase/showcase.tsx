@@ -11,6 +11,7 @@ import {
   type PricingMarket,
 } from "@/lib/public-plan-comparison";
 import s from "./showcase.module.css";
+import { PublicFooter } from "@/components/public-footer";
 import { StoreAvailability } from "@/components/app-store-links";
 import { JourneyHeader, JourneyActions } from "@/app/landing-preview/landing-journey";
 
@@ -81,7 +82,7 @@ export function Mascot({ pose, size = 160 }: { pose: string; size?: number }) {
   return (
     <img
       className={s.mascot}
-      src={`/assets/mascots/velvet-${pose}.webp`}
+      src={pose === "welcome" ? "/assets/landing-showcase/mascot-welcome-hd-20261018.webp" : `/assets/mascots/velvet-${pose}.webp`}
       width={size}
       height={size}
       alt=""
@@ -230,7 +231,7 @@ export function Receipt({ small = false }: { small?: boolean }) {
       aria-hidden="true"
     >
       <img
-        src="/figma-icons/categories/food-dining.svg"
+        src="/assets/logo-library/company logos/food/starbucks/icon.png"
         className={s.receiptLogo}
         width={38}
         height={38}
@@ -239,9 +240,10 @@ export function Receipt({ small = false }: { small?: boolean }) {
       <strong>STARBUCKS</strong>
       <span>October 5, 2026 · 9:41 AM</span>
       <div>
-        <span>Caffè Latte</span>
+        <span>1 × Caffè Latte</span>
         <span>₱190.00</span>
       </div>
+      <div className={s.receiptNote}><span>Size</span><span>Grande</span></div><div className={s.receiptNote}><span>Payment</span><span>BPI card</span></div>
       <div className={s.receiptTotal}>
         <strong>Total</strong>
         <strong>₱190.00</strong>
@@ -258,11 +260,11 @@ export function PurchaseThroughline() {
     <div className={s.purchaseThroughline} data-purchase-throughline aria-hidden="true">
       <div className={s.purchasePaper}>
         <div className={s.purchaseReceiptHead}>
-          STARBUCKS<small>October 5, 2026 · 9:41 AM</small>
+          <img src="/assets/logo-library/company logos/food/starbucks/icon.png" width="36" height="36" alt="" /> STARBUCKS<small>October 5, 2026 · 9:41 AM</small>
         </div>
         <div className={s.purchaseIdentity}>
           <img
-            src="/figma-icons/categories/food-dining.svg"
+            src="/assets/logo-library/company logos/food/starbucks/icon.png"
             width={44}
             height={44}
             alt=""
@@ -318,7 +320,7 @@ export function TransactionMoment() {
   return (
     <div className={s.transactionMoment}>
       <img
-        src="/figma-icons/categories/food-dining.svg"
+        src="/assets/logo-library/company logos/food/starbucks/icon.png"
         width={44}
         height={44}
         alt=""
@@ -734,11 +736,8 @@ export function CircleCard() {
         <span>Circles</span>
       </div>
       <div className={s.circlePeople}>
-        <span>A</span>
-        <span>J</span>
-        <span>S</span>
+        <Person face={0} name="Alex" /><Person face={1} name="Jamie" /><Person face={2} name="Sam" />
       </div>
-      <strong>One home. One shared view.</strong>
       <div>
         <span>Groceries budget</span>
         <b>₱4,500 / ₱6,000</b>
@@ -751,59 +750,26 @@ export function CircleCard() {
   );
 }
 
+function Person({face, name}: {face:number; name:string}) {
+  return <span className={s.person} role="img" aria-label={name} style={{"--face":face} as CSSProperties} />;
+}
+
 export function SplitCard() {
-  return (
-    <div className={s.sharedCard}>
-      <div className={s.miniHeader}>
-        <strong>
-          <img
-            src="/assets/3d icons/navigation/figma-v7/splitBills.webp"
-            width="28"
-            height="28"
-            alt=""
-            loading="lazy"
-          />
-          Weekend with friends
-        </strong>
-        <span>Split Bills</span>
-      </div>
-      <strong className={s.sharedTotal}>₱1,200.00</strong>
-      <small className={s.splitPeople}>3 people · ₱400 each</small>
-      <div className={s.sharedMember}>
-        <span>A</span>
-        <div>
-          Alex<small>Paid with GCash</small>
-        </div>
-        <img
-          src="/assets/banks/philippines/gcash.png"
-          width="32"
-          height="32"
-          alt="GCash"
-        />
-        <strong>₱400</strong>
-      </div>
-      <div className={s.sharedMember}>
-        <span>J</span>
-        <div>
-          Jamie<small>Paid with Maya</small>
-        </div>
-        <img
-          src="/assets/banks/philippines/maya.png"
-          width="32"
-          height="32"
-          alt="Maya"
-        />
-        <strong>₱400</strong>
-      </div>
-      <div className={s.sharedMember}>
-        <span>S</span>
-        <div>
-          Sam<small>Still to settle</small>
-        </div>
-        <strong>₱400</strong>
-      </div>
-    </div>
-  );
+  const [selected, setSelected] = useState(0);
+  const [request, setRequest] = useState(false);
+  const names = ["Alex", "Jamie", "Sam"];
+  return <div className={s.sharedCard}>
+    <div className={s.miniHeader}><strong>Lunch with friends</strong><span>Split Bills</span></div>
+    <strong className={s.sharedTotal}>₱1,200.00</strong>
+    {!request && <><p className={s.splitHint}>Assign each item</p>
+    <div className={s.splitItems}>
+      <div><span>Pasta · ₱450</span><Person face={0} name="Alex" /></div>
+      <div><span>Chicken · ₱450</span><Person face={1} name="Jamie" /></div>
+      <div><span>Coffee · ₱300</span><div role="group" aria-label="Assign coffee">{names.map((name,i)=><button type="button" key={name} aria-label={`Assign coffee to ${name}`} aria-pressed={selected===i} onClick={()=>setSelected(i)}><Person face={i} name={name} /></button>)}</div></div>
+    </div></>}
+    <button className={s.requestPreview} type="button" aria-expanded={request} onClick={()=>setRequest(!request)}>{request ? "Back to items" : "Preview payment request"}<Icon /></button>
+    {request && <div className={s.paymentPreview}><div><strong>Hi {names[selected]}!</strong><p>Your coffee share is ₱300. Here’s my payment QR.</p><small>Sample message · nothing is sent</small></div><div className={s.sampleQr} aria-label="Illustrative payment QR, not scannable"><i/><i/><i/></div></div>}
+  </div>;
 }
 
 export function BudgetMoment() {
@@ -855,15 +821,15 @@ export function Showcase({ initialMarket, authEnabled = false }: { initialMarket
                 <br />
                 <em>Organized in minutes.</em>
               </Heading>
-              <div className={s.signupAction}><JourneyActions authEnabled={authEnabled} final /></div>
-              <StoreAvailability variant="badges" />
+              <div className={s.signupAction}><JourneyActions authEnabled={authEnabled} final /><Link className={s.loginLink} href="/sign-in">Log in</Link></div>
+              <StoreAvailability variant="white" />
             </div>
             <div className={`${s.stage} ${s.heroStage}`}>
               <div className={s.heroPhone}>
                 <AppScreen page="accounts" eager />
               </div>
               <div className={s.heroReceipt}>
-                <Receipt small />
+                <Receipt small /><div className={s.ingestStatement}><span>BPI · Statement</span><b>September 2026</b><i /><i /><i /><small>12 transactions → Clover</small></div>
               </div>
               <div className={s.heroTransaction}>
                 <TransactionMoment />
@@ -903,32 +869,10 @@ export function Showcase({ initialMarket, authEnabled = false }: { initialMarket
                 <div className={s.journeyReceipt}>
                   <Receipt />
                 </div>
-                <ConnectionOptions />
+                <ConnectionOptions /><div className={s.manualPreview}><span>Add manually</span><strong>Lunch with friends</strong><b>₱500.00</b><small>Food & dining · BPI</small></div>
                 <div className={s.journeyTransaction}>
                   <TransactionMoment />
                 </div>
-              </div>
-            </article>
-            <article className={s.journeyBeat} data-story-act data-story-weight="0.55" data-chapter="trust">
-              <div className={s.journeyCopy}>
-                <Heading text="Your financial records are private, reviewable, and traceable. Edit, export, or delete your data through your account.">
-                  Your financial data stays
-                  <br />
-                  <em>under your control.</em>
-                </Heading>
-              </div>
-              <div
-                className={`${s.journeyArt} ${s.journeyPrivacy}`}
-                data-story-art
-              >
-                <div className={s.privacyPhoto}>
-                  <StoryPhoto
-                    desktop="landing-story-v3/07-private-review"
-                    mobile="landing-story-v3/07-private-review-mobile"
-                    alt="Reviewing personal financial records at home."
-                  />
-                </div>
-                <ControlCard />
               </div>
             </article>
             <article className={s.journeyBeat} data-story-act data-story-weight="0.85" data-chapter="understand">
@@ -967,6 +911,28 @@ export function Showcase({ initialMarket, authEnabled = false }: { initialMarket
                 </div>
               </div>
             </article>
+            <article className={s.journeyBeat} data-story-act data-story-weight="0.55" data-chapter="trust">
+              <div className={s.journeyCopy}>
+                <Heading text="Your financial records are private, reviewable, and traceable. Edit, export, or delete your data through your account.">
+                  Your financial data stays
+                  <br />
+                  <em>under your control.</em>
+                </Heading>
+              </div>
+              <div
+                className={`${s.journeyArt} ${s.journeyPrivacy}`}
+                data-story-art
+              >
+                <div className={s.privacyPhoto}>
+                  <StoryPhoto
+                    desktop="landing-story-v3/07-private-review"
+                    mobile="landing-story-v3/07-private-review-mobile"
+                    alt="Reviewing personal financial records at home."
+                  />
+                </div>
+                <ControlCard />
+              </div>
+            </article>
             <article className={s.journeyBeat} data-story-act data-story-weight="1.2" data-chapter="together">
               <div className={s.journeyCopy}>
                 <Heading text="Split expenses with friends on Split Bills. Manage household expenses with a partner on Circles.">
@@ -990,29 +956,7 @@ export function Showcase({ initialMarket, authEnabled = false }: { initialMarket
                 <SplitCard />
               </div>
             </article>
-            <article className={s.journeyBeat} data-story-act data-story-weight="0.7" data-chapter="plan">
-              <div className={s.journeyCopy}>
-                <Heading text="Give each goal a plan. Set budgets for everyday spending, follow your savings progress, and make room for what matters.">
-                  Set your goals.
-                  <br />
-                  <em>Make a budget to get there.</em>
-                </Heading>
-              </div>
-              <div
-                className={`${s.journeyArt} ${s.journeyLife}`}
-                data-story-art
-              >
-                <div className={s.lifePhoto}>
-                  <StoryPhoto
-                    desktop="landing-story-v3/07-records-away"
-                    mobile="landing-story-v3/07-records-away-mobile"
-                    alt="Putting the paperwork away and closing the laptop at home."
-                  />
-                </div>
-                <GoalMoment />
-                <BudgetMoment />
-              </div>
-            </article>
+
           </div>
         </ScrollScene>
 
@@ -1024,31 +968,14 @@ export function Showcase({ initialMarket, authEnabled = false }: { initialMarket
           </Heading>
           <Plans initialMarket={initialMarket} />
         </section>
-        <section id="start-with-clover" className={s.finalCta} aria-labelledby="final-cta-title">
+        <section data-scroll-scene id="start-with-clover" className={s.finalCta} aria-labelledby="final-cta-title">
           <div className={s.finalMascot}><Mascot pose="welcome" size={156} /></div>
-          <h2 id="final-cta-title">Know where you stand.<br /><em>Build toward what matters next.</em></h2>
-          <p>Bring your money together with Clover. Start free, your way.</p>
-          <div className={s.signupAction}><JourneyActions authEnabled={authEnabled} final /></div>
-          <StoreAvailability variant="badges" />
+          <h2 id="final-cta-title">Feel clearer about your money,<br /><em>and more confident about what comes next.</em></h2>
+          <div className={s.signupAction}><JourneyActions authEnabled={authEnabled} final /><Link className={s.loginLink} href="/sign-in">Log in</Link></div>
+          <StoreAvailability variant="white" />
         </section>
       </main>
-      <footer className={s.footer}>
-        <a href="#together" aria-label="Clover, back to top">
-          <Brand />
-        </a>
-        <div>
-          <Link href="/help">Help</Link>
-          <Link href="/contact-us">Contact</Link>
-          <Link href="/privacy-policy">Privacy</Link>
-          <Link href="/terms-of-service">Terms</Link>
-        </div>
-        <nav className={s.socialLinks} aria-label="Follow Clover">
-          <a href="https://www.instagram.com/cloverpersonalfinance/" target="_blank" rel="noopener noreferrer" aria-label="Clover on Instagram"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="5"/><circle cx="12" cy="12" r="4"/><circle cx="17.5" cy="6.5" r="1" fill="currentColor" stroke="none"/></svg></a>
-          <a href="https://www.facebook.com/cloverpersonalfinance" target="_blank" rel="noopener noreferrer" aria-label="Clover on Facebook"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M13.5 22v-9h3l.5-3.5h-3.5V7.3c0-1 .3-1.8 1.8-1.8H17V2.4c-.8-.1-1.6-.2-2.5-.2-2.5 0-4.2 1.5-4.2 4.4v2.9H7.5V13h2.8v9z"/></svg></a>
-          <a href="https://www.tiktok.com/@cloverpersonalfinance" target="_blank" rel="noopener noreferrer" aria-label="Clover on TikTok"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M16.5 2c.4 2.7 1.9 4.3 4.5 4.5V10a10 10 0 0 1-4.5-1.4v7.2a6.2 6.2 0 1 1-5.3-6.1v3.6a2.7 2.7 0 1 0 1.8 2.5V2z"/></svg></a>
-        </nav>
-        <small>© {new Date().getFullYear()} Clover.</small>
-      </footer>
+      <PublicFooter includeTikTok />
     </div>
   );
 }

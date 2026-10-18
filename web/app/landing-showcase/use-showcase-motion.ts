@@ -141,7 +141,7 @@ export function useShowcaseMotion(root: RefObject<HTMLDivElement | null>) {
           // remounting or resetting: receipt → transaction → category insight.
           if (hasPurchase) {
             for (const [property, value] of Object.entries(
-              purchaseChoreography(chapterTravel, { trustInterlude: true }),
+              purchaseChoreography(chapterTravel, { trustInterlude: false }),
             )) write(scene, property, value);
           }
           const active = Math.min(
@@ -157,14 +157,14 @@ export function useShowcaseMotion(root: RefObject<HTMLDivElement | null>) {
             write(
               act,
               "--act-enter",
-              staticStory || actIndex === 0 ? 1 : ease(travel / fade),
+              staticStory || actIndex === 0 ? 1 : ease((travel + fade / 2) / fade),
             );
             write(
               act,
               "--act-leave",
               staticStory || actIndex === acts.length - 1
                 ? 1
-                : ease((1 - travel) / fade),
+                : ease((1 + fade / 2 - travel) / fade),
             );
             const activeValue = String(staticStory || active === actIndex);
             if (act.dataset.storyActive !== activeValue)
