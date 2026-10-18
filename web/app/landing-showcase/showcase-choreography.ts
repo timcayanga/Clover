@@ -10,14 +10,15 @@ export function purchaseChoreography(position: number, { trustInterlude = false 
   const travel = trustInterlude ? (position < 2 ? Math.min(position, 1) : position - 1) : position;
   return {
     "--purchase-presence": trustInterlude ? 1 - ease((position - .85) / .2) + ease((position - 1.85) / .2) : 1,
-    "--paper-fold": ease((travel - 0.18) / 0.55),
-    "--paper-expand": ease((travel - 0.5) / 0.24),
-    "--purchase-merge": ease((travel - 1.1) / 0.35),
-    "--category-join": ease((travel - 1.4) / 0.4),
-    "--purchase-away": ease((travel - 1.8) / 0.15),
-    "--category-fill": ease((travel - 1.5) / 0.35),
-    "--report-reveal": ease((travel - 0.85) / 0.45),
-    "--category-glow": ease((travel - 1.5) / 0.3) * (1 - ease((travel - 1.85) / 0.15)),
+    "--purchase-arrival": ease((travel - 0.08) / 0.18),
+    "--paper-fold": ease((travel - 0.12) / 0.48),
+    "--paper-expand": ease((travel - 0.38) / 0.32),
+    "--purchase-merge": ease((travel - 1.12) / 0.30),
+    "--category-join": ease((travel - 1.45) / 0.28),
+    "--purchase-away": ease((travel - 1.86) / 0.13),
+    "--category-fill": ease((travel - 1.58) / 0.27),
+    "--report-reveal": ease((travel - 0.82) / 0.36),
+    "--category-glow": ease((travel - 1.58) / 0.24) * (1 - ease((travel - 1.87) / 0.12)),
   };
 }
 

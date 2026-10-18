@@ -14,7 +14,13 @@
 .badges a:focus-visible { outline:2px solid #008f9e; outline-offset:4px; border-radius:7px; }
 @media(max-width:600px) { .badges { column-gap:4px; } .badges img { height:40px; } .badges .googleBadge img { height:60px; } }
 
-.white { gap:12px; padding:8px 0; }
-.links.white > a { min-width:128px; justify-content:center; padding:9px 18px; background:#03a8c0; border:1px solid #03a8c0; border-radius:99px; color:#fff; font-size:14px; font-weight:600; }
-.links.white > a:hover { background:#009bb2; color:#fff; }
-.white a > svg:last-child { display:none; }
+/* White store surfaces keep the recognizable Apple / multicolor Play marks. */
+.whiteBadges { display:flex; flex-wrap:wrap; justify-content:center; align-items:center; gap:12px; padding:8px 0; }
+.whiteBadges > a { box-sizing:border-box; display:inline-flex; align-items:center; justify-content:center; gap:8px; min-height:48px; width:150px; padding:7px 12px; border:1px solid #b7c8c9; border-radius:8px; background:#fff; color:#172126; text-decoration:none!important; }
+.whiteBadges > a:hover { background:#f8fcfc; color:#172126; border-color:#03a8c0; }
+.whiteBadges svg { width:27px; height:29px; flex:0 0 27px; }
+.whiteBadges span { display:grid; gap:1px; text-align:left; }
+.whiteBadges small { font:500 9px/1.1 Arial,sans-serif; letter-spacing:0; }
+.whiteBadges strong { font:500 19px/1.05 Arial,sans-serif; white-space:nowrap; }
+.whiteBadges a:focus-visible { outline:2px solid #008f9e; outline-offset:4px; }
+@media(max-width:360px) { .whiteBadges { gap:8px; }.whiteBadges > a { width:140px; padding-inline:8px; } }

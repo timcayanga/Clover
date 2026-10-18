@@ -2,12 +2,13 @@
 
 import { useRef } from "react";
 import Link from "next/link";
+import { PublicFooter } from "@/components/public-footer";
 import { JourneyHeader } from "@/app/landing-preview/landing-journey";
 import type { FeatureStory, FeatureVisual } from "@/lib/feature-stories";
 import type { PricingMarket } from "@/lib/public-plan-comparison";
 import { FEATURE_LINKS } from "@/lib/public-site";
 import { useShowcaseMotion } from "../use-showcase-motion";
-import { Action, AppScreen, Brand, BudgetMoment, CircleCard, ConnectionOptions, ControlCard, Conversation, GoalMoment, Heading, Icon, Mascot, Plans, Receipt, ScrollScene, SpendingStory, SplitCard, StoreAvailability, StoryPhoto, TransactionMoment } from "../showcase";
+import { Action, AppScreen, BudgetMoment, CircleCard, ConnectionOptions, ControlCard, Conversation, GoalMoment, Heading, Icon, Mascot, Plans, Receipt, ScrollScene, SpendingStory, SplitCard, StoreAvailability, StoryPhoto, TransactionMoment } from "../showcase";
 import s from "../showcase.module.css";
 import f from "./feature-showcase.module.css";
 
@@ -53,11 +54,11 @@ export function FeatureShowcase({ story, initialMarket }: { story: FeatureStory;
     <a href="#feature-main" className={s.skip}>Skip to content</a>
     <div className={s.productionHeader}><JourneyHeader featureBasePath="/landing-showcase/features" homeHref="/landing-showcase"/></div>
     <main id="feature-main">
-      <ScrollScene id="overview" className={`${s.hero} ${f.hero}`}><div className={s.storyGrid}><div className={s.copy}><Heading hero text={first.copy ?? ""}>{first.title}<br/><em>{first.accent}</em></Heading><Action/><StoreAvailability/></div><FeatureArt hero visual={first.visual} slug={story.slug}/></div><a className={s.scrollArrow} href="#feature-story" aria-label={`Explore ${story.title}`}><Icon kind="chevron"/></a></ScrollScene>
+      <ScrollScene id="overview" className={`${s.hero} ${f.hero}`}><div className={s.storyGrid}><div className={s.copy}><Heading hero text={first.copy ?? ""}>{first.title}<br/><em>{first.accent}</em></Heading><Action/><StoreAvailability variant="white"/></div><FeatureArt hero visual={first.visual} slug={story.slug}/></div><a className={s.scrollArrow} href="#feature-story" aria-label={`Explore ${story.title}`}><Icon kind="chevron"/></a></ScrollScene>
       <ScrollScene id="feature-story" className={`${s.journey} ${f.journey}`}><div className={s.journeyWorld}>{chapters.map(chapter => <article key={chapter.id} className={s.journeyBeat} data-story-act id={chapter.id}><div className={s.journeyCopy}><Heading text={chapter.copy ?? ""}>{chapter.title}<br/><em>{chapter.accent}</em></Heading>{chapter.link ? <Link className={f.contextLink} href={chapter.link.href.startsWith("/features/") ? `/landing-showcase${chapter.link.href}` : chapter.link.href}>{chapter.link.label}</Link> : null}</div><div className={s.journeyArt} data-story-art><FeatureArt visual={chapter.visual} slug={story.slug}/></div></article>)}</div></ScrollScene>
       {story.slug === "pro" ? <section className={s.plans} id="plans"><Heading text="Start free. Choose more room when you need it.">Choose what works <em>for you.</em></Heading><Plans initialMarket={initialMarket}/></section> : null}
       <section className={f.closing}><Heading text="Your next clearer step starts here.">{final.title} <em>{final.accent}</em></Heading><Action/><div className={f.related}>{FEATURE_LINKS.filter(link => !link.href.endsWith(story.slug)).map(link => <Link key={link.href} href={`/landing-showcase${link.href}`}><strong>{link.label}</strong><small>{link.products}</small><Icon/></Link>)}</div></section>
     </main>
-    <footer className={s.footer}><Link href="/landing-showcase" aria-label="Clover home"><Brand/></Link><div><Link href="/help">Help</Link><Link href="/contact-us">Contact</Link><Link href="/privacy-policy">Privacy</Link><Link href="/terms-of-service">Terms</Link></div><StoreAvailability/><small>© {new Date().getFullYear()} Clover</small></footer>
+    <PublicFooter includeTikTok storeVariant="white" />
   </div>;
 }

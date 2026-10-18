@@ -126,7 +126,7 @@ export function useShowcaseMotion(root: RefObject<HTMLDivElement | null>) {
           animated && pinned && mode === "full"
             ? previousProgress +
               (targetProgress - previousProgress) *
-                (1 - Math.exp(-elapsed / 65))
+                (1 - Math.exp(-elapsed / 85))
             : targetProgress;
         sceneProgress.set(scene, raw);
         if (Math.abs(targetProgress - raw) > 0.00015) settling = true;

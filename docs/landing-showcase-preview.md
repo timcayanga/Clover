@@ -206,4 +206,11 @@ The preview now follows input → insights → Ask Clover → Security → share
 
 Plan and CTA headings use the chapter scale. Both conversion areas include a plain Log in link, white platform symbols on Clover teal, and the final caption has no subtext. The shared production footer is reused with an optional TikTok link, leaving production footer defaults unchanged.
 
-Shared-money examples reuse Clover’s existing built-in profile faces from the production Split Bills avatar library (`assets/profiles/avatar_1.png`, `avatar_6.png`, and `avatar_3.png`), consistently across Circles, item assignments, and feature previews. The split example assigns individual line items and opens an illustrative message/QR preview; nothing is sent and the QR is deliberately nonfunctional. The production app already supports item allocation and payment requests. All example amounts remain fictional.
+Shared-money examples reuse the realistic people from production’s closing group photo (`assets/landing-story-v2/06-life.webp`), with CSS crops that leave the original image unchanged, consistently across Circles, item assignments, and feature previews. The split example assigns individual line items and opens an illustrative message/QR preview; nothing is sent and the QR is deliberately nonfunctional. The production app already supports item allocation and payment requests. All example amounts remain fictional.
+
+
+### 19 October: continuous mobile handoff and a calmer closing scene
+
+Receipt → readable transaction row → category insight now uses the same reversible choreography on desktop and normal-height phones. The transaction has a deliberate readable pause, collapses before crossing the report, and joins its category before disappearing. The mobile rule that hid the handoff is removed; reduced-motion and short-screen natural-flow views retain readable static scenes. The copy remains centered in its own safe area.
+
+The closing caption uses the production landing type scale with natural wrapping, the original production group photo, and a smaller mascot. White-background download badges retain the Apple and multicolor Google Play marks in the opening, closing, and shared footer. Feature previews share the same footer. Footer resources now list Pro before Security, and the Security label is shortened.

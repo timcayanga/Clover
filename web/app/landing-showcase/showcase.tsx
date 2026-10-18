@@ -3,7 +3,6 @@
 import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import Link from "next/link";
 import { planSwipeDirection } from "./showcase-interactions";
-import { splitBillProfileAvatarUrls } from "@/lib/split-bill-avatars";
 import { useShowcaseMotion } from "./use-showcase-motion";
 import { SwitchOfferNotice } from "@/components/switch-campaign";
 import {
@@ -751,9 +750,11 @@ export function CircleCard() {
   );
 }
 
+// Crop the actual people from production's closing group photo in CSS;
+// no illustrated profile defaults or new synthetic identities.
 function Person({ face, name }: { face: number; name: string }) {
-  const avatars = [splitBillProfileAvatarUrls[0], splitBillProfileAvatarUrls[5], splitBillProfileAvatarUrls[2]];
-  return <img className={s.person} src={avatars[face] ?? avatars[0]} alt={name} width={42} height={42} loading="lazy" />;
+  const positions = ["75.83% 25.33%", "58.00% 26.00%", "64.16% 27.33%"];
+  return <span className={s.person} role="img" aria-label={name} style={{ backgroundPosition: positions[face] ?? positions[0] }} />;
 }
 
 export function SplitCard() {
@@ -971,13 +972,14 @@ export function Showcase({ initialMarket, authEnabled = false }: { initialMarket
           <Plans initialMarket={initialMarket} />
         </section>
         <section data-scroll-scene id="start-with-clover" className={s.finalCta} aria-labelledby="final-cta-title">
+          <div className={s.finalFriends} aria-hidden="true"><img src="/assets/landing-story-v2/06-life.webp" alt="" width={1693} height={900} loading="lazy" /></div>
           <div className={s.finalMascot}><Mascot pose="welcome" size={156} /></div>
-          <h2 id="final-cta-title">Feel clearer about your money,<br /><em>and more confident about what comes next.</em></h2>
+          <h2 id="final-cta-title">Feel clearer about your money, and more confident <em>about what comes next.</em></h2>
           <div className={s.signupAction}><JourneyActions authEnabled={authEnabled} final /><Link className={s.loginLink} href="/sign-in">Log in</Link></div>
           <StoreAvailability variant="white" />
         </section>
       </main>
-      <PublicFooter includeTikTok />
+      <PublicFooter includeTikTok storeVariant="white" />
     </div>
   );
 }

@@ -20,7 +20,7 @@ async function main() {
   assert.match(footer, /aria-label=\{link.label\}/, "Icon-only social links need accessible names.");
   assert.match(footer, /Money looks better from here<\/p>/);
   assert.match(footer, /Help &amp; Support/);
-  assert.match(footer, /Other Resources[\s\S]*?Privacy and Security[\s\S]*?>Pro<[\s\S]*?Privacy Policy[\s\S]*?Terms of Service/);
+  assert.match(footer, /Other Resources[\s\S]*?>Pro<[\s\S]*?>Security<[\s\S]*?Privacy Policy[\s\S]*?Terms of Service/);
   assert.doesNotMatch(footer, />Home<|Explore Clover|Here to help/);
   assert.match(await readSource("components/marketing-footer.tsx"), /PublicFooter as MarketingFooter/, "Every public layout must use the same footer.");
   const landingJourneySource = await readSource("app/landing-preview/landing-journey.tsx");

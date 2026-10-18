@@ -24,6 +24,14 @@ assert.equal(previous["--category-fill"], 1);
 // Reversing scroll restores the exact corresponding frame and then the receipt.
 for (let index = 300; index >= 0; index--) assert.deepEqual(purchaseChoreography(index / 100), forward.get(index));
 assert.deepEqual(purchaseChoreography(0), start);
+// Keep a distinct readable transaction beat before collapsing into the insight.
+for (const position of [.75, .9, 1.1]) {
+  const frame = purchaseChoreography(position);
+  assert.equal(frame["--paper-fold"], 1);
+  assert.equal(frame["--paper-expand"], 1);
+  assert.equal(frame["--purchase-merge"], 0);
+  assert.equal(frame["--purchase-arrival"], 1);
+}
 console.log("Showcase choreography: bounded, reversible, readable handoff passed.");
 
 const weights = [1, .55, .85, 1.2, 1.2, .7];
