@@ -99,3 +99,33 @@ logo library. These illustrate sharing a request and do not send messages.
 The Starbucks sample has one Grande Mocha Frappuccino and one Sausage Roll.
 Its illustrative PHP120 + PHP70 amounts preserve the PHP190 purchase shown in
 the production capture and the receipt-to-report story; these are not menu prices.
+
+## Current Accounts / Transactions previews · 19 October 2026
+
+`accounts-current-20261019.webp` (1206×2616) and
+`transactions-current-20261019.webp` (1206×2460) were captured at 3× from the
+actual Accounts, Transactions and CloverShell components of production commit
+`b01578f1fc81f7b29ab5105e9726624a66d432f0`. They use fictional local records,
+not customer data. All API responses were replaced inside a disposable local
+copy; no authentication changes or capture route are included in the app.
+
+The local-only fixture is archived as
+`web/scripts/fixtures/showcase-capture-20261019.tsx.txt`. It was rendered inside
+a 402px iframe scaled by 3 in a 1206px browser viewport. PNGs were encoded to
+WebP at quality 96 without resizing or upscaling. Accounts framing omits the
+header, summary and navigation, and applies the requested presentation alignment:
+amounts immediately before the chevron, aligned within 1px, with a clear logo/name
+gap. These adjustments affect the marketing capture only.
+
+Transactions uses the production MerchantLogo component with fixture artwork
+identity evidence. Starbucks, Jollibee, Puregold, McDonald's, Grab and Uniqlo use
+their merchant logos; Salary and Meralco retain category fallbacks. The Account
+avatar is the existing glasses-wearing person from production's
+`landing-story-v2/06-life.webp`, cropped through CSS in the capture.
+
+`qr-ph-symbol.svg` retains only the visible blue/red/yellow symbol through its
+SVG viewBox; its source and CC0 license are recorded above for `qr-ph-logo.svg`.
+`gmail-color.png` is Google's current multicolour Gmail artwork from
+https://www.gstatic.com/images/branding/product/2x/gmail_2020q4_48dp.png .
+WhatsApp and Instagram retain their existing local artwork with cropped rounded
+corners in the sharing row. Original logo-library files remain intact.

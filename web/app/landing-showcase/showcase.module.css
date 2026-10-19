@@ -3846,3 +3846,7 @@
  .revisedStory .journeyClarity .spendingStory { position:relative; inset:auto; width:100%; flex:none; order:0; }
  .revisedStory .journey[data-scroll-flow] .insightPhone { flex:none; }
 }
+
+/* Official multicolour mail mark, cropped app-icon silhouettes and symbol-only QR Ph. */
+.gcashRequestBody .qrCode > .qrPhMark { width:26px; height:26px; object-fit:contain; }
+.requestChannels img:is([alt="WhatsApp"],[alt="Instagram"]) { border-radius:23%; object-fit:cover; }

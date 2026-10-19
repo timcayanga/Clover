@@ -1,0 +1,39 @@
+"use client";
+import {Suspense,useEffect,useState} from "react";
+import {useSearchParams} from "next/navigation";
+import {PathnameContext} from "next/dist/shared/lib/hooks-client-context.shared-runtime";
+import Accounts from "@/app/accounts/page"; import Transactions from "@/app/transactions/page";
+import {merchantIdentityInputKey} from "@/lib/merchant-identity-context";
+const accounts=[
+{id:"demo-bank",name:"BPI",institution:"BPI",type:"bank",currency:"PHP",balance:"168511",accountNumber:"00001234"},
+{id:"demo-union",name:"UnionBank",institution:"UnionBank",type:"bank",currency:"PHP",balance:"32000"},
+{id:"demo-bdo",name:"BDO",institution:"BDO",type:"credit_card",currency:"PHP",balance:"3400"},
+{id:"demo-maya",name:"Maya",institution:"Maya",type:"wallet",currency:"PHP",balance:"8500"},
+{id:"demo-wallet",name:"GCash",institution:"GCash",type:"wallet",currency:"PHP",balance:"2950"},
+{id:"demo-invest",name:"GoTrade",institution:"GoTrade",type:"investment",investmentSubtype:"stocks",currency:"PHP",balance:"120000"},
+{id:"demo-atram",name:"ATRAM",institution:"ATRAM",type:"investment",investmentSubtype:"fund",currency:"PHP",balance:"45000"}
+].map(a=>({...a,workspaceId:"landing-demo",source:"upload"}));
+const categories=[{id:"food",name:"Food & Dining",type:"expense"},{id:"shopping",name:"Shopping",type:"expense"},{id:"salary",name:"Salary",type:"income"},{id:"bills",name:"Bills & Utilities",type:"expense"},{id:"transport",name:"Transport",type:"expense"}];
+const rows=[
+["2026-10-05","Starbucks",190,"food","demo-bank","food/starbucks"],
+["2026-10-05","Jollibee",250,"food","demo-wallet","food/jollibee"],
+["2026-10-04","Puregold",1250,"shopping","demo-bank","shopping/puregold"],
+["2026-10-04","McDonald's",180,"food","demo-wallet","food/mcdonalds"],
+["2026-10-03","Salary",48000,"salary","demo-bank",null],
+["2026-10-03","Meralco",1920,"bills","demo-bank",null],
+["2026-10-02","Grab",220,"transport","demo-wallet","transportation/grab"],
+["2026-10-01","Uniqlo",1490,"shopping","demo-bank","shopping/uniqlo"]];
+const transactions=rows.map(([date,name,amount,categoryId,accountId,logo],i)=>{
+ const account=accounts.find(a=>a.id===accountId)!; const category=categories.find(c=>c.id===categoryId)!;
+ const t:any={id:`sample-${i}`,workspaceId:"landing-demo",date,description:name,rawDescription:name,merchantRaw:name,merchantClean:name,title:name,merchant:name,amount:String(amount),currency:"PHP",categoryId,accountId,categoryName:category.name,accountName:account.name,institution:account.institution,type:categoryId==="salary"?"income":"expense",status:"confirmed",reviewStatus:"confirmed",confidence:1,parserConfidence:1,categoryConfidence:1,source:"manual",isTransfer:false,isExcluded:false,account,category,normalizedPayload:{}};
+ if(logo){const entryId=`sample-${i}`;t.normalizedPayload.merchantIdentity={inputKey:merchantIdentityInputKey(t),status:"suggested",confidence:99,reason:"explicit sample merchant",entryId,logoPath:`/assets/logo-library/company logos/${logo}/icon.png`,candidates:[{entryId,name,industry:"food",countryCodes:["PH"],conflicts:[],evidence:[],confidence:99}],observations:[]};}
+ return t;
+});
+const body={ok:true,pending:[],connections:[],workspaces:[{id:"landing-demo",name:"Personal",type:"personal"}],accounts,categories,transactions,totalCount:8,totalCountIsExact:true,currencyCodes:["PHP"],summary:{totalCount:8,totalIncome:48000,totalSpending:5500,netCashFlow:42500,currency:"PHP",currencyCodes:["PHP"],reviewCount:0},accountRules:[],statementCheckpoints:[],investmentSnapshots:[],notifications:[],unreadCount:0,user:{id:"capture-user",firstName:"Alex",planTier:"pro",defaultCurrency:"PHP",onboardingCompletedAt:"2026-09-01"},planTier:"pro",defaultCurrency:"PHP",rates:{PHP:1,USD:1},base:"PHP",preferences:{currency:"PHP"},imports:[],importFiles:[]};
+function Capture(){const page=useSearchParams().get("page")||"transactions";const[ready,setReady]=useState(false);useEffect(()=>{const original=window.fetch;window.fetch=async(input,init)=>{const url=String(typeof input==="string"?input:input instanceof Request?input.url:input);if(url.includes("/api/"))return new Response(JSON.stringify(body),{headers:{"Content-Type":"application/json"}});if(url.startsWith("http")&&!url.startsWith(location.origin))return new Response("{}",{status:403});return original(input,init);};localStorage.clear();sessionStorage.clear();setReady(true);return()=>{window.fetch=original;};},[]);return ready?<PathnameContext.Provider value={`/${page}`}><style>{`
+html,body{margin:0!important;scrollbar-width:none!important;}::-webkit-scrollbar{display:none!important;}
+.shell-bottom-nav__item--account .shell-bottom-nav__icon{background-image:url('/assets/landing-story-v2/06-life.webp');background-size:1128.67% 600%;background-position:75.83% 25.33%;border-radius:50%;overflow:hidden;}
+.shell-bottom-nav__profile-photo{opacity:0;}
+${page==="accounts"?`html body main.content.content--accounts > header.topbar,html body main.content.content--accounts .accounts-page > section.accounts-overview-grid,.content--accounts .shell-compact-bar,.accounts-summary-grid,.accounts-overview-grid,.accounts-summary,.accounts-currency-note,.shell-bottom-nav{display:none!important;}.content--accounts{padding-top:0!important;}.content--accounts .content-body{padding-top:0!important;}html body main.content.content--accounts .wallet-pocket:not(.is-expanded) .financial-account-card__amount{right:32px;top:10px;line-height:22px;font-size:13px!important;max-width:48%;}.content--accounts .wallet-pocket:not(.is-expanded) .financial-account-card__name{left:52px!important;max-width:calc(100% - 175px);}.content--accounts .wallet-pocket__chevron{top:10px;height:22px;line-height:22px;font-size:18px;}`:""}
+`}</style>{page==="accounts"?<Accounts/>:<Transactions/>}</PathnameContext.Provider>:null;}
+export default function Page(){return <Suspense><Capture/></Suspense>;}

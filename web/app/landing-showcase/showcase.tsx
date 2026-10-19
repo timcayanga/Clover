@@ -165,7 +165,7 @@ export function AppScreen({
   page: "accounts" | "transactions";
   eager?: boolean;
 }) {
-  const capture = `/assets/landing-showcase/${page === "accounts" ? "accounts-iphone-squircle-20261014" : "transactions-production-hd-20261013"}.webp`;
+  const capture = `/assets/landing-showcase/${page}-current-20261019.webp`;
   return (
     <div className={s.phone}>
       <div className={s.phoneDisplay}>
@@ -198,7 +198,7 @@ export function AppScreen({
           alt={
             page === "accounts"
               ? "Clover account lists with BPI, UnionBank, BDO, Maya, GCash, GoTrade and ATRAM, using fictional balances."
-              : "Clover Transactions showing categorized purchases, dates, amounts and bank logos with sample data."
+              : "Clover Transactions showing merchant logos, category fallbacks, dates, amounts and a sample profile photo."
           }
           width={402}
           height={page === "accounts" ? 872 : 820}
@@ -804,8 +804,8 @@ export function SplitCard({ compact = false }: { compact?: boolean } = {}) {
     <div className={s.requestBridge}><svg viewBox="0 0 24 32" fill="none" aria-hidden="true"><path d="M12 1v27m-7-7 7 7 7-7" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg><span>Request payment through Clover</span></div>
     <div className={s.gcashRequest}>
       <div className={s.gcashRequestHeading}><img src="/assets/banks/philippines/gcash.png" alt="" width={26} height={26}/><strong>GCash</strong><span>Payment request</span></div>
-      <div className={s.gcashRequestBody}><div><strong>Hi friends! 👋</strong><p>Here’s our lunch split:</p><ul>{names.map((name,i)=><li key={name}><span>{name}</span><b>{money(totals[i])}</b></li>)}</ul></div><figure><div className={s.qrIdentity}><strong>AL•• ••• RE••</strong><span>09•• ••• 1234</span></div><div className={s.qrCode}><img src="/assets/landing-showcase/gcash-sample-qr.svg" alt="Sample black QR code" width={120} height={120}/><img className={s.qrPhMark} src="/assets/landing-showcase/qr-ph-logo.svg" alt="QR Ph" width={40} height={10}/></div><figcaption>Sample QR</figcaption></figure></div>
-      <div className={s.requestChannels}><span>Send via</span><span role="img" aria-label="Messenger" title="Messenger"><svg viewBox="0 0 24 24" aria-hidden="true"><defs><linearGradient id="showcase-messenger" x2="0" y2="1"><stop stopColor="#00b2ff"/><stop offset="1" stopColor="#a033ff"/></linearGradient></defs><path fill="url(#showcase-messenger)" d="M12 2C6.3 2 2 6.1 2 11.5c0 3.1 1.4 5.6 3.8 7.3V22l3.4-1.9c.9.2 1.8.4 2.8.4 5.7 0 10-4.1 10-9.5S17.7 2 12 2Z"/><path fill="#fff" d="m5.5 14 5-5 3 2.5 5-2.5-5 5-3-2.5Z"/></svg></span>{[["WhatsApp","social-media/whatsapp"],["Instagram","social-media/instagram"],["Gmail","subscriptions/gmail"]].map(([name,path])=><img key={name} src={`/assets/logo-library/company logos/${path}/icon.png`} alt={name} title={name} width={24} height={24} loading="lazy"/>)}</div>
+      <div className={s.gcashRequestBody}><div><strong>Hi friends! 👋</strong><p>Here’s our lunch split:</p><ul>{names.map((name,i)=><li key={name}><span>{name}</span><b>{money(totals[i])}</b></li>)}</ul></div><figure><div className={s.qrIdentity}><strong>AL•• ••• RE••</strong><span>09•• ••• 1234</span></div><div className={s.qrCode}><img src="/assets/landing-showcase/gcash-sample-qr.svg" alt="Sample black QR code" width={120} height={120}/><img className={s.qrPhMark} src="/assets/landing-showcase/qr-ph-symbol.svg" alt="QR Ph" width={28} height={28}/></div><figcaption>Sample QR</figcaption></figure></div>
+      <div className={s.requestChannels}><span>Send via</span><span role="img" aria-label="Messenger" title="Messenger"><svg viewBox="0 0 24 24" aria-hidden="true"><defs><linearGradient id="showcase-messenger" x2="0" y2="1"><stop stopColor="#00b2ff"/><stop offset="1" stopColor="#a033ff"/></linearGradient></defs><path fill="url(#showcase-messenger)" d="M12 2C6.3 2 2 6.1 2 11.5c0 3.1 1.4 5.6 3.8 7.3V22l3.4-1.9c.9.2 1.8.4 2.8.4 5.7 0 10-4.1 10-9.5S17.7 2 12 2Z"/><path fill="#fff" d="m5.5 14 5-5 3 2.5 5-2.5-5 5-3-2.5Z"/></svg></span>{[["WhatsApp","/assets/logo-library/company logos/social-media/whatsapp/icon.png"],["Instagram","/assets/logo-library/company logos/social-media/instagram/icon.png"],["Gmail","/assets/landing-showcase/gmail-color.png"]].map(([name,path])=><img key={name} src={path} alt={name} title={name} width={24} height={24} loading="lazy"/>)}</div>
     </div>
   </div>;
 }
