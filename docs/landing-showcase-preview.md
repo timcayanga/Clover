@@ -343,3 +343,16 @@ Verification covers all six pages at narrow phone and desktop sizes, mobile
 art/caption clearance, first-view CTA visibility, image loading, the interactive
 examples, and the repository's mandatory release gate. Only staging is deployed;
 production keeps the approved homepage and existing feature pages.
+
+### Feature deep dives — October 20
+
+The staging-only feature routes now begin directly with product chapters. There is no repeated overview or closing CTA scene. The shared site header and footer remain; the demonstrations are independently authored for these routes, with no landing-page screens, photos, or scene components.
+
+- Manage Money: searchable/filterable transaction rows and details, currency-specific account views, recurring calendar with selectable due dates.
+- Understand Your Money: period comparison, category and income/expense views, three Ask Clover examples including a confirmation step.
+- Plan Ahead: holdings filters, a budget slider and remaining balance, goal contributions and reset.
+- Together: Circle sharing boundaries and an item-by-person split matrix with recalculated payment requests.
+- Security: source-to-transaction traceability, category confirmation and account control examples.
+- Pro: advanced guidance/report examples and a concise plan comparison linked to current pricing.
+
+All interactions use fictional, isolated client state. No example creates a real transaction, bank connection, contribution or payment. HTML/SVG scenes remain sharp at every viewport without video downloads. Scroll-linked depth uses a single passive listener and a settling animation that stops at rest; offscreen scenes are excluded, and reduced motion preserves static readable content. Existing production routes and the production-only preview guard are unchanged.
