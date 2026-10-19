@@ -3525,21 +3525,27 @@
 .revisedStory .finalCta h2 { position:relative; max-width:min(560px,44vw); font-size:clamp(28px,2.35vw,38px); line-height:1.15; font-weight:600; letter-spacing:-.04em; }
 .revisedStory .finalCta > :not(.finalFriends) { z-index:1; }
 .finalFriends { position:absolute; z-index:0; inset:0; opacity:1!important; transform:none!important; pointer-events:none; }
-.finalFriend { position:absolute; top:50%; width:23%; max-width:310px; height:min(440px,60svh); overflow:hidden; border-radius:30px; box-shadow:0 8px 0 #d8ebe6,0 24px 45px -25px #245f5e45; }
-.finalFriend[data-side="left"] { left:1.5%; transform:translateY(-50%) perspective(1000px) rotateY(calc((1 - var(--enter,1)) * 9deg)) rotate(5deg); }
-.finalFriend[data-side="right"] { right:1.5%; transform:translateY(-50%) perspective(1000px) rotateY(calc((1 - var(--enter,1)) * -9deg)) rotate(-5deg); }
-.finalFriend img { display:block; width:100%; height:100%; object-fit:cover; }
+.finalFriend { --photo-open:min(1,calc(var(--photo-progress,.5) * 2)); position:absolute; top:50%; width:26%; max-width:410px; height:min(580px,72svh); overflow:hidden; border-radius:34px; box-shadow:0 8px 0 #d8ebe6,0 30px 60px -30px #245f5e45; }
+.finalFriend[data-side="left"] { left:max(-2%,calc(50% - 820px)); transform:translateY(calc(-50% + (.5 - var(--photo-progress,.5)) * 60px)) translateX(calc((1 - var(--photo-open)) * -42px)) perspective(1200px) rotateY(calc((1 - var(--photo-open)) * 14deg)) rotate(calc(8deg - var(--photo-open) * 5deg)); }
+.finalFriend[data-side="right"] { right:max(-2%,calc(50% - 820px)); transform:translateY(calc(-50% - (.5 - var(--photo-progress,.5)) * 60px)) translateX(calc((1 - var(--photo-open)) * 42px)) perspective(1200px) rotateY(calc((1 - var(--photo-open)) * -14deg)) rotate(calc(-8deg + var(--photo-open) * 5deg)); }
+.finalFriend img { display:block; width:100%; height:100%; object-fit:cover; transform:translateY(calc((.5 - var(--photo-progress,.5)) * 16px)) scale(calc(1.08 - var(--photo-open) * .04)); }
 .finalFriend[data-side="left"] img { object-position:60% center; }
 .finalFriend[data-side="right"] img { object-position:100% center; }
 @media(max-width:900px), (max-width:1100px) and (min-height:1000px) {
  .revisedStory .purchaseThroughline { display:block; z-index:6; left:3%; width:94%; top:85px; height:calc(100% - 310px); }
  .revisedStory .purchasePaper { left:calc(4% - var(--paper-expand,0) * 4% + var(--category-join,0) * 30%); top:calc(7% + var(--paper-fold,0) * 58% - var(--category-join,0) * 26%); }
  .revisedStory .journeyRecords .connectionOptions { opacity:calc(1 - sin(var(--paper-fold,0) * 180deg) * .9); transform:translateY(calc(var(--paper-fold,0) * -12px)); }
- .revisedStory .finalCta { min-height:85svh; padding:65px 22px 45px; }
+ .revisedStory .finalCta { min-height:85svh; padding:40px 22px 40px; }
  .revisedStory .finalCta h2 { max-width:480px; font-size:clamp(26px,6vw,34px); }
- .revisedStory .finalFriends { position:relative; flex:0 0 260px; width:100%; max-width:460px; height:260px; margin:0 0 8px; }
- .revisedStory .finalFriend { top:0; width:44%; height:235px; max-width:none; border-radius:24px; }
- .revisedStory .finalFriend[data-side="left"] { left:2%; transform:perspective(1000px) rotateY(calc((1 - var(--enter,1)) * 9deg)) rotate(5deg); }
- .revisedStory .finalFriend[data-side="right"] { right:2%; top:18px; transform:perspective(1000px) rotateY(calc((1 - var(--enter,1)) * -9deg)) rotate(-5deg); }
+ .revisedStory .finalFriends { --final-photo-height:clamp(260px,36svh,320px); position:relative; flex:0 0 calc(var(--final-photo-height) + 40px); width:100%; max-width:500px; height:calc(var(--final-photo-height) + 40px); margin:0 0 8px; }
+ .revisedStory .finalFriend { top:0; width:50%; height:var(--final-photo-height); max-width:none; border-radius:28px; }
+ .revisedStory .finalFriend[data-side="left"] { left:-4%; transform:translateY(calc((.5 - var(--photo-progress,.5)) * 24px)) translateX(calc((1 - var(--photo-open)) * -18px)) perspective(1000px) rotateY(calc((1 - var(--photo-open)) * 10deg)) rotate(calc(7deg - var(--photo-open) * 4deg)); }
+ .revisedStory .finalFriend[data-side="right"] { right:-4%; top:22px; transform:translateY(calc((var(--photo-progress,.5) - .5) * 24px)) translateX(calc((1 - var(--photo-open)) * 18px)) perspective(1000px) rotateY(calc((1 - var(--photo-open)) * -10deg)) rotate(calc(-7deg + var(--photo-open) * 4deg)); }
 }
 .revisedStory .journey[data-story-static="true"] .purchaseThroughline { display:none; }
+
+@media(max-width:360px), (max-width:900px) and (max-height:700px) {
+ .revisedStory .finalFriends { --final-photo-height:250px; }
+}
+/* Photos settle on scroll; copy stays on its own fixed, readable plane. */
+.revisedStory .finalCta > h2,.revisedStory .finalCta > .signupAction,.revisedStory .finalCta > [aria-label="Download Clover"] { transform:none; opacity:1; }

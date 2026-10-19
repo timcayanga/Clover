@@ -62,6 +62,7 @@ export function useShowcaseMotion(root: RefObject<HTMLDivElement | null>) {
     let previousTime = performance.now();
     const sceneProgress = new Map<HTMLElement, number>();
     let impulse = 0;
+    let closingProgress: number | undefined;
     let pointerX = 0;
     let pointerY = 0;
     const write = (node: HTMLElement, property: string, value: number) => {
@@ -118,6 +119,18 @@ export function useShowcaseMotion(root: RefObject<HTMLDivElement | null>) {
           (relativeTop + height < -viewport || relativeTop > viewport * 2)
         )
           return;
+        // A separate full-viewport passage keeps the closing photos moving
+        // gently after their entrance, without moving the caption or buttons.
+        if (scene.id === "start-with-clover") {
+          const photoTarget = clamp((viewport - relativeTop) / Math.max(1, viewport + height));
+          const photoPrevious = closingProgress ?? photoTarget;
+          const photoProgress = animated && mode === "full"
+            ? photoPrevious + (photoTarget - photoPrevious) * (1 - Math.exp(-elapsed / 110))
+            : photoTarget;
+          closingProgress = photoProgress;
+          if (Math.abs(photoTarget - photoProgress) > .00015) settling = true;
+          write(scene, "--photo-progress", animated ? ease(photoProgress) : .5);
+        }
         const targetProgress = clamp(
           -relativeTop / Math.max(1, height - pinHeight),
         );
