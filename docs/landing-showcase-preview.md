@@ -280,3 +280,5 @@ visible directly below the bill, with current amounts. `gcash-sample-qr.svg` is
 an optimized, locally generated QR using the existing mobile qrcode dependency;
 it encodes an explicit plain-text Clover demonstration message, never a real
 payment payload. No payment or message is initiated by the illustration.
+
+Feature-page peripheral Split Bills previews retain their compact card variant; the complete main-page illustration includes the always-visible GCash request.

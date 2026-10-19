@@ -799,13 +799,13 @@ function Person({ face, name }: { face: number; name: string }) {
   return <span className={s.person} role="img" aria-label={name} style={{ backgroundPosition: positions[face] ?? positions[0] }} />;
 }
 
-export function SplitCard() {
+export function SplitCard({ compact = false }: { compact?: boolean } = {}) {
   const [assignments, setAssignments] = useState([[true,true,true],[true,true,false],[false,false,true]]);
   const names = ["Alex", "Jamie", "Sam"];
   const items = [{name:"Pasta",amount:45000},{name:"Chicken",amount:45000},{name:"Coffee",amount:30000}];
   const totals = sampleSplitShares(items.map(item=>item.amount), assignments);
   const money = (cents:number) => `₱${(cents/100).toLocaleString("en-PH",{maximumFractionDigits:2})}`;
-  return <div className={s.splitExample}><div className={s.sharedCard}>
+  const bill = <>
     <div className={s.miniHeader}><strong>Lunch with friends</strong><span>Split Bills</span></div>
     <strong className={s.sharedTotal}>₱1,200.00</strong>
     <table className={s.splitMatrix}>
@@ -814,7 +814,10 @@ export function SplitCard() {
       <tbody>{items.map((item,row)=><tr key={item.name}><th scope="row">{item.name}<small>{money(item.amount)}</small></th>{names.map((name,col)=><td key={name}><input type="checkbox" aria-label={`${name} pays for ${item.name.toLowerCase()}`} checked={assignments[row][col]} disabled={assignments[row][col] && assignments[row].filter(Boolean).length===1} onChange={()=>setAssignments(current=>current.map((values,r)=>r===row?values.map((value,c)=>c===col?!value:value):values))}/></td>)}</tr>)}</tbody>
       <tfoot><tr><th scope="row">To pay</th>{totals.map((total,i)=><td key={names[i]}>{money(total)}</td>)}</tr></tfoot>
     </table>
-    </div>
+  </>;
+  if (compact) return <div className={s.sharedCard}>{bill}</div>;
+  return <div className={s.splitExample}>
+    <div className={s.sharedCard}>{bill}</div>
     <div className={s.gcashRequest}>
       <div className={s.gcashRequestHeading}><img src="/assets/banks/philippines/gcash.png" alt="" width={26} height={26}/><strong>GCash</strong><span>Payment request</span></div>
       <div className={s.gcashRequestBody}><div><strong>Hi friends! 👋</strong><p>Here’s our lunch split:</p><ul>{names.map((name,i)=><li key={name}><span>{name}</span><b>{money(totals[i])}</b></li>)}</ul></div><figure><img src="/assets/landing-showcase/gcash-sample-qr.svg" alt="Sample GCash-style QR illustration" width={106} height={106}/><figcaption>Sample QR</figcaption></figure></div>

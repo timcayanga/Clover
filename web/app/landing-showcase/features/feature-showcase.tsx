@@ -38,7 +38,7 @@ function FeatureArt({ visual, hero = false, slug }: { visual?: FeatureVisual; he
     {kind === "investments" ? <><div className={f.left}><PortfolioCard/></div><div className={f.rightGoal}><GoalMoment compact/></div></> : null}
     {kind === "budget" ? <><LifePhoto/><div className={f.rightBudget}><BudgetMoment/></div></> : null}
     {kind === "goal" ? <><LifePhoto/><div className={f.rightGoal}><GoalMoment/></div></> : null}
-    {kind === "circles" || kind === "split" ? <><LifePhoto shared/><div className={f.leftCircle}><CircleCard/></div><div className={f.rightSplit}><SplitCard/></div></> : null}
+    {kind === "circles" || kind === "split" ? <><LifePhoto shared/><div className={f.leftCircle}><CircleCard/></div><div className={f.rightSplit}><SplitCard compact/></div></> : null}
     {kind === "source" ? <><div className={f.leftReceipt}><Receipt/></div><div className={f.rightControl}><ControlCard/></div><div className={f.bottomRow}><TransactionMoment/></div></> : null}
     {kind === "control" ? <><LifePhoto/><div className={f.rightControl}><ControlCard/></div></> : null}
   </div>;
