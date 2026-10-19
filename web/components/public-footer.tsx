@@ -29,6 +29,7 @@ export function PublicFooter() {
       <Link href="/features/pro">Pro</Link>
       <Link href="/privacy-policy">Privacy Policy</Link>
       <Link href="/terms-of-service">Terms of Service</Link>
+      <Link href="/business-registration">Business Registration</Link>
     </nav>
     <nav className={styles.socials} aria-label="Follow Clover">
       {SOCIAL_LINKS.map(link => <a key={link.href} href={link.href} aria-label={link.label} title={link.label}>
