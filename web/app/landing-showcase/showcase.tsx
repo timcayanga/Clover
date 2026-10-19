@@ -831,7 +831,7 @@ export function BudgetMoment() {
   );
 }
 
-export function Showcase({ initialMarket, authEnabled = false }: { initialMarket: PricingMarket; authEnabled?: boolean }) {
+export function Showcase({ initialMarket, authEnabled = false, homeHref = "/landing-showcase", featureBasePath = "/landing-showcase/features" }: { initialMarket: PricingMarket; authEnabled?: boolean; homeHref?: string; featureBasePath?: string }) {
   const root = useRef<HTMLDivElement>(null);
   const { mode, reduced } = useShowcaseMotion(root);
   return (
@@ -845,7 +845,7 @@ export function Showcase({ initialMarket, authEnabled = false }: { initialMarket
         Skip to content
       </a>
       <div className={s.productionHeader}>
-        <JourneyHeader featureBasePath="/landing-showcase/features" homeHref="/landing-showcase" />
+        <JourneyHeader featureBasePath={featureBasePath} homeHref={homeHref} />
       </div>
       <main id="showcase-main" className={s.mainStory}>
         <div className={s.mainPurchase} data-main-purchase aria-hidden="true"><div className={s.mainPaper}><div className={s.mainReceiptBody}><Receipt /></div></div><img className={s.mainFlyingBrand} src="/assets/logo-library/company logos/food/starbucks/icon.png" width={64} height={64} alt="" /></div>

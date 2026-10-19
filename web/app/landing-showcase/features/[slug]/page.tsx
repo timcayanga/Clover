@@ -10,6 +10,8 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   return { title: `${story?.title ?? "Features"} · Clover preview`, robots: { index: false, follow: false } };
 }
 export default async function FeatureShowcasePage({ params }: Props) {
+  // Experimental feature designs remain staging-only for this homepage release.
+  if (process.env.VERCEL_ENV === "production") notFound();
   const story = FEATURE_STORY_MAP.get((await params).slug);
   if (!story) notFound();
   const country = (await headers()).get("x-vercel-ip-country");

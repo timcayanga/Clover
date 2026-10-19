@@ -300,3 +300,12 @@ active Switch campaign is presented as a full-width mobile banner. The final
 CTA retains optional store badges, and the showcase footer places named social
 links beside Other Resources and the tagline above the Clover mark. Shared
 production footer styling is unchanged unless the showcase option is enabled.
+
+### Homepage release, 19 October 2026
+
+The approved showcase now renders at `/` with canonical, indexable Clover
+metadata and the existing country-based PH/global pricing. Homepage navigation
+uses the existing `/features/*` pages, whose implementation is unchanged. The
+experimental `/landing-showcase/features/*` routes return 404 in production;
+`/landing-showcase` redirects to `/` there and remains the staging preview URL.
+This release does not replace the existing feature-page designs.

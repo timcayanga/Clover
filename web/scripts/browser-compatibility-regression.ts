@@ -41,7 +41,10 @@ async function main() {
   assert.match(pricingPageSource, /variant="full"/, "Pricing must display the full shared comparison.");
   assert.doesNotMatch(pricingPageSource, /not enforced during beta/, "The plan table must not claim that active limits are disabled.");
   assert.match(await readSource("components/public-footer.tsx"), /Pricing[\s\S]*?Privacy Policy[\s\S]*?Terms of Service/, "Pricing and legal links must remain available in the footer.");
-  assert.match(mainLandingPageSource, /export \{ default, metadata \} from "\.\/landing-preview\/page"/, "The main landing route must use the approved journey and its Clover metadata without duplicating the implementation.");
+  assert.match(mainLandingPageSource, /import \{ Showcase \} from "\.\/landing-showcase\/showcase"/, "The homepage must reuse the approved showcase implementation.");
+  assert.match(mainLandingPageSource, /homeHref="\/" featureBasePath="\/features"/, "The released homepage must link to existing production feature pages.");
+  assert.match(mainLandingPageSource, /robots: \{ index: true, follow: true \}/, "The production homepage must remain indexable.");
+  assert.match(await readSource("app/landing-showcase/features/[slug]/page.tsx"), /process\.env\.VERCEL_ENV === "production"\) notFound\(\)/, "Experimental feature pages must remain unavailable in production.");
   assert.match(landingPreviewPageSource, /window.location.pathname === "\/" \|\| window.location.pathname === "\/landing-preview"/, "Both public landing routes must retain their light appearance regardless of the saved app theme.");
   assert.match(landingJourneyStyles, /\.journey \.chapter\[data-active=false\]\{overflow:hidden\}/, "Inactive mobile chapters must not leak nested scrollbars over the current scene.");
   assert.match(landingJourneyStyles, /\.comparisonChapter,\.proChapter\{scrollbar-width:none\}/, "Scrollable mobile tables must not paint an extra scrollbar.");
