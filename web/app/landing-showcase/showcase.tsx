@@ -911,7 +911,7 @@ export function Showcase({ initialMarket, authEnabled = false }: { initialMarket
                 data-story-art
               >
                 <div className={s.conversationPhoto}>
-                  <img src="/assets/landing-showcase/ask-clover-woman-20261019.webp" alt="A woman using her phone at home." width={900} height={1200} loading="lazy" />
+                  <img src="/assets/marketing-photos-v4/adviser-desktop.webp" alt="A woman using her phone on a terrace." width={1672} height={941} loading="lazy" />
                 </div>
                 <Conversation />
                 <div className={s.journeyMascot}>
@@ -978,9 +978,9 @@ export function Showcase({ initialMarket, authEnabled = false }: { initialMarket
         </section>
         <section data-scroll-scene id="start-with-clover" className={s.finalCta} aria-labelledby="final-cta-title">
           <div className={s.finalFriends} aria-hidden="true">
-            <div className={s.finalFriend} data-side="left"><img src="/assets/landing-showcase/closing-friends-20261019.webp" alt="" width={1536} height={1024} loading="lazy" /></div>
-            <div className={s.finalFriend} data-side="right"><img src="/assets/landing-showcase/closing-friends-20261019.webp" alt="" width={1536} height={1024} loading="lazy" /></div>
-            <img className={s.finalGroupMobile} src="/assets/landing-showcase/closing-friends-20261019.webp" alt="" width={1536} height={1024} loading="lazy" />
+            <div className={s.finalFriend} data-side="left"><svg viewBox="790 120 365 750" role="presentation" focusable="false"><image href="/assets/landing-story-v2/06-life.webp" width="1693" height="900" /></svg></div>
+            <div className={s.finalFriend} data-side="right"><svg viewBox="1155 120 430 750" role="presentation" focusable="false"><image href="/assets/landing-story-v2/06-life.webp" width="1693" height="900" /></svg></div>
+            <img className={s.finalGroupMobile} src="/assets/landing-story-v2/06-life.webp" alt="" width={1693} height={900} loading="lazy" />
           </div>
           <h2 id="final-cta-title">Feel clearer about your money, and more confident <em>about what comes next.</em></h2>
           <div className={s.signupAction}><JourneyActions authEnabled={authEnabled} final /><Link className={s.loginLink} href="/sign-in">Log in</Link></div>
