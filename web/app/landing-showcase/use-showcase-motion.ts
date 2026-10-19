@@ -103,7 +103,10 @@ export function useShowcaseMotion(root: RefObject<HTMLDivElement | null>) {
         const stop = element.querySelector<HTMLElement>("[data-receipt-stop]");
         const destination = element.querySelector<HTMLElement>("[data-receipt-destination]");
         const main = element.querySelector<HTMLElement>("main");
-        if (purchase && origin && stop && destination && main) {
+        receiptPoints = [];
+        brandFlight = undefined;
+        brandCaption = undefined;
+        if (purchase && getComputedStyle(purchase).display !== "none" && origin && stop && destination && main) {
           const source = origin.getBoundingClientRect(), middle = stop.getBoundingClientRect(), target = destination.getBoundingClientRect();
           const mainTop = main.getBoundingClientRect().top + y;
           const connectTop = stop.closest<HTMLElement>("[data-story-act]")!.getBoundingClientRect().top + y;
@@ -131,7 +134,7 @@ export function useShowcaseMotion(root: RefObject<HTMLDivElement | null>) {
       }
       const elapsed = Math.min(64, Math.max(1, time - previousTime));
       let settling = false;
-      const receiptTarget = !animated ? 0 : y;
+      const receiptTarget = !animated || receiptPoints.length === 0 ? 0 : y;
       const receiptPrevious = receiptScroll ?? receiptTarget;
       receiptScroll = animated && mode === "full" ? receiptPrevious + (receiptTarget - receiptPrevious) * (1 - Math.exp(-elapsed / 75)) : receiptTarget;
       if (Math.abs(receiptTarget - receiptScroll) > .05) settling = true;

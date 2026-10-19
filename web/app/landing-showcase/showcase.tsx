@@ -713,7 +713,7 @@ export function Plans({ initialMarket }: { initialMarket: PricingMarket }) {
       <Link className={s.compare} href="/pricing">
         Compare all features <Icon />
       </Link>
-      <SwitchOfferNotice compact />
+      <div className={s.switchBanner}><SwitchOfferNotice compact /></div>
     </div>
   );
 }
@@ -868,7 +868,7 @@ export function Showcase({ initialMarket, authEnabled = false }: { initialMarket
                 <AppScreen page="accounts" eager />
               </div>
               <div className={s.heroReceipt}>
-                <div className={s.receiptDock} data-receipt-origin /><div className={s.ingestStatement}><span><img src="/assets/banks/philippines/bpi.png" alt="" width={24} height={24} />BPI · Statement</span><b>September 2026</b><div className={s.statementRows}><div><span>Sep 30 · Payroll credit</span><b>+₱48,000</b></div><div><span>Sep 28 · Fund transfer</span><b>−₱5,000</b></div><div><span>Sep 26 · Meralco</span><b>−₱1,920</b></div><div><span>Sep 25 · Interest earned</span><b>+₱18.50</b></div></div><small>12 transactions → Clover</small></div>
+                <div className={s.receiptDock} data-receipt-origin><div className={s.mobileReceipt}><Receipt small /></div></div><div className={s.ingestStatement}><span><img src="/assets/banks/philippines/bpi.png" alt="" width={24} height={24} />BPI · Statement</span><b>September 2026</b><div className={s.statementRows}><div><span>Sep 30 · Payroll credit</span><b>+₱48,000</b></div><div><span>Sep 28 · Fund transfer</span><b>−₱5,000</b></div><div><span>Sep 26 · Meralco</span><b>−₱1,920</b></div><div><span>Sep 25 · Interest earned</span><b>+₱18.50</b></div></div><small>12 transactions → Clover</small></div>
               </div>
             </div>
           </div>
@@ -934,6 +934,7 @@ export function Showcase({ initialMarket, authEnabled = false }: { initialMarket
                 data-story-art
               >
                 <div className={s.conversationPhoto}>
+                  <div className={s.mobileAskPrompt}><span><img src="/clover-mark.svg" alt="" width={22} height={22} /><strong>Ask Clover</strong></span><AnimatedQuestion /></div>
                   <img src="/assets/marketing-photos-v4/adviser-desktop.webp" alt="A woman using her phone on a terrace." width={1672} height={941} loading="lazy" />
                 </div>
                 <Conversation />
@@ -984,6 +985,7 @@ export function Showcase({ initialMarket, authEnabled = false }: { initialMarket
                   />
                 </div>
                 <CircleCard />
+                <div className={s.mobileTogetherCaption}><Heading text="Split expenses with friends on Split Bills. Manage shared plans on Circles.">Manage money together.<br /><em>With less effort.</em></Heading></div>
                 <SplitCard />
               </div>
             </article>
@@ -1010,7 +1012,7 @@ export function Showcase({ initialMarket, authEnabled = false }: { initialMarket
           <StoreAvailability variant="white" />
         </section>
       </main>
-      <PublicFooter includeTikTok storeVariant="white" />
+      <PublicFooter includeTikTok storeVariant="white" mobileShowcase />
     </div>
   );
 }

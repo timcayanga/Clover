@@ -282,3 +282,21 @@ it encodes an explicit plain-text Clover demonstration message, never a real
 payment payload. No payment or message is initiated by the illustration.
 
 Feature-page peripheral Split Bills previews retain their compact card variant; the complete main-page illustration includes the always-visible GCash request.
+
+### Mobile story simplification, 19 October 2026
+
+The showcase's mobile layout now opens with a smaller centered Accounts phone,
+flanked by a static receipt and BPI statement. The primary CTA and Log in remain
+in the opening viewport; compact-height phones omit the optional store badges.
+Mobile no longer carries the receipt or Starbucks mark between sections. Desktop
+keeps the existing receipt journey.
+
+Connect and Add Manually form one centered stack; the report section omits its
+Transactions phone. Ask Clover uses the existing production woman photo at a
+larger scale with a prompt above it. Security shows its photo and three separate
+icon descriptions. Circles comes first, then the shared-money headline, then the
+interactive split bill and payment request, with no shared-photo overlay. The
+active Switch campaign is presented as a full-width mobile banner. The final
+CTA retains optional store badges, and the showcase footer places named social
+links beside Other Resources and the tagline above the Clover mark. Shared
+production footer styling is unchanged unless the showcase option is enabled.

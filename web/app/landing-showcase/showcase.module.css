@@ -3850,3 +3850,94 @@
 /* Official multicolour mail mark, cropped app-icon silhouettes and symbol-only QR Ph. */
 .gcashRequestBody .qrCode > .qrPhMark { width:26px; height:26px; object-fit:contain; }
 .requestChannels img:is([alt="WhatsApp"],[alt="Instagram"]) { border-radius:23%; object-fit:cover; }
+
+/* Mobile web: compact opening and natural scrolling; desktop retains its choreography. */
+.mobileReceipt,.mobileAskPrompt,.mobileTogetherCaption { display:none; }
+.switchBanner { display:contents; }
+@media(max-width:900px), (max-width:1100px) and (min-height:1000px) {
+ .revisedStory .mainPurchase,.revisedStory .receiptStop { display:none; }
+ .revisedStory .hero[data-scroll-flow] .storyGrid { display:flex; flex-direction:column; justify-content:center; gap:18px; height:auto; min-height:100svh; padding:78px 6% 24px; }
+ .revisedStory .hero .heroStage { position:relative; inset:auto; width:100%; height:clamp(210px,35svh,320px); flex:0 0 clamp(210px,35svh,320px); margin:0; order:0; transform:none; }
+ .revisedStory .hero .heroPhone { left:50%; top:50%; width:clamp(97px,15.8svh,146px); transform:translate(-50%,-50%); }
+ .revisedStory .hero .heroPhone > .phone { animation:none; }
+ .revisedStory .hero .copy { position:relative; inset:auto; transform:none; width:100%; order:1; padding:0; gap:10px; }
+ .revisedStory .hero .heading h1 { font-size:clamp(25px,6.8vw,34px); line-height:1.14; }
+ .revisedStory .hero .heading p { margin-top:12px; font-size:13px; line-height:1.6; }
+ .revisedStory .hero .signupAction { margin-top:2px; gap:3px; }
+ .revisedStory .hero .heroReceipt { inset:0; width:100%; height:100%; transform:none; z-index:1; }
+ .revisedStory .hero .receiptDock { position:absolute; left:0; top:14%; width:28%; height:auto; }
+ .mobileReceipt { display:block; }
+ .revisedStory .hero .mobileReceipt > .receipt { width:100%; min-height:0; padding:12px 8px; font-size:7px; transform:rotate(-6deg); animation:none; }
+ .revisedStory .hero .mobileReceipt .receiptLogo { width:23px; height:23px; margin:0 auto 8px; }
+ .revisedStory .hero .mobileReceipt .receipt > strong { font-size:9px; letter-spacing:.06em; }
+ .revisedStory .hero .mobileReceipt .receipt > span { font-size:6px; }
+ .revisedStory .hero .mobileReceipt .receipt > div { font-size:6px; gap:5px; margin-top:8px; }
+ .revisedStory .hero .mobileReceipt .barcode { height:16px; }
+ .revisedStory .hero .ingestStatement { display:grid; right:0; top:27%; bottom:auto; width:28%; padding:10px 8px; gap:7px; transform:rotate(5deg); font-size:7px; }
+ .revisedStory .hero .ingestStatement > span { font-size:7px; gap:4px; }
+ .revisedStory .hero .ingestStatement > span img { width:16px; height:16px; }
+ .revisedStory .hero .ingestStatement .statementRows > div { font-size:6px; padding:6px 0; gap:3px; }
+ .revisedStory .hero .ingestStatement .statementRows b { font-size:6px; }
+ .revisedStory .hero .ingestStatement .statementRows > div:nth-child(n+3),.revisedStory .hero .ingestStatement > small,.revisedStory .hero .scrollArrow { display:none; }
+ .revisedStory .hero .copy > [aria-label="Download Clover"] { margin-top:0; padding:2px 0; }
+ .revisedStory .hero .copy > [aria-label="Download Clover"] > a { min-height:43px; width:140px; }
+ .revisedStory .journey[data-scroll-flow] .journeyBeat { min-height:0; padding:48px 6% 40px; gap:26px; }
+ .revisedStory .journey[data-scroll-flow] .journeyRecords,.revisedStory .journey[data-scroll-flow] .journeyClarity,.revisedStory .journey[data-scroll-flow] .journeyPrivacy { display:flex; flex-direction:column; align-items:center; gap:22px; height:auto; flex-basis:auto; }
+ .revisedStory .journeyRecords .connectStack { position:relative; inset:auto; width:min(100%,430px); margin-inline:auto; gap:14px; }
+ .revisedStory .journeyRecords .connectStack .connectionOptions { padding:20px; }
+ .revisedStory .journeyRecords .connectionGrid { gap:10px; }
+ .revisedStory .journeyRecords .connectionGrid > div { padding:12px 4px; gap:8px; font-size:10px; }
+ .revisedStory .journeyRecords .connectionGrid img { width:36px; height:36px; }
+ .revisedStory .journeyRecords .connectionOptions .miniHeader { font-size:16px; }
+ .revisedStory .journeyRecords .connectionOptions .miniHeader > span { font-size:10px; }
+ .revisedStory .journeyRecords .connectStack .manualPreview { padding:18px; grid-template-columns:1fr auto; gap:7px 10px; }
+ .revisedStory .connectStack .manualPreview > span { font-size:12px; }
+ .revisedStory .connectStack .manualPreview > strong { font-size:13px; }
+ .revisedStory .connectStack .manualPreview > small { font-size:10px; }
+ .revisedStory .journey[data-scroll-flow] .insightPhone { display:none; }
+ .revisedStory .journeyClarity .spendingStory { width:min(100%,430px); }
+ .revisedStory .journeyClarity .reportCard { padding:22px; }
+ .revisedStory .journeyClarity .donut { max-width:210px; width:70%; margin:20px auto; }
+ .revisedStory .journeyClarity .spendingRows > button { font-size:12px; }
+ .revisedStory .journeyClarity .donut circle:nth-child(2) { stroke-dasharray:39.2 100; }
+ .revisedStory .journey[data-scroll-flow] .journeyConversation { display:block; height:auto; flex-basis:auto; }
+ .revisedStory .journey[data-scroll-flow] .conversationPhoto { display:flex; flex-direction:column; position:relative; inset:auto; width:100%; height:auto; overflow:visible; background:transparent; border-radius:26px; box-shadow:none; transform:none; }
+ .revisedStory .journey[data-scroll-flow] .conversationPhoto > img { display:block; height:clamp(300px,45svh,440px); border-radius:26px; object-fit:cover; object-position:50% center; box-shadow:0 7px 0 #d1e6df; }
+ .mobileAskPrompt { position:relative; z-index:1; display:grid; gap:12px; width:92%; margin:0 auto -16px; padding:16px 18px; border:1px solid #cce5df; border-radius:20px; background:#fff; box-shadow:0 12px 30px #13605b16; }
+ .mobileAskPrompt > span:first-child { display:flex; align-items:center; gap:8px; font-size:14px; }
+ .mobileAskPrompt > span:first-child img { width:22px; height:22px; }
+ .mobileAskPrompt .animatedQuestion { font-size:12px; min-height:21px; }
+ .revisedStory .journey[data-scroll-flow] .journeyConversation .conversation,.revisedStory .journey[data-scroll-flow] .journeyConversation .journeyMascot { display:none; }
+ .revisedStory .journey[data-scroll-flow] .journeyPrivacy .privacyPhoto { position:relative; inset:auto; width:100%; height:clamp(280px,40svh,380px); transform:none; border-radius:26px; }
+ .revisedStory .journey[data-scroll-flow] .journeyPrivacy .privacyPhoto img { object-position:86% center; }
+ .revisedStory .journey[data-scroll-flow] .journeyPrivacy .controlCard { position:relative; inset:auto; width:100%; padding:0 8px; border:0; background:none; box-shadow:none; transform:none; }
+ .revisedStory .journeyPrivacy .controlSeal,.revisedStory .journeyPrivacy .controlCard > strong,.revisedStory .journeyPrivacy .controlCard > div > svg:last-child { display:none; }
+ .revisedStory .journeyPrivacy .controlCard > div { border:0; padding:8px 0; font-size:13px; }
+ .revisedStory .journey[data-scroll-flow] [data-chapter="together"] > .journeyCopy,.revisedStory .journeyShared .sharedPhoto { display:none; }
+ .revisedStory .journey[data-scroll-flow] .journeyShared { align-items:center; gap:28px; }
+ .revisedStory .journeyShared .circleCard { width:min(100%,430px); margin-inline:auto; }
+ .mobileTogetherCaption { display:block; text-align:center; width:100%; }
+ .mobileTogetherCaption .heading p { margin-inline:auto; }
+ .revisedStory .journeyShared .splitExample { width:min(100%,430px); }
+ .switchBanner { display:block; width:calc(100% + 10vw); margin:24px -5vw 0; }
+ .switchBanner:empty { display:none; }
+ .switchBanner > aside { display:flex; align-items:center; justify-content:space-between; gap:18px; padding:22px 6%; background:linear-gradient(110deg,#daf7ed,#d5f2f7); border-block:1px solid #a8dfdb; text-align:left; }
+ .switchBanner > aside strong { font-size:16px; line-height:1.45; font-weight:600; max-width:240px; }
+ .switchBanner > aside a { flex-shrink:0; color:#007e91; font-size:13px; font-weight:600; margin:0; }
+ .revisedStory .finalCta { gap:14px; }
+}
+@media(max-width:900px) and (max-height:760px) {
+ .revisedStory .hero .copy > [aria-label="Download Clover"] { display:none; }
+ .revisedStory .hero[data-scroll-flow] .storyGrid { gap:12px; padding-top:74px; padding-bottom:20px; }
+ .revisedStory .hero .heroStage { height:clamp(190px,34svh,250px); flex-basis:clamp(190px,34svh,250px); }
+ .revisedStory .finalCta > [aria-label="Download Clover"] { display:none; }
+}
+@media(max-width:900px), (max-width:1100px) and (min-height:1000px) {
+ .revisedStory .journey[data-scroll-flow] .journeyClarity .reportCard { display:block; }
+ .revisedStory .journey[data-scroll-flow] .journeyClarity .donut { width:68%; max-width:210px; }
+ .revisedStory .journey[data-scroll-flow] .journeyConversation .conversationPhoto { height:auto; grid-column:auto; grid-row:auto; }
+ .revisedStory .journey[data-scroll-flow] .journeyConversation .conversationPhoto > img { flex:none; height:clamp(300px,45svh,440px); }
+}
+@media(max-width:900px), (max-width:1100px) and (min-height:1000px) {
+ .mobileTogetherCaption .heading h2 { font-size:clamp(28px,6.3vw,38px); line-height:1.12; }
+}
