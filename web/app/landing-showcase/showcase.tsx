@@ -110,13 +110,15 @@ export function ScrollScene({
   id,
   className,
   children,
+  flow = false,
 }: {
   id: string;
   className: string;
   children: ReactNode;
+  flow?: boolean;
 }) {
   return (
-    <section id={id} className={`${s.scene} ${className}`} data-scroll-scene>
+    <section id={id} className={`${s.scene} ${className}`} data-scroll-scene data-scroll-flow={flow || undefined}>
       <div className={s.pin}>{children}</div>
     </section>
   );
@@ -813,7 +815,7 @@ export function Showcase({ initialMarket, authEnabled = false }: { initialMarket
         <JourneyHeader featureBasePath="/landing-showcase/features" homeHref="/landing-showcase" />
       </div>
       <main id="showcase-main">
-        <ScrollScene id="together" className={s.hero}>
+        <ScrollScene id="together" className={s.hero} flow>
           <div className={s.storyGrid}>
             <div className={s.copy}>
               <Heading
@@ -851,7 +853,7 @@ export function Showcase({ initialMarket, authEnabled = false }: { initialMarket
           </a>
         </ScrollScene>
 
-        <ScrollScene id="one-picture" className={s.journey}>
+        <ScrollScene id="one-picture" className={s.journey} flow>
           <div className={s.journeyWorld}>
             <PurchaseThroughline />
             <article className={s.journeyBeat} data-story-act data-story-weight="1" data-chapter="organize">

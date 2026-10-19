@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { planSwipeDirection } from "../app/landing-showcase/showcase-interactions";
-import { purchaseChoreography, storyTravel } from "../app/landing-showcase/showcase-choreography";
+import { flowChapterTravel, purchaseChoreography, storyTravel } from "../app/landing-showcase/showcase-choreography";
 
 const start = purchaseChoreography(0);
 assert.equal(start["--paper-fold"], 0);
@@ -71,3 +71,22 @@ assert.equal(planSwipeDirection(50, 50), 0);
 assert.equal(planSwipeDirection(NaN, 0), 0);
 assert.equal(planSwipeDirection(0, Infinity), 0);
 console.log("Plan swipes: forward/backward intent, short taps and native vertical scrolling passed.");
+
+// Natural scrolling follows actual document geometry, including unequal phone chapters.
+for (const tops of [[0, 900, 1800], [120, 910, 1840, 2600]]) {
+  assert.equal(flowChapterTravel(tops[0] - 1000, tops), 0);
+  tops.forEach((top, index) => assert.equal(flowChapterTravel(top, tops), index));
+  const frames = new Map<number, number>();
+  let previous = 0;
+  for (let point = -100; point < 4000; point++) {
+    const travel = flowChapterTravel(point, tops);
+    assert.ok(travel >= previous && travel - previous < .01);
+    frames.set(point, travel);
+    previous = travel;
+  }
+  for (let point = 3999; point >= -100; point--) assert.equal(flowChapterTravel(point, tops), frames.get(point));
+}
+assert.equal(flowChapterTravel(1, []), 0);
+console.log("Natural flow: unequal chapter heights, bounded travel and exact reverse positions passed.");
+assert.equal(flowChapterTravel(-10, [100]), 0);
+assert.equal(flowChapterTravel(101, [100]), 1);

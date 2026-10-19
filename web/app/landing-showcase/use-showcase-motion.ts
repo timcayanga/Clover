@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, type RefObject } from "react";
-import { purchaseChoreography, storyTravel } from "./showcase-choreography";
+import { flowChapterTravel, purchaseChoreography, storyTravel } from "./showcase-choreography";
 
 export type MotionMode = "full" | "gentle" | "off";
 const clamp = (value: number) => Math.max(0, Math.min(1, value));
@@ -53,6 +53,7 @@ export function useShowcaseMotion(root: RefObject<HTMLDivElement | null>) {
       hasPurchase: boolean;
       weights: number[];
       actTops: number[];
+      actHeights: number[];
     }[] = [];
     let viewport = innerHeight;
     let frame = 0;
@@ -89,6 +90,7 @@ export function useShowcaseMotion(root: RefObject<HTMLDivElement | null>) {
             hasPurchase: Boolean(scene.querySelector("[data-purchase-throughline]")),
             weights: [...scene.querySelectorAll<HTMLElement>("[data-story-act]")].map(act => Number(act.dataset.storyWeight ?? 1)),
             actTops: [...scene.querySelectorAll<HTMLElement>("[data-story-act]")].map(act => act.getBoundingClientRect().top + y),
+            actHeights: [...scene.querySelectorAll<HTMLElement>("[data-story-act]")].map(act => act.offsetHeight),
           };
         });
         needsMeasure = false;
@@ -105,7 +107,8 @@ export function useShowcaseMotion(root: RefObject<HTMLDivElement | null>) {
         mode === "full" && animated ? impulse * 0.78 + target * 0.22 : 0;
       if (Math.abs(impulse) < 0.002) impulse = 0;
       scenes.forEach((scene, index) => {
-        const { top, height, pinHeight, pinned, acts, hasPurchase, weights, actTops } = geometry[index];
+        const { top, height, pinHeight, pinned, acts, hasPurchase, weights, actTops, actHeights } = geometry[index];
+        const flow = scene.dataset.scrollFlow === "true";
         const relativeTop = top - y;
         const visible = String(
           relativeTop < viewport && relativeTop + height > 0,
@@ -132,7 +135,7 @@ export function useShowcaseMotion(root: RefObject<HTMLDivElement | null>) {
           write(scene, "--photo-progress", animated ? ease(photoProgress) : .5);
         }
         const targetProgress = clamp(
-          -relativeTop / Math.max(1, height - pinHeight),
+          -relativeTop / Math.max(1, flow ? height : height - pinHeight),
         );
         const previousProgress = sceneProgress.get(scene) ?? targetProgress;
         const raw =
@@ -144,17 +147,24 @@ export function useShowcaseMotion(root: RefObject<HTMLDivElement | null>) {
         sceneProgress.set(scene, raw);
         if (Math.abs(targetProgress - raw) > 0.00015) settling = true;
         const p =
-          animated && pinned ? (mode === "gentle" ? 0.7 + raw * 0.3 : raw) : 1;
+          animated && (pinned || flow) ? (mode === "gentle" ? 0.7 + raw * 0.3 : raw) : 1;
         if (acts.length) {
-          const staticStory = !animated || !pinned;
+          const staticStory = !animated || (!pinned && !flow);
           scene.dataset.storyStatic = String(staticStory);
           const storyProgress = mode === "gentle" ? raw : p;
-          const chapterTravel = storyTravel(storyProgress, weights);
+          const chapterTravel = flow
+            ? flowChapterTravel(y + viewport * .65, actTops)
+            : storyTravel(storyProgress, weights);
           // Shared purchase choreography crosses the scene boundary without
           // remounting or resetting: receipt → transaction → category insight.
           if (hasPurchase) {
+            if (flow) {
+              scene.style.setProperty("--chapter-height", `${actHeights[0]}px`);
+              const distance = (actTops[1] ?? actTops[0]) - actTops[0];
+              scene.style.setProperty("--handoff-offset", `${(distance * ease((chapterTravel - .85) / .9)).toFixed(2)}px`);
+            }
             for (const [property, value] of Object.entries(
-              purchaseChoreography(chapterTravel, { trustInterlude: false }),
+              purchaseChoreography(flow && !animated ? 0 : chapterTravel, { trustInterlude: false }),
             )) write(scene, property, value);
           }
           const active = Math.min(
@@ -164,28 +174,28 @@ export function useShowcaseMotion(root: RefObject<HTMLDivElement | null>) {
           acts.forEach((act, actIndex) => {
             const travel = chapterTravel - actIndex;
             const fade = mode === "gentle" ? 0.1 : 0.3;
-            const naturalEnter = staticStory && animated ? ease((viewport - (actTops[actIndex] - y)) / (viewport * .65)) : 1;
+            const naturalEnter = (flow || staticStory) && animated ? ease((viewport - (actTops[actIndex] - y)) / (viewport * .65)) : 1;
             write(act, "--natural-enter", naturalEnter);
-            write(act, "--act-progress", staticStory ? naturalEnter : ease(travel));
+            write(act, "--act-progress", staticStory || flow ? naturalEnter : ease(travel));
             write(
               act,
               "--act-enter",
-              staticStory || actIndex === 0 ? 1 : ease((travel + fade / 2) / fade),
+              staticStory || flow || actIndex === 0 ? 1 : ease((travel + fade / 2) / fade),
             );
             write(
               act,
               "--act-leave",
-              staticStory || actIndex === acts.length - 1
+              staticStory || flow || actIndex === acts.length - 1
                 ? 1
                 : ease((1 + fade / 2 - travel) / fade),
             );
-            const activeValue = String(staticStory || active === actIndex);
+            const activeValue = String(staticStory || flow || active === actIndex);
             if (act.dataset.storyActive !== activeValue)
               act.dataset.storyActive = activeValue;
-            act.inert = !staticStory && active !== actIndex;
+            act.inert = !staticStory && !flow && active !== actIndex;
             const art = act.querySelector<HTMLElement>("[data-story-art]");
-            if (art && art.inert !== (!staticStory && active !== actIndex))
-              art.inert = !staticStory && active !== actIndex;
+            if (art && art.inert !== (!staticStory && !flow && active !== actIndex))
+              art.inert = !staticStory && !flow && active !== actIndex;
           });
         }
         write(scene, "--p", p);

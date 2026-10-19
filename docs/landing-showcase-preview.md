@@ -217,3 +217,7 @@ The closing caption uses the production landing type scale with natural wrapping
 
 
 Closing photos are enlarged on desktop and phones. Their full passage through the viewport drives softly damped, reversible 3D settling and restrained image parallax. The caption and actions stay still on a separate plane; mobile reserves the photo row’s full height before the text. Reduced-motion and motion-off views use a fixed pose, with no idle animation loop or new image downloads.
+
+### Continuous scrolling throughout
+
+The main showcase's opening and five middle chapters now occupy their own document space, like pricing and the closing CTA. The middle no longer pins one viewport or replaces captions. Desktop keeps centred copy with art at the edges; mobile keeps art above centred copy, expanding for wrapped text and short screens. Only the supporting art settles as it enters; copy remains fully readable and all chapters remain available to keyboard and assistive technology. The same receipt DOM node travels through the first two chapters and transforms into a transaction and category insight using measured chapter positions, including unequal mobile heights. Scrolling backwards reverses the path. Reduced-motion views use normal flow and static financial examples. Feature previews retain their existing independent presentation.

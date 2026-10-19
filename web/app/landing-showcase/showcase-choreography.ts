@@ -33,3 +33,17 @@ export function storyTravel(progress: number, weights: readonly number[]) {
   }
   return safe.length;
 }
+
+/** Map document positions to chapters without pinning or replacing their content.
+ * Unequal chapter heights (including wrapped mobile copy) retain a continuous path. */
+export function flowChapterTravel(viewportPoint: number, chapterTops: readonly number[]) {
+  if (!chapterTops.length) return 0;
+  for (let index = 0; index < chapterTops.length - 1; index++) {
+    const distance = Math.max(1, chapterTops[index + 1] - chapterTops[index]);
+    if (viewportPoint < chapterTops[index + 1])
+      return Math.max(0, index + (viewportPoint - chapterTops[index]) / distance);
+  }
+  const last = chapterTops.length - 1;
+  const distance = Math.max(1, chapterTops[last] - (chapterTops[last - 1] ?? chapterTops[last] - 1));
+  return Math.max(0, Math.min(chapterTops.length, last + (viewportPoint - chapterTops[last]) / distance));
+}
