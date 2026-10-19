@@ -3708,3 +3708,60 @@
  .animatedQuestion > span:last-child { font-size:9px; }
  .journeyConversation .chatInput { padding-inline:10px; }
 }
+
+/* Compact chapter rhythm; content remains in natural document flow. */
+.revisedStory .journey[data-scroll-flow] .journeyBeat { min-height:max(620px,76svh); }
+.revisedStory .journey[data-scroll-flow] .insightPhone { width:clamp(190px,min(20vw,calc((76svh - 140px) * .46)),250px); }
+.mainReceiptBody { transform:none; }
+.mainReceiptBody .receiptLogo { display:block; width:38px; height:38px; margin:0 auto 12px; }
+.mainFlyingBrand { position:absolute; top:0; left:0; width:64px; height:64px; border-radius:50%; opacity:var(--brand-opacity,0); transform:translate3d(var(--brand-x,0px),var(--brand-y,0px),0) translate(-50%,-50%) scale(var(--brand-scale,.5)); box-shadow:0 0 0 4px #fff,0 8px 24px #00754a30; }
+.connectStack { position:absolute; right:1%; top:12%; width:28%; display:grid; gap:14px; }
+.revisedStory .journeyRecords .connectStack .connectionOptions,.revisedStory .journeyRecords .connectStack .manualPreview { position:relative; inset:auto; width:100%; transform:none; }
+.revisedStory .journeyRecords .connectStack .manualPreview { grid-template-columns:1fr auto; gap:6px 10px; padding:16px 20px; }
+.connectStack .manualPreview > span,.connectStack .manualPreview > small { grid-column:1/-1; }
+.connectStack .manualPreview > b { font-size:22px; }
+.conversationPhoto img,.revisedStory .journey[data-scroll-flow] .conversationPhoto img { object-position:50% center; }
+.revisedStory .journey[data-scroll-flow] .journeyConversation .journeyMascot { left:9%; right:auto; top:auto; bottom:1%; width:90px; }
+.splitExample { position:absolute; right:0; top:50%; width:27%; transform:translateY(-50%); display:grid; gap:14px; }
+.revisedStory .journeyShared .splitExample .sharedCard { position:relative; inset:auto; width:100%; padding:18px; transform:none; }
+.splitExample .sharedTotal { margin:12px 0 0; font-size:28px; }
+.splitExample .splitMatrix caption { padding:6px 0 8px; }
+.splitExample .splitMatrix th,.splitExample .splitMatrix td { padding:7px 2px; }
+.gcashRequest { padding:15px; border:1px solid #c6dcff; border-radius:22px; background:#fff; box-shadow:0 5px 0 #d9e8ff,0 22px 38px -26px #005ce433; }
+.gcashRequestHeading { display:flex; align-items:center; gap:6px; color:#005ce4; font-size:15px; }
+.gcashRequestHeading > img { border-radius:8px; }
+.gcashRequestHeading > span { font-size:10px; margin-left:auto; color:#5b6c75; }
+.gcashRequestBody { display:grid; grid-template-columns:1fr 106px; gap:12px; margin-top:10px; align-items:center; font-size:11px; }
+.gcashRequestBody p { margin:4px 0 8px!important; font-size:10px; }
+.gcashRequestBody ul { margin:0; padding:0; list-style:none; display:grid; gap:4px; }
+.gcashRequestBody li { display:flex; justify-content:space-between; gap:10px; }
+.gcashRequestBody figure { margin:0; text-align:center; }
+.gcashRequestBody figure img { width:106px; height:106px; border-radius:8px; }
+.gcashRequestBody figcaption { font-size:9px; color:#5b6c75; margin-top:2px; }
+@media(max-width:900px), (max-width:1100px) and (min-height:1000px) {
+ .revisedStory .journey[data-scroll-flow] .journeyBeat { min-height:0; gap:14px; padding:48px 6% 12px; }
+ .revisedStory .journey[data-scroll-flow] .journeyArt { height:clamp(290px,39svh,330px); flex-basis:clamp(290px,39svh,330px); }
+ .connectStack { top:5%; right:0; width:58%; gap:10px; }
+ .revisedStory .journeyRecords .connectStack .manualPreview { padding:11px; gap:5px; grid-template-columns:1fr; }
+ .connectStack .manualPreview > strong { font-size:10px; }
+ .connectStack .manualPreview > span { font-size:10px; }
+ .connectStack .manualPreview > b { font-size:18px; }
+ .connectStack .manualPreview > small { font-size:8px; }
+ .revisedStory .journeyRecords .connectStack .connectionOptions { padding:10px; }
+ .revisedStory .journey[data-scroll-flow] .journeyRecords { height:360px; flex-basis:360px; }
+ .revisedStory .journey[data-scroll-flow] .journeyConversation { height:590px; flex-basis:590px; }
+ .revisedStory .journey[data-scroll-flow] .conversationPhoto { left:27%; width:73%; height:280px; }
+ .revisedStory .journey[data-scroll-flow] .journeyConversation .journeyMascot { left:0; right:auto; top:145px; bottom:auto; width:84px; }
+ .revisedStory .journey[data-scroll-flow] .journeyShared { height:auto; flex-basis:auto; gap:16px; }
+ .splitExample { position:relative; inset:auto; width:100%; transform:none; gap:12px; }
+ .revisedStory .journeyShared .splitExample .sharedCard { padding:16px; }
+ .gcashRequestBody { grid-template-columns:1fr 96px; }
+ .gcashRequestBody figure img { width:96px; height:96px; }
+}
+/* Let longer phone chat text grow naturally; the helper never shares its row. */
+@media(max-width:900px), (max-width:1100px) and (min-height:1000px) {
+ .revisedStory .journey[data-scroll-flow] .journeyConversation { display:grid; grid-template-columns:84px minmax(0,1fr); grid-template-rows:250px auto; gap:14px; height:auto; flex-basis:auto; }
+ .revisedStory .journey[data-scroll-flow] .journeyConversation .conversationPhoto { position:relative; inset:auto; grid-column:2; grid-row:1; width:100%; height:250px; }
+ .revisedStory .journey[data-scroll-flow] .journeyConversation .journeyMascot { position:relative; inset:auto; grid-column:1; grid-row:1; align-self:end; width:84px; margin-bottom:12px; }
+ .revisedStory .journey[data-scroll-flow] .journeyConversation .conversation { position:relative; inset:auto; grid-column:1/-1; grid-row:2; width:100%; transform:none; }
+}

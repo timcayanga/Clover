@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { planSwipeDirection, sampleSplitShares } from "../app/landing-showcase/showcase-interactions";
-import { flowChapterTravel, flowPurchaseChoreography, purchaseChoreography, receiptJourneyFrame, storyTravel } from "../app/landing-showcase/showcase-choreography";
+import { flowChapterTravel, flowPurchaseChoreography, purchaseChoreography, receiptJourneyFrame, merchantFlightFrame, storyTravel } from "../app/landing-showcase/showcase-choreography";
 
 const start = purchaseChoreography(0);
 assert.equal(start["--paper-fold"], 0);
@@ -125,8 +125,8 @@ for (let y=2000;y>=0;y--) assert.deepEqual(receiptJourneyFrame(y,receiptPoints),
 assert.equal(receiptJourneyFrame(0,[]),null);
 console.log("Hero receipt: one reversible route, exact docks, report-lane crossing and absorption passed.");
 
-const defaultAssignments=[[true,false,false],[false,true,false],[true,true,true]];
-assert.deepEqual(sampleSplitShares([45000,45000,30000],defaultAssignments),[55000,55000,10000]);
+const defaultAssignments=[[true,true,true],[true,true,false],[false,false,true]];
+assert.deepEqual(sampleSplitShares([45000,45000,30000],defaultAssignments),[37500,37500,45000]);
 assert.deepEqual(sampleSplitShares([45000,45000,30000],[[true,false,false],[false,true,false],[true,true,false]]),[60000,60000,0]);
 assert.deepEqual(sampleSplitShares([10000],[[true,true,true]]),[3334,3333,3333]);
 for (let mask=1;mask<8;mask++) {
@@ -134,3 +134,22 @@ for (let mask=1;mask<8;mask++) {
   assert.equal(sampleSplitShares([45001,45002,30001],assignments).reduce((a,b)=>a+b,0),120004);
 }
 console.log("Split-bill sample: assignment changes, exact centavo totals and remainder preservation passed.");
+
+// The detached brand follows a single straight segment from the printed mark.
+const brandFlight={start:800,arrival:1400,end:1550,x0:75,y0:1000,x1:140,y1:1700,width:18};
+const brandFrames=new Map<number,ReturnType<typeof merchantFlightFrame>>();
+for(let scroll=0;scroll<=1700;scroll++) {
+ const frame=merchantFlightFrame(scroll,brandFlight);
+ assert.ok(Object.values(frame).every(Number.isFinite));
+ assert.ok(frame.opacity>=0 && frame.opacity<=1 && frame.width>0);
+ const cross=(frame.x-brandFlight.x0)*(brandFlight.y1-brandFlight.y0)-(frame.y-brandFlight.y0)*(brandFlight.x1-brandFlight.x0);
+ assert.ok(Math.abs(cross)<1e-7,"Merchant logo bends away from its direct route");
+ brandFrames.set(scroll,frame);
+}
+assert.equal(merchantFlightFrame(800,brandFlight).x,brandFlight.x0);
+assert.equal(merchantFlightFrame(800,brandFlight).y,brandFlight.y0);
+assert.equal(merchantFlightFrame(1400,brandFlight).x,brandFlight.x1);
+assert.equal(merchantFlightFrame(1400,brandFlight).y,brandFlight.y1);
+assert.equal(merchantFlightFrame(1550,brandFlight).opacity,0);
+for(let scroll=1700;scroll>=0;scroll--) assert.deepEqual(merchantFlightFrame(scroll,brandFlight),brandFrames.get(scroll));
+console.log("Merchant mark: printed-logo origin, straight-line travel, reversible absorption and bounded opacity passed.");

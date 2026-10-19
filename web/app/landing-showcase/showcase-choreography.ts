@@ -77,3 +77,17 @@ export function receiptJourneyFrame(scroll: number, points: readonly ReceiptWayp
   }
   return points[points.length - 1];
 }
+
+/** The printed merchant mark detaches at its own centre and follows one straight
+ * line to the report. A shared easing parameter preserves collinearity. */
+export function merchantFlightFrame(scroll:number, flight:{start:number;arrival:number;end:number;x0:number;y0:number;x1:number;y1:number;width:number}) {
+  const progress = ease((scroll-flight.start)/Math.max(1,flight.arrival-flight.start));
+  const takeoff = ease(progress/.18);
+  const absorbed = ease((scroll-flight.arrival)/Math.max(1,flight.end-flight.arrival));
+  return {
+    x:flight.x0+(flight.x1-flight.x0)*progress,
+    y:flight.y0+(flight.y1-flight.y0)*progress,
+    width:(flight.width+(32-flight.width)*progress)*(1-absorbed*.8),
+    opacity:takeoff*(1-absorbed), takeoff, absorbed, progress,
+  };
+}

@@ -257,3 +257,26 @@ bill, including remainders; every row retains at least one payer. The optional
 sample payment request reflects current shares and retains the illustrative QR.
 No actual message is sent, and no customer data or authenticated app changes are
 involved. Mobile cards reflow vertically when the request expands.
+
+### Direct merchant flight and tighter examples (19 October 2026)
+
+Desktop chapters shorten from 88svh to 76svh (with a 620px content minimum).
+Mobile chapter padding reduces from 72/28px to 48/12px and report art is more
+compact. Connect and Add Manually now form one responsive vertical stack.
+
+The paper settles beside Connect, then its actual printed Starbucks mark
+crossfades into a separately measured brand layer at the same centre and size.
+The mark uses one straight, reversible segment to the report arc, with a shared
+easing parameter on both axes; the paper no longer takes a gutter detour.
+Departure starts while the source mark is visible. The mobile mark softens while
+passing the caption, preserving readable words without bending the flight path.
+The woman’s focal point is centered. The Ask Clover helper moves to the left;
+on phones a two-row grid separates the photo/helper from the chat, so wrapped
+text cannot cause an overlap.
+
+Pasta starts shared among all three people, chicken among Alex and Jamie, and
+coffee paid by Sam: PHP 375 / 375 / 450. The branded GCash sample request is always
+visible directly below the bill, with current amounts. `gcash-sample-qr.svg` is
+an optimized, locally generated QR using the existing mobile qrcode dependency;
+it encodes an explicit plain-text Clover demonstration message, never a real
+payment payload. No payment or message is initiated by the illustration.

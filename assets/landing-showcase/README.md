@@ -71,3 +71,12 @@ capture.
 `closing-friends-20261019.webp` (1536×1024) and `ask-clover-woman-20261019.webp` (900×1200) are fictional, AI-generated editorial lifestyle photographs created with the built-in image generation tool. They do not depict Clover customers. The first shows four Filipino friends on one sofa, safely composed as a left pair and right pair for desktop, and one intact group on mobile. The second shows a Filipino woman using a phone at home. Prompts requested realistic anatomy, natural warm daylight, mint/ivory/denim styling, generous face/headroom, no logos, no legible screens, and no financial claims. Generated originals remain under the Codex generated-images directory; these optimized WebP copies are project-owned and lazy-loaded. Cropping and motion are controlled by responsive CSS.
 
 The two October 19 generated human photos above were superseded the same day. They are retained as unused assets for provenance. The showcase now exclusively reuses the established production people templates (`marketing-photos-v4/adviser-desktop.webp` and `landing-story-v2/06-life.webp`) for these scenes, with responsive CSS/SVG framing and no changes to their identities.
+
+## GCash request sample · 19 October 2026
+
+`gcash-sample-qr.svg` was generated locally with the repository’s existing
+`mobile/node_modules/qrcode` encoder, error correction H and blue `#005CE4`.
+Its payload is exactly: `Clover sample split bill. This is a demonstration, not a payment request.`
+It contains no payment destination, account information, credentials, or money
+transfer instruction. The surrounding illustration uses Clover’s existing GCash
+institution asset and fictional split amounts.

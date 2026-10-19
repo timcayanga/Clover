@@ -800,13 +800,12 @@ function Person({ face, name }: { face: number; name: string }) {
 }
 
 export function SplitCard() {
-  const [assignments, setAssignments] = useState([[true,false,false],[false,true,false],[true,true,true]]);
-  const [request, setRequest] = useState(false);
+  const [assignments, setAssignments] = useState([[true,true,true],[true,true,false],[false,false,true]]);
   const names = ["Alex", "Jamie", "Sam"];
   const items = [{name:"Pasta",amount:45000},{name:"Chicken",amount:45000},{name:"Coffee",amount:30000}];
   const totals = sampleSplitShares(items.map(item=>item.amount), assignments);
   const money = (cents:number) => `₱${(cents/100).toLocaleString("en-PH",{maximumFractionDigits:2})}`;
-  return <div className={s.sharedCard}>
+  return <div className={s.splitExample}><div className={s.sharedCard}>
     <div className={s.miniHeader}><strong>Lunch with friends</strong><span>Split Bills</span></div>
     <strong className={s.sharedTotal}>₱1,200.00</strong>
     <table className={s.splitMatrix}>
@@ -815,8 +814,11 @@ export function SplitCard() {
       <tbody>{items.map((item,row)=><tr key={item.name}><th scope="row">{item.name}<small>{money(item.amount)}</small></th>{names.map((name,col)=><td key={name}><input type="checkbox" aria-label={`${name} pays for ${item.name.toLowerCase()}`} checked={assignments[row][col]} disabled={assignments[row][col] && assignments[row].filter(Boolean).length===1} onChange={()=>setAssignments(current=>current.map((values,r)=>r===row?values.map((value,c)=>c===col?!value:value):values))}/></td>)}</tr>)}</tbody>
       <tfoot><tr><th scope="row">To pay</th>{totals.map((total,i)=><td key={names[i]}>{money(total)}</td>)}</tr></tfoot>
     </table>
-    <button className={s.requestPreview} type="button" aria-expanded={request} onClick={()=>setRequest(!request)}>{request ? "Hide payment request" : "Preview payment request"}<Icon /></button>
-    {request && <div className={s.paymentPreview}><div><strong>Hi friends!</strong><p>{names.map((name,i)=>`${name} ${money(totals[i])}`).join(" · ")}. Here’s my payment QR.</p><small>Sample message · nothing is sent</small></div><div className={s.sampleQr} aria-label="Illustrative payment QR, not scannable"><i/><i/><i/></div></div>}
+    </div>
+    <div className={s.gcashRequest}>
+      <div className={s.gcashRequestHeading}><img src="/assets/banks/philippines/gcash.png" alt="" width={26} height={26}/><strong>GCash</strong><span>Payment request</span></div>
+      <div className={s.gcashRequestBody}><div><strong>Hi friends! 👋</strong><p>Here’s our lunch split:</p><ul>{names.map((name,i)=><li key={name}><span>{name}</span><b>{money(totals[i])}</b></li>)}</ul></div><figure><img src="/assets/landing-showcase/gcash-sample-qr.svg" alt="Sample GCash-style QR illustration" width={106} height={106}/><figcaption>Sample QR</figcaption></figure></div>
+    </div>
   </div>;
 }
 
@@ -858,7 +860,7 @@ export function Showcase({ initialMarket, authEnabled = false }: { initialMarket
         <JourneyHeader featureBasePath="/landing-showcase/features" homeHref="/landing-showcase" />
       </div>
       <main id="showcase-main" className={s.mainStory}>
-        <div className={s.mainPurchase} data-main-purchase aria-hidden="true"><div className={s.mainPaper}><div className={s.mainReceiptBody}><Receipt /></div><img className={s.mainReceiptMark} src="/assets/logo-library/company logos/food/starbucks/icon.png" width={230} height={230} alt="" /></div></div>
+        <div className={s.mainPurchase} data-main-purchase aria-hidden="true"><div className={s.mainPaper}><div className={s.mainReceiptBody}><Receipt /></div></div><img className={s.mainFlyingBrand} src="/assets/logo-library/company logos/food/starbucks/icon.png" width={64} height={64} alt="" /></div>
         <ScrollScene id="together" className={s.hero} flow>
           <div className={s.storyGrid}>
             <div className={s.copy}>
@@ -894,7 +896,7 @@ export function Showcase({ initialMarket, authEnabled = false }: { initialMarket
         <ScrollScene id="one-picture" className={s.journey} flow>
           <div className={s.journeyWorld}>
             <article className={s.journeyBeat} data-story-act data-story-weight="1" data-chapter="organize">
-              <div className={s.journeyCopy}>
+              <div className={s.journeyCopy} data-receipt-caption>
                 <Heading text="Stop piecing your history together by hand. Bring your accounts and records into one organized view.">
                   Connect. Upload.
                   <br />
@@ -909,7 +911,7 @@ export function Showcase({ initialMarket, authEnabled = false }: { initialMarket
                 data-story-art
               >
                 <div className={s.receiptStop} data-receipt-stop />
-                <ConnectionOptions /><div className={s.manualPreview}><span>Add manually</span><strong>Lunch with friends</strong><b>₱500.00</b><small>Food & dining · BPI</small></div>
+                <div className={s.connectStack}><ConnectionOptions /><div className={s.manualPreview}><span>Add manually</span><strong>Lunch with friends</strong><b>₱500.00</b><small>Food & dining · BPI</small></div></div>
 
               </div>
             </article>
