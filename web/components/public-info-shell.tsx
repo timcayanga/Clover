@@ -9,7 +9,7 @@ export function PublicInfoShell({
   active,
 }: {
   children: ReactNode;
-  active: "contact" | "privacy" | "terms";
+  active?: "contact" | "privacy" | "terms";
 }) {
   return (
     <div className={styles.site}>
@@ -20,7 +20,7 @@ export function PublicInfoShell({
         <JourneyHeader />
       </div>
       <main id="public-info-main" className={styles.wrap}>
-        <nav className={styles.nav} aria-label="Contact and legal information">
+        {active ? <nav className={styles.nav} aria-label="Contact and legal information">
           {[
             ["contact", "/contact-us", "Contact"],
             ["privacy", "/privacy-policy", "Privacy Policy"],
@@ -34,7 +34,7 @@ export function PublicInfoShell({
               {label}
             </Link>
           ))}
-        </nav>
+        </nav> : null}
         {children}
       </main>
       <PublicFooter />
