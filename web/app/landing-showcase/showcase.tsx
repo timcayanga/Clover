@@ -972,8 +972,10 @@ export function Showcase({ initialMarket, authEnabled = false }: { initialMarket
           <Plans initialMarket={initialMarket} />
         </section>
         <section data-scroll-scene id="start-with-clover" className={s.finalCta} aria-labelledby="final-cta-title">
-          <div className={s.finalFriends} aria-hidden="true"><img src="/assets/landing-story-v2/06-life.webp" alt="" width={1693} height={900} loading="lazy" /></div>
-          <div className={s.finalMascot}><Mascot pose="welcome" size={156} /></div>
+          <div className={s.finalFriends} aria-hidden="true">
+            <div className={s.finalFriend} data-side="left"><img src="/assets/marketing-photos-v4/together-desktop.webp" alt="" width={1672} height={941} loading="lazy" /></div>
+            <div className={s.finalFriend} data-side="right"><img src="/assets/landing-story-v2/06-life.webp" alt="" width={1693} height={900} loading="lazy" /></div>
+          </div>
           <h2 id="final-cta-title">Feel clearer about your money, and more confident <em>about what comes next.</em></h2>
           <div className={s.signupAction}><JourneyActions authEnabled={authEnabled} final /><Link className={s.loginLink} href="/sign-in">Log in</Link></div>
           <StoreAvailability variant="white" />
