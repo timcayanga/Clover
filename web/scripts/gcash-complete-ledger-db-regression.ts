@@ -46,11 +46,18 @@ async function main() {
     assert.equal(Number(checkpoint.openingBalance), 100);
     assert.equal(Number(checkpoint.endingBalance), 100);
     assert.equal(checkpoint.mismatchReason, null);
-    const snapshot = async () => JSON.stringify(await Promise.all([db.account.findMany({ where: { workspaceId: workspace.id } }), db.transaction.findMany({ where: { workspaceId: workspace.id } }), db.parsedTransaction.findMany({ where: { importFileId: file.id } }), db.accountStatementCheckpoint.findMany({ where: { workspaceId: workspace.id } }), db.learningJob.findMany({ where: { workspaceId: workspace.id } })]));
+    // Database row order is unspecified; compare every stored field in stable ID order.
+    const snapshot = async () => JSON.stringify(await Promise.all([
+      db.account.findMany({ where: { workspaceId: workspace.id }, orderBy: { id: 'asc' } }),
+      db.transaction.findMany({ where: { workspaceId: workspace.id }, orderBy: { id: 'asc' } }),
+      db.parsedTransaction.findMany({ where: { importFileId: file.id }, orderBy: { id: 'asc' } }),
+      db.accountStatementCheckpoint.findMany({ where: { workspaceId: workspace.id }, orderBy: { id: 'asc' } }),
+      db.learningJob.findMany({ where: { workspaceId: workspace.id }, orderBy: { id: 'asc' } }),
+    ]));
     const before = await snapshot();
     await confirmImportFile(file.id);
     await settle();
-    assert.equal(await snapshot(), before, 'Repeated confirmation must be a complete no-op');
+    assert.deepEqual(JSON.parse(await snapshot()), JSON.parse(before), 'Repeated confirmation must be a complete no-op');
     const jobs = await db.learningJob.findMany({ where: { workspaceId: workspace.id } });
     assert.equal(jobs.length, 2);
     assert(jobs.every(job => job.status === 'completed'));
