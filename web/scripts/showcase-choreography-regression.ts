@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { planSwipeDirection } from "../app/landing-showcase/showcase-interactions";
-import { flowChapterTravel, purchaseChoreography, storyTravel } from "../app/landing-showcase/showcase-choreography";
+import { flowChapterTravel, flowPurchaseChoreography, purchaseChoreography, storyTravel } from "../app/landing-showcase/showcase-choreography";
 
 const start = purchaseChoreography(0);
 assert.equal(start["--paper-fold"], 0);
@@ -90,3 +90,15 @@ assert.equal(flowChapterTravel(1, []), 0);
 console.log("Natural flow: unequal chapter heights, bounded travel and exact reverse positions passed.");
 assert.equal(flowChapterTravel(-10, [100]), 0);
 assert.equal(flowChapterTravel(101, [100]), 1);
+
+const flowFrames = new Map<number, ReturnType<typeof flowPurchaseChoreography>>();
+for (let index = 0; index <= 300; index++) {
+  const frame = flowPurchaseChoreography(index / 100);
+  flowFrames.set(index, frame);
+  for (const value of Object.values(frame)) assert.ok(Number.isFinite(value) && value >= 0 && value <= 1);
+  if (frame["--handoff-bridge"] > 0) assert.equal(frame["--purchase-merge"], 1, "Wide row crosses the intervening caption");
+  if (frame["--handoff-arrival"] > 0) assert.ok(frame["--handoff-bridge"] >= .8, "Purchase enters copy lane before reaching the report");
+}
+for (let index = 300; index >= 0; index--) assert.deepEqual(flowPurchaseChoreography(index / 100), flowFrames.get(index));
+for (const position of [.75, .85, .95]) assert.equal(flowPurchaseChoreography(position)["--purchase-merge"], 0);
+console.log("Flow purchase: readable row pause, collapse before travel, margin route and exact reversal passed.");

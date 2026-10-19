@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, type RefObject } from "react";
-import { flowChapterTravel, purchaseChoreography, storyTravel } from "./showcase-choreography";
+import { flowChapterTravel, flowPurchaseChoreography, purchaseChoreography, storyTravel } from "./showcase-choreography";
 
 export type MotionMode = "full" | "gentle" | "off";
 const clamp = (value: number) => Math.max(0, Math.min(1, value));
@@ -167,14 +167,15 @@ export function useShowcaseMotion(root: RefObject<HTMLDivElement | null>) {
           // Shared purchase choreography crosses the scene boundary without
           // remounting or resetting: receipt → transaction → category insight.
           if (hasPurchase) {
-            if (flow) {
+            const flowChoreography = flow ? flowPurchaseChoreography(!animated ? 0 : chapterTravel) : null;
+            const choreography = flowChoreography ?? purchaseChoreography(chapterTravel, { trustInterlude: false });
+            if (flowChoreography) {
               scene.style.setProperty("--chapter-height", `${actHeights[0]}px`);
               const distance = (actTops[1] ?? actTops[0]) - actTops[0];
-              scene.style.setProperty("--handoff-offset", `${(distance * ease((chapterTravel - .85) / .9)).toFixed(2)}px`);
+              scene.style.setProperty("--handoff-offset", `${(distance * flowChoreography["--handoff-bridge"]).toFixed(2)}px`);
             }
-            for (const [property, value] of Object.entries(
-              purchaseChoreography(flow && !animated ? 0 : chapterTravel, { trustInterlude: false }),
-            )) write(scene, property, value);
+            for (const [property, value] of Object.entries(choreography))
+              write(scene, property, value);
           }
           const active = Math.min(
             acts.length - 1,

@@ -47,3 +47,18 @@ export function flowChapterTravel(viewportPoint: number, chapterTops: readonly n
   const distance = Math.max(1, chapterTops[last] - (chapterTops[last - 1] ?? chapterTops[last] - 1));
   return Math.max(0, Math.min(chapterTops.length, last + (viewportPoint - chapterTops[last]) / distance));
 }
+
+/** Natural document flow has copy between the two art stages. Collapse while
+ * still in the first stage, travel down its margin, then enter the report. */
+export function flowPurchaseChoreography(position: number) {
+  const bridge = ease((position - 1.15) / .55);
+  const arrival = ease((bridge - .8) / .2);
+  return {
+    ...purchaseChoreography(position),
+    "--purchase-merge": ease((position - .95) / .2),
+    "--category-join": arrival,
+    "--category-fill": ease((position - 1.62) / .22),
+    "--handoff-bridge": bridge,
+    "--handoff-arrival": arrival,
+  };
+}

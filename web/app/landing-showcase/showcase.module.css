@@ -3583,7 +3583,7 @@
 
 /* Join the mobile chart below its heading; static views always show the full category. */
 @media(max-width:900px), (max-width:1100px) and (min-height:1000px) {
- .revisedStory .journey[data-scroll-flow] .purchasePaper { top:calc(7% + var(--paper-fold,0) * 58% - var(--category-join,0) * 12%); }
+ .revisedStory .journey[data-scroll-flow] .purchasePaper { top:calc(7% + var(--paper-fold,0) * 58% - var(--category-join,0) * 20%); }
 }
 .revisedStory .journey[data-scroll-flow][data-story-static="true"] .journeyClarity .donut circle:nth-child(2) { stroke-dasharray:39.2 100; }
 
@@ -3626,4 +3626,10 @@
 }
 @media(prefers-reduced-motion:reduce) {
  .revisedStory .journey[data-scroll-flow] .journeyArt,.revisedStory .finalFriends > .finalGroupMobile { transform:none; }
+}
+/* The collapsed purchase uses the phone's side margin while passing the caption. */
+.revisedStory .journey[data-scroll-flow] .purchasePaper { box-shadow:0 5px 0 rgb(204 229 223 / calc(1 - var(--merge))),0 28px 44px -22px rgb(19 96 91 / calc((1 - var(--merge)) * .3)); }
+@media(max-width:900px), (max-width:1100px) and (min-height:1000px) {
+ .revisedStory .journey[data-scroll-flow] .purchasePaper { left:calc(4% - var(--paper-expand,0) * 4% - var(--merge) * 7% + var(--handoff-arrival,0) * 37%); width:calc((170px + var(--paper-expand,0) * (100% - 170px)) * (1 - var(--merge)) + 18px * var(--merge)); }
+ .revisedStory .journey[data-scroll-flow] .purchaseIdentity { height:calc(44px - var(--merge) * 40px); }
 }
