@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, type RefObject } from "react";
-import { flowChapterTravel, flowPurchaseChoreography, purchaseChoreography, storyTravel } from "./showcase-choreography";
+import { flowChapterTravel, flowPurchaseChoreography, purchaseChoreography, receiptJourneyFrame, storyTravel, type ReceiptWaypoint } from "./showcase-choreography";
 
 export type MotionMode = "full" | "gentle" | "off";
 const clamp = (value: number) => Math.max(0, Math.min(1, value));
@@ -56,6 +56,9 @@ export function useShowcaseMotion(root: RefObject<HTMLDivElement | null>) {
       actHeights: number[];
     }[] = [];
     let viewport = innerHeight;
+    const purchase = element.querySelector<HTMLElement>("[data-main-purchase]");
+    let receiptPoints: ReceiptWaypoint[] = [];
+    let receiptScroll: number | undefined;
     let frame = 0;
     let needsMeasure = true;
     let disposed = false;
@@ -94,10 +97,48 @@ export function useShowcaseMotion(root: RefObject<HTMLDivElement | null>) {
             actHeights: [...scene.querySelectorAll<HTMLElement>("[data-story-act]")].map(act => act.offsetHeight),
           };
         });
+        const origin = element.querySelector<HTMLElement>("[data-receipt-origin]");
+        const stop = element.querySelector<HTMLElement>("[data-receipt-stop]");
+        const destination = element.querySelector<HTMLElement>("[data-receipt-destination]");
+        const main = element.querySelector<HTMLElement>("main");
+        if (purchase && origin && stop && destination && main) {
+          const source = origin.getBoundingClientRect(), middle = stop.getBoundingClientRect(), target = destination.getBoundingClientRect();
+          const mainTop = main.getBoundingClientRect().top + y;
+          const connectTop = stop.closest<HTMLElement>("[data-story-act]")!.getBoundingClientRect().top + y;
+          const reportTop = destination.closest<HTMLElement>("[data-story-act]")!.getBoundingClientRect().top + y;
+          const mobile = matchMedia("(max-width:900px), (max-width:1100px) and (min-height:1000px)").matches;
+          const sourceWidth = Math.min(source.width, 230), middleWidth = mobile ? 105 : 230;
+          const markX = target.left + target.width * .86 - 18;
+          const markY = target.top + y - mainTop + target.height * .16 - 18;
+          const point = (at:number,x:number,docY:number,width:number,merge=0,opacity=1,rotate=0) => ({at,x,y:docY-mainTop,width,merge,opacity,rotate});
+          receiptPoints = [
+            point(0,source.left,source.top+y,sourceWidth,0,1,5),
+            point(connectTop*.45,mobile?-sourceWidth*.88:innerWidth*.74,connectTop*.45+110,sourceWidth,0,1,-5),
+            point(connectTop-viewport*.18,middle.left,middle.top+y,middleWidth,0,1,-4),
+            point(connectTop+viewport*.08,middle.left,middle.top+y,middleWidth,0,1,0),
+            point(Math.min(connectTop+viewport*.20,reportTop-viewport*.64),mobile?-12:innerWidth*.02,Math.min(connectTop+viewport*.20,reportTop-viewport*.64)+95,36,1,1,0),
+            {at:reportTop-viewport*.42,x:mobile?-12:innerWidth*.02,y:markY,width:36,merge:1,opacity:1,rotate:0},
+            {at:reportTop-viewport*.12,x:markX,y:markY,width:36,merge:1,opacity:1,rotate:0},
+            {at:reportTop+viewport*.10,x:markX+12,y:markY+12,width:12,merge:1,opacity:0,rotate:0},
+          ].sort((a,b)=>a.at-b.at);
+        }
         needsMeasure = false;
       }
       const elapsed = Math.min(64, Math.max(1, time - previousTime));
       let settling = false;
+      const receiptTarget = !animated ? 0 : y;
+      const receiptPrevious = receiptScroll ?? receiptTarget;
+      receiptScroll = animated && mode === "full" ? receiptPrevious + (receiptTarget - receiptPrevious) * (1 - Math.exp(-elapsed / 85)) : receiptTarget;
+      if (Math.abs(receiptTarget - receiptScroll) > .05) settling = true;
+      const receipt = receiptJourneyFrame(receiptScroll, receiptPoints);
+      if (purchase && receipt) {
+        purchase.style.setProperty("--receipt-x", `${receipt.x.toFixed(2)}px`);
+        purchase.style.setProperty("--receipt-y", `${receipt.y.toFixed(2)}px`);
+        write(purchase,"--receipt-scale",receipt.width/230);
+        write(purchase,"--receipt-merge",receipt.merge);
+        write(purchase,"--receipt-opacity",receipt.opacity);
+        purchase.style.setProperty("--receipt-rotate", `${receipt.rotate.toFixed(2)}deg`);
+      }
       const delta = y - previousY;
       // A small reversible inertia on ornaments; never shake headings or amounts.
       const target = Math.max(
@@ -183,6 +224,8 @@ export function useShowcaseMotion(root: RefObject<HTMLDivElement | null>) {
           );
           acts.forEach((act, actIndex) => {
             const travel = chapterTravel - actIndex;
+            const actVisible = String(actTops[actIndex] - y < viewport && actTops[actIndex] + actHeights[actIndex] > y);
+            if (act.dataset.visible !== actVisible) act.dataset.visible = actVisible;
             const fade = mode === "gentle" ? 0.1 : 0.3;
             const naturalEnter = (flow || staticStory) && animated ? ease((viewport - (actTops[actIndex] - y)) / (viewport * .65)) : 1;
             write(act, "--natural-enter", naturalEnter);

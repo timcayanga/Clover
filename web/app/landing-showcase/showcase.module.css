@@ -3633,3 +3633,78 @@
  .revisedStory .journey[data-scroll-flow] .purchasePaper { left:calc(4% - var(--paper-expand,0) * 4% - var(--merge) * 7% + var(--handoff-arrival,0) * 37%); width:calc((170px + var(--paper-expand,0) * (100% - 170px)) * (1 - var(--merge)) + 18px * var(--merge)); }
  .revisedStory .journey[data-scroll-flow] .purchaseIdentity { height:calc(44px - var(--merge) * 40px); }
 }
+
+/* One receipt crosses the hero, connect stage and report without duplicating props. */
+.mainStory { position:relative; overflow:clip; }
+.mainPurchase { position:absolute; inset:0; z-index:6; pointer-events:none; }
+.mainPaper { position:absolute; left:0; top:0; width:230px; opacity:var(--receipt-opacity,1); transform-origin:top left; transform:translate3d(var(--receipt-x,calc(100vw - 260px)),var(--receipt-y,140px),0) perspective(1100px) rotateZ(var(--receipt-rotate,5deg)) scale(var(--receipt-scale,1)); }
+.mainReceiptBody { opacity:calc(1 - var(--receipt-merge,0)); transform:scale(calc(1 - var(--receipt-merge,0) * .15)); transform-origin:top left; }
+.mainReceiptBody .receipt { width:230px; padding:24px; min-height:330px; transform:none; animation:none; }
+.mainReceiptMark { position:absolute; top:0; left:0; width:230px; height:230px; border-radius:50%; opacity:var(--receipt-merge,0); box-shadow:0 0 0 12px #fff,0 20px 45px #00754a25; }
+.receiptDock { width:100%; height:330px; }
+.receiptStop { position:absolute; left:2%; top:13%; width:230px; height:330px; pointer-events:none; }
+.revisedStory .hero .heroReceipt { transform:none; animation:none; }
+.revisedStory .hero .ingestStatement { animation:none; top:calc(100% + 50px); bottom:auto; width:210px; }
+.revisedStory .journey[data-scroll-flow] .journeyConversation .journeyMascot { display:block; left:auto; right:18%; top:12%; bottom:auto; width:110px; z-index:3; }
+.journeyConversation .journeyMascot img { animation:helpfulClover 4s ease-in-out infinite; }
+@keyframes helpfulClover { 0%,100% { transform:translateY(0) rotate(-4deg); } 50% { transform:translateY(-7px) rotate(4deg); } }
+.journeyBeat[data-story-active] .journeyMascot img { animation-play-state:running; }
+.site[data-awake="false"] .journeyMascot img { animation-play-state:paused; }
+.animatedQuestion { display:flex; align-items:center; gap:7px; min-width:0; flex:1; height:24px; }
+.animatedQuestion > span:first-child { flex:0 0 auto; font-size:15px; }
+.animatedQuestion > span:last-child { overflow:hidden; white-space:nowrap; font-size:11px; line-height:24px; }
+.chatInput > svg { flex-shrink:0; }
+.typingCursor { display:inline-block; height:12px; margin-left:2px; width:1px; background:#03a8c0; vertical-align:-2px; animation:typingBlink 1s steps(2,end) infinite; }
+@keyframes typingBlink { 50% { opacity:0; } }
+.splitMatrix { border-collapse:collapse; width:100%; table-layout:fixed; font-size:11px; }
+.splitMatrix caption { text-align:left; color:#5b6c75; padding:8px 0 12px; font-size:11px; }
+.splitMatrix th,.splitMatrix td { padding:9px 2px; text-align:center; border-bottom:1px solid #deebe9; }
+.splitMatrix th:first-child { width:34%; text-align:left; }
+.splitMatrix thead th { font-weight:500; font-size:10px; vertical-align:bottom; }
+.splitMatrix thead th > span { display:block; }
+.splitMatrix .person { width:30px; height:30px; margin:0 auto 4px; }
+.splitMatrix tbody th { font-weight:500; }
+.splitMatrix tbody small { display:block; margin-top:3px; color:#637681; font-size:10px; }
+.splitMatrix input { appearance:none; width:20px; height:20px; min-height:20px; max-height:20px; padding:0; border:1px solid #bcd9d5; border-radius:6px; background:#fff; vertical-align:middle; cursor:pointer; }
+.splitMatrix input:checked { background:#03a8c0; border-color:#03a8c0; }
+.splitMatrix input:checked::after { content:""; display:block; width:5px; height:9px; border:solid white; border-width:0 2px 2px 0; transform:translate(6px,2px) rotate(45deg); }
+.splitMatrix input:focus-visible { outline:2px solid #007e91; outline-offset:3px; }
+.splitMatrix input:disabled { cursor:default; opacity:1; }
+.splitMatrix tfoot td { color:#008597; font-weight:700; font-variant-numeric:tabular-nums; font-size:11px; }
+.splitMatrix tfoot th,.splitMatrix tfoot td { border-bottom:0; padding-top:13px; }
+.circleCard .circleTrack i { width:70%; }
+.circleCard .tripDetails { display:block; margin-top:12px; }
+@media(max-width:900px), (max-width:1100px) and (min-height:1000px) {
+ .revisedStory .hero .heroReceipt { left:auto; right:0; top:7%; width:105px; }
+ .receiptDock { height:160px; }
+ .revisedStory .hero .ingestStatement { display:none; }
+ .receiptStop { left:0; top:8%; width:135px; height:200px; }
+ .revisedStory .journey[data-scroll-flow] .journeyConversation .journeyMascot { left:auto; right:0; top:140px; bottom:auto; width:100px; }
+ .revisedStory .journey[data-scroll-flow] .journeyShared { display:flex; flex-direction:column; align-items:flex-end; gap:20px; height:auto; flex-basis:auto; }
+ .revisedStory .journeyShared .circleCard,.revisedStory .journeyShared .sharedCard { position:relative; inset:auto; transform:none; padding:18px; }
+ .revisedStory .journeyShared .circleCard { width:90%; }
+ .revisedStory .journeyShared .sharedCard { width:100%; }
+ .revisedStory .journeyShared .circleCard > div:nth-of-type(3),.revisedStory .journeyShared .circleCard .circleTrack { display:block; }
+ .revisedStory .journeyShared .circleCard > div:nth-of-type(3) { display:flex; justify-content:space-between; gap:8px; margin-top:12px; font-size:12px; }
+ .revisedStory .journeyShared .sharedTotal { margin:12px 0 4px; }
+ .splitMatrix th,.splitMatrix td { padding:10px 2px; }
+}
+@media(prefers-reduced-motion:reduce) {
+ .mainPaper { transform:translate(var(--receipt-x),var(--receipt-y)) scale(var(--receipt-scale)); }
+ .typingCursor,.journeyConversation .journeyMascot img { animation:none; }
+}
+
+.revisedStory .journeyBeat[data-visible="false"] .journeyMascot img { animation-play-state:paused; }
+
+@media(max-width:900px), (max-width:1100px) and (min-height:1000px) {
+ .revisedStory .journeyRecords .connectionOptions { left:auto; right:0; top:8%; width:58%; padding:12px; }
+ .revisedStory .journeyRecords .connectionGrid { gap:7px; }
+ .revisedStory .journeyRecords .connectionGrid > div { padding:8px 3px; gap:5px; font-size:8px; }
+ .revisedStory .journeyRecords .connectionGrid img { width:28px; height:28px; }
+ .revisedStory .journeyRecords .connectionOptions .miniHeader { font-size:11px; gap:5px; }
+ .revisedStory .journeyRecords .connectionOptions .miniHeader > span { font-size:8px; }
+}
+@media(max-width:360px) {
+ .animatedQuestion > span:last-child { font-size:9px; }
+ .journeyConversation .chatInput { padding-inline:10px; }
+}

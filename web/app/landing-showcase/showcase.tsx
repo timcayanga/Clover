@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import Link from "next/link";
-import { planSwipeDirection } from "./showcase-interactions";
+import { planSwipeDirection, sampleSplitShares } from "./showcase-interactions";
 import { useShowcaseMotion } from "./use-showcase-motion";
 import { SwitchOfferNotice } from "@/components/switch-campaign";
 import {
@@ -377,6 +377,7 @@ export function SpendingStory() {
         </div>
         <div
           className={s.donut}
+          data-receipt-destination
           role="img"
           aria-label={
             current
@@ -437,6 +438,45 @@ export function SpendingStory() {
     </div>
   );
 }
+const sampleQuestions = [
+  ["🍽️", "Ask why food spending is up"],
+  ["📊", "Show my spending this month"],
+  ["🏦", "Add my BPI savings account"],
+  ["🧾", "Add lunch, ₱500 from BPI"],
+  ["✈️", "Help budget for my Japan trip"],
+] as const;
+
+function AnimatedQuestion() {
+  const root = useRef<HTMLSpanElement>(null);
+  const [prompt, setPrompt] = useState({text: "", emoji: "🍽️" as string});
+  useEffect(() => {
+    const media = matchMedia("(prefers-reduced-motion: reduce)");
+    let visible = false, timer: ReturnType<typeof setTimeout> | undefined;
+    let index = 0, letters = 0, deleting = false;
+    const stop = () => { clearTimeout(timer); timer = undefined; };
+    const tick = () => {
+      const [emoji, text] = sampleQuestions[index];
+      letters += deleting ? -1 : 1;
+      setPrompt({emoji, text: Array.from(text).slice(0, letters).join("")});
+      let delay = deleting ? 28 : 65;
+      if (!deleting && letters === Array.from(text).length) { deleting = true; delay = 1800; }
+      else if (deleting && letters === 0) { deleting = false; index = (index + 1) % sampleQuestions.length; delay = 250; }
+      timer = setTimeout(tick, delay);
+    };
+    const sync = () => {
+      stop();
+      if (media.matches) { setPrompt({emoji:sampleQuestions[0][0],text:sampleQuestions[0][1]}); return; }
+      if (visible && !document.hidden) timer = setTimeout(tick, 200);
+    };
+    const observer = new IntersectionObserver(([entry]) => { visible = entry.isIntersecting; sync(); });
+    if (root.current) observer.observe(root.current);
+    document.addEventListener("visibilitychange", sync);
+    media.addEventListener("change", sync);
+    return () => { stop(); observer.disconnect(); document.removeEventListener("visibilitychange",sync); media.removeEventListener("change",sync); };
+  }, []);
+  return <span ref={root} className={s.animatedQuestion} aria-label="Ask Clover about spending, reports, accounts, transactions, and budgets"><span aria-hidden="true">{prompt.emoji}</span><span aria-hidden="true">{prompt.text}<i className={s.typingCursor} /></span></span>;
+}
+
 export function Conversation() {
   return (
     <div className={s.conversation}>
@@ -472,7 +512,7 @@ export function Conversation() {
         </div>
       </div>
       <div className={s.chatInput}>
-        <span>Ask about your money…</span>
+        <AnimatedQuestion />
         <Icon />
       </div>
     </div>
@@ -733,7 +773,7 @@ export function CircleCard() {
             alt=""
             loading="lazy"
           />
-          Our home
+          Japan Trip
         </strong>
         <span>Circles</span>
       </div>
@@ -741,13 +781,13 @@ export function CircleCard() {
         <Person face={0} name="Alex" /><Person face={1} name="Jamie" /><Person face={2} name="Sam" />
       </div>
       <div>
-        <span>Groceries budget</span>
-        <b>₱4,500 / ₱6,000</b>
+        <span>Travel budget</span>
+        <b>₱38,500 / ₱55,000</b>
       </div>
       <div className={s.circleTrack}>
         <i />
       </div>
-      <small>Household expenses · Shared budgets · Goals</small>
+      <small className={s.tripDetails}>🇯🇵 Tokyo & Kyoto · 7 days</small>
     </div>
   );
 }
@@ -760,20 +800,23 @@ function Person({ face, name }: { face: number; name: string }) {
 }
 
 export function SplitCard() {
-  const [selected, setSelected] = useState(0);
+  const [assignments, setAssignments] = useState([[true,false,false],[false,true,false],[true,true,true]]);
   const [request, setRequest] = useState(false);
   const names = ["Alex", "Jamie", "Sam"];
+  const items = [{name:"Pasta",amount:45000},{name:"Chicken",amount:45000},{name:"Coffee",amount:30000}];
+  const totals = sampleSplitShares(items.map(item=>item.amount), assignments);
+  const money = (cents:number) => `₱${(cents/100).toLocaleString("en-PH",{maximumFractionDigits:2})}`;
   return <div className={s.sharedCard}>
     <div className={s.miniHeader}><strong>Lunch with friends</strong><span>Split Bills</span></div>
     <strong className={s.sharedTotal}>₱1,200.00</strong>
-    {!request && <><p className={s.splitHint}>Assign each item</p>
-    <div className={s.splitItems}>
-      <div><span>Pasta · ₱450</span><Person face={0} name="Alex" /></div>
-      <div><span>Chicken · ₱450</span><Person face={1} name="Jamie" /></div>
-      <div><span>Coffee · ₱300</span><div role="group" aria-label="Assign coffee">{names.map((name,i)=><button type="button" key={name} aria-label={`Assign coffee to ${name}`} aria-pressed={selected===i} onClick={()=>setSelected(i)}><Person face={i} name={name} /></button>)}</div></div>
-    </div></>}
-    <button className={s.requestPreview} type="button" aria-expanded={request} onClick={()=>setRequest(!request)}>{request ? "Back to items" : "Preview payment request"}<Icon /></button>
-    {request && <div className={s.paymentPreview}><div><strong>Hi {names[selected]}!</strong><p>Your coffee share is ₱300. Here’s my payment QR.</p><small>Sample message · nothing is sent</small></div><div className={s.sampleQr} aria-label="Illustrative payment QR, not scannable"><i/><i/><i/></div></div>}
+    <table className={s.splitMatrix}>
+      <caption>Choose who pays for each item</caption>
+      <thead><tr><th scope="col">Item</th>{names.map((name,i)=><th key={name} scope="col"><Person face={i} name={name}/><span>{name}</span></th>)}</tr></thead>
+      <tbody>{items.map((item,row)=><tr key={item.name}><th scope="row">{item.name}<small>{money(item.amount)}</small></th>{names.map((name,col)=><td key={name}><input type="checkbox" aria-label={`${name} pays for ${item.name.toLowerCase()}`} checked={assignments[row][col]} disabled={assignments[row][col] && assignments[row].filter(Boolean).length===1} onChange={()=>setAssignments(current=>current.map((values,r)=>r===row?values.map((value,c)=>c===col?!value:value):values))}/></td>)}</tr>)}</tbody>
+      <tfoot><tr><th scope="row">To pay</th>{totals.map((total,i)=><td key={names[i]}>{money(total)}</td>)}</tr></tfoot>
+    </table>
+    <button className={s.requestPreview} type="button" aria-expanded={request} onClick={()=>setRequest(!request)}>{request ? "Hide payment request" : "Preview payment request"}<Icon /></button>
+    {request && <div className={s.paymentPreview}><div><strong>Hi friends!</strong><p>{names.map((name,i)=>`${name} ${money(totals[i])}`).join(" · ")}. Here’s my payment QR.</p><small>Sample message · nothing is sent</small></div><div className={s.sampleQr} aria-label="Illustrative payment QR, not scannable"><i/><i/><i/></div></div>}
   </div>;
 }
 
@@ -814,7 +857,8 @@ export function Showcase({ initialMarket, authEnabled = false }: { initialMarket
       <div className={s.productionHeader}>
         <JourneyHeader featureBasePath="/landing-showcase/features" homeHref="/landing-showcase" />
       </div>
-      <main id="showcase-main">
+      <main id="showcase-main" className={s.mainStory}>
+        <div className={s.mainPurchase} data-main-purchase aria-hidden="true"><div className={s.mainPaper}><div className={s.mainReceiptBody}><Receipt /></div><img className={s.mainReceiptMark} src="/assets/logo-library/company logos/food/starbucks/icon.png" width={230} height={230} alt="" /></div></div>
         <ScrollScene id="together" className={s.hero} flow>
           <div className={s.storyGrid}>
             <div className={s.copy}>
@@ -834,13 +878,7 @@ export function Showcase({ initialMarket, authEnabled = false }: { initialMarket
                 <AppScreen page="accounts" eager />
               </div>
               <div className={s.heroReceipt}>
-                <Receipt small /><div className={s.ingestStatement}><span><img src="/assets/banks/philippines/bpi.png" alt="" width={24} height={24} />BPI · Statement</span><b>September 2026</b><i /><i /><i /><small>12 transactions → Clover</small></div>
-              </div>
-              <div className={s.heroTransaction}>
-                <TransactionMoment />
-              </div>
-              <div className={s.heroMascot}>
-                <Mascot pose="welcome" size={124} />
+                <div className={s.receiptDock} data-receipt-origin /><div className={s.ingestStatement}><span><img src="/assets/banks/philippines/bpi.png" alt="" width={24} height={24} />BPI · Statement</span><b>September 2026</b><i /><i /><i /><small>12 transactions → Clover</small></div>
               </div>
             </div>
           </div>
@@ -855,7 +893,6 @@ export function Showcase({ initialMarket, authEnabled = false }: { initialMarket
 
         <ScrollScene id="one-picture" className={s.journey} flow>
           <div className={s.journeyWorld}>
-            <PurchaseThroughline />
             <article className={s.journeyBeat} data-story-act data-story-weight="1" data-chapter="organize">
               <div className={s.journeyCopy}>
                 <Heading text="Stop piecing your history together by hand. Bring your accounts and records into one organized view.">
@@ -871,13 +908,9 @@ export function Showcase({ initialMarket, authEnabled = false }: { initialMarket
                 className={`${s.journeyArt} ${s.journeyRecords}`}
                 data-story-art
               >
-                <div className={s.journeyReceipt}>
-                  <Receipt />
-                </div>
+                <div className={s.receiptStop} data-receipt-stop />
                 <ConnectionOptions /><div className={s.manualPreview}><span>Add manually</span><strong>Lunch with friends</strong><b>₱500.00</b><small>Food & dining · BPI</small></div>
-                <div className={s.journeyTransaction}>
-                  <TransactionMoment />
-                </div>
+
               </div>
             </article>
             <article className={s.journeyBeat} data-story-act data-story-weight="0.85" data-chapter="understand">

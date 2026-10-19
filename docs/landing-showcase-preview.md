@@ -231,3 +231,29 @@ The natural-flow purchase collapses to a small category mark before travelling b
 ### Production people templates (19 October 2026)
 
 The main Ask Clover scene now reuses production’s `marketing-photos-v4/adviser-desktop.webp`. The closing scene reuses production’s original four friends in `landing-story-v2/06-life.webp`: two SVG viewport crops on desktop and one intact group on mobile. Only framing changes; the original people and source pixels are preserved. The newly generated October 19 lifestyle photos are no longer used by the showcase. Existing receipt motion, readable caption lanes, and responsive scroll behavior remain unchanged.
+
+### One receipt across the opening story (19 October 2026)
+
+The main showcase now renders one Starbucks receipt across the opening, Connect,
+and report chapters. Its document-space route is measured from responsive docks,
+with a short scroll-settling pass. The receipt starts at the hero’s right edge,
+settles on the left of Connect, then folds down to its recognizable Starbucks mark.
+The mark reaches the report’s outer food-spending arc before shrinking and fading
+into it. Reverse scrolling restores the same receipt. Mobile routes use the outer
+gutter while passing copy, then cross into the chart only at the chart’s height.
+The former bottom hero transaction, opening mascot, and duplicate Connect receipt
+are removed. Feature-preview choreography remains independent.
+
+Ask Clover gains the existing chat-pose mascot and an emoji question prompt that
+types, holds, erases and rotates through spending, reports, accounts, transactions,
+and travel budgeting. Typing stops offscreen and in hidden tabs. Reduced motion
+shows a complete static question. The helper’s float pauses offscreen too.
+
+The shared-money illustrations use the production people. Japan Trip replaces
+Our home, with a PHP 38,500 / 55,000 travel budget and Tokyo/Kyoto context. Split
+Bills now presents people as named columns, per-item checkbox assignments, and
+live per-person totals. Integer-centavo allocation preserves the full PHP 1,200
+bill, including remainders; every row retains at least one payer. The optional
+sample payment request reflects current shares and retains the illustrative QR.
+No actual message is sent, and no customer data or authenticated app changes are
+involved. Mobile cards reflow vertically when the request expands.

@@ -62,3 +62,18 @@ export function flowPurchaseChoreography(position: number) {
     "--handoff-arrival": arrival,
   };
 }
+
+export type ReceiptWaypoint = { at: number; x: number; y: number; width: number; merge: number; opacity: number; rotate: number };
+/** Interpolate one physical receipt, including reverse scroll, without remounting it. */
+export function receiptJourneyFrame(scroll: number, points: readonly ReceiptWaypoint[]) {
+  if (!points.length) return null;
+  if (scroll <= points[0].at) return points[0];
+  for (let index = 1; index < points.length; index++) {
+    const end = points[index], start = points[index - 1];
+    if (scroll <= end.at) {
+      const t = ease((scroll - start.at) / Math.max(1, end.at - start.at));
+      return Object.fromEntries(Object.keys(start).map(key => [key, start[key as keyof ReceiptWaypoint] + (end[key as keyof ReceiptWaypoint] - start[key as keyof ReceiptWaypoint]) * t])) as ReceiptWaypoint;
+    }
+  }
+  return points[points.length - 1];
+}

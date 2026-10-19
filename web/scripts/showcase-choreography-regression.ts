@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
-import { planSwipeDirection } from "../app/landing-showcase/showcase-interactions";
-import { flowChapterTravel, flowPurchaseChoreography, purchaseChoreography, storyTravel } from "../app/landing-showcase/showcase-choreography";
+import { planSwipeDirection, sampleSplitShares } from "../app/landing-showcase/showcase-interactions";
+import { flowChapterTravel, flowPurchaseChoreography, purchaseChoreography, receiptJourneyFrame, storyTravel } from "../app/landing-showcase/showcase-choreography";
 
 const start = purchaseChoreography(0);
 assert.equal(start["--paper-fold"], 0);
@@ -102,3 +102,35 @@ for (let index = 0; index <= 300; index++) {
 for (let index = 300; index >= 0; index--) assert.deepEqual(flowPurchaseChoreography(index / 100), flowFrames.get(index));
 for (const position of [.75, .85, .95]) assert.equal(flowPurchaseChoreography(position)["--purchase-merge"], 0);
 console.log("Flow purchase: readable row pause, collapse before travel, margin route and exact reversal passed.");
+
+// One receipt must arrive at each declared dock exactly and reverse without drift.
+const receiptPoints = [
+  {at:0,x:1150,y:150,width:230,merge:0,opacity:1,rotate:5},
+  {at:750,x:25,y:1000,width:230,merge:0,opacity:1,rotate:-4},
+  {at:1100,x:25,y:1200,width:36,merge:1,opacity:1,rotate:0},
+  {at:1300,x:25,y:1850,width:36,merge:1,opacity:1,rotate:0},
+  {at:1550,x:280,y:1850,width:36,merge:1,opacity:1,rotate:0},
+  {at:1750,x:292,y:1862,width:12,merge:1,opacity:0,rotate:0},
+];
+const receiptFrames = new Map<number, ReturnType<typeof receiptJourneyFrame>>();
+receiptPoints.forEach(point=>assert.deepEqual(receiptJourneyFrame(point.at,receiptPoints),point));
+for (let y=0;y<=2000;y++) {
+  const frame=receiptJourneyFrame(y,receiptPoints)!;
+  assert.ok(Object.values(frame).every(Number.isFinite));
+  assert.ok(frame.merge>=0 && frame.merge<=1 && frame.opacity>=0 && frame.opacity<=1 && frame.width>=12);
+  if (y>=1300 && y<=1550) assert.equal(frame.y,1850,"Logo crosses the caption before reaching the report lane");
+  receiptFrames.set(y,frame);
+}
+for (let y=2000;y>=0;y--) assert.deepEqual(receiptJourneyFrame(y,receiptPoints),receiptFrames.get(y));
+assert.equal(receiptJourneyFrame(0,[]),null);
+console.log("Hero receipt: one reversible route, exact docks, report-lane crossing and absorption passed.");
+
+const defaultAssignments=[[true,false,false],[false,true,false],[true,true,true]];
+assert.deepEqual(sampleSplitShares([45000,45000,30000],defaultAssignments),[55000,55000,10000]);
+assert.deepEqual(sampleSplitShares([45000,45000,30000],[[true,false,false],[false,true,false],[true,true,false]]),[60000,60000,0]);
+assert.deepEqual(sampleSplitShares([10000],[[true,true,true]]),[3334,3333,3333]);
+for (let mask=1;mask<8;mask++) {
+  const assignments=Array.from({length:3},()=>[Boolean(mask&1),Boolean(mask&2),Boolean(mask&4)]);
+  assert.equal(sampleSplitShares([45001,45002,30001],assignments).reduce((a,b)=>a+b,0),120004);
+}
+console.log("Split-bill sample: assignment changes, exact centavo totals and remainder preservation passed.");
