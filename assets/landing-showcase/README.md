@@ -80,3 +80,22 @@ Its payload is exactly: `Clover sample split bill. This is a demonstration, not 
 It contains no payment destination, account information, credentials, or money
 transfer instruction. The surrounding illustration uses Clover’s existing GCash
 institution asset and fictional split amounts.
+
+## Payment-request and readability refinements · 19 October 2026
+
+The main showcase serves the full 1206px production captures directly in larger
+iPhone frames, with no enlarge/zoom interaction. Mobile Transactions now has its
+own larger phone above the chart rather than hiding that phone. These are the
+existing production-UI captures with fictional records; no customer data was used.
+
+`qr-ph-logo.svg` is the CC0 vector from
+https://commons.wikimedia.org/wiki/File:QR_Ph_Logo.svg
+(original https://upload.wikimedia.org/wikipedia/commons/3/35/QR_Ph_Logo.svg).
+The black sample QR retains its existing plain-text demonstration payload; it is
+not a payment destination. The masked recipient and phone number are fictional.
+Messenger is a code-native vector; WhatsApp, Instagram and Gmail reuse the local
+logo library. These illustrate sharing a request and do not send messages.
+
+The Starbucks sample has one Grande Mocha Frappuccino and one Sausage Roll.
+Its illustrative PHP120 + PHP70 amounts preserve the PHP190 purchase shown in
+the production capture and the receipt-to-report story; these are not menu prices.

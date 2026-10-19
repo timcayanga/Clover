@@ -3765,3 +3765,84 @@
  .revisedStory .journey[data-scroll-flow] .journeyConversation .journeyMascot { position:relative; inset:auto; grid-column:1; grid-row:1; align-self:end; width:84px; margin-bottom:12px; }
  .revisedStory .journey[data-scroll-flow] .journeyConversation .conversation { position:relative; inset:auto; grid-column:1/-1; grid-row:2; width:100%; transform:none; }
 }
+
+/* Larger full-resolution app screens; no zoom step interrupts the story. */
+.revisedStory .hero .heroPhone { width:clamp(250px,min(27vw,calc((100svh - 125px) * .461)),360px); left:1%; }
+.revisedStory .journey[data-scroll-flow] .journeyBeat:has(.insightPhone) { min-height:max(750px,90svh); }
+.revisedStory .journey[data-scroll-flow] .insightPhone { left:auto; right:0; width:clamp(270px,min(27vw,calc((90svh - 90px) * .461)),350px); }
+.phoneDisplay > img { backface-visibility:hidden; }
+.receipt > div > span:first-child { text-align:left; }
+.receipt > div > span:last-child { white-space:nowrap; }
+.receipt > div { gap:12px; font-size:11px; line-height:1.5; }
+.statementRows { display:grid; gap:0; }
+.ingestStatement .statementRows > div { display:flex; justify-content:space-between; gap:12px; border-bottom:1px solid #e2edeb; padding:9px 0; font-size:9px; }
+.ingestStatement .statementRows span { color:#526c76; font-weight:400; }
+.statementRows b { white-space:nowrap; color:#263b46; font-size:9px; }
+.requestBridge { display:flex; align-items:center; justify-content:center; gap:8px; color:#008597; font-size:11px; font-weight:600; }
+.requestBridge svg { width:18px; height:26px; flex:none; }
+.splitExample { gap:10px; }
+.gcashRequestBody { grid-template-columns:minmax(0,1fr) 120px; gap:12px; }
+.qrIdentity { display:grid; gap:2px; margin:0 0 5px; font-size:9px; color:#253b46; }
+.qrIdentity span { font-size:8px; color:#5b6c75; }
+.qrCode { position:relative; width:120px; margin:auto; background:white; }
+.gcashRequestBody .qrCode > img:first-child { display:block; width:120px; height:120px; border-radius:0; }
+.gcashRequestBody .qrCode > .qrPhMark { position:absolute; left:50%; top:50%; transform:translate(-50%,-50%); width:36px; height:auto; border:3px solid white; border-radius:2px; background:white; box-sizing:content-box; }
+.requestChannels { display:flex; align-items:center; justify-content:center; gap:12px; padding-top:12px; margin-top:12px; border-top:1px solid #e1ebf5; }
+.requestChannels > span:first-child { color:#5b6c75; font-size:10px; margin-right:2px; }
+.requestChannels svg,.requestChannels img { display:block; width:23px; height:23px; object-fit:contain; }
+.revisedStory .journeyShared .sharedPhoto { top:auto; bottom:8%; height:36%; }
+.sharedPhoto img { object-position:88% center; }
+@media(max-width:1100px) and (min-width:901px) and (max-height:999px) {
+ .revisedStory .journey[data-scroll-flow] .insightPhone { width:26%; }
+ .gcashRequest { padding:12px; }
+ .gcashRequestBody { grid-template-columns:1fr; }
+ .gcashRequestBody > div:first-child { display:none; }
+}
+@media(max-width:900px), (max-width:1100px) and (min-height:1000px) {
+ .revisedStory .hero .heroPhone { left:27%; width:clamp(185px,calc((100svh - 370px) * .461),265px); }
+ .revisedStory .hero[data-scroll-flow] .storyGrid { min-height:900px; }
+ .revisedStory .journey[data-scroll-flow] .journeyBeat:has(.insightPhone) { min-height:0; }
+ .revisedStory .journey[data-scroll-flow] .journeyClarity { display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1.05fr); align-items:center; gap:14px; height:auto; flex-basis:auto; padding:12px 0; }
+ .revisedStory .journeyClarity .reportCard { position:relative; inset:auto; width:100%; padding:12px; transform:none; }
+ .revisedStory .journey[data-scroll-flow] .insightPhone { display:block; position:relative; inset:auto; width:100%; transform:perspective(1200px) rotateY(calc((1 - var(--act-progress)) * -8deg)); }
+ .revisedStory .journeyClarity .reportMascot { display:none; }
+ .revisedStory .journeyShared .sharedPhoto { display:block; position:relative; inset:auto; order:-1; width:100%; height:230px; flex:none; }
+ .sharedPhoto img { object-position:center; }
+ .gcashRequestBody { grid-template-columns:minmax(0,1fr) 120px; }
+}
+@media(max-width:360px) {
+ .revisedStory .hero .heroPhone { left:30%; width:175px; }
+ .revisedStory .journey[data-scroll-flow] .journeyClarity { gap:10px; grid-template-columns:minmax(0,.8fr) minmax(0,1.2fr); }
+ .gcashRequestBody { gap:8px; }
+ .requestChannels { gap:9px; }
+}
+.revisedStory .hero .heroPhone { left:3%; }
+.revisedStory .journeyClarity .reportMascot { display:none; }
+.revisedStory .journey[data-scroll-flow] .journeyBeat:has(.insightPhone) { min-height:max(830px,90svh); }
+.revisedStory .journey[data-scroll-flow] .insightPhone { width:clamp(280px,27vw,350px); }
+@media(max-width:900px), (max-width:1100px) and (min-height:1000px) {
+ .revisedStory .hero .heroPhone { left:27%; }
+ .revisedStory .journey[data-scroll-flow] .journeyBeat:has(.insightPhone) { min-height:0; }
+ .revisedStory .journey[data-scroll-flow] .journeyClarity { display:flex; flex-direction:column; gap:20px; }
+ .revisedStory .journey[data-scroll-flow] .insightPhone { width:min(250px,80%); order:0; }
+ .revisedStory .journeyClarity .reportCard { order:1; width:100%; }
+ .revisedStory .journeyClarity .donut { max-width:150px; }
+}
+.revisedStory .journey[data-scroll-flow] .journeyBeat:has(.splitExample) { min-height:max(800px,92svh); }
+@media(max-width:900px), (max-width:1100px) and (min-height:1000px) {
+ .revisedStory .hero .heroPhone { left:5%; width:clamp(210px,calc((100svh - 350px) * .461),250px); }
+ .revisedStory .journey[data-scroll-flow] .journeyBeat:has(.splitExample) { min-height:0; }
+}
+.sharedPhoto img { object-position:100% center; }
+@media(min-width:901px) and (max-width:1100px) and (max-height:999px) {
+ .revisedStory .journey[data-scroll-flow] .insightPhone { width:26%; }
+}
+@media(max-width:900px), (max-width:1100px) and (min-height:1000px) {
+ .sharedPhoto img { object-position:50% 60%; }
+ .revisedStory .journey[data-scroll-flow] .insightPhone { order:1; }
+ .revisedStory .journeyClarity .reportCard { order:0; }
+}
+@media(max-width:900px), (max-width:1100px) and (min-height:1000px) {
+ .revisedStory .journeyClarity .spendingStory { position:relative; inset:auto; width:100%; flex:none; order:0; }
+ .revisedStory .journey[data-scroll-flow] .insightPhone { flex:none; }
+}

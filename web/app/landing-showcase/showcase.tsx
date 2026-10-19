@@ -165,15 +165,7 @@ export function AppScreen({
   page: "accounts" | "transactions";
   eager?: boolean;
 }) {
-  const dialog = useRef<HTMLDialogElement>(null);
-  const [expanded, setExpanded] = useState(false);
   const capture = `/assets/landing-showcase/${page === "accounts" ? "accounts-iphone-squircle-20261014" : "transactions-production-hd-20261013"}.webp`;
-  useEffect(() => {
-    if (!expanded) return;
-    const previous = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-    return () => { document.body.style.overflow = previous; };
-  }, [expanded]);
   return (
     <div className={s.phone}>
       <div className={s.phoneDisplay}>
@@ -216,13 +208,6 @@ export function AppScreen({
         />
         <span className={s.phoneHome} aria-hidden="true" />
       </div>
-      <button className={s.phoneExpand} type="button" aria-label={`Enlarge Clover ${page} screenshot`} onClick={() => { setExpanded(true); dialog.current?.showModal(); }}>
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true"><circle cx="10" cy="10" r="6"/><path d="m15 15 6 6M7 10h6M10 7v6"/></svg>
-      </button>
-      <dialog ref={dialog} className={s.captureDialog} aria-label={`Clover ${page} screenshot`} onClose={() => setExpanded(false)} onClick={(event) => { if (event.target === event.currentTarget) dialog.current?.close(); }}>
-        <header><strong>{page === "accounts" ? "Accounts" : "Transactions"}</strong><button type="button" onClick={() => dialog.current?.close()} aria-label="Close screenshot">×</button></header>
-        {expanded ? <img src={capture} width={1206} height={page === "accounts" ? 2616 : 2460} alt={`Full-resolution Clover ${page} screen with sample data`} /> : null}
-      </dialog>
     </div>
   );
 }
@@ -242,10 +227,11 @@ export function Receipt({ small = false }: { small?: boolean }) {
       <strong>STARBUCKS</strong>
       <span>October 5, 2026 · 9:41 AM</span>
       <div>
-        <span>1 × Caffè Latte</span>
-        <span>₱190.00</span>
+        <span>1 × Grande Mocha Frappuccino</span>
+        <span>₱120.00</span>
       </div>
-      <div className={s.receiptNote}><span>Size</span><span>Grande</span></div><div className={s.receiptNote}><span>Payment</span><span>BPI card</span></div>
+      <div><span>1 × Sausage Roll</span><span>₱70.00</span></div>
+      <div className={s.receiptNote}><span>Payment</span><span>BPI card</span></div>
       <div className={s.receiptTotal}>
         <strong>Total</strong>
         <strong>₱190.00</strong>
@@ -278,7 +264,7 @@ export function PurchaseThroughline() {
           <b>−₱190.00</b>
         </div>
         <div className={s.purchaseReceiptTail}>
-          <span>Caffè Latte</span>
+          <span>Grande Mocha Frappuccino · Sausage Roll</span>
           <span>Total paid</span>
           <div className={s.barcode} />
         </div>
@@ -458,9 +444,9 @@ function AnimatedQuestion() {
       const [emoji, text] = sampleQuestions[index];
       letters += deleting ? -1 : 1;
       setPrompt({emoji, text: Array.from(text).slice(0, letters).join("")});
-      let delay = deleting ? 28 : 65;
-      if (!deleting && letters === Array.from(text).length) { deleting = true; delay = 1800; }
-      else if (deleting && letters === 0) { deleting = false; index = (index + 1) % sampleQuestions.length; delay = 250; }
+      let delay = deleting ? 10 : 24;
+      if (!deleting && letters === Array.from(text).length) { deleting = true; delay = 1200; }
+      else if (deleting && letters === 0) { deleting = false; index = (index + 1) % sampleQuestions.length; delay = 120; }
       timer = setTimeout(tick, delay);
     };
     const sync = () => {
@@ -600,9 +586,6 @@ export function Plans({ initialMarket }: { initialMarket: PricingMarket }) {
             Monthly
           </button>
         </div>
-      </div>
-      <div className={s.planSelectors} role="group" aria-label="Choose a plan">
-        {["Free", "Plus", "Pro"].map(name => <button key={name} type="button" aria-pressed={plans[active].name === name} onClick={() => setActive(plans.findIndex(plan => plan.name === name))}>{name}</button>)}
       </div>
       <div
         className={s.planCarousel}
@@ -818,9 +801,11 @@ export function SplitCard({ compact = false }: { compact?: boolean } = {}) {
   if (compact) return <div className={s.sharedCard}>{bill}</div>;
   return <div className={s.splitExample}>
     <div className={s.sharedCard}>{bill}</div>
+    <div className={s.requestBridge}><svg viewBox="0 0 24 32" fill="none" aria-hidden="true"><path d="M12 1v27m-7-7 7 7 7-7" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg><span>Request payment through Clover</span></div>
     <div className={s.gcashRequest}>
       <div className={s.gcashRequestHeading}><img src="/assets/banks/philippines/gcash.png" alt="" width={26} height={26}/><strong>GCash</strong><span>Payment request</span></div>
-      <div className={s.gcashRequestBody}><div><strong>Hi friends! 👋</strong><p>Here’s our lunch split:</p><ul>{names.map((name,i)=><li key={name}><span>{name}</span><b>{money(totals[i])}</b></li>)}</ul></div><figure><img src="/assets/landing-showcase/gcash-sample-qr.svg" alt="Sample GCash-style QR illustration" width={106} height={106}/><figcaption>Sample QR</figcaption></figure></div>
+      <div className={s.gcashRequestBody}><div><strong>Hi friends! 👋</strong><p>Here’s our lunch split:</p><ul>{names.map((name,i)=><li key={name}><span>{name}</span><b>{money(totals[i])}</b></li>)}</ul></div><figure><div className={s.qrIdentity}><strong>AL•• ••• RE••</strong><span>09•• ••• 1234</span></div><div className={s.qrCode}><img src="/assets/landing-showcase/gcash-sample-qr.svg" alt="Sample black QR code" width={120} height={120}/><img className={s.qrPhMark} src="/assets/landing-showcase/qr-ph-logo.svg" alt="QR Ph" width={40} height={10}/></div><figcaption>Sample QR</figcaption></figure></div>
+      <div className={s.requestChannels}><span>Send via</span><span role="img" aria-label="Messenger" title="Messenger"><svg viewBox="0 0 24 24" aria-hidden="true"><defs><linearGradient id="showcase-messenger" x2="0" y2="1"><stop stopColor="#00b2ff"/><stop offset="1" stopColor="#a033ff"/></linearGradient></defs><path fill="url(#showcase-messenger)" d="M12 2C6.3 2 2 6.1 2 11.5c0 3.1 1.4 5.6 3.8 7.3V22l3.4-1.9c.9.2 1.8.4 2.8.4 5.7 0 10-4.1 10-9.5S17.7 2 12 2Z"/><path fill="#fff" d="m5.5 14 5-5 3 2.5 5-2.5-5 5-3-2.5Z"/></svg></span>{[["WhatsApp","social-media/whatsapp"],["Instagram","social-media/instagram"],["Gmail","subscriptions/gmail"]].map(([name,path])=><img key={name} src={`/assets/logo-library/company logos/${path}/icon.png`} alt={name} title={name} width={24} height={24} loading="lazy"/>)}</div>
     </div>
   </div>;
 }
@@ -883,7 +868,7 @@ export function Showcase({ initialMarket, authEnabled = false }: { initialMarket
                 <AppScreen page="accounts" eager />
               </div>
               <div className={s.heroReceipt}>
-                <div className={s.receiptDock} data-receipt-origin /><div className={s.ingestStatement}><span><img src="/assets/banks/philippines/bpi.png" alt="" width={24} height={24} />BPI · Statement</span><b>September 2026</b><i /><i /><i /><small>12 transactions → Clover</small></div>
+                <div className={s.receiptDock} data-receipt-origin /><div className={s.ingestStatement}><span><img src="/assets/banks/philippines/bpi.png" alt="" width={24} height={24} />BPI · Statement</span><b>September 2026</b><div className={s.statementRows}><div><span>Sep 30 · Payroll credit</span><b>+₱48,000</b></div><div><span>Sep 28 · Fund transfer</span><b>−₱5,000</b></div><div><span>Sep 26 · Meralco</span><b>−₱1,920</b></div><div><span>Sep 25 · Interest earned</span><b>+₱18.50</b></div></div><small>12 transactions → Clover</small></div>
               </div>
             </div>
           </div>
