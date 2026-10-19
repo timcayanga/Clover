@@ -834,7 +834,7 @@ export function Showcase({ initialMarket, authEnabled = false }: { initialMarket
                 <AppScreen page="accounts" eager />
               </div>
               <div className={s.heroReceipt}>
-                <Receipt small /><div className={s.ingestStatement}><span>BPI · Statement</span><b>September 2026</b><i /><i /><i /><small>12 transactions → Clover</small></div>
+                <Receipt small /><div className={s.ingestStatement}><span><img src="/assets/banks/philippines/bpi.png" alt="" width={24} height={24} />BPI · Statement</span><b>September 2026</b><i /><i /><i /><small>12 transactions → Clover</small></div>
               </div>
               <div className={s.heroTransaction}>
                 <TransactionMoment />
@@ -910,6 +910,9 @@ export function Showcase({ initialMarket, authEnabled = false }: { initialMarket
                 className={`${s.journeyArt} ${s.journeyConversation}`}
                 data-story-art
               >
+                <div className={s.conversationPhoto}>
+                  <img src="/assets/landing-showcase/ask-clover-woman-20261019.webp" alt="A woman using her phone at home." width={900} height={1200} loading="lazy" />
+                </div>
                 <Conversation />
                 <div className={s.journeyMascot}>
                   <Mascot pose="chat" size={150} />
@@ -931,7 +934,7 @@ export function Showcase({ initialMarket, authEnabled = false }: { initialMarket
                 <div className={s.privacyPhoto}>
                   <StoryPhoto
                     desktop="landing-story-v3/07-private-review"
-                    mobile="landing-story-v3/07-private-review-mobile"
+                    mobile="landing-story-v3/07-private-review"
                     alt="Reviewing personal financial records at home."
                   />
                 </div>
@@ -975,8 +978,9 @@ export function Showcase({ initialMarket, authEnabled = false }: { initialMarket
         </section>
         <section data-scroll-scene id="start-with-clover" className={s.finalCta} aria-labelledby="final-cta-title">
           <div className={s.finalFriends} aria-hidden="true">
-            <div className={s.finalFriend} data-side="left"><img src="/assets/marketing-photos-v4/together-desktop.webp" alt="" width={1672} height={941} loading="lazy" /></div>
-            <div className={s.finalFriend} data-side="right"><img src="/assets/landing-story-v2/06-life.webp" alt="" width={1693} height={900} loading="lazy" /></div>
+            <div className={s.finalFriend} data-side="left"><img src="/assets/landing-showcase/closing-friends-20261019.webp" alt="" width={1536} height={1024} loading="lazy" /></div>
+            <div className={s.finalFriend} data-side="right"><img src="/assets/landing-showcase/closing-friends-20261019.webp" alt="" width={1536} height={1024} loading="lazy" /></div>
+            <img className={s.finalGroupMobile} src="/assets/landing-showcase/closing-friends-20261019.webp" alt="" width={1536} height={1024} loading="lazy" />
           </div>
           <h2 id="final-cta-title">Feel clearer about your money, and more confident <em>about what comes next.</em></h2>
           <div className={s.signupAction}><JourneyActions authEnabled={authEnabled} final /><Link className={s.loginLink} href="/sign-in">Log in</Link></div>

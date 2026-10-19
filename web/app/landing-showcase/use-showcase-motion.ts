@@ -64,6 +64,7 @@ export function useShowcaseMotion(root: RefObject<HTMLDivElement | null>) {
     const sceneProgress = new Map<HTMLElement, number>();
     let impulse = 0;
     let closingProgress: number | undefined;
+    const flowTravel = new Map<HTMLElement, number>();
     let pointerX = 0;
     let pointerY = 0;
     const write = (node: HTMLElement, property: string, value: number) => {
@@ -152,9 +153,17 @@ export function useShowcaseMotion(root: RefObject<HTMLDivElement | null>) {
           const staticStory = !animated || (!pinned && !flow);
           scene.dataset.storyStatic = String(staticStory);
           const storyProgress = mode === "gentle" ? raw : p;
-          const chapterTravel = flow
+          const travelTarget = flow
             ? flowChapterTravel(y + viewport * .65, actTops)
             : storyTravel(storyProgress, weights);
+          // Let only the purchase settle gently; document scrolling and captions
+          // remain directly attached to the user's gesture.
+          const previousTravel = flowTravel.get(scene) ?? travelTarget;
+          const chapterTravel = flow && animated && mode === "full"
+            ? previousTravel + (travelTarget - previousTravel) * (1 - Math.exp(-elapsed / 100))
+            : travelTarget;
+          flowTravel.set(scene, chapterTravel);
+          if (Math.abs(travelTarget - chapterTravel) > .00015) settling = true;
           // Shared purchase choreography crosses the scene boundary without
           // remounting or resetting: receipt → transaction → category insight.
           if (hasPurchase) {

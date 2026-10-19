@@ -3586,3 +3586,44 @@
  .revisedStory .journey[data-scroll-flow] .purchasePaper { top:calc(7% + var(--paper-fold,0) * 58% - var(--category-join,0) * 12%); }
 }
 .revisedStory .journey[data-scroll-flow][data-story-static="true"] .journeyClarity .donut circle:nth-child(2) { stroke-dasharray:39.2 100; }
+
+/* Denser natural chapters, with a protected caption lane and a human Ask Clover scene. */
+.revisedStory .journey[data-scroll-flow] .journeyBeat { min-height:max(680px,88svh); }
+.revisedStory .journey[data-scroll-flow] .insightPhone { width:clamp(190px,min(20vw,calc((88svh - 150px) * .46)),270px); }
+.revisedStory .journey[data-scroll-flow] .privacyPhoto img { object-position:86% center; }
+.revisedStory .purchaseIdentity b { color:#ef465d; }
+.ingestStatement > span { display:flex; align-items:center; gap:7px; }
+.ingestStatement > span img { width:24px; height:24px; border-radius:7px; object-fit:contain; flex-shrink:0; }
+.conversationPhoto { position:absolute; left:1%; top:15%; width:26%; height:70%; overflow:hidden; border-radius:34px; box-shadow:0 7px 0 #d1e6df,0 30px 55px -28px #13605b45; transform:perspective(1200px) rotateY(calc((1 - var(--act-progress)) * 8deg)) rotateZ(calc((1 - var(--act-progress)) * 3deg)); }
+.conversationPhoto img { display:block; width:100%; height:100%; object-fit:cover; object-position:center 35%; }
+.revisedStory .journey[data-scroll-flow] .journeyConversation .journeyMascot { display:none; }
+/* One friendly group: separate pairs on desktop, everyone together on phones. */
+.revisedStory .finalFriends > .finalGroupMobile { display:none; }
+.revisedStory .finalFriend { width:24%; max-width:390px; height:auto; aspect-ratio:3 / 4; max-height:calc(100svh - 140px); }
+.revisedStory .finalFriend[data-side="left"] { left:max(2.5%,calc(50% - 770px)); }
+.revisedStory .finalFriend[data-side="right"] { right:max(2.5%,calc(50% - 770px)); }
+.revisedStory .finalFriend img { width:200%; max-width:none; height:100%; object-fit:cover; object-position:center; transform:none; }
+.revisedStory .finalFriend[data-side="right"] img { margin-left:-100%; }
+@media(max-width:900px), (max-width:1100px) and (min-height:1000px) {
+ .revisedStory .journey[data-scroll-flow] .journeyBeat { min-height:0; justify-content:flex-start; gap:20px; padding:72px 6% 28px; }
+ .revisedStory .journey[data-scroll-flow] .journeyArt { height:clamp(310px,43svh,370px); flex-basis:clamp(310px,43svh,370px); transform:perspective(1200px) translateY(calc((1 - var(--natural-enter,1)) * 12px)) rotateX(calc((1 - var(--natural-enter,1)) * 2deg)); }
+ .revisedStory .journey[data-scroll-flow] .purchaseThroughline { top:72px; height:clamp(310px,43svh,370px); }
+ .revisedStory .journey[data-scroll-flow] .journeyRecords .connectionOptions { opacity:1; }
+ .revisedStory .journey[data-scroll-flow] .journeyShared { height:460px; flex-basis:460px; }
+ .revisedStory .journey[data-scroll-flow] .journeyConversation { height:610px; flex-basis:610px; }
+ .revisedStory .journey[data-scroll-flow] .conversationPhoto { left:0; top:0; width:65%; height:300px; border-radius:26px; }
+ .revisedStory .journey[data-scroll-flow] .conversationPhoto img { object-position:center top; }
+ .revisedStory .journey[data-scroll-flow] .journeyConversation .conversation { left:auto; right:0; top:auto; bottom:0; width:92%; padding:15px; z-index:2; transform:perspective(1200px) rotateY(calc((1 - var(--act-progress)) * -4deg)); }
+ .revisedStory .journey[data-scroll-flow] .journeyConversation .question { font-size:12px; margin:10px 0; padding:9px 12px; }
+ .revisedStory .journey[data-scroll-flow] .journeyConversation .answer { font-size:12px; line-height:1.55; }
+ .revisedStory .journey[data-scroll-flow] .journeyConversation .chatChart { margin:10px 0; padding:8px 10px; }
+ .revisedStory .journey[data-scroll-flow] .journeyPrivacy .controlCard { width:64%; }
+ .ingestStatement > span { gap:4px; }.ingestStatement > span img { width:18px; height:18px; border-radius:5px; }
+ .revisedStory .finalCta { min-height:0; padding-top:42px; padding-bottom:48px; }
+ .revisedStory .finalFriends { width:100%; max-width:520px; height:auto; flex-basis:auto; margin-bottom:10px; }
+ .revisedStory .finalFriend { display:none; }
+ .revisedStory .finalFriends > .finalGroupMobile { display:block; width:100%; height:auto; border-radius:26px; box-shadow:0 7px 0 #d8ebe6,0 24px 44px -26px #245f5e45; transform:perspective(1200px) rotateX(calc((1 - min(1,calc(var(--photo-progress,.5) * 2))) * 5deg)) translateY(calc((.5 - var(--photo-progress,.5)) * 18px)); }
+}
+@media(prefers-reduced-motion:reduce) {
+ .revisedStory .journey[data-scroll-flow] .journeyArt,.revisedStory .finalFriends > .finalGroupMobile { transform:none; }
+}
