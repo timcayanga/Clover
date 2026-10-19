@@ -1,8 +1,10 @@
 # Clover landing showcase
 
-Preview only: `/landing-showcase` on staging. No change to the public production
-homepage, authenticated app, financial data, or native binaries. The route is
-excluded from indexing.
+The approved showcase is now the production homepage. `/landing-showcase` remains
+the staging preview. Experimental feature pages under
+`/landing-showcase/features/*` are staging-only and excluded from indexing; their
+production routes return 404. The authenticated app, financial data, and native
+binaries are outside this marketing work.
 
 ## Story and visual direction
 
@@ -309,3 +311,35 @@ uses the existing `/features/*` pages, whose implementation is unchanged. The
 experimental `/landing-showcase/features/*` routes return 404 in production;
 `/landing-showcase` redirects to `/` there and remains the staging preview URL.
 This release does not replace the existing feature-page designs.
+
+
+### Focused feature stories on staging, 19 October 2026
+
+All six feature previews reuse the production story without changing
+`web/lib/feature-stories.ts` or the public `/features/*` pages:
+
+- Manage Money: Transactions, Accounts, Recurring.
+- Understand Your Money: Reports, Ask Clover.
+- Plan Ahead: Investments, Budgeting, Goals.
+- Manage Money Together: separate Circles and Split Bills examples.
+- Security: source records, review decisions, account controls.
+- Pro: additional account capacity, Ask Clover, Reports, regional plan comparison.
+
+The previews use natural document scrolling and reversible, restrained 3D
+entrances. Desktop captions stay centered between product illustrations; mobile
+illustrations sit above centered copy. Narrow-phone openings keep the primary
+CTA and Log in visible, with optional store badges omitted on compact heights.
+Mobile chapters emphasize one feature at a time: no overlapping photo/card
+stacks, and no repeated decorative photos on Recurring, Budgeting or Goals.
+
+Existing production people, HD app captures, company logos, mascot poses and
+lightweight SVG charts are reused. There are no new raster assets or animation
+packages. Sample report selection, review Keep/Delete with reset, Split Bills
+assignments and pricing navigation are interactive examples only. They do not
+read or modify customer financial records. Reduced-motion/off mode preserves the
+layout while removing the decorative transforms.
+
+Verification covers all six pages at narrow phone and desktop sizes, mobile
+art/caption clearance, first-view CTA visibility, image loading, the interactive
+examples, and the repository's mandatory release gate. Only staging is deployed;
+production keeps the approved homepage and existing feature pages.
