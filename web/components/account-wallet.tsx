@@ -35,7 +35,7 @@ export function AccountWalletPocket({ children, expanded, label, foreground, onT
         "--card-x": `${layout.x}px`, "--card-y": `${layout.y}px`, "--card-scale": String(layout.scale),
         "--card-icon": `${22 + 10 * p}px`, "--card-name-size": `${13 + 3 * p}px`, "--card-name-left": `${42 + 10 * p}px`,
         "--card-number-y": `${35 + 28 * p}px`, "--card-number-size": `${10 + p}px`,
-        "--card-amount-y": `${33 + (layout.cardHeight - 85) * p}px`, "--card-amount-size": `${15 + 10 * p}px`,
+        "--card-amount-right": `${44 - 34 * p}px`, "--card-amount-y": `${33 + (layout.cardHeight - 85) * p}px`, "--card-amount-size": `${15 + 10 * p}px`,
         "--sleeve-shadow": String(.23 * (1 - p) ** 3), "--card-shadow": `0 ${4 * p}px ${5 * p}px rgb(0 0 0 / ${.15 * p})`,
       };
       Object.entries(values).forEach(([key, value]) => node.style.setProperty(key, value));

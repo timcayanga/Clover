@@ -65382,6 +65382,8 @@ html[data-theme="dark"] .transaction-creation-tabs { background:#0e1b21!importan
 .content--dashboard :is(.dashboard-home__report-card-head,.dashboard-home__goal-card-head,.home-next-steps,.dashboard-home__insight-strip,.dashboard-home__budget-card) > .eyebrow,
 .content--dashboard .dashboard-home__report-card-head > div > .eyebrow { font-family:var(--font-poppins),sans-serif; font-size:16px; line-height:1.5; font-weight:600; text-transform:none; letter-spacing:0; }
 .transaction-creation-tabs button:not([aria-selected="true"]) img { filter:brightness(0) saturate(100%) invert(46%) sepia(96%) saturate(1300%) hue-rotate(147deg) brightness(94%); }
+/* Keep Ask Clover's mascot full-color in both selector states. */
+.transaction-creation-tabs button img[src*="/adviser-velvet-"] { filter: none !important; }
 .transaction-drawer__mobile-header { display:none; }
 @media(max-width:1100px) {
  .transaction-drawer__mobile-header { display:grid; grid-template-columns:44px minmax(0,1fr) 44px; align-items:center; gap:4px; margin-bottom:16px; }
@@ -66967,14 +66969,14 @@ html[data-theme="dark"] .content--accounts .accounts-overview-card:first-child {
   .content--accounts .wallet-pocket .financial-account-card__logo-trigger .accounts-brand-mark { position:static; }
   .content--accounts .wallet-pocket .financial-account-card__name { position:absolute; left:var(--card-name-left); top:10px; max-width:calc(100% - var(--card-name-left) - 40px); font-size:var(--card-name-size)!important; font-weight:600!important; line-height:22px; overflow:hidden; white-space:nowrap; text-overflow:ellipsis; }
   .content--accounts .wallet-pocket .financial-account-card__number { position:absolute; left:10px; top:var(--card-number-y); max-width:44%; font-size:var(--card-number-size)!important; font-weight:500!important; line-height:15px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-  .content--accounts .wallet-pocket .financial-account-card__amount { position:absolute; right:10px; top:var(--card-amount-y); max-width:75%; margin:0; font-size:var(--card-amount-size)!important; font-weight:600!important; padding-bottom:0; line-height:1.3; white-space:nowrap; text-align:right; }
+  .content--accounts .wallet-pocket .financial-account-card__amount { position:absolute; right:var(--card-amount-right,44px); top:var(--card-amount-y); max-width:75%; margin:0; font-size:var(--card-amount-size)!important; font-weight:600!important; padding-bottom:0; line-height:1.3; white-space:nowrap; text-align:right; }
   .wallet-pocket .financial-account-card__chevron,
   .wallet-pocket .financial-account-card__edit { display:none!important; }
   .content--accounts .accounts-wallet .wallet-pocket > .wallet-pocket__toggle { position:absolute; inset:0; width:100%; height:100%; min-height:0; max-height:none; padding:0; margin:0; border:0; border-radius:12px 12px 0 0; box-shadow:none; background:transparent!important; cursor:pointer; }
   .content--accounts .accounts-wallet .wallet-pocket.is-expanded > .wallet-pocket__toggle { height:100%; opacity:0; pointer-events:none; }
   .wallet-pocket__collapse { position:absolute; right:9px; top:7px; width:44px; height:44px; padding:0; border:0; background:transparent; color:inherit; font-size:20px; z-index:2; opacity:0; pointer-events:none; }
   .wallet-pocket.is-expanded .wallet-pocket__collapse { opacity:1; pointer-events:auto; }
-  .wallet-pocket__chevron { position:absolute; right:15px; top:8px; font-size:20px; pointer-events:none; }
+  .wallet-pocket__chevron { position:absolute; right:15px; top:22px; font-size:20px; pointer-events:none; }
   .wallet-pocket.is-expanded .wallet-pocket__chevron { visibility:hidden; }
   .wallet-pocket__sleeve { position:absolute; bottom:0; left:0; right:0; height:6px; border-radius:8px 8px 2px 2px / 5px 5px 2px 2px; background:var(--wallet-shell); box-shadow:inset 0 1px 1px #ffffff66,inset 0 -1px 1px #0000001f; pointer-events:none; }
   .wallet-pocket__sleeve::before { content:""; position:absolute; left:0; right:0; bottom:100%; height:5px; background:linear-gradient(transparent,rgb(0 0 0 / var(--sleeve-shadow))); }
