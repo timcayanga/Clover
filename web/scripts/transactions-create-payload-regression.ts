@@ -22,7 +22,7 @@ function visit(node: ts.Node) {
 }
 visit(source);
 assert.ok(payload, "Manual creation must submit a JSON body");
-const serialize = new Function("manualForm", "accountId", "categoryId", "transactionCurrency", "receiptLineItems", "sanitizeTransactionTagNames", "activeWorkspaceId", "normalizedManualAmount", `return JSON.parse(JSON.stringify(${payload.getText(source)}));`);
+const serialize = new Function("entryDraft", "accountId", "categoryId", "transactionCurrency", "receiptLineItems", "sanitizeTransactionTagNames", "activeWorkspaceId", "normalizedManualAmount", `return JSON.parse(JSON.stringify(${payload.getText(source)}));`);
 for (const type of ["debit", "credit"]) {
   const result = serialize({ type, date: "2026-09-08", amount: "12,345.67", merchantRaw: "QA", description: " Note ", tags: [" Work ", "work", "Travel", ""] }, "account", "category", "PHP", [], sanitizeTransactionTagNames, "profile", "12345.67");
   assert.deepEqual(result.tags, ["Work", "Travel"]);

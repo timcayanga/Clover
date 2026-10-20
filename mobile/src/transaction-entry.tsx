@@ -1,3 +1,4 @@
+import { manualTransactionCategoryId, manualTransactionName, manualTransactionPlaceholder, validManualTransactionDate } from "../../shared/manual-transaction-defaults";
 import { entryExample } from "../../shared/entry-examples";
 import { mostUsedTransactionAccount } from "../../shared/default-transaction-account";
 import { applicableCategorySuggestion, type CategorySuggestion } from "../../shared/category-suggestion";
@@ -180,7 +181,7 @@ export function ManualTransaction({
       if (!live || current.busy || current.uncertain || current.draft.merchantRaw.trim() !== merchantText || current.draft.type !== type ||
         !applicableCategorySuggestion(suggestion, options.categories, type, categoryTouched.current)) return;
       // A draft received from Ask Clover may already contain a category to review.
-      if (current.draft.categoryId && current.draft.categoryId !== autoCategory.current) return;
+      if (current.draft.categoryId && current.draft.categoryId !== autoCategory.current && !/^(other|uncategorized|income)$/i.test(options.categories.find(category => category.id === current.draft.categoryId)?.name ?? "")) return;
       setCategorySuggestion(suggestion);
       autoCategory.current = suggestion.categoryId;
       if (current.draft.categoryId !== suggestion.categoryId) current.onChange({ ...current.draft, categoryId: suggestion.categoryId });
@@ -228,6 +229,11 @@ export function ManualTransaction({
     const preferred = mostUsedTransactionAccount(options.accounts);
     if (preferred) onChange({ ...draft, accountId: preferred.id, currency: preferred.currency });
   }, [options, draft, onChange]);
+  useEffect(() => {
+    if (!options || categoryTouched.current) return;
+    const categoryId = manualTransactionCategoryId(options.categories, draft.type, draft.categoryId) || null;
+    if (categoryId !== draft.categoryId) onChange({ ...draft, categoryId });
+  }, [options, draft, onChange]);
   const change = (patch: Partial<TransactionDraft>) => {
     if (busy || uncertain) return;
     if (Object.hasOwn(patch, "type")) { categoryTouched.current = false; autoCategory.current = null; setCategorySuggestion(null); }
@@ -250,17 +256,17 @@ export function ManualTransaction({
   };
   const save = async (another = false) => {
     if (lock.current) return;
+    const entryDraft = { ...draft, merchantRaw: draft.merchantRaw.trim() || manualTransactionName(draft.type),
+      date: draft.date.trim() || today(), amount: draft.amount.trim() || "0",
+      categoryId: manualTransactionCategoryId(options?.categories ?? [], draft.type, draft.categoryId) || null };
     if (
-      !availableAccounts.some((account) => account.id === draft.accountId) ||
-      !draft.merchantRaw.trim() ||
-      !/^\d{1,12}(\.\d{1,2})?$/.test(draft.amount) ||
-      Number(draft.amount) <= 0 ||
-      !/^\d{4}-\d{2}-\d{2}$/.test(draft.date) ||
-      !Number.isFinite(Date.parse(draft.date)) ||
-      new Date(draft.date).toISOString().slice(0, 10) !== draft.date
+      !availableAccounts.some((account) => account.id === entryDraft.accountId) ||
+      !/^\d{1,12}(\.\d{1,2})?$/.test(entryDraft.amount) ||
+      Number(entryDraft.amount) < 0 ||
+      !validManualTransactionDate(entryDraft.date)
     ) {
       setError(
-        "Choose an account and enter a name, valid date, and amount greater than zero.",
+        "Choose an account, a valid date, and a zero or positive amount.",
       );
       return;
     }
@@ -271,28 +277,28 @@ export function ManualTransaction({
     setSavedPending(false);
     try {
       if (!session.demo) {
-        if (draft.adviserEntry) {
-          if (draft.type === "transfer")
+        if (entryDraft.adviserEntry) {
+          if (entryDraft.type === "transfer")
             throw new Error("Use a new Manual transaction for transfers.");
-          const entry = draft.adviserEntry;
+          const entry = entryDraft.adviserEntry;
           await session.request(
             `adviser/entries?workspaceId=${encodeURIComponent(session.profileId)}`,
             {
               method: "POST",
               body: JSON.stringify({
                 ...entry,
-                accounts: entry.accounts.filter(account => [draft.accountId, ...entry.transactions.slice(1).map(row => row.accountId)].includes(`new:${account.key}`)).map(account => ({ ...account, balance: account.balance.trim() || "0" })),
+                accounts: entry.accounts.filter(account => [entryDraft.accountId, ...entry.transactions.slice(1).map(row => row.accountId)].includes(`new:${account.key}`)).map(account => ({ ...account, balance: account.balance.trim() || "0" })),
                 receipts: [],
                 transactions: entry.transactions.map((row, index) => index === 0 ? {
                     ...row,
-                    accountId: draft.accountId,
-                    categoryId: draft.categoryId ?? "",
-                    merchant: draft.merchantRaw,
-                    amount: draft.amount,
-                    currency: draft.currency,
-                    type: draft.type,
-                    date: draft.date,
-                    description: draft.description,
+                    accountId: entryDraft.accountId,
+                    categoryId: entryDraft.categoryId ?? "",
+                    merchant: entryDraft.merchantRaw,
+                    amount: entryDraft.amount,
+                    currency: entryDraft.currency,
+                    type: entryDraft.type,
+                    date: entryDraft.date,
+                    description: entryDraft.description,
                   } : row),
               }),
             },
@@ -300,7 +306,7 @@ export function ManualTransaction({
         } else {
           const result = await session.request<{ pendingSync?: boolean }>(
             `transactions?workspaceId=${encodeURIComponent(session.profileId)}`,
-            { method: "POST", body: JSON.stringify(draft) },
+            { method: "POST", body: JSON.stringify(entryDraft) },
           );
           setSavedPending(Boolean(result.pendingSync));
         }
@@ -311,7 +317,7 @@ export function ManualTransaction({
       session.refresh();
       if (!another) onSaved?.();
     } catch (e) {
-      if (draft.adviserEntry && (!(e instanceof ApiError) || e.status >= 500))
+      if (entryDraft.adviserEntry && (!(e instanceof ApiError) || e.status >= 500))
         setUncertain(true);
       setError((e as Error).message);
     } finally {
@@ -356,7 +362,7 @@ export function ManualTransaction({
         label="What was it for?"
         value={draft.merchantRaw}
         onChangeText={(merchantRaw) => change({ merchantRaw })}
-        placeholder="e.g. Lunch at Mendokoro"
+        placeholder={manualTransactionPlaceholder(draft.type)}
         maxLength={200}
       />
       {options ? (

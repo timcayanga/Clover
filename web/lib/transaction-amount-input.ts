@@ -16,3 +16,11 @@ export const parsePositiveTransactionAmount = (value: string | number): number |
   const amount = Number(normalized);
   return Number.isFinite(amount) && amount > 0 ? amount : null;
 };
+
+/** New manual entries may be zero; malformed and negative values still fail. */
+export const parseManualTransactionAmount = (value: string | number): number | null => {
+  const normalized = normalizeTransactionAmountInput(String(value).trim() || "0");
+  if (normalized === null) return null;
+  const amount = Number(normalized);
+  return Number.isFinite(amount) && amount >= 0 ? amount : null;
+};

@@ -1,3 +1,4 @@
+import { manualTransactionName, manualTransactionToday } from "../../shared/manual-transaction-defaults";
 import { z } from "zod";
 
 // Account numbers remain excluded. Investment creation enforces createOnly
@@ -49,7 +50,9 @@ export const mobileEditSchema = z.object({
 
 export const mobileCreateSchema = z.object({
   accountId: z.string().min(1), categoryId: z.string().min(1).nullable(),
-  merchantRaw: z.string().trim().min(1).max(200), date, amount,
+  merchantRaw: z.string().trim().max(200).optional().default(""),
+  date: z.preprocess(value => value === undefined || value === "" ? manualTransactionToday() : value, date),
+  amount: z.preprocess(value => value === undefined || value === "" ? "0" : value, amount),
   currency: z.string().regex(/^[A-Z]{3}$/), type: z.enum(["income", "expense", "transfer"]),
   description: z.string().max(2000).optional(), tags: z.array(z.string().trim().min(1).max(64)).max(20).optional(),
-}).strict();
+}).strict().transform(value => ({ ...value, merchantRaw: value.merchantRaw || manualTransactionName(value.type) }));

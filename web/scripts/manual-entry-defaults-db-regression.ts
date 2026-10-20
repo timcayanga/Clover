@@ -1,0 +1,64 @@
+import assert from "node:assert/strict";
+import { createRequire } from "node:module";
+import { randomUUID } from "node:crypto";
+import { manualTransactionToday, manualTransactionCategoryId, manualTransactionPlaceholder } from "../../shared/manual-transaction-defaults";
+import { mobileCreateSchema } from "../lib/mobile-edit-schema";
+const url = new URL(process.env.DATABASE_URL ?? "http://invalid");
+assert.equal(url.hostname, "127.0.0.1");
+assert.equal(url.port, process.env.CLOVER_QA_PARSER_PORT ?? "55441");
+assert.equal(url.pathname, "/clover_migration_qa");
+assert(process.argv.includes("--execute"));
+globalThis.fetch = async () => { throw new Error("External services disabled during manual-entry QA"); };
+const require = createRequire(import.meta.url);
+async function main() {
+  const { prisma: db } = await import("../lib/prisma");
+  const user = await db.user.create({ data: { clerkUserId: randomUUID(), email: `${randomUUID()}@example.invalid`, environment: "staging" } });
+  const saved = new Map<string, NodeModule | undefined>();
+  const stub = (id:string,exports:unknown) => {const path=require.resolve(id);saved.set(path,require.cache[path]);require.cache[path]={id:path,filename:path,loaded:true,exports} as NodeModule;};
+  stub("../lib/auth", {isLocalDevHost:async()=>false,requireAuth:async()=>({userId:user.clerkUserId})});
+  stub("../lib/user-context", {getOrCreateCurrentUser:async()=>user});
+  stub("../lib/workspace-access", {assertWorkspaceAccess:async(_id:string,workspaceId:string)=>{assert(await db.workspace.findFirst({where:{id:workspaceId,userId:user.id}}));}});
+  stub("../lib/analytics-server", {capturePostHogServerEvent:async()=>{}});
+  stub("../lib/recurring-detection", {syncWorkspaceRecurringPatterns:async()=>{}});
+  stub("../lib/workspace-summary-cache", {invalidateWorkspaceSummaryCache:()=>{}});
+  const server=require("next/server");stub("next/server",{...server,after:()=>{}});
+  try {
+    const { POST } = await import("../app/api/transactions/route");
+    const { POST: transfer } = await import("../app/api/transactions/manual-transfer/route");
+    const { withMobileRequestContext } = await import("../lib/mobile-request-context");
+    const workspace=await db.workspace.create({data:{userId:user.id,name:"Disposable manual default checks"}});
+    const account=await db.account.create({data:{workspaceId:workspace.id,name:"Cash",type:"cash",currency:"PHP",balance:"300"}});
+    const destination=await db.account.create({data:{workspaceId:workspace.id,name:"Bank",type:"bank",currency:"PHP",balance:"100"}});
+    const categories=await Promise.all([['Income','income'],['Other','expense'],['Transfers','transfer'],['Salary','income']].map(([name,type])=>db.category.create({data:{workspaceId:workspace.id,name,type:type as 'income'|'expense'|'transfer'}})));
+    const existing=await db.transaction.create({data:{workspaceId:workspace.id,accountId:account.id,date:new Date('2026-10-01'),amount:'25',type:'expense',currency:'PHP',merchantRaw:'Confirmed sentinel',reviewStatus:'confirmed'}});
+    const snapshot=JSON.stringify(await db.transaction.findUnique({where:{id:existing.id}}));
+    const send=async(body:Record<string,unknown>,handler=POST)=>{const request=new Request('https://clover.test/api/transactions',{method:'POST',headers:{'Content-Type':'application/json',Origin:'https://clover.test'},body:JSON.stringify(body)});return withMobileRequestContext(user.clerkUserId!,request,()=>handler(request));};
+    const base={workspaceId:workspace.id,accountId:account.id,currency:'PHP',type:'income',categoryId:categories[1].id};
+    const today=manualTransactionToday();
+    const response=await send({...base,merchantRaw:'  ',date:'',amount:''});assert.equal(response.status,201,await response.clone().text());
+    const result=(await response.json()).transaction;assert.equal(result.merchantRaw,'Income');assert.equal(result.amount,'0');assert.equal(result.date.slice(0,10),today);assert.equal(result.categoryId,categories[0].id);assert.equal(result.type,'income');
+    const expense=await send({...base,type:'expense',merchantRaw:'',amount:0});assert.equal(expense.status,201);assert.equal((await expense.json()).transaction.merchantRaw,'Expense');
+    const explicit=await send({...base,merchantRaw:'Payday',amount:'100',categoryId:categories[3].id});assert.equal(explicit.status,201);assert.equal((await explicit.json()).transaction.categoryId,categories[3].id);
+    const before=await db.transaction.count({where:{workspaceId:workspace.id}});
+    for(const patch of [{amount:'-1'},{amount:'1.234'},{amount:'1e3'},{date:'2026-02-30'},{date:'bad'},{accountId:randomUUID()}]){const res=await send({...base,...patch});assert.equal(res.status,400);assert.equal(await db.transaction.count({where:{workspaceId:workspace.id}}),before);}
+    const zeroTransfer=await send({workspaceId:workspace.id,sourceAccountId:account.id,destinationAccountId:destination.id,currency:'PHP',date:'',amount:'',name:''},transfer);assert.equal(zeroTransfer.status,201,await zeroTransfer.clone().text());
+    const legs=await zeroTransfer.json();assert.equal(legs.transactions.length,2);assert(legs.transactions.every((row:{amount:string})=>row.amount==='0'));
+    assert.equal(await db.transaction.count({where:{workspaceId:workspace.id,type:'transfer',merchantRaw:'Transfer'}}),2);
+    const { applyMobileOfflineMutation } = await import("../lib/mobile-offline-sync");
+    const queued = {id:randomUUID(),kind:"create",payload:{accountId:account.id,categoryId:null,merchantRaw:"",date:"",amount:"",currency:"PHP",type:"income"}};
+    const sync = await applyMobileOfflineMutation(user.clerkUserId!,workspace.id,queued);
+    assert.equal(sync.status,200,JSON.stringify(sync.body));
+    const synced = await db.transaction.findFirstOrThrow({where:{workspaceId:workspace.id,merchantRaw:"Income"},orderBy:{createdAt:"desc"}});
+    assert.equal(synced.categoryId,categories[0].id);assert.equal(synced.amount.toString(),"0");
+    const beforeRetry = await db.transaction.count({where:{workspaceId:workspace.id}});
+    assert.equal((await applyMobileOfflineMutation(user.clerkUserId!,workspace.id,queued)).status,200);
+    assert.equal(await db.transaction.count({where:{workspaceId:workspace.id}}),beforeRetry);
+    assert.equal(JSON.stringify(await db.transaction.findUnique({where:{id:existing.id}})),snapshot);
+    assert.equal((await db.account.findUniqueOrThrow({where:{id:account.id}})).balance?.toString(),'300');
+    const mobile=mobileCreateSchema.parse({accountId:account.id,categoryId:null,type:'income',currency:'PHP',merchantRaw:'',date:'',amount:''});assert.equal(mobile.merchantRaw,'Income');assert.equal(mobile.amount,'0');assert.equal(mobile.date,today);
+    assert.equal(manualTransactionCategoryId(categories,'credit',categories[1].id),categories[0].id);
+    assert.equal(manualTransactionPlaceholder('income'),'Salary');assert.equal(manualTransactionPlaceholder('expense'),'Lunch');assert.equal(manualTransactionPlaceholder('transfer'),'Transfer');
+    console.log('PASS manual entry defaults: blank/zero drafts, local date, income category, explicit category preservation, invalid inputs, zero transfer legs, mobile schema, and immutable existing financial records.');
+  } finally { for(const [path,value] of saved){if(value)require.cache[path]=value;else delete require.cache[path];}await db.user.delete({where:{id:user.id}});await db.$disconnect(); }
+}
+void main();

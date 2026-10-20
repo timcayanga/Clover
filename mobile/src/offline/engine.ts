@@ -1,3 +1,4 @@
+import { manualTransactionName, manualTransactionToday, validManualTransactionDate } from "../../../shared/manual-transaction-defaults";
 import { telemetry } from "../../../shared/analytics";
 import { NetworkError } from "../api";
 import type {
@@ -112,17 +113,24 @@ export class OfflineEngine {
       const payload = JSON.parse(String(options.body ?? "{}"));
       if (!payload || Array.isArray(payload) || typeof payload !== "object")
         throw new Error("Invalid transaction draft.");
+      if (method === "POST") {
+        payload.merchantRaw = payload.merchantRaw?.trim() || manualTransactionName(payload.type);
+        payload.date = payload.date?.trim() || manualTransactionToday();
+        payload.amount = String(payload.amount ?? "").trim() || "0";
+        options = { ...options, body: JSON.stringify(payload) };
+      }
       if (
         method === "POST" &&
         (!payload.accountId ||
           !payload.merchantRaw?.trim() ||
-          !/^\d{4}-\d{2}-\d{2}/.test(payload.date ?? "") ||
+          !validManualTransactionDate(payload.date ?? "") ||
+          !/^\d{1,12}(\.\d{1,2})?$/.test(payload.amount) ||
           !Number.isFinite(Number(payload.amount)) ||
-          Number(payload.amount) <= 0 ||
+          Number(payload.amount) < 0 ||
           !["income", "expense", "transfer"].includes(payload.type))
       )
         throw new Error(
-          "Complete the account, date, name, type and positive amount before saving.",
+          "Choose an account, a valid date, and a zero or positive amount before saving.",
         );
       let baseVersion: string | undefined;
       if (method === "PATCH") {

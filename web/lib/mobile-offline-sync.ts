@@ -90,12 +90,12 @@ export async function applyMobileOfflineMutation(
     let transactionId: string;
     if (operation.kind === "create") {
       const p = operation.payload;
-      if (Number(p.amount) <= 0 || p.type === "transfer")
+      if (Number(p.amount) < 0 || p.type === "transfer")
         return {
           status: 400,
           body: {
             error:
-              "Use a positive income or expense amount. Create linked transfers online.",
+              "Use a zero or positive income or expense amount. Create linked transfers online.",
           },
         };
       const account = await tx.account.findFirst({
@@ -109,17 +109,19 @@ export async function applyMobileOfflineMutation(
             error: "Choose a matching-currency account in this Profile.",
           },
         };
-      if (
-        p.categoryId &&
-        !(await tx.category.findFirst({
-          where: { id: p.categoryId, workspaceId, isArchived: false, type: p.type },
-          select: { id: true },
-        }))
-      )
-        return {
-          status: 400,
-          body: { error: "This category is no longer available." },
-        };
+      const selectedCategory = p.categoryId ? await tx.category.findFirst({
+        where: { id: p.categoryId, workspaceId, isArchived: false },
+        select: { id: true, name: true, type: true },
+      }) : null;
+      if (p.categoryId && !selectedCategory) return { status: 400, body: { error: "This category is no longer available." } };
+      const genericCategory = !selectedCategory || /^(other|uncategorized)$/i.test(selectedCategory.name.trim());
+      const category = genericCategory ? await tx.category.findFirst({
+        where: { workspaceId, isArchived: false, type: p.type,
+          name: { equals: p.type === "income" ? "Income" : "Other", mode: "insensitive" } },
+        select: { id: true, type: true },
+      }) : selectedCategory;
+      if (category && category.type !== p.type) return { status: 400, body: { error: "Choose a category for this transaction type." } };
+      p.categoryId = category?.id ?? null;
       const owner = await tx.user.findUniqueOrThrow({
         where: { id: workspace.userId },
       });

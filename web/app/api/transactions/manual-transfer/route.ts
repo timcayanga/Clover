@@ -1,3 +1,4 @@
+import { manualTransactionToday, validManualTransactionDate } from "../../../../../shared/manual-transaction-defaults";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { capturePostHogServerEvent } from "@/lib/analytics-server";
@@ -6,7 +7,7 @@ import { prisma } from "@/lib/prisma";
 import { assertTrustedRequestOrigin } from "@/lib/request-security";
 import { sanitizeTransactionTagNames } from "@/lib/transaction-tags";
 import { assertWorkspaceAccess } from "@/lib/workspace-access";
-import { parsePositiveTransactionAmount } from "@/lib/transaction-amount-input";
+import { parseManualTransactionAmount } from "@/lib/transaction-amount-input";
 
 export const dynamic = "force-dynamic";
 
@@ -14,8 +15,8 @@ const transferSchema = z.object({
   workspaceId: z.string().min(1),
   sourceAccountId: z.string().min(1),
   destinationAccountId: z.string().min(1),
-  date: z.string().min(1),
-  amount: z.union([z.string(), z.number()]),
+  date: z.string().optional().default("").transform(value => value.trim() || manualTransactionToday()).refine(validManualTransactionDate, "Choose a valid date."),
+  amount: z.union([z.string(), z.number()]).optional().default("0"),
   currency: z.string().min(3),
   name: z.string().optional().nullable(),
   description: z.string().optional().nullable(),
@@ -58,10 +59,10 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Choose two different accounts." }, { status: 400 });
     }
 
-    const amount = parsePositiveTransactionAmount(payload.amount);
+    const amount = parseManualTransactionAmount(payload.amount);
     const feeAmount = payload.feeAmount === null || payload.feeAmount === undefined || payload.feeAmount === ""
       ? 0
-      : parsePositiveTransactionAmount(payload.feeAmount);
+      : parseManualTransactionAmount(payload.feeAmount);
     if (amount === null || feeAmount === null) {
       return NextResponse.json({ error: "Enter a valid transfer amount." }, { status: 400 });
     }
@@ -94,7 +95,7 @@ export async function POST(request: Request) {
         : Promise.resolve(null),
     ]);
     const transferId = crypto.randomUUID();
-    const transferName = payload.name?.trim() || `Transfer to ${destination.name}`;
+    const transferName = payload.name?.trim() || "Transfer";
     const date = new Date(payload.date);
 
     const created = await prisma.$transaction(async (tx) => {
@@ -128,7 +129,7 @@ export async function POST(request: Request) {
           transactionTags: buildTagLinks(payload.workspaceId, payload.tags),
         },
       });
-      const destinationName = `Transfer from ${source.name}`;
+      const destinationName = transferName;
       const destinationTransaction = await tx.transaction.create({
         data: {
           workspaceId: payload.workspaceId,

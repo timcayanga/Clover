@@ -1,3 +1,4 @@
+import { manualTransactionName, manualTransactionToday, validManualTransactionDate } from "../../../../shared/manual-transaction-defaults";
 import { actionableReviewIds } from "@/lib/actionable-transaction-review";
 import { includedTransactionWhere } from "@/lib/transaction-review-inclusion-where";
 import { isAutomaticReviewExclusion } from "@/lib/transaction-review-inclusion";
@@ -42,7 +43,7 @@ import {
   type TransactionSummaryCandidate,
 } from "@/lib/transaction-summary";
 import { invalidateWorkspaceSummaryCache } from "@/lib/workspace-summary-cache";
-import { parsePositiveTransactionAmount } from "@/lib/transaction-amount-input";
+import { parseManualTransactionAmount } from "@/lib/transaction-amount-input";
 
 export const dynamic = "force-dynamic";
 
@@ -691,11 +692,11 @@ const transactionSchema = z.object({
   workspaceId: z.string().min(1),
   accountId: z.string().min(1),
   categoryId: z.string().optional().nullable(),
-  date: z.string().min(1),
-  amount: z.union([z.string(), z.number()]),
+  date: z.string().optional().default("").transform(value => value.trim() || manualTransactionToday()).refine(validManualTransactionDate, "Choose a valid date."),
+  amount: z.union([z.string(), z.number()]).optional().default("0"),
   currency: z.string().default("PHP"),
   type: z.enum(["income", "expense", "transfer"]),
-  merchantRaw: z.string().min(1),
+  merchantRaw: z.string().trim().max(200).optional().default(""),
   merchantClean: z.string().optional().nullable(),
   investmentAssetName: z.string().trim().min(1).optional(),
   description: z.string().optional().nullable(),
@@ -1449,11 +1450,12 @@ export async function POST(request: Request) {
   try {
     assertTrustedRequestOrigin(request);
     const userId = await resolveTransactionsRouteUserId();
-    const payload = transactionSchema.parse(await request.json());
+    const parsed = transactionSchema.parse(await request.json());
+    const payload = { ...parsed, merchantRaw: parsed.merchantRaw || manualTransactionName(parsed.type) };
 
-    const amount = parsePositiveTransactionAmount(payload.amount);
+    const amount = parseManualTransactionAmount(payload.amount);
     if (amount === null) {
-      return NextResponse.json({ error: "Enter an amount greater than zero with no more than two decimal places." }, { status: 400 });
+      return NextResponse.json({ error: "Enter zero or a positive amount with no more than two decimal places." }, { status: 400 });
     }
 
     await assertWorkspaceAccess(userId, payload.workspaceId);
@@ -1461,15 +1463,10 @@ export async function POST(request: Request) {
     const effectiveLimits = getEffectiveUserLimits(user);
     const transactionCountPromise =
       effectiveLimits.transactionLimit !== null ? countWorkspaceOwnerTransactions(payload.workspaceId) : Promise.resolve(null);
-    const otherCategoryPromise =
-      payload.categoryId === undefined || payload.categoryId === null
-        ? prisma.category.findFirst({
-            where: {
-              workspaceId: payload.workspaceId,
-              name: "Other",
-            },
-          })
-        : Promise.resolve(null);
+    const otherCategoryPromise = prisma.category.findFirst({
+      where: { workspaceId: payload.workspaceId, isArchived: false,
+        name: { equals: payload.type === "income" ? "Income" : payload.type === "transfer" ? "Transfers" : "Other", mode: "insensitive" } },
+    });
     const selectedCategoryPromise =
       payload.categoryId === undefined || payload.categoryId === null
         ? Promise.resolve(null)
@@ -1515,8 +1512,10 @@ export async function POST(request: Request) {
       );
     }
 
-    const resolvedCategoryId = payload.categoryId ?? otherCategory?.id ?? null;
-    const resolvedCategoryName = selectedCategory?.name ?? otherCategory?.name ?? null;
+    const useDefaultCategory = !selectedCategory || /^(other|uncategorized)$/i.test(selectedCategory.name.trim());
+    const resolvedCategory = useDefaultCategory ? otherCategory ?? selectedCategory : selectedCategory;
+    const resolvedCategoryId = resolvedCategory?.id ?? null;
+    const resolvedCategoryName = resolvedCategory?.name ?? null;
     const resolvedType = payload.preserveType
       ? payload.type
       : coerceTransactionTypeFromCategoryName(resolvedCategoryName, payload.type);

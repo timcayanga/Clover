@@ -19,6 +19,7 @@ const categorySettings = read("components/settings-categories-panel.tsx");
 const styles = read("app/globals.css");
 
 for (const [surface, source] of [["Transactions", transactions], ["Dashboard", dashboardActions]] as const) {
+  assert.match(source, /placeholder=\{manualTransactionPlaceholder\((?:manualForm|form)\.type\)\}[\s\S]{0,80}required=\{false\}/, `${surface} must permit the blank-name default rather than trigger browser required validation.`);
   assert.match(source, /TransactionNameAutocomplete/, `${surface} must provide prior-name suggestions.`);
   assert.match(source, /TransactionCategoryPicker/, `${surface} must use the grouped category picker.`);
   assert.match(source, />Transfer</, `${surface} must offer Transfer beside Expense and Income.`);

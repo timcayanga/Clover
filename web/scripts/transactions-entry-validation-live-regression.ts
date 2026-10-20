@@ -20,7 +20,7 @@ async function main() {
   try {
     const account = await prisma.account.create({ data: { workspaceId: workspace.id, name: "QA", type: "bank", currency: "PHP" } });
     const base = { workspaceId: workspace.id, accountId: account.id, date: "2026-09-09", amount: "1.00", currency: "PHP", type: "expense", merchantRaw: "QA" };
-    for (const override of [{ amount: "0" }, { amount: "-1" }, { amount: "1.234" }, { amount: "12,34" }, { date: "not-a-date" }, { merchantRaw: "" }]) {
+    for (const override of [{ amount: "-1" }, { amount: "1.234" }, { amount: "12,34" }, { date: "not-a-date" }]) {
       const response = await post({ ...base, ...override });
       assert.equal(response.status, 400, JSON.stringify(override));
       assert.equal(await prisma.transaction.count({ where: { workspaceId: workspace.id } }), 0);

@@ -32,7 +32,6 @@ async function main() {
       [{ destinationAccountId: source.id }, 400],
       [{ destinationAccountId: foreignDestination.id }, 404],
       [{ destinationAccountId: usdDestination.id }, 400],
-      [{ amount: "0" }, 400],
       [{ amount: "-10" }, 400],
       [{ amount: "1.234" }, 400],
     ] as const) {

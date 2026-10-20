@@ -1,4 +1,6 @@
 "use client";
+
+import { manualTransactionCategoryId, manualTransactionName, manualTransactionPlaceholder, manualTransactionToday } from "../../shared/manual-transaction-defaults";
 import { mostUsedTransactionAccount } from "../../shared/default-transaction-account";
 import { useDraftCategorySuggestion } from "@/lib/use-draft-category-suggestion";
 import { getNavigationIconSrc } from "@/lib/navigation-icons";
@@ -205,14 +207,14 @@ export function DashboardManualTransactionModal({
       return;
     }
 
-    const fallbackCategoryId = getOtherCategoryId(categories) || categories[0]?.id || "";
-    if (!form.categoryId) {
+    const fallbackCategoryId = manualTransactionCategoryId(categories, form.type, form.categoryId) || categories[0]?.id || "";
+    if (form.categoryId !== fallbackCategoryId) {
       setForm((current) => ({
         ...current,
         categoryId: fallbackCategoryId,
       }));
     }
-  }, [categories, form.categoryId]);
+  }, [categories, form.categoryId, form.type]);
 
   useEffect(() => {
     if (!rootRef.current) {
@@ -371,6 +373,12 @@ export function DashboardManualTransactionModal({
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+    const entryDraft = { ...form,
+      merchantRaw: form.merchantRaw.trim() || manualTransactionName(form.type),
+      date: form.date.trim() || manualTransactionToday(),
+      amount: form.amount.trim() || "0",
+      categoryId: manualTransactionCategoryId(categories, form.type, form.categoryId),
+    };
     const submitter = event.nativeEvent instanceof SubmitEvent ? event.nativeEvent.submitter : null;
     const submitMode = submitter instanceof HTMLElement ? submitter.getAttribute("data-submit-mode") : null;
     const keepOpenAfterSave = submitMode === "add-another";
@@ -378,13 +386,13 @@ export function DashboardManualTransactionModal({
     setError(null);
 
     try {
-      const accountId = form.accountId || (await ensureDefaultAccount());
+      const accountId = entryDraft.accountId || (await ensureDefaultAccount());
       const account = accounts.find((entry) => entry.id === accountId) ?? null;
-      const currency = formatCurrencyCode(form.currency || account?.currency || "PHP");
-      const categoryId = form.categoryId || otherCategoryId || null;
+      const currency = formatCurrencyCode(entryDraft.currency || account?.currency || "PHP");
+      const categoryId = entryDraft.categoryId || otherCategoryId || null;
 
-      const isTransfer = form.type === "transfer";
-      if (isTransfer && !form.destinationAccountId) {
+      const isTransfer = entryDraft.type === "transfer";
+      if (isTransfer && !entryDraft.destinationAccountId) {
         throw new Error("Choose where the money is going.");
       }
 
@@ -396,28 +404,28 @@ export function DashboardManualTransactionModal({
             ? {
                 workspaceId,
                 sourceAccountId: accountId,
-                destinationAccountId: form.destinationAccountId,
-                date: form.date,
-                amount: form.amount,
+                destinationAccountId: entryDraft.destinationAccountId,
+                date: entryDraft.date,
+                amount: entryDraft.amount,
                 currency,
-                name: form.merchantRaw.trim() || null,
-                description: form.description.trim() || null,
-                feeAmount: form.feeAmount || null,
-                tags: sanitizeTransactionTagNames(form.tags),
+                name: entryDraft.merchantRaw.trim() || null,
+                description: entryDraft.description.trim() || null,
+                feeAmount: entryDraft.feeAmount || null,
+                tags: sanitizeTransactionTagNames(entryDraft.tags),
               }
             : {
                 workspaceId,
                 accountId,
                 categoryId,
-                date: form.date,
-                amount: form.amount,
+                date: entryDraft.date,
+                amount: entryDraft.amount,
                 currency,
-                type: form.type === "credit" ? "income" : "expense",
-                merchantRaw: form.merchantRaw,
+                type: entryDraft.type === "credit" ? "income" : "expense",
+                merchantRaw: entryDraft.merchantRaw,
                 merchantClean: null,
-                description: form.description.trim() || null,
-                tags: sanitizeTransactionTagNames(form.tags),
-                receiptLineItems: form.receiptLineItems
+                description: entryDraft.description.trim() || null,
+                tags: sanitizeTransactionTagNames(entryDraft.tags),
+                receiptLineItems: entryDraft.receiptLineItems
                   .filter((entry) => entry.description.trim() || entry.amount.trim())
                   .map((entry) => ({ description: entry.description, amount: entry.amount })),
                 isTransfer: false,
@@ -442,10 +450,10 @@ export function DashboardManualTransactionModal({
           await createSplitBillFromTransaction({
             workspaceId,
             transactionId: createdTransaction.id,
-            transactionTitle: form.merchantRaw.trim() || createdTransaction.merchantRaw?.trim() || "Split Bill",
-            billDate: form.date,
+            transactionTitle: entryDraft.merchantRaw.trim() || createdTransaction.merchantRaw?.trim() || "Split Bill",
+            billDate: entryDraft.date,
             currency,
-            amount: form.amount,
+            amount: entryDraft.amount,
             draft: manualSplitBillDraft,
           });
         } catch (splitBillError) {
@@ -578,7 +586,6 @@ export function DashboardManualTransactionModal({
                   value={form.amount}
                   onChange={(event) => setForm((current) => ({ ...current, amount: event.target.value }))}
                   placeholder="0.00"
-                  required
                 />
               </label>
             </div>
@@ -601,8 +608,9 @@ export function DashboardManualTransactionModal({
                     }));
                     categoryButtonRef.current?.focus();
                   }}
-                  placeholder={form.type === "transfer" ? "Transfer between my accounts" : "e.g. Lunch at Mendokoro"}
-                  required={form.type !== "transfer"}
+                  placeholder={manualTransactionPlaceholder(form.type)}
+                      required={false}
+
                 />
               </label>
             </div>
@@ -692,7 +700,7 @@ export function DashboardManualTransactionModal({
 
             <label className="transactions-manual-field transactions-manual-field--embedded-label transactions-manual-date">
               <span className="transactions-manual-field__label"><InterfaceIcon name="date" /> Date</span>
-              <input type="date" value={form.date} required onChange={(event) => setForm((current) => ({ ...current, date: event.target.value }))} />
+              <input type="date" value={form.date} onChange={(event) => setForm((current) => ({ ...current, date: event.target.value }))} />
             </label>
 
             {manualMoreOpen ? <div className="transactions-manual-field transactions-manual-field--embedded-label">

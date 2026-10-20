@@ -1,4 +1,6 @@
 "use client";
+
+import { manualTransactionCategoryId, manualTransactionName, manualTransactionPlaceholder, manualTransactionToday } from "../../../shared/manual-transaction-defaults";
 import { useDraftCategorySuggestion } from "@/lib/use-draft-category-suggestion";
 import { CloverMascot } from "@/components/clover-mascot";
 import { getNavigationIconSrc } from "@/lib/navigation-icons";
@@ -2688,7 +2690,7 @@ function TransactionsPageContent() {
     () => accounts.find((account) => account.id === manualForm.accountId) ?? null,
     [accounts, manualForm.accountId]
   );
-  const manualSelectedCategoryId = manualForm.categoryId || otherCategoryId;
+  const manualSelectedCategoryId = manualTransactionCategoryId(categories, manualForm.type, manualForm.categoryId) || otherCategoryId;
   const manualSelectedCategory = useMemo(
     () => categories.find((category) => category.id === manualSelectedCategoryId) ?? null,
     [categories, manualSelectedCategoryId]
@@ -5925,12 +5927,18 @@ function TransactionsPageContent() {
 
   const saveManualTransaction = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+    const entryDraft = { ...manualForm,
+      merchantRaw: manualForm.merchantRaw.trim() || manualTransactionName(manualForm.type),
+      date: manualForm.date.trim() || manualTransactionToday(),
+      amount: manualForm.amount.trim() || "0",
+      categoryId: manualTransactionCategoryId(categories, manualForm.type, manualForm.categoryId),
+    };
     if (manualSaveInFlightRef.current) return;
     const submitter = event.nativeEvent instanceof SubmitEvent ? event.nativeEvent.submitter : null;
     const submitMode = submitter instanceof HTMLElement ? submitter.getAttribute("data-submit-mode") : null;
     const keepOpenAfterSave = submitMode === "add-another";
 
-    const normalizedManualAmount = normalizeTransactionAmountInput(manualForm.amount);
+    const normalizedManualAmount = normalizeTransactionAmountInput(entryDraft.amount);
     if (normalizedManualAmount === null) {
       setMessage(transactionAmountFormatMessage);
       return;
@@ -5952,18 +5960,18 @@ function TransactionsPageContent() {
     setIsSaving(true);
     let optimisticTransactionId = "";
     let optimisticTransactionAmount = 0;
-    let optimisticTransactionCurrency = manualForm.currency;
+    let optimisticTransactionCurrency = entryDraft.currency;
     let optimisticTransactionType: Transaction["type"] = "expense";
     let resolvedAccountId = "";
     try {
-      const accountId = manualForm.accountId || (await ensureDefaultAccount(activeWorkspaceId, manualForm.currency));
+      const accountId = entryDraft.accountId || (await ensureDefaultAccount(activeWorkspaceId, entryDraft.currency));
       resolvedAccountId = accountId;
       const account = accounts.find((entry) => entry.id === accountId) ?? null;
       const accountCurrency = formatCurrencyCode(account?.currency ?? "PHP");
-      const transactionCurrency = formatCurrencyCode(manualForm.currency || accountCurrency);
+      const transactionCurrency = formatCurrencyCode(entryDraft.currency || accountCurrency);
 
-      if (manualForm.type === "transfer") {
-        if (!manualForm.destinationAccountId) {
+      if (entryDraft.type === "transfer") {
+        if (!entryDraft.destinationAccountId) {
           throw new Error("Choose where the money is going.");
         }
 
@@ -5973,14 +5981,14 @@ function TransactionsPageContent() {
           body: JSON.stringify({
             workspaceId: activeWorkspaceId,
             sourceAccountId: accountId,
-            destinationAccountId: manualForm.destinationAccountId,
-            date: manualForm.date,
+            destinationAccountId: entryDraft.destinationAccountId,
+            date: entryDraft.date,
             amount: normalizedManualAmount,
             currency: transactionCurrency,
-            name: manualForm.merchantRaw.trim() || null,
-            description: manualForm.description.trim() || null,
-            feeAmount: manualForm.feeAmount || null,
-            tags: sanitizeTransactionTagNames(manualForm.tags),
+            name: entryDraft.merchantRaw.trim() || null,
+            description: entryDraft.description.trim() || null,
+            feeAmount: entryDraft.feeAmount || null,
+            tags: sanitizeTransactionTagNames(entryDraft.tags),
           }),
         });
         const transferPayload = (await transferResponse.json().catch(() => ({}))) as { error?: string };
@@ -6008,10 +6016,10 @@ function TransactionsPageContent() {
         return;
       }
 
-      const categoryId = manualForm.categoryId || getOtherCategoryId(categories) || undefined;
+      const categoryId = entryDraft.categoryId || getOtherCategoryId(categories) || undefined;
       const categoryName = getCategoryNameById(categories, categoryId ?? null);
       const accountName = account?.name ?? accountId;
-      const receiptLineItems = sanitizeReceiptLineItems(manualForm.receiptLineItems);
+      const receiptLineItems = sanitizeReceiptLineItems(entryDraft.receiptLineItems);
       const optimisticTransaction: Transaction = {
         id: `temp-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`,
         workspaceId: activeWorkspaceId,
@@ -6020,13 +6028,13 @@ function TransactionsPageContent() {
         categoryId: categoryId ?? null,
         categoryName,
         reviewStatus: "confirmed",
-        date: manualForm.date,
+        date: entryDraft.date,
         amount: Number(normalizedManualAmount).toFixed(2),
         currency: transactionCurrency,
-        type: manualForm.type === "credit" ? "income" : "expense",
-        merchantRaw: manualForm.merchantRaw,
+        type: entryDraft.type === "credit" ? "income" : "expense",
+        merchantRaw: entryDraft.merchantRaw,
         merchantClean: null,
-        description: manualForm.description.trim() || null,
+        description: entryDraft.description.trim() || null,
         isTransfer: false,
         isExcluded: false,
         source: "manual",
@@ -6034,10 +6042,10 @@ function TransactionsPageContent() {
         warningReason: null,
         rawPayload: {
           source: "manual",
-          merchantRaw: manualForm.merchantRaw,
+          merchantRaw: entryDraft.merchantRaw,
           merchantClean: null,
-          description: manualForm.description.trim() || null,
-          tags: sanitizeTransactionTagNames(manualForm.tags),
+          description: entryDraft.description.trim() || null,
+          tags: sanitizeTransactionTagNames(entryDraft.tags),
           receiptLineItems,
         },
       };
@@ -6071,14 +6079,14 @@ function TransactionsPageContent() {
           workspaceId: activeWorkspaceId,
           accountId,
           categoryId: categoryId ?? null,
-          date: manualForm.date,
+          date: entryDraft.date,
           amount: normalizedManualAmount,
           currency: transactionCurrency,
-          type: manualForm.type === "credit" ? "income" : "expense",
-          merchantRaw: manualForm.merchantRaw,
+          type: entryDraft.type === "credit" ? "income" : "expense",
+          merchantRaw: entryDraft.merchantRaw,
           merchantClean: null,
-          description: manualForm.description.trim() || null,
-          tags: sanitizeTransactionTagNames(manualForm.tags),
+          description: entryDraft.description.trim() || null,
+          tags: sanitizeTransactionTagNames(entryDraft.tags),
           receiptLineItems,
           isTransfer: false,
           isExcluded: false,
@@ -8813,7 +8821,6 @@ function TransactionsPageContent() {
                         if (amount !== null) setManualForm((current) => ({ ...current, amount }));
                       }}
                       placeholder="0.00"
-                      required
                     />
                   </label>
                 </div>
@@ -8834,8 +8841,8 @@ function TransactionsPageContent() {
                         }));
                         manualCategoryButtonRef.current?.focus();
                       }}
-                      placeholder={manualForm.type === "transfer" ? "Transfer between my accounts" : "e.g. Lunch at Mendokoro"}
-                      required={manualForm.type !== "transfer"}
+                      placeholder={manualTransactionPlaceholder(manualForm.type)}
+                      required={false}
                     />
                   </label>
                 </div>
@@ -8953,7 +8960,6 @@ function TransactionsPageContent() {
                     type="date"
                     value={manualForm.date}
                     onChange={(event) => setManualForm((current) => ({ ...current, date: event.target.value }))}
-                    required
                   />
                 </label>
 
