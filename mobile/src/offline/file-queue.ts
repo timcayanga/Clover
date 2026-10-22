@@ -1,3 +1,4 @@
+import type { ReceiptCaptureLocation } from "../../../shared/receipt-capture-location";
 import { telemetry } from "../../../shared/analytics";
 import { NATIVE_UPLOAD_MAX_SIZE, uploadSizeProblem } from "../../../shared/native-upload";
 import type { OfflineStore } from "./types";
@@ -24,6 +25,7 @@ export type QueuedFile = {
   serverPaused?: boolean;
   needsPassword?: boolean;
   deviceText?: DeviceTextEvidence;
+  receiptCaptureLocation?: ReceiptCaptureLocation;
 };
 export type UploadControl = {
   signal: AbortSignal;

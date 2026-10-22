@@ -38,6 +38,7 @@ const config: ExpoConfig = {
       },
     ],
     "expo-localization",
+    ["expo-location", { locationWhenInUsePermission: "Use your location to suggest the currency for your next receipt photo. Only the country is saved; scanning also works without location.", isIosBackgroundLocationEnabled: false, isAndroidBackgroundLocationEnabled: false, isAndroidForegroundServiceEnabled: false }],
     ["expo-build-properties", { ios: {
       // iOS 27 rejects Xcode 27 builds that still use the application lifecycle.
       enableSceneSupport: true,

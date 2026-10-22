@@ -75,12 +75,14 @@ async function main() {
     Object.assign(row,{state:"uploading",response:null,fileName:"receipt.png",contentType:"image/png",size:imageBytes.length,parts:{"0":createHash("sha256").update(imageBytes).digest("hex")}});
     saved.status="failed";saved.processingPhase="receipt_review_required";
     await writeFile(getLocalImportObjectPath(`native-upload-parts/${id}/0`),imageBytes);
-    const body=JSON.stringify({deviceText:evidence});
+    const captureHint = { source: "device_location", countryCode: "ID", locatedAt: new Date(Date.now()-1_000).toISOString(), capturedAt: new Date().toISOString(), accuracyMeters: 200 };
+    const body=JSON.stringify({deviceText:evidence,receiptCaptureLocation:{...captureHint,latitude:-6.2,longitude:106.8}});
     const imageResult=await nativeUploadRequest(new Request("https://staging.clover.ph/api/mobile/v1/uploads/test/complete",{
       method:"POST",headers:{"content-type":"application/json","content-length":String(Buffer.byteLength(body))},body,
     }),id,userId,workspaceId,"complete",async request=>{
       const form=await request.formData();
       assert.deepEqual(JSON.parse(String(form.get("deviceText"))),{...evidence,text:evidence.text.trim()});
+      assert.deepEqual(JSON.parse(String(form.get("receiptCaptureLocation"))),captureHint,"Native handoff preserves country context but strips coordinates");
       assert.deepEqual(Buffer.from(await (form.get("file") as File).arrayBuffer()),imageBytes);
       return Response.json({ok:true,canonicalImportFileId:id});
     });

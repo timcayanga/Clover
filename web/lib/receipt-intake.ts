@@ -1,3 +1,5 @@
+import { normalizeReceiptCaptureLocation, locationMatchesReceiptDate } from "../../shared/receipt-capture-location";
+import { getRegionalParsingProfile } from "./context-corpus";
 import { normalizeDefaultCurrency } from "./regional-preferences";
 
 /** Classify the document, not a camera filename or incidental crypto substring. */
@@ -11,14 +13,15 @@ export function hasReceiptPhotoEvidence(text: string) {
 
 type ReceiptCurrencyDetails = {
   currency: string | null;
+  transaction_date?: string | null;
   confidence_score: number;
   parser_evidence: { reason: string; source_text?: string | null; page?: number | null };
-  currency_resolution?: { source?: string; original?: string | null; currency?: string; requiresReview?: boolean; evidence?: string };
+  currency_resolution?: { source?: string; original?: string | null; currency?: string; requiresReview?: boolean; evidence?: string; confidence?: number; countryCode?: string };
 };
 
 /** Strong printed location clues suggest a currency, never rewrite source text.
  * Conflicting regions deliberately fall back to the user's preference. */
-export function inferReceiptLocationCurrency(text: string) {
+function receiptLocationCandidates(text: string) {
   const source = text.normalize("NFKC");
   const regions: [string, RegExp][] = [
     ["PHP", /\bPhilippines\b|\b(?:Makati|Mandaluyong|Taguig|Pasig|Quezon|Cebu|Davao)\s+City\b|\bBIR\b.{0,50}\b(?:permit|accred|TIN)\b/i],
@@ -35,23 +38,33 @@ export function inferReceiptLocationCurrency(text: string) {
     const match = source.match(pattern);
     return match ? [{ currency, evidence: match[0] }] : [];
   });
+  return matches;
+}
+
+export function inferReceiptLocationCurrency(text: string) {
+  const matches = receiptLocationCandidates(text);
   return matches.length === 1 ? matches[0] : null;
 }
 
 /** The user's default is a documented suggestion, never printed evidence. */
-export function applyReceiptDefaultCurrency<T extends ReceiptCurrencyDetails>(details: T, defaultCurrency: string, receiptText = ""): T {
+export function applyReceiptDefaultCurrency<T extends ReceiptCurrencyDetails>(details: T, defaultCurrency: string, receiptText = "", captureLocation?: unknown): T {
   const currency = details.currency?.trim().toUpperCase();
-  const previousDefault = details.currency_resolution?.source === "user_default" &&
-    details.currency_resolution.currency === currency;
+  const previousDefault = ["user_default", "device_location"].includes(details.currency_resolution?.source ?? "") &&
+    details.currency_resolution?.currency === currency;
   if (!previousDefault && currency && /^[A-Z]{3}$/.test(currency) && !["XXX", "MIXED"].includes(currency)) return details;
-  const location = inferReceiptLocationCurrency([receiptText, details.parser_evidence.source_text].filter(Boolean).join("\n"));
-  const resolved = location?.currency ?? normalizeDefaultCurrency(defaultCurrency);
+  const locations = receiptLocationCandidates([receiptText, details.parser_evidence.source_text].filter(Boolean).join("\n"));
+  const location = locations.length === 1 ? locations[0] : null;
+  const hint = normalizeReceiptCaptureLocation(captureLocation);
+  const deviceCurrency = locations.length === 0 && hint && locationMatchesReceiptDate(hint, details.transaction_date)
+    ? getRegionalParsingProfile(hint.countryCode)?.defaultCurrency : null;
+  const useDevice = !location && !!deviceCurrency;
+  const resolved = location?.currency ?? deviceCurrency ?? normalizeDefaultCurrency(defaultCurrency);
   return {
     ...details,
     currency: resolved,
-    currency_resolution: { source: location ? "receipt_location" : "user_default", original: previousDefault ? details.currency_resolution?.original ?? null : details.currency, currency: resolved, requiresReview: false, ...(location ? { evidence: location.evidence } : {}) },
+    currency_resolution: { source: location ? "receipt_location" : useDevice ? "device_location" : "user_default", original: previousDefault ? details.currency_resolution?.original ?? null : details.currency, currency: resolved, requiresReview: false, ...(location ? { evidence: location.evidence } : useDevice ? { evidence: `Optional capture country: ${hint!.countryCode}`, countryCode: hint!.countryCode, confidence: 0.7 } : {}) },
     parser_evidence: { ...details.parser_evidence,
-      reason: `${details.parser_evidence.reason.replace(/\s*Currency defaulted to [A-Z]{3} from the user's settings; editable in Transactions\./g, "")} ${location ? `Currency suggested as ${resolved} from printed location: ${location.evidence}; editable in Transactions.` : `Currency defaulted to ${resolved} from the user's settings; editable in Transactions.`}` },
+      reason: `${details.parser_evidence.reason.replace(/\s*Currency (?:defaulted to [A-Z]{3} from the user's settings|suggested as [A-Z]{3} from optional capture country [A-Z]{2}); editable in Transactions\./g, "")} ${location ? `Currency suggested as ${resolved} from printed location: ${location.evidence}; editable in Transactions.` : useDevice ? `Currency suggested as ${resolved} from optional capture country ${hint!.countryCode}; editable in Transactions.` : `Currency defaulted to ${resolved} from the user's settings; editable in Transactions.`}` },
   };
 }
 

@@ -1,3 +1,4 @@
+import { normalizeReceiptCaptureLocation } from "../../../../../../shared/receipt-capture-location";
 import { startImportTiming, measureImportTiming } from "@/lib/import-timing";
 import { SOURCE_REVIEW_CODE } from "@/lib/import-source-review";
 import { persistSourceReviewFailure } from "@/lib/import-source-review.server";
@@ -1366,6 +1367,7 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
     let forceInlineProcessing = false;
     let importMode: ImportImageMode | null = null;
     let deviceText: DeviceTextEvidence | undefined;
+    let receiptCaptureLocation: ReturnType<typeof normalizeReceiptCaptureLocation> = null;
 
     let importFile = await fetchImportFileCompat(importId);
     let password: string | undefined;
@@ -1878,6 +1880,11 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
       const effectiveUploadFileName = file.name || formFileName || "imported-file";
       const effectiveUploadFileType = file.type || formFileType || "";
       const imageUploadFile = isImageUploadFile(effectiveUploadFileName, effectiveUploadFileType);
+      // Country-only context is kept separate from OCR and never added to AI prompts.
+      const suppliedLocation = formData.get("receiptCaptureLocation");
+      if (imageUploadFile && typeof suppliedLocation === "string" && suppliedLocation.length <= 1_024) {
+        try { receiptCaptureLocation = normalizeReceiptCaptureLocation(JSON.parse(suppliedLocation)); } catch { /* Optional context must not block uploads. */ }
+      }
       const suppliedDeviceText = formData.get("deviceText");
       if (imageUploadFile && typeof suppliedDeviceText === "string" && suppliedDeviceText.length <= 256_000) {
         try {
@@ -2042,6 +2049,12 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
       if (byteValidationError) {
         return importJsonResponse({ error: byteValidationError }, { status: 400 });
       }
+      // Persist only after workspace authorization, record creation and byte validation.
+      if (receiptCaptureLocation) await prisma.auditLog.create({ data: {
+        workspaceId: String(importFile.workspaceId), actorUserId: userId,
+        action: "import.receipt_capture_location", entity: "ImportFile", entityId: importId,
+        metadata: { ...receiptCaptureLocation },
+      } });
       const fileFingerprint = makeImportFileBytesFingerprint(bytes);
       // Start durable storage immediately. The previous cross-import raw-file
       // lookup delayed every first upload before its S3 transfer could begin.

@@ -1,3 +1,4 @@
+import type { ReceiptCaptureLocation } from "../../shared/receipt-capture-location";
 import { OnboardingPersistence } from "./onboarding-persistence";
 import { nativeImportIsComplete, needsNativeImportResume } from "../../shared/native-import-status";
 import { notifyImportQueued } from "./import-handoff";
@@ -64,6 +65,7 @@ type Session = {
     file: SelectedFile,
     targetProfileId?: string,
     importMode?: QueuedFile["importMode"],
+    receiptCaptureLocation?: ReceiptCaptureLocation,
   ) => Promise<void>;
   markUploadStarted: (id: string) => void;
 };
@@ -411,7 +413,7 @@ export function SessionProvider({
         refresh: () => { pageCache.current.clear(); void flushSetup().catch(() => {}); setRevision((n) => n + 1); },
         rows,
         uploads,
-        registerUpload: async (id, file, targetProfileId = profileId, importMode) => {
+        registerUpload: async (id, file, targetProfileId = profileId, importMode, receiptCaptureLocation) => {
           if (!data?.profiles.some((p) => p.id === targetProfileId)) throw new Error("Choose a Profile before importing.");
 
           const uploadQueue=fileQueue??fileQueueRef.current;
@@ -428,6 +430,7 @@ export function SessionProvider({
                 createdAt: new Date().toISOString(),
                 state: "draft",
                 importMode,
+                receiptCaptureLocation,
               },
               bytes,
             );

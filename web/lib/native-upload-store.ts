@@ -1,3 +1,4 @@
+import { normalizeReceiptCaptureLocation } from "../../shared/receipt-capture-location";
 import { downloadImportObject } from "./import-storage.server";
 import { NativeInputError } from "./native-input-error";
 import { createHash } from "node:crypto";
@@ -275,8 +276,8 @@ export async function nativeUploadRequest(
   const completionBody = await request.text();
   if (new TextEncoder().encode(completionBody).length > 256_000)
     throw new NativeInputError("Upload details are too large.");
-  const { password, importMode, deviceText: suppliedDeviceText } = z
-    .object({ password: z.string().max(256).optional(), importMode: z.enum(["receipt", "statement", "portfolio", "account_detail"]).optional(), deviceText: z.unknown().optional() })
+  const { password, importMode, deviceText: suppliedDeviceText, receiptCaptureLocation: suppliedLocation } = z
+    .object({ password: z.string().max(256).optional(), importMode: z.enum(["receipt", "statement", "portfolio", "account_detail"]).optional(), deviceText: z.unknown().optional(), receiptCaptureLocation: z.unknown().optional() })
     .strict()
     .parse(JSON.parse(completionBody));
   // The original is still validated below. OCR is bounded, untrusted evidence,
@@ -340,6 +341,8 @@ export async function nativeUploadRequest(
     if (password) form.set("password", password);
     if (importMode) form.set("importMode", importMode);
     if (deviceText) form.set("deviceText", JSON.stringify(deviceText));
+    const hint = isUploadPhoto(row.fileName, row.contentType) ? normalizeReceiptCaptureLocation(suppliedLocation) : null;
+    if (hint) form.set("receiptCaptureLocation", JSON.stringify(hint));
     const forwarded = new Request(request.url, { method: "POST", body: form });
     const result = await withMobileRequestContext(userId, forwarded, () =>
       withCompletedNativeUpload(() => processor(forwarded, id)),

@@ -1,3 +1,4 @@
+import { normalizeReceiptCaptureLocation } from "../../shared/receipt-capture-location";
 import {hasVerifiedHeldNativeRows} from '@/lib/held-source-contracts';
 import { hasVerifiedMariBankNativeRows } from '@/lib/maribank-native-ledger';
 import { hasVerifiedMaybankIslamicRows } from '@/lib/maybank-islamic-statement';
@@ -8644,6 +8645,10 @@ const processImportFileTextImpl = async (
       orderBy: { createdAt: "desc" }, select: { metadata: true },
     }))?.metadata) : null;
   }
+  const receiptCaptureLocation = imageImport ? normalizeReceiptCaptureLocation((await prisma.auditLog.findFirst({
+    where: { workspaceId: String(importFile.workspaceId), entityId: importFileId, action: "import.receipt_capture_location" },
+    orderBy: { createdAt: "asc" }, select: { metadata: true },
+  }))?.metadata) : null;
   const usableDeviceText = deviceText?.complete && deviceText.pagesRead === 1 && deviceText.totalPages === 1 && deviceText.text.trim()
     ? deviceText.text : null;
   const likelyNetWorthSnapshotCsv =
@@ -9478,7 +9483,7 @@ const processImportFileTextImpl = async (
       trainedReceiptDetails = applyReceiptDefaultCurrency({ ...localDetails,
         confidence_score: Math.min(69, localDetails.confidence_score),
         parser_evidence: { ...localDetails.parser_evidence, reason: "Receipt read locally; review the suggested details against the original photo." },
-      }, defaultReceiptCurrency, usableDeviceText ? deviceText!.text : text);
+      }, defaultReceiptCurrency, usableDeviceText ? deviceText!.text : text, receiptCaptureLocation);
     }
   }
   if (!trainedReceiptDetails && fileType === "application/pdf" && text.trim()) {
@@ -11272,7 +11277,7 @@ const processImportFileTextImpl = async (
       })
     : null;
   if (receiptDetails && effectiveImportMode === "receipt") {
-    receiptDetails = applyReceiptDefaultCurrency(receiptDetails, defaultReceiptCurrency, textForParse);
+    receiptDetails = applyReceiptDefaultCurrency(receiptDetails, defaultReceiptCurrency, textForParse, receiptCaptureLocation);
   }
   const promotesNotesSplitBillToReceipt =
     effectiveImportMode === "notes" &&
@@ -11665,7 +11670,7 @@ const processImportFileTextImpl = async (
   // confirming its transaction.
   if (effectiveImportMode === "receipt" && openAiParsed?.receiptDetails) {
     receiptDetails = chooseBetterReceiptDetails(receiptDetails, openAiParsed.receiptDetails);
-    if (receiptDetails) receiptDetails = applyReceiptDefaultCurrency(receiptDetails, defaultReceiptCurrency, textForParse);
+    if (receiptDetails) receiptDetails = applyReceiptDefaultCurrency(receiptDetails, defaultReceiptCurrency, textForParse, receiptCaptureLocation);
     receiptAccountMatch = openAiParsed.receiptAccountMatch ?? receiptAccountMatch;
     openAiReceiptValidation = assessReceiptExtractionQuality({
       receiptDetails,
@@ -11685,7 +11690,7 @@ const processImportFileTextImpl = async (
       confidence_score: Math.min(35, partialDetails.confidence_score),
       parser_evidence: { ...partialDetails.parser_evidence,
         reason: "Incomplete receipt read locally; complete missing details against the original source." },
-    }, defaultReceiptCurrency, usableDeviceText ? deviceText!.text : text);
+    }, defaultReceiptCurrency, usableDeviceText ? deviceText!.text : text, receiptCaptureLocation);
     openAiReceiptValidation = assessReceiptExtractionQuality({
       receiptDetails,
       expectedCurrency: receiptDetails.currency,

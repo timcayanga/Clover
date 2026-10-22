@@ -1,4 +1,6 @@
 "use client";
+import { requestReceiptLocation } from "@/lib/receipt-device-location";
+import { captureReceiptLocation, receiptLocationCountryLabel, type ReceiptCaptureLocation, type ReceiptLocationFix } from "../../shared/receipt-capture-location";
 
 import { ReceiptDraftEditor } from "./receipt-draft-editor";
 import { publishWorkspaceDataChange } from "@/lib/workspace-data-sync";
@@ -185,6 +187,7 @@ type ConfirmationState = "none" | "pending" | "staged" | "confirmed";
 type UploadAccountType = AccountType | null;
 
 type QueuedFile = {
+  receiptCaptureLocation?: ReceiptCaptureLocation;
   id: string;
   file: File;
   importMode: ImportImageMode;
@@ -440,6 +443,16 @@ export function ImportFilesModal({
   const [dragActive, setDragActive] = useState(false);
   const [selectedAccountId, setSelectedAccountId] = useState("");
   const selectedImportMode: ImportImageMode = defaultImportMode;
+  const [locationFix, setLocationFix] = useState<ReceiptLocationFix | null>(null);
+  const [locationBusy, setLocationBusy] = useState(false);
+  const [locationNotice, setLocationNotice] = useState("");
+  const enableReceiptLocation = async () => {
+    setLocationBusy(true);
+    const fix = await requestReceiptLocation();
+    setLocationFix(fix);
+    setLocationNotice(fix ? "" : "Location unavailable. You can still scan; Clover will use receipt details or your default currency.");
+    setLocationBusy(false);
+  };
   const [launchInBackground, setLaunchInBackground] = useState(backgroundOnly);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
@@ -1493,7 +1506,7 @@ export function ImportFilesModal({
 
   const addFiles = (
     incoming: FileList | File[],
-    options?: { launchInBackground?: boolean; imagesPrepared?: boolean }
+    options?: { launchInBackground?: boolean; imagesPrepared?: boolean; receiptCaptureLocation?: ReceiptCaptureLocation }
   ) => {
     const nextFiles = Array.from(incoming);
     if (nextFiles.length === 0) return;
@@ -1634,6 +1647,7 @@ export function ImportFilesModal({
           {
             id: queuedFileId,
             file,
+            ...(options?.receiptCaptureLocation && isImageImportFile(file) ? { receiptCaptureLocation: options.receiptCaptureLocation } : {}),
             status: "pending" as ImportStatus,
             confirmationState: "none" as ConfirmationState,
             error: null,
@@ -5361,6 +5375,7 @@ export function ImportFilesModal({
                 ? "BPI"
                 : undefined,
           extractedText: extractedTextForUpload,
+          receiptCaptureLocation: item.receiptCaptureLocation ? JSON.stringify(item.receiptCaptureLocation) : undefined,
           sourceTimezone: Intl.DateTimeFormat().resolvedOptions().timeZone || undefined,
           sourceLocale: navigator.languages?.[0] || navigator.language || undefined,
         },
@@ -8386,7 +8401,10 @@ export function ImportFilesModal({
         fileCount: event.target.files.length,
         workspaceReady: Boolean(workspaceId),
       });
-      addFiles(event.target.files);
+      const camera = event.target === cameraInputRef.current;
+      const hint = camera ? captureReceiptLocation(locationFix) : null;
+      if (camera) setLocationFix(null);
+      addFiles(event.target.files, hint ? { receiptCaptureLocation: hint } : undefined);
     }
     event.target.value = "";
   };
@@ -8566,6 +8584,12 @@ export function ImportFilesModal({
 
           <input ref={photoLibraryInputRef} className="hidden-file-input" type="file" accept="image/*" multiple onChange={handleInputChange} />
           <UploadSourceButtons onFiles={openFilePicker} onCamera={() => cameraInputRef.current?.click()} onLibrary={() => photoLibraryInputRef.current?.click()} />
+          <button type="button" className="text-button" disabled={locationBusy}
+            onClick={() => { if (locationFix) { setLocationFix(null); setLocationNotice(""); } else void enableReceiptLocation(); }}>
+            {locationBusy ? "Finding country…" : locationFix ? `Next photo: ${receiptLocationCountryLabel(locationFix.countryCode)} · Clear` : "Use location for next receipt photo"}
+          </button>
+          <p>Optional. Only the country is saved with your next photo to help suggest its currency. No background tracking.</p>
+          {locationNotice ? <p role="status">{locationNotice}</p> : null}
         </div>
 
         <div className="accounts-import-footer-copy">

@@ -1,3 +1,4 @@
+import { normalizeReceiptCaptureLocation } from "../../../shared/receipt-capture-location";
 import {
   NATIVE_UPLOAD_PART_SIZE,
   nativeUploadPartBytes,
@@ -81,6 +82,7 @@ export async function uploadInParts(
         ...(file.password ? { password: file.password } : {}),
         ...(file.importMode ? { importMode: file.importMode } : {}),
         ...(deviceText ? { deviceText } : {}),
+        ...(normalizeReceiptCaptureLocation(file.receiptCaptureLocation) ? { receiptCaptureLocation: normalizeReceiptCaptureLocation(file.receiptCaptureLocation) } : {}),
       }),
     },
   );

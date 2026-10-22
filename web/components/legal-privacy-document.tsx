@@ -105,6 +105,15 @@ export function PrivacyPolicyDocument() {
                 histories, investments, recurring activity, budgets, goals, and
                 split-bill details.
               </p>
+              <h3>Optional receipt location</h3>
+              <p>
+                If you choose “Use location for next receipt photo,” Clover asks for location access
+                while you use the app or browser. Country lookup runs on your device. Clover does not
+                upload or retain the coordinates, send them to AI, or track location in the background.
+                Only the country, capture and location timestamps, and approximate accuracy are saved
+                with that import to help suggest a missing currency. Printed receipt evidence takes
+                priority. You can clear the suggestion, deny permission, or scan without location.
+              </p>
               <h3>Information Clover creates from your records</h3>
               <p>
                 Clover may extract and organize transactions, merchants,

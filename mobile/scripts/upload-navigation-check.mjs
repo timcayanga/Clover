@@ -2,6 +2,10 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import vm from 'node:vm';
 import ts from 'typescript';
+const receiptLocationHelpers = {};
+vm.runInNewContext(ts.transpileModule(fs.readFileSync(new URL('../../shared/receipt-capture-location.ts', import.meta.url), 'utf8'), {
+ compilerOptions: {module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022},
+}).outputText, {exports:receiptLocationHelpers,Date,Intl});
 const code=ts.transpileModule(fs.readFileSync(new URL('../app/(tabs)/add.tsx',import.meta.url),'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022,jsx:ts.JsxEmit.ReactJSX,esModuleInterop:true}}).outputText;
 function harness(source,{sheet=false,cancel=true,permission=true,canGoBack=true,registerFails=false}={}){
  const states=[],refs=[],routes=[],calls=[];let si=0,ri=0,effects=[], queuedListener;
@@ -9,6 +13,8 @@ function harness(source,{sheet=false,cancel=true,permission=true,canGoBack=true,
  const picker=async name=>{calls.push(name);return {canceled:cancel,assets:[{uri:'file:///receipt.jpg',name:'receipt.jpg',fileName:'receipt.jpg',mimeType:'image/jpeg',size:100,fileSize:100}]};};
  const exports={};const router={back:()=>routes.push('back'),replace:v=>routes.push(v),push:v=>routes.push(v),setParams:()=>{},canGoBack:()=>canGoBack,canDismiss:()=>canGoBack,dismissAll:()=>routes.push("dismissAll")};
  vm.runInNewContext(code,{exports,console,Error,require:name=>{
+  if(name.endsWith('/receipt-capture-location'))return receiptLocationHelpers;
+  if(name.endsWith('/receipt-location'))return {requestReceiptLocation:async()=>null};
   if(name.endsWith('/import-handoff'))return {onImportQueued:fn=>{queuedListener=fn;return ()=>{};}};
   if(name.endsWith('/native-upload'))return {isUploadPhoto:()=>true};
   if(name==='react')return {useState:v=>{const i=si++;if(!(i in states))states[i]=typeof v==='function'?v():v;return [states[i],v=>{states[i]=v;}];},useRef:v=>{const i=ri++;return refs[i]??={current:v};},useEffect:f=>effects.push(f),useCallback:f=>f};

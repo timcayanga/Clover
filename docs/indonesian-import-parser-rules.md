@@ -120,3 +120,28 @@ Normalize quoted integer receipt totals with the existing unlocalized grammar be
 ## Server image OCR follow-up
 
 See [local receipt OCR](local-receipt-ocr.md) for the bounded PP-OCRv5 receipt reader, raw optical evidence envelope, mandatory review, model provenance and original-image benchmark. Native device OCR and direct cloud vision remain separate paths.
+
+
+## Optional country context for freshly photographed receipts
+
+Users may explicitly choose “Use location for next receipt photo” before Take Photo.
+Country lookup runs locally against bundled boundaries; neither IP/VPN country nor
+precise coordinates are uploaded, logged or sent to the extraction model. Foreground
+permission only; no background location. Denial, unavailable services, a mocked fix,
+poor accuracy or border uncertainty leave the existing scanning flow usable.
+
+Store the country-only hint and timestamps separately in the import audit and encrypted
+native upload queue. A fix expires after ten minutes before capture. Retain that capture
+context on retries rather than substitute the user's current location. Apply it only to
+new receipt currency normalization, after explicit source currency and printed location,
+and only when the receipt date is within 36 hours of capture. Thus an ambiguous fresh
+receipt photographed in Indonesia can suggest IDR, but an old receipt cannot inherit it.
+Raw extraction still has null/MIXED when printed currency is missing. Keep source text,
+amounts, confirmed data and base-currency preferences unchanged. The normalized
+currency-resolution metadata records device_location and suggestion confidence 0.7;
+it does not raise extraction confidence or generate a missing-currency warning.
+
+`qa:receipt-camera` includes location precedence, boundary uncertainty, privacy filtering,
+old receipts, retry provenance and native multipart transport. Native upload checks cover
+permission denial, disabled services, mocked locations and the absence of startup prompts.
+A new native binary is required for the foreground location module and permission text.

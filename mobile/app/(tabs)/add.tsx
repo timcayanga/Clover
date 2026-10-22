@@ -1,3 +1,5 @@
+import { requestReceiptLocation } from "../../src/receipt-location";
+import { captureReceiptLocation, receiptLocationCountryLabel, type ReceiptLocationFix, type ReceiptCaptureLocation } from "../../../shared/receipt-capture-location";
 import { onImportQueued } from "../../src/import-handoff";
 import { PlanHeader } from "../../src/plan-ui";
 import { EntrySelector, EntryTransition } from "../../src/entry-controls";
@@ -70,6 +72,16 @@ export default function Add({ sheet = false }: { sheet?: boolean } = {}) {
     setTab(entry?.startsWith("upload-") ? "upload" : "manual");
     setDraft(emptyTransaction());
   }, [entry, session.profileId]);
+  const [locationFix, setLocationFix] = useState<ReceiptLocationFix | null>(null);
+  const [locationBusy, setLocationBusy] = useState(false);
+  const [locationNotice, setLocationNotice] = useState("");
+  const enableReceiptLocation = async () => {
+    setLocationBusy(true);
+    const fix = await requestReceiptLocation();
+    setLocationFix(fix);
+    setLocationNotice(fix ? "" : "Location unavailable. You can still scan; Clover will use receipt details or your default currency.");
+    setLocationBusy(false);
+  };
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const [historyError, setHistoryError] = useState("");
@@ -110,7 +122,7 @@ export default function Add({ sheet = false }: { sheet?: boolean } = {}) {
       };
     }, [session.demo, session.profileId, session.request, tab, historyRevision]),
   );
-  const open = async (picked: SelectedFile) => {
+  const open = async (picked: SelectedFile, receiptCaptureLocation?: ReceiptCaptureLocation) => {
     const file = resolveSelectedFile(picked);
     const problem = fileProblem(file);
     if (problem) {
@@ -133,7 +145,7 @@ export default function Add({ sheet = false }: { sheet?: boolean } = {}) {
       session.setProfileId(target.id);
       setBusy(true);
       await session
-        .registerUpload(id, file, target.id, importMode)
+        .registerUpload(id, file, target.id, importMode, receiptCaptureLocation)
         .catch((e: Error) => setError(e.message))
         .finally(() => setBusy(false));
     };
@@ -209,12 +221,14 @@ export default function Add({ sheet = false }: { sheet?: boolean } = {}) {
         finishInput(result.canceled ? "canceled" : "completed");
         if (!result.canceled) {
           const asset = result.assets[0];
+          const hint = source === "camera" ? captureReceiptLocation(locationFix) : null;
+          if (source === "camera") setLocationFix(null);
           await open({
             uri: asset.uri,
             name: asset.fileName ?? "receipt.jpg",
             mimeType: asset.mimeType ?? "image/jpeg",
             size: asset.fileSize ?? new File(asset.uri).size,
-          });
+          }, hint ?? undefined);
         }
       }
     } catch {
@@ -327,6 +341,15 @@ export default function Add({ sheet = false }: { sheet?: boolean } = {}) {
                   </Text>
                 </Pressable>
               ))}
+            </View>
+            <View style={{ gap: 8 }}>
+              <Pressable accessibilityRole="button" disabled={locationBusy || busy || session.demo}
+                onPress={() => { if (locationFix) { setLocationFix(null); setLocationNotice(""); } else void enableReceiptLocation(); }}
+                style={{ minHeight: 44, justifyContent: "center" }}>
+                <Text style={{ color: colors.teal, fontWeight: "500" }}>{locationBusy ? "Finding country…" : locationFix ? `Next photo: ${receiptLocationCountryLabel(locationFix.countryCode)} · Clear` : "Use location for next receipt photo"}</Text>
+              </Pressable>
+              <Body>Optional. Only the country is saved with your next photo to help suggest its currency. No background tracking.</Body>
+              {locationNotice ? <Body>{locationNotice}</Body> : null}
             </View>
             {error ? <Notice>{error}</Notice> : null}
             <Body>

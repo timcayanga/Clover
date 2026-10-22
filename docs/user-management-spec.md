@@ -275,3 +275,14 @@ Settings Plan on web and native shows account-wide usage and a read-only plan pr
 - Use the established GSave-family Investments presentation on web, iOS and
   Android, including legacy bank-typed GSave UNO/CIMB and explicit time deposits.
   Presentation must not overwrite stored account types, balances or identity.
+
+
+### Optional receipt capture location
+
+Upload offers an explicit country hint for the next Take Photo receipt. Explain the purpose
+before requesting foreground location access. Resolve country on the device; upload no
+coordinates and use no background tracking. Show the country with a Clear action. Apply
+only to this photo and recent receipt dates, behind printed currency/location evidence;
+permission denial or failure must never prevent scanning. Files and Photo Library do not
+inherit today's device location. Save only country/timestamps/approximate accuracy with
+the import for provenance, keeping raw extracted financial evidence separate.
