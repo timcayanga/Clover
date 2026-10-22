@@ -20,7 +20,7 @@ async function main() {
   assert.match(footer, /aria-label=\{link.label\}/, "Icon-only social links need accessible names.");
   assert.match(footer, /Money looks better from here<\/p>/);
   assert.match(footer, /Help &amp; Support/);
-  assert.match(footer, /Other Resources[\s\S]*?>Pro<[\s\S]*?>Security<[\s\S]*?Privacy Policy[\s\S]*?Terms of Service/);
+  assert.match(footer, /Other Resources[\s\S]*?>Pro<[\s\S]*?>Security<[\s\S]*?Privacy Policy[\s\S]*?Terms and Conditions/);
   assert.doesNotMatch(footer, />Home<|Explore Clover|Here to help/);
   assert.match(await readSource("components/marketing-footer.tsx"), /PublicFooter as MarketingFooter/, "Every public layout must use the same footer.");
   const landingJourneySource = await readSource("app/landing-preview/landing-journey.tsx");
@@ -40,7 +40,7 @@ async function main() {
   assert.match(pricingPageSource, /x-vercel-ip-country[\s\S]*?country === "PH"/, "Pricing must select the market from the visitor country.");
   assert.match(pricingPageSource, /variant="full"/, "Pricing must display the full shared comparison.");
   assert.doesNotMatch(pricingPageSource, /not enforced during beta/, "The plan table must not claim that active limits are disabled.");
-  assert.match(await readSource("components/public-footer.tsx"), /Pricing[\s\S]*?Privacy Policy[\s\S]*?Terms of Service/, "Pricing and legal links must remain available in the footer.");
+  assert.match(await readSource("components/public-footer.tsx"), /Pricing[\s\S]*?Privacy Policy[\s\S]*?Terms and Conditions/, "Pricing and legal links must remain available in the footer.");
   assert.match(mainLandingPageSource, /import \{ Showcase \} from "\.\/landing-showcase\/showcase"/, "The homepage must reuse the approved showcase implementation.");
   assert.match(mainLandingPageSource, /homeHref="\/" featureBasePath="\/features"/, "The released homepage must link to existing production feature pages.");
   assert.match(mainLandingPageSource, /robots: \{ index: true, follow: true \}/, "The production homepage must remain indexable.");
