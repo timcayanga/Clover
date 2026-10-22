@@ -49,7 +49,8 @@ export default clerkMiddleware(async (auth, request) => {
       (request.nextUrl.pathname === "/onboarding" && request.nextUrl.searchParams.get("campaign") === "switch-to-clover")) {
       signIn.searchParams.set("campaign", "switch-to-clover");
     }
-  if (isProtectedAppRoute(request)) {
+  const isPublicPaymentRequest = /^\/split-bill\/request\/[a-zA-Z0-9_-]{20,100}\/?$/.test(request.nextUrl.pathname);
+  if (isProtectedAppRoute(request) && !isPublicPaymentRequest) {
     await auth.protect({
       unauthenticatedUrl: signIn.toString(),
     });

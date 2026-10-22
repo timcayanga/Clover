@@ -358,9 +358,16 @@ async function main() {
   );
   assert.match(
     middlewareSource,
-    /if \(isProtectedAppRoute\(request\)\) \{[\s\S]{0,120}await auth\.protect\(\{[\s\S]{0,120}unauthenticatedUrl:/,
+    /if \(isProtectedAppRoute\(request\) && !isPublicPaymentRequest\) \{[\s\S]{0,120}await auth\.protect\(\{[\s\S]{0,120}unauthenticatedUrl:/,
     "Protected app routes must require Clerk authentication in every deployed environment."
   );
+  const publicRequestMatcher = middlewareSource.match(/const isPublicPaymentRequest = (\/[^\n]+?\/)\.test\(request\.nextUrl\.pathname\);/);
+  assert.ok(publicRequestMatcher, "Guest access must use a bounded payment-token path matcher.");
+  const guestPath = new RegExp(publicRequestMatcher[1].slice(1, -1));
+  assert.ok(guestPath.test(`/split-bill/request/${"a".repeat(32)}`));
+  for (const pathname of ["/split-bill", "/split-bill/private-id", "/accounts", "/split-bill/request/short", `/split-bill/request/${"a".repeat(101)}`, `/split-bill/request/${"a".repeat(32)}/edit`]) {
+    assert.equal(guestPath.test(pathname), false, `${pathname} must remain protected.`);
+  }
   assert.doesNotMatch(
     middlewareSource,
     /isGuestEnabledEnvironment|VERCEL_ENV === "preview"|staging\.clover\.ph/,

@@ -72,7 +72,7 @@
     "qa:imported-accounts": "tsx scripts/imported-account-ui-regression.ts",
     "qa:internal-transfers": "tsx scripts/internal-transfer-matching-regression.ts",
     "qa:digital-note-split-bill": "tsx scripts/digital-note-split-bill-regression.ts",
-    "qa:split-bill-details": "tsx scripts/split-bill-detail-features-regression.ts && tsx scripts/split-bill-payment-request-regression.ts",
+    "qa:split-bill-details": "tsx scripts/split-bill-detail-features-regression.ts && tsx scripts/split-bill-payment-request-regression.ts && tsx scripts/split-bill-experience-regression.ts",
     "qa:parser-routing": "tsx scripts/parser-routing-regression.ts",
     "qa:import-quality": "tsx scripts/import-quality-regression.ts",
     "qa:import-arbitration": "tsx scripts/import-candidate-arbitration-regression.ts",

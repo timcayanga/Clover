@@ -1,4 +1,6 @@
 "use client";
+import { SplitItemGrid } from "./split-item-grid";
+import { suggestBillCategory, type SplitItem } from "../../shared/split-bill-experience";
 import { MobileSheetHandle } from "@/components/mobile-sheet-handle";
 import { SplitBillImportModal } from "./split-bill-import-modal";
 import { readSelectedWorkspaceId } from "@/lib/workspace-selection";
@@ -47,6 +49,7 @@ async function readJsonResponse<T>(response: Response): Promise<T> {
 }
 
 export function SplitBillManualModal({ open, currentUserName, people, groups, onClose, onSaved }: SplitBillManualModalProps) {
+  const [lineItems,setLineItems]=useState<SplitItem[]>([]);
   const [entryUpload,setEntryUpload]=useState(false);
   const [receiptFile,setReceiptFile]=useState<File | null>(null);
   const [selectedPeople, setSelectedPeople] = useState<string[]>([]);
@@ -67,6 +70,7 @@ export function SplitBillManualModal({ open, currentUserName, people, groups, on
       return;
     }
 
+    setLineItems([]);
     setSelectedPeople([]);
     setSelectedGroupId(null);
     setQuery("");
@@ -189,6 +193,14 @@ export function SplitBillManualModal({ open, currentUserName, people, groups, on
 
     if (!/^\d{4}-\d{2}-\d{2}$/.test(billDate) || !Number.isFinite(Date.parse(billDate)) || new Date(billDate).toISOString().slice(0,10) !== billDate) { setError("Choose a valid bill date."); return; }
 
+    if (lineItems.length && lineItems.some(item=>!item.description.trim()||!/^\d+(\.\d{1,2})?$/.test(item.amount)||Number(item.amount)<=0||!item.participantIds.length||item.participantIds.some(name=>![currentUserName,...selectedPeople].includes(name)))) { setError("Add a name, positive amount and at least one person for every item.");return; }
+    if (lineItems.length && Math.abs(lineItems.reduce((sum,item)=>sum+Number(item.amount),0)-Number(trimmedAmount))>.005) {setError("Line items must match the bill total.");return;}
+    for(const item of lineItems){
+      if(item.splitMethod && item.splitMethod!=="equal"){
+        const a=item.allocations??[],sum=a.reduce((s,v)=>s+Number(v.value),0);
+        if(a.length!==item.participantIds.length||a.some(v=>!item.participantIds.includes(v.participantId)||!Number.isFinite(Number(v.value))||Number(v.value)<0)||new Set(a.map(v=>v.participantId)).size!==a.length||(item.splitMethod==="percentage"?Math.abs(sum-100)>.001:Math.abs(sum-Number(item.amount))>.005)){setError("Check each person's amount or percentage.");return;}
+      }
+    }
     setIsSaving(true);
     setError(null);
 
@@ -214,14 +226,10 @@ export function SplitBillManualModal({ open, currentUserName, people, groups, on
         sourceType: "manual" as const,
         groupId: selectedGroupId,
         participants: participantEntries,
-        items: [
-          {
-            id: createId(),
-            description: trimmedDescription,
-            amount: trimmedAmount,
-            participantIds: itemParticipantIds,
-          },
-        ],
+        items: lineItems.length ? lineItems.map(item=>({...item,
+          participantIds:item.participantIds.map(name=>participantEntries.find(p=>p.name===name)?.id).filter((id):id is string=>Boolean(id)),
+          allocations:(item.allocations??[]).map(a=>({participantId:participantEntries.find(p=>p.name===a.participantId)?.id??"",value:a.value})),
+        })) : [{id:createId(),description:trimmedDescription,amount:trimmedAmount,participantIds:itemParticipantIds}],
         payments:
           splitMode === "you-paid" || splitMode === "person-paid"
             ? [
@@ -323,6 +331,9 @@ export function SplitBillManualModal({ open, currentUserName, people, groups, on
           </label>
         </div>
 
+        <SplitItemGrid people={Array.from(new Set([currentUserName,...selectedPeople])).map(name=>({id:name,name,avatarUrl:people.find(p=>p.name===name)?.avatarUrl}))}
+          items={lineItems} currency={currency} onChange={next=>{setLineItems(next);if(next.length)setAmount(next.reduce((sum,item)=>sum+(Number(item.amount)||0),0).toFixed(2));}} />
+        {suggestBillCategory(description,lineItems.map(item=>item.description)) ? <small>Suggested category: {suggestBillCategory(description,lineItems.map(item=>item.description))?.name}</small> : null}
         <label className="settings-field">
           <span>Add people or group</span>
           <input

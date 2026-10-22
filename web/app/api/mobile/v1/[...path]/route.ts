@@ -407,7 +407,8 @@ async function handle(
         prisma.splitBillPerson.findMany({where:{userId:user.id},select:{id:true,name:true,avatarUrl:true}}),
         prisma.splitBillPaymentProfile.findMany({where:{userId:user.id},select:{id:true,label:true,provider:true,currency:true,accountName:true,accountNumber:true,qrImageData:true,isDefault:true}}),
       ]);
-      return reply({groups,people,profiles});
+      const {paymentOptionBrand}=await import("@/lib/payment-option-brand");
+      return reply({groups,people,profiles:profiles.map(profile=>({...profile,...paymentOptionBrand(profile.provider,profile.label)}))});
     }
     if (operation === "investments") {
       return reply(await (await import("@/lib/mobile-investment-data")).loadMobileInvestments(workspaceId));
@@ -780,8 +781,11 @@ async function handle(
             return (await import("@/app/api/split-bills/[billId]/resolution/route")).POST(forwarded,{params:Promise.resolve({billId:path[1]})});
           case "payment-profile-delete":
             return (await import("@/app/api/split-bill-payment-profiles/[profileId]/route")).DELETE(forwarded, { params: Promise.resolve({ profileId: path[1] }) });
-          case "payment-requests":
-            return (await import("@/app/api/split-bills/[billId]/payment-requests/route")).POST(forwarded, { params: Promise.resolve({ billId: path[1] }) });
+          case "payment-requests": {
+            const route=await import("@/app/api/split-bills/[billId]/payment-requests/route");
+            const args={params:Promise.resolve({billId:path[1]})};
+            return request.method==="GET"?route.GET(forwarded,args):route.POST(forwarded,args);
+          }
           case "transfer-settlements":
             return (await import("@/app/api/split-bills/[billId]/transfer-settlements/route")).POST(forwarded, { params: Promise.resolve({ billId: path[1] }) });
           case "preview":

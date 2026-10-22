@@ -1,3 +1,9 @@
+import { SplitItemGrid } from "./split-item-grid";
+import { PaymentOptionMark } from "./payment-option-mark";
+import {
+  splitItemTotals,
+  paymentRequestMessage,
+} from "../../shared/split-bill-experience";
 import { Text } from "./app-text";
 import { useEffect, useRef, useState } from "react";
 import { apiBase } from "./api";
@@ -46,10 +52,20 @@ export function BillDetails({
   onSaved,
   onDeleted,
   paymentProfiles,
+  peopleProfiles = [],
+  relatedBills = [],
   onManagePaymentOptions,
 }: {
   bill: EditableBill;
-  paymentProfiles: { id: string; label: string; provider: string; currency: string; isDefault: boolean }[];
+  peopleProfiles?: { name: string; avatarUrl?: string | null }[];
+  relatedBills?: EditableBill[];
+  paymentProfiles: {
+    id: string;
+    label: string;
+    provider: string;
+    currency: string;
+    isDefault: boolean;
+  }[];
   onManagePaymentOptions: () => void;
   onSaved: (bill: EditableBill) => void;
   onDeleted: () => void;
@@ -63,12 +79,37 @@ export function BillDetails({
     };
   }, []);
   const { colors } = useTheme();
-  const [editingItem, setEditingItem] = useState<string | null>(null);
-  const [showSplit, setShowSplit] = useState(false);
   const [shareUrl, setShareUrl] = useState("");
   const [shareMessage, setShareMessage] = useState("");
+  const [savedRequests, setSavedRequests] = useState<
+    {
+      id: string;
+      shareUrl: string;
+      amount: string;
+      currency: string;
+      recipientName: string;
+      note?: string | null;
+    }[]
+  >([]);
+  useEffect(() => {
+    if (session.demo) return;
+    let active = true;
+    session
+      .request<{ requests: typeof savedRequests }>(
+        `split-bills/${bill.id}/payment-requests?workspaceId=${encodeURIComponent(session.profileId)}`,
+      )
+      .then((r) => {
+        if (active) setSavedRequests(r.requests ?? []);
+      })
+      .catch(() => {});
+    return () => {
+      active = false;
+    };
+  }, [bill.id, session.demo, session.profileId, session.request]);
   const [paymentProfileId, setPaymentProfileId] = useState("");
-  const availableProfiles = paymentProfiles.filter((profile) => profile.currency === bill.currency);
+  const availableProfiles = paymentProfiles.filter(
+    (profile) => profile.currency === bill.currency,
+  );
   const [title, setTitle] = useState(bill.title);
   const [items, setItems] = useState(() =>
     (bill.items ?? []).map((i) => ({
@@ -81,6 +122,14 @@ export function BillDetails({
     })),
   );
   const [preview, setPreview] = useState(bill.settlement);
+  const adjustment =
+    Number(bill.total) -
+    (bill.items ?? []).reduce((sum, item) => sum + Number(item.amount), 0);
+  const instantTotals = splitItemTotals(
+    bill.participants ?? [],
+    items,
+    adjustment,
+  );
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const [confirm, setConfirm] = useState<
@@ -88,6 +137,91 @@ export function BillDetails({
   >(null);
   const [request, setRequest] = useState<Transfer | null>(null);
   const [requestAmount, setRequestAmount] = useState("");
+  const [extraBills, setExtraBills] = useState<string[]>([]);
+  const candidates = relatedBills
+    .filter(
+      (b) => b.id !== bill.id && !b.resolved && b.currency === bill.currency,
+    )
+    .flatMap((b) => {
+      const transfer = b.settlement?.transfers.find(
+        (t) =>
+          t.fromParticipantName === request?.fromParticipantName &&
+          t.toParticipantName === request?.toParticipantName &&
+          t.amount > 0,
+      );
+      return transfer ? [{ bill: b, transfer }] : [];
+    });
+  const requestLock = useRef(false);
+  const prepareRequests = async () => {
+    if (requestLock.current || busy || !request) return;
+    requestLock.current = true;
+    setBusy(true);
+    setError("");
+    const ready: {
+      title: string;
+      amount: string;
+      currency: string;
+      date: string;
+      url: string;
+      note: string;
+    }[] = [];
+    try {
+      for (const entry of [
+        { bill, transfer: request },
+        ...candidates.filter((c) => extraBills.includes(c.bill.id)),
+      ]) {
+        const amount =
+          entry.bill.id === bill.id
+            ? requestAmount
+            : String(entry.transfer.amount);
+        const result = await session.request<{ request: { shareUrl: string } }>(
+          `split-bills/${entry.bill.id}/payment-requests?workspaceId=${encodeURIComponent(session.profileId)}`,
+          {
+            method: "POST",
+            body: JSON.stringify({
+              recipientParticipantId: entry.transfer.fromParticipantId,
+              payeeParticipantId: entry.transfer.toParticipantId,
+              amount,
+              paymentProfileId,
+              note,
+            }),
+          },
+        );
+        ready.push({
+          title: entry.bill.title,
+          amount,
+          currency: entry.bill.currency,
+          date: entry.bill.billDate,
+          url: `${apiBase()}${result.request.shareUrl}`,
+          note,
+        });
+      }
+      const text = paymentRequestMessage(request.fromParticipantName, ready);
+      setShareMessage(text);
+      setShareUrl(ready[0]?.url ?? "");
+      setRequest(null);
+      setMessage("Your request is ready. Choose a contact or app to send it.");
+      await Share.share({ message: text }).catch(() =>
+        setMessage(
+          "Requests saved. Tap Share payment request to choose a contact or app.",
+        ),
+      );
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Unable to prepare requests.");
+      if (ready.length) {
+        setShareMessage(
+          paymentRequestMessage(request.fromParticipantName, ready),
+        );
+        setShareUrl(ready[0].url);
+        setMessage(
+          "Some requests are ready below. Retry to finish the remaining requests; existing requests will be reused.",
+        );
+      }
+    } finally {
+      requestLock.current = false;
+      setBusy(false);
+    }
+  };
   const [note, setNote] = useState("");
   const [message, setMessage] = useState("");
   const payload = JSON.stringify({ title, items });
@@ -159,10 +293,29 @@ export function BillDetails({
       if (method === "DELETE") onDeleted();
       else if (result.bill) onSaved(result.bill);
       else {
-        setMessage("Payment request created.");
-        setShareUrl(result.request?.shareUrl ?? "");
-        setShareMessage(`Please send ${bill.currency} ${requestAmount} for ${bill.title}.${note ? `\n\n${note}` : ""}`);
+        const url = result.request?.shareUrl ?? "";
+        const text = paymentRequestMessage(request?.fromParticipantName ?? "", [
+          {
+            title: bill.title,
+            amount: requestAmount,
+            currency: bill.currency,
+            date: bill.billDate,
+            url: `${apiBase()}${url}`,
+            note,
+          },
+        ]);
+        setShareUrl(url);
+        setShareMessage(text);
+        setMessage(
+          "Your request is ready. Choose a contact or app to send it, or share it again below.",
+        );
         setRequest(null);
+        if (url)
+          await Share.share({ message: text }).catch(() =>
+            setMessage(
+              "Your request is saved. Tap Share payment request to choose a contact or app.",
+            ),
+          );
       }
       setConfirm(null);
     } catch (e) {
@@ -184,215 +337,64 @@ export function BillDetails({
         detail={`${bill.billDate.slice(0, 10)} · ${bill.resolved ? "Resolved" : bill.settlementStatus}`}
       />
       <Field label="Bill name" value={title} onChangeText={setTitle} />
-      <View
-        style={{
-          flexDirection: "row",
-          justifyContent: "space-between",
-          alignItems: "center",
-        }}
-      >
-        <Body muted={false}>
-          Items ·{" "}
-          {money(
-            String(items.reduce((s, i) => s + (Number(i.amount) || 0), 0)),
-            bill.currency,
-          )}
-        </Body>
-        <PlanAction
-          title="Auto split"
-          onPress={() => setShowSplit(!showSplit)}
-        />
-      </View>
-      {showSplit ? (
-        <Card>
-          <Body>
-            Choose a method for every item. Then tap an item to adjust
-            allocations.
-          </Body>
-          {(["equal", "exact", "percentage", "shares"] as const).map(
-            (method) => (
-              <PlanAction
-                key={method}
-                title={
-                  method === "equal"
-                    ? "Split equally"
-                    : method === "exact"
-                      ? "Split by amount"
-                      : method === "percentage"
-                        ? "Split by percentage"
-                        : "Split by shares"
-                }
-                onPress={() => {
-                  setItems((current) =>
-                    current.map((i) => ({
-                      ...i,
-                      splitMethod: method,
-                      allocations:
-                        method === "equal"
-                          ? []
-                          : i.participantIds.map((participantId) => ({
-                              participantId,
-                              value: method === "shares" ? "1" : "0",
-                            })),
-                    })),
-                  );
-                  setShowSplit(false);
-                  setEditingItem(items[0]?.id ?? null);
-                }}
-              />
-            ),
-          )}
-        </Card>
-      ) : null}
-      {items.map((item) => (
-        <Card key={item.id}>
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel={`Edit ${item.description}`}
-            onPress={() =>
-              setEditingItem(editingItem === item.id ? null : item.id)
-            }
-            style={{
-              flexDirection: "row",
-              justifyContent: "space-between",
-              gap: 8,
-            }}
-          >
-            <Body muted={false}>{item.description}</Body>
-            <Body>{money(item.amount, bill.currency)}</Body>
-          </Pressable>
-          {editingItem === item.id ? (
-            <View style={{ flexDirection: "row", gap: 8 }}>
-              <View style={{ flex: 2 }}>
-                <Field
-                  label="Item name"
-                  value={item.description}
-                  onChangeText={(description) =>
-                    update(item.id, { description })
-                  }
-                />
-              </View>
-              <View style={{ flex: 1 }}>
-                <Field
-                  label="Amount"
-                  value={item.amount}
-                  keyboardType="decimal-pad"
-                  onChangeText={(amount) => update(item.id, { amount })}
-                />
-              </View>
-            </View>
-          ) : null}
-          <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 12 }}>
-            {people.map((person) => (
-              <Pressable
-                key={person.id}
-                accessibilityRole="checkbox"
-                accessibilityLabel={`${item.description}: ${person.name}`}
-                accessibilityState={{
-                  checked: item.participantIds.includes(person.id),
-                }}
-                onPress={() =>
-                  update(item.id, {
-                    participantIds: item.participantIds.includes(person.id)
-                      ? item.participantIds.filter((id) => id !== person.id)
-                      : [...item.participantIds, person.id],
-                    allocations: [],
-                  })
-                }
-                style={{
-                  padding: 8,
-                  borderWidth: 1,
-                  borderColor: colors.line,
-                  borderRadius: 8,
-                }}
-              >
-                <Text style={{ color: colors.ink }}>
-                  {item.participantIds.includes(person.id) ? "☑" : "☐"}{" "}
-                  {person.name}
-                </Text>
-              </Pressable>
-            ))}
-          </View>
-          {editingItem === item.id ? (
-            <>
-              <Body>Split method</Body>
-              <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 6 }}>
-                {(["equal", "exact", "percentage", "shares"] as const).map(
-                  (method) => (
-                    <PlanAction
-                      key={method}
-                      title={
-                        method === "exact"
-                          ? "By amount"
-                          : method === "equal"
-                            ? "Equally"
-                            : method === "percentage"
-                              ? "By percent"
-                              : "By shares"
-                      }
-                      tone={item.splitMethod === method ? "primary" : "view"}
-                      onPress={() =>
-                        update(item.id, {
-                          splitMethod: method,
-                          allocations:
-                            method === "equal"
-                              ? []
-                              : item.participantIds.map((participantId) => ({
-                                  participantId,
-                                  value: method === "shares" ? "1" : "0",
-                                })),
-                        })
-                      }
-                    />
-                  ),
-                )}
-              </View>
-              {item.splitMethod !== "equal"
-                ? item.participantIds.map((id) => (
-                    <Field
-                      key={id}
-                      label={`${people.find((p) => p.id === id)?.name ?? "Person"} ${item.splitMethod === "percentage" ? "%" : item.splitMethod === "shares" ? "shares" : "amount"}`}
-                      value={
-                        item.allocations.find((a) => a.participantId === id)
-                          ?.value ?? "0"
-                      }
-                      keyboardType="decimal-pad"
-                      onChangeText={(value) =>
-                        update(item.id, {
-                          allocations: item.participantIds.map(
-                            (participantId) => ({
-                              participantId,
-                              value:
-                                participantId === id
-                                  ? value
-                                  : (item.allocations.find(
-                                      (a) => a.participantId === participantId,
-                                    )?.value ?? "0"),
-                            }),
-                          ),
-                        })
-                      }
-                    />
-                  ))
-                : null}
-            </>
-          ) : null}
-        </Card>
-      ))}
+      <SplitItemGrid
+        people={(bill.participants ?? []).map((p) => ({
+          ...p,
+          avatarUrl: peopleProfiles.find((profile) => profile.name === p.name)
+            ?.avatarUrl,
+        }))}
+        items={items}
+        adjustment={adjustment}
+        currency={bill.currency}
+        onChange={(next) =>
+          setItems(
+            next.map((item, index) => ({
+              ...item,
+              id: item.id ?? `new-${index}`,
+              splitMethod: item.splitMethod ?? "equal",
+              allocations: item.allocations ?? [],
+            })),
+          )
+        }
+      />
       {error ? <Notice>{error}</Notice> : null}
       {message ? <Body>{message}</Body> : null}
+      {savedRequests.map((entry) => (
+        <PlanAction
+          key={entry.id}
+          title={`Share request to ${entry.recipientName}`}
+          onPress={() =>
+            void Share.share({
+              message: paymentRequestMessage(entry.recipientName, [
+                {
+                  title: bill.title,
+                  amount: entry.amount,
+                  currency: entry.currency,
+                  date: bill.billDate,
+                  url: `${apiBase()}${entry.shareUrl}`,
+                  note: entry.note,
+                },
+              ]),
+            }).catch(() =>
+              setError("Unable to open sharing. Please try again."),
+            )
+          }
+        />
+      ))}
       {shareUrl ? (
         <PlanAction
           title="Share payment request"
           onPress={() =>
-            void Share.share({ message: `${shareMessage}\n\nPayment details: ${apiBase()}${shareUrl}` }).catch(() => setError("Unable to open sharing. Please try again."))
+            void Share.share({ message: shareMessage }).catch(() =>
+              setError("Unable to open sharing. Please try again."),
+            )
           }
         />
       ) : null}
       <Body muted={false}>
         {changed ? "Preview · not saved" : "People and balances"}
       </Body>
-      {preview?.participants.map((p) => (
+      {(preview?.participants ?? bill.settlement?.participants)?.map((p) => (
         <View
           key={p.id}
           style={{
@@ -404,7 +406,13 @@ export function BillDetails({
           }}
         >
           <Body muted={false}>{p.name}</Body>
-          <Body>{money(String(p.owed), bill.currency)} share</Body>
+          <Body>
+            {money(
+              String(changed ? (instantTotals[p.id] ?? 0) : p.owed),
+              bill.currency,
+            )}{" "}
+            share
+          </Body>
         </View>
       ))}
       <PlanAction
@@ -435,7 +443,13 @@ export function BillDetails({
                 title="Request payment"
                 tone="primary"
                 onPress={() => {
-                  setPaymentProfileId((availableProfiles.find((profile) => profile.isDefault) ?? availableProfiles[0])?.id ?? "");
+                  setPaymentProfileId(
+                    (
+                      availableProfiles.find((profile) => profile.isDefault) ??
+                      availableProfiles[0]
+                    )?.id ?? "",
+                  );
+                  setExtraBills([]);
                   setRequest(t);
                   setRequestAmount(String(t.amount));
                   setNote("");
@@ -460,6 +474,33 @@ export function BillDetails({
             keyboardType="decimal-pad"
             onChangeText={setRequestAmount}
           />
+          {candidates.length ? (
+            <Body muted={false}>
+              Include other bills for {request.fromParticipantName}
+            </Body>
+          ) : null}
+          {candidates.map((entry) => (
+            <Pressable
+              key={entry.bill.id}
+              accessibilityRole="checkbox"
+              accessibilityState={{
+                checked: extraBills.includes(entry.bill.id),
+              }}
+              onPress={() =>
+                setExtraBills((ids) =>
+                  ids.includes(entry.bill.id)
+                    ? ids.filter((id) => id !== entry.bill.id)
+                    : [...ids, entry.bill.id],
+                )
+              }
+            >
+              <Body>
+                {extraBills.includes(entry.bill.id) ? "☑" : "☐"}{" "}
+                {entry.bill.title} ·{" "}
+                {money(String(entry.transfer.amount), entry.bill.currency)}
+              </Body>
+            </Pressable>
+          ))}
           <Body muted={false}>Payment option</Body>
           {availableProfiles.map((profile) => (
             <Pressable
@@ -467,13 +508,32 @@ export function BillDetails({
               accessibilityRole="radio"
               accessibilityState={{ checked: paymentProfileId === profile.id }}
               onPress={() => setPaymentProfileId(profile.id)}
-              style={{ padding: 14, borderWidth: 1, borderRadius: 12, borderColor: paymentProfileId === profile.id ? colors.teal : colors.line }}
+              style={{
+                padding: 14,
+                borderWidth: 1,
+                borderRadius: 12,
+                borderColor:
+                  paymentProfileId === profile.id ? colors.teal : colors.line,
+              }}
             >
-              <Body muted={false}>{paymentProfileId === profile.id ? "✓ " : ""}{profile.label} · {profile.provider}</Body>
+              <PaymentOptionMark
+                provider={profile.provider}
+                identity={profile}
+                label={profile.label}
+                selected={paymentProfileId === profile.id}
+              />
             </Pressable>
           ))}
-          {!availableProfiles.length ? <Body>Save bank details or a QR image in Payments so they appear with your request.</Body> : null}
-          <PlanAction title="Manage payment options" onPress={onManagePaymentOptions} />
+          {!availableProfiles.length ? (
+            <Body>
+              Save bank details or a QR image in Payments so they appear with
+              your request.
+            </Body>
+          ) : null}
+          <PlanAction
+            title="Manage payment options"
+            onPress={onManagePaymentOptions}
+          />
           <Field label="Note" value={note} onChangeText={setNote} />
           <PlanAction
             title="Cancel request"
@@ -481,18 +541,15 @@ export function BillDetails({
             onPress={() => setRequest(null)}
           />
           <PlanAction
-            title="Create payment request"
+            title={busy ? "Preparing…" : "Choose contact or share"}
             tone="primary"
-            disabled={busy || !availableProfiles.some((profile) => profile.id === paymentProfileId)}
-            onPress={() =>
-              action(`split-bills/${bill.id}/payment-requests`, "POST", {
-                recipientParticipantId: request.fromParticipantId,
-                payeeParticipantId: request.toParticipantId,
-                amount: requestAmount,
-                paymentProfileId,
-                note,
-              })
+            disabled={
+              busy ||
+              !availableProfiles.some(
+                (profile) => profile.id === paymentProfileId,
+              )
             }
+            onPress={() => void prepareRequests()}
           />
         </Card>
       ) : null}

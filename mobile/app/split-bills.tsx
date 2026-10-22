@@ -1,3 +1,7 @@
+import { type AccountCardPalette, accountCardPalette } from "../../shared/visual-identity";
+import { SplitItemGrid } from "../src/split-item-grid";
+import { PaymentOptionMark } from "../src/payment-option-mark";
+import { suggestBillCategory, type SplitItem } from "../../shared/split-bill-experience";
 import { SwipeDeleteRow } from "../src/swipe-delete-row";
 import { AdaptiveGrid } from "../src/adaptive";
 import { CloverEmptyState } from "../src/clover-mascot";
@@ -85,6 +89,8 @@ const optionsSample = {
     accountNumber: string | null;
     qrImageData: string | null;
     isDefault: boolean;
+    brandLogoUrl?:string|null;
+    brandPalette?:AccountCardPalette;
   }[],
 };
 export default function SplitBills() {
@@ -157,7 +163,7 @@ export default function SplitBills() {
   }, [params.billId]);
   const selectedId = selected?.id;
   useEffect(() => {
-    if (!selectedId || session.demo) return;
+    if (!selectedId || session.demo || selected?.items?.length) return;
     let active = true;
     setLoading(true);
     setDetailError("");
@@ -230,7 +236,7 @@ export default function SplitBills() {
           }}
         />
         <Card>
-          <Body muted={false}>{paymentDetail.label}</Body>
+          <PaymentOptionMark provider={paymentDetail.provider} label={paymentDetail.label} identity={paymentDetail} />
           <Body>
             {paymentDetail.provider} · {paymentDetail.currency}
           </Body>
@@ -297,7 +303,7 @@ export default function SplitBills() {
       />
       {selected ? (
         <>
-          {loading ? (
+          {loading && !selected.items?.length ? (
             <Body>Loading bill…</Body>
           ) : detailError ? (
             <Notice>{detailError}</Notice>
@@ -305,6 +311,8 @@ export default function SplitBills() {
             <BillDetails
               key={`${selected.id}-${JSON.stringify(selected.items)}`}
               bill={selected}
+              peopleProfiles={options.data?.people ?? []}
+              relatedBills={data?.bills ?? []}
               paymentProfiles={options.data?.profiles ?? []}
               onManagePaymentOptions={() => { setSelected(null); setTab("Payments"); }}
               onSaved={(bill) => {
@@ -420,7 +428,7 @@ export default function SplitBills() {
                             borderColor: colors.line,
                           }}
                         >
-                          <CategoryMark name={bill.categoryName} />
+                          <CategoryMark name={bill.categoryName || suggestBillCategory(bill.title)?.name} />
                           <View style={{ flex: 1 }}>
                             <Body muted={false}>{bill.title}</Body>
                             <Body>{bill.billDate.slice(0, 10)}</Body>
@@ -665,11 +673,7 @@ export default function SplitBills() {
                 options.data.profiles.map((profile) => (
                   <LinearGradient
                     key={profile.id}
-                    colors={
-                      /gcash/i.test(profile.provider)
-                        ? ["#1256B8", "#37A1EE"]
-                        : ["#087E91", "#1CA8AF"]
-                    }
+                    colors={accountCardPalette({type:"bank",institution:profile.provider,brandPalette:profile.brandPalette}).colors}
                     style={{ padding: 20, gap: 16, borderRadius: 20 }}
                   >
                     <Text
@@ -697,6 +701,7 @@ export default function SplitBills() {
                     >
                       {profile.accountNumber}
                     </Text>
+                    <PaymentOptionMark provider={profile.provider} label={profile.label} identity={profile} />
                     {profile.qrImageData ? (
                       <Image
                         source={{ uri: profile.qrImageData }}
@@ -744,7 +749,7 @@ function BillEditor({
   const [date, setDate] = useState(
     sourceTransaction?.date.slice(0, 10) || new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Manila" }),
   );
-  const [reviewedItems, setReviewedItems] = useState<{ description: string; amount: string }[]>([]);
+  const [reviewedItems, setReviewedItems] = useState<(Omit<SplitItem, "participantIds"> & { participantIds?: string[] })[]>([]);
   const [receipt, setReceipt] = useState<{
     fileName: string;
     mimeType: string;
@@ -864,7 +869,7 @@ function BillEditor({
       );
       return;
     }
-    if (receipt && (!reviewedItems.length || reviewedItems.some(item => !item.description.trim() || !/^\d+(\.\d{1,2})?$/.test(item.amount) || Number(item.amount) <= 0) || reviewedItems.reduce((sum, item) => sum + Math.round(Number(item.amount) * 100), 0) !== Math.round(Number(total) * 100))) {
+    if ((receipt || reviewedItems.length > 0) && (!reviewedItems.length || reviewedItems.some(item => !item.description.trim() || !/^\d+(\.\d{1,2})?$/.test(item.amount) || Number(item.amount) <= 0) || reviewedItems.reduce((sum, item) => sum + Math.round(Number(item.amount) * 100), 0) !== Math.round(Number(total) * 100))) {
       setError("Review each item and include extra charges so the items match the bill total.");
       return;
     }
@@ -881,7 +886,13 @@ function BillEditor({
         total,
         participants,
         paidByIndex: payer,
-        ...(receipt ? { receipt, reviewedItems } : {}),
+        ...(receipt ? { receipt } : {}),
+        ...(reviewedItems.length ? { reviewedItems: reviewedItems.map(item=>({
+          description:item.description,amount:item.amount,
+          participantIndexes:(item.participantIds ?? participants.map(p=>p.name)).map(name=>participants.findIndex(p=>p.name===name)).filter(i=>i>=0),
+          splitMethod:item.splitMethod??"equal",
+          allocations:(item.allocations??[]).map(a=>({participantIndex:participants.findIndex(p=>p.name===a.participantId),value:a.value})),
+        })) } : {}),
       };
       const result = session.demo
         ? {
@@ -934,24 +945,6 @@ function BillEditor({
         }}
         onUpload={() => void uploadReceipt()}
       >
-        {receipt ? (
-          <Card>
-            <Body>
-              {receipt.fileName} · {receipt.confidence}% extraction confidence
-            </Body>
-            <Notice>
-              Check the extracted items and include any extra charges. Items must match the total. After creating the bill, choose who shares each item and save before requesting payment.
-            </Notice>
-            {reviewedItems.map((item, index) => (
-              <View key={index}>
-                <Field label={`Item ${index + 1}`} value={item.description} onChangeText={description => setReviewedItems(current => current.map((entry, i) => i === index ? { ...entry, description } : entry))} />
-                <Field label={`Item ${index + 1} amount`} value={item.amount} keyboardType="decimal-pad" onChangeText={amount => setReviewedItems(current => current.map((entry, i) => i === index ? { ...entry, amount } : entry))} />
-                <PlanAction title={`Remove item ${index + 1}`} onPress={() => setReviewedItems(current => current.filter((_, i) => i !== index))} />
-              </View>
-            ))}
-            <PlanAction title="Add item or charge" onPress={() => setReviewedItems(current => [...current, { description: "", amount: "" }])} />
-          </Card>
-        ) : null}
         <Field
           label="Bill title"
           value={title}
@@ -980,7 +973,11 @@ function BillEditor({
           }}
           multiline
         />
-        <Body>Split equally between these people.</Body>
+        {receipt ? <Body>{receipt.fileName} · Check the extracted items and total before saving.</Body> : null}
+        <SplitItemGrid people={participants.map(p=>({id:p.name,name:p.name}))} currency={currency}
+          items={reviewedItems.map((item,index)=>({...item,id:item.id??`new-${index}`,participantIds:item.participantIds??participants.map(p=>p.name)}))}
+          onChange={next=>{setReviewedItems(next);setTotal(next.reduce((sum,item)=>sum+(Number(item.amount)||0),0).toFixed(2));}} />
+        {suggestBillCategory(title,reviewedItems.map(item=>item.description)) ? <Body>Suggested category: {suggestBillCategory(title,reviewedItems.map(item=>item.description))?.name}</Body> : null}
         <Body>Who paid?</Body>
         <PlanAction
           title={payer === null ? "Not paid yet ✓" : "Not paid yet"}

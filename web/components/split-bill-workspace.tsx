@@ -1,4 +1,5 @@
 "use client";
+import { SplitItemGrid } from "./split-item-grid";
 import { MobileSwipeDelete } from "@/components/mobile-swipe-delete";
 import { AdviserHeaderLink } from "@/components/adviser-header-link";
 
@@ -91,7 +92,7 @@ const ensureDraftDefaults = (draft: SplitBillDraft): SplitBillDraft => {
   return next;
 };
 
-const buildBillEditorDraft = (bill: SplitBillSerializedBill): SplitBillDraft => ensureDraftDefaults(splitBillDraftFromSerializedBill(bill));
+const buildBillEditorDraft = (bill: SplitBillSerializedBill): SplitBillDraft => { const draft=ensureDraftDefaults(splitBillDraftFromSerializedBill(bill)); return {...draft,items:draft.items.map(item=>({...item,participantIds:item.participantIds.length?item.participantIds:bill.participants.map(p=>p.id)}))}; };
 
 const getBillEditorValidationError = (
   participants: BillEditorParticipant[],
@@ -116,6 +117,7 @@ const getBillEditorValidationError = (
       return `${label} needs an amount greater than zero.`;
     }
 
+    if (item.participantIds.length === 0) return `${label} needs at least one person selected.`;
     if (item.participantIds.length > 0 && item.participantIds.some((participantId) => !participantIds.has(participantId))) {
       return `${label} has an invalid person selected.`;
     }
@@ -1178,110 +1180,13 @@ export function SplitBillWorkspace({
     );
   };
 
-  const renderBillItemsTable = (bill: SplitBillSerializedBill, editable: boolean) => {
-    const participants = editable
-      ? billEditorParticipants
-      : bill.participants;
-    const items = editable
-      ? billEditorItems
-      : bill.items;
-
-    return (
-      <div className="split-bill-detail-modal__table-wrap">
-        <table className="split-bill-detail-modal__items-table">
-          <thead>
-            <tr>
-              <th>Item</th>
-              <th className="split-bill-detail-modal__amount-col">Amount</th>
-              {participants.map((participant) => (
-                <th key={participant.id} title={participant.name}>
-                  <SplitBillEntityAvatar name={participant.name} avatarUrl={people.find((person) => person.name === participant.name)?.avatarUrl ?? null} />
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {items.length > 0 ? (
-              items.map((item) => (
-                <tr key={item.id}>
-                  <td>
-                    {editable ? (
-                      <div className="split-bill-detail-modal__item-fields">
-                        <input
-                          className="settings-input"
-                          value={item.description}
-                          onChange={(event) => updateBillEditorItem(item.id ?? "", { description: event.target.value })}
-                          placeholder="Item description"
-                        />
-                        <button className="button button-secondary button-small" type="button" onClick={() => removeBillEditorItem(item.id ?? "")}>
-                          Remove
-                        </button>
-                        <label>Split method<select className="settings-input" value={item.splitMethod ?? "equal"} onChange={event => updateBillEditorItem(item.id ?? "", { splitMethod:event.target.value as "equal" | "exact" | "percentage" | "shares", allocations: [] })}><option value="equal">Split equally</option><option value="exact">By amount</option><option value="percentage">By percentage</option><option value="shares">By shares</option></select></label>
-                      </div>
-                    ) : (
-                      <strong>{item.description}</strong>
-                    )}
-                  </td>
-                  <td className="split-bill-detail-modal__amount-col">
-                    {editable ? (
-                      <input
-                        className="settings-input"
-                        value={item.amount}
-                        onChange={(event) => updateBillEditorItem(item.id ?? "", { amount: event.target.value })}
-                        placeholder="Amount"
-                      />
-                    ) : (
-                      formatSplitBillAmount(Number(item.amount), bill.currency)
-                    )}
-                  </td>
-                  {participants.map((participant) => {
-                    const checked = item.participantIds.includes(participant.id ?? "");
-                    const allocation = item.allocations?.find(
-                      (entry) => entry.participantId === participant.id
-                    );
-                    const allocationAmount = parseAmountValue(allocation?.value);
-                    return (
-                      <td key={participant.id} className="split-bill-detail-modal__check-cell">
-                        {editable ? (
-                          <label className="split-bill-detail-modal__check-label">
-                            <input
-                              type="checkbox"
-                              checked={checked}
-                              onChange={() => toggleBillEditorItemParticipant(item.id ?? "", participant.id ?? "")}
-                              aria-label={`${item.description || "Item"} for ${participant.name}`}
-                            />
-                            {checked && item.splitMethod && item.splitMethod !== "equal" ? <input className="settings-input" aria-label={`${participant.name} ${item.splitMethod} allocation for ${item.description}`} inputMode="decimal" value={allocation?.value ?? ""} onChange={event => updateBillEditorItem(item.id ?? "", { allocations:[...(item.allocations ?? []).filter(a=>a.participantId!==participant.id), {participantId:participant.id ?? "",value:event.target.value}] })}/> : null}
-                          </label>
-                        ) : (
-                          <span
-                            className={`split-bill-detail-modal__checkmark${checked ? " is-checked" : ""}${
-                              allocationAmount !== null ? " split-bill-detail-modal__checkmark--amount" : ""
-                            }`}
-                          >
-                            {allocationAmount !== null
-                              ? formatSplitBillAmount(allocationAmount, bill.currency)
-                              : checked
-                                ? "✓"
-                                : ""}
-                          </span>
-                        )}
-                      </td>
-                    );
-                  })}
-                </tr>
-              ))
-            ) : (
-              <tr>
-                <td colSpan={2 + participants.length} className="split-bill-detail-modal__table-empty">
-                  No line items yet.
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
-      </div>
-    );
-  };
+  const renderBillItemsTable = (bill: SplitBillSerializedBill, editable: boolean) => <SplitItemGrid
+    people={(editable ? billEditorParticipants : bill.participants).map(person=>({id:person.id??"",name:person.name,avatarUrl:people.find(p=>p.name===person.name)?.avatarUrl}))}
+    items={(editable ? billEditorItems : bill.items).map(item=>({...item,participantIds:editable?item.participantIds:(item.participantIds.length?item.participantIds:bill.participants.map(p=>p.id))}))}
+    currency={bill.currency}
+    adjustment={Number(bill.total??0)-bill.items.reduce((sum,item)=>sum+Number(item.amount),0)}
+    onChange={editable || selectedBill?.id===bill.id ? next=>{setIsEditingBill(true);setSelectedBillDraft(current=>({...current??buildBillEditorDraft(bill),total:(Number(bill.total??0)+next.reduce((sum,item)=>sum+(Number(item.amount)||0),0)-bill.items.reduce((sum,item)=>sum+Number(item.amount),0)).toFixed(2),subtotal:next.reduce((sum,item)=>sum+(Number(item.amount)||0),0).toFixed(2),items:next.map(item=>({...item,id:item.id??createSplitBillDraftId(),splitMethod:item.splitMethod??"equal",allocations:item.allocations??[]}))}));} : undefined}
+  />;
 
   const renderParticipantAllocationSummary = (bill: SplitBillSerializedBill) => (
     <div className="split-bill-detail-modal__allocation-summary">
@@ -1552,6 +1457,7 @@ export function SplitBillWorkspace({
                       </div>
                     </div>
                     <SplitBillPaymentTools
+                      relatedBills={bills}
                       bill={selectedBill}
                       onBillUpdated={(updatedBill) => setBills((current) => current.map((entry) => (entry.id === updatedBill.id ? updatedBill : entry)))}
                     />
@@ -1606,6 +1512,7 @@ export function SplitBillWorkspace({
                       </button>
                     ) : null}
                     <SplitBillPaymentTools
+                      relatedBills={bills}
                       bill={selectedBill}
                       onBillUpdated={(updatedBill) => setBills((current) => current.map((entry) => (entry.id === updatedBill.id ? updatedBill : entry)))}
                     />

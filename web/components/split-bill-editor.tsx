@@ -910,7 +910,7 @@ export function SplitBillEditor({ mode, initialBill, groups }: SplitBillEditorPr
                           <option value="equal">Equal</option>
                           <option value="exact">Exact amount</option>
                           <option value="percentage">Percentage</option>
-                          <option value="shares">Shares</option>
+                          {item.splitMethod === "shares" ? <option value="shares" disabled>Saved allocation</option> : null}
                         </select>
                         <button className="button button-secondary button-small" type="button" onClick={() => applyAllPeopleToItem(item.id ?? "")}>
                           All people
