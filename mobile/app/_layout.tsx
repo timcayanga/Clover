@@ -110,6 +110,7 @@ function Routes() {
               headerBackButtonDisplayMode: "minimal",
             }}
           >
+            <Stack.Screen name="payment-request" options={{headerShown:false}} />
             <Stack.Protected guard={accountDeleted}>
               <Stack.Screen name="account-deleted" options={{ headerShown: false, animation: reduceMotion ? "none" : "fade" }} />
             </Stack.Protected>

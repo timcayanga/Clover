@@ -1,3 +1,4 @@
+import { suggestBillCategory } from "../../shared/split-bill-experience";
 import { transactionMerchantLogo } from "./transaction-merchant-logo";
 import type { MerchantIdentityInput } from "./logo-identity-types";
 import { parseAddFormDraft } from "../../shared/add-form-draft";
@@ -75,7 +76,7 @@ const splitDetail = (value: unknown) => {
   const bill = record(value), settlement = record(bill.settlement);
   return { ...splitSummary(bill),
     group: bill.group ? pick(bill.group, ["id", "name"]) : null,
-    categoryName: typeof record(record(bill.transaction).category).name === "string" ? record(record(bill.transaction).category).name : null,
+    categoryName: typeof record(record(bill.transaction).category).name === "string" ? record(record(bill.transaction).category).name : suggestBillCategory(String(bill.title??""))?.name ?? null,
     participants: rows(bill.participants, ["id", "name"]),
     items: rows(bill.items, ["id", "description", "amount", "participantIds", "splitMethod", "allocations"]),
     settlement: {
@@ -115,7 +116,7 @@ export function mobileApiResponse(operation: string, value: unknown) {
   if (operation === "split-bills") return data.bill ? { bill: splitDetail(data.bill) } : { ...pick(data, ["page", "hasMore"]), bills: Array.isArray(data.bills) ? data.bills.map(splitDetail) : [] };
   if (operation === "split-bill" || operation === "transfer-settlements" || operation === "resolution") return data.bill ? { bill: splitDetail(data.bill) } : pick(data,["deleted","ok"]);
   if (operation === "payment-profile-delete") return pick(data,["deleted","ok"]);
-  if (operation === "payment-requests") return { ...pick(data,["shareUrl"]), request: pick(data.request,["id","amount","currency","status","shareUrl"]) };
+  if (operation === "payment-requests") return { ...pick(data,["shareUrl"]), request: pick(data.request,["id","amount","currency","status","shareUrl"]), requests: rows(data.requests,["id","amount","currency","status","shareUrl","recipientName","note"]) };
   if (operation === "budgets" || operation === "budget") return {
     budget: pick(data.budget, ["id"]),
     ...(data.history ? { history: pick(data.history, ["points", "recentTransactions"]) } : {}),

@@ -9,8 +9,6 @@ import { loadSplitBillTransferSettlementsForBill } from "@/lib/split-bill-transf
 
 export const dynamic = "force-dynamic";
 
-
-
 const serializeRequest = (entry: {
   id: string;
   billId: string;
@@ -35,7 +33,10 @@ const serializeRequest = (entry: {
   shareUrl: `/split-bill/request/${entry.shareToken}`,
 });
 
-export async function GET(_request: Request, { params }: { params: Promise<{ billId: string }> }) {
+export async function GET(
+  _request: Request,
+  { params }: { params: Promise<{ billId: string }> },
+) {
   try {
     const user = await getSplitBillCurrentUser();
     const { billId } = await params;
@@ -50,11 +51,22 @@ export async function GET(_request: Request, { params }: { params: Promise<{ bil
     });
     return NextResponse.json({ requests: requests.map(serializeRequest) });
   } catch (error) {
-    return NextResponse.json({ error: error instanceof Error ? error.message : "Unable to load payment requests" }, { status: 400 });
+    return NextResponse.json(
+      {
+        error:
+          error instanceof Error
+            ? error.message
+            : "Unable to load payment requests",
+      },
+      { status: 400 },
+    );
   }
 }
 
-export async function POST(request: Request, { params }: { params: Promise<{ billId: string }> }) {
+export async function POST(
+  request: Request,
+  { params }: { params: Promise<{ billId: string }> },
+) {
   try {
     const user = await getSplitBillCurrentUser();
     const { billId } = await params;
@@ -64,8 +76,15 @@ export async function POST(request: Request, { params }: { params: Promise<{ bil
       throw new Error("Enter an amount greater than zero.");
     }
 
-    const parsedDueDate = body.dueDate ? new Date(`${body.dueDate}T12:00:00`) : null;
-    if (body.dueDate && (!/^\d{4}-\d{2}-\d{2}$/.test(body.dueDate) || !parsedDueDate || Number.isNaN(parsedDueDate.getTime()))) {
+    const parsedDueDate = body.dueDate
+      ? new Date(`${body.dueDate}T12:00:00`)
+      : null;
+    if (
+      body.dueDate &&
+      (!/^\d{4}-\d{2}-\d{2}$/.test(body.dueDate) ||
+        !parsedDueDate ||
+        Number.isNaN(parsedDueDate.getTime()))
+    ) {
       throw new Error("Choose a valid due date.");
     }
 
@@ -73,14 +92,20 @@ export async function POST(request: Request, { params }: { params: Promise<{ bil
     if (!bill) {
       return NextResponse.json({ error: "Bill not found" }, { status: 404 });
     }
-    const transferSettlements = await loadSplitBillTransferSettlementsForBill(billId);
+    const transferSettlements =
+      await loadSplitBillTransferSettlementsForBill(billId);
     const serializedBill = serializeSplitBillRecord({
       ...bill,
       transferSettlements,
     } as Parameters<typeof serializeSplitBillRecord>[0]);
-    if (serializedBill.resolved) throw new Error("This bill is resolved. No payment is requested.");
-    const recipient = bill.participants.find((participant) => participant.id === body.recipientParticipantId);
-    const payee = bill.participants.find((participant) => participant.id === body.payeeParticipantId);
+    if (serializedBill.resolved)
+      throw new Error("This bill is resolved. No payment is requested.");
+    const recipient = bill.participants.find(
+      (participant) => participant.id === body.recipientParticipantId,
+    );
+    const payee = bill.participants.find(
+      (participant) => participant.id === body.payeeParticipantId,
+    );
     if (!recipient || !payee) {
       throw new Error("Recipient must be part of this bill.");
     }
@@ -88,55 +113,93 @@ export async function POST(request: Request, { params }: { params: Promise<{ bil
       throw new Error("Choose two different people for a payment request.");
     }
     const transfer = serializedBill.settlement.transfers.find(
-      (entry) => entry.fromParticipantId === recipient.id && entry.toParticipantId === payee.id
+      (entry) =>
+        entry.fromParticipantId === recipient.id &&
+        entry.toParticipantId === payee.id,
     );
     if (!transfer) {
       throw new Error("There is no open balance for this payment request.");
     }
-    const activeRequests = await prisma.splitBillPaymentRequest.findMany({
-      where: {
-        billId,
-        recipientParticipantId: recipient.id,
-        payeeParticipantId: payee.id,
-        status: { in: ["requested", "payment_reported"] },
-      },
-      select: { amount: true },
-    });
-    const alreadyRequested = activeRequests.reduce((sum, entry) => sum + Number(entry.amount), 0);
-    const remainingAfterRequests = transfer.amount - alreadyRequested;
-    if (amount > remainingAfterRequests + 0.005) {
-      throw new Error(`This request can be up to ${bill.currency.toUpperCase()} ${Math.max(0, remainingAfterRequests).toFixed(2)}.`);
-    }
-    if (body.paymentProfileId) {
-      const profile = await prisma.splitBillPaymentProfile.findFirst({
-        where: { id: body.paymentProfileId, userId: user.id },
-        select: { id: true },
-      });
-      if (!profile) {
-        throw new Error("Payment option not found.");
-      }
-    }
+    return await prisma.$transaction(
+      async (tx) => {
+        const existing = await tx.splitBillPaymentRequest.findFirst({
+          where: {
+            billId,
+            recipientParticipantId: recipient.id,
+            payeeParticipantId: payee.id,
+            status: { in: ["requested", "payment_reported"] },
+            amount: amount.toFixed(2),
+            paymentProfileId: body.paymentProfileId || null,
+            note: body.note || null,
+            dueDate: parsedDueDate,
+          },
+          include: { paymentProfile: true },
+        });
+        if (existing)
+          return NextResponse.json({ request: serializeRequest(existing) });
+        const activeRequests = await tx.splitBillPaymentRequest.findMany({
+          where: {
+            billId,
+            recipientParticipantId: recipient.id,
+            payeeParticipantId: payee.id,
+            status: { in: ["requested", "payment_reported"] },
+          },
+          select: { amount: true },
+        });
+        const alreadyRequested = activeRequests.reduce(
+          (sum, entry) => sum + Number(entry.amount),
+          0,
+        );
+        const remainingAfterRequests = transfer.amount - alreadyRequested;
+        if (amount > remainingAfterRequests + 0.005) {
+          throw new Error(
+            `This request can be up to ${bill.currency.toUpperCase()} ${Math.max(0, remainingAfterRequests).toFixed(2)}.`,
+          );
+        }
+        if (body.paymentProfileId) {
+          const profile = await tx.splitBillPaymentProfile.findFirst({
+            where: { id: body.paymentProfileId, userId: user.id },
+            select: { id: true },
+          });
+          if (!profile) {
+            throw new Error("Payment option not found.");
+          }
+        }
 
-    const entry = await prisma.splitBillPaymentRequest.create({
-      data: {
-        billId,
-        paymentProfileId: body.paymentProfileId || null,
-        recipientParticipantId: recipient.id,
-        payeeParticipantId: payee.id,
-        recipientName: recipient.name,
-        payeeName: payee.name,
-        recipientEmail: body.recipientEmail || null,
-        amount: amount.toFixed(2),
-        currency: bill.currency,
-        dueDate: parsedDueDate,
-        note: body.note || null,
-        shareToken: randomUUID().replaceAll("-", ""),
-      },
-      include: { paymentProfile: true },
-    });
+        const entry = await tx.splitBillPaymentRequest.create({
+          data: {
+            billId,
+            paymentProfileId: body.paymentProfileId || null,
+            recipientParticipantId: recipient.id,
+            payeeParticipantId: payee.id,
+            recipientName: recipient.name,
+            payeeName: payee.name,
+            recipientEmail: body.recipientEmail || null,
+            amount: amount.toFixed(2),
+            currency: bill.currency,
+            dueDate: parsedDueDate,
+            note: body.note || null,
+            shareToken: randomUUID().replaceAll("-", ""),
+          },
+          include: { paymentProfile: true },
+        });
 
-    return NextResponse.json({ request: serializeRequest(entry) }, { status: 201 });
+        return NextResponse.json(
+          { request: serializeRequest(entry) },
+          { status: 201 },
+        );
+      },
+      { isolationLevel: "Serializable" },
+    );
   } catch (error) {
-    return NextResponse.json({ error: error instanceof Error ? error.message : "Unable to create payment request" }, { status: 400 });
+    return NextResponse.json(
+      {
+        error:
+          error instanceof Error
+            ? error.message
+            : "Unable to create payment request",
+      },
+      { status: 400 },
+    );
   }
 }

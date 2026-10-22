@@ -1,4 +1,5 @@
 "use client";
+import { suggestBillCategory } from "../../shared/split-bill-experience";
 import { CloverMascot } from "@/components/clover-mascot";
 
 import { CategoryBrandMark } from "@/components/category-brand-mark";
@@ -408,7 +409,7 @@ export function SplitBillHome({
                   const balance = bill.settlement.transfers.reduce((sum, t) => sum + (isSamePersonName(t.toParticipantName, currentUserName) ? t.amount : 0) - (isSamePersonName(t.fromParticipantName, currentUserName) ? t.amount : 0), 0);
                   return <MobileSwipeDelete key={bill.id} deleteLabel={`Delete ${bill.title}`} confirmationMessage={`Delete "${bill.title}" and its split and payment records? This cannot be undone.`} onDelete={() => onDeleteBill(bill.id)}>
                   <button type="button" className="split-bill-swipe-row" onClick={() => onOpenBill(bill.id)}>
-                    <CategoryBrandMark categoryName={bill.transaction?.category?.name ?? "Uncategorized"} size={32} />
+                    <CategoryBrandMark categoryName={bill.transaction?.category?.name ?? suggestBillCategory(bill.title,bill.items.map(item=>item.description))?.name ?? "Uncategorized"} size={32} />
                     <span><strong>{bill.title}</strong><small>{formatDate(bill.billDate)} · {bill.resolved ? "Resolved" : formatSplitBillSettlementStatus(bill.settlementStatus)}</small>{sharedWith(bill)}<small>Your balance: {formatSplitBillAmount(balance, bill.currency)}</small></span>
                     <strong>{bill.total ? formatSplitBillAmount(Number(bill.total), bill.currency) : "—"}</strong><span aria-hidden="true">›</span>
                   </button>
@@ -453,7 +454,7 @@ export function SplitBillHome({
                             aria-label={`View ${bill.title}`}
                             onClick={() => onOpenBill(bill.id)}
                           >
-                            <CategoryBrandMark categoryName={bill.transaction?.category?.name ?? "Uncategorized"} size={32} />
+                            <CategoryBrandMark categoryName={bill.transaction?.category?.name ?? suggestBillCategory(bill.title,bill.items.map(item=>item.description))?.name ?? "Uncategorized"} size={32} />
                             <span>{bill.title}</span>
                           </button>
                           <div className="split-bill-mobile-context"><small>{formatDate(bill.billDate)}</small>{sharedWith(bill)}</div>

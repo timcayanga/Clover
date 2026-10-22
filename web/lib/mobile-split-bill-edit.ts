@@ -43,15 +43,10 @@ export function mergeMobileBillEdit(
 ) {
   const body = mobileBillEdit.parse(input);
   const people = new Set(bill.participants.map((p) => p.id));
-  const ids = new Set(bill.items.map((i) => i.id));
-  if (
-    body.items.length !== ids.size ||
-    new Set(body.items.map((i) => i.id)).size !== ids.size
-  )
-    throw new Error("Reload this bill before editing its items.");
+  if (new Set(body.items.map((item) => item.id)).size !== body.items.length)
+    throw new Error("Each line item must have a distinct ID.");
   for (const item of body.items) {
     if (
-      !ids.has(item.id) ||
       item.participantIds.some((id) => !people.has(id)) ||
       new Set(item.participantIds).size !== item.participantIds.length
     )
@@ -93,7 +88,9 @@ export function mergeMobileBillEdit(
     items: body.items.map((item, index) => ({ ...item, sortOrder: index })),
     rawPayload: {
       ...mergeSplitBillItemSplitMetadata(bill.rawPayload, body.items),
-      userItemAllocations: bill.rawPayload?.userItemAllocations === true || hasSplitBillAllocationChanges(bill, body.items),
+      userItemAllocations:
+        bill.rawPayload?.userItemAllocations === true ||
+        hasSplitBillAllocationChanges(bill, body.items),
     },
   };
 }
