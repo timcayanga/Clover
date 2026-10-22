@@ -3,6 +3,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { ContactUsForm } from "@/components/contact-us-form";
 import { PublicInfoShell } from "@/components/public-info-shell";
+import { PublicBusinessDetails } from "@/components/public-business-details";
 import styles from "@/components/public-info.module.css";
 
 export const metadata: Metadata = {
@@ -54,6 +55,11 @@ export default function ContactUsPage() {
           aria-label="Other ways to get help"
         >
           <section className={styles.supportCard}>
+            <h2>Our business and address</h2>
+            <PublicBusinessDetails />
+            <Link href="/business-registration">View business registration →</Link>
+          </section>
+          <section className={styles.supportCard}>
             <h2>Find an answer</h2>
             <p>
               Browse help with uploads, accounts, shared money, and planning.
@@ -78,6 +84,8 @@ export default function ContactUsPage() {
               receipt. Never include complete card details.
             </p>
             <Link href="/pricing">View plans and pricing →</Link>
+            <p><Link href="/refund-policy">Return and Refund Policy →</Link></p>
+            <Link href="/dispute-resolution">Resolve a billing or service concern →</Link>
           </section>
           <section className={styles.supportCard}>
             <h2>Privacy or account security</h2>

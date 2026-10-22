@@ -28,7 +28,9 @@ export function PublicFooter({ includeTikTok = false, storeVariant = "text", mob
       <Link href="/features/pro">Pro</Link>
       <Link href="/features/security">Security</Link>
       <Link href="/privacy-policy">Privacy Policy</Link>
-      <Link href="/terms-of-service">Terms of Service</Link>
+      <Link href="/terms-of-service">Terms and Conditions</Link>
+      <Link href="/refund-policy">Return and Refund Policy</Link>
+      <Link href="/dispute-resolution">Dispute Resolution</Link>
       <Link href="/business-registration">Business Registration</Link>
     </nav>
     <nav className={styles.socials} aria-label="Follow Clover">

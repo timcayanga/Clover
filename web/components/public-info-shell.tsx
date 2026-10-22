@@ -9,7 +9,7 @@ export function PublicInfoShell({
   active,
 }: {
   children: ReactNode;
-  active?: "contact" | "privacy" | "terms";
+  active?: "contact" | "privacy" | "terms" | "refund" | "disputes" | "business";
 }) {
   return (
     <div className={styles.site}>
@@ -24,7 +24,10 @@ export function PublicInfoShell({
           {[
             ["contact", "/contact-us", "Contact"],
             ["privacy", "/privacy-policy", "Privacy Policy"],
-            ["terms", "/terms-of-service", "Terms of Service"],
+            ["terms", "/terms-of-service", "Terms and Conditions"],
+            ["refund", "/refund-policy", "Returns and Refunds"],
+            ["disputes", "/dispute-resolution", "Dispute Resolution"],
+            ["business", "/business-registration", "Business Details"],
           ].map(([key, href, label]) => (
             <Link
               key={key}

@@ -30,7 +30,7 @@ export function TermsOfServiceDocument() {
         <header className={styles.hero}>
           <p className={styles.eyebrow}>Legal</p>
           <h1>Terms of Service</h1>
-          <p className={styles.updated}>Last updated: September 24, 2026</p>
+          <p className={styles.updated}>Last updated: October 22, 2026</p>
           <p className={styles.intro}>
             These Terms explain the rules for using Clover. By creating an
             account or using the service, you agree to them.
@@ -366,7 +366,7 @@ export function TermsOfServiceDocument() {
               <h2>10. Billing and cancellation</h2>
               <p>
                 Plus and Pro purchases use the billing provider identified at checkout,
-                including Paddle, PayPal, Apple App Store, or Google Play where available. RevenueCat may validate app purchases and manage subscription entitlements. Review the amount,
+                including PayMongo, Paddle, PayPal, Apple App Store, or Google Play where available. RevenueCat may validate app purchases and manage subscription entitlements. Review the amount,
                 currency, taxes, billing interval, and provider terms before
                 approving payment. Regional pricing may differ; the checkout
                 details govern your purchase.
@@ -408,7 +408,7 @@ export function TermsOfServiceDocument() {
               </ul>
               <p>
                 Refund requests are handled under the applicable checkout terms,
-                billing-provider policy, and consumer law. For Paddle purchases,
+                billing-provider policy, and consumer law. Read our <Link href="/refund-policy">Return and Refund Policy</Link> for eligibility, request instructions and provider-specific routes. For Paddle purchases,
                 see the{" "}
                 <a href="https://www.paddle.com/legal/refund-policy">
                   Paddle Refund Policy
@@ -530,7 +530,7 @@ export function TermsOfServiceDocument() {
                 These Terms are governed by the laws of the Republic of the
                 Philippines, without regard to conflict-of-law rules. Before
                 starting formal proceedings, please contact us so we can try to
-                resolve the concern directly.
+                resolve the concern directly. Our <Link href="/dispute-resolution">Dispute Resolution Policy</Link> explains how to report a concern, request further review and use available provider or consumer remedies.
               </p>
               <p>
                 Where permitted by law, disputes will be submitted to the
@@ -556,7 +556,7 @@ export function TermsOfServiceDocument() {
               <p>
                 Questions about these Terms can be sent to{" "}
                 <a href="mailto:hello@clover.ph">hello@clover.ph</a> or through
-                the <Link href="/contact-us">Contact page</Link>.
+                the <Link href="/contact-us">Contact page</Link>. Our <Link href="/business-registration">business details</Link> include our SEC registration number and registered Philippine address.
               </p>
             </section>
           </article>

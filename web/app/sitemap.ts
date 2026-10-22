@@ -13,6 +13,8 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     "/privacy-policy",
     "/terms-of-service",
     "/business-registration",
+    "/refund-policy",
+    "/dispute-resolution",
     ...FEATURE_LINKS.map((l) => l.href),
     ...categories.map((c) => `/help/${c.slug}`),
     ...entries.map((e) => e.path),

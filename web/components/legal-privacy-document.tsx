@@ -27,7 +27,7 @@ export function PrivacyPolicyDocument() {
         <header className={styles.hero}>
           <p className={styles.eyebrow}>Legal</p>
           <h1>Privacy Policy</h1>
-          <p className={styles.updated}>Last updated: September 24, 2026</p>
+          <p className={styles.updated}>Last updated: October 22, 2026</p>
           <p className={styles.intro}>
             Clover helps you connect supported banks, upload records, enter details manually,
             and understand your finances. This policy explains what information we
@@ -125,7 +125,7 @@ export function PrivacyPolicyDocument() {
                 For Plus and Pro subscriptions, we process your selected plan, billing
                 interval, subscription status, payment-provider references, and
                 transaction status. Payments are completed through the provider
-                shown at checkout, including Paddle, PayPal, Apple App Store, or Google Play where available. RevenueCat helps validate app purchases and maintain subscription entitlements.
+                shown at checkout, including PayMongo, Paddle, PayPal, Apple App Store, or Google Play where available. RevenueCat helps validate app purchases and maintain subscription entitlements.
                 Clover does not receive or store your complete card or
                 bank-payment credentials.
               </p>
@@ -284,7 +284,7 @@ export function PrivacyPolicyDocument() {
                   <strong>Service providers.</strong> Providers help us deliver
                   authentication (Clerk), hosting and application infrastructure
                   (Vercel), database services (Supabase), AI processing
-                  (OpenAI), bank-data connections (Finverse), payments (Paddle, PayPal, Apple, or Google), subscription validation (RevenueCat), product analytics
+                  (OpenAI), bank-data connections (Finverse), payments (PayMongo, Paddle, PayPal, Apple, or Google), subscription validation (RevenueCat), product analytics
                   (PostHog), and support email (Zoho). They receive only the
                   information needed for their role and process it under their
                   own applicable terms and privacy commitments.

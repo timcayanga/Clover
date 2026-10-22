@@ -1,11 +1,12 @@
 import type { Metadata } from "next";
 import Image from "next/image";
 import { PublicInfoShell } from "@/components/public-info-shell";
+import { PublicBusinessDetails } from "@/components/public-business-details";
 import styles from "./registration.module.css";
 
 export const metadata: Metadata = {
   title: "Business Registration",
-  description: "View Clover Innovations OPC’s official BIR Registration Seal Badge and scan the QR code to verify its registration.",
+  description: "View Clover Innovations OPC’s SEC registration number, Philippine business address, customer service details and BIR Registration Seal Badge.",
   alternates: { canonical: "https://clover.ph/business-registration" },
 };
 
@@ -13,13 +14,14 @@ const badge = "/assets/registration/bir-registration-seal-2026.png";
 
 export default function BusinessRegistrationPage() {
   return (
-    <PublicInfoShell>
+    <PublicInfoShell active="business">
       <section className={styles.registration} aria-labelledby="registration-title">
         <header className={styles.intro}>
           <p className={styles.eyebrow}>Clover Innovations OPC</p>
           <h1 id="registration-title">Business Registration</h1>
           <p>Clover is operated by Clover Innovations OPC, a business registered with the Philippine Bureau of Internal Revenue.</p>
         </header>
+        <section className={styles.details} aria-label="Registered business and customer service"><PublicBusinessDetails /></section>
         <figure className={styles.badge}>
           <Image
             src={badge}
