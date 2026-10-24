@@ -1,4 +1,4 @@
-const { withAppBuildGradle, withDangerousMod } = require("expo/config-plugins");
+const { withAndroidManifest, withAppBuildGradle, withDangerousMod } = require("expo/config-plugins");
 const fs = require("node:fs/promises");
 const path = require("node:path");
 
@@ -21,7 +21,26 @@ function configureGradle(source) {
   return source.includes("ph.clover.build.CloverCompatibilityFactory") ? source : source + registration;
 }
 
+function configureOptionalLocation(manifest) {
+  // Location only assists a receipt upload. Permission-implied hardware must
+  // never prevent installing Clover on tablets or phones without a provider.
+  const optional = new Set([
+    "android.hardware.location",
+    "android.hardware.location.gps",
+    "android.hardware.location.network",
+  ]);
+  manifest["uses-feature"] = [
+    ...(manifest["uses-feature"] || []).filter(feature => !optional.has(feature.$?.["android:name"])),
+    ...Array.from(optional, name => ({ $: { "android:name": name, "android:required": "false" } })),
+  ];
+  return manifest;
+}
+
 module.exports = config => {
+  config = withAndroidManifest(config, config => {
+    configureOptionalLocation(config.modResults.manifest);
+    return config;
+  });
   config = withAppBuildGradle(config, config => {
     config.modResults.contents = configureGradle(config.modResults.contents);
     return config;
@@ -51,3 +70,4 @@ module.exports = config => {
   }]);
 };
 module.exports.configureGradle = configureGradle;
+module.exports.configureOptionalLocation = configureOptionalLocation;
