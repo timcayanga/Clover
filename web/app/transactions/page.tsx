@@ -1,4 +1,5 @@
 "use client";
+import { TransactionConversion, QuickAddLineItem, TransactionLineItemRow } from "@/components/transaction-detail-extras";
 
 import { manualTransactionCategoryId, manualTransactionName, manualTransactionPlaceholder, manualTransactionToday } from "../../../shared/manual-transaction-defaults";
 import { useDraftCategorySuggestion } from "@/lib/use-draft-category-suggestion";
@@ -5511,19 +5512,6 @@ function TransactionsPageContent() {
     });
   };
 
-  const addDetailReceiptLineItem = () => {
-    setDetailDraft((current) => {
-      if (!current) {
-        return current;
-      }
-
-      return {
-        ...current,
-        receiptLineItems: [...current.receiptLineItems, createEmptyReceiptLineItem()],
-      };
-    });
-  };
-
   const deleteDetailReceiptLineItem = (index: number) => {
     setDetailDraft((current) => {
       if (!current) {
@@ -9229,6 +9217,7 @@ function TransactionsPageContent() {
                   <strong>{formatTransactionAmount(Number(detailDraft?.amount ?? selectedTransaction.amount), detailDraft?.currency ?? selectedTransaction.currency)}</strong>
                   <em>{detailDraft?.type === "credit" ? "Income" : detailDraft?.type === "transfer" ? "Transfer" : "Expense"}</em>
                 </div>
+                <TransactionConversion amount={detailDraft?.amount ?? selectedTransaction.amount} currency={detailDraft?.currency ?? selectedTransaction.currency} />
                 <dl className="transaction-drawer-view__facts">
                   {[
                     ["Name", detailDraft?.merchantClean || selectedTransaction.merchantRaw],
@@ -9249,10 +9238,14 @@ function TransactionsPageContent() {
                     <input aria-label={label} type={label === "Date" ? "date" : label === "Amount" ? "number" : "text"} step={label === "Amount" ? "0.01" : undefined} value={label === "Date" ? detailDraft?.date ?? todayIso : label === "Amount" ? detailDraft?.amount ?? "" : detailDraft?.merchantClean ?? ""} onChange={event => setDetailDraft(current => current ? {...current,[label === "Date" ? "date" : label === "Amount" ? "amount" : "merchantClean"]:event.target.value} : current)} />
                   ) : <button type="button" onClick={() => beginDrawerEdit(label)}>{value}</button>}</dd></div>)}
                 </dl>
-                <details className="transaction-line-items-accordion">
+                <details className="transaction-line-items-accordion" open>
                   <summary>Line Items <span>{detailReceiptLineItems.length}</span></summary>
-                  {detailReceiptLineItems.length ? detailReceiptLineItems.map((item, index) => <div className="transaction-line-items-accordion__row" key={index}><span>{item.description || `Line item ${index + 1}`}</span><strong>{formatTransactionAmount(getReceiptLineItemComputedAmount(item) ?? 0, item.currency || selectedTransaction.currency)}</strong></div>) : <p>No line items yet.</p>}
-                  <button className="button button-secondary button-small" type="button" onClick={() => beginDrawerEdit("Line Items")}>Edit / add line items</button>
+                  {detailReceiptLineItems.length ? detailReceiptLineItems.map((item, index) => <TransactionLineItemRow key={index} description={item.description || `Line item ${index + 1}`} amount={formatTransactionAmount(getReceiptLineItemComputedAmount(item) ?? 0, item.currency || selectedTransaction.currency)} />) : <p>No line items yet.</p>}
+                  {!detailEditing ? <QuickAddLineItem key={selectedTransaction.id} currency={detailDraft?.currency ?? selectedTransaction.currency} count={detailReceiptLineItems.length} disabled={isSaving} onAdd={async (item,requestId) => {
+                    setIsSaving(true);
+                    try { await updateTransaction(selectedTransaction.id,{appendReceiptLineItem:{item,requestId}}); }
+                    finally { setIsSaving(false); }
+                  }} /> : null}
                 </details>
               </div>
 
@@ -9339,9 +9332,7 @@ function TransactionsPageContent() {
                       <div className="transaction-drawer-receipt-table__empty">No line items yet.</div>
                     )}
                   </div>
-                  <button className="button button-secondary button-small transaction-drawer-receipt-lines__add" type="button" onClick={addDetailReceiptLineItem}>
-                    Add line item
-                  </button>
+                  <QuickAddLineItem key={`${selectedTransaction.id}:edit`} currency={detailDraft?.currency ?? selectedTransaction.currency} count={detailReceiptLineItems.length} disabled={isSaving} onAdd={item => setDetailDraft(current => current ? {...current,receiptLineItems:[...current.receiptLineItems,{...createEmptyReceiptLineItem(),...item}]} : current)} />
                 </div>
 
                 <div className="transaction-drawer-more__row">

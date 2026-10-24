@@ -1,3 +1,4 @@
+import { lineItemAdditionSchema } from "./transaction-line-item-addition";
 import { manualTransactionName, manualTransactionToday } from "../../shared/manual-transaction-defaults";
 import { z } from "zod";
 
@@ -27,6 +28,7 @@ const date = z.string().regex(/^\d{4}-\d{2}-\d{2}$/).refine(value => {
 // Accept older clients' signed input, but persist the magnitude. Type carries direction.
 const amount = z.string().regex(/^-?\d{1,12}(\.\d{1,2})?$/).transform(value => value.replace(/^-/, ""));
 export const mobileEditSchema = z.object({
+  appendReceiptLineItem: lineItemAdditionSchema.optional(),
   isExcluded: z.boolean().optional(),
   receiptLineItems: z.array(z.object({
     description: z.string().max(500),

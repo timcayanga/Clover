@@ -37,10 +37,12 @@ for (const rawPayload of [undefined, null, "legacy raw text", { original: "sourc
   assert.equal(Object.hasOwn(buildTransactionUpdatePayload(draft, source), "rawPayload"), false, "Unchanged line items must omit raw source entirely");
   assert.equal(JSON.stringify(source), before);
   draft.receiptLineItems = [{ description: "New line", quantity: "", unitPrice: "", amount: "2", currency: "PHP" }];
-  assert.equal(Object.hasOwn(buildTransactionUpdatePayload(draft, source), "rawPayload"), true, "Explicit line-item edits still save");
+  assert.equal(Object.hasOwn(buildTransactionUpdatePayload(draft, source), "rawPayload"), false, "Line-item edits must preserve original source evidence");
+  assert.equal(Object.hasOwn(buildTransactionUpdatePayload(draft, source), "receiptLineItems"), true, "Explicit line-item edits save as normalized annotations");
   draft.receiptLineItems = [];
   if (rawPayload && typeof rawPayload === "object" && "receiptLineItems" in rawPayload) {
-    assert.equal(Object.hasOwn(buildTransactionUpdatePayload(draft, source), "rawPayload"), true, "Explicitly removing existing line items still saves");
+    assert.equal(Object.hasOwn(buildTransactionUpdatePayload(draft, source), "rawPayload"), false, "Removing normalized items must preserve original receipt evidence");
+    assert.deepEqual(buildTransactionUpdatePayload(draft, source).receiptLineItems, [], "Explicitly removing existing line items still saves");
   }
 }
 console.log("PASS: global account pagination, equal display labels, stable ties, and untouched raw-payload preservation.");

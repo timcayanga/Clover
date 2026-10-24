@@ -1,3 +1,4 @@
+import { appendedLineItems, lineItemAdditionSchema } from "@/lib/transaction-line-item-addition";
 import { transactionReviewDisplayFields } from "@/lib/actionable-transaction-review";
 import { isAutomaticReviewExclusion, exclusionAfterTransactionEdit } from "@/lib/transaction-review-inclusion";
 import { enqueueLearningJob, processPendingLearningJobs } from "@/lib/learning-jobs";
@@ -21,6 +22,7 @@ import { invalidateWorkspaceSummaryCache } from "@/lib/workspace-summary-cache";
 export const dynamic = "force-dynamic";
 
 const patchSchema = z.object({
+  appendReceiptLineItem: lineItemAdditionSchema.optional(),
   categoryId: z.string().nullable().optional(),
   accountId: z.string().min(1).optional(),
   isExcluded: z.boolean().optional(),
@@ -207,6 +209,20 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ tr
     }
 
     await assertWorkspaceAccess(userId, transaction.workspaceId);
+    if (payload.appendReceiptLineItem) {
+      if (Object.keys(payload).length !== 1) return NextResponse.json({ error: "Add line items separately from other edits." }, { status: 400 });
+      await prisma.$transaction(async db => {
+        await db.$queryRaw`SELECT id FROM "Transaction" WHERE id = ${transactionId} FOR UPDATE`;
+        const latest = await db.transaction.findUniqueOrThrow({ where: { id: transactionId, deletedAt: null } });
+        const normalizedPayload = appendedLineItems(latest.rawPayload, latest.normalizedPayload, payload.appendReceiptLineItem!);
+        if (!normalizedPayload) return;
+        await db.transaction.update({ where: { id: transactionId }, data: { normalizedPayload: normalizedPayload as Prisma.InputJsonValue } });
+        await db.auditLog.create({ data: { workspaceId: latest.workspaceId, actorUserId: userId, action: "transaction_line_item_added", entity: "Transaction", entityId: latest.id, metadata: { requestId: payload.appendReceiptLineItem!.requestId } } });
+      });
+      revalidateTag("admin-financial-totals");
+      invalidateWorkspaceSummaryCache(transaction.workspaceId);
+      return GET(request, { params: Promise.resolve({ transactionId }) });
+    }
     const existingTagNames = transaction.transactionTags.map((entry) => entry.tag.name);
     const nextTagNames = payload.tags === undefined ? undefined : payload.tagAction
       ? applyTransactionTagSelection(existingTagNames, payload.tags, payload.tagAction)

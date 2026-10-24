@@ -1,3 +1,4 @@
+import { TransactionConversion, QuickAddLineItem } from "../../src/transaction-detail-extras";
 import { MerchantLogo } from "../../src/merchant-logo";
 import { transactionReviewReasons } from "../../src/transaction-review";
 import { InlineDetailRow } from "../../src/inline-detail-row";
@@ -255,6 +256,7 @@ export default function TransactionDetail() {
 
                   </View>
                 </View>
+                <TransactionConversion amount={row.amount} currency={row.currency} />
                 <Card
                   style={{ padding: 0, gap: 0, overflow: "hidden", borderRadius: 16 }}
                 >
@@ -280,7 +282,6 @@ export default function TransactionDetail() {
                   <Button secondary danger title="Delete" disabled={busy || session.demo} onPress={()=>Alert.alert("Delete transaction?","This cannot be undone.",[{text:"Cancel",style:"cancel"},{text:"Delete",style:"destructive",onPress:()=>void remove()}])}/>
                   <Button secondary title="Edit details" onPress={() => setEditing(true)} />
                 </Card> : null}
-                <TransactionRelatedActions key={row.id} transaction={row} />
                 <Pressable
                   accessibilityRole="button"
                   accessibilityState={{ expanded: sourceOpen }}
@@ -318,7 +319,21 @@ export default function TransactionDetail() {
                   ) : (
                     <Body>No line items yet.</Body>
                   )}
+                  <QuickAddLineItem key={row.id} currency={row.currency} count={row.receiptLineItems?.length ?? 0} disabled={busy} onAdd={async (item,requestId) => {
+                    const receiptLineItems = [...(row.receiptLineItems ?? []),item];
+                    setBusy(true);
+                    try {
+                      if(session.demo) session.updateSample({...row,receiptLineItems});
+                      else {
+                        const result = await session.request<{transaction:Transaction}>(`transactions/${id}?workspaceId=${encodeURIComponent(session.profileId)}`,{method:'PATCH',body:JSON.stringify({appendReceiptLineItem:{item,requestId}})});
+                        setRow(result.transaction);setLineItems(result.transaction.receiptLineItems ?? []);
+                        return;
+                      }
+                      setRow({...row,receiptLineItems});setLineItems(receiptLineItems);
+                    } finally {setBusy(false);}
+                  }} />
                 </Card>
+                <TransactionRelatedActions key={row.id} transaction={row} />
               </>
             ) : (
               <>
@@ -402,7 +417,7 @@ export default function TransactionDetail() {
                   <Field label={`Item ${index + 1} amount (${item.currency || row.currency})`} value={item.amount ?? ""} keyboardType="decimal-pad" maxLength={32} onChangeText={amount => setLineItems(items => items.map((entry, i) => i === index ? { ...entry, amount: amount || null } : entry))} />
                   <Button title={`Remove item ${index + 1}`} secondary onPress={() => setLineItems(items => items.filter((_, i) => i !== index))} />
                 </Card>)}
-                <Button title="Add line item" secondary disabled={lineItems.length >= 100} onPress={() => setLineItems(items => [...items, { description: "", amount: null, currency: row.currency }])} />
+                <QuickAddLineItem key={`${row.id}:edit`} currency={row.currency} count={lineItems.length} disabled={busy} onAdd={item=>setLineItems(items=>[...items,item])} />
                 <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
                   <Switch accessibilityLabel="Exclude from reports" value={excluded} onValueChange={setExcluded} />
                   <Body>Exclude from reports</Body>

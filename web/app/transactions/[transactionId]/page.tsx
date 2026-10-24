@@ -1,4 +1,6 @@
 "use client";
+import { TransactionConversion, QuickAddLineItem } from "@/components/transaction-detail-extras";
+import type { QuickLineItem } from "../../../../shared/transaction-detail-extras";
 import { TransactionReviewControls } from "@/components/transaction-review-controls";
 import { usePendingReceiptDetails } from "@/lib/use-pending-receipt-details";
 import { TransactionDetailLabel } from "@/components/transaction-detail-label";
@@ -317,6 +319,23 @@ export default function TransactionDetailPage() {
     } finally { setSaving(false); }
   };
 
+  const addQuickLineItem = async (item: QuickLineItem, requestId: string) => {
+    if (!transaction || !draft || saving) return;
+    const receiptLineItems = [...draft.receiptLineItems, {...createEmptyReceiptLineItem(), ...item}];
+    if (editing) { setDraft({...draft,receiptLineItems}); return; }
+    setSaving(true);
+    try {
+      const response = await fetch(`/api/transactions/${encodeURIComponent(transaction.id)}`, {method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({appendReceiptLineItem:{item,requestId}})});
+      const payload = await response.json() as DetailPayload;
+      if (!response.ok || !payload.transaction) throw new Error(payload.error || 'Unable to add line item.');
+      const updated = payload.transaction;
+      setTransaction(updated);
+      setDraft(buildTransactionDetailDraft(updated,{merchantClean:updated.merchantClean??updated.merchantRaw,effectiveType:updated.type,categoryId:updated.categoryId,isTransfer:updated.isTransfer}));
+      clearJsonRequestCache(`transactions:list:${updated.workspaceId}:`);
+      window.dispatchEvent(new CustomEvent('clover:transactions-changed',{detail:{workspaceId:updated.workspaceId}}));
+    } finally { setSaving(false); }
+  };
+
   const save = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (!transaction || !draft || saving) {
@@ -448,6 +467,7 @@ export default function TransactionDetailPage() {
               </strong>
             </section>
 
+            <TransactionConversion amount={draft.amount} currency={draft.currency} />
             <section className="transaction-detail-page__facts transaction-detail-page__facts--inline">
               {(["type", "name", "account", "category", "tags", "date", "amount", "notes"] as const).map(field => {
                 const label = field[0].toUpperCase() + field.slice(1);
@@ -486,7 +506,7 @@ export default function TransactionDetailPage() {
                       <button type="button" aria-label={`Remove line item ${index + 1}`} onClick={() => setDraft({ ...draft, receiptLineItems: draft.receiptLineItems.filter((_, itemIndex) => itemIndex !== index) })}>×</button>
                     </div>
                   ))}
-                  <button className="button button-secondary button-small transaction-detail-page__add-line" type="button" onClick={() => setDraft({ ...draft, receiptLineItems: [...draft.receiptLineItems, { ...createEmptyReceiptLineItem(), currency: draft.currency }] })}>Add line item</button>
+                  <QuickAddLineItem key={`${transaction.id}:edit`} currency={draft.currency} count={draft.receiptLineItems.length} disabled={saving} onAdd={addQuickLineItem} />
                 </div>
                 <div className="transaction-detail-page__confidence">
                   <span className={`transaction-detail-page__confidence-chip is-${confidenceScore >= 85 ? "high" : confidenceScore >= 65 ? "medium" : "low"}`}>{confidenceLabel}</span>
@@ -517,7 +537,7 @@ export default function TransactionDetailPage() {
             )}
 
             {!editing ? (
-              <details className="transaction-detail-page__line-items-view transaction-line-items-accordion">
+              <details className="transaction-detail-page__line-items-view transaction-line-items-accordion" open>
                 <summary className="transaction-detail-page__line-items-head">
                   <strong>Line Items</strong>
                   <span>{formatCurrencyAmount(receiptLineTotal, draft.currency)}</span>
@@ -535,11 +555,9 @@ export default function TransactionDetailPage() {
                     ))}
                   </div>
                 ) : (
-                  <button className="transaction-detail-page__line-items-empty" type="button" onClick={() => beginEditing("line-items")}>
-                    No line items yet. Tap to add one.
-                  </button>
+                  <p className="transaction-detail-page__line-items-empty">No line items yet.</p>
                 )}
-                {draft.receiptLineItems.length > 0 ? <button className="button button-secondary button-small" type="button" onClick={() => beginEditing("line-items")}>Add line item</button> : null}
+                <QuickAddLineItem key={transaction.id} currency={draft.currency} count={draft.receiptLineItems.length} disabled={saving} onAdd={addQuickLineItem} />
               </details>
             ) : null}
 

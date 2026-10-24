@@ -24,7 +24,9 @@ export const buildTransactionUpdatePayload = (
   const hasConfirmedItems = normalized && typeof normalized === "object" && !Array.isArray(normalized) && "receiptLineItems" in normalized;
   const receiptPayload = mergeReceiptLineItemsIntoPayload({}, detailDraft.receiptLineItems, currency);
   return {
-    ...(hasConfirmedItems ? { receiptLineItems: receiptPayload.receiptLineItems } : {}),
+    ...((hasConfirmedItems || receiptLineItemSignature(detailDraft.receiptLineItems) !==
+      receiptLineItemSignature(parseReceiptLineItemsFromPayload(selectedTransaction.rawPayload, normalized)))
+      ? { receiptLineItems: receiptPayload.receiptLineItems } : {}),
     merchantRaw: detailDraft.merchantRaw,
     merchantClean: detailDraft.merchantClean.trim() || null,
     date: detailDraft.date,
@@ -37,10 +39,6 @@ export const buildTransactionUpdatePayload = (
     userNote: detailDraft.description,
     isExcluded: detailDraft.isExcluded,
     isTransfer: detailDraft.type === "transfer",
-    // Omitting unchanged source data preserves even legacy/unknown raw fields exactly.
-    ...(!hasConfirmedItems && receiptLineItemSignature(detailDraft.receiptLineItems) !==
-    receiptLineItemSignature(parseReceiptLineItemsFromPayload(selectedTransaction.rawPayload))
-      ? { rawPayload: mergeReceiptLineItemsIntoPayload(selectedTransaction.rawPayload, detailDraft.receiptLineItems, currency) }
-      : {}),
+    // User edits are normalized annotations. Preserve original receipt evidence exactly.
   };
 };

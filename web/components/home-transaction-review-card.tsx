@@ -1,4 +1,7 @@
 "use client";
+import { TransactionConversion, QuickAddLineItem, TransactionLineItemRow } from "@/components/transaction-detail-extras";
+import { createEmptyReceiptLineItem, getReceiptLineItemComputedAmount } from "@/lib/receipt-line-items";
+import type { QuickLineItem } from "../../shared/transaction-detail-extras";
 
 import { InterfaceIcon } from "@/components/interface-icon";
 
@@ -229,6 +232,21 @@ export function HomeTransactionDetailModal({
     setMessage("");
   };
 
+  const addQuickLineItem = async (item: QuickLineItem, requestId: string) => {
+    if (!detail || !draft || saving) return;
+    const receiptLineItems=[...draft.receiptLineItems,{...createEmptyReceiptLineItem(),...item}];
+    if(editing){setDraft({...draft,receiptLineItems});return;}
+    setSaving(true);
+    try {
+      const response=await fetch(`/api/transactions/${encodeURIComponent(detail.id)}`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({appendReceiptLineItem:{item,requestId}})});
+      const payload=await response.json() as DetailPayload;
+      if(!response.ok||!payload.transaction)throw new Error(payload.error||'Unable to add line item.');
+      const updated=payload.transaction;setDetail(updated);setDraft(createDraft(updated));
+      detailCache.set(updated.id,Promise.resolve({...payload,transaction:updated,accounts,categories}));
+      router.refresh();
+    } finally {setSaving(false);}
+  };
+
   const save = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (!detail || !draft || saving) return;
@@ -291,6 +309,7 @@ export function HomeTransactionDetailModal({
               <em>{new Date(draft?.date ?? detail?.date ?? selected.date).toLocaleDateString("en-PH", { month: "short", day: "numeric", year: "numeric" })}</em>
             </div>
 
+            <TransactionConversion amount={draft?.amount ?? detail?.amount ?? selected.amount} currency={draft?.currency ?? detail?.currency ?? selected.currency} renderAmount={(value,currency)=><HomeSensitiveAmount value={value} currency={currency} />} />
             {loading ? (
               <div className="home-transaction-detail__loading" role="status"><span className="transaction-detail-page__spinner" aria-hidden="true" />Loading editable details…</div>
             ) : message && !detail ? (
@@ -335,6 +354,11 @@ export function HomeTransactionDetailModal({
                   </dl>
                 )}
 
+                <section aria-label="Line Items">
+                  <h5>Line Items</h5>
+                  {draft.receiptLineItems.length ? draft.receiptLineItems.map((item,index)=><TransactionLineItemRow key={index} description={item.description} amount={<HomeSensitiveAmount value={formatCurrencyAmount(getReceiptLineItemComputedAmount(item) ?? 0,item.currency||draft.currency)} currency={item.currency||draft.currency} />} />) : <p>No line items yet.</p>}
+                  <QuickAddLineItem key={`${detail.id}:${editing}`} currency={draft.currency} count={draft.receiptLineItems.length} disabled={saving} onAdd={addQuickLineItem} />
+                </section>
                 {message ? <p className="transaction-detail-page__message" role="status">{message}</p> : null}
                 {editing ? (
                   <div className="transaction-drawer-edit-footer">
