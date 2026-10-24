@@ -43,7 +43,7 @@ const config: ExpoConfig = {
       },
     ],
     "expo-localization",
-    ["expo-location", { locationAlwaysAndWhenInUsePermission: false, locationAlwaysPermission: false, motionUsagePermission: false, locationWhenInUsePermission: "Use your location to suggest the currency for your next receipt photo. Only the country is saved; scanning also works without location.", isIosBackgroundLocationEnabled: false, isAndroidBackgroundLocationEnabled: false, isAndroidForegroundServiceEnabled: false }],
+    ["expo-location", { locationAlwaysAndWhenInUsePermission: false, locationAlwaysPermission: false, motionUsagePermission: "Clover’s location library includes optional motion support. Clover does not request or collect motion or fitness activity; receipt scanning works without this access.", locationWhenInUsePermission: "Use your location to suggest the currency for your next receipt photo. Only the country is saved; scanning also works without location.", isIosBackgroundLocationEnabled: false, isAndroidBackgroundLocationEnabled: false, isAndroidForegroundServiceEnabled: false }],
     ["expo-build-properties", { ios: {
       // iOS 27 rejects Xcode 27 builds that still use the application lifecycle.
       enableSceneSupport: true,
