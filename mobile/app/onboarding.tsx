@@ -1,3 +1,4 @@
+import { SignupTrialSummary } from "../src/signup-trial-summary";
 import { EntrySelector } from "../src/entry-controls";
 import { CloverMascot } from "../src/clover-mascot";
 import { Text } from "../src/app-text";
@@ -74,6 +75,7 @@ export default function Onboarding() {
   };
   return (
     <Screen>
+      <SignupTrialSummary trial={session.data?.entitlement.trial} />
       <View style={{ alignItems: "center" }}><CloverMascot pose={step === "experience" ? "chat" : accountMethod === "connect" ? "banks" : accountMethod === "upload" ? "receipt" : "manual"} size={128} /></View>
       {step === "experience" ? (
         <>

@@ -24,9 +24,10 @@ export async function POST(request: Request) {
     const body = await request.json().catch(() => ({})) as { workspaceId?: string };
     if (!body.workspaceId) return NextResponse.json({ error: "Workspace is required." }, { status: 400 });
     const workspace = await assertWorkspaceAccess(userId, body.workspaceId);
-    const user = await prisma.user.findUnique({ where: { id: workspace.userId }, select: { id: true, email: true } });
+    const user = await prisma.user.findUnique({ where: { id: workspace.userId }, select: { id: true, email: true, verified: true } });
     if (!user?.email) return NextResponse.json({ error: "Your account needs an email address before connecting a bank." }, { status: 422 });
 
+    if (!user.verified) return NextResponse.json({ error: "Verify your email before connecting a bank.", emailVerificationRequired: true }, { status: 403 });
     const registered = await registerLunchFlowUser(user.email, user.id);
     if (!registered.access_token) throw new Error("LUNCHFLOW_USER_TOKEN_MISSING");
     const config = getLunchFlowConfig();

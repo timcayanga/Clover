@@ -1,3 +1,4 @@
+import { ensureSignupTrial } from "./signup-trial";
 import { requestBankDisconnect, revokeBankConnection } from "./finverse-lifecycle";
 import { cancelStoreBillingForDeletion } from "./store-account-deletion";
 import { revalidateTag } from "next/cache";
@@ -68,11 +69,13 @@ export async function syncClerkIdentity(clerkUserId: string) {
         lastName: source.lastName,
         verified: primary?.verification?.status === "verified",
       };
-      return tx.user.upsert({
+      const result = await tx.user.upsert({
         where: { clerkUserId },
         update: data,
         create: { ...data, clerkUserId, environment, planTier: "free" },
       });
+      if (!result.signupTrialEvaluatedAt) await ensureSignupTrial(tx, result.id, new Date(source.createdAt));
+      return result;
     },
     { timeout: 20000 },
   );

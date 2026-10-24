@@ -1,3 +1,4 @@
+import { SIGNUP_TRIAL_SOURCE } from "../../shared/signup-trial";
 import { storeProductTier } from "../../shared/store-catalog";
 export function addCalendarMonths(date: Date, months: number) {
   const result = new Date(date);
@@ -23,13 +24,15 @@ export type AccessInput = {
     paidThrough: Date | null;
   } | null;
   storeAccess?: { productId?: string | null; planTier?: "pro" | "premium"; expiresAt: Date | null; renewing: boolean } | null;
-  grants: { planTier?: "free" | "pro" | "premium"; startsAt: Date; endsAt: Date; revokedAt: Date | null }[];
+  grants: { source?: string; planTier?: "free" | "pro" | "premium"; startsAt: Date; endsAt: Date; revokedAt: Date | null }[];
 };
 
 export function calculateProAccess(input: AccessInput, now = new Date()) {
   const activeGrants = input.grants.filter(
-    (g) => !g.revokedAt && g.startsAt <= now && g.endsAt > now,
+    (g) => !(g.source === SIGNUP_TRIAL_SOURCE && input.subscription?.status === "suspended") && !g.revokedAt && g.startsAt <= now && g.endsAt > now,
   );
+  const trialGrants = activeGrants.filter(g => g.source === SIGNUP_TRIAL_SOURCE);
+  const complimentary = activeGrants.filter(g => g.source !== SIGNUP_TRIAL_SOURCE);
   const paidThrough = input.subscription?.paidThrough ?? null;
   const storePaid = Boolean(input.storeAccess?.expiresAt && input.storeAccess.expiresAt > now);
   const subscriptionRenewing = input.subscription?.status === "active" && Boolean(input.subscription.interval);
@@ -62,12 +65,14 @@ export function calculateProAccess(input: AccessInput, now = new Date()) {
       ? "staging QA override"
       : input.planTierLocked
       ? "manual override"
-      : paid && activeGrants.length
+      : paid && complimentary.length
         ? "paid + complimentary"
         : paid
           ? "paid"
-          : activeGrants.length
+          : complimentary.length
             ? "complimentary"
+            : trialGrants.length
+              ? "trial"
             : "free",
   };
 }

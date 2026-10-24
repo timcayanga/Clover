@@ -5,6 +5,7 @@ import { resolve } from "node:path";
 const requireFixture = createRequire(resolve("package.json"));
 async function main() {
   const fixture = `
+let verified=true;export function setVerified(value){verified=value;}
 let lifecycleCalls=0, discoveryReady=false, discoveryError=false, discoveryWrites=[];
 export function setDiscoveryReady(value){discoveryReady=value;}
 export function setDiscoveryError(value){discoveryError=value;}
@@ -50,7 +51,7 @@ export const createFinverseLink=async()=>({link_url:'https://link.finverse.com/t
 export const hashFinverseState=s=>s;
 export const encryptFinverseToken=()=> 'encrypted';
 export const exchangeFinverseCode=async()=>{exchanges++;return {login_identity_id:'identity',access_token:'secret',refresh_token:'secret',expires_in:3600};};
-export const prisma={user:{findUniqueOrThrow:async()=>({planTier})},$transaction:async f=>f({}),finverseConnection:{
+export const prisma={user:{findUniqueOrThrow:async()=>({planTier,verified})},$transaction:async f=>f({}),finverseConnection:{
  findUniqueOrThrow:async()=>({status:"ready"}),
  findFirst:async({where})=>{if(where.workspaceId!=='profile'||where.user.clerkUserId!=='owner'||where.status.not!=='disconnected')throw Error('unsafe scope');return {id:'connection',userId:'owner',loginIdentityId:'identity',encryptedAccessToken:'cipher',accessTokenExpiresAt:new Date(Date.now()+3600000)};},
  findMany:async({where,select})=>{if(where.workspaceId!=='profile'||where.user.clerkUserId!=='owner')throw Error('unsafe scope');return [{id:'failed',status:'error',institutionName:'Failed bank',lastSyncedAt:null,accountLinks:[]},{id:'cancelled',status:'cancelled',institutionName:'Cancelled bank',lastSyncedAt:null,accountLinks:[]},{id:'pending',status:'awaiting_selection',institutionId:'rcbc',institutionName:'RCBC - Personal',lastSyncedAt:null,accountLinks:[]},{id:'linked',status:'ready',institutionName:'Test bank',lastSyncedAt:new Date('2026-09-24T00:00:00Z'),encryptedRefreshToken:'cipher',accountLinks:[{account:{id:'account',name:'Savings',institution:'Test bank',accountNumber:'1234-5678-90',type:'bank'}}]}];},
@@ -60,9 +61,14 @@ export const prisma={user:{findUniqueOrThrow:async()=>({planTier})},$transaction
  update:async({data})=>{updates.push(data);return{};}
 }};
 `;
-  const bundled = await build({ stdin: { contents: `export {observeFinverseDiscovery} from './lib/finverse-discovery-progress'; export {GET as catalog} from './app/api/admin/finverse/catalog/route'; export {POST as sync} from './app/api/integrations/finverse/sync/route'; export {GET as connections} from './app/api/integrations/finverse/connections/route'; export {GET as institutions} from './app/api/integrations/finverse/institutions/route'; export {POST as link} from './app/api/integrations/finverse/link/route'; export {GET as callback} from './app/api/integrations/finverse/callback/route'; export {reset,stats,setPlan,setRefreshLimit,setDiscoveryReady,setDiscoveryError} from 'fixture';`, resolveDir: process.cwd() }, bundle: true, platform: "node", format: "cjs", packages: "external", write: false, plugins: [{ name: "finverse-boundaries", setup(b) { b.onResolve({filter:/^(fixture|@\/lib\/(admin|auth|finverse-refresh-limit|finverse-access-token|bank-link-usage|user-limits|account-limit-count|account-brand|finverse-lifecycle|workspace-access|finverse|prisma|plan-quota|pro-access|mobile-request-context))$/},()=>({path:"fixture",namespace:"test"})); b.onLoad({filter:/.*/,namespace:"test"},()=>({contents:fixture,loader:"ts",resolveDir:process.cwd()})); }}] });
+  const bundled = await build({ stdin: { contents: `export {observeFinverseDiscovery} from './lib/finverse-discovery-progress'; export {GET as catalog} from './app/api/admin/finverse/catalog/route'; export {POST as sync} from './app/api/integrations/finverse/sync/route'; export {GET as connections} from './app/api/integrations/finverse/connections/route'; export {GET as institutions} from './app/api/integrations/finverse/institutions/route'; export {POST as link} from './app/api/integrations/finverse/link/route'; export {GET as callback} from './app/api/integrations/finverse/callback/route'; export {reset,stats,setPlan,setRefreshLimit,setDiscoveryReady,setDiscoveryError,setVerified} from 'fixture';`, resolveDir: process.cwd() }, bundle: true, platform: "node", format: "cjs", packages: "external", write: false, plugins: [{ name: "finverse-boundaries", setup(b) { b.onResolve({filter:/^(fixture|@\/lib\/(admin|auth|finverse-refresh-limit|finverse-access-token|bank-link-usage|user-limits|account-limit-count|account-brand|finverse-lifecycle|workspace-access|finverse|prisma|plan-quota|pro-access|mobile-request-context))$/},()=>({path:"fixture",namespace:"test"})); b.onLoad({filter:/.*/,namespace:"test"},()=>({contents:fixture,loader:"ts",resolveDir:process.cwd()})); }}] });
   const Module = requireFixture("node:module"), mod = new Module(resolve("finverse-test.cjs")); mod.filename=resolve("finverse-test.cjs");mod.paths=Module._nodeModulePaths(process.cwd());mod._compile(bundled.outputFiles[0].text,mod.filename);
   const api=mod.exports;
+  api.setVerified(false);
+  const unverified=await api.link(new Request('https://clover.test/api',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({workspaceId:'profile'})}));
+  assert.equal(unverified.status,403);assert.equal((await unverified.json()).emailVerificationRequired,true);
+  assert.equal(api.stats().created,0,'No bank authorization is created before email verification');
+  api.setVerified(true);
   api.setDiscoveryReady(true);
   await api.observeFinverseDiscovery('pending-connection','test-token');
   assert.deepEqual(api.stats().discoveryWrites,[{where:{id:'pending-connection',status:'retrieving',lastSyncedAt:null,disconnectRequestedAt:null,accountLinks:{none:{unlinkedAt:null,accountId:{not:null}}}},data:{status:'awaiting_selection'}}], 'Background discovery must never overwrite linked, synced or disconnecting accounts');

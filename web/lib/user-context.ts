@@ -1,3 +1,4 @@
+import { ensureSignupTrial } from "./signup-trial";
 import { Prisma, type User } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { syncClerkUser, type SyncedClerkUser } from "@/lib/clerk";
@@ -29,15 +30,16 @@ export const getOrCreateCurrentUser = async (clerkUserId: string): Promise<User>
     const user = await prisma.$transaction(async (tx) => {
       await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`clerk-identity:${clerkUserId}`}))`;
       if (await tx.clerkIdentityDeletion.findUnique({ where: { clerkUserId } })) throw new Error("UNAUTHORIZED");
-      return existing
-      ? existing.email !== syncedEmail ||
-          existing.firstName !== syncedFirstName ||
-          existing.lastName !== syncedLastName ||
-          existing.verified !== syncedVerified ||
-          existing.environment !== resolvedEnvironment ||
-          (applyLocalProOverride && existing.planTier !== "pro")
+      const freshExisting = await tx.user.findUnique({ where: { clerkUserId } });
+      const result = freshExisting
+      ? freshExisting.email !== syncedEmail ||
+          freshExisting.firstName !== syncedFirstName ||
+          freshExisting.lastName !== syncedLastName ||
+          freshExisting.verified !== syncedVerified ||
+          freshExisting.environment !== resolvedEnvironment ||
+          (applyLocalProOverride && freshExisting.planTier !== "pro")
         ? await tx.user.update({
-            where: { id: existing.id },
+            where: { id: freshExisting.id },
             data: {
               email: syncedEmail,
               firstName: syncedFirstName,
@@ -47,7 +49,7 @@ export const getOrCreateCurrentUser = async (clerkUserId: string): Promise<User>
               ...(applyLocalProOverride ? { planTier: "pro" } : {}),
             },
           })
-        : existing
+        : freshExisting
       : await tx.user.create({
           data: {
             clerkUserId: clerkUser.clerkUserId,
@@ -60,6 +62,8 @@ export const getOrCreateCurrentUser = async (clerkUserId: string): Promise<User>
           },
         });
 
+      if (!result.signupTrialEvaluatedAt) await ensureSignupTrial(tx, result.id, clerkUser.accountCreatedAt);
+      return result;
     });
 
     if (!existing) {

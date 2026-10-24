@@ -16,6 +16,9 @@ export function retainedPlanRows(usage: RetainedUsage, tier: CloverPlanTier, ove
   });
 }
 export type RetentionSnapshot = {
+  hasPaidSubscription?: boolean;
+  billingProvider?: string | null;
+  trial?: import("./signup-trial").SignupTrialSnapshot | null;
   linkedBanks?: { used: number; limit: number | null };
   planTier: CloverPlanTier;
   usage: RetainedUsage;

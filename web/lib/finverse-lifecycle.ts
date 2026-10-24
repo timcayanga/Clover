@@ -44,13 +44,13 @@ export async function enforceBankAllowance(userId:string, effectiveTier?: "free"
   await prisma.$transaction(async tx=>{
     await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`plan-quota:${userId}`}, 0))`;
     const user=await tx.user.findUniqueOrThrow({where:{id:userId}});
-    const limit=hasUnlimitedPlanLimits(user)?Number.MAX_SAFE_INTEGER:PLAN_CATALOG[user.planTier].linkedBanks;
+    const limit=hasUnlimitedPlanLimits(user)?Number.MAX_SAFE_INTEGER:PLAN_CATALOG[effectiveTier ?? user.planTier].linkedBanks;
     const links=await tx.finverseAccountLink.findMany({where:{workspace:{userId},unlinkedAt:null,accountId:{not:null},connection:{status:{not:'disconnected'},disconnectRequestedAt:null}},include:{connection:{select:{lastSyncedAt:true}}}});
     const keep=new Set(retainedBankLinks(links.map(l=>({...l,lastSeenAt:l.connection.lastSyncedAt??l.createdAt})),limit).map(l=>l.id));
     // Finverse revokes a login identity, not one child account. If it contains
     // excess accounts, revoke that identity; retained cards can be reconnected.
     const ids=[...new Set(links.filter(l=>!keep.has(l.id)).map(l=>l.connectionId))];
-    await tx.finverseConnection.updateMany({where:{...(limit===0?{userId,encryptedRefreshToken:{not:null}}:{id:{in:ids}}),status:{not:'disconnected'},disconnectRequestedAt:null},data:{status:'disconnect_pending',disconnectRequestedAt:new Date(),disconnectRetryAt:new Date(),disconnectReason:user.planTier==='free'?'Paid access ended':'Plan linked-account allowance reduced'}});
+    await tx.finverseConnection.updateMany({where:{...(limit===0?{userId}:{id:{in:ids}}),status:{not:'disconnected'},disconnectRequestedAt:null},data:{status:'disconnect_pending',disconnectRequestedAt:new Date(),disconnectRetryAt:new Date(),disconnectReason:user.planTier==='free'?'Paid access ended':'Plan linked-account allowance reduced'}});
   });
 }
 export async function sweepBankConnections() {

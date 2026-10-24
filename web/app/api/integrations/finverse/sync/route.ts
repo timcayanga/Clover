@@ -50,6 +50,7 @@ const importAccount = async (connectionId: string, workspaceId: string, account:
     // A deletion is deliberate; do not silently recreate the deleted account.
     if (sameIdentity && !sameIdentity.accountId && !explicitlySelected) return null;
     const allowance = await bankLinkAllowance(tx, workspace.userId);
+    if (allowance.limit === 0) throw new PlanQuotaError("Bank syncing requires current Plus or Pro access. Your imported history stays available.");
     const candidates = await tx.account.findMany({ where: { workspaceId }, include: { finverseAccountLink: true } });
     const matches = matchingBankAccounts(candidates, normalized);
     if (!targetAccountId && !sameIdentity && matches.length > 1) throw new PlanQuotaError("More than one Clover account matches this bank account. Review the duplicate accounts before linking; no records have been changed.");
@@ -60,9 +61,9 @@ const importAccount = async (connectionId: string, workspaceId: string, account:
     if (priorLink && !explicitlySelected && (priorLink.unlinkedAt || priorLink.connectionId !== connectionId)) return null;
     if (priorLink && priorLink.externalAccountId !== account.account_id && (!/^\d+$/.test(cleanBankNumber(normalized.accountNumber)) || cleanBankNumber(match?.accountNumber) !== cleanBankNumber(normalized.accountNumber))) throw new PlanQuotaError("This Clover account is already linked to a different bank account. Review its link first.");
     const quotaIdentity = priorLink ? bankLinkUsageIdentity(priorLink) : account.account_id;
-    if (!allowance.usedIds.has(quotaIdentity) && allowance.remaining === 0) throw new PlanQuotaError("Your bank-account allowance is full for this monthly period. You can reconnect an account already used this period.");
+    if (!allowance.usedIds.has(quotaIdentity) && allowance.remaining === 0) throw new PlanQuotaError("Your bank-account allowance is full for this allocation period. You can reconnect an account already used this period.");
     const activeCount=await tx.finverseAccountLink.count({where:{workspace:{userId:workspace.userId},accountId:{not:null},unlinkedAt:null,connection:{status:{not:'disconnected'},disconnectRequestedAt:null},NOT:{id:priorLink?.id??''}}});
-    if(!hasUnlimitedPlanLimits(workspace.user) && activeCount>=PLAN_CATALOG[workspace.user.planTier].linkedBanks) throw new PlanQuotaError("Your plan's active linked-account allowance is full. Choose which accounts to keep before reconnecting.");
+    if(!hasUnlimitedPlanLimits(workspace.user) && activeCount>=allowance.limit) throw new PlanQuotaError("Your plan's active linked-account allowance is full. Choose which accounts to keep before reconnecting.");
     let accountId = match?.id;
     if (!accountId) {
       const limit = getEffectiveUserLimits(workspace.user).accountLimit;

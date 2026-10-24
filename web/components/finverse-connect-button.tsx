@@ -1,4 +1,6 @@
 "use client";
+import { SignupTrialSummary } from "./signup-trial-summary";
+import type { SignupTrialSnapshot } from "../../shared/signup-trial";
 import { ResourceUpgradeNotice } from "./contextual-upgrade";
 
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -51,7 +53,7 @@ export function FinverseConnectButton({
   accountId?: string;
   onSynced?: () => Promise<void> | void;
 }) {
-  const [access, setAccess] = useState<{ workspaceId: string; upgradeRequired: boolean } | null>(null);
+  const [access, setAccess] = useState<{ workspaceId: string; upgradeRequired: boolean; trial?: SignupTrialSnapshot | null } | null>(null);
   const allowed = access?.workspaceId === workspaceId && !access.upgradeRequired;
   const [banksLoaded, setBanksLoaded] = useState(false);
   const [banks, setBanks] = useState<FinverseBankOption[]>([]);
@@ -103,7 +105,7 @@ export function FinverseConnectButton({
     setConnectionsLoaded(false); setConnectionsError(""); setLinked([]);
     void fetch(`/api/integrations/finverse/connections?view=picker&workspaceId=${encodeURIComponent(workspaceId)}${accountId ? `&accountId=${encodeURIComponent(accountId)}` : ""}`,{signal:controller.signal,cache:"no-store"})
       .then(async response => { if(!response.ok) throw new Error("Unable to load linked accounts.");return response.json(); })
-      .then(data => {if(!controller.signal.aborted){setLinked(data.accounts);setPending(data.pending);setAccess({ workspaceId, upgradeRequired: data.upgradeRequired === true });setConnectionsLoaded(true);}})
+      .then(data => {if(!controller.signal.aborted){setLinked(data.accounts);setPending(data.pending);setAccess({ workspaceId, upgradeRequired: data.upgradeRequired === true, trial: data.trial });setConnectionsLoaded(true);}})
       .catch(error => {if(!controller.signal.aborted)setConnectionsError(error.message);});
     return () => controller.abort();
   }, [workspaceId, bankRevision, mode, accountId]);
@@ -239,7 +241,7 @@ export function FinverseConnectButton({
     }
   };
 
-  if (unlinkTarget) return <div role="alertdialog" aria-label="Unlink bank account" className="finverse-connect__selection"><h4>Unlink {unlinkTarget.name}?</h4><p>Your Clover accounts and history will stay. All accounts sharing this bank login will be unlinked: {linked.filter(a=>a.connectionId===unlinkTarget.connectionId&&!a.unlinkedAt).map(a=>`${a.name}${a.last4?` •••• ${a.last4}`:""}`).join(", ")}. Reconnection requires bank authentication. Used slots remain reserved until the monthly reset.</p><button type="button" className="button button-secondary" disabled={action !== null} autoFocus onClick={() => setUnlinkTarget(null)}>Keep linked</button><button type="button" className="button button-secondary" disabled={action !== null} onClick={() => void unlink()}>Unlink account</button></div>;
+  if (unlinkTarget) return <div role="alertdialog" aria-label="Unlink bank account" className="finverse-connect__selection"><h4>Unlink {unlinkTarget.name}?</h4><p>Your Clover accounts and history will stay. All accounts sharing this bank login will be unlinked: {linked.filter(a=>a.connectionId===unlinkTarget.connectionId&&!a.unlinkedAt).map(a=>`${a.name}${a.last4?` •••• ${a.last4}`:""}`).join(", ")}. Reconnection requires bank authentication. Used slots stay reserved for the allocation period, including the entire original 30-day signup trial.</p><button type="button" className="button button-secondary" disabled={action !== null} autoFocus onClick={() => setUnlinkTarget(null)}>Keep linked</button><button type="button" className="button button-secondary" disabled={action !== null} onClick={() => void unlink()}>Unlink account</button></div>;
   const selectionPanel = selection ? <fieldset className="finverse-connect__selection"><legend>Select bank accounts</legend><p>Choose which accounts to link. Matching Clover accounts keep their history.</p><p>{selection.remaining} new account slots available. Previously used accounts can be reconnected.</p>{selection.accounts.map(account => {
         const newSelected = selection.accounts.filter(a => selected.includes(a.id) && !a.reserved).length;
         return <label key={account.id}><input type="checkbox" checked={selected.includes(account.id)} disabled={action !== null || (!selected.includes(account.id) && !account.reserved && newSelected >= selection.remaining)} onChange={event => setSelected(current => event.target.checked ? [...current,account.id] : current.filter(id => id !== account.id))}/><span>{account.name}{account.existingAccountName ? <small> · Reuse {account.existingAccountName}; keep all history</small> : null}{account.reserved ? <small> · Already included this period</small> : null}<select aria-label={`Destination for ${account.name}`} disabled={action!==null} value={mappings[account.id]??''} onChange={event=>setMappings(current=>({...current,[account.id]:event.target.value}))}><option value="">{account.suggestedAccountId?'Use matching existing account':'Create a new account card'}</option>{account.candidates?.map(c=><option key={c.id} value={c.id}>Link to {c.name}{c.last4?` •••• ${c.last4}`:''}</option>)}</select></span></label>;
@@ -285,6 +287,7 @@ export function FinverseConnectButton({
   }
   return (
     <div className="finverse-connect finverse-connect--picker">
+      <SignupTrialSummary trial={access?.trial?.status === "active" ? access.trial : null} />
       {mode === "connect" ? <ResourceUpgradeNotice resource="linkedBanks" /> : null}
 
 

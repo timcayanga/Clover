@@ -19,7 +19,7 @@ export async function GET(request: Request) {
     const accountId = new URL(request.url).searchParams.get("accountId") || undefined;
     const picker = new URL(request.url).searchParams.get("view") === "picker";
     const [details, connections] = await Promise.all([
-      picker ? getProAccess(workspace.userId).then(access => ({ upgradeRequired: access.planTier === "free" }))
+      picker ? getProAccess(workspace.userId).then(access => ({ upgradeRequired: access.planTier === "free", trial: access.trial }))
         : bankLifecycleOverview(workspace.userId).then(lifecycle => ({ lifecycle })),
       prisma.finverseConnection.findMany({where:{workspaceId,user:{clerkUserId:userId},...(accountId ? { accountLinks: { some: { accountId } } } : { status:{not:"disconnected"},encryptedRefreshToken:{not:null} })},select:{id:true,status:true,institutionName:true,institutionId:true,lastSyncedAt:true,syncError:true,encryptedRefreshToken:true,accountLinks:{where:{workspaceId,accountId:{not:null},...(accountId ? {} : {unlinkedAt:null})},select:{unlinkedAt:true,account:{select:{id:true,name:true,institution:true,accountNumber:true,logoUrl:true,type:true}}}}}}),
     ]);

@@ -1,3 +1,5 @@
+import { SignupTrialSummary } from "@/components/signup-trial-summary";
+import { getProAccess } from "@/lib/pro-access";
 import { redirect } from "next/navigation";
 import { headers } from "next/headers";
 import { OnboardingForm } from "@/components/onboarding-form";
@@ -93,9 +95,11 @@ export default async function OnboardingPage({ searchParams }: { searchParams?: 
   ]);
 
 
+  const trialAccess = await getProAccess(user.id);
   return (
     <main className="onboarding-page">
       <section className="onboarding-page__shell">
+        <SignupTrialSummary trial={trialAccess.trial} />
         <OnboardingForm
           workspaceId={onboardingWorkspace?.id ?? starterWorkspace.id}
           billingCustomerId={user.id}

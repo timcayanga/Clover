@@ -24,6 +24,8 @@ export async function POST(request: Request) {
     const body = parsed.data;
     if (!body.workspaceId) return NextResponse.json({ error: "Workspace is required." }, { status: 400 });
     const workspace = await assertWorkspaceAccess(userId, body.workspaceId);
+    const owner = await prisma.user.findUniqueOrThrow({ where: { id: workspace.userId }, select: { verified: true } });
+    if (!owner.verified) return NextResponse.json({ error: "Verify your email before connecting a bank.", emailVerificationRequired: true }, { status: 403 });
     if ((await getProAccess(workspace.userId)).planTier === "free") return NextResponse.json({ error: "Upgrade to Clover Plus or Pro to connect your banks.", upgradeRequired: true }, { status: 403 });
     // Authorization may reconnect an already reserved account at a full allowance.
     // Distinct-account slots are enforced atomically when accounts are selected.

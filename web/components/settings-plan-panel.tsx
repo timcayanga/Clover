@@ -1,4 +1,6 @@
 "use client";
+import { TRIAL_PURCHASE_COPY } from "../../shared/signup-trial";
+import { SignupTrialSummary } from "./signup-trial-summary";
 import { SwitchOfferNotice } from "./switch-campaign";
 import type { RetentionSnapshot } from "../../shared/plan-retention";
 import cardSurface from "./plan-card-surface.module.css";
@@ -136,10 +138,12 @@ export function SettingsPlanPanel({
   const currentInterval = billingSubscription?.interval ?? null;
   const currentProvider = billingSubscription?.provider ?? null;
   const billingDetailsReady = planLoaded && !planLoading;
+  const hasStoreSubscription = retention?.hasPaidSubscription === true && ["app_store", "play_store"].includes(retention.billingProvider ?? "");
+  const hasPayPalSubscription = currentProvider === "paypal" && Boolean(billingSubscription?.providerSubscriptionId) && (!["cancelled", "expired"].includes(billingSubscription?.status ?? "") || retention?.hasPaidSubscription === true);
   const hasPaddleSubscription =
     currentProvider === "paddle" &&
     Boolean(billingSubscription?.providerSubscriptionId) &&
-    !["cancelled", "expired"].includes(billingSubscription?.status ?? "");
+    (!["cancelled", "expired"].includes(billingSubscription?.status ?? "") || retention?.hasPaidSubscription === true);
 
   useEffect(() => {
     if (billingDetailsReady && currentInterval) {
@@ -236,6 +240,7 @@ export function SettingsPlanPanel({
         <h4>Clover {planName(planTier)}</h4>
       </div>
 
+      <SignupTrialSummary trial={retention?.trial} purchase />
       <div className="settings-plan-usage-heading"><h5>Plan usage</h5><button type="button" className="settings-plan-info" aria-label="About plan usage" onClick={() => setDialog("usage")}>i</button></div>
       <div className="settings-plan-usage" aria-label="Plan usage">
         {usageRows.map((usage) => (
@@ -274,10 +279,10 @@ export function SettingsPlanPanel({
             <div className="settings-plan-card__band"><span className="settings-plan-card__band-text">
               <strong className="settings-plan-card__band-title">{plan.name}</strong>
               <span className="settings-plan-card__band-price">{price ?? (offersLoading ? "Checking pricing…" : "Pricing unavailable")}{tier !== "free" && price ? (billingInterval === "monthly" ? " / month" : " / year") : ""}</span>
-              {planTier === tier ? <span className="settings-pill">Current plan</span> : null}
+              {planTier === tier ? <span className="settings-pill">{retention?.trial?.relyingOnTrial ? "Trial access" : "Current plan"}</span> : null}
             </span></div>
             <div className="settings-plan-card__body"><ul className="settings-plan-card__features">{features.map(feature => <PlanFeatureItem key={feature} label={feature} className="settings-plan-card__feature-row" />)}</ul>
-              {planTier !== tier ? <button type="button" className="settings-plan-switch" onClick={() => setDialog(tier)}>Switch to {plan.name} →</button> : null}
+              {planTier !== tier || (tier === "pro" && retention?.trial?.relyingOnTrial) ? <button type="button" className="settings-plan-switch" onClick={() => setDialog(tier)}>{tier === "pro" && retention?.trial?.relyingOnTrial ? "Subscribe to Plus" : `Switch to ${plan.name}`} →</button> : null}
             </div>
           </article>;
         })}
@@ -286,19 +291,20 @@ export function SettingsPlanPanel({
       {campaignActive ? <section className="settings-plan-referral"><h5>Refer and Earn</h5><p>Invite friends and explore your available rewards.</p><a href="/referrals">View referral offer →</a></section> : null}
       <footer className="settings-plan-footer"><button type="button" onClick={() => setDialog("terms-of-service")}>Terms</button><button type="button" onClick={() => setDialog("privacy-policy")}>Privacy Policy</button></footer>
       <PlanDialog open={dialog !== null} title={dialog === "usage" ? "Plan usage" : dialog === "terms-of-service" ? "Terms" : dialog === "privacy-policy" ? "Privacy Policy" : `Switch to ${dialog ? planName(dialog) : ""}`} onClose={() => setDialog(null)}>
-      {dialog === "usage" ? <p>Monthly Clover tokens reset on the first day of each month in Asia/Manila. Unused tokens do not roll over. The 24-hour allowance is a rolling window. Cash accounts do not count toward the account limit. Investments count by institution. Only active budgets and non-archived Circles you own count. Linked bank slots remain reserved after unlinking until the next monthly period. Changing plans preserves your existing records.</p> : dialog === "terms-of-service" || dialog === "privacy-policy" ? <div className="settings-plan-legal-view">{dialog === "privacy-policy" ? <PrivacyDocument /> : <TermsDocument />}</div> : <div className="settings-plan-management" aria-label="Subscription options">
-        {hasPaddleSubscription ? <div className="settings-plan-management__actions">
+      {dialog === "usage" ? <p>Monthly Clover tokens reset on the first day of each month in Asia/Manila. Unused tokens do not roll over. The 24-hour allowance is a rolling window. Cash accounts do not count toward the account limit. Investments count by institution. Only active budgets and non-archived Circles you own count. Linked bank slots remain reserved after unlinking. Trials have one allocation window for the full original 30 days; paid plans follow their monthly period. Changing plans preserves your existing records.</p> : dialog === "terms-of-service" || dialog === "privacy-policy" ? <div className="settings-plan-legal-view">{dialog === "privacy-policy" ? <PrivacyDocument /> : <TermsDocument />}</div> : <div className="settings-plan-management" aria-label="Subscription options">
+        {retention?.trial?.status === "active" ? <p>{TRIAL_PURCHASE_COPY}</p> : null}
+        {hasStoreSubscription ? <p>This subscription is managed through {retention?.billingProvider === "app_store" ? "Apple" : "Google Play"}. Open Clover on that platform and choose Manage subscription to change or cancel it.</p> : hasPaddleSubscription ? <div className="settings-plan-management__actions">
           <button type="button" className="button button-primary" disabled={paddlePortalAction !== null} onClick={() => void openPaddlePortal("plan_change")}>Change plan</button>
           <button type="button" className="button button-secondary" disabled={paddlePortalAction !== null} onClick={() => void openPaddlePortal("payment_method")}>Change payment method</button>
           <button type="button" className="button button-secondary" disabled={paddlePortalAction !== null} onClick={() => void openPaddlePortal("cancel")}>Unsubscribe</button>
-        </div> : currentProvider === "paypal" && billingDetailsReady ? <BillingActions planTier={planTier} clientId={paypalClientId} monthlyPlanId={paypalMonthlyPlanId} annualPlanId={paypalAnnualPlanId} buyerCountry={paypalBuyerCountry} customId={billingCustomerId ?? ""} returnPath="/settings/plan" subscription={billingSubscription} />
+        </div> : hasPayPalSubscription && billingDetailsReady ? <BillingActions planTier={planTier} clientId={paypalClientId} monthlyPlanId={paypalMonthlyPlanId} annualPlanId={paypalAnnualPlanId} buyerCountry={paypalBuyerCountry} customId={billingCustomerId ?? ""} returnPath="/settings/plan" subscription={billingSubscription} />
         : !billingDetailsReady ? <p role="status">Loading subscription options…</p>
         : isAwaitingApproval ? <p role="status">Waiting for payment confirmation.</p>
         : <div className="settings-plan-management__actions">
-          {dialog === "pro" && planTier === "free" && (paddleReady ? <div><PaddleCheckoutButton clientToken={paddleClientToken!} environment={paddleEnvironment} priceId={paddlePriceId!} customerId={billingCustomerId ?? ""} customerEmail={customerEmail} interval={billingInterval} onStart={() => capturePostHogClientEvent("upgrade_cta_clicked", {cta_location:"settings_billing",billing_provider:"paddle",plan_tier:planTier,plan_interval:billingInterval})} /></div> : paypalCheckoutReady ? <PayPalSubscribeButton clientId={paypalClientId!} planId={checkoutPlanId!} customId={billingCustomerId ?? ""} buyerCountry={paypalBuyerCountry} fundingSource="card" /> : null)}
+          {dialog === "pro" && (planTier === "free" || retention?.trial?.relyingOnTrial) && (paddleReady ? <div><PaddleCheckoutButton clientToken={paddleClientToken!} environment={paddleEnvironment} priceId={paddlePriceId!} customerId={billingCustomerId ?? ""} customerEmail={customerEmail} interval={billingInterval} onStart={() => capturePostHogClientEvent("upgrade_cta_clicked", {cta_location:"settings_billing",billing_provider:"paddle",plan_tier:planTier,plan_interval:billingInterval})} /></div> : paypalCheckoutReady ? <PayPalSubscribeButton clientId={paypalClientId!} planId={checkoutPlanId!} customId={billingCustomerId ?? ""} buyerCountry={paypalBuyerCountry} fundingSource="card" /> : null)}
           {dialog === "premium" && planTier !== "premium" && premiumReady ? <div><PaddleCheckoutButton clientToken={paddleClientToken!} environment={paddleEnvironment} priceId={premiumPriceId!} planTier="premium" customerId={billingCustomerId ?? ""} customerEmail={customerEmail} interval={billingInterval} /></div> : null}
         </div>}
-        {!hasPaddleSubscription && currentProvider !== "paypal" && billingDetailsReady && !isAwaitingApproval && ((dialog === "premium" && !premiumReady) || (dialog === "pro" && !paddleReady && !paypalCheckoutReady) || dialog === "free") ? <p>Manage this plan with your original billing provider. Available checkout options will appear here when pricing is verified.</p> : null}
+        {!hasStoreSubscription && !hasPaddleSubscription && !hasPayPalSubscription && billingDetailsReady && !isAwaitingApproval && ((dialog === "premium" && !premiumReady) || (dialog === "pro" && !paddleReady && !paypalCheckoutReady) || dialog === "free") ? <p>{dialog === "free" && retention?.trial?.relyingOnTrial ? "Your trial has no subscription to cancel and no automatic charge. Clover returns to Free at your original trial end date unless you have other valid access. Your financial history stays available." : "Manage this plan with your original billing provider. Available checkout options will appear here when pricing is verified."}</p> : null}
         {paddlePortalMessage ? <p role="status">{paddlePortalMessage}</p> : null}
       </div>}
       </PlanDialog>

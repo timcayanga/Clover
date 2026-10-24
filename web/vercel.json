@@ -24,6 +24,10 @@
     {
       "path": "/api/cron/account-erasure",
       "schedule": "17 18 * * *"
+    },
+    {
+      "path": "/api/cron/signup-trials",
+      "schedule": "*/5 * * * *"
     }
   ]
 }

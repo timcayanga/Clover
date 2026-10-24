@@ -1,3 +1,5 @@
+import { SignupTrialSummary } from "./signup-trial-summary";
+import { TRIAL_PURCHASE_COPY } from "../../shared/signup-trial";
 import { planCardLayout } from "./adaptive-layout";
 import { isStoreOwnershipConflict, STORE_OWNERSHIP_MESSAGE, isPurchaseCancelled, purchaseFeedback, purchaseVerified, purchaseNeedsVerification, storeErrorMessage, type PurchaseIntent } from './store-change-policy';
 import { catalogStorePrice, planManagement, storePriceLabel, storeVerificationMessage } from "./store-presentation";
@@ -172,7 +174,7 @@ export function SettingsPlan() {
   };
   const access = status ?? session.data?.entitlement;
   const limits = access ? PLAN_CATALOG[access.planTier] : null;
-  const showUsageInfo = () => Alert.alert("Plan usage", "Cloud parsing and Ask Clover use Clover tokens. On-device processing is not counted. Monthly Clover tokens reset on the first day of each month in Asia/Manila. Unused tokens do not roll over. The 24-hour allowance is a rolling window. Cash accounts do not count toward the account limit. Linked bank slots remain reserved after unlinking until the next monthly period.\n\n" + RETENTION_MESSAGE + "\n\n" + DOWNGRADE_MESSAGE);
+  const showUsageInfo = () => Alert.alert("Plan usage", "Cloud parsing and Ask Clover use Clover tokens. On-device processing is not counted. Monthly Clover tokens reset on the first day of each month in Asia/Manila. Unused tokens do not roll over. The 24-hour allowance is a rolling window. Cash accounts do not count toward the account limit. Linked bank slots remain reserved after unlinking. Trials have one allocation window for the full original 30 days; paid plans follow their monthly period.\n\n" + RETENTION_MESSAGE + "\n\n" + DOWNGRADE_MESSAGE);
   const manageGoogleSubscription = async () => {
     if (!status || locked.current || session.demo) return;
     locked.current = true; setBusy(true); setError('');
@@ -201,9 +203,9 @@ export function SettingsPlan() {
     const choices = packages.filter(item => STORE_PACKAGES.find(p => p.identifier === item.identifier)?.tier === tier);
     if (!canUseStore(status) || !choices.length) { setError('Store plans are not available yet. Use Refresh plan status to try again.'); return; }
     const changingPeriod = tier === status.planTier && paid;
-    const explanation = paid
+    const explanation = (status.trial?.status === 'active' && !paid ? TRIAL_PURCHASE_COPY + '\n\n' : '') + (paid
       ? 'Choose a billing period. Upgrades take effect immediately; downgrades take effect at renewal. A billing-period change within your current plan changes the price at your next billing date. Google Play shows the final terms before you confirm.'
-      : 'Choose a billing period. The store will ask you to confirm the purchase.';
+      : 'Choose a billing period. The store will ask you to confirm the purchase.');
     dialogOpen.current = true;
     const close = () => { dialogOpen.current = false; };
     Alert.alert(changingPeriod ? 'Change billing period' : `Switch to ${PLAN_CATALOG[tier].name}`, explanation, [
@@ -213,6 +215,7 @@ export function SettingsPlan() {
   };
   return <>
     <Text style={{ color: colors.ink, fontFamily: "Poppins-SemiBold", fontSize: 24 }}>Clover {limits?.name ?? "Free"}</Text>
+    <SignupTrialSummary trial={status?.trial ?? session.data?.entitlement.trial} purchase />
     <Card>
       <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
         <Text style={styles.sectionTitle}>Plan usage</Text>
@@ -249,7 +252,7 @@ export function SettingsPlan() {
           </View>
           <View style={{ padding: 20, gap: 14 }}>
             {[`${plan.profiles} profiles · ${plan.accounts} non-cash accounts`, `${plan.linkedBanks} linked bank accounts`, `${plan.budgets} budgets · ${plan.goals} goals · ${plan.circles} Circles`, `${plan.monthlyTokens.toLocaleString()} Clover tokens monthly`, `${plan.dailyTokens.toLocaleString()} tokens per rolling 24 hours`, tier === "free" ? "Basic Ask Clover and Reports" : "Advanced Ask Clover and Reports"].map(feature => <Text key={feature} style={{color: "#153b42", fontSize: 13, lineHeight: 21}}>✓  {feature}</Text>)}
-            {access?.planTier !== tier || (tier !== "free" && status?.hasPaidSubscription === true) ? <Text accessibilityRole="button" accessibilityState={{ disabled: busy || loading || verificationPending || ownershipConflict || session.demo }} disabled={busy || loading || verificationPending || ownershipConflict || session.demo} onPress={() => switchPlan(tier)} style={{ color: "#153b42", paddingVertical: 8, fontFamily: "Poppins-SemiBold" }}>{access?.planTier === tier ? "Change billing period" : `Switch to ${plan.name}`} →</Text> : null}
+            {access?.planTier !== tier || (tier !== "free" && status?.hasPaidSubscription === true) || (tier === "pro" && status?.trial?.relyingOnTrial) ? <Text accessibilityRole="button" accessibilityState={{ disabled: busy || loading || verificationPending || ownershipConflict || session.demo }} disabled={busy || loading || verificationPending || ownershipConflict || session.demo} onPress={() => switchPlan(tier)} style={{ color: "#153b42", paddingVertical: 8, fontFamily: "Poppins-SemiBold" }}>{tier === "pro" && status?.trial?.relyingOnTrial ? "Subscribe to Plus" : access?.planTier === tier ? "Change billing period" : `Switch to ${plan.name}`} →</Text> : null}
           </View>
         </PlanCardSurface>;
       })}

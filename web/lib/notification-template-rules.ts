@@ -3,6 +3,7 @@ import type { InAppNotification } from "@/lib/in-app-notifications";
 
 // Original runtime copy remains the source of dynamic amounts, names and links.
 export const notificationTriggers = [
+  ["signup-trial", "Signup Plus trial", "7 days, 1 day and expiry, evaluated against current access.", "Your Clover Plus trial", "Your original trial end date stays the same. Existing financial history stays available."],
   ["bank-lifecycle", "Bank connection lifecycle", "A bank needs syncing, plan review or disconnection attention.", "Sync to keep connected", "Your bank connection will disconnect after inactivity. Sync to keep connected; financial history stays."],
   [
     "import-processing",
@@ -194,12 +195,12 @@ export const defaultNotificationTemplates: NotificationTemplateView[] =
     triggerKey: key,
     enabled: true,
     inApp: true,
-    email: key === "circle-invitation",
+    email: key === "circle-invitation" || key === "signup-trial",
     title: "{{title}}",
     body: "{{message}}",
     ctaLabel: "{{ctaLabel}}",
     emailSubject: "{{title}}",
-    emailBody: "{{message}}\n\n{{actionUrl}}",
+    emailBody: key === "signup-trial" ? "{{message}}" : "{{message}}\n\n{{actionUrl}}",
     version: 0,
     archived: false,
     emailEnabledAt: null,

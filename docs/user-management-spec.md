@@ -1,5 +1,9 @@
 # User Management Spec
 
+## Current signup entitlement (October 2026)
+
+The 30-day signup Plus trial supersedes the historical Phase 1 Free-default wording below. Newly created eligible Clerk/Clover accounts receive standard Plus access without checkout or a card, once per account across Profiles and devices. The exact original expiry never moves. Existing users are not retroactively enrolled. Paid access and other valid grants remain independent; after all valid access ends, Free applies and financial history remains available. See `docs/signup-plus-trial.md` for eligibility, bank allocations, reminders and billing precedence.
+
 ## Purpose
 Create a low-friction consumer onboarding and account system for Clover that gets users into the product quickly, starts everyone on a Free Plan by default, and leaves room for paid subscriptions and goal-based personalization in Phase 2.
 

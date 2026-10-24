@@ -20,6 +20,9 @@ export async function getPlanRetentionSnapshot(userId: string): Promise<Retentio
   const effectiveUser = { ...user, planTier: access.planTier };
   return {
     linkedBanks: { ...linkedBanks, limit: hasUnlimitedPlanLimits(effectiveUser) ? null : PLAN_CATALOG[access.planTier].linkedBanks },
+    trial: access.trial,
+    hasPaidSubscription: access.hasPaidSubscription,
+    billingProvider: access.hasPaidSubscription ? access.analytics.billing_provider : null,
     planTier: access.planTier,
     usage: { accounts: countNonCashAccounts(accounts), profiles, budgets, goals, circles },
     limits: {

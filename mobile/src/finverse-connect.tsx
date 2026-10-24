@@ -1,3 +1,4 @@
+import { SignupTrialSummary } from "./signup-trial-summary";
 import { ResourceUpgradeNotice } from "./contextual-upgrade";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { FinverseBankOption } from "../../shared/finverse-bank-options";
@@ -161,6 +162,7 @@ export function FinverseConnect({ onSynced, callbackConnection, mode = "connect"
   if (!connectionsLoaded && !session.demo) return <View style={{ gap: 12 }}><Notice>{connectionsError || "Loading linked accounts…"}</Notice>{connectionsError ? <Button secondary title="Try again" onPress={() => setRevision(v => v + 1)} /> : null}</View>;
   const syncAccounts=linked.filter(a=>!accountId||a.id===accountId);
   return <View style={{gap:16}}>
+    <SignupTrialSummary trial={session.data?.entitlement.trial?.status === "active" ? session.data.entitlement.trial : null} />
     {mode === "connect" ? <ResourceUpgradeNotice resource="linkedBanks" /> : null}
 
     {pending.map(c=><FinversePendingChip key={c.id} connection={c} busy={busy} resumeDisabled={!allowed} onResume={()=>void sync(c.id)} onCancel={()=>void cancelSetup(c.id)}/>)}

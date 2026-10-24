@@ -24,7 +24,7 @@ export async function dispatchNotificationEmails() {
       t.enabled &&
       t.email &&
       !t.archived &&
-      t.triggerKey !== "circle-invitation",
+      t.triggerKey !== "circle-invitation" && t.triggerKey !== "signup-trial",
   );
   if (!emailTemplates.length)
     return { skipped: "No daily email templates enabled." };
@@ -98,6 +98,7 @@ export async function dispatchNotificationEmails() {
               if (
                 claims.length >= 10 ||
                 seen.has(event) ||
+                template.triggerKey === "signup-trial" ||
                 !eligibleNotificationEmail(template, item)
               )
                 continue;

@@ -10,6 +10,7 @@ export type SyncedClerkUser = {
   imageUrl: string | null;
   verified: boolean;
   authoritative: boolean;
+  accountCreatedAt?: Date | null;
 };
 
 const stagingGuestUserId = "staging-guest";
@@ -31,6 +32,7 @@ const loadClerkUser = unstable_cache(
       imageUrl: clerkUser.imageUrl ?? null,
       verified: primary?.verification?.status === "verified",
       authoritative: true,
+      accountCreatedAt: new Date(clerkUser.createdAt),
     };
   },
   ["clover-clerk-user-v1"],

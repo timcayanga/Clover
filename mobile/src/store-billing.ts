@@ -6,6 +6,7 @@ import { Platform } from "react-native";
 import Purchases, { type PurchasesPackage } from "react-native-purchases";
 import { assertStoreOwner, currentStoreProduct, googleReplacement, StoreActionError, type PurchaseIntent } from './store-change-policy';
 export type StoreStatus = {
+  trial?: import("../../shared/signup-trial").SignupTrialSnapshot | null;
   available: boolean;
   verifiedRecoveryAlias?: string;
   purchaseRecoveryAvailable?: boolean;

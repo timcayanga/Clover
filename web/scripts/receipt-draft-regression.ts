@@ -37,7 +37,8 @@ stub(prisma,"$transaction",(fn:any)=>{
   });
   flight=next.catch(()=>{});return next;
 });
-stub(prisma.workspace,"findUnique",async()=>({userId:"owner",user:{planTier:"free",regionalPreferences:{baseCurrency:"PHP"},clerkUserId:"fictional"}}));
+stub(prisma.user,"findUniqueOrThrow",async({where}:any)=>{assert.equal(where.id,"owner");return {id:"owner",planTier:"free",clerkUserId:"fictional",signupTrial:null};});
+stub(prisma.workspace,"findUnique",async()=>({userId:"owner",user:{id:"owner",planTier:"free",regionalPreferences:{baseCurrency:"PHP"},clerkUserId:"fictional"}}));
 stub(prisma.importFile,"findFirst",async({where}:any)=>where.workspaceId==="profile"?file:null);
 stub(prisma.account,"findMany",async()=>[account]);
 stub(prisma.category,"findMany",async()=>[category]);

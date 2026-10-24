@@ -1,3 +1,4 @@
+import { trialAwareUser } from "./trial-aware-tier";
 import type { UserLimits } from "@/lib/user-limits";
 import { getEffectiveUserLimits } from "@/lib/user-limits";
 import { prisma } from "@/lib/prisma";
@@ -161,6 +162,7 @@ export async function getWorkspaceOwnerLimits(workspaceId: string): Promise<User
     select: {
       user: {
         select: {
+          id: true,
           clerkUserId: true,
           planTier: true,
           accountLimit: true,
@@ -175,5 +177,5 @@ export async function getWorkspaceOwnerLimits(workspaceId: string): Promise<User
     return null;
   }
 
-  return getEffectiveUserLimits(workspace.user as PlanLimitSource);
+  return getEffectiveUserLimits(await trialAwareUser(prisma,workspace.user.id) as PlanLimitSource);
 }

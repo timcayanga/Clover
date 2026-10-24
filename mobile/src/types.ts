@@ -53,6 +53,8 @@ export type Bootstrap = {
   firstName: string | null;
   profiles: Profile[];
   entitlement: {
+    trial?: import("../../shared/signup-trial").SignupTrialSnapshot | null;
+    hasPaidSubscription?: boolean;
     analytics?: Record<string, string | number | boolean | null>;
     planTier: "free" | "pro" | "premium";
     fullFeatureAccess?: boolean;

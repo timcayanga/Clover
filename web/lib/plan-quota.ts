@@ -1,3 +1,4 @@
+import { trialAwareUser } from "./trial-aware-tier";
 import { bankLinkAllowance } from "./bank-link-usage";
 import type { Prisma } from "@prisma/client";
 import { PLAN_CATALOG } from "../../shared/plan-catalog";
@@ -5,7 +6,7 @@ import { hasUnlimitedPlanLimits } from "./user-limits";
 export class PlanQuotaError extends Error {}
 export async function assertPlanQuota(tx: Prisma.TransactionClient, userId: string, kind: "budgets" | "goals" | "circles" | "linkedBanks", additional = 1) {
   await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`plan-quota:${userId}`}, 0))`;
-  const user = await tx.user.findUniqueOrThrow({where:{id:userId}});
+  const user = await trialAwareUser(tx,userId);
   if (hasUnlimitedPlanLimits(user)) return;
   const plan = PLAN_CATALOG[user.planTier];
   const count = kind === "budgets" ? await tx.budget.count({where:{workspace:{userId},isActive:true}})

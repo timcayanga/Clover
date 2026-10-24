@@ -1,3 +1,4 @@
+import { revokeSignupTrial } from "@/lib/signup-trial";
 import { PLAN_CATALOG } from "../../../../../../../shared/plan-catalog";
 import { getEffectiveUserLimits } from "@/lib/user-limits";
 import { getCloverTokenUsage } from "@/lib/clover-token-usage";
@@ -94,6 +95,8 @@ export async function POST(
               where: { id: input.grantId ?? "", userId },
             })
           : null;
+      if (before?.source === "signup_trial" && input.action === "edit") throw new Error("Signup trials keep their original dates. Create a separate complimentary grant instead.");
+      if (before?.source === "signup_trial" && input.action === "revoke") await revokeSignupTrial(tx, userId, input.reason);
       if (before?.revokedAt)
         throw new Error("This grant has already been revoked.");
       if (
@@ -127,7 +130,7 @@ export async function POST(
                       reason: input.reason,
                     },
             });
-      if (input.action === "revoke" && before?.rewardId)
+      if (input.action === "revoke" && before?.rewardId && before.source !== "signup_trial")
         await tx.referralReward.update({
           where: { id: before.rewardId },
           data: { status: "revoked", reason: input.reason },

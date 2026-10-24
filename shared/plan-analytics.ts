@@ -11,5 +11,5 @@ export function normalizePlanAnalytics<T extends Record<string, unknown>>(proper
 }
 export function planContext(tier: CloverPlanTier, source: string, provider: string | null = null, paid = false) {
   return { plan_schema_version: 3, plan_tier: publicPlan(tier), plan_tier_internal: tier, plan_name: PLAN_CATALOG[tier].name,
-    access_source: source, is_paid_subscriber: paid, billing_provider: provider ?? "none", is_complimentary: source.includes("complimentary"), is_manual_override: source === "manual override", is_test_access: source === "staging QA override" };
+    access_source: source, is_paid_subscriber: paid, billing_provider: provider ?? "none", is_trial: source === "trial", is_complimentary: source.includes("complimentary"), is_manual_override: source === "manual override", is_test_access: source === "staging QA override" };
 }

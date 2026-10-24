@@ -11,10 +11,14 @@ export function storeVerificationMessage(tier: 'free' | 'pro' | 'premium', actio
 }
 
 /** Entitlement follows the Clover login, but billing stays with the original store. */
-export function planManagement(status: { hasPaidSubscription?: boolean; billingProvider?: string | null; accessSource?: string }, platform: string, target: 'free' | 'pro' | 'premium') {
+export function planManagement(status: { hasPaidSubscription?: boolean; billingProvider?: string | null; accessSource?: string; trial?: import("../../shared/signup-trial").SignupTrialSnapshot | null }, platform: string, target: 'free' | 'pro' | 'premium') {
   const provider = status.billingProvider;
   const apple = provider === 'app_store', google = provider === 'play_store';
   const store = apple ? 'Apple' : 'Google Play';
+  if (status.hasPaidSubscription === false && status.trial?.status === 'active') return {
+    title: 'Your Clover Plus trial', url: null,
+    message: 'No subscription or payment method is attached to this trial. It ends on ' + new Date(status.trial.endsAt).toLocaleDateString('en-PH') + '. After that, Free applies unless you have other valid access. Your financial history stays available.',
+  };
   if (status.hasPaidSubscription === false) return {
     title: 'Your Clover access', url: null,
     message: 'Your current access was granted without a store subscription. There is no store subscription to cancel. Contact Clover support if you want this access changed.',

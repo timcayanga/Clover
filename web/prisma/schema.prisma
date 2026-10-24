@@ -44,6 +44,10 @@ model NotificationEmailDelivery {
   templateKey String
   eventKey    String
   status      String   @default("sending")
+  attempts    Int      @default(0)
+  retryAt     DateTime?
+  leaseUntil  DateTime?
+  outcome     String?
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
   @@unique([environment, userId, templateKey, eventKey], map: "NotificationEmailDelivery_dedupe_key")
@@ -359,6 +363,7 @@ model User {
   adviserPreferences               Json?
   regionalPreferences              Json?
   regionalPreferencesInitializedAt DateTime?
+  signupTrialEvaluatedAt           DateTime?
   onboardingCompletedAt            DateTime?
   dataWipedAt                      DateTime?
   createdAt                        DateTime                     @default(now())
@@ -379,6 +384,7 @@ model User {
   circleInvestmentShares           CircleInvestmentShare[]
   storeAccess                      StoreAccess?
   billingSubscription              BillingSubscription?
+  signupTrial                      SignupTrial?
   proGrants                        ProAccessGrant[]
   referralCodes                    ReferralCode[]
   billingEvents                    BillingEvent[]
@@ -2704,4 +2710,24 @@ model LearningJobAttempt {
   finishedAt DateTime?
   job LearningJob @relation(fields: [jobId], references: [id], onDelete: Cascade)
   @@unique([jobId, attempt])
+}
+
+// Rollout is recorded by migration, never inferred from a user's first login.
+model SignupTrialPolicy {
+  id        String   @id
+  startsAt  DateTime @default(now())
+}
+
+// One immutable redemption per Clover identity, independent of Profiles/billing.
+model SignupTrial {
+  id                 String   @id @default(cuid())
+  userId             String   @unique
+  startsAt           DateTime
+  endsAt             DateTime
+  revokedAt          DateTime?
+  revocationReason   String?
+  expiryProcessedAt  DateTime?
+  createdAt          DateTime @default(now())
+  user               User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  @@index([expiryProcessedAt, endsAt])
 }

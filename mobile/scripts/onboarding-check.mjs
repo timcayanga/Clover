@@ -5,7 +5,7 @@ import ts from 'typescript';
 const code=ts.transpileModule(fs.readFileSync(new URL('../app/onboarding.tsx',import.meta.url),'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022,jsx:ts.JsxEmit.ReactJSX,esModuleInterop:true}}).outputText;
 function harness(fail=false){
  const states=[],refs=[],requests=[],routes=[];let si=0,ri=0,effects=[];
- const session={data:{needsOnboarding:true,currencyChoices:[{code:'PHP',name:'Philippine Peso'}]},completeOnboarding:async(body)=>{requests.push({path:"onboarding",body});if(fail)throw new Error("Setup unavailable");session.data={...session.data,needsOnboarding:false};},refresh:()=>{session.data={...session.data,needsOnboarding:false};}};
+ const session={data:{needsOnboarding:true,entitlement:{planTier:'pro',trial:{startsAt:'2026-10-24T00:00:00.000Z',endsAt:'2026-11-23T00:00:00.000Z',status:'active',remainingDays:30,relyingOnTrial:true,linkedAccounts:2}},currencyChoices:[{code:'PHP',name:'Philippine Peso'}]},completeOnboarding:async(body)=>{requests.push({path:"onboarding",body});if(fail)throw new Error("Setup unavailable");session.data={...session.data,needsOnboarding:false};},refresh:()=>{session.data={...session.data,needsOnboarding:false};}};
  const exports={};
  vm.runInNewContext(code,{exports,Intl,Error,require:name=>{
   if(name==='react')return {useState:v=>{const i=si++;if(!(i in states))states[i]=v;return [states[i],v=>{states[i]=v;}];},useRef:v=>{const i=ri++;return refs[i]??=( {current:v});},useEffect:f=>effects.push(f)};
@@ -13,6 +13,7 @@ function harness(fail=false){
   if(name==='expo-router')return {router:{replace:v=>routes.push(v)}};
   if(name==='react-native')return {Image:'Image',Pressable:'Pressable',View:'View'};
   if(name.endsWith('/entry-controls'))return {EntrySelector:'EntrySelector'};
+  if(name.endsWith('/signup-trial-summary'))return {SignupTrialSummary:'SignupTrialSummary'};
   if(name.endsWith('/clover-mascot'))return {CloverMascot:'CloverMascot'};
   if(name.endsWith('/app-text'))return {Text:'Text'};
   if(name.endsWith('/session'))return {useSession:()=>session};
@@ -26,6 +27,7 @@ function harness(fail=false){
 const tick=()=>new Promise(resolve=>setImmediate(resolve));
 for(const action of ['skip','connect','manual','file','camera','library']){
  const h=harness();let nodes=h.render();
+ assert.equal(nodes.find(n=>n.type==='SignupTrialSummary').props.trial,h.session.data.entitlement.trial,'Onboarding presents the server trial rather than creating local dates');
  const mascots=nodes.filter(n=>n.type==='CloverMascot');
  assert.equal(mascots.length,1,'Use one mascot in the onboarding brand position');
  assert.equal(mascots[0].props.pose,'chat');

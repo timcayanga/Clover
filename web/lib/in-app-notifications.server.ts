@@ -565,12 +565,16 @@ export const buildInAppNotificationCandidates = async (
       id:`bank-lifecycle:${c.id}:${c.disconnectError?'pending':planEnding?'plan':stage}:${deadline.toISOString()}`,
       product:'accounts',productLabel:'Connected banks',productHref:'/accounts',
       title:c.disconnectError?'Bank disconnection pending':planEnding?'Review your connected banks':'Sync to keep connected',
-      message:c.disconnectError?'Finverse disconnection is pending. Your history remains available.':planEnding?`Paid access ends ${toMonthDay(planEnding)}. Bank connections exceeding your next allowance will disconnect; records remain.`:`${c.name} has not synced recently. Sync before ${toMonthDay(c.inactivityDeadline)} to keep connected. Your history will remain if disconnected.`,
+      message:c.disconnectError?'Finverse disconnection is pending. Your history remains available.':planEnding?`Plus or Pro access ends ${toMonthDay(planEnding)}. Bank connections exceeding your next allowance will disconnect; records remain.`:`${c.name} has not synced recently. Sync before ${toMonthDay(c.inactivityDeadline)} to keep connected. Your history will remain if disconnected.`,
       tone:'warning',priority:'high',createdAt:new Date(Math.min(+now,+deadline-(planEnding?14:stage??14)*DAY_MS)).toISOString(),href:'/accounts',ctaLabel:'Manage connected banks'
     });
   }
   const { switchNotifications } = await import("./switch-campaign-notifications.server");
   items.push(...await switchNotifications(user.id));
+  if (!options.raw) {
+    const { signupTrialNotifications } = await import("./signup-trial-lifecycle");
+    items.push(...await signupTrialNotifications(user.id, now));
+  }
   const configured = options.raw ? items : applyInAppTemplates(items, await loadRuntimeNotificationTemplates(
     (await prisma.user.findUnique({ where: { id: user.id }, select: { environment: true } }))?.environment ?? "local",
   ));

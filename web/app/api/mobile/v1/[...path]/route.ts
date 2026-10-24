@@ -162,7 +162,7 @@ async function handle(
         ({ verifiedRecoveryAlias } = await syncStoreAccess(user.id));
       }
       const access = await getProAccess(user.id);
-      return reply({ verifiedRecoveryAlias, purchaseRecoveryAvailable: config.purchaseRecoveryAvailable, available: config.enabled && !(access.user.planTierLocked && access.planTier === "free"), appUserId: userId, entitlementId: config.entitlementId, offeringId: config.offeringId, productIds: config.products, planTier: access.planTier, accessEndsAt: access.accessEndsAt, renewing: access.renewing, hasPaidSubscription: access.hasPaidSubscription, accessSource: access.source, billingProvider: access.storeSubscription?.expiresAt && access.storeSubscription.expiresAt > new Date() ? access.storeSubscription.store : access.hasPaidSubscription ? access.subscription?.provider ?? null : null });
+      return reply({ verifiedRecoveryAlias, purchaseRecoveryAvailable: config.purchaseRecoveryAvailable, available: config.enabled && !(access.user.planTierLocked && access.planTier === "free"), appUserId: userId, entitlementId: config.entitlementId, offeringId: config.offeringId, productIds: config.products, planTier: access.planTier, accessEndsAt: access.accessEndsAt, renewing: access.renewing, hasPaidSubscription: access.hasPaidSubscription, trial: access.trial, accessSource: access.source, billingProvider: access.storeSubscription?.expiresAt && access.storeSubscription.expiresAt > new Date() ? access.storeSubscription.store : access.hasPaidSubscription ? access.subscription?.provider ?? null : null });
     }
     if (operation === "settings-ai-consent") {
       const { getAiConsent, setAiConsent } = await import("@/lib/ai-consent");
@@ -222,6 +222,8 @@ async function handle(
         profiles,
         entitlement: {
           planTier: access.planTier,
+          trial: access.trial,
+          hasPaidSubscription: access.hasPaidSubscription,
           analytics: access.analytics,
           fullFeatureAccess: hasFullFeatureAccess(access.planTier),
           accessEndsAt: access.accessEndsAt,

@@ -1,3 +1,4 @@
+import { trialAwareUser } from "./trial-aware-tier";
 import { isLunaModel, LUNA_PRICING } from "./openai-model-policy";
 import type { PlanTier, Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
@@ -277,7 +278,7 @@ export const mayUseImportCloudAi = async (
 ) => {
   if (!userId) return false;
   try {
-    const user = await db.user.findUnique({ where: { id: userId }, select: { id: true, clerkUserId: true, planTier: true } });
+    const user = await trialAwareUser(db,userId,now);
     if (!user) return false;
     const usage = await getCloverTokenUsage(user, now, db);
     return hasImportCloudAllowance(usage, pendingCloverTokens);

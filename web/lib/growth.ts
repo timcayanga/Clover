@@ -1,3 +1,4 @@
+import { revokeSignupTrial } from "./signup-trial";
 import { capturePostHogServerEvent } from "./analytics-server";
 import { getPaddlePlanById } from "./paddle-plans";
 import { randomUUID } from "node:crypto";
@@ -44,8 +45,10 @@ export async function prepareReferralCheckout(
   return growthTransaction(async (tx) => {
     const user = await tx.user.findUniqueOrThrow({
       where: { id: userId },
-      include: { billingSubscription: true },
+      include: { billingSubscription: true, storeAccess: true },
     });
+    if (user.storeAccess?.expiresAt && user.storeAccess.expiresAt > new Date()) throw new Error("Manage your existing Apple or Google Play subscription before starting another checkout.");
+    if (user.billingSubscription?.paidThrough && user.billingSubscription.paidThrough > new Date()) throw new Error("Manage your existing subscription before starting another checkout.");
     if (user.billingSubscription?.providerSubscriptionId &&
         !["cancelled", "expired"].includes(user.billingSubscription.status)) {
       throw new Error("Manage your existing subscription before starting another checkout.");
@@ -178,6 +181,7 @@ export async function recordGrowthPayment(payment: QualifiedPayment) {
         paidThrough: payment.paidThrough,
       },
     });
+    if (existing?.reversedAt) await revokeSignupTrial(tx, payment.userId, "Verified reversed payment");
     if (payment.paidThrough && !existing?.reversedAt) {
       await tx.billingSubscription.updateMany({
         where: {
@@ -269,6 +273,7 @@ export async function reverseGrowthPayment(
       create: { id: key, provider, paymentId, reversedAt: new Date() },
       update: { reversedAt: new Date() },
     });
+    if (previous?.userId) await revokeSignupTrial(tx, previous.userId, "Verified refund or payment reversal");
     const reward = await tx.referralReward.findUnique({
       where: { paymentId: key },
     });
@@ -290,6 +295,7 @@ export async function reverseGrowthPayment(
       },
     });
   });
+  if (previous?.userId) await refreshProAccess(previous.userId);
   if (previous?.userId && !previous.reversedAt) void capturePostHogServerEvent("billing_refunded", previous.userId, { billing_provider: provider, $insert_id: `refund:${provider}:${paymentId}` }).catch(() => {});
 }
 

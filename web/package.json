@@ -190,7 +190,7 @@
     "qa:app-font": "tsx scripts/app-font-regression.ts",
     "qa:receipt-detail-refresh": "tsx scripts/transaction-detail-refresh-regression.ts && tsx scripts/review-refresh-state-regression.ts && tsx scripts/transaction-review-actions-regression.ts",
     "qa:analytics": "tsx scripts/analytics-coverage-regression.ts",
-    "qa:plans": "tsx scripts/three-tier-plans-regression.ts",
+    "qa:plans": "tsx scripts/three-tier-plans-regression.ts && tsx scripts/signup-trial-regression.ts",
     "qa:store-tiers": "tsx scripts/store-tier-regression.ts",
     "qa:plan-admin": "tsx scripts/plan-admin-analytics-regression.ts && tsx scripts/admin-bank-links-regression.ts",
     "qa:switch-campaign": "tsx scripts/switch-campaign-regression.ts",
@@ -238,7 +238,7 @@
     "tesseract.js": "^7.0.0",
     "tsx": "^4.23.1",
     "xlsx": "https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz",
-    "zod": "4.6.6"
+    "zod": "^4.6.7"
   },
   "overrides": {
     "deepmerge-ts": "8.0.1",

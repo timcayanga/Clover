@@ -1,3 +1,4 @@
+import { revokeSignupTrial } from "./signup-trial";
 import { withStoreSandboxTester } from "./store-sandbox-tester";
 import type { AnalyticsEventName } from "./analytics";
 import { capturePostHogServerEvent } from "./analytics-server";
@@ -67,6 +68,7 @@ export async function syncStoreAccess(userId: string) {
     await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`store-access:${user.id}`}))`;
     const current = await tx.storeAccess.findUnique({ where: { userId } });
     if (current && current.verifiedAt >= state.verifiedAt) return;
+    if (refunded) await revokeSignupTrial(tx, userId, "Verified store refund");
     await tx.storeAccess.upsert({
       where: { userId },
       create: { userId, ...state },

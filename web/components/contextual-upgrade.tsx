@@ -16,7 +16,7 @@ export function ContextualUpgrade({ context, tier, currentLimit, onDismiss }: { 
     <CloverMascot pose={detail.mascot} size={128} />
     <h2>{detail.title}</h2>
     {currentLimit !== undefined && currentLimit !== null ? <p>Your current plan includes {currentLimit} {detail.label}.</p> : null}
-    {context === "linkedBanks" ? <p>Linked bank allowances apply each monthly period.</p> : null}
+    {context === "linkedBanks" ? <p>Paid linked-bank allowances apply each monthly period; signup trials have one allowance for the full original 30 days.</p> : null}
     {options.map(option => <Link className={`${styles.choice} ${planStyles.surface} ${planStyles[option.tier]}`} key={option.tier} href={`/settings?section=plan&upgrade=${option.tier}&interval=annual`}><span>Upgrade to {option.name}</span><span>{option.benefit}</span></Link>)}
     <Link href="/pricing">Compare plans</Link>
   </section>;
