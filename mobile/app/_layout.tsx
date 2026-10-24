@@ -111,7 +111,6 @@ function Routes() {
               headerBackButtonDisplayMode: "minimal",
             }}
           >
-            <Stack.Screen name="payment-request" options={{headerShown:false}} />
             <Stack.Protected guard={accountDeleted}>
               <Stack.Screen name="account-deleted" options={{ headerShown: false, animation: reduceMotion ? "none" : "fade" }} />
             </Stack.Protected>
@@ -176,6 +175,8 @@ function Routes() {
             <Stack.Protected guard={entry.onboarding}>
               <Stack.Screen name="onboarding" options={{ headerShown: false, animation: reduceMotion ? "none" : "slide_from_right" }} />
             </Stack.Protected>
+            {/* Public deep links stay reachable without becoming the launch fallback. */}
+            <Stack.Screen name="payment-request" options={{headerShown:false}} />
           </Stack>
           {entry.app ? <ImportActivity /> : null}
           </View>

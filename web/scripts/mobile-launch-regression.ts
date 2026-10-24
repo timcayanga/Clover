@@ -1,6 +1,7 @@
 import { selectRecentProfile } from "../../mobile/src/profile-selection";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
+import ts from "typescript";
 import { hasVisitedClover, rememberCloverVisit, launchDestination, nativeEntryAccess, launchHistoryKey, type LaunchStorage } from "../../mobile/src/launch-history";
 
 async function main() {
@@ -33,6 +34,49 @@ async function main() {
   assert.equal(await hasVisitedClover(unavailable), true, "Storage failure falls back to login");
   await rememberCloverVisit(unavailable);
   const layout = readFileSync(new URL("../../mobile/app/_layout.tsx", import.meta.url), "utf8");
+  const source = ts.createSourceFile("_layout.tsx", layout, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
+  let rootStack: ts.JsxElement | undefined;
+  function findStack(node: ts.Node) {
+    if (ts.isJsxElement(node) && node.openingElement.tagName.getText(source) === "Stack") rootStack = node;
+    ts.forEachChild(node, findStack);
+  }
+  findStack(source);
+  assert(rootStack, "The native root navigator must exist");
+  function availableScreens(active: boolean, needsOnboarding: boolean | undefined, authEntry: "sign-in" | "sign-up" | null, accountDeleted = false) {
+    const entry = nativeEntryAccess(active, needsOnboarding, authEntry, accountDeleted);
+    const screens: string[] = [];
+    function visit(children: ts.NodeArray<ts.JsxChild>) {
+      for (const child of children) {
+        if (ts.isJsxSelfClosingElement(child) && child.tagName.getText(source) === "Stack.Screen") {
+          const name = child.attributes.properties.find(p => ts.isJsxAttribute(p) && p.name.getText(source) === "name");
+          assert(name && ts.isJsxAttribute(name) && name.initializer && ts.isStringLiteral(name.initializer));
+          screens.push(name.initializer.text);
+        } else if (ts.isJsxElement(child) && child.openingElement.tagName.getText(source) === "Stack.Protected") {
+          const guard = child.openingElement.attributes.properties.find(p => ts.isJsxAttribute(p) && p.name.getText(source) === "guard");
+          assert(guard && ts.isJsxAttribute(guard) && guard.initializer && ts.isJsxExpression(guard.initializer) && guard.initializer.expression);
+          const expression = guard.initializer.expression.getText(source);
+          assert(expression === "accountDeleted" || /^entry\.(welcome|auth|app|onboarding)$/.test(expression));
+          const allowed = expression === "accountDeleted" ? accountDeleted : entry[expression.slice(6) as keyof typeof entry];
+          if (allowed) visit(child.children);
+        }
+      }
+    }
+    visit(rootStack!.children);
+    return screens;
+  }
+  for (const [active, needsOnboarding, authEntry, deleted, expected] of [
+    [false, undefined, null, false, "welcome"],
+    [true, undefined, "sign-in", false, "auth"],
+    [true, undefined, "sign-up", false, "onboarding"],
+    [true, true, null, false, "onboarding"],
+    [true, false, null, false, "(tabs)"],
+    [false, undefined, null, true, "account-deleted"],
+  ] as const) {
+    const screens = availableScreens(active, needsOnboarding, authEntry, deleted);
+    assert.equal(screens[0], expected, "A public payment link must never replace the normal entry fallback");
+    assert(screens.includes("payment-request"), "Guest payment links remain available in every account state");
+    assert.equal(screens.length, new Set(screens).size, "Screens must not be declared twice");
+  }
   assert(layout.includes('if (launchDestination(loaded, active, visited) === "loading") return null;'));
   assert(layout.includes('guard={entry.welcome}'));
   assert(layout.includes('guard={entry.app}'));
