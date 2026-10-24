@@ -1,0 +1,35 @@
+import assert from 'node:assert/strict';
+import { createRequire } from 'node:module';
+import { readFileSync } from 'node:fs';
+import { resolve, dirname } from 'node:path';
+import { fileURLToPath } from 'node:url';
+const require=createRequire(import.meta.url);
+const expoRequire=createRequire(require.resolve('expo/package.json'));
+const cliPath=expoRequire.resolve('@expo/cli/package.json');
+const cliRequire=createRequire(cliPath);
+assert.equal(cliRequire('zod/package.json').version,'4.6.6');
+const cliRoot=dirname(cliPath);
+const {PluginSchema}=require(resolve(cliRoot,'build/src/start/server/DevToolsPlugin.schema.js'));
+const {createMCPDevToolsExtensionSchema}=require(resolve(cliRoot,'build/src/start/server/createMCPDevToolsExtensionSchema.js'));
+const plugin={packageName:'clover-qa',packageRoot:'/tmp/clover-qa',cliExtensions:{description:'QA',entryPoint:'qa.js',commands:[{name:'inspect',title:'Inspect',environments:['mcp'],parameters:[{name:'count',type:'number'},{name:'enabled',type:'confirm'},{name:'label',type:'text'}]}]}};
+assert.equal(PluginSchema.safeParse(plugin).success,true);
+assert.equal(PluginSchema.safeParse({...plugin,packageName:''}).success,false);
+const schema=createMCPDevToolsExtensionSchema(plugin);
+assert.equal(schema.safeParse({command:'inspect',count:2,enabled:true,label:'Clover'}).success,true);
+assert.equal(schema.safeParse({command:'inspect',count:'bad'}).success,false);
+assert.equal(schema.safeParse({command:'inspect',unknown:true}).success,false);
+const lock=JSON.parse(readFileSync(new URL('../package-lock.json',import.meta.url),'utf8'));
+for(const path of Object.keys(lock.packages).filter(p=>p.endsWith('/abitype'))){
+ const consumer=createRequire(resolve(dirname(fileURLToPath(new URL('../package-lock.json',import.meta.url))),path,'package.json'));
+ const abi=consumer('abitype/zod');
+ assert.equal(abi.Abi.safeParse([{type:'function',name:'transfer',stateMutability:'nonpayable',inputs:[{name:'to',type:'address'},{name:'value',type:'uint256'}],outputs:[{name:'ok',type:'bool'}]}]).success,true,path);
+ assert.equal(abi.Abi.safeParse([{type:'function',name:'transfer',inputs:'invalid'}]).success,false,path);
+ assert.equal(abi.TypedData.safeParse({Message:[{name:'contents',type:'string'}]}).success,true,path);
+}
+const {z}=cliRequire('zod');let visits=0;
+const element=z.string().refine(()=>{visits++;return true;});
+assert.equal(z.array(element).max(2).safeParse(Array(1000).fill('x')).success,false);
+assert.equal(visits,0,'Oversized bounded input must stop before parsing elements');
+const invalid=z.array(z.string()).max(2).safeParse(Array(1000).fill(1));
+assert.equal(invalid.error.issues.length,1,'Oversized invalid input must not allocate an issue per element');
+console.log('PASS patched Zod: real Expo plugin/MCP schemas, all ABI consumers, invalid inputs, early collection size limits.');

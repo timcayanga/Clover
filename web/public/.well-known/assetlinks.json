@@ -1,0 +1,10 @@
+[
+  {
+    "relation": ["delegate_permission/common.handle_all_urls"],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "ph.clover.app",
+      "sha256_cert_fingerprints": ["A4:2F:E5:14:62:1D:DA:DF:5E:9C:36:CD:CE:DF:96:73:ED:40:3A:C9:63:EE:3B:D9:EA:D9:AD:F0:3E:BE:01:08"]
+    }
+  }
+]

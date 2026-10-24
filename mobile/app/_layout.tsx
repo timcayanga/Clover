@@ -72,13 +72,14 @@ function Routes() {
   const { active, authEntry, accountDeleted, recovering } = useAccess();
   const path = usePathname();
   const session = useSession();
+  const publicPaymentRequest = path === "/payment-request";
   const entry = nativeEntryAccess(active, session.data?.needsOnboarding, authEntry, accountDeleted);
   const landed = useRef(false);
   useEffect(() => {
     // Cold restored sessions stay under the native launch image until bootstrap.
     // New signups can choose onboarding preferences while bootstrap finishes.
-    if (!entry.coldStart || session.error) void SplashScreen.hideAsync().catch(() => {});
-  }, [entry.coldStart, session.error]);
+    if (publicPaymentRequest || !entry.coldStart || session.error) void SplashScreen.hideAsync().catch(() => {});
+  }, [entry.coldStart, session.error, publicPaymentRequest]);
   useEffect(() => {
     if (!active) {
       landed.current = false;
@@ -92,12 +93,12 @@ function Routes() {
     else if (page === "reports") router.replace("/reports");
     else if (page === "accounts") router.replace("/(tabs)/accounts");
   }, [active, session.data, path]);
-  if (entry.coldStart) return session.error ? <View style={{ flex: 1, justifyContent: "center", padding: 24, gap: 16 }}><Notice>{session.error}</Notice><Button title="Try again" onPress={session.refresh} /><Button title="Sign out" secondary onPress={() => void session.signOut()} /></View> : null;
+  if (entry.coldStart && !publicPaymentRequest) return session.error ? <View style={{ flex: 1, justifyContent: "center", padding: 24, gap: 16 }}><Notice>{session.error}</Notice><Button title="Try again" onPress={session.refresh} /><Button title="Sign out" secondary onPress={() => void session.signOut()} /></View> : null;
   return (
     <RouteReveal><PrivacyShield>
       <GlassNavigationProvider>
         <StatusBar style={active && dark ? "light" : "dark"} />
-          <View style={{ flex: 1 }} accessibilityElementsHidden={!active && recovering} importantForAccessibility={!active && recovering ? "no-hide-descendants" : "auto"}>
+          <View style={{ flex: 1 }} accessibilityElementsHidden={!publicPaymentRequest && !active && recovering} importantForAccessibility={!publicPaymentRequest && !active && recovering ? "no-hide-descendants" : "auto"}>
           <Stack
             screenOptions={{
               animation: reduceMotion ? "none" : "slide_from_right",
@@ -178,7 +179,7 @@ function Routes() {
           </Stack>
           {entry.app ? <ImportActivity /> : null}
           </View>
-          {!active && recovering ? <View accessibilityViewIsModal style={[StyleSheet.absoluteFill, { backgroundColor: colors.bg, justifyContent: "center", alignItems: "center", zIndex: 200 }]}>
+          {!publicPaymentRequest && !active && recovering ? <View accessibilityViewIsModal style={[StyleSheet.absoluteFill, { backgroundColor: colors.bg, justifyContent: "center", alignItems: "center", zIndex: 200 }]}>
             <ActivityIndicator color={colors.teal} accessibilityLabel="Finishing sign-in" />
           </View> : null}
       </GlassNavigationProvider>

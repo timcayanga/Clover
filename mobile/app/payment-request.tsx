@@ -1,7 +1,9 @@
-import { useEffect, useState } from "react";
-import { Image, Linking } from "react-native";
+import { useEffect, useState, useRef } from "react";
+import { Image } from "react-native";
+import * as WebBrowser from "expo-web-browser";
 import { useLocalSearchParams } from "expo-router";
 import { apiBase } from "../src/api-base";
+import { paymentOrigin, PAYMENT_TOKEN } from "../../shared/payment-request-links";
 import { Body, Card, Notice, Screen, money } from "../src/ui";
 import { PlanAction, PlanHeader } from "../src/plan-ui";
 import { PaymentOptionMark } from "../src/payment-option-mark";
@@ -22,20 +24,24 @@ type PublicRequest = {
   } | null;
 };
 export default function PaymentRequest() {
-  const { token } = useLocalSearchParams<{ token?: string }>();
+  const { token, origin } = useLocalSearchParams<{ token?: string; origin?: string }>();
+  const requestOrigin = paymentOrigin(origin ?? apiBase());
+  const identity = `${requestOrigin}:${token}`;
+  const latest = useRef(identity); latest.current = identity;
   const [request, setRequest] = useState<PublicRequest | null>(null),
     [error, setError] = useState(""),
     [busy, setBusy] = useState(false);
   const valid =
-    typeof token === "string" && /^[a-zA-Z0-9_-]{20,100}$/.test(token);
+    typeof token === "string" && PAYMENT_TOKEN.test(token) && Boolean(requestOrigin);
   useEffect(() => {
+    setRequest(null); setError(""); setBusy(false);
     if (!valid) {
       setError("This payment link is incomplete.");
       return;
     }
     let alive = true;
     const controller = new AbortController();
-    fetch(`${apiBase()}/api/split-bill-requests/${token}`, {
+    fetch(`${requestOrigin}/api/split-bill-requests/${token}`, {
       signal: controller.signal,
     })
       .then(async (r) => {
@@ -50,24 +56,25 @@ export default function PaymentRequest() {
       alive = false;
       controller.abort();
     };
-  }, [token, valid]);
+  }, [token, valid, requestOrigin]);
   const report = async () => {
     if (busy || !valid) return;
     setBusy(true);
     setError("");
     try {
-      const r = await fetch(`${apiBase()}/api/split-bill-requests/${token}`, {
+      const r = await fetch(`${requestOrigin}/api/split-bill-requests/${token}`, {
         method: "POST",
       });
       const p = await r.json();
       if (!r.ok) throw Error(p.error ?? "Could not report payment.");
+      if (latest.current !== identity) return;
       setRequest((q) =>
         q ? { ...q, status: p.status ?? "payment_reported" } : q,
       );
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Please try again.");
+      if (latest.current === identity) setError(e instanceof Error ? e.message : "Please try again.");
     } finally {
-      setBusy(false);
+      if (latest.current === identity) setBusy(false);
     }
   };
   return (
@@ -133,7 +140,7 @@ export default function PaymentRequest() {
           <PlanAction
             title="View in browser"
             onPress={() =>
-              void Linking.openURL(`${apiBase()}/split-bill/request/${token}`)
+              void WebBrowser.openBrowserAsync(`${requestOrigin}/split-bill/request/${token}?browser=1`)
             }
           />
         </Card>

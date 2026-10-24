@@ -1,3 +1,5 @@
+import { parsePaymentAppLink } from "../../shared/payment-request-links.ts";
+
 /**
  * Android delivers OAuth redirects to both Expo Router and expo-web-browser.
  * Leave the current auth form mounted while Clerk's browser listener verifies
@@ -11,27 +13,8 @@ export function redirectSystemPath({
   path: string;
   initial: boolean;
 }): string | null {
-  try {
-    const url = new URL(
-      path.startsWith("/") ? `https://clover.ph${path}` : path,
-    );
-    const publicMatch = url.pathname.match(
-      /^\/split-bill\/request\/([a-zA-Z0-9_-]{20,100})\/?$/,
-    );
-    const nativeToken =
-      url.hostname === "payment-request" || url.pathname === "/payment-request"
-        ? url.searchParams.get("token")
-        : null;
-    const token =
-      (url.protocol === "https:" && url.hostname === "clover.ph"
-        ? publicMatch?.[1]
-        : null) ??
-      (url.protocol === "clover:" || url.protocol === "clover-preview:"
-        ? nativeToken
-        : null);
-    if (token && /^[a-zA-Z0-9_-]{20,100}$/.test(token))
-      return `/payment-request?token=${encodeURIComponent(token)}`;
-  } catch {}
+  const request = parsePaymentAppLink(path);
+  if (request) return `/payment-request?token=${encodeURIComponent(request.token)}&origin=${encodeURIComponent(request.origin)}`;
   const callback =
     /^(?:(?:clover|clover-preview):\/\/\/?|\/?)(?:sso-callback)\/?(?:[?#]|$)/.test(
       path,

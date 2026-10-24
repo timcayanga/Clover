@@ -15,11 +15,16 @@ const config: ExpoConfig = {
     appleTeamId: "6XX38GYURG",
     supportsTablet: true,
     usesAppleSignIn: true,
+    associatedDomains: ["applinks:clover.ph", "applinks:staging.clover.ph"],
     // SQLCipher adds bundled cryptography; complete Apple’s export declaration for release.
   },
   android: {
     package: process.env.CLOVER_ANDROID_PACKAGE_ID || "ph.clover.preview",
     allowBackup: false,
+    intentFilters: [{
+      action: "VIEW", autoVerify: true, category: ["BROWSABLE", "DEFAULT"],
+      data: ["clover.ph", "staging.clover.ph"].map(host => ({ scheme: "https", host, pathPrefix: "/split-bill/request/" })),
+    }],
     adaptiveIcon: { foregroundImage: "./assets/android-clover-symbol.png", backgroundColor: "#18343A" },
     predictiveBackGestureEnabled: true,
   },

@@ -2,6 +2,7 @@
 import { paymentRequestMessage } from "../../shared/split-bill-experience";
 import { getAccountWalletBrand as getAccountBrand } from "@/lib/account-brand";
 import { AccountBrandMark } from "./account-brand-mark";
+import { PaymentRequestShareDialog } from "./payment-request-share-dialog";
 
 import { useEffect, useMemo, useState, useRef } from "react";
 import type { SplitBillSerializedBill } from "@/lib/split-bill";
@@ -54,30 +55,7 @@ export function SplitBillPaymentTools({
   relatedBills = [],
 }: SplitBillPaymentToolsProps) {
   const [preparedMessage, setPreparedMessage] = useState("");
-  const shareDialog = useRef<HTMLDialogElement>(null);
-  useEffect(() => {
-    const dialog = shareDialog.current;
-    if (!dialog) return;
-    if (preparedMessage && !dialog.open) dialog.showModal();
-    else if (!preparedMessage && dialog.open) dialog.close();
-  }, [preparedMessage]);
-  const chooseContact = async () => {
-    try {
-      if (typeof navigator.share === "function")
-        await navigator.share({
-          title: "Your shared bills",
-          text: preparedMessage,
-        });
-      else
-        window.location.href = `mailto:?subject=${encodeURIComponent("Your shared bills")}&body=${encodeURIComponent(preparedMessage)}`;
-      setPreparedMessage("");
-    } catch (error) {
-      if (!(error instanceof DOMException && error.name === "AbortError"))
-        setShareNotice(
-          "Sharing could not open. Copy the message below or choose another app.",
-        );
-    }
-  };
+  const [preparedEmail, setPreparedEmail] = useState("");
   const [extraBills, setExtraBills] = useState<string[]>([]);
   const [profiles, setProfiles] = useState<PaymentProfile[]>([]);
   const [requests, setRequests] = useState<PaymentRequest[]>([]);
@@ -176,67 +154,12 @@ export function SplitBillPaymentTools({
     }));
   }, [availableProfiles, transferOptions]);
 
-  const emailRequest = (entry: PaymentRequest) => {
-    const shareUrl = `${window.location.origin}${entry.shareUrl}`;
-    const subject = encodeURIComponent(`Payment request for ${bill.title}`);
-    const body = encodeURIComponent(
-      paymentRequestMessage(entry.recipientName, [
-        {
-          title: bill.title,
-          amount: entry.amount,
-          currency: entry.currency,
-          date: bill.billDate,
-          url: shareUrl,
-          note: entry.note,
-        },
-      ]),
-    );
-    window.location.href = `mailto:${entry.recipientEmail ?? ""}?subject=${subject}&body=${body}`;
-  };
-
-  const shareRequest = async (entry: PaymentRequest) => {
-    const shareUrl = `${window.location.origin}${entry.shareUrl}`;
-    const shareData = {
-      title: `Payment request for ${bill.title}`,
-      text: paymentRequestMessage(entry.recipientName, [
-        {
-          title: bill.title,
-          amount: entry.amount,
-          currency: entry.currency,
-          date: bill.billDate,
-          url: shareUrl,
-          note: entry.note,
-        },
-      ]),
-    };
-
-    if (typeof navigator.share === "function") {
-      try {
-        await navigator.share(shareData);
-        setShareNotice("Payment request shared.");
-        return;
-      } catch (shareError) {
-        if (
-          shareError instanceof DOMException &&
-          shareError.name === "AbortError"
-        )
-          return;
-      }
-    }
-
-    if (entry.recipientEmail) {
-      emailRequest(entry);
-      return;
-    }
-
-    try {
-      await navigator.clipboard.writeText(shareData.text);
-      setShareNotice(
-        "Payment request copied. Paste it into a message to send it.",
-      );
-    } catch {
-      setShareNotice(`Share this link: ${shareUrl}`);
-    }
+  const shareRequest = (entry: PaymentRequest) => {
+    setPreparedEmail(entry.recipientEmail ?? "");
+    setPreparedMessage(paymentRequestMessage(entry.recipientName, [{
+      title: bill.title, amount: entry.amount, currency: entry.currency,
+      date: bill.billDate, url: `${window.location.origin}${entry.shareUrl}`, note: entry.note,
+    }]));
   };
 
   const candidates = relatedBills
@@ -322,6 +245,7 @@ export function SplitBillPaymentTools({
           note: result.request.note,
         });
       }
+      setPreparedEmail(request.recipientEmail ?? "");
       setPreparedMessage(paymentRequestMessage(request.recipientName, entries));
       setShareNotice("Request saved. Choose a contact or app to send it.");
     } catch (requestError) {
@@ -342,47 +266,7 @@ export function SplitBillPaymentTools({
     );
   return (
     <section className="split-bill-payment-tools">
-      <dialog
-        ref={shareDialog}
-        className="split-request-share-dialog"
-        aria-label="Share payment request"
-        onCancel={() => setPreparedMessage("")}
-        onClose={() => setPreparedMessage("")}
-      >
-        <h2>Your request is ready</h2>
-        <p>Choose who to send it to. Nothing has been sent yet.</p>
-        <pre>{preparedMessage}</pre>
-        <button
-          type="button"
-          className="button button-primary"
-          onClick={() => void chooseContact()}
-        >
-          Choose contact or app
-        </button>
-        <button
-          type="button"
-          className="button button-secondary"
-          onClick={() =>
-            void navigator.clipboard
-              .writeText(preparedMessage)
-              .then(() =>
-                setShareNotice(
-                  "Message copied. Paste it into your conversation.",
-                ),
-              )
-              .catch(() => setShareNotice("Select and copy the message above."))
-          }
-        >
-          Copy message
-        </button>
-        <button
-          type="button"
-          className="button button-secondary"
-          onClick={() => setPreparedMessage("")}
-        >
-          Close
-        </button>
-      </dialog>
+      <PaymentRequestShareDialog message={preparedMessage} email={preparedEmail} onClose={() => setPreparedMessage("")} />
       <div className="split-bill-detail-modal__section-head">
         <div>
           <strong>Request Payment</strong>

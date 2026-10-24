@@ -57,7 +57,7 @@
   "scripts": {
     "postinstall": "node scripts/forge-security-patch.mjs && node scripts/braces-security-patch.mjs",
     "eas-build-post-install": "node scripts/forge-security-check.mjs && node scripts/braces-security-check.mjs",
-    "qa:production-audit": "node scripts/production-audit.mjs",
+    "qa:production-audit": "node scripts/zod-compatibility-check.mjs && node scripts/production-audit.mjs",
     "start": "expo start",
     "android": "expo run:android",
     "ios": "expo run:ios",
@@ -78,5 +78,8 @@
     "check:ios-release": "node scripts/ios-scene-check.mjs",
     "check:layout": "node scripts/adaptive-layout-check.mjs && node scripts/adviser-layout-check.mjs && node scripts/route-accessibility-check.mjs && node scripts/dynamic-type-check.mjs"
   },
-  "private": true
+  "private": true,
+  "overrides": {
+    "zod": "4.6.6"
+  }
 }

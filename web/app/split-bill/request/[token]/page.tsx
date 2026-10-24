@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
+import { PaymentRequestHandoff } from "@/components/payment-request-handoff";
 
 type PublicRequest = {
   recipientName: string;
@@ -29,6 +30,7 @@ export default function SplitBillPaymentRequestPage({
 }: {
   params: Promise<{ token: string }>;
 }) {
+  const latest = useRef(params); latest.current = params;
   const [request, setRequest] = useState<PublicRequest | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [reported, setReported] = useState(false);
@@ -41,6 +43,8 @@ export default function SplitBillPaymentRequestPage({
     setRequest(null);
     setError(null);
     setReported(false);
+    setReporting(false);
+    setTokenValue("");
     void params.then(({ token }) => {
       if (!active) return;
       setTokenValue(token);
@@ -80,11 +84,11 @@ export default function SplitBillPaymentRequestPage({
         throw new Error(
           payload.error ?? "Could not report payment. Please try again.",
         );
-      setReported(true);
+      if (latest.current === params) setReported(true);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Could not report payment.");
+      if (latest.current === params) setError(e instanceof Error ? e.message : "Could not report payment.");
     } finally {
-      setReporting(false);
+      if (latest.current === params) setReporting(false);
     }
   };
 
@@ -205,18 +209,7 @@ export default function SplitBillPaymentRequestPage({
         ) : (
           <p>This request is no longer active.</p>
         )}
-        <a
-          className="button button-secondary"
-          href={`clover://payment-request?token=${encodeURIComponent(tokenValue)}`}
-        >
-          Open in Clover
-        </a>
-        <p>
-          <small>
-            If your messaging app keeps this page inside its browser, you can
-            still view the details and report payment here.
-          </small>
-        </p>
+        <PaymentRequestHandoff token={tokenValue} />
       </section>
     </main>
   );

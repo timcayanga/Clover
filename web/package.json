@@ -72,7 +72,7 @@
     "qa:imported-accounts": "tsx scripts/imported-account-ui-regression.ts",
     "qa:internal-transfers": "tsx scripts/internal-transfer-matching-regression.ts",
     "qa:digital-note-split-bill": "tsx scripts/digital-note-split-bill-regression.ts",
-    "qa:split-bill-details": "tsx scripts/split-bill-detail-features-regression.ts && tsx scripts/split-bill-payment-request-regression.ts && tsx scripts/split-bill-experience-regression.ts",
+    "qa:split-bill-details": "tsx scripts/split-bill-detail-features-regression.ts && tsx scripts/split-bill-payment-request-regression.ts && tsx scripts/split-bill-experience-regression.ts && tsx scripts/split-bill-link-regression.ts",
     "qa:parser-routing": "tsx scripts/parser-routing-regression.ts",
     "qa:import-quality": "tsx scripts/import-quality-regression.ts",
     "qa:import-arbitration": "tsx scripts/import-candidate-arbitration-regression.ts",
@@ -238,7 +238,7 @@
     "tesseract.js": "^7.0.0",
     "tsx": "^4.23.1",
     "xlsx": "https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz",
-    "zod": "^4.1.11"
+    "zod": "4.6.6"
   },
   "overrides": {
     "deepmerge-ts": "8.0.1",
