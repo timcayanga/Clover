@@ -27,7 +27,7 @@
     },
     {
       "path": "/api/cron/signup-trials",
-      "schedule": "*/5 * * * *"
+      "schedule": "7 1 * * *"
     }
   ]
 }
