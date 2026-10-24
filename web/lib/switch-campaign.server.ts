@@ -57,7 +57,9 @@ export async function submitSwitchEvidence(userId: string, file: File, note: str
       if(existing && existing.evidence.length>=5) throw new Error("Five files have already been submitted. Contact Clover support for help.");
       const app=existing?await tx.switchApplication.update({where:{id:existing.id},data:{status:"submitted"}}):await tx.switchApplication.create({data:{campaignId:c.id,userId}});
       await tx.switchEvidence.create({data:{applicationId:app.id,storageKey:key,digest,mime,fileName:file.name.replace(/[^a-zA-Z0-9 ._-]/g,"_").slice(0,100)}});
-      await tx.switchEvent.create({data:{applicationId:app.id,kind:`submitted:${randomUUID()}`,message:`Offer terms v2026-09-25 accepted. ${note.trim()||"Purchase evidence submitted for review."}`,actorId:userId,emailStatus:"not_required"}});
+      const submission = await tx.switchEvent.create({data:{applicationId:app.id,kind:`submitted:${randomUUID()}`,message:`Offer terms v2026-09-25 accepted. ${note.trim()||"Purchase evidence submitted for review."}`,actorId:userId,emailStatus:"not_required"}});
+      await tx.switchReviewMail.updateMany({where:{event:{applicationId:app.id},consumedAt:null},data:{consumedAt:new Date()}});
+      await tx.switchReviewMail.create({data:{eventId:submission.id}});
       return app;
     });
   } catch(error) { await deleteSwitchObject(key).catch(()=>{}); throw error; }
@@ -82,7 +84,10 @@ export async function activateSwitch(userId: string) {
 }
 export async function reviewSwitch(id:string,decision:"approved"|"rejected"|"needs_information",message:string,actorId:string) {
   if(!message.trim() || message.length>2000) throw new Error("Enter a clear message of up to 2,000 characters for the applicant.");
-  return growthTransaction(async tx=>{
+  return growthTransaction(tx => reviewSwitchInTransaction(tx,id,decision,message,actorId));
+}
+export async function reviewSwitchInTransaction(tx:Prisma.TransactionClient,id:string,decision:"approved"|"rejected"|"needs_information",message:string,actorId:string) {
+  if(!message.trim() || message.length>2000) throw new Error("Enter a clear message of up to 2,000 characters for the applicant.");
     const app=await tx.switchApplication.findFirstOrThrow({where:{id,campaignId:campaignId()}});
     if(app.status!=="submitted" && app.status!=="needs_information") throw new Error("This application has already been decided.");
     let claimBy:Date|null=null;
@@ -95,7 +100,6 @@ export async function reviewSwitch(id:string,decision:"approved"|"rejected"|"nee
     await tx.switchEvent.create({data:{applicationId:id,kind:`${decision}:${randomUUID()}`,actorId,message:message.trim()+(claimBy?` Activate by ${claimBy.toISOString()}.`:"")}});
     await tx.growthAudit.create({data:{actorId,targetId:id,action:`switch_${decision}`,reason:message.trim()}});
     return result;
-  });
 }
 export async function deleteSwitchObject(key:string) {
   const { deleteImportObject } = await import("./s3-delete");

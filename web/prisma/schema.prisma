@@ -2518,6 +2518,19 @@ model SwitchEvidence {
   application SwitchApplication @relation(fields:[applicationId], references:[id], onDelete:Cascade)
   @@index([digest])
 }
+model SwitchReviewMail {
+  id String @id @default(cuid())
+  eventId String @unique
+  tokenHash String? @unique
+  expiresAt DateTime?
+  consumedAt DateTime?
+  emailStatus String @default("pending")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  event SwitchEvent @relation(fields:[eventId], references:[id], onDelete:Cascade)
+  @@index([emailStatus,createdAt])
+}
+
 model SwitchEvent {
   id String @id @default(cuid())
   applicationId String
@@ -2527,6 +2540,7 @@ model SwitchEvent {
   emailStatus String @default("pending")
   createdAt DateTime @default(now())
   application SwitchApplication @relation(fields:[applicationId], references:[id], onDelete:Cascade)
+  reviewMail SwitchReviewMail?
   @@unique([applicationId,kind])
   @@index([emailStatus,createdAt])
 }

@@ -1,3 +1,4 @@
+import { dispatchSwitchReviewEmails } from "./switch-review-mail.server";
 import { prisma } from "./prisma";
 import { campaignId,deleteSwitchObject,switchAnalytics } from "./switch-campaign.server";
 import { getCurrentUserEnvironment } from "./user-environment";
@@ -35,5 +36,6 @@ export async function dispatchSwitchEmails() {
  const url=`${environment==="production"?"https://clover.ph":"https://staging.clover.ph"}${SWITCH_PATH}`;
  try{await sendNotificationMail(testRecipient&&environment!=="production"?testRecipient:e.application.user.email,"Your Switch to Clover application",`${e.message}\n\nView your application: ${url}`,`<p>${e.message.replaceAll("&","&amp;").replaceAll("<","&lt;").replaceAll(">","&gt;")}</p><p><a href="${url}">View your application</a></p>`);await prisma.switchEvent.update({where:{id:e.id},data:{emailStatus:"sent"}});}catch{await prisma.switchEvent.update({where:{id:e.id},data:{emailStatus:"failed"}});}
  }
- return {processed:events.length};
+ const reviewEmails=await dispatchSwitchReviewEmails();
+ return {processed:events.length,reviewEmails};
 }

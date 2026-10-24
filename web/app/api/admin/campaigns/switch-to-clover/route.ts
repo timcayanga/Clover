@@ -8,7 +8,7 @@ import { getCurrentUserEnvironment } from "@/lib/user-environment";
 import { growthTransaction } from "@/lib/growth";
 export const dynamic="force-dynamic";
 export async function GET(){try{const admin=await requireAdminAuth();const config=await campaignConfig();
- const applications=await prisma.switchApplication.findMany({where:{campaignId:config.id},orderBy:{createdAt:"asc"},include:{user:{select:{email:true,firstName:true,lastName:true,planTier:true}},evidence:{select:{id:true,fileName:true,digest:true,createdAt:true,purgedAt:true}},events:{orderBy:{createdAt:"asc"}}}});
+ const applications=await prisma.switchApplication.findMany({where:{campaignId:config.id},orderBy:{createdAt:"asc"},include:{user:{select:{email:true,firstName:true,lastName:true,planTier:true}},evidence:{select:{id:true,fileName:true,digest:true,createdAt:true,purgedAt:true}},events:{orderBy:{createdAt:"asc"},include:{reviewMail:{select:{emailStatus:true,createdAt:true,expiresAt:true,consumedAt:true}}}}}});
  const counts=new Map<string,Set<string>>();for(const a of applications)for(const e of a.evidence){const owners=counts.get(e.digest)??new Set();owners.add(a.userId);counts.set(e.digest,owners);}
  return Response.json({config,role:admin.role,applications:applications.map(a=>({...a,duplicateEvidence:a.evidence.some(e=>(counts.get(e.digest)?.size??0)>1),evidence:a.evidence.map(({digest,...e})=>e)}))},{headers:{"Cache-Control":"private, no-store"}});
 }catch{return Response.json({error:"Forbidden"},{status:403});}}
