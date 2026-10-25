@@ -65,5 +65,6 @@
   "seabank-id-spaced-identity": "67435555ec04cb6883dd01c5aa764eb6ca5b552215e7e2257925a02cb51294a2",
   "grab-split-grabpay-wallet": "5b67b9fa033266c5caee6905f9a2bc2d0ec19a2cafdafa003033d26632dd18f9",
   "grab-unspecified-instrument": "43ce5675e5a652e2b1c1597c95df9defe4e360e80808fa130fd6cb3adfbd54e8",
-  "grab-native-word": "25ee7e020e8cd39b018bd82d82a0c4d0ffbd825acd4fef37027c2adb47c711a6"
+  "grab-native-word": "25ee7e020e8cd39b018bd82d82a0c4d0ffbd825acd4fef37027c2adb47c711a6",
+  "seabank-id-dormant-opening": "19b02984d9e6c2aa8ef8401195b75eeb12581765efb9135f423726d20877ddb6"
 }

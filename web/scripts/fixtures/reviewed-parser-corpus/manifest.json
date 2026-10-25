@@ -4026,6 +4026,111 @@
           }
         }
       ]
+    },
+    {
+      "id": "seabank-id-dormant-opening",
+      "kind": "statement",
+      "source": "seabank-id-dormant-opening.txt",
+      "sha256": "5a1782fd989e44e80fad5ed8d3e51309a5666f13710f6d04f31afb6b6ea947c9",
+      "representation": "Independently invented complete zero-opening English Indonesian SeaBank pages with foreign postal address and stale serial",
+      "provenance": {
+        "origin": "synthetic",
+        "reviewer": "Codex",
+        "reviewedAt": "2026-10-25",
+        "status": "reviewed",
+        "basis": "Invented two incoming500 occurrences on30May2026 and interest1 on31May2026 reconcile zero opening, no outgoing and1001 closing. Complete active-day daily evidence and all native movement totals prove zero activity before30May. The Indonesian legal issuer/contact and explicit IDR columns establish bank jurisdiction; mailing country does not. Repeated explicit period/publication establish financial dates; stale serial is retained as a review flag and confidence capped85."
+      },
+      "expectedMetadata": {
+        "institution": "SeaBank Indonesia",
+        "accountNumber": "901000000654",
+        "currency": "IDR",
+        "openingBalance": 0,
+        "endingBalance": 1001,
+        "confidence": 85
+      },
+      "expected": [
+        {
+          "date": "2026-05-30",
+          "amount": "500.00",
+          "currency": "IDR",
+          "type": "income",
+          "accountNumber": "901000000654",
+          "confidence": 85,
+          "rawPayload": {
+            "source": "seabank_indonesia_legacy_daily",
+            "kind": "bank_transaction",
+            "sourceRowIndex": 0,
+            "dormantOpeningProof": {
+              "firstActiveDate": "2026-05-30",
+              "zeroPriorActivityProved": true,
+              "serialPeriodConflict": true,
+              "sourceMetadataNeedsReview": true,
+              "issuerCountry": "ID"
+            },
+            "reconciliation": {
+              "version": "seabank-id-legacy-dormant-v1",
+              "openingBalance": 0,
+              "endingBalance": 1001,
+              "dailyRows": 2,
+              "physicalPages": 2
+            }
+          }
+        },
+        {
+          "date": "2026-05-30",
+          "amount": "500.00",
+          "currency": "IDR",
+          "type": "income",
+          "accountNumber": "901000000654",
+          "confidence": 85,
+          "rawPayload": {
+            "source": "seabank_indonesia_legacy_daily",
+            "kind": "bank_transaction",
+            "sourceRowIndex": 1,
+            "dormantOpeningProof": {
+              "firstActiveDate": "2026-05-30",
+              "zeroPriorActivityProved": true,
+              "serialPeriodConflict": true,
+              "sourceMetadataNeedsReview": true,
+              "issuerCountry": "ID"
+            },
+            "reconciliation": {
+              "version": "seabank-id-legacy-dormant-v1",
+              "openingBalance": 0,
+              "endingBalance": 1001,
+              "dailyRows": 2,
+              "physicalPages": 2
+            }
+          }
+        },
+        {
+          "date": "2026-05-31",
+          "amount": "1.00",
+          "currency": "IDR",
+          "type": "income",
+          "accountNumber": "901000000654",
+          "confidence": 85,
+          "rawPayload": {
+            "source": "seabank_indonesia_legacy_daily",
+            "kind": "daily_interest",
+            "sourceRowIndex": 2,
+            "dormantOpeningProof": {
+              "firstActiveDate": "2026-05-30",
+              "zeroPriorActivityProved": true,
+              "serialPeriodConflict": true,
+              "sourceMetadataNeedsReview": true,
+              "issuerCountry": "ID"
+            },
+            "reconciliation": {
+              "version": "seabank-id-legacy-dormant-v1",
+              "openingBalance": 0,
+              "endingBalance": 1001,
+              "dailyRows": 2,
+              "physicalPages": 2
+            }
+          }
+        }
+      ]
     }
   ]
 }
