@@ -940,17 +940,17 @@ const main = async () => {
   );
   assert.match(
     processRouteSource,
-    /rawFileReady:\s*canProcessImageFromRequestBytes \|\| canExtractPdfFromRequestBytes\s*\? uploadPromise\s*:\s*null/,
-    "Request-byte PDFs should overlap storage and parsing, with the worker preserving the raw-file write boundary."
+    /rawFileReady:\s*canProcessImageFromRequestBytes \|\| canExtractPdfFromRequestBytes \|\| canProcessWordFromRequestBytes\s*\? uploadPromise\s*:\s*null/,
+    "Request-byte PDFs and Word documents must overlap storage and parsing, with the worker preserving the raw-file write boundary."
   );
   assert.equal(
     (
       processRouteSource.match(
-        /sourceBytes:\s*canProcessImageFromRequestBytes \|\|\s*canExtractPdfFromRequestBytes \|\| canProcessSpreadsheetFromRequestBytes\s*\? bytes\s*:\s*null/g
+        /sourceBytes:\s*canProcessImageFromRequestBytes \|\|\s*canExtractPdfFromRequestBytes \|\| canProcessSpreadsheetFromRequestBytes \|\| canProcessWordFromRequestBytes\s*\? bytes\s*:\s*null/g
       ) ?? []
     ).length >= 2,
     true,
-    "Image preflight must read the request bytes instead of attempting object storage before the concurrent raw upload completes."
+    "Image, PDF, spreadsheet and Word preflight must read immutable request bytes before the concurrent raw upload completes."
   );
   assert.match(
     processRouteSource,
@@ -959,9 +959,11 @@ const main = async () => {
   );
   assert.match(
     processRouteSource,
-    /Unable to finish spreadsheet raw file upload/,
-    "Spreadsheet parsing may run from immutable request bytes, but the raw workbook upload must remain scheduled for audit."
+    /Unable to finish structured document raw file upload/,
+    "Spreadsheet and Word parsing may use immutable request bytes; their raw audit-file upload must remain scheduled."
   );
+  assert.match(processRouteSource,/const shouldProcessInlineWord = canProcessWordFromRequestBytes/,
+    'Native Word bytes require the deterministic inline route in addition to the existing spreadsheet route.');
   assert.match(processRouteSource, /await uploadPromise;[\s\S]{0,500}processingMessage: canonicalStillProcessing/);
   assert.match(importProcessorSource, /sourceFingerprint: importFile\.sourceFingerprint/);
   assert.match(

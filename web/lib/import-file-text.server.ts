@@ -3166,6 +3166,10 @@ export const readImportedFileTextWithCacheInfo = async (
   }
 
   const extraction = (async () => {
+    if (lowerName.endsWith('.docx') || params.fileType.toLowerCase() === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document') {
+      return decodeWordGrabReceiptBytes(bytes);
+    }
+
     if (
       lowerName.endsWith(".csv") ||
       lowerName.endsWith(".tsv") ||

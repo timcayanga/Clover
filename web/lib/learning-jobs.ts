@@ -120,14 +120,16 @@ export async function processLearningJob(id: string, options: { maxItems?: numbe
   } catch (error) {
     const failure = learningFailure(error);
     const waiting = failure.errorCode === "SOURCE_NOT_READY";
+    const superseded = failure.errorCode === "SUPERSEDED_SOURCE";
     await prisma.$transaction(async db => {
       const changed = await db.learningJob.updateMany({ where: { id, leaseToken: token }, data: {
-        status: waiting ? "queued" : "failed", leaseToken: null, lockedUntil: null, failureCount: { increment: waiting ? 0 : 1 },
+        status: superseded ? "cancelled" : waiting ? "queued" : "failed", leaseToken: null, lockedUntil: null, failureCount: { increment: waiting || superseded ? 0 : 1 },
+        ...(superseded ? {completedAt:new Date()} : {}),
         ...failure, nextAttemptAt: new Date(Date.now() + 60_000 * 2 ** claimed.failureCount),
       } });
       if (changed.count) {
         const job = await db.learningJob.findUniqueOrThrow({ where: { id }, omit: { payload: true } });
-        await db.learningJobAttempt.update({ where: { jobId_attempt: { jobId: id, attempt: job.attempts } }, data: { status: waiting ? "waiting" : "failed", endIndex: job.nextIndex, finishedAt: new Date(), ...failure } });
+        await db.learningJobAttempt.update({ where: { jobId_attempt: { jobId: id, attempt: job.attempts } }, data: { status: superseded ? "cancelled" : waiting ? "waiting" : "failed", endIndex: job.nextIndex, finishedAt: new Date(), ...failure } });
       }
     });
   }
