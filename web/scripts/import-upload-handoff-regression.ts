@@ -786,11 +786,20 @@ const main = async () => {
     /export const maxDuration = 300;[\s\S]{0,80}export const preferredRegion = "sin1";/,
     "Resumable imports must retain the normal five-minute regional execution window."
   );
-  assert.match(
-    resumeRouteSource,
-    /const visibleRows = await countTransactionsByImportFileCompat[\s\S]{0,900}visibleRows > 0 \? "done" : "processing"[\s\S]{0,900}status: 503/,
-    "A failed resume must preserve visible rows or a retryable durable checkpoint."
-  );
+  const resumeCatchSource = resumeRouteSource.slice(resumeRouteSource.lastIndexOf("  } catch (error) {"));
+  const resumeRecoverySource = await readFile(join(webRoot, "lib/import-resume-recovery.ts"), "utf8");
+  assert.match(resumeCatchSource, /if \(!authorizedImportId\) \{[\s\S]*?status: 401[\s\S]*?status: 404/,
+    "Failed authorization must return before any resume recovery writes.");
+  assert.match(resumeCatchSource, /recoverFailedImportResume\(authorizedImportId\)/,
+    "Failed resumes must use the authorized atomic checkpoint recovery path.");
+  assert.doesNotMatch(resumeCatchSource, /params\.then|updateImportFileCompat|\.catch\(\(\) => 0\)/,
+    "Resume error handling must not mutate an unverified ID or infer empty saved rows from a failed read.");
+  assert.match(resumeRecoverySource, /FOR UPDATE[\s\S]*?file\.status === "done"[\s\S]*?if \(saved\) return \{ kind: "preserved" \}/,
+    "Recovery must serialize with saves/controls and preserve completed and existing financial rows.");
+  assert.match(resumeRecoverySource, /rawPayload: \{ path: \["sourceImportFileId"\], equals: importId \}/,
+    "Recovery must preserve legacy transaction links, including user-deleted rows.");
+  assert.match(resumeRecoverySource, /status: "failed", processingPhase: "repair_needed"[\s\S]*?creditFailedImportUsage\(importId, tx\)/,
+    "Unsaved failed resumes must retain a retryable checkpoint and credit failed AI usage atomically.");
   assert.match(
     recoverySweepSource,
     /FOR UPDATE SKIP LOCKED[\s\S]{0,900}RETURNING import_file\."id"/,
