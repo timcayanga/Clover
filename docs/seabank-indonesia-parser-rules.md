@@ -1,5 +1,7 @@
 # SeaBank Indonesia native statements
 
+A standalone `SUPPORTING WITHHOLDING TAX DOCUMENT` with a SeaBank account is a tax summary, not a dated movement ledger. Require the underlying complete statement and currency evidence instead of importing summary amounts as transactions. The disclaimer's mention of a bank statement does not establish an underlying ledger. A tax annex attached to an actual `BANK STATEMENT` / `REKENING KORAN` heading retains the existing strict statement validator. Preserve raw text, all source bytes and the visible source-review reason.
+
 This is the Indonesian REKENING KORAN / TABUNGAN - RINCIAN TRANSAKSI layout, separate from Philippine MariBank/SeaBank. Require the explicit Indonesian domain/contact, full twelve-digit account, IDR column labels, one valid monthly period, every printed/physical page and complete native dated-row coverage. Native empty outgoing/incoming columns determine direction. Dot-grouped integers are Rupiah, not Philippine decimal fractions.
 
 Reconcile all outgoing/incoming summary totals, opening/closing arithmetic and every printed running balance. Keep each native occurrence, including identical same-day purchases and top-ups. Bunga Tabungan is one printed interest movement; Biaya remains a separate fee. Do not infer daily clocks or additional wallet identities from counterparties. Preserve source descriptions, account/currency, native row index, balance, original amount text and complete document evidence independently of normalized labels.

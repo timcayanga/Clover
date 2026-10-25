@@ -9,6 +9,7 @@ import {parseBcaTransferProof} from '../lib/bca-transfer-proof';
 import {pdfTextLayerLooksSufficientForParsing} from '../lib/import-file-text.server';
 import {validateParsedImportRows} from '../lib/data-engine-validation';
 import {SOURCE_REVIEW_PHASE,SourceReviewRequiredError,sourceReviewFailureReason} from '../lib/import-source-review';
+import {reviewCases} from './fixtures/held-source-review-cases';
 import {shouldPersistPublishedAccountSummaries,persistPublishedAccountSummaries} from '../lib/import-checkpoint-publication';
 const url=new URL(process.env.DATABASE_URL??'http://invalid');assert.equal(url.hostname,'127.0.0.1');assert.equal(url.port,process.env.CLOVER_QA_PARSER_PORT??'55441');assert.equal(url.pathname,'/clover_migration_qa');assert(process.argv.includes('--execute'));
 const require=createRequire(import.meta.url);require('next/cache').revalidateTag=()=>{};const tasks:Array<()=>Promise<void>>=[];require('next/server').after=(t:()=>Promise<void>)=>tasks.push(t);const drain=async()=>{while(tasks.length)await Promise.all(tasks.splice(0).map(t=>t()));};let network=0;globalThis.fetch=async()=>{network++;throw new Error('Held source regression prohibits providers');};
@@ -86,6 +87,17 @@ async function main(){
  assert.deepEqual(await db.importFile.findUniqueOrThrow({where:{id:refusalFile.id}}),refusalBefore,'Repeated failure persistence is idempotent including timestamps');
  const allConfirmedBefore=await db.transaction.findMany({where:{workspace:{userId:user.id}},orderBy:{id:'asc'}});
  const allAccountsBefore=await db.account.findMany({where:{workspace:{userId:user.id}},orderBy:{id:'asc'}});
+ for(const example of reviewCases)for(const importMode of ['statement','receipt'] as const){
+  const workspace=await db.workspace.create({data:{userId:user.id,name:'Reviewed refusal '+example.id+' '+importMode}});
+  const file=await db.importFile.create({data:{workspaceId:workspace.id,fileName:'unfamiliar.pdf',fileType:'application/pdf',storageKey:'qa/'+randomUUID()}});
+  let error:unknown;try{await processImportFileText(file.id,{text:example.text,importMode,actorUserId:user.clerkUserId});}catch(caught){error=caught;}
+  assert(error instanceof SourceReviewRequiredError);assert.match(error.message,example.reason);
+  const persisted=await persistSourceReviewFailure(file.id,error);assert.equal(persisted?.kind,'review');
+  const before=await db.importFile.findUniqueOrThrow({where:{id:file.id}});assert.equal(before.processingPhase,SOURCE_REVIEW_PHASE);
+  await assert.rejects(confirmImportFile(file.id),caught=>caught instanceof SourceReviewRequiredError);
+  assert.deepEqual(await db.importFile.findUniqueOrThrow({where:{id:file.id}}),before,'Refused confirmations preserve source/status timestamps');
+  for(const table of [db.transaction,db.parsedTransaction,db.account,db.learningJob,db.trainingSignal,db.statementTemplate])assert.equal(await (table as typeof db.transaction).count({where:{workspaceId:workspace.id}}),0,'A reviewed refusal cannot create financial or learning observations');
+ }
  await assert.rejects(confirmImportFile(refusalFile.id),error=>error instanceof SourceReviewRequiredError&&error.message===refusalBefore.processingMessage);
  assert.deepEqual(await db.importFile.findUniqueOrThrow({where:{id:refusalFile.id}}),refusalBefore,'Refusal confirmation leaves the source and status unchanged');
  assert.deepEqual(await db.transaction.findMany({where:{workspace:{userId:user.id}},orderBy:{id:'asc'}}),allConfirmedBefore);

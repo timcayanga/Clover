@@ -72,6 +72,8 @@ The private second Scribd batch supplies eight movements, one empty-account snap
 
 ## Complete native UPSave and single FastPlus statements
 
+A single GSave/FastPlus/UPSave `Statement of Account` can be outside the accepted consolidated/native family while still printing a complete PHP summary. Before generic fallback, verify the unambiguous opening + deposits - withdrawals = closing arithmetic. A contradiction requires source review, never inferred corrections or a partial ledger. This guard is independent of the filename and does not broaden accepted account/product support.
+
 The source-verified path accepts UPSave alongside Fast Plus and GSave and preserves every full account number independently, including zero-activity account markers. Wrapped PHP summary labels must still provide exactly one amount and all balances/movement totals must reconcile. A later opening date inside the period is allowed only for a printed zero opening balance; a nonzero later anchor requires review.
 
 A native one-account Statement of Account with FastPlus, explicit full identity and interest rate, complete physical/printed pages, period, summary and every running balance has the additive cimb-single-ledger-v1 proof. Preserve unpunctuated month-first source dates and raw lines; opening and closing balances and generated-on dates are not movements. Interest and tax may share a reference and remain separate. This prevents generic arbitration replacing an interest amount with the opening balance. No historical source/cache/confirmed record is refreshed.

@@ -1,4 +1,5 @@
 import { decodeWordGrabReceiptBytes } from './word-receipt-import.server';
+import { heldSourceReviewReason } from './held-source-review';
 import {buildSeaBankIndonesiaPdfRows, buildSeaBankIndonesiaPdfSummary, buildSeaBankIndonesiaLegacyPdfEvidence, buildDbsZeroPdfProof, hasSeaBankIndonesiaEnglishHeader} from '@/lib/held-source-contracts';
 import { buildGrabReceiptNativePages, buildGrabPickupFields, buildGrabTwoMessagePanelBodies, type GrabVisualHeadline } from '@/lib/grab-email-receipt';
 import { parseCimbConsolidatedStatement } from "@/lib/import-parser";
@@ -1169,6 +1170,9 @@ const scoreStatementTextCandidate = (text: string) => {
 };
 
 export const pdfTextLayerLooksSufficientForParsing = (text: string, fileName?: string | null) => {
+  // Preserve decisive native contradictions/unsupported report evidence. OCR
+  // must not erase the reason and promote a generic guess into transactions.
+  if (heldSourceReviewReason(text)) return true;
   if (/^(?:SEABANK_ID_NATIVE_PAGES|DBS_NATIVE_PAGES) \d+$/m.test(text)) return true;
   if (/^BCA_NATIVE_PAGES \d+$/m.test(text) && parseBcaTransferProof(text)) return true;
   // A captured Grab proof retains failed validation for the parser review gate.

@@ -1,4 +1,5 @@
 import {parseHeldNativeSource} from '@/lib/held-source-contracts';
+import { heldSourceReviewReason } from '@/lib/held-source-review';
 import { SourceReviewRequiredError } from '@/lib/import-source-review';
 import { parseMariBankNativeLedger } from '@/lib/maribank-native-ledger';
 import { parseMaybankIslamicStatement } from '@/lib/maybank-islamic-statement';
@@ -25163,6 +25164,8 @@ export const parseImportTextGenericOnly = (
   fileType: string,
   context: ImportParseContext = {}
 ) => {
+  const reviewReason = heldSourceReviewReason(text);
+  if (reviewReason) throw new SourceReviewRequiredError(reviewReason);
   const structuredWorkbookRows = parseStructuredWorkbookImport(text, fileName, fileType, context);
   if (structuredWorkbookRows) {
     return structuredWorkbookRows;

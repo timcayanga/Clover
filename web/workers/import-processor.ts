@@ -1,5 +1,6 @@
 import { normalizeReceiptCaptureLocation } from "../../shared/receipt-capture-location";
 import {hasVerifiedHeldNativeRows} from '@/lib/held-source-contracts';
+import { heldSourceReviewReason } from '@/lib/held-source-review';
 import { hasVerifiedMariBankNativeRows } from '@/lib/maribank-native-ledger';
 import { hasVerifiedMaybankIslamicRows } from '@/lib/maybank-islamic-statement';
 import { hasVerifiedGrabReceiptRows, readGrabReceiptTimestamp, getGrabPaymentInstrumentSuffix, isGrabWordCashReceipt, GRAB_PAYMENT_ACCOUNT_REVIEW_PHASE } from '@/lib/grab-email-receipt';
@@ -9496,6 +9497,10 @@ const processImportFileTextImpl = async (
 
   const finishParsingTiming = startImportTiming(importFileId, "parsing_to_candidate_commit");
   await requireImportMayContinue(importFileId, String(importFile.workspaceId));
+  // Keep historical raw parsing available for evidence retrieval, but never
+  // turn a contradictory/unsupported source into finance or learned labels.
+  const heldReviewReason = heldSourceReviewReason(text);
+  if (heldReviewReason) throw new SourceReviewRequiredError(heldReviewReason);
   // Classify receipts before institution guessing or any AI request. A POS
   // permit number is not a bank account and "Method" is not Ethereum.
   if (imageImport && importMode === "statement" && hasReceiptPhotoEvidence(readLocalReceiptOcrText(text) ?? text)) {
