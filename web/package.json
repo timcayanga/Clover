@@ -97,7 +97,7 @@
     "qa:clover-token-usage": "tsx scripts/clover-token-usage-regression.ts",
     "qa:adviser-local-routing": "tsx scripts/adviser-local-routing-regression.ts && tsx scripts/adviser-planning-regression.ts && npm run qa:adviser-reliability",
     "qa:adviser-planning": "tsx scripts/adviser-planning-regression.ts",
-    "qa:import-model-usage": "tsx scripts/import-model-usage-regression.ts",
+    "qa:import-model-usage": "tsx scripts/import-model-usage-regression.ts && tsx scripts/import-backup-empty-regression.ts",
     "qa:financial-scope-gates": "tsx scripts/financial-scope-gates-regression.ts",
     "qa:adviser-reports": "tsx scripts/adviser-report-controls-regression.ts",
     "qa:posthog-query": "NODE_OPTIONS=--conditions=react-server tsx scripts/posthog-query-regression.ts",

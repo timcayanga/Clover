@@ -33,3 +33,16 @@ assert(!hasVerifiedGcashWalletHistoryRows(source.replace('GCash Transaction Hist
 assert.throws(() => parseImportText(source.replace('STARTING BALANCE 100.00', 'STARTING BALANCE 99.00'), 'GCash Transaction History.pdf', 'application/pdf'), /source review/);
 assert.throws(() => parseImportText(source.replace('ENDING BALANCE 100.00', 'ENDING BALANCE 101.00'), 'GCash Transaction History.pdf', 'application/pdf'), /source review/);
 console.log('Complete GCash ledger: clocks, exact balances, wallet identity, repeats and unsafe negatives passed.');
+
+// A native PDF may split a single record into description / date / numeric
+// cells, with the reference number at the start of its own line.
+const splitCells = source.replace(
+  movements[1],
+  `Transfer from ${counterparty} to ${account}\n2026-08-10 08:02 AM\n1000000000002 10.00 100.00`,
+);
+const splitRows = parseImportText(splitCells, 'GCash Transaction History.pdf', 'application/pdf');
+assert.equal(splitRows.length, 6);
+assert.deepEqual(splitRows.map(row => [row.date, row.amount, row.type, row.accountNumber]), rows.map(row => [row.date, row.amount, row.type, row.accountNumber]));
+assert.match(String(splitRows[1].rawPayload?.line), /1000000000002/);
+assert(hasVerifiedGcashWalletHistoryRows(splitCells, splitRows));
+assert.throws(() => parseImportText(splitCells.replace('1000000000002 10.00 100.00', '1000000000002 10.00 101.00'), 'GCash Transaction History.pdf', 'application/pdf'), /source review/);

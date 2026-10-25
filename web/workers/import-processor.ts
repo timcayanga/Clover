@@ -19,6 +19,7 @@ import { finalizePortfolioImport, isHoldingsOnlyPortfolio, portfolioConfidence }
 import { assessImportEvidenceSafety, assertSafeImportEvidence } from "@/lib/import-evidence-safety";
 import { startImportTiming, measureImportTiming } from "@/lib/import-timing";
 import { incompleteReceiptFields, receiptCurrencyForPersistence, receiptReviewMessage, RECEIPT_REVIEW_PHASE } from "@/lib/receipt-review";
+import { persistSourceReviewFailure } from "@/lib/import-source-review.server";
 import { SOURCE_REVIEW_PHASE, SourceReviewRequiredError } from "@/lib/import-source-review";
 import { shouldRefineReceiptCore } from "@/lib/receipt-detail-refinement";
 import { Prisma } from "@prisma/client";
@@ -8497,6 +8498,10 @@ const processImportFileTextImpl = async (
 ): Promise<ProcessImportResult> => {
   const startedAt = Date.now();
   const openAIUsageEntries: OpenAIImportModelUsage[] = [];
+  const backupDiagnostics: import("@/lib/openai-import-parser").OpenAIImportDiagnostic[] = [];
+  const recordBackupDiagnostic = (diagnostic: import("@/lib/openai-import-parser").OpenAIImportDiagnostic) => {
+    if (backupDiagnostics.length < 16) backupDiagnostics.push(diagnostic);
+  };
   const rawFileReady = options.rawFileReady ?? null;
   // Attach a rejection handler immediately so an early validation return does
   // not leave the concurrent object-storage upload as an unhandled promise.
@@ -8577,7 +8582,7 @@ const processImportFileTextImpl = async (
     for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
       try {
         await requireImportMayContinue(importFileId, String(importFile?.workspaceId ?? ""));
-        return await confirmImportFile(importFileId, matchedAccountId);
+        return await confirmImportFile(importFileId, matchedAccountId, { recoverMissingRows: false });
       } catch (error) {
         if (error instanceof ImportUserControlError) throw error;
         lastError = error;
@@ -9603,6 +9608,8 @@ const processImportFileTextImpl = async (
       imagePreparationOverlappedWithPreflight: Boolean(eagerReceiptImagePromise),
     });
     earlyReceiptVisionPromise = measureImportTiming(importFileId, "receipt_core_vision", () => parseImportTextWithOpenAIFallback({
+            forceFallback: true,
+            onDiagnostic: recordBackupDiagnostic,
             consentUserId,
       text: readLocalReceiptOcrText(text) ?? text,
       fileName,
@@ -10201,6 +10208,8 @@ const processImportFileTextImpl = async (
           const earlyPageImages = prefetchedAssets?.pageImages ?? pageImages ?? null;
           const earlyPdfFileDataBase64 = prefetchedAssets?.pdfFileDataBase64 ?? pdfFileDataBase64 ?? null;
           return measureImportTiming(importFileId, "model_extraction_and_parse", () => parseImportTextWithOpenAIFallback({
+            forceFallback: true,
+            onDiagnostic: recordBackupDiagnostic,
             consentUserId,
             text: textForParse,
             fileName,
@@ -11126,6 +11135,8 @@ const processImportFileTextImpl = async (
           : importMode === "statement" && earlyOpenAiFallbackPromise
           ? await earlyOpenAiFallbackPromise
           : await measureImportTiming(importFileId, "model_extraction_and_parse", () => parseImportTextWithOpenAIFallback({
+            forceFallback: true,
+            onDiagnostic: recordBackupDiagnostic,
             consentUserId,
               text: textForParse,
               fileName,
@@ -11148,6 +11159,8 @@ const processImportFileTextImpl = async (
             }));
       if (!openAiParsed && importMode === "receipt" && earlyReceiptVisionPromise) {
         openAiParsed = await measureImportTiming(importFileId, "model_extraction_and_parse", () => parseImportTextWithOpenAIFallback({
+            forceFallback: true,
+            onDiagnostic: recordBackupDiagnostic,
             consentUserId,
           text: textForParse,
           fileName,
@@ -11412,6 +11425,8 @@ const processImportFileTextImpl = async (
       const transcriptParsed = transcriptPreviewDetails
         ? null
         : await measureImportTiming(importFileId, "model_extraction_and_parse", () => parseImportTextWithOpenAIFallback({
+            forceFallback: true,
+            onDiagnostic: recordBackupDiagnostic,
             consentUserId,
             text: transcriptNormalized,
             fileName,
@@ -11561,6 +11576,8 @@ const processImportFileTextImpl = async (
     if (transcript?.transcript.trim()) {
       const transcriptImportMode = normalizeImportImageMode(transcript.documentType);
       const transcriptParsed = await measureImportTiming(importFileId, "model_extraction_and_parse", () => parseImportTextWithOpenAIFallback({
+            forceFallback: true,
+            onDiagnostic: recordBackupDiagnostic,
             consentUserId,
         text: normalizeStatementImageOcrText(transcript.transcript),
         fileName,
@@ -11873,6 +11890,9 @@ const processImportFileTextImpl = async (
         autoRerunAttempt,
         selectedParser: useOpenAiParse ? "backup_parser" : "local_parser",
         backupParserInvoked: backupParserUsage.calls > 0,
+        backupParserRequested: shouldRunOpenAiFallback,
+        backupParserReturnedResult: Boolean(openAiParsed),
+        backupParserDiagnostics: backupDiagnostics,
         localParser: {
           ...localTokenEstimate,
           parsedRows: parsedRows.length,
@@ -13103,6 +13123,12 @@ const processImportFileTextImpl = async (
     };
   }
 
+  if (!isDocumentImport && rows.length === 0) {
+    // A parser must never call confirmation with no rows: confirmation recovery
+    // would re-enter this parser and recurse until the function times out.
+    throw new SourceReviewRequiredError("This statement contains no safely readable transactions. Clover saved the file; try a clearer export or another format.");
+  }
+
   if (!isDocumentImport) {
     try {
       const statementConfirmationStartedAt = Date.now();
@@ -13308,6 +13334,8 @@ const processImportFileTextImpl = async (
           const finishReceiptDetailTiming = startImportTiming(importFileId, "receipt_detail_enrichment");
           const detailStartedAt = Date.now();
           const refined = await measureImportTiming(importFileId, "model_extraction_and_parse", () => parseImportTextWithOpenAIFallback({
+            forceFallback: true,
+            onDiagnostic: recordBackupDiagnostic,
             consentUserId,
             text: textForParse,
             fileName,
@@ -13848,7 +13876,10 @@ export const processImportFileText = async (...args: Parameters<typeof processIm
     await requireImportMayContinue(importFileId);
     return await processImportFileTextImpl(...args);
   } catch (error) {
-    if (!(error instanceof ImportUserControlError)) throw error;
+    if (!(error instanceof ImportUserControlError)) {
+      await persistSourceReviewFailure(importFileId, error);
+      throw error;
+    }
     // Inner recovery handlers may have set a generic failed phase. Restore the
     // durable user intent once every parser/confirmation frame has unwound.
     await requireImportMayContinue(importFileId).catch(() => undefined);
@@ -14023,7 +14054,7 @@ async function insertReceiptTransactionOnce(params: Parameters<typeof insertTran
 export const confirmImportFile = async (
   importFileId: string,
   accountId?: string | null,
-  options?: { allowDeletedAccountRecreation?: boolean }
+  options?: { allowDeletedAccountRecreation?: boolean; recoverMissingRows?: boolean }
 ): Promise<ConfirmImportResult> => {
   const startedAt = Date.now();
   await requireImportMayContinue(importFileId);
@@ -14770,15 +14801,21 @@ export const confirmImportFile = async (
     ["Landbank", "EastWest", "UCPB", "Chinabank", "China Bank"].includes(noisyBankName) || isLikelyLowQualityUnionBankStatement
       ? 60_000
       : 8_000;
+  let recoveryAttempted = options?.recoverMissingRows === false;
   while (Date.now() - startedAt < MAX_WAIT_MS) {
     parsedRows = await fetchParsedTransactionRows(importFileId);
     if (parsedRows.length > 0) {
       break;
     }
 
+    // At most one recovery pass per explicit confirmation request. Recovery
+    // itself confirms with recoverMissingRows=false, so it cannot recurse.
+    if (recoveryAttempted) break;
+    recoveryAttempted = true;
     try {
       await processImportFileText(importFileId, { actorUserId: null });
     } catch (error) {
+      if (error instanceof SourceReviewRequiredError) throw error;
       console.warn("Unable to recover parsed rows before confirmation", {
         importFileId,
         error,
