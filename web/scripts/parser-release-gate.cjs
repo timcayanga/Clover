@@ -28,6 +28,7 @@ async function main() {
   for (const [script, args] of [['parser-regression.ts', ['--portable']], ['reviewed-parser-corpus.ts', []], ...['seabank-dormant-opening-regression.ts', 'word-receipt-regression.ts', 'held-grab-layout-regression.ts', 'gcash-complete-ledger-regression.ts', 'maybank-islamic-statement-regression.ts', 'seabank-large-evidence-regression.ts', 'merchant-enrichment-regression.ts', 'context-corpus-learning-regression.ts', 'training-signal-dedupe.ts', 'account-tombstone-currency-regression.ts', 'account-import-identity-regression.ts', 'source-review-regression.ts'].map(script => [script, []])]) {
     run(process.execPath, [tsx, join('scripts', script), ...args], { NODE_OPTIONS: '--conditions=react-server' });
   }
+  run(process.execPath, [tsx, join('scripts', 'held-source-review-regression.ts')], { NODE_OPTIONS: '--conditions=react-server' });
   // Refuse an occupied port; never reuse or reset any existing database.
   const probe = net.createServer();
   await new Promise((ok, fail) => { probe.once('error', fail); probe.listen(qaPort, '127.0.0.1', ok); });
