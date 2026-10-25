@@ -40,6 +40,7 @@ export const DATA_ENGINE_VERSION = "v2";
 export const IMPORT_FILE_EXTRACTION_CACHE_VERSION = "v39";
 export const resolveImportFileExtractionCacheVersion = (fileName?: string | null) => {
   const normalizedFileName = String(fileName ?? "");
+  if (/\.docx$/i.test(normalizedFileName)) return "v56-native-word-stored-reader";
   if (/^915541100-.*\.pdf$/i.test(normalizedFileName)) return 'v55-seabank-dormant-opening';
   if (/^1069029702-.*\.pdf$/i.test(normalizedFileName)) return "v54-grab-payment-reference";
   // Re-extract only the retained legacy SeaBank PDFs whose previous cache had
@@ -6005,6 +6006,12 @@ export async function applyLearningAction(action: LearningAction, context: Learn
       if (!source || ["deleted", "failed"].includes(source.status)) throw new LearningInputError("SOURCE_UNAVAILABLE", "The template source is missing, removed or needs import repair.");
       if (action.requireCompletedSource && source.status !== "done") throw new LearningInputError("SOURCE_NOT_READY", "Template learning is waiting for the source import to finish.");
       if (action.requireReviewedTransactions && (!source.transactions.length || source.transactions.some(row => row.deletedAt || row.reviewStatus === "pending_review"))) throw new LearningInputError("SOURCE_NOT_READY", "Template learning is waiting for receipt review.");
+    }
+    const config=action.input.parserConfig;
+    if (action.sourceImportFileId && action.requireCompletedSource &&
+      action.input.fileType?.toLowerCase()==='application/vnd.openxmlformats-officedocument.wordprocessingml.document' &&
+      config && typeof config==='object' && !Array.isArray(config) && (config as Record<string,unknown>).rowCount===0) {
+      throw new LearningInputError('SUPERSEDED_SOURCE','This job described an empty Word parse. Its input is retained for audit; use the corrected source learning job.');
     }
     const template = await upsertStatementTemplate(action.input, context);
     if (template && action.learnCandidates) await writeTemplateCandidates(template, context);

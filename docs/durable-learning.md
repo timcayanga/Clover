@@ -67,3 +67,7 @@ The live receipt replay also exposed a concurrent-upload race: receipt PDF proce
 ## Large staging verification responses
 
 The existing authenticated, origin-checked, actor-owned staging diagnostic can send large full-evidence JSON with negotiated Brotli compression. It retains every source occurrence, raw field, financial value, hash and timestamp; this is transport encoding only. Clients that do not accept it retain the original JSON response, and all responses remain uncached. The mandatory release test verifies a large complete report, Unicode and leading zeros, its decoded bytes, the transport budget and unsupported-client behavior. Stored sources, learning jobs and confirmed data are not changed.
+
+## Superseded empty Word snapshots
+
+The supported native DOCX contract always contains one complete reconciled receipt. A historical queued Word-template action that captured zero rows cannot describe that corrected source. Once its source is complete, the worker cancels that action with `SUPERSEDED_SOURCE`, retaining its input, progress, counters, source reference and attempt history. It does not create an empty template or reset prior learning. The corrected nonempty job completes independently; cancelled snapshots remain visible with their reason and cannot be restarted as active work. This narrowly applies to completed-source DOCX template actions with an explicit zero row count.

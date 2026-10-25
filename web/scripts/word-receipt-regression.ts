@@ -2,16 +2,22 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import JSZip from 'jszip';
 import { decodeWordGrabReceiptBytes } from '../lib/word-receipt-import.server';
+import {readImportedFileTextWithCacheInfo} from '../lib/import-file-text.server';
 import { parseGrabEmailReceipt, hasVerifiedGrabReceiptRows } from '../lib/grab-email-receipt';
 import { isSourceReviewRequiredError } from '../lib/import-source-review';
 
 async function main() {
   const bytes = readFileSync('scripts/fixtures/reviewed-parser-corpus/grab-native-word.docx');
   const text = await decodeWordGrabReceiptBytes(bytes);
+  const network=globalThis.fetch;let calls=0;globalThis.fetch=async()=>{calls++;throw new Error('Stored Word extraction must use retained request bytes without network');};
+  let stored;try{stored=await readImportedFileTextWithCacheInfo({storageKey:'qa/no-network.docx',fileName:'invented-stored-word.docx',fileType:'application/vnd.openxmlformats-officedocument.wordprocessingml.document',sourceBytes:bytes});}finally{globalThis.fetch=network;}
+  assert.equal(calls,0);assert.equal(stored.text,text,'Stored/native resume extraction matches direct Word decoding');
   const parsed = parseGrabEmailReceipt(text)!;
   assert.equal(parsed.rows.length, 1);
   assert.equal(parsed.rows[0].amount, '250.00');
   assert.equal(hasVerifiedGrabReceiptRows(text, parsed.rows), true);
+  const reordered=structuredClone(parsed.rows);reordered[0].rawPayload!.wordParts=(reordered[0].rawPayload!.wordParts as Record<string,unknown>[]).map(part=>Object.fromEntries(Object.entries(part).reverse()));
+  assert.equal(hasVerifiedGrabReceiptRows(text,reordered),true,'Stored JSON key ordering cannot invalidate Word evidence');
   const altered = structuredClone(parsed.rows); (altered[0].rawPayload!.wordParts as Array<{sha256:string}>)[0].sha256 = '0'.repeat(64);
   assert.equal(hasVerifiedGrabReceiptRows(text, altered), false);
   async function modified(change: (zip: JSZip, xml: string) => void) {

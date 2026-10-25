@@ -2302,6 +2302,9 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
       const canProcessSpreadsheetFromRequestBytes =
         isSpreadsheetUploadFile(effectiveFileName, effectiveFileType) &&
         bytes.length <= 10_000_000;
+      const canProcessWordFromRequestBytes =
+        (/\.docx$/i.test(effectiveFileName) || effectiveFileType.toLowerCase() === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document') &&
+        bytes.length <= 4 * 1024 * 1024;
 
       if (trainedReceiptFixture) {
         await uploadBankHintPromise.catch((error) => {
@@ -2396,20 +2399,20 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
         } else if (
           canExtractPdfFromRequestBytes ||
           canProcessImageFromRequestBytes ||
-          canProcessSpreadsheetFromRequestBytes
+          canProcessSpreadsheetFromRequestBytes || canProcessWordFromRequestBytes
         ) {
           // The request already contains the complete file. Let durable storage
           // and parsing run concurrently instead of uploading and immediately
           // downloading the same bytes again.
           await uploadBankHintPromise;
-          if (canProcessSpreadsheetFromRequestBytes) {
+          if (canProcessSpreadsheetFromRequestBytes || canProcessWordFromRequestBytes) {
             // Workbook decoding and confirmation can safely use the immutable
             // request bytes. Keep the raw audit-file upload alive after the
             // response without making visible rows wait on object-storage
             // latency.
             after(async () => {
               await uploadPromise.catch((error) => {
-                console.warn("Unable to finish spreadsheet raw file upload", {
+                console.warn("Unable to finish structured document raw file upload", {
                   importId,
                   error: summarizeErrorForLog(error),
                 });
@@ -2449,7 +2452,7 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
         return processInline({
           bankName: processingBankName || null,
           progressMessage: "Importing trained receipt...",
-          sourceBytes: canProcessImageFromRequestBytes || canExtractPdfFromRequestBytes || canProcessSpreadsheetFromRequestBytes ? bytes : null,
+          sourceBytes: canProcessImageFromRequestBytes || canExtractPdfFromRequestBytes || canProcessSpreadsheetFromRequestBytes || canProcessWordFromRequestBytes ? bytes : null,
           rawFileReady: uploadPromise,
         });
       }
@@ -2458,14 +2461,14 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
         return processInline({
           bankName: processingBankName || null,
           progressMessage: "Reading receipt image...",
-          sourceBytes: canProcessImageFromRequestBytes || canExtractPdfFromRequestBytes || canProcessSpreadsheetFromRequestBytes ? bytes : null,
+          sourceBytes: canProcessImageFromRequestBytes || canExtractPdfFromRequestBytes || canProcessSpreadsheetFromRequestBytes || canProcessWordFromRequestBytes ? bytes : null,
           rawFileReady: uploadPromise,
         });
       }
 
       if (importMode === "receipt" && !forceInlineProcessing) {
         return processReceiptAfterResponse(processingBankName || null, {
-          sourceBytes: canProcessImageFromRequestBytes || canExtractPdfFromRequestBytes || canProcessSpreadsheetFromRequestBytes ? bytes : null,
+          sourceBytes: canProcessImageFromRequestBytes || canExtractPdfFromRequestBytes || canProcessSpreadsheetFromRequestBytes || canProcessWordFromRequestBytes ? bytes : null,
           rawFileReady: uploadPromise,
         });
       }
@@ -2502,7 +2505,7 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
 
       if (shouldQueueDocumentUpload && !cachedDocTextInfo) {
         return queueBackgroundProcessing(processingBankName || null, {
-          sourceBytes: canProcessImageFromRequestBytes || canExtractPdfFromRequestBytes || canProcessSpreadsheetFromRequestBytes ? bytes : null,
+          sourceBytes: canProcessImageFromRequestBytes || canExtractPdfFromRequestBytes || canProcessSpreadsheetFromRequestBytes || canProcessWordFromRequestBytes ? bytes : null,
           rawFileReady: uploadPromise,
         });
       }
@@ -2586,7 +2589,7 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
               workspaceId: String(importFile.workspaceId),
               importMode,
               sourceBytes:
-                canProcessImageFromRequestBytes || canExtractPdfFromRequestBytes || canProcessSpreadsheetFromRequestBytes
+                canProcessImageFromRequestBytes || canExtractPdfFromRequestBytes || canProcessSpreadsheetFromRequestBytes || canProcessWordFromRequestBytes
                   ? bytes
                   : null,
             },
@@ -2820,7 +2823,7 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
               workspaceId: String(importFile.workspaceId),
               importMode,
               sourceBytes:
-                canProcessImageFromRequestBytes || canExtractPdfFromRequestBytes || canProcessSpreadsheetFromRequestBytes
+                canProcessImageFromRequestBytes || canExtractPdfFromRequestBytes || canProcessSpreadsheetFromRequestBytes || canProcessWordFromRequestBytes
                   ? bytes
                   : null,
             },
@@ -2863,10 +2866,12 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
       const shouldProcessInlineStatementImage =
         isStatementImageUpload && bytes.length <= 10_000_000;
       const shouldProcessInlineSpreadsheet = canProcessSpreadsheetFromRequestBytes;
+      const shouldProcessInlineWord = canProcessWordFromRequestBytes;
       const shouldProcessInline =
         shouldProcessInlineKnownBpiScreenshot ||
         shouldProcessInlineStatementImage ||
         shouldProcessInlineSpreadsheet ||
+        shouldProcessInlineWord ||
         (!shouldQueueDocumentUpload &&
           !isPdfUpload(effectiveFileName, effectiveFileType) &&
           ((hasExtractedText && parsedMetadataConfidence >= 95 && bytes.length <= 8_000_000) ||
@@ -2924,14 +2929,14 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
           sourceBytes:
             canProcessImageFromRequestBytes ||
             canExtractPdfFromRequestBytes ||
-            canProcessSpreadsheetFromRequestBytes
+            canProcessSpreadsheetFromRequestBytes || canProcessWordFromRequestBytes
               ? bytes
               : null,
           // The processor awaits this promise immediately before normalized
           // financial rows are written. That retains the raw-file audit
           // guarantee while allowing storage and parsing to overlap.
           rawFileReady:
-            canProcessImageFromRequestBytes || canExtractPdfFromRequestBytes
+            canProcessImageFromRequestBytes || canExtractPdfFromRequestBytes || canProcessWordFromRequestBytes
               ? uploadPromise
               : null,
           skipVisualBackupParser: shouldPreferSampleFallback && Boolean(sampleFallbackText),
