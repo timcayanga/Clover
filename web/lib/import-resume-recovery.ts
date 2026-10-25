@@ -26,7 +26,8 @@ export async function recoverFailedImportResume(importId: string): Promise<Resum
       return { kind: "user_control", control: file.processingPhase?.startsWith("pause") ? "paused" : "cancelled" };
     }
     if (file.status === "done" || file.confirmedAt || file.confirmedTransactionsCount > 0 ||
-        file.processingPhase === SOURCE_REVIEW_PHASE || file.processingPhase === RECEIPT_REVIEW_PHASE) {
+        file.processingPhase === SOURCE_REVIEW_PHASE || file.processingPhase === RECEIPT_REVIEW_PHASE ||
+        file.processingPhase === "password_required" || file.processingPhase === "account_match_needs_confirmation") {
       return { kind: "preserved" };
     }
     // Include legacy raw-payload links and soft-deleted rows: a retry must not

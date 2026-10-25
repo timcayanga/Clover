@@ -39,6 +39,13 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
     const control = await getImportUserControl(importId, String(importFile.workspaceId));
     if (control !== "running") return NextResponse.json({ error: control === "paused" ? "Resume this paused import using its play icon." : "This import was cancelled.", control }, { status: 409 });
 
+    if (importFile.processingPhase === "password_required" || importFile.processingPhase === "account_match_needs_confirmation") {
+      const needsPassword = importFile.processingPhase === "password_required";
+      return NextResponse.json({ error: needsPassword ? "Enter the statement password to continue." : "Confirm the account for this import before continuing.",
+        code: needsPassword ? "IMPORT_PASSWORD_REQUIRED" : "IMPORT_ACCOUNT_CONFIRMATION_REQUIRED",
+        retryable: false, importFileId: importId }, { status: 409 });
+    }
+
     const statementCheckpoint = (await hasCompatibleTable("AccountStatementCheckpoint"))
       ? await prisma.accountStatementCheckpoint.findUnique({
           where: { importFileId: importId },

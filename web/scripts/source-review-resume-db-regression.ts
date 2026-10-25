@@ -75,6 +75,15 @@ async function main() {
     assert.deepEqual(await db.importFile.findUniqueOrThrow({where:{id:protectedFile.id}}),sourceBefore,"Ownership failure must not mutate another Profile's import");
     assert.equal(await db.auditLog.count({where:{workspaceId:workspace.id}}),auditsBefore);
     assert.equal(parserCalls,2,"Unauthorized retries never invoke parsing");
+    for (const phase of ["password_required","account_match_needs_confirmation"]) {
+      const file = await makeFile(phase);
+      const before = await db.importFile.findUniqueOrThrow({where:{id:file.id}});
+      const response = await call(file.id);assert.equal(response.status,409);
+      const payload = await response.json();assert.equal(payload.retryable,false);
+      assert.equal(payload.code,phase==="password_required"?"IMPORT_PASSWORD_REQUIRED":"IMPORT_ACCOUNT_CONFIRMATION_REQUIRED");
+      assert.deepEqual(await db.importFile.findUniqueOrThrow({where:{id:file.id}}),before,"Required input must not be overwritten by a retry");
+    }
+    assert.equal(parserCalls,2,"Imports waiting for user input do not call the parser");
     failure = new Error("A generic provider timeout");
     for (const action of ["pause","cancel"] as const) {
       controlOnParse = action;
@@ -102,7 +111,7 @@ async function main() {
     assert.deepEqual(await db.importFile.findUniqueOrThrow({where:{id:retry.id}}),retryState,"Repeated failure recovery preserves source and timestamps");
     assert.equal(await db.auditLog.count({where:{entityId:retry.id,action:"import.ai_usage_credit"}}),1,"Failed-import credit cannot be duplicated");
     assert.deepEqual(await db.auditLog.findUniqueOrThrow({where:{id:usage.id}}),usageBefore,"Provider usage audit is never erased or rewritten");
-    for (const phase of [SOURCE_REVIEW_PHASE,"receipt_review_required","complete"]) {
+    for (const phase of [SOURCE_REVIEW_PHASE,"receipt_review_required","password_required","account_match_needs_confirmation","complete"]) {
       const file = await makeFile(phase);
       if (phase==="complete") await db.importFile.update({where:{id:file.id},data:{status:"done"}});
       const before = await db.importFile.findUniqueOrThrow({where:{id:file.id}});
