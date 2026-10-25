@@ -97,6 +97,8 @@ async function main() {
     Object.assign(db.importFile, { updateMany: async (args: Parameters<typeof originalUpdateMany>[0]) => {
       if (args?.where?.id === racing.id && args.data.processingPhase === SOURCE_REVIEW_PHASE) {
         await setImportUserControl(racing.id, user.clerkUserId, 'cancel');
+        // Simulate a same-millisecond timestamp collision; phase predicates still protect control.
+        await db.importFile.update({where:{id:racing.id},data:{updatedAt:racing.updatedAt}});
       }
       return originalUpdateMany.call(db.importFile, args);
     } });

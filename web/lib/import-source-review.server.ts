@@ -2,6 +2,8 @@ import { prisma } from "./prisma";
 import { countParsedTransactionRows, countTransactionsByImportFileCompat, fetchImportFileCompat } from "./data-engine";
 import { isSourceReviewRequiredError, sourceReviewFailureReason, sourceReviewUserMessage, SOURCE_REVIEW_PHASE } from "./import-source-review";
 
+const CONTROL_PHASES = ["pause_requested", "paused", "cancel_requested", "cancelled"];
+
 type SourceReviewDecision =
   | { kind: "review"; message: string; diagnosticReason: string; noOp: boolean }
   | { kind: "user_control"; control: "paused" | "cancelled" }
@@ -19,7 +21,7 @@ export async function persistSourceReviewFailure(importFileId: string, error: un
   const file = await fetchImportFileCompat(importFileId).catch(() => undefined);
   if (file === undefined) return { kind: "unavailable" };
   if (!file) return { kind: "missing_import" };
-  if (["pause_requested", "paused", "cancel_requested", "cancelled"].includes(String(file.processingPhase))) {
+  if (CONTROL_PHASES.includes(String(file.processingPhase))) {
     return { kind: "user_control", control: String(file.processingPhase).startsWith("pause") ? "paused" : "cancelled" };
   }
   if (file.status === "done" || file.confirmedAt) return { kind: "unavailable" };
@@ -33,7 +35,9 @@ export async function persistSourceReviewFailure(importFileId: string, error: un
   // Atomic predicates protect rows committed after the counts above, and a
   // concurrent source/progress change wins instead of being overwritten.
   const updated = await prisma.importFile.updateMany({
-    where: { id: importFileId, updatedAt, confirmedAt: null, parsedRowsCount: 0, confirmedTransactionsCount: 0,
+    where: { id: importFileId, updatedAt, status: { not: "done" }, confirmedAt: null,
+      OR: [{ processingPhase: null }, { processingPhase: { notIn: CONTROL_PHASES } }],
+      parsedRowsCount: 0, confirmedTransactionsCount: 0,
       transactions: { none: {} }, parsedRows: { none: {} } },
     data: { status: "failed", processingPhase: SOURCE_REVIEW_PHASE, processingMessage: message,
       processingCurrentScore: 0, parsedRowsCount: 0, confirmedTransactionsCount: 0 },
