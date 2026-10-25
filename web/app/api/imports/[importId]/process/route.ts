@@ -1372,6 +1372,8 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
     let importFile = await fetchImportFileCompat(importId);
     let password: string | undefined;
     let queued = false;
+    // Callers must await this helper inside POST's try block so delayed parser
+    // refusals reach the durable source-review handler instead of escaping as 500s.
     const processInline = async (options?: {
       text?: string;
       textCacheInfo?: Awaited<ReturnType<typeof readImportedStatementTextWithCache>> | null;
@@ -2355,7 +2357,7 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
       // keeps the original. Avoid re-running server image OCR in this route.
       if (deviceText) {
         await uploadBankHintPromise;
-        return processInline({ sourceBytes: bytes, rawFileReady: uploadPromise });
+        return await processInline({ sourceBytes: bytes, rawFileReady: uploadPromise });
       }
 
       const shouldInlineReceiptProcessing =
@@ -2449,7 +2451,7 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
       }
 
       if (importMode === "receipt" && isTrainedReceiptFileName(effectiveFileName)) {
-        return processInline({
+        return await processInline({
           bankName: processingBankName || null,
           progressMessage: "Importing trained receipt...",
           sourceBytes: canProcessImageFromRequestBytes || canExtractPdfFromRequestBytes || canProcessSpreadsheetFromRequestBytes || canProcessWordFromRequestBytes ? bytes : null,
@@ -2458,7 +2460,7 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
       }
 
       if (importMode === "receipt" && shouldInlineReceiptProcessing) {
-        return processInline({
+        return await processInline({
           bankName: processingBankName || null,
           progressMessage: "Reading receipt image...",
           sourceBytes: canProcessImageFromRequestBytes || canExtractPdfFromRequestBytes || canProcessSpreadsheetFromRequestBytes || canProcessWordFromRequestBytes ? bytes : null,

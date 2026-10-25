@@ -174,3 +174,7 @@ Large native ledgers retain one full extracted transcript with the first parsed 
 Native Word and unidentified-payment coverage adds independently invented `grab-native-word` and `grab-unspecified-instrument` sources. The reviewed corpus now contains 67 sources and 215 transaction/item observations. Word expansion/compatibility/refusal checks and two dedicated real-worker preservation suites are mandatory in `qa:parsers`; previous financial expectations and extraction cache namespaces remain retained.
 
 The independently invented dormant SeaBank source extends the permanent corpus to68 sources /218 transaction and item observations. Mandatory portable tests cover native glyph binding, explicit issuer/currency/date authority, complete active days, repeated credits, stale-serial review and unchanged historical refusals. Its separate real-worker test verifies pending review survives both enrichment passes, complete durable jobs, source evidence, repeated-confirmation no-op, and immutable prior accounts with positive, zero and unknown balances and confirmed edits.
+
+## Asynchronous upload refusals
+
+Receipt and device-text multipart processing await the inline worker inside the route error boundary. A delayed deterministic source refusal must return JSON I-109 with the retained review reason, preserve original bytes and confirmed data, and leave learning empty. The permanent API/database regression exercises both upload branches and confirms that repeated resume leaves every retained import field unchanged.
