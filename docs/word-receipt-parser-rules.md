@@ -17,3 +17,5 @@ Maximum uploaded and expanded XML is 4 MiB; at most 512 archive entries and boun
 XML traversal. Unsupported documents fail with a typed source-review reason
 before generic or AI fallbacks. Existing PDF and spreadsheet readers and cache
 namespaces are preserved.
+
+Browser and native selection allow `.docx` consistently. Native upload-format coverage must validate every public import extension before release; the bounded server reader still enforces source integrity and supported receipt scope.
