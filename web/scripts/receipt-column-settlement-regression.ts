@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { joinReceiptColumnSettlement } from '../lib/receipt-column-settlement';
 import { parseReceiptText } from '../lib/split-bill';
+import { applyReceiptDefaultCurrency, inferReceiptLocationCurrency } from '../lib/receipt-intake';
 
 // Invented source reproducing column-order OCR, not a customer receipt.
 export const columnReceipt = `QUICK MEALS CORPORATION
@@ -41,6 +42,10 @@ BIR Accr. No. : SAMPLE-123
 Date Issued: 03/01/2013
 Valid Until: 07/31/2025
 This serves as a Sales Invoice.`;
+assert.equal(inferReceiptLocationCurrency(columnReceipt)?.currency, 'PHP');
+assert.equal(applyReceiptDefaultCurrency({ currency: null, confidence_score: 60, parser_evidence: { reason: 'QA', source_text: columnReceipt } }, 'USD', columnReceipt).currency, 'PHP', 'Printed BIR accreditation outranks a different user default');
+assert.equal(inferReceiptLocationCurrency('RECEIPT\nBIR unknown code\nTOTAL 250.00'), null, 'A bare acronym is not country evidence');
+assert.equal(inferReceiptLocationCurrency(columnReceipt+'\nJapan'), null, 'Conflicting regions remain unresolved');
 const prepared = joinReceiptColumnSettlement(columnReceipt);
 assert.match(prepared, /TOTAL 250\.00/);
 assert.match(prepared, /CASH 1,000\.00/);

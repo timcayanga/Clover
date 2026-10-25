@@ -120,3 +120,5 @@ When OCR reads a separate label column before monetary cells, only rejoin the ex
 Purchase dates must outrank printer accreditation, permit issuance and validity dates. A printer-context Date Issued or a Valid Until field does not establish a purchase date; an ordinary invoice issue date remains eligible.
 
 Cosmetic progress writes must test persisted completion, source/receipt review and pause/cancel phases atomically. A delayed update cannot reopen those states or change their timestamps. Incomplete receipts drain the pending reconciliation write before publishing their terminal review state.
+
+Printed Philippine BIR accreditation labels include Accr., Accred., and Accreditation. Recognize those bounded variants as location evidence for the existing editable PHP suggestion; a bare BIR acronym or conflicting countries is insufficient. Keep a distinct source for this suggestion instead of relabeling it as a printed currency.

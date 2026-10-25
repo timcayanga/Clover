@@ -25,7 +25,7 @@ type ReceiptCurrencyDetails = {
 function receiptLocationCandidates(text: string) {
   const source = text.normalize("NFKC");
   const regions: [string, RegExp][] = [
-    ["PHP", /\bPhilippines\b|\b(?:Makati|Mandaluyong|Taguig|Pasig|Quezon|Cebu|Davao)\s+City\b|\bBIR\b.{0,50}\b(?:permit|accred|TIN)\b/i],
+    ["PHP", /\bPhilippines\b|\b(?:Makati|Mandaluyong|Taguig|Pasig|Quezon|Cebu|Davao)\s+City\b|\bBIR\b.{0,50}\b(?:permit|accr(?:ed(?:itation)?)?|TIN)\b/i],
     ["IDR", /\bIndonesia\b|\b(?:Jakarta|Surabaya|Bandung|Denpasar)\b.{0,60}\b\d{5}\b/i],
     ["KRW", /\b(?:South Korea|Republic of Korea)\b|(?:서울|부산|인천|대구|대전|광주|울산)(?:특별시|광역시)|대한민국/u],
     ["SGD", /\bSingapore\s+\d{6}\b/i],
