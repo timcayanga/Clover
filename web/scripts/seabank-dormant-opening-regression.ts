@@ -20,6 +20,8 @@ for(const change of [
   (s:string)=>s.replace('page 2 of 2','page 2 of 3'),
   (s:string)=>s.replace('SEABANK_ID_LEGACY_COUNTS 2 2','SEABANK_ID_LEGACY_COUNTS 1 2'),
 ])assert.throws(()=>parseHeldNativeSource(change(text)),isSourceReviewRequiredError);
+const reordered=structuredClone(parsed.rows);for(const row of reordered)row.rawPayload!.dormantOpeningProof=Object.fromEntries(Object.entries(row.rawPayload!.dormantOpeningProof as Record<string,unknown>).reverse());
+assert.equal(hasVerifiedHeldNativeRows(text,reordered),true,'JSON key ordering cannot invalidate persisted source proof');
 const changed=structuredClone(parsed.rows);(changed[0].rawPayload!.dormantOpeningProof as Record<string,unknown>).serialPeriodConflict=false;
 assert.equal(hasVerifiedHeldNativeRows(text,changed),false,'Review evidence cannot be stripped from the trusted source');
 const cell=(str:string,x:number,y:number,width:number)=>({str,transform:[1,0,0,1,x,y],width});

@@ -328,6 +328,10 @@ export function buildDbsZeroPdfProof(items: Item[]): string[] {
   const [dd,mm,yy]=d.text.split('/');const date=day(dd,months[Number(mm)-1]??'',yy);
   return ['DBS_ZERO_COLUMN_PROOF '+JSON.stringify({product:product.text,accountNumber:id.text.slice(12),date,rows:1,movements:0,balance:0})];
 }
+// PostgreSQL JSONB and transport serializers may reorder these flat proof keys.
+const heldProofKey=(value:unknown)=>value && typeof value==='object' && !Array.isArray(value)
+  ? JSON.stringify(Object.entries(value).sort(([a],[b])=>a<b?-1:a>b?1:0))
+  : JSON.stringify(value??null);
 export function hasVerifiedHeldNativeRows(text: string, rows: Array<{date?: unknown; amount?: unknown; currency?: unknown; type?: unknown; accountNumber?: unknown; rawPayload?: unknown}>): boolean {
-  try{const source=parseHeldNativeSource(text);return Boolean(source && rows.length===source.rows.length && rows.every((r,i)=>{const raw=r.rawPayload as Record<string,unknown>|null,expected=source.rows[i];return r.date===expected.date && Number(r.amount)===Number(expected.amount) && r.currency===expected.currency && r.type===expected.type && r.accountNumber===expected.accountNumber && raw?.source===expected.rawPayload?.source && raw?.line===expected.rawPayload?.line && JSON.stringify(raw?.dormantOpeningProof??null)===JSON.stringify(expected.rawPayload?.dormantOpeningProof??null) && raw?.reviewRequired===expected.rawPayload?.reviewRequired && raw?.sourceRowIndex===i;}));}catch{return false;}
+  try{const source=parseHeldNativeSource(text);return Boolean(source && rows.length===source.rows.length && rows.every((r,i)=>{const raw=r.rawPayload as Record<string,unknown>|null,expected=source.rows[i];return r.date===expected.date && Number(r.amount)===Number(expected.amount) && r.currency===expected.currency && r.type===expected.type && r.accountNumber===expected.accountNumber && raw?.source===expected.rawPayload?.source && raw?.line===expected.rawPayload?.line && heldProofKey(raw?.dormantOpeningProof)===heldProofKey(expected.rawPayload?.dormantOpeningProof) && raw?.reviewRequired===expected.rawPayload?.reviewRequired && raw?.sourceRowIndex===i;}));}catch{return false;}
 }

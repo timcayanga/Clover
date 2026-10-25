@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
 import { readFileSync } from 'node:fs';
 import { randomUUID } from 'node:crypto';
+import {parseHeldNativeSource,hasVerifiedHeldNativeRows} from '../lib/held-source-contracts';
 
 const url = new URL(process.env.DATABASE_URL ?? 'http://invalid');
 assert.equal(url.hostname, '127.0.0.1');
@@ -39,11 +40,16 @@ async function main() {
       assert.equal(saved.length,3); assert(saved.every(row=>row.accountId===card.id && row.currency==='IDR' && row.type==='income'));
       assert.equal(saved.filter(row=>String(row.amount)==='500').length,2,'Legitimate repeated credits stay distinct');
       assert.equal(saved.filter(row=>String(row.amount)==='1').length,1);
-      for(const row of saved){const raw=row.rawPayload as Record<string,unknown>;assert.equal((raw.dormantOpeningProof as Record<string,unknown>).serialPeriodConflict,true);assert.equal((raw.dormantOpeningProof as Record<string,unknown>).sourceMetadataNeedsReview,true);assert.notEqual(row.reviewStatus,'confirmed','Source metadata review is not silently user-confirmed');}
+      for(const row of saved){const raw=row.rawPayload as Record<string,unknown>;assert.equal((raw.dormantOpeningProof as Record<string,unknown>).serialPeriodConflict,true);assert.equal((raw.dormantOpeningProof as Record<string,unknown>).sourceMetadataNeedsReview,true);assert.equal(row.reviewStatus,'pending_review','Source metadata review survives both enrichment passes');}
 
       assert.deepEqual(await db.account.findMany({where:{workspaceId:workspace.id},orderBy:{id:'asc'}}), accountsBefore, 'Dormant legacy source preserves confirmed zero, unknown or current IDR balances, identity and all timestamps');
       assert.deepEqual(await db.transaction.findUniqueOrThrow({where:{id:prior.id}}), prior);
-      assert.equal(await db.parsedTransaction.count({where:{importFileId:file.id}}),3);
+      const persisted=await db.parsedTransaction.findMany({where:{importFileId:file.id}});
+      assert.equal(persisted.length,3);
+      const expectedRows=parseHeldNativeSource(text)!.rows;
+      const storedRows=persisted.sort((a,b)=>Number((a.rawPayload as Record<string,unknown>).sourceRowIndex)-Number((b.rawPayload as Record<string,unknown>).sourceRowIndex));
+      storedRows.forEach((row,i)=>assert.equal((row.rawPayload as Record<string,unknown>).sourceRowIndex,i+1,'Storage occurrence indices retain their one-based audit contract'));
+      assert.equal(hasVerifiedHeldNativeRows(text,expectedRows.map((row,i)=>({...row,rawPayload:{...row.rawPayload,dormantOpeningProof:(storedRows[i].rawPayload as Record<string,unknown>).dormantOpeningProof,reviewRequired:(storedRows[i].rawPayload as Record<string,unknown>).reviewRequired}}))),true,'Actual stored JSONB proof remains verifiable after key reordering');
       const signals = await db.trainingSignal.findMany({where:{importFileId:file.id}});
       assert.equal(signals.length,3); assert(signals.every(signal=>signal.type==='income'&&saved.some(row=>row.id===signal.transactionId))); 
       const jobs = await db.learningJob.findMany({where:{workspaceId:workspace.id}});
