@@ -2,6 +2,8 @@ import { isLocalDevHost, requireAuth } from "@/lib/auth";
 import { assertWorkspaceAccess } from "@/lib/workspace-access";
 import { countParsedTransactionRows, countTransactionsByImportFileCompat, fetchImportFileCompat, hasCompatibleTable, updateImportFileCompat } from "@/lib/data-engine";
 import { SOURCE_REVIEW_PHASE, SOURCE_REVIEW_CODE } from "@/lib/import-source-review";
+import { recoverFailedImportResume } from "@/lib/import-resume-recovery";
+import { isUnauthorizedDataError } from "@/lib/transient-data";
 import { persistSourceReviewFailure } from "@/lib/import-source-review.server";
 import { buildImportTelemetrySnapshot } from "@/lib/import-telemetry";
 import { readCheckpointWorkflowStage } from "@/lib/import-workflow";
@@ -334,6 +336,14 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
       resumeReason: nextTelemetry.resumeReason,
     });
   } catch (error) {
+    // A failed sign-in/ownership check must never mutate the requested import.
+    if (!authorizedImportId) {
+      if (isUnauthorizedDataError(error)) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+      if (error instanceof Error && error.message === "WORKSPACE_NOT_FOUND") {
+        return NextResponse.json({ error: "Import not found" }, { status: 404 });
+      }
+      return NextResponse.json({ error: "Unable to resume import yet", retryable: true }, { status: 503 });
+    }
     if (authorizedImportId) {
       const sourceReview = await persistSourceReviewFailure(authorizedImportId, error);
       if (sourceReview?.kind === "user_control") {
@@ -350,21 +360,15 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
           retryable: false, requiresSourceReview: true, importFileId: authorizedImportId }, { status: 422 });
       }
     }
-    const importId = await params.then((value) => value.importId).catch(() => null);
-    if (importId) {
-      const visibleRows = await countTransactionsByImportFileCompat(importId).catch(() => 0);
-      await updateImportFileCompat(importId, {
-        status: visibleRows > 0 ? "done" : "processing",
-        processingPhase: visibleRows > 0 ? "complete" : "queued_retry",
-        processingMessage:
-          visibleRows > 0
-            ? "Transactions are visible. Clover is cleaning up names and categories in the background."
-            : "Clover saved this import and will retry from its last checkpoint.",
-        ...(visibleRows > 0 ? { confirmedTransactionsCount: visibleRows } : {}),
-      }).catch(() => null);
+    const recovery = await recoverFailedImportResume(authorizedImportId).catch(() => null);
+    if (recovery?.kind === "user_control") {
+      return NextResponse.json({ error: recovery.control === "paused" ? "Import paused" : "Import cancelled",
+        control: recovery.control, retryable: false, importFileId: authorizedImportId }, { status: 409 });
     }
+    if (recovery?.kind === "missing_import") return NextResponse.json({ error: "Import not found" }, { status: 404 });
     return NextResponse.json(
-      { error: "Unable to resume import yet", retryable: true, importFileId: importId },
+      { error: recovery?.kind === "preserved" ? "This import's current state was preserved. Refresh to see its status." : "Unable to resume import yet",
+        retryable: recovery?.kind !== "preserved", importFileId: authorizedImportId },
       { status: 503 }
     );
   }

@@ -182,3 +182,7 @@ Receipt and device-text multipart processing await the inline worker inside the 
 ## Late failures and cancellation
 
 Cancellation becomes terminal while holding the same import row lock used by financial confirmation; it does not depend on a surviving worker to acknowledge it. The durable control audit still prevents an in-flight worker from saving after cancellation. Source-review persistence preserves paused, cancelling, cancelled and completed states, including their timestamps. The isolated database gate exercises late failures before and after cancellation, refuses confirmation/resume of a cancelled import, and verifies existing confirmed finance is unchanged. No customer imports are replayed or modified by this change.
+
+## Failed resume recovery
+
+Resume error handling cannot mutate an import until workspace ownership has been verified. Generic timeout recovery takes the same import row lock as confirmation and pause/cancel, preserves completed/source-review/receipt-review states, and checks direct and legacy transaction links including soft-deleted records. Lookup failures roll back without assuming an empty import. An unsaved failed attempt stays retryable from its retained checkpoint and receives a separate, idempotent AI allowance credit; the original provider audit is retained. The real database/API regression covers denied access, late generic errors after controls, repeated refunds, deleted-row preservation and failed-read rollback.
