@@ -12415,7 +12415,7 @@ const processImportFileTextImpl = async (
   // This is progress-only state: do not put a separate database round trip in
   // front of the durable parsed-row write that makes a statement available for
   // confirmation.
-  void updateImportProgress({
+  const reconciliationProgressWrite = updateImportProgress({
     status: "processing",
     processingPhase: rows.length > 0 ? "reconciling" : "identifying_transactions",
     processingMessage:
@@ -13059,6 +13059,7 @@ const processImportFileTextImpl = async (
   }
 
   if (!isDocumentImport && imageImport && rows.length === 0) {
+    await reconciliationProgressWrite;
     const stalledInstitution = resolvedMetadata.institution ?? checkpointBankName ?? null;
     await updateImportFileCompat(importFileId, {
       status: "failed",
@@ -13179,6 +13180,8 @@ const processImportFileTextImpl = async (
   }
 
   if (!isDocumentImport && rows.length === 0) {
+    // A delayed cosmetic progress write must settle before the terminal state.
+    await reconciliationProgressWrite;
     // A parser must never call confirmation with no rows: confirmation recovery
     // would re-enter this parser and recurse until the function times out.
     throw new SourceReviewRequiredError("This statement contains no safely readable transactions. Clover saved the file; try a clearer export or another format.");

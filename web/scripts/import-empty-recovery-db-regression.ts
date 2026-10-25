@@ -23,9 +23,25 @@ async function main() {
     const snapshot = async () => JSON.stringify([await db.account.findUniqueOrThrow({ where: { id: account.id } }), await db.transaction.findUniqueOrThrow({ where: { id: tx.id } })]);
     const before = await snapshot();
     const file = await db.importFile.create({ data: { workspaceId: workspace.id, fileName: 'unreadable-bank.txt', fileType: 'text/plain', storageKey: 'qa/'+randomUUID() } });
+    const execute = db.$executeRawUnsafe.bind(db);
+    const delayedWrites: Promise<unknown>[] = [];
+    Object.assign(db, { $executeRawUnsafe: (query: string, ...values: unknown[]) => {
+      const run = async () => {
+        if (query.startsWith('UPDATE "ImportFile"') && values.includes('identifying_transactions')) {
+          await new Promise(resolve => setTimeout(resolve, 200));
+        }
+        return execute(query, ...values);
+      };
+      const write = run();
+      if (values.includes('identifying_transactions')) delayedWrites.push(write);
+      return write;
+    } });
     const startedAt = performance.now();
     await assert.rejects(processImportFileText(file.id, { text: 'BANK ACCOUNT STATEMENT\nAccount number 12345678\nCurrency PHP\nOpening balance 100.00\nEnding balance 50.00\nTransaction records are unreadable', importMode: 'statement', skipVisualBackupParser: true, actorUserId: user.clerkUserId }), SourceReviewRequiredError);
     assert(performance.now() - startedAt < 10000, 'An empty import must terminate, not recurse for minutes');
+    assert(delayedWrites.length > 0, 'Delayed progress race was actually exercised');
+    await Promise.all(delayedWrites);
+    Object.assign(db, { $executeRawUnsafe: execute });
     const stored = await db.importFile.findUniqueOrThrow({ where: { id: file.id } });
     assert.equal(stored.status, 'failed'); assert.equal(stored.processingPhase, SOURCE_REVIEW_PHASE);
     assert.equal(await db.auditLog.count({ where: { entityId: file.id, action: 'import.parser_usage' } }), 1, 'One processing request must mean one parser pass');
