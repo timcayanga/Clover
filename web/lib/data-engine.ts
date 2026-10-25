@@ -3006,7 +3006,7 @@ export const listAllImportFilesCompat = async (limit?: number): Promise<any[]> =
 export const updateImportFileCompat = async (
   importFileId: string,
   data: Partial<Record<string, unknown>>,
-  options: { fetchUpdated?: boolean } = {}
+  options: { fetchUpdated?: boolean; progressOnly?: boolean } = {}
 ): Promise<any | null> => {
   const columns = new Set(await getCompatibleImportFileColumns());
   const entries = Object.entries(data).filter(([key, value]) => columns.has(key) && value !== undefined);
@@ -3017,9 +3017,14 @@ export const updateImportFileCompat = async (
   if (entries.length > 0) {
     const setClause = entries.map(([key], index) => `"${key}" = $${index + 1}`).join(", ");
     const values = entries.map(([, value]) => value);
+    // Cosmetic writes can finish after confirmation, a refusal, or a user
+    // control. Check the persisted state atomically, rather than a stale read.
+    const progressGuard = options.progressOnly
+      ? `${columns.has("status") ? ` AND "status" <> 'done'` : ""}${columns.has("processingPhase") ? ` AND ("processingPhase" IS NULL OR "processingPhase" NOT IN ('source_review_required', 'receipt_review_required', 'pause_requested', 'paused', 'cancel_requested', 'cancelled'))` : ""}`
+      : "";
     if (options.fetchUpdated === false) {
       await prisma.$executeRawUnsafe(
-        `UPDATE "ImportFile" SET ${setClause} WHERE "id" = $${entries.length + 1}`,
+        `UPDATE "ImportFile" SET ${setClause} WHERE "id" = $${entries.length + 1}${progressGuard}`,
         ...values,
         importFileId
       );
@@ -3028,7 +3033,7 @@ export const updateImportFileCompat = async (
 
     const selectColumns = [...columns].map((column) => `"${column}"`).join(", ");
     const updatedRows = await prisma.$queryRawUnsafe<any[]>(
-      `UPDATE "ImportFile" SET ${setClause} WHERE "id" = $${entries.length + 1} RETURNING ${selectColumns}`,
+      `UPDATE "ImportFile" SET ${setClause} WHERE "id" = $${entries.length + 1}${progressGuard} RETURNING ${selectColumns}`,
       ...values,
       importFileId
     );

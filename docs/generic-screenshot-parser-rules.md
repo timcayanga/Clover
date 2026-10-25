@@ -112,3 +112,11 @@ Follow [Indonesian import rules](indonesian-import-parser-rules.md) for Bahasa I
 - Adjacent TOTAL PAID / amount and TOTAL / AMOUNT / amount cells may be rejoined for parsing without modifying digits or the retained raw receipt text. Item counts, dates, references and unrelated intervening labels do not qualify.
 - A zero-row local statement must be eligible for the consented, metered backup reader. An explicit routing quality decision cannot be vetoed by a second metadata-confidence heuristic. Non-financial scope, consent and quota checks remain enforced.
 - Empty statement results stop in a durable source-review state before confirmation. A parser's confirmation cannot recover rows by re-entering itself; explicit confirmation gets at most one recovery pass. Existing confirmed data, raw files, audit records and learning remain protected.
+
+## Column-order POS receipts and progress safety
+
+When OCR reads a separate label column before monetary cells, only rejoin the exact Sub Total / TOTAL / Tendered / CASH / Change layout with its VAT disclosures and contiguous tax-coded item amounts. Require exact cents agreement between item sum, subtotal, total, and cash minus change. Keep the original source independently; conflicting, repeated, missing or differently paid layouts remain unresolved. Currency absence still uses the established editable user-default/location suggestion, never fabricated printed evidence.
+
+Purchase dates must outrank printer accreditation, permit issuance and validity dates. A printer-context Date Issued or a Valid Until field does not establish a purchase date; an ordinary invoice issue date remains eligible.
+
+Cosmetic progress writes must test persisted completion, source/receipt review and pause/cancel phases atomically. A delayed update cannot reopen those states or change their timestamps. Incomplete receipts drain the pending reconciliation write before publishing their terminal review state.

@@ -555,6 +555,14 @@ const parseBillDateFromText = (text: string) => {
   const matches = datePatterns.flatMap(pattern => [...text.matchAll(new RegExp(pattern.source, "g"))])
     .sort((left, right) => left.index! - right.index!);
   for (const match of matches) {
+    const lineStart = text.lastIndexOf("\n", match.index! - 1) + 1;
+    const prefix = text.slice(lineStart, match.index!);
+    const previousLines = text.slice(0, lineStart).split(/\r?\n/).filter(line => line.trim()).slice(-4);
+    const dateLabel = prefix.trim() ? prefix : previousLines.at(-1) ?? "";
+    const printerContext = [...previousLines, prefix].join(" ");
+    const administrativeDate = /\b(?:valid\s+until|expir(?:y|ation)|date\s+of\s+birth|dob)\b/i.test(dateLabel) ||
+      (/\bdate\s+issued\b/i.test(dateLabel) && /\b(?:BIR\s+Accr|Accred(?:itation)?|PTU[N]?|printer|printing|permit)\b/i.test(printerContext));
+    if (administrativeDate) continue;
 
     if (/^\d{4}$/.test(match[1])) {
       const year = normalizeReceiptYear(Number(match[1]));

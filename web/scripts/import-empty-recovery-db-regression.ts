@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
 import { randomUUID } from 'node:crypto';
 import { eastwestProof } from './eastwest-transfer-proof-regression';
+import { columnReceipt } from './receipt-column-settlement-regression';
 import { SourceReviewRequiredError, SOURCE_REVIEW_PHASE } from '../lib/import-source-review';
 const url = new URL(process.env.DATABASE_URL ?? 'http://invalid');
 assert.equal(url.hostname, '127.0.0.1');
@@ -62,6 +63,53 @@ async function main() {
     await confirmImportFile(proof.id);
     assert.equal(await db.transaction.count({ where: { importFileId: proof.id } }), 2, 'Proof confirmation must be idempotent');
     assert.equal(await db.account.count({ where: { workspaceId: workspace.id, institution: 'UnionBank' } }), 0, 'A recipient is not a new user-owned bank account');
+    assert.equal(await snapshot(), before);
+
+    const { updateImportFileCompat } = await import('../lib/data-engine');
+    for (const phase of ['complete', 'source_review_required', 'receipt_review_required', 'pause_requested', 'paused', 'cancel_requested', 'cancelled']) {
+      const protectedFile = await db.importFile.create({ data: { workspaceId: workspace.id, fileName: 'protected.txt', fileType: 'text/plain', storageKey: 'qa/'+randomUUID(), status: phase === 'complete' ? 'done' : 'failed', processingPhase: phase, processingMessage: 'Existing authoritative state' } });
+      const prior = JSON.stringify(protectedFile);
+      await updateImportFileCompat(protectedFile.id, { status: 'processing', processingPhase: 'identifying_transactions', processingMessage: 'Late progress' }, { fetchUpdated: false, progressOnly: true });
+      assert.equal(JSON.stringify(await db.importFile.findUniqueOrThrow({ where: { id: protectedFile.id } })), prior, phase+' must survive a late cosmetic update, including timestamps');
+      assert.equal(await updateImportFileCompat(protectedFile.id, { processingPhase: 'reconciling' }, { progressOnly: true }), null, 'Returning progress writes use the same guard');
+    }
+    const liveFile = await db.importFile.create({ data: { workspaceId: workspace.id, fileName: 'live.txt', fileType: 'text/plain', storageKey: 'qa/'+randomUUID(), status: 'processing', processingPhase: 'queued' } });
+    await updateImportFileCompat(liveFile.id, { processingPhase: 'reading_file' }, { fetchUpdated: false, progressOnly: true });
+    assert.equal((await db.importFile.findUniqueOrThrow({ where: { id: liveFile.id } })).processingPhase, 'reading_file');
+    // State may change after a progress request starts, before its SQL runs.
+    let release!: () => void; let entered!: () => void;
+    const hold = new Promise<void>(resolve => { release = resolve; });
+    const reached = new Promise<void>(resolve => { entered = resolve; });
+    Object.assign(db, { $executeRawUnsafe: async (query: string, ...values: unknown[]) => {
+      if (query.startsWith('UPDATE "ImportFile"') && values.includes('late_race')) { entered(); await hold; }
+      return execute.call(db, query, ...values);
+    } });
+    const late = updateImportFileCompat(liveFile.id, { processingPhase: 'late_race', status: 'processing' }, { fetchUpdated: false, progressOnly: true });
+    await reached;
+    const completed = await db.importFile.update({ where: { id: liveFile.id }, data: { status: 'done', processingPhase: 'complete' } });
+    release(); await late; Object.assign(db, { $executeRawUnsafe: execute });
+    assert.equal(JSON.stringify(await db.importFile.findUniqueOrThrow({ where: { id: liveFile.id } })), JSON.stringify(completed));
+
+    const columnFile = await db.importFile.create({ data: { workspaceId: workspace.id, fileName: 'column-receipt.jpg', fileType: 'image/jpeg', storageKey: 'qa/'+randomUUID() } });
+    await processImportFileText(columnFile.id, { text: columnReceipt, importMode: 'statement', skipVisualBackupParser: true, actorUserId: user.clerkUserId });
+    const columnRows = await db.transaction.findMany({ where: { importFileId: columnFile.id } });
+    assert.equal(columnRows.length, 1);
+    assert.equal(Number(columnRows[0].amount), 250);
+    assert.equal(columnRows[0].currency, 'PHP', 'Missing source currency uses the user default');
+    assert.equal(columnRows[0].date.toISOString().slice(0,10), '2026-10-23');
+    assert.equal((await db.importFile.findUniqueOrThrow({ where: { id: columnFile.id } })).status, 'done');
+    await confirmImportFile(columnFile.id);
+    assert.equal(await db.transaction.count({ where: { importFileId: columnFile.id } }), 1);
+    assert.equal(await snapshot(), before);
+
+    const noDate = await db.importFile.create({ data: { workspaceId: workspace.id, fileName: 'incomplete-receipt.jpg', fileType: 'image/jpeg', storageKey: 'qa/'+randomUUID() } });
+    const partial = await processImportFileText(noDate.id, { text: columnReceipt.replace('10/23/2026 05:25:13 PM\n',''), importMode: 'receipt', skipVisualBackupParser: true, actorUserId: user.clerkUserId });
+    assert.equal(partial.requiresInput, true);
+    const partialFile = await db.importFile.findUniqueOrThrow({ where: { id: noDate.id } });
+    assert.equal(partialFile.status, 'failed');
+    assert.equal(partialFile.processingPhase, 'receipt_review_required');
+    assert.match(partialFile.processingMessage ?? '', /date/i);
+    assert.equal(await db.transaction.count({ where: { importFileId: noDate.id } }), 0, 'A printer date cannot create a transaction');
     assert.equal(await snapshot(), before);
 
     // Confirmation invoked by a parser cannot re-enter the parser at all.

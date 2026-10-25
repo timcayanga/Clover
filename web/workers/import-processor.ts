@@ -8591,7 +8591,7 @@ const processImportFileTextImpl = async (
     });
   };
   const updateImportProgress = (data: Partial<Record<string, unknown>>) =>
-    updateImportFileCompat(importFileId, data, { fetchUpdated: false });
+    updateImportFileCompat(importFileId, data, { fetchUpdated: false, progressOnly: true });
   const traceId =
     (importFile && typeof (importFile as { traceId?: unknown }).traceId === "string" && String((importFile as { traceId: string }).traceId).trim()) ||
     crypto.randomUUID();
@@ -12901,6 +12901,8 @@ const processImportFileTextImpl = async (
         }) as Prisma.InputJsonValue },
       });
     }
+    await reconciliationProgressWrite;
+    await requireImportMayContinue(importFileId, String(importFile.workspaceId));
     await updateImportFileCompat(importFileId, {
       status: "failed", processingPhase: RECEIPT_REVIEW_PHASE, processingMessage: message,
       parsedRowsCount: 0, confirmedTransactionsCount: 0,
