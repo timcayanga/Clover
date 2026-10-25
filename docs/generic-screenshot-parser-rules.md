@@ -105,3 +105,10 @@ Follow [Indonesian import rules](indonesian-import-parser-rules.md) for Bahasa I
 - Regional text-parser benchmarks and original-image OCR benchmarks are separate gates. A passing post-OCR corpus does not establish image, cloud fallback, or end-to-end import accuracy.
 - A schema-valid partial receipt with no transaction rows and missing merchant, date, currency or positive total must retain its source and extracted ReceiptDocument for review. Use the terminal `receipt_review_required` phase, identify the missing fields, and do not confirm, promote template learning, or retry the same unreadable source automatically. Existing confirmed transactions remain protected. A partial receipt document alone must not count as a visible transaction in the global upload indicator.
 - Native OCR is accepted through a complete, bounded one-page envelope and is checked before cloud routing. Complete local receipt cores remain review-required; incomplete cores offer editable saved drafts, even at the cloud quota limit. See [native receipt intake](local-receipt-ocr.md#native-receipt-intake-october-2026).
+
+## October 2026 import incident safeguards
+
+- Standalone RECEIPT, INVOICE and EXPENSE RECORD headings with settlement evidence route camera uploads to receipt processing before generic statement extraction. Bank balance tables still take precedence over incidental receipt words.
+- Adjacent TOTAL PAID / amount and TOTAL / AMOUNT / amount cells may be rejoined for parsing without modifying digits or the retained raw receipt text. Item counts, dates, references and unrelated intervening labels do not qualify.
+- A zero-row local statement must be eligible for the consented, metered backup reader. An explicit routing quality decision cannot be vetoed by a second metadata-confidence heuristic. Non-financial scope, consent and quota checks remain enforced.
+- Empty statement results stop in a durable source-review state before confirmation. A parser's confirmation cannot recover rows by re-entering itself; explicit confirmation gets at most one recovery pass. Existing confirmed data, raw files, audit records and learning remain protected.

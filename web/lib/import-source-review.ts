@@ -17,6 +17,9 @@ export function sourceReviewUserMessage(reason: string): string {
   if (reason === "Native source requires review: complete DBS zero snapshot pages") {
     return "Clover could not verify the account, pages, and balances in this DBS statement.";
   }
+  if (reason.startsWith("GCash complete wallet ledger requires source review:")) {
+    return "Clover could not verify every transaction against the balances in this GCash statement. Your file is saved; try a fresh statement export.";
+  }
   if (reason.includes("GCash payment template mixes currencies")) {
     return "This GCash template shows conflicting currencies and does not establish a reliable payment.";
   }

@@ -100,3 +100,24 @@ assert.equal(receiptCacheQualityPercent({score:90, issues:[]}),90);
 assert.equal(receiptCacheQualityPercent({score:10, issues:["date missing"]}),null);
 assert.equal(receiptCacheQualityPercent({score:10, critical:true}),null);
 assert.equal(receiptCacheQualityPercent({score:NaN}),null);
+
+for (const header of ['RECEIPT', 'INVOICE', 'EXPENSE RECORD']) {
+  assert(hasReceiptPhotoEvidence(`SAMPLE CONDOMINIUM ASSOCIATION\n${header}\nOct 23, 2026\nCondominium dues\nTOTAL PAID\nPHP 1,250.00`), 'A plain document heading is receipt evidence before statement parsing');
+}
+assert(!hasReceiptPhotoEvidence('Account statement\nRECEIPT\nOpening balance 100.00\nTOTAL 100.00'));
+
+for (const settlement of ['TOTAL PAID\nPHP 1,250.00', 'TOTAL\nAMOUNT\nP1,250.00']) {
+  const source = `SAMPLE ASSOCIATION\nTaguig City Philippines\nRECEIPT\nOct 23, 2026\nDues\n${settlement}`;
+  const parsed = parseReceiptText(source);
+  assert.equal(parsed.total, '1250.00', 'Use the adjacent printed settlement, not an unrelated number');
+  assert.equal(parsed.receiptText, source, 'Original line boundaries remain in the source evidence');
+}
+const countOnly = parseReceiptText('SAMPLE CAFE\nRECEIPT\nOct 23, 2026\nTOTAL ITEMS\n12\nInvoice no 12345678');
+assert.notEqual(countOnly.total, '12.00');
+assert.notEqual(countOnly.total, '12345678.00');
+
+assert(hasReceiptPhotoEvidence('SAMPLE ASSOCIATION\nOct 23, 2026\nDues and utilities\nTOTAL PAID\nPHP 1,250.00'), 'A printed paid settlement can identify a receipt without a receipt heading');
+assert(!hasReceiptPhotoEvidence('Bank statement\nOpening balance 100\nTOTAL PAID\nPHP 100.00'));
+
+assert(!hasReceiptPhotoEvidence('GCash Transaction History\n2026-10-23\nINVOICE\nTOTAL PAID\nPHP 1,250.00'), 'History screens remain statements even when they contain a receipt heading or payment summary');
+assert(!hasReceiptPhotoEvidence('GCash statement\nSTARTING BALANCE 100.00\nINVOICE\nTOTAL PAID\nPHP 50.00\nENDING BALANCE 50.00'));

@@ -31,6 +31,12 @@ const OPENAI_IMPORT_LEGACY_TEXT_MODEL_FALLBACK = "gpt-5.4-mini";
 const OPENAI_IMPORT_LEGACY_PDF_MODEL_FALLBACK = "gpt-5.5";
 const RECEIPT_VISION_HEDGE_DELAY_MS = 2_500;
 
+export type OpenAIImportDiagnostic = {
+  reason: "consent_required" | "not_configured" | "quota_exhausted" | "provider_error" | "timeout" | "invalid_response";
+  statusCode?: number | null;
+  model?: string | null;
+};
+
 export type OpenAIImportModelUsage = {
   model: string;
   stage: string;
@@ -2052,7 +2058,9 @@ const responseLooksUseful = (metadata: DetectedStatementMetadata | null, rows: P
   const fileNameLike = genericName.length > 0 && (genericName.includes("imported-file") || genericName === "account" || genericName === "statement");
 
   if (rows.length === 0) {
-    return false;
+    // An empty local result is the strongest reason to try the backup reader.
+    // Upload scope, consent and quota checks still apply at their boundaries.
+    return true;
   }
 
   if (rows.length <= 2 && confidence < 80) {
@@ -2679,6 +2687,8 @@ const parseImportTextWithOpenAIFallbackImpl = async (params: {
   pageImages?: Array<{ page: number; dataUrl: string }> | null;
   fileDataBase64?: string | null;
   preferPrimary?: boolean;
+  /** The routing quality gate has already required backup verification. */
+  forceFallback?: boolean;
   importMode?: ImportMode | null;
   pageImageLimit?: number | null;
   timeoutMs?: number | null;
@@ -2686,6 +2696,7 @@ const parseImportTextWithOpenAIFallbackImpl = async (params: {
   receiptCoreOnly?: boolean;
   forceReceiptHighDetail?: boolean;
   onUsage?: (usage: OpenAIImportModelUsage) => void;
+  onDiagnostic?: (diagnostic: OpenAIImportDiagnostic) => void;
 }): Promise<
   | {
       documentType: "statement" | "receipt" | "notes" | "portfolio" | "account_detail";
@@ -2784,8 +2795,12 @@ const parseImportTextWithOpenAIFallbackImpl = async (params: {
   }
 
   const env = getEnv();
-  if (!(await maySendToCloudAi(params.consentUserId))) return null;
+  if (!(await maySendToCloudAi(params.consentUserId))) {
+    params.onDiagnostic?.({ reason: "consent_required" });
+    return null;
+  }
   const apiKey = (env as { OPENAI_API_KEY?: string }).OPENAI_API_KEY?.trim();
+  if (!apiKey) params.onDiagnostic?.({ reason: "not_configured" });
   const isPrimaryMode =
     params.preferPrimary ?? isTruthyEnvValue((env as { OPENAI_IMPORT_PARSER_PRIMARY?: string }).OPENAI_IMPORT_PARSER_PRIMARY);
   const noisyVisionPreferredInstitutions = new Set(["Landbank", "EastWest", "UCPB", "Chinabank", "China Bank"]);
@@ -2796,6 +2811,7 @@ const parseImportTextWithOpenAIFallbackImpl = async (params: {
   if (
     !apiKey ||
     (!isPrimaryMode &&
+      !params.forceFallback &&
       !shouldForceOpenAIFallbackForNoisyInstitution &&
       !responseLooksUseful(params.detectedMetadata, params.parsedRows, params.importMode ?? null))
   ) {
@@ -3106,6 +3122,7 @@ const parseImportTextWithOpenAIFallbackImpl = async (params: {
     requestController?: AbortController
   ) => {
     if (cloudAllowanceExhausted || !(await mayUseImportCloudAi(params.consentUserId, pendingCloudTokens))) {
+      params.onDiagnostic?.({ reason: "quota_exhausted", model: selectedModel });
       cloudAllowanceExhausted = true;
       return null;
     }
@@ -3353,6 +3370,7 @@ const parseImportTextWithOpenAIFallbackImpl = async (params: {
         return { response, model: candidateModel };
       }
 
+      params.onDiagnostic?.({ reason: response ? "provider_error" : "timeout", model: candidateModel, statusCode: response?.status ?? null });
       console.warn("OpenAI import fallback model attempt failed", {
         model: candidateModel,
         status: response?.status ?? null,
@@ -3932,6 +3950,7 @@ const parseImportTextWithOpenAIFallbackImpl = async (params: {
     const allowsEmptyRows = documentType !== "statement";
 
     if (rows.length === 0 && !allowsEmptyRows) {
+      params.onDiagnostic?.({ reason: "invalid_response", model: selectedModel });
       return null;
     }
 
@@ -3955,6 +3974,7 @@ const parseImportTextWithOpenAIFallbackImpl = async (params: {
       },
     };
   } catch (error) {
+    params.onDiagnostic?.({ reason: error instanceof Error && error.name === "AbortError" ? "timeout" : "invalid_response" });
     console.warn("OpenAI import fallback failed", error);
     return null;
   }

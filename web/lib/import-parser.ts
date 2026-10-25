@@ -1,3 +1,4 @@
+import { parseEastwestTransferProof } from "./eastwest-transfer-proof";
 import {parseHeldNativeSource} from '@/lib/held-source-contracts';
 import { heldSourceReviewReason } from '@/lib/held-source-review';
 import { SourceReviewRequiredError } from '@/lib/import-source-review';
@@ -16712,16 +16713,21 @@ const parseGcashCompleteNativeLedger = (text: string, metadata: DetectedStatemen
   const descriptions = new Map<string, { description: string; parts: string[] }>();
   for (let index = 0; index < nativeLines.length; index++) {
     const line = nativeLines[index];
-    const cells = line.match(/^(.*?)\s+(\d{12,})\s+([\d,]+\.\d{2})\s+([\d,]+\.\d{2})$/);
+    const cells = line.match(/^(?:(.*?)\s+)?(\d{12,})\s+([\d,]+\.\d{2})\s+([\d,]+\.\d{2})$/);
     if (!cells) continue;
     const reference = cells[2];
-    let description = cells[1].replace(/^\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}(?::\d{2})?\s+[AP]M\s*/i, "").trim();
+    let description = (cells[1] ?? "").replace(/^\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}(?::\d{2})?\s+[AP]M\s*/i, "").trim();
     const parts = [line];
     if (!description) {
-      const before = nativeLines[index - 1] ?? "";
-      if (!gcashRecordStarterPattern.test(before)) return null;
-      description = before;
-      parts.unshift(before);
+      // PDF text layers can put description, date/time and numeric cells on
+      // three separate lines. A reference at column zero is still a source row.
+      const preceding = nativeLines.slice(Math.max(0, index - 2), index);
+      const dateOnly = /^\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}(?::\d{2})?\s+[AP]M$/i;
+      const before = preceding.at(-1) ?? "";
+      const prefix = dateOnly.test(before) ? preceding.at(-2) ?? "" : before;
+      if (!gcashRecordStarterPattern.test(prefix) || /\b\d{12,}\s+[\d,]+\.\d{2}\s+[\d,]+\.\d{2}$/.test(prefix)) return null;
+      description = prefix;
+      parts.unshift(...(dateOnly.test(before) ? [prefix, before] : [prefix]));
     }
     const after = nativeLines[index + 1] ?? "";
     if (/^invno:[A-Z0-9]+$/i.test(after) && /\band$/i.test(description) || /\bTransaction Number:\s*$/i.test(description) && /^[A-Z0-9-]{8,}$/i.test(after)) {
@@ -25166,6 +25172,8 @@ export const parseImportTextGenericOnly = (
 ) => {
   const reviewReason = heldSourceReviewReason(text);
   if (reviewReason) throw new SourceReviewRequiredError(reviewReason);
+  const eastwestProof = parseEastwestTransferProof(text);
+  if (eastwestProof) return eastwestProof.rows;
   const structuredWorkbookRows = parseStructuredWorkbookImport(text, fileName, fileType, context);
   if (structuredWorkbookRows) {
     return structuredWorkbookRows;
@@ -26498,6 +26506,8 @@ export const detectStatementMetadata = (text: string, fileName = ""): DetectedSt
     };
   }
 
+  const eastwestProof = parseEastwestTransferProof(text);
+  if (eastwestProof) return eastwestProof.metadata;
   const heldNative = parseHeldNativeSource(text);
   if (heldNative) return heldNative.metadata;
   const maybankIslamic = parseMaybankIslamicStatement(text);
@@ -27388,6 +27398,8 @@ export const parseImportText = (
   fileType: string,
   context: ImportParseContext = {}
 ): ParsedImportRow[] => {
+  const eastwestProof = parseEastwestTransferProof(text);
+  if (eastwestProof) return eastwestProof.rows;
   const financialExchangeRows = parseFinancialExchangeImport(text, fileName, fileType, context);
   if (financialExchangeRows) {
     return financialExchangeRows;

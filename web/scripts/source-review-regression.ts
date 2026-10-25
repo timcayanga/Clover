@@ -51,3 +51,8 @@ const mobile = mobileApiResponse("import-status", { importFile: snapshot, ...tel
   confirmedTransactionsCount: 0, parsedRowsCount: 0, visibleImportComplete: false });
 assert.equal((mobile.importFile as typeof snapshot).processingMessage, reason);
 console.log("Source review: typed native refusals, visible reasons, stopped source retries, transient recovery and confirmed-data precedence passed.");
+
+const gcashMessage = sourceReviewUserMessage('GCash complete wallet ledger requires source review: native references, clocks, descriptions, account identity or running balances do not reconcile');
+assert.match(gcashMessage, /balances/);
+assert.match(gcashMessage, /file is saved/);
+assert.doesNotMatch(gcashMessage, /native|clock|parser/i);

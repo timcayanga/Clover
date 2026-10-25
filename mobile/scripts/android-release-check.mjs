@@ -6,7 +6,19 @@ import { execFileSync } from "node:child_process";
 import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
 const require = createRequire(import.meta.url);
-const { configureGradle } = require("../plugins/with-clover-android-release.cjs");
+const { configureGradle, configureOptionalLocation } = require("../plugins/with-clover-android-release.cjs");
+const camera = { $: { "android:name": "android.hardware.camera", "android:required": "false" } };
+for (const features of [undefined, [camera], [camera, { $: { "android:name": "android.hardware.location", "android:required": "true" } }]]) {
+  const manifest = { ...(features ? { "uses-feature": structuredClone(features) } : {}), "uses-permission": [{ $: { "android:name": "android.permission.ACCESS_COARSE_LOCATION" } }] };
+  configureOptionalLocation(manifest);
+  for (const name of ["android.hardware.location", "android.hardware.location.gps", "android.hardware.location.network"]) {
+    assert.deepEqual(manifest["uses-feature"].filter(feature => feature.$["android:name"] === name), [{ $: { "android:name": name, "android:required": "false" } }]);
+  }
+  if (features) assert.deepEqual(manifest["uses-feature"].find(feature => feature.$["android:name"] === "android.hardware.camera"), camera);
+  assert.deepEqual(manifest["uses-permission"], [{ $: { "android:name": "android.permission.ACCESS_COARSE_LOCATION" } }]);
+  const first = structuredClone(manifest);
+  assert.deepEqual(configureOptionalLocation(manifest), first, "Repeated prebuilds preserve optional hardware and unrelated entries");
+}
 const source = 'proguardFiles getDefaultProguardFile("proguard-android.txt"), "proguard-rules.pro"';
 assert.match(configureGradle(source), /proguard-android-optimize\.txt/);
 assert.equal(configureGradle(configureGradle(source)), configureGradle(source));

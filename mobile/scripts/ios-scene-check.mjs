@@ -31,6 +31,16 @@ try {
 
   const native = join(project, "ios", "Clover");
   const plist = parse(readFileSync(join(native, "Info.plist"), "utf8"));
+  // expo-location links CoreMotion even when Clover only requests foreground location.
+  // Apple validates linked APIs during processing, so the final generated plist needs
+  // a truthful purpose string without enabling motion collection or background access.
+  assert.equal(typeof plist.NSMotionUsageDescription, "string");
+  assert.ok(plist.NSMotionUsageDescription.trim().length > 40,
+    "App Store processing requires a nonempty motion purpose for the linked location SDK");
+  assert.match(plist.NSMotionUsageDescription, /does not request or collect motion/);
+  assert.equal(plist.NSLocationAlwaysUsageDescription, undefined);
+  assert.equal(plist.NSLocationAlwaysAndWhenInUseUsageDescription, undefined);
+  assert.ok(!plist.UIBackgroundModes?.includes("location"));
   const scene = plist.UIApplicationSceneManifest;
   assert.equal(scene?.UISceneConfigurations?.UIWindowSceneSessionRoleApplication?.[0]?.UISceneDelegateClassName,
     "EXExpoAppSceneDelegate", "iOS 27 requires a configured Expo scene delegate in the generated app");
@@ -46,7 +56,7 @@ try {
   assert.ok(existsSync(join(native, "Clover.entitlements")));
   const entitlements = parse(readFileSync(join(native, "Clover.entitlements"), "utf8"));
   assert.deepEqual(entitlements["com.apple.developer.applesignin"], ["Default"]);
-  console.log("iOS scene lifecycle: clean prebuild, factory wiring, deep links and Apple sign-in passed.");
+  console.log("iOS scene lifecycle: clean prebuild, factory wiring, deep links, permission purposes and Apple sign-in passed.");
 } finally {
   rmSync(project, { recursive: true, force: true });
 }

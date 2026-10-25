@@ -1,3 +1,4 @@
+import { hasVerifiedEastwestTransferRows } from "@/lib/eastwest-transfer-proof";
 import { normalizeReceiptCaptureLocation } from "../../shared/receipt-capture-location";
 import {hasVerifiedHeldNativeRows} from '@/lib/held-source-contracts';
 import { heldSourceReviewReason } from '@/lib/held-source-review';
@@ -20,6 +21,7 @@ import { finalizePortfolioImport, isHoldingsOnlyPortfolio, portfolioConfidence }
 import { assessImportEvidenceSafety, assertSafeImportEvidence } from "@/lib/import-evidence-safety";
 import { startImportTiming, measureImportTiming } from "@/lib/import-timing";
 import { incompleteReceiptFields, receiptCurrencyForPersistence, receiptReviewMessage, RECEIPT_REVIEW_PHASE } from "@/lib/receipt-review";
+import { persistSourceReviewFailure } from "@/lib/import-source-review.server";
 import { SOURCE_REVIEW_PHASE, SourceReviewRequiredError } from "@/lib/import-source-review";
 import { shouldRefineReceiptCore } from "@/lib/receipt-detail-refinement";
 import { Prisma } from "@prisma/client";
@@ -6010,6 +6012,12 @@ const resolveConfirmationAccount = async (params: {
       investmentMaturityDate?: Date | null;
     }
   ) => {
+    // A payment proof identifies only a masked sender. Matching it to an
+    // existing account must not replace the full identity or stored balance.
+    if (params.parsedRows.length > 0 && params.parsedRows.every(row =>
+      (row.rawPayload as Record<string, unknown> | null)?.source === "eastwest_transfer_proof")) {
+      return account;
+    }
     const data: Record<string, unknown> = {};
     const explicitInventoryName =
       accountSnapshotInventory && typeof next.name === "string" && next.name.trim()
@@ -8538,6 +8546,10 @@ const processImportFileTextImpl = async (
 ): Promise<ProcessImportResult> => {
   const startedAt = Date.now();
   const openAIUsageEntries: OpenAIImportModelUsage[] = [];
+  const backupDiagnostics: import("@/lib/openai-import-parser").OpenAIImportDiagnostic[] = [];
+  const recordBackupDiagnostic = (diagnostic: import("@/lib/openai-import-parser").OpenAIImportDiagnostic) => {
+    if (backupDiagnostics.length < 16) backupDiagnostics.push(diagnostic);
+  };
   const rawFileReady = options.rawFileReady ?? null;
   // Attach a rejection handler immediately so an early validation return does
   // not leave the concurrent object-storage upload as an unhandled promise.
@@ -8618,7 +8630,7 @@ const processImportFileTextImpl = async (
     for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
       try {
         await requireImportMayContinue(importFileId, String(importFile?.workspaceId ?? ""));
-        return await confirmImportFile(importFileId, matchedAccountId);
+        return await confirmImportFile(importFileId, matchedAccountId, { recoverMissingRows: false });
       } catch (error) {
         if (error instanceof ImportUserControlError) throw error;
         lastError = error;
@@ -9648,6 +9660,8 @@ const processImportFileTextImpl = async (
       imagePreparationOverlappedWithPreflight: Boolean(eagerReceiptImagePromise),
     });
     earlyReceiptVisionPromise = measureImportTiming(importFileId, "receipt_core_vision", () => parseImportTextWithOpenAIFallback({
+            forceFallback: true,
+            onDiagnostic: recordBackupDiagnostic,
             consentUserId,
       text: readLocalReceiptOcrText(text) ?? text,
       fileName,
@@ -10055,7 +10069,7 @@ const processImportFileTextImpl = async (
       );
     }) &&
     countPdaxPortfolioHoldingRows(parsedRows as Array<Record<string, unknown>>) === 0;
-  const isTransactionHistoryImage = () => imageImport && isTransactionHistoryScreenshotText(textForParse);
+  const isTransactionHistoryImage = () => imageImport && (isTransactionHistoryScreenshotText(textForParse) || hasVerifiedEastwestTransferRows(textForParse, parsedRows));
   let effectiveImportMode = isTransactionHistoryImage() && importMode === "statement"
     ? "statement"
     : inferStructuredDocumentImportModeFromParsedRows(importMode, parsedRows, metadataForParse);
@@ -10171,6 +10185,7 @@ const processImportFileTextImpl = async (
       hasVerifiedGcashWalletHistoryRows(textForParse, parsedRows) ||
       hasVerifiedGcashBillsRows(textForParse, parsedRows) ||
       hasVerifiedPosbRows(textForParse, parsedRows) ||
+      hasVerifiedEastwestTransferRows(textForParse, parsedRows) ||
       hasVerifiedBcaTransferRows(textForParse, parsedRows) ||
       hasVerifiedCimbConsolidatedRows(textForParse, parsedRows) ||
       hasStructuredWorkbookRows ||
@@ -10252,6 +10267,8 @@ const processImportFileTextImpl = async (
           const earlyPageImages = prefetchedAssets?.pageImages ?? pageImages ?? null;
           const earlyPdfFileDataBase64 = prefetchedAssets?.pdfFileDataBase64 ?? pdfFileDataBase64 ?? null;
           return measureImportTiming(importFileId, "model_extraction_and_parse", () => parseImportTextWithOpenAIFallback({
+            forceFallback: true,
+            onDiagnostic: recordBackupDiagnostic,
             consentUserId,
             text: textForParse,
             fileName,
@@ -10665,6 +10682,7 @@ const processImportFileTextImpl = async (
     !hasVerifiedGcashWalletHistoryRows(textForParse, parsedRows) &&
     !hasVerifiedGcashBillsRows(textForParse, parsedRows) &&
     !hasVerifiedPosbRows(textForParse, parsedRows) &&
+    !hasVerifiedEastwestTransferRows(textForParse, parsedRows) &&
     !hasVerifiedBcaTransferRows(textForParse, parsedRows) &&
     !hasVerifiedCimbConsolidatedRows(textForParse, parsedRows) &&
     !hasStructuredWorkbookRows &&
@@ -10845,6 +10863,7 @@ const processImportFileTextImpl = async (
       hasVerifiedGcashWalletHistoryRows(textForParse, parsedRows) ||
       hasVerifiedGcashBillsRows(textForParse, parsedRows) ||
     hasVerifiedPosbRows(textForParse, parsedRows) ||
+      hasVerifiedEastwestTransferRows(textForParse, parsedRows) ||
       hasVerifiedBcaTransferRows(textForParse, parsedRows) ||
       hasVerifiedCimbConsolidatedRows(textForParse, parsedRows) ||
     hasStructuredWorkbookRows ||
@@ -11177,6 +11196,8 @@ const processImportFileTextImpl = async (
           : importMode === "statement" && earlyOpenAiFallbackPromise
           ? await earlyOpenAiFallbackPromise
           : await measureImportTiming(importFileId, "model_extraction_and_parse", () => parseImportTextWithOpenAIFallback({
+            forceFallback: true,
+            onDiagnostic: recordBackupDiagnostic,
             consentUserId,
               text: textForParse,
               fileName,
@@ -11199,6 +11220,8 @@ const processImportFileTextImpl = async (
             }));
       if (!openAiParsed && importMode === "receipt" && earlyReceiptVisionPromise) {
         openAiParsed = await measureImportTiming(importFileId, "model_extraction_and_parse", () => parseImportTextWithOpenAIFallback({
+            forceFallback: true,
+            onDiagnostic: recordBackupDiagnostic,
             consentUserId,
           text: textForParse,
           fileName,
@@ -11463,6 +11486,8 @@ const processImportFileTextImpl = async (
       const transcriptParsed = transcriptPreviewDetails
         ? null
         : await measureImportTiming(importFileId, "model_extraction_and_parse", () => parseImportTextWithOpenAIFallback({
+            forceFallback: true,
+            onDiagnostic: recordBackupDiagnostic,
             consentUserId,
             text: transcriptNormalized,
             fileName,
@@ -11612,6 +11637,8 @@ const processImportFileTextImpl = async (
     if (transcript?.transcript.trim()) {
       const transcriptImportMode = normalizeImportImageMode(transcript.documentType);
       const transcriptParsed = await measureImportTiming(importFileId, "model_extraction_and_parse", () => parseImportTextWithOpenAIFallback({
+            forceFallback: true,
+            onDiagnostic: recordBackupDiagnostic,
             consentUserId,
         text: normalizeStatementImageOcrText(transcript.transcript),
         fileName,
@@ -11924,6 +11951,9 @@ const processImportFileTextImpl = async (
         autoRerunAttempt,
         selectedParser: useOpenAiParse ? "backup_parser" : "local_parser",
         backupParserInvoked: backupParserUsage.calls > 0,
+        backupParserRequested: shouldRunOpenAiFallback,
+        backupParserReturnedResult: Boolean(openAiParsed),
+        backupParserDiagnostics: backupDiagnostics,
         localParser: {
           ...localTokenEstimate,
           parsedRows: parsedRows.length,
@@ -12400,7 +12430,7 @@ const processImportFileTextImpl = async (
   // This is progress-only state: do not put a separate database round trip in
   // front of the durable parsed-row write that makes a statement available for
   // confirmation.
-  void updateImportProgress({
+  const reconciliationProgressWrite = updateImportProgress({
     status: "processing",
     processingPhase: rows.length > 0 ? "reconciling" : "identifying_transactions",
     processingMessage:
@@ -13044,6 +13074,7 @@ const processImportFileTextImpl = async (
   }
 
   if (!isDocumentImport && imageImport && rows.length === 0) {
+    await reconciliationProgressWrite;
     const stalledInstitution = resolvedMetadata.institution ?? checkpointBankName ?? null;
     await updateImportFileCompat(importFileId, {
       status: "failed",
@@ -13161,6 +13192,14 @@ const processImportFileTextImpl = async (
       accountBalance: metadataOnlyBalance,
       status: "done",
     };
+  }
+
+  if (!isDocumentImport && rows.length === 0) {
+    // A delayed cosmetic progress write must settle before the terminal state.
+    await reconciliationProgressWrite;
+    // A parser must never call confirmation with no rows: confirmation recovery
+    // would re-enter this parser and recurse until the function times out.
+    throw new SourceReviewRequiredError("This statement contains no safely readable transactions. Clover saved the file; try a clearer export or another format.");
   }
 
   if (!isDocumentImport) {
@@ -13368,6 +13407,8 @@ const processImportFileTextImpl = async (
           const finishReceiptDetailTiming = startImportTiming(importFileId, "receipt_detail_enrichment");
           const detailStartedAt = Date.now();
           const refined = await measureImportTiming(importFileId, "model_extraction_and_parse", () => parseImportTextWithOpenAIFallback({
+            forceFallback: true,
+            onDiagnostic: recordBackupDiagnostic,
             consentUserId,
             text: textForParse,
             fileName,
@@ -13908,7 +13949,10 @@ export const processImportFileText = async (...args: Parameters<typeof processIm
     await requireImportMayContinue(importFileId);
     return await processImportFileTextImpl(...args);
   } catch (error) {
-    if (!(error instanceof ImportUserControlError)) throw error;
+    if (!(error instanceof ImportUserControlError)) {
+      await persistSourceReviewFailure(importFileId, error);
+      throw error;
+    }
     // Inner recovery handlers may have set a generic failed phase. Restore the
     // durable user intent once every parser/confirmation frame has unwound.
     await requireImportMayContinue(importFileId).catch(() => undefined);
@@ -14083,7 +14127,7 @@ async function insertReceiptTransactionOnce(params: Parameters<typeof insertTran
 export const confirmImportFile = async (
   importFileId: string,
   accountId?: string | null,
-  options?: { allowDeletedAccountRecreation?: boolean }
+  options?: { allowDeletedAccountRecreation?: boolean; recoverMissingRows?: boolean }
 ): Promise<ConfirmImportResult> => {
   const startedAt = Date.now();
   await requireImportMayContinue(importFileId);
@@ -14830,15 +14874,21 @@ export const confirmImportFile = async (
     ["Landbank", "EastWest", "UCPB", "Chinabank", "China Bank"].includes(noisyBankName) || isLikelyLowQualityUnionBankStatement
       ? 60_000
       : 8_000;
+  let recoveryAttempted = options?.recoverMissingRows === false;
   while (Date.now() - startedAt < MAX_WAIT_MS) {
     parsedRows = await fetchParsedTransactionRows(importFileId);
     if (parsedRows.length > 0) {
       break;
     }
 
+    // At most one recovery pass per explicit confirmation request. Recovery
+    // itself confirms with recoverMissingRows=false, so it cannot recurse.
+    if (recoveryAttempted) break;
+    recoveryAttempted = true;
     try {
       await processImportFileText(importFileId, { actorUserId: null });
     } catch (error) {
+      if (error instanceof SourceReviewRequiredError) throw error;
       console.warn("Unable to recover parsed rows before confirmation", {
         importFileId,
         error,
@@ -16054,7 +16104,7 @@ export const confirmImportFile = async (
   const verifiedMaybankIslamicImport = isVerifiedMaybankIslamicRowSet(parsedRows);
   const verifiedPosbImport = parsedRows.length > 0 && parsedRows.every(row => { const raw = row.rawPayload as Record<string, unknown> | null; return raw?.source === "posb_pdf_columns" && raw.balanceReconciled === true && (raw.reconciliation as Record<string, unknown> | null)?.version === "posb-column-reconciliation-v1"; });
   const verifiedGrabPaymentInstrumentImport = Boolean(getGrabPaymentInstrumentSuffix(parsedRows));
-  const verifiedReadOnlyAccountImport = isGrabWordCashReceipt(parsedRows) || verifiedGrabPaymentInstrumentImport || verifiedGcashReceiptImport || verifiedGcashLedgerImport || verifiedMaybankIslamicImport || verifiedHeldImport || verifiedPosbImport || verifiedMariImport || (parsedRows.length > 0 && parsedRows.every(row => (row.rawPayload as Record<string, unknown> | null)?.source === 'bca_transfer_proof'));
+  const verifiedReadOnlyAccountImport = (parsedRows.length > 0 && parsedRows.every(row => (row.rawPayload as Record<string, unknown> | null)?.source === "eastwest_transfer_proof")) || isGrabWordCashReceipt(parsedRows) || verifiedGrabPaymentInstrumentImport || verifiedGcashReceiptImport || verifiedGcashLedgerImport || verifiedMaybankIslamicImport || verifiedHeldImport || verifiedPosbImport || verifiedMariImport || (parsedRows.length > 0 && parsedRows.every(row => (row.rawPayload as Record<string, unknown> | null)?.source === 'bca_transfer_proof'));
   const preserveExistingVerifiedBalance = verifiedReadOnlyAccountImport && (account.balance !== null || (await tx.account.findUniqueOrThrow({where:{id:resolvedAccountId},select:{createdAt:true}})).createdAt.getTime() <= importFile.uploadedAt.getTime());
   if (preserveExistingVerifiedBalance || consolidatedCimbImport) {
     reconciledAccountBalance = snapshotBalanceToString(account.balance);
@@ -16143,7 +16193,7 @@ export const confirmImportFile = async (
   // projection after the existing balance calculation, in this transaction,
   // so the first settled GET need not repair a stale pre-confirmation value.
   if (!multiAccountImport && parsedRows.length > 0 && parsedRows.every(row =>
-    ["gcash_bills_receipt", "bca_transfer_proof", "grab_email_receipt", "maribank_native_columns", "maybank_islamic_native", "seabank_indonesia_native", "seabank_indonesia_legacy_daily", "dbs_native_zero"].includes(String((row.rawPayload as Record<string, unknown> | null)?.source)))) {
+    ["eastwest_transfer_proof", "gcash_bills_receipt", "bca_transfer_proof", "grab_email_receipt", "maribank_native_columns", "maybank_islamic_native", "seabank_indonesia_native", "seabank_indonesia_legacy_daily", "dbs_native_zero"].includes(String((row.rawPayload as Record<string, unknown> | null)?.source)))) {
     const storedAccount = await tx.account.findUniqueOrThrow({ where: { id: resolvedAccountId }, select: { balance: true } });
     const storedBalance = snapshotBalanceToString(storedAccount.balance);
     const summary = accountSummaries.find(entry => entry.accountId === resolvedAccountId);
@@ -16203,7 +16253,7 @@ export const confirmImportFile = async (
   for (const [index, originalRow] of parsedRows.entries()) {
     // POSB's amountColumn="withdrawal" is column evidence, not an ATM
     // description. Its dedicated parser already distinguishes FAST and cash.
-    const row = readAppMigration(originalRow.rawPayload) || ["posb_pdf_columns", "bca_transfer_proof", "cimb_consolidated_ledger", "cimb_consolidated_snapshot", "grab_email_receipt", "maribank_native_columns", "seabank_indonesia_native", "seabank_indonesia_legacy_daily", "dbs_native_zero"].includes(String((originalRow.rawPayload as Record<string, unknown> | null)?.source))
+    const row = readAppMigration(originalRow.rawPayload) || ["eastwest_transfer_proof", "posb_pdf_columns", "bca_transfer_proof", "cimb_consolidated_ledger", "cimb_consolidated_snapshot", "grab_email_receipt", "maribank_native_columns", "seabank_indonesia_native", "seabank_indonesia_legacy_daily", "dbs_native_zero"].includes(String((originalRow.rawPayload as Record<string, unknown> | null)?.source))
       ? originalRow : normalizeLandbankImportedRow(originalRow as ImportInsightSourceRow, statementInstitution);
     const migration = readAppMigration(row.rawPayload);
     const rowAccount = rowAccountFor(row as Record<string, unknown>);

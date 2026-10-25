@@ -26,7 +26,7 @@ export function parseUnlocalizedReceiptText(source: string): ReceiptPreviewResul
     const label = line.match(finalLabel) ?? line.match(totalLabel);
     if (!label) return false;
     const value = line.slice(label[0].length).trim() || lines[index + 1] || "";
-    return /^(?:Rp\.?|IDR)?\s*\d[\d,. ]*[.,]\d{1,2}\s*$/i.test(value);
+    return /^(?:Rp\.?|IDR|PHP|₱|P)?\s*\d[\d,. ]*[.,]\d{1,2}\s*$/i.test(value);
   })) return null;
   const amounts = source.match(/\b(?:\d{1,3}(?:[.,]\d{3})+|\d{4,})\b/g) ?? [];
   if (amounts.length < 2) return null;

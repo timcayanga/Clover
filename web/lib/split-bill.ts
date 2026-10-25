@@ -1,3 +1,4 @@
+import { joinReceiptSettlementLines } from "./receipt-summary-lines";
 import { normalizeLocalReceiptOcrText } from "./local-receipt-ocr-normalization";
 import { readLocalReceiptOcrText } from "./local-receipt-ocr-envelope";
 import { hasHangul } from "@/lib/korean-financial-text";
@@ -2490,7 +2491,10 @@ export const parseAirlineTicketReceiptText = (receiptText: string): ReceiptPrevi
 
 export const parseReceiptText = (receiptText: string): ReceiptPreviewResult => {
   const opticalText = readLocalReceiptOcrText(receiptText);
-  const result = parseReceiptTextCore(opticalText === null ? receiptText : normalizeLocalReceiptOcrText(opticalText));
+  const sourceText = opticalText === null ? receiptText : normalizeLocalReceiptOcrText(opticalText);
+  const settlementText = joinReceiptSettlementLines(sourceText);
+  const parsed = parseReceiptTextCore(settlementText);
+  const result = settlementText === sourceText ? parsed : { ...parsed, receiptText };
   // Optical confidence does not establish financial correctness. Until wider
   // field-level validation, this engine always asks the user to review.
   return opticalText === null ? result : { ...result, receiptText, requiresReview: true, confidence: Math.min(45, result.confidence) };
