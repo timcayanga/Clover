@@ -1,3 +1,4 @@
+import { decodeWordGrabReceiptBytes } from './word-receipt-import.server';
 import {buildSeaBankIndonesiaPdfRows, buildSeaBankIndonesiaPdfSummary, buildSeaBankIndonesiaLegacyPdfEvidence, buildDbsZeroPdfProof, hasSeaBankIndonesiaEnglishHeader} from '@/lib/held-source-contracts';
 import { buildGrabReceiptNativePages, buildGrabPickupFields, buildGrabTwoMessagePanelBodies, type GrabVisualHeadline } from '@/lib/grab-email-receipt';
 import { parseCimbConsolidatedStatement } from "@/lib/import-parser";
@@ -2937,6 +2938,11 @@ export const readUploadedFileText = async (
     }
 
     throw new Error("Unable to read imported file.");
+  }
+
+  if (lowerName.endsWith('.docx') || lowerType === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document') {
+    if (typeof file.arrayBuffer !== 'function') throw new Error('Unable to read imported Word receipt.');
+    return decodeWordGrabReceiptBytes(new Uint8Array(await file.arrayBuffer()));
   }
 
   if (

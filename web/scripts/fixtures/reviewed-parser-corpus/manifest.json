@@ -2250,7 +2250,7 @@
         "reviewer": "Codex",
         "reviewedAt": "2026-10-12",
         "status": "reviewed",
-        "basis": "Independent invented derivative: four active UPSave movements100,1,1,-1 and one zero Fast Plus snapshot. Repeated1 entries remain distinct. Summary withdrawal label is wrapped with its PHP prefix. Only the zero-activity account may have a later Nov15 opening anchor inside the Nov1–30 period; active20 opening remains at start."
+        "basis": "Independent invented derivative: four active UPSave movements100,1,1,-1 and one zero Fast Plus snapshot. Repeated1 entries remain distinct. Summary withdrawal label is wrapped with its PHP prefix. Only the zero-activity account may have a later Nov15 opening anchor inside the Nov1\u201330 period; active20 opening remains at start."
       },
       "id": "cimb-upsave-wrapped-summary",
       "source": "cimb-upsave-wrapped-summary.txt",
@@ -3912,6 +3912,120 @@
         "openingBalance": null,
         "endingBalance": null
       }
+    },
+    {
+      "id": "grab-unspecified-instrument",
+      "source": "grab-unspecified-instrument.txt",
+      "sha256": "812a9793170efc44033068ea85a93f9e3f9d19ea11121f4013072dc3ae12da84",
+      "kind": "statement",
+      "representation": "Independently invented complete native receipt pages with an unidentified payment reference",
+      "provenance": {
+        "origin": "synthetic",
+        "reviewer": "Codex",
+        "reviewedAt": "2026-10-25",
+        "status": "reviewed",
+        "basis": "Invented Philippine receipt: fare125 plus toll20 equals two145 totals and the paid amount. The native payment panel provides only a four-digit reference. No issuer, full account number, account type, clock or bank balance is invented; finance requires explicit existing account selection."
+      },
+      "expectedMetadata": {
+        "institution": null,
+        "accountNumber": null,
+        "accountType": null,
+        "currency": "PHP",
+        "openingBalance": null,
+        "endingBalance": null
+      },
+      "expected": [
+        {
+          "date": "2026-08-14T12:00:00.000Z",
+          "amount": "145.00",
+          "currency": "PHP",
+          "type": "expense",
+          "merchantRaw": "Grab",
+          "accountName": "Payment account ending 4821",
+          "rawPayload": {
+            "source": "grab_email_receipt",
+            "kind": "payment_instrument_transaction",
+            "paymentMethod": "Unspecified payment instrument",
+            "accountType": null,
+            "payerAccountNumber": null,
+            "paymentAccountSuffix": "4821",
+            "paymentAccountSelectionRequired": true,
+            "sourceTimestamp": null,
+            "components": [
+              {
+                "label": "Fare",
+                "amount": "125.00"
+              },
+              {
+                "label": "Toll",
+                "amount": "20.00"
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "grab-native-word",
+      "kind": "statement",
+      "source": "grab-native-word.docx",
+      "sha256": "9df908fe2f7d3d835dff1d30cd017f6a60127228cb862e2ac19b10461b3ee2de",
+      "representation": "Invented native Word receipt with mutually exclusive drawing copies",
+      "provenance": {
+        "origin": "synthetic",
+        "reviewer": "Codex",
+        "reviewedAt": "2026-10-25",
+        "status": "reviewed",
+        "basis": "Independently invented Philippine cash ride: base100 plus distance65.25 plus time50 plus surge34.75 equals headline, summary and cash250. XML compatibility copies are one receipt; no bank identity, balance or pickup clock exists."
+      },
+      "expectedMetadata": {
+        "currency": "PHP",
+        "accountNumber": null,
+        "accountType": "cash",
+        "openingBalance": null,
+        "endingBalance": null
+      },
+      "expected": [
+        {
+          "date": "2026-08-14T12:00:00.000Z",
+          "amount": "250.00",
+          "currency": "PHP",
+          "type": "expense",
+          "accountName": "Cash",
+          "merchantRaw": "Grab",
+          "rawPayload": {
+            "source": "grab_email_receipt",
+            "sourceContainer": "docx",
+            "referenceNumber": "A-INVENTEDWORD0001",
+            "paymentMethod": "Cash",
+            "payerAccountNumber": null,
+            "sourceTimestamp": null,
+            "components": [
+              {
+                "label": "Base fare",
+                "amount": "100.00"
+              },
+              {
+                "label": "Distance",
+                "amount": "65.25"
+              },
+              {
+                "label": "Time",
+                "amount": "50.00"
+              },
+              {
+                "label": "Surge charges",
+                "amount": "34.75"
+              }
+            ],
+            "parserEvidence": {
+              "fullNativePages": false,
+              "fullWordParts": true,
+              "reconciled": true
+            }
+          }
+        }
+      ]
     }
   ]
 }

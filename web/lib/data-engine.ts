@@ -40,6 +40,7 @@ export const DATA_ENGINE_VERSION = "v2";
 export const IMPORT_FILE_EXTRACTION_CACHE_VERSION = "v39";
 export const resolveImportFileExtractionCacheVersion = (fileName?: string | null) => {
   const normalizedFileName = String(fileName ?? "");
+  if (/^1069029702-.*\.pdf$/i.test(normalizedFileName)) return "v54-grab-payment-reference";
   // Re-extract only the retained legacy SeaBank PDFs whose previous cache had
   // no complete daily-balance proof. Other trained statement caches survive.
   if (/^(?:1028748777|895545880|884319546)-.*\.pdf$/i.test(normalizedFileName)) return "v53-seabank-id-legacy-daily";
