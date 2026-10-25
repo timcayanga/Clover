@@ -178,3 +178,7 @@ The independently invented dormant SeaBank source extends the permanent corpus t
 ## Asynchronous upload refusals
 
 Receipt and device-text multipart processing await the inline worker inside the route error boundary. A delayed deterministic source refusal must return JSON I-109 with the retained review reason, preserve original bytes and confirmed data, and leave learning empty. The permanent API/database regression exercises both upload branches and confirms that repeated resume leaves every retained import field unchanged.
+
+## Late failures and cancellation
+
+Cancellation becomes terminal while holding the same import row lock used by financial confirmation; it does not depend on a surviving worker to acknowledge it. The durable control audit still prevents an in-flight worker from saving after cancellation. Source-review persistence preserves paused, cancelling, cancelled and completed states, including their timestamps. The isolated database gate exercises late failures before and after cancellation, refuses confirmation/resume of a cancelled import, and verifies existing confirmed finance is unchanged. No customer imports are replayed or modified by this change.

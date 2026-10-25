@@ -336,6 +336,10 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
   } catch (error) {
     if (authorizedImportId) {
       const sourceReview = await persistSourceReviewFailure(authorizedImportId, error);
+      if (sourceReview?.kind === "user_control") {
+        return NextResponse.json({ error: sourceReview.control === "paused" ? "Import paused" : "Import cancelled",
+          retryable: false, control: sourceReview.control, importFileId: authorizedImportId }, { status: 409 });
+      }
       if (sourceReview?.kind === "unavailable") {
         return NextResponse.json({ error: "Clover could not verify this import's existing rows. Existing records were not changed.",
           retryable: true, importFileId: authorizedImportId }, { status: 503 });

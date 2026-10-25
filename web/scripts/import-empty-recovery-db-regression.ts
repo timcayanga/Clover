@@ -73,6 +73,40 @@ async function main() {
       assert.equal(JSON.stringify(await db.importFile.findUniqueOrThrow({ where: { id: protectedFile.id } })), prior, phase+' must survive a late cosmetic update, including timestamps');
       assert.equal(await updateImportFileCompat(protectedFile.id, { processingPhase: 'reconciling' }, { progressOnly: true }), null, 'Returning progress writes use the same guard');
     }
+    const { persistSourceReviewFailure } = await import('../lib/import-source-review.server');
+    const { setImportUserControl } = await import('../lib/import-user-control');
+    for (const phase of ['pause_requested', 'paused', 'cancel_requested', 'cancelled', 'complete']) {
+      const protectedFile = await db.importFile.create({ data: { workspaceId: workspace.id, fileName: 'late-refusal.txt', fileType: 'text/plain', storageKey: 'qa/'+randomUUID(), status: phase === 'complete' ? 'done' : 'processing', processingPhase: phase } });
+      const prior = await db.importFile.findUniqueOrThrow({where:{id:protectedFile.id}});
+      const decision = await persistSourceReviewFailure(protectedFile.id, new SourceReviewRequiredError('Delayed native refusal'));
+      assert.equal(decision?.kind, phase === 'complete' ? 'unavailable' : 'user_control');
+      assert.deepEqual(await db.importFile.findUniqueOrThrow({where:{id:protectedFile.id}}), prior, 'Late refusal preserves '+phase+' and timestamps');
+    }
+    const cancelled = await db.importFile.create({ data: { workspaceId: workspace.id, fileName: 'abandoned-worker.txt', fileType: 'text/plain', storageKey: 'qa/'+randomUUID(), status: 'processing', processingPhase: 'reading_file' } });
+    await setImportUserControl(cancelled.id, user.clerkUserId, 'cancel');
+    const cancelledBefore = await db.importFile.findUniqueOrThrow({where:{id:cancelled.id}});
+    assert.equal(cancelledBefore.status, 'failed'); assert.equal(cancelledBefore.processingPhase, 'cancelled');
+    await assert.rejects(confirmImportFile(cancelled.id), /Import cancelled/);
+    await assert.rejects(setImportUserControl(cancelled.id, user.clerkUserId, 'resume'), /cancelled/);
+    assert.equal(await db.transaction.count({where:{importFileId:cancelled.id}}), 0);
+    assert.equal(await db.parsedTransaction.count({where:{importFileId:cancelled.id}}), 0);
+    assert.equal(await db.auditLog.count({where:{entityId:cancelled.id,action:'import.user_control'}}), 1);
+    // A cancellation committed between the refusal read and write wins the CAS.
+    const racing = await db.importFile.create({ data: { workspaceId: workspace.id, fileName: 'racing-refusal.txt', fileType: 'text/plain', storageKey: 'qa/'+randomUUID(), status: 'processing', processingPhase: 'reading_file' } });
+    const originalUpdateMany = db.importFile.updateMany;
+    Object.assign(db.importFile, { updateMany: async (args: Parameters<typeof originalUpdateMany>[0]) => {
+      if (args?.where?.id === racing.id && args.data.processingPhase === SOURCE_REVIEW_PHASE) {
+        await setImportUserControl(racing.id, user.clerkUserId, 'cancel');
+      }
+      return originalUpdateMany.call(db.importFile, args);
+    } });
+    try {
+      assert.equal((await persistSourceReviewFailure(racing.id, new SourceReviewRequiredError('Racing refusal')))?.kind, 'unavailable');
+    } finally { Object.assign(db.importFile, { updateMany: originalUpdateMany }); }
+    const raceResult = await db.importFile.findUniqueOrThrow({where:{id:racing.id}});
+    assert.equal(raceResult.status, 'failed'); assert.equal(raceResult.processingPhase, 'cancelled');
+    assert.equal(await snapshot(), before, 'Cancellation and late refusal never change existing finance');
+
     const liveFile = await db.importFile.create({ data: { workspaceId: workspace.id, fileName: 'live.txt', fileType: 'text/plain', storageKey: 'qa/'+randomUUID(), status: 'processing', processingPhase: 'queued' } });
     await updateImportFileCompat(liveFile.id, { processingPhase: 'reading_file' }, { fetchUpdated: false, progressOnly: true });
     assert.equal((await db.importFile.findUniqueOrThrow({ where: { id: liveFile.id } })).processingPhase, 'reading_file');

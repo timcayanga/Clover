@@ -19,6 +19,7 @@ async function main() {
   const paths = ['../lib/auth', '../lib/workspace-access', '../lib/s3', '../workers/import-processor'].map(path => require.resolve(path));
   const prior = paths.map(path => require.cache[path]);
   let parserCalls = 0;
+  let controlOnParse: "pause" | "cancel" | null = null;
   const retained = new Map<string, Uint8Array>();
   const refusal = new SourceReviewRequiredError('Native source requires review: IDR summary columns');
   const exports = [
@@ -26,7 +27,12 @@ async function main() {
     { assertWorkspaceAccess: async (_actor: string, id: string) => { assert(await db.workspace.findFirst({ where: { id, userId: user.id } })); } },
     { uploadObject: async (key: string, bytes: Uint8Array) => { retained.set(key, bytes.slice()); } },
     { processImportFileText: async (_id: string, options: {rawFileReady?: Promise<unknown>}) => {
-      parserCalls++; await options.rawFileReady; await Promise.resolve(); throw refusal;
+      parserCalls++; await options.rawFileReady; await Promise.resolve();
+      if (controlOnParse) {
+        const { setImportUserControl } = await import('../lib/import-user-control');
+        await setImportUserControl(_id, user.clerkUserId, controlOnParse);
+      }
+      throw refusal;
     } },
   ];
   paths.forEach((path, i) => { require.cache[path] = { id: path, filename: path, loaded: true, exports: exports[i] } as NodeModule; });
@@ -61,6 +67,25 @@ async function main() {
       assert.equal(await db.transaction.count({where:{workspaceId:workspace.id}}),1); assert.equal(await db.account.count({where:{workspaceId:workspace.id}}),1); assert.equal(await protectedRows(),before);
     }
     assert.equal(parserCalls,2,'Receipt and device-text inline upload paths both reach the worker'); assert.equal(network,0);
+    for (const action of ['pause', 'cancel'] as const) {
+      controlOnParse = action;
+      const file = await db.importFile.create({data:{workspaceId:workspace.id,fileName:'controlled.png',fileType:'image/png',storageKey:'qa/'+randomUUID()}});
+      const form = new FormData();
+      form.set('file',new File([Uint8Array.from([137,80,78,71,13,10,26,10,action==='pause'?1:2])],'controlled.png',{type:'image/png'}));
+      form.set('workspaceId',workspace.id);form.set('importMode','receipt');form.set('forceInlineProcessing','true');
+      const response = await POST(new Request('https://staging.clover.ph/api/imports/'+file.id+'/process',{method:'POST',headers:{Origin:'https://staging.clover.ph'},body:form}),{params:Promise.resolve({importId:file.id})});
+      assert.equal(response.status,409);
+      const payload = await response.json();assert.equal(payload.retryable,false);assert.equal(payload.control,action==='pause'?'paused':'cancelled');
+      const stored = await db.importFile.findUniqueOrThrow({where:{id:file.id}});
+      assert.equal(stored.processingPhase,action==='pause'?'pause_requested':'cancelled');
+      assert.equal(stored.status,action==='pause'?'processing':'failed');
+      assert.equal(await db.transaction.count({where:{importFileId:file.id}}),0);
+      assert.equal(await db.parsedTransaction.count({where:{importFileId:file.id}}),0);
+      assert.equal(await protectedRows(),before);
+    }
+    assert.equal(network,0);
+    assert.equal(parserCalls,4,'Both control races reached the worker');
+
     console.log('Process API: delayed receipt/device refusal returns I-109, retains source bytes, preserves confirmed finance and learning, and repeat resume is a no-op.');
   } finally {
     paths.forEach((path,i) => { if(prior[i]) require.cache[path]=prior[i]; else delete require.cache[path]; });

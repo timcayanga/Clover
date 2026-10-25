@@ -19,6 +19,8 @@ async function main() {
   await setImportUserControl("import","user","pause");assert.equal(state.events.length,1);assert.equal(state.file.processingPhase,"paused");
   const resumed=await setImportUserControl("import","user","resume");assert.equal(resumed.restart,true);await requireImportMayContinue("import","workspace");
   await setImportUserControl("import","user","cancel");
+  assert.equal(state.file.status,"failed","cancellation finishes without requiring a live worker");
+  assert.equal(state.file.processingPhase,"cancelled");
   await assert.rejects(requireImportMayContinue("import","workspace"),(e:any)=>e.control==="cancelled");
   assert.equal(state.file.processingPhase,"cancelled");
   await setImportUserControl("import","user","cancel");assert.equal(state.file.status,"failed","repeated cancellation cannot resurrect processing");

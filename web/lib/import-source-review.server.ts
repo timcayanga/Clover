@@ -4,6 +4,7 @@ import { isSourceReviewRequiredError, sourceReviewFailureReason, sourceReviewUse
 
 type SourceReviewDecision =
   | { kind: "review"; message: string; diagnosticReason: string; noOp: boolean }
+  | { kind: "user_control"; control: "paused" | "cancelled" }
   | { kind: "unavailable" | "existing_rows" | "missing_import" };
 
 export async function persistSourceReviewFailure(importFileId: string, error: unknown): Promise<SourceReviewDecision | null> {
@@ -18,6 +19,10 @@ export async function persistSourceReviewFailure(importFileId: string, error: un
   const file = await fetchImportFileCompat(importFileId).catch(() => undefined);
   if (file === undefined) return { kind: "unavailable" };
   if (!file) return { kind: "missing_import" };
+  if (["pause_requested", "paused", "cancel_requested", "cancelled"].includes(String(file.processingPhase))) {
+    return { kind: "user_control", control: String(file.processingPhase).startsWith("pause") ? "paused" : "cancelled" };
+  }
+  if (file.status === "done" || file.confirmedAt) return { kind: "unavailable" };
   const message = sourceReviewUserMessage(reason);
   if (file.status === "failed" && file.processingPhase === SOURCE_REVIEW_PHASE && file.processingMessage === message &&
       file.processingCurrentScore === 0 && file.parsedRowsCount === 0 && file.confirmedTransactionsCount === 0) {

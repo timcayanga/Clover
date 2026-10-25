@@ -49,9 +49,11 @@ export async function setImportUserControl(importId: string, actorUserId: string
     if (prior !== control) await tx.auditLog.create({ data: { workspaceId: file.workspaceId, actorUserId, action: "import.user_control", entity: "ImportFile", entityId: importId, metadata: { control } } });
     const restart = action === "resume" && file.processingPhase === "paused";
     await tx.importFile.update({ where: { id: importId }, data: {
-      status: action === "cancel" && file.processingPhase === "cancelled" ? "failed" : "processing",
-      processingPhase: action === "pause" ? file.processingPhase === "paused" ? "paused" : "pause_requested" : action === "cancel" ? file.processingPhase === "cancelled" ? "cancelled" : "cancel_requested" : restart ? "queued_retry" : file.processingPhase,
-      processingMessage: action === "pause" ? "Pausing import" : action === "cancel" ? "Cancelling import" : "Reading file",
+      // Confirmation shares this row lock and checks the durable control audit.
+      // Cancellation is final even when the original worker no longer exists.
+      status: action === "cancel" ? "failed" : "processing",
+      processingPhase: action === "pause" ? file.processingPhase === "paused" ? "paused" : "pause_requested" : action === "cancel" ? "cancelled" : restart ? "queued_retry" : file.processingPhase,
+      processingMessage: action === "pause" ? "Pausing import" : action === "cancel" ? "Import cancelled" : "Reading file",
     } });
     return { control, restart, workspaceId: file.workspaceId };
   });
