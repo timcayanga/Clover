@@ -29,7 +29,8 @@ async function main() {
     assertWorkspaceAccess: async (_actor: string, id: string) => { if (denyWorkspace) throw new Error("WORKSPACE_NOT_FOUND"); assert(await db.workspace.findFirst({ where: { id, userId: user.id } })); },
   } } as NodeModule;
   require.cache[paths[2]] = { id: paths[2], filename: paths[2], loaded: true, exports: {
-    processImportFileText: async (id: string) => {
+    processImportFileText: async (id: string, options: {autoRerunAttempt?:number}) => {
+      assert.equal(options.autoRerunAttempt,(await db.importFile.findUniqueOrThrow({where:{id}})).processingAttempt,"Inline retries preserve their durable attempt budget");
       parserCalls++; await Promise.resolve();
       if (controlOnParse) {
         const { setImportUserControl } = await import("../lib/import-user-control");
@@ -95,7 +96,7 @@ async function main() {
       assert.equal(after.status,action==="pause"?"processing":"failed");
     }
     controlOnParse=null;
-    const retry = await makeFile();
+    const retry = await db.importFile.update({where:{id:(await makeFile()).id},data:{processingAttempt:2}});
     const usage = await db.auditLog.create({data:{workspaceId:workspace.id,actorUserId:user.clerkUserId,entity:"ImportFile",entityId:retry.id,action:"import.openai_model_call",metadata:{model:"unknown-test-model",totalTokens:1200}}});
     const usageBefore = await db.auditLog.findUniqueOrThrow({where:{id:usage.id}});
     const response = await call(retry.id);assert.equal(response.status,503);assert.equal((await response.json()).retryable,true);

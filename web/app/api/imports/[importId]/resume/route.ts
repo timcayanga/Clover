@@ -1,3 +1,4 @@
+import { coerceVisualImportAttempt } from "@/lib/import-visual-recovery";
 import { isLocalDevHost, requireAuth } from "@/lib/auth";
 import { assertWorkspaceAccess } from "@/lib/workspace-access";
 import { countParsedTransactionRows, countTransactionsByImportFileCompat, fetchImportFileCompat, hasCompatibleTable, updateImportFileCompat } from "@/lib/data-engine";
@@ -183,6 +184,7 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
       const { processImportFileText } = await import("@/workers/import-processor");
       const result = await processImportFileText(importId, {
         actorUserId: userId,
+        autoRerunAttempt: coerceVisualImportAttempt(importFile.processingAttempt),
         qaSource: "import_processing",
         pdfJsBaseUrl: getConfiguredPdfJsBaseUrl(),
       });

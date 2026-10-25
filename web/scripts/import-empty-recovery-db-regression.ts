@@ -66,7 +66,7 @@ async function main() {
     assert.equal(await snapshot(), before);
 
     const { updateImportFileCompat } = await import('../lib/data-engine');
-    for (const phase of ['complete', 'source_review_required', 'receipt_review_required', 'pause_requested', 'paused', 'cancel_requested', 'cancelled']) {
+    for (const phase of ['complete', 'source_review_required', 'receipt_review_required', 'password_required', 'account_match_needs_confirmation', 'pause_requested', 'paused', 'cancel_requested', 'cancelled']) {
       const protectedFile = await db.importFile.create({ data: { workspaceId: workspace.id, fileName: 'protected.txt', fileType: 'text/plain', storageKey: 'qa/'+randomUUID(), status: phase === 'complete' ? 'done' : 'failed', processingPhase: phase, processingMessage: 'Existing authoritative state' } });
       const prior = JSON.stringify(protectedFile);
       await updateImportFileCompat(protectedFile.id, { status: 'processing', processingPhase: 'identifying_transactions', processingMessage: 'Late progress' }, { fetchUpdated: false, progressOnly: true });

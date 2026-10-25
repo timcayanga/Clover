@@ -1,5 +1,9 @@
+import { coerceVisualImportAttempt } from "@/lib/import-visual-recovery";
 import { countParsedTransactionRows, countTransactionsByImportFileCompat, updateImportFileCompat } from "@/lib/data-engine";
 import { readCheckpointImportMode } from "@/lib/import-workflow";
+import { requireImportMayContinue } from "@/lib/import-user-control";
+import { persistSourceReviewFailure } from "@/lib/import-source-review.server";
+import { recoverFailedImportResume } from "@/lib/import-resume-recovery";
 import { prisma } from "@/lib/prisma";
 import { summarizeErrorForLog } from "@/lib/security-logging";
 import { confirmImportFile, processImportEnrichmentJobs, processImportFileText } from "@/workers/import-processor";
@@ -24,6 +28,20 @@ const claimRecoverableImports = async (limit: number) => {
           "status" = 'processing'
           AND COALESCE("confirmedTransactionsCount", 0) = 0
           AND "rawPurgedAt" IS NULL
+          AND "confirmedAt" IS NULL
+          AND NOT EXISTS (
+            SELECT 1 FROM "Transaction" saved
+            WHERE saved."workspaceId" = "ImportFile"."workspaceId"
+              AND (saved."importFileId" = "ImportFile"."id"
+                OR saved."rawPayload"::jsonb->>'sourceImportFileId' = "ImportFile"."id")
+          )
+          AND COALESCE((
+            SELECT control."metadata"::jsonb->>'control' FROM "AuditLog" control
+            WHERE control."workspaceId" = "ImportFile"."workspaceId"
+              AND control."entityId" = "ImportFile"."id"
+              AND control."action" = 'import.user_control'
+            ORDER BY control."createdAt" DESC, control."id" DESC LIMIT 1
+          ), 'running') NOT IN ('paused', 'cancelled')
           AND (
             (
               "processingPhase" = 'queued_retry'
@@ -71,15 +89,15 @@ const loadCheckpointImportMode = async (importFileId: string) => {
     .findUnique({
       where: { importFileId },
       select: { sourceMetadata: true },
-    })
-    .catch(() => null);
+    });
   return readCheckpointImportMode(checkpoint?.sourceMetadata) ?? "statement";
 };
 
 const recoverClaimedImport = async (claimed: ClaimedImport) => {
+  await requireImportMayContinue(claimed.id, claimed.workspaceId);
   const [visibleRows, parsedRows] = await Promise.all([
-    countTransactionsByImportFileCompat(claimed.id).catch(() => 0),
-    countParsedTransactionRows(claimed.id).catch(() => 0),
+    countTransactionsByImportFileCompat(claimed.id),
+    countParsedTransactionRows(claimed.id),
   ]);
 
   if (visibleRows > 0) {
@@ -104,6 +122,7 @@ const recoverClaimedImport = async (claimed: ClaimedImport) => {
   const importMode = await loadCheckpointImportMode(claimed.id);
   const result = await processImportFileText(claimed.id, {
     actorUserId: null,
+    autoRerunAttempt: coerceVisualImportAttempt(claimed.processingAttempt),
     importMode,
     qaSource: "import_processing",
   });
@@ -123,8 +142,8 @@ export const runImportRecoverySweep = async (options: {
   const claimedImports = await claimRecoverableImports(options.importLimit ?? 1);
   const recoveredImports: Array<{
     importFileId: string;
-    action: "already_visible" | "confirmed_checkpoint" | "reprocessed_raw_file" | "retry_scheduled";
-    visibleRows: number;
+    action: "already_visible" | "confirmed_checkpoint" | "reprocessed_raw_file" | "held_for_review" | "retry_available" | "preserved" | "user_control" | "unavailable";
+    visibleRows: number | null;
     error?: ReturnType<typeof summarizeErrorForLog>;
   }> = [];
 
@@ -132,20 +151,19 @@ export const runImportRecoverySweep = async (options: {
     try {
       recoveredImports.push(await recoverClaimedImport(claimed));
     } catch (error) {
-      const visibleRows = await countTransactionsByImportFileCompat(claimed.id).catch(() => 0);
-      await updateImportFileCompat(claimed.id, {
-        status: visibleRows > 0 ? "done" : "processing",
-        processingPhase: visibleRows > 0 ? "complete" : "queued_retry",
-        processingMessage:
-          visibleRows > 0
-            ? "Transactions are visible. Clover is cleaning up names and categories in the background."
-            : "Clover saved this import and will retry from its last checkpoint.",
-        ...(visibleRows > 0 ? { confirmedTransactionsCount: visibleRows } : {}),
-      }).catch(() => null);
+      // The worker may already have persisted a terminal source refusal. Never
+      // turn it back into queued_retry, or the next sweep pays to repeat it.
+      const sourceReview = await persistSourceReviewFailure(claimed.id, error).catch(() => ({ kind: "unavailable" as const }));
+      const recovery = sourceReview?.kind === "review" || sourceReview?.kind === "unavailable"
+        ? null : await recoverFailedImportResume(claimed.id).catch(() => null);
       recoveredImports.push({
         importFileId: claimed.id,
-        action: "retry_scheduled",
-        visibleRows,
+        action: sourceReview?.kind === "review" ? "held_for_review"
+          : sourceReview?.kind === "unavailable" ? "unavailable"
+          : recovery?.kind === "retryable" ? "retry_available"
+          : recovery?.kind === "user_control" ? "user_control"
+          : recovery?.kind === "preserved" ? "preserved" : "unavailable",
+        visibleRows: null,
         error: summarizeErrorForLog(error),
       });
     }

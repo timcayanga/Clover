@@ -3020,7 +3020,7 @@ export const updateImportFileCompat = async (
     // Cosmetic writes can finish after confirmation, a refusal, or a user
     // control. Check the persisted state atomically, rather than a stale read.
     const progressGuard = options.progressOnly
-      ? `${columns.has("status") ? ` AND "status" <> 'done'` : ""}${columns.has("processingPhase") ? ` AND ("processingPhase" IS NULL OR "processingPhase" NOT IN ('source_review_required', 'receipt_review_required', 'pause_requested', 'paused', 'cancel_requested', 'cancelled'))` : ""}`
+      ? `${columns.has("status") ? ` AND "status" <> 'done'` : ""}${columns.has("processingPhase") ? ` AND ("processingPhase" IS NULL OR "processingPhase" NOT IN ('source_review_required', 'receipt_review_required', 'password_required', 'account_match_needs_confirmation', 'pause_requested', 'paused', 'cancel_requested', 'cancelled'))` : ""}`
       : "";
     if (options.fetchUpdated === false) {
       await prisma.$executeRawUnsafe(

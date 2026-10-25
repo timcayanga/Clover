@@ -815,6 +815,27 @@ const main = async () => {
     /processImportEnrichmentJobs\(\{[\s\S]{0,300}batchSize: 250/,
     "The server-owned recovery sweep must continue bounded enrichment without an open browser."
   );
+  assert.match(recoverySweepSource, /saved\.\"importFileId\" = \"ImportFile\"\.\"id\"[\s\S]*?sourceImportFileId/,
+    "Scheduled recovery must exclude direct and legacy saved transactions, including deleted records.");
+  assert.match(recoverySweepSource, /control\.\"workspaceId\" = \"ImportFile\"\.\"workspaceId\"[\s\S]*?NOT IN \('paused', 'cancelled'\)/,
+    "Scheduled claims must respect the owning Profile's durable pause/cancel before changing progress.");
+  assert.doesNotMatch(recoverySweepSource, /count(?:ParsedTransactionRows|TransactionsByImportFileCompat)\(claimed\.id\)\.catch/,
+    "Failed saved-row reads must not be interpreted as empty imports.");
+  const sweepFailureSource = recoverySweepSource.slice(recoverySweepSource.indexOf("    } catch (error) {"));
+  assert.match(sweepFailureSource, /persistSourceReviewFailure\(claimed\.id, error\)/,
+    "Scheduled failures must retain deterministic source refusals.");
+  assert.match(sweepFailureSource, /recoverFailedImportResume\(claimed\.id\)/,
+    "Generic scheduled failures must use locked recovery and repeat-safe allowance credits.");
+  assert.doesNotMatch(sweepFailureSource, /updateImportFileCompat|processingPhase:.*queued_retry/,
+    "A late scheduled error must not blindly resurrect terminal imports.");
+  assert.doesNotMatch(statusRouteSource, /processImportFileText|parsedRowsCount: 0|confirmedTransactionsCount: 0/,
+    "Progress reads must not start OCR/AI or clear saved-row counters after a late failure.");
+  assert.match(statusRouteSource, /queueStaleEmptyImportRecovery\(importId, new Date\(snapshot\.importFile\.updatedAt\)\)/,
+    "Empty completion recovery must claim only an unchanged, unsaved source.");
+  assert.match(statusRouteSource, /queueStaleEmptyImportRecovery\(importId, snapshotTime, \{ expectedStatus: "processing", nextAttempt \}\)/,
+    "Receipt retries must use the same atomic durable queue and bounded attempt count.");
+  assert.match(statusRouteSource, /persistStatusRecoveryFailure\(importId, error\)/,
+    "Late confirmation failures must preserve controls and source review through the shared recovery guard.");
   assert.match(recoveryCronSource, /timingSafeEqual\(providedBuffer, expectedBuffer\)/);
   assert.match(recoveryCronSource, /CRON_SECRET[\s\S]{0,500}Bearer \$\{cronSecret\}/);
   assert.match(recoveryCronSource, /runImportRecoverySweep\(\{/);
