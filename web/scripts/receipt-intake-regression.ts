@@ -118,3 +118,6 @@ assert.notEqual(countOnly.total, '12345678.00');
 
 assert(hasReceiptPhotoEvidence('SAMPLE ASSOCIATION\nOct 23, 2026\nDues and utilities\nTOTAL PAID\nPHP 1,250.00'), 'A printed paid settlement can identify a receipt without a receipt heading');
 assert(!hasReceiptPhotoEvidence('Bank statement\nOpening balance 100\nTOTAL PAID\nPHP 100.00'));
+
+assert(!hasReceiptPhotoEvidence('GCash Transaction History\n2026-10-23\nINVOICE\nTOTAL PAID\nPHP 1,250.00'), 'History screens remain statements even when they contain a receipt heading or payment summary');
+assert(!hasReceiptPhotoEvidence('GCash statement\nSTARTING BALANCE 100.00\nINVOICE\nTOTAL PAID\nPHP 50.00\nENDING BALANCE 50.00'));
