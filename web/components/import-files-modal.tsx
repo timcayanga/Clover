@@ -1,4 +1,6 @@
 "use client";
+
+import { GRAB_PAYMENT_ACCOUNT_REVIEW_PHASE } from '@/lib/grab-email-receipt';
 import { requestReceiptLocation } from "@/lib/receipt-device-location";
 import { captureReceiptLocation, receiptLocationCountryLabel, type ReceiptCaptureLocation, type ReceiptLocationFix } from "../../shared/receipt-capture-location";
 
@@ -2618,6 +2620,21 @@ export function ImportFilesModal({
         if (processingPhase === SOURCE_REVIEW_PHASE && parsedRowsCount === 0 && confirmedTransactionsCount === 0) {
           closeImportAfterError(itemId, "source_review", summaryContext.fileName,
             processingMessage ?? "This source needs review before transactions can be added.");
+          return;
+        }
+
+        if (processingPhase === GRAB_PAYMENT_ACCOUNT_REVIEW_PHASE) {
+          const explicitAccountId = accountId && !accountId.startsWith('optimistic-') ? accountId : null;
+          if (!explicitAccountId) {
+            closeImportAfterError(itemId, 'confirm', summaryContext.fileName,
+              processingMessage ?? 'Select the existing payment account before resuming this receipt.');
+            return;
+          }
+          await confirmItemImport(itemId, importFileId, explicitAccountId, {
+            fileName: summaryContext.fileName, accountName: null, institution: null,
+            accountNumber: null, accountType: null, currency: resolvedStatementCurrency,
+            optimisticAccountId: null,
+          }, { backgroundOnly });
           return;
         }
 

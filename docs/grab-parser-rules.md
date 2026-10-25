@@ -31,3 +31,33 @@ Some printed legacy Grab emails put the large `P` headline total in an image whi
 ## Reviewed Barangay Central route cue
 
 An older complete GrabPay Wallet receipt prints only `P` for its total and names `11-C Marunong St, Central` as a trip stop. Quezon City Government identifies Marunong Street in Barangay Central, Quezon City (https://quezoncity.gov.ph/brgy-directory/central/). Accept a numbered Marunong Street, Central address only inside the `Your Trip` section and only with the existing agreeing headline, summary, fare arithmetic, booking, date and explicit wallet-payment checks. The sender address, Singapore footer, an unnumbered street mention or a standalone `Central` cannot establish Philippine currency. Keep the original address as source evidence and the GrabPay Wallet identity without inventing a wallet number or bank balance. This additive parser rule does not modify prior imports or learned data.
+
+## Unidentified payment references and native Word receipts
+
+A complete, reconciled receipt may show only a four-digit reference in its native
+Paid by panel. Preserve that reference separately from the full payer number,
+issuer and account type (all unknown). It must wait for explicit selection of an
+existing bank/card account in the same Profile and source currency with a matching
+stored suffix. Do not create a Cash account or infer an issuer from a card logo.
+The account-review phase remains processing so deferred learning can resume after
+confirmation. Unselected references have no financial transaction or training
+signal. Confirmation must preserve every existing account field and balance.
+
+The bounded DOCX reader supports one complete Grab cash receipt with native
+Word text. It reads the main part and native headers/footers, retains their hashes
+and text separately from normalized data, and selects one compatible drawing
+representation rather than concatenating Choice and Fallback. It does not invent
+PDF page counts. Headline, summary, payment and fare components must reconcile;
+booking, pickup date and currency must be explicit. Sender clocks do not supply
+pickup clocks. Malformed XML, DTD/entity declarations, revisions, active/embedded
+content, excessive expansion and unsupported receipts require source review.
+The old clipped PDF remains retained; recovery from its complete original Word
+file is an alternate source artifact, not a rewrite of old evidence or labels.
+
+Release coverage: `grab-unspecified-instrument` and `grab-native-word` in the
+reviewed corpus; `word-receipt-regression.ts`,
+`grab-payment-instrument-db-regression.ts`, and
+`word-receipt-db-regression.ts` in the permanent release gate. Their invented
+financial labels are independent of the private originals. Both statement and
+receipt import modes, durable jobs, repeat confirmation, and existing confirmed
+financial data are checked with disposable PostgreSQL and no provider calls.

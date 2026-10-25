@@ -1,3 +1,4 @@
+import { GRAB_PAYMENT_ACCOUNT_REVIEW_PHASE } from '@/lib/grab-email-receipt';
 import { isLocalDevHost, requireAuth } from "@/lib/auth";
 import { assertWorkspaceAccess } from "@/lib/workspace-access";
 import { fetchImportFileCompat } from "@/lib/data-engine";
@@ -64,7 +65,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ imp
     // The worker normally owns confirmation. If it has already parsed rows but
     // stopped making progress, this fresh request can safely finish the save;
     // confirmImportFile serializes concurrent attempts with its import lock.
-    if ((importFile.status === "queued" || importFile.status === "processing") && !recreatingDeletedAccount) {
+    if ((importFile.status === "queued" || importFile.status === "processing") && !recreatingDeletedAccount && importFile.processingPhase !== GRAB_PAYMENT_ACCOUNT_REVIEW_PHASE) {
       if (canTakeOverStrandedConfirmation) {
         const { confirmImportFile } = await import("@/workers/import-processor");
         // Re-uploading a statement is the explicit user action that restores a

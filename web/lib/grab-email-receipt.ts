@@ -1,11 +1,14 @@
 import type { DetectedStatementMetadata, ParsedImportRow } from './import-parser';
+import { SourceReviewRequiredError } from './import-source-review';
+
+export const GRAB_PAYMENT_ACCOUNT_REVIEW_PHASE = 'payment_account_review_required';
 
 const prefix = 'GRAB_RECEIPT_NATIVE ';
 const amountPattern = '(\\d{1,3}(?:,\\d{3})*\\.\\d{2}|\\d+\\.\\d{2})';
 const months = ['jan','feb','mar','apr','may','jun','jul','aug','sep','oct','nov','dec'];
 type PickupField = { reference: string; merchant: string; page: number };
 export type GrabVisualHeadline = { reference: string; page: number; amountText: string; ocrText: string; cropSha256: string };
-function fail(reason: string): never { throw new Error(`Grab receipt requires source review: ${reason}`); }
+function fail(reason: string): never { throw new SourceReviewRequiredError(`Grab receipt requires source review: ${reason}`); }
 const cents = (text: string) => Math.round(Number(text.replaceAll(',', '')) * 100);
 
 export function buildGrabReceiptNativePages(pages: string[], pickupFields?: PickupField[], panelBodies?: string[], visualHeadlines?: GrabVisualHeadline[]): string | null {
@@ -190,7 +193,13 @@ function oneReceipt(text: string, fullText: string, pickupFields?: PickupField[]
   const paidMethods = [...paymentRegion.matchAll(new RegExp(`\\b(Cash|GCash|GrabPay Wallet)\\s+${amountPattern}\\b`, 'gi'))];
   const legacyCash = paidMethods.length === 0 && /\bCash\b/i.test(paymentRegion) && !/\b(?:GCash|GrabPay Wallet)\b/i.test(paymentRegion);
   const method = labeledMethod ?? (paidMethods.length === 1 && cents(paidMethods[0][2]) === total ? paidMethods[0][1] : legacyCash ? 'Cash' : null);
-  if (!method || /\b(?:MasterCard|Visa|Amex)\b/i.test(text)) fail('only explicit Cash, GCash or GrabPay Wallet payment is supported; card issuer/account remains unknown');
+  // A bare last-four token in the native Paid by panel proves only a payment
+  // reference. It never supplies an issuer, full account number or account type.
+  const instrumentMatches = [...paymentRegion.matchAll(new RegExp(`(?:^|\\n)\\s*(\\d{4})\\s+${amountPattern}\\b`, 'g'))];
+  const instrument = !method && instrumentMatches.length === 1 && cents(instrumentMatches[0][2]) === total &&
+    !/\b(?:Cash|GCash|GrabPay Wallet|MasterCard|Visa|Amex)\b/i.test(paymentRegion)
+      ? instrumentMatches[0][1] : null;
+  if ((!method && !instrument) || /\b(?:MasterCard|Visa|Amex)\b/i.test(text)) fail('only explicit Cash, GCash or GrabPay Wallet payment is supported; card issuer/account remains unknown');
   const components: Array<{ label: string; amount: number }> = [];
   if (food) {
     if (legacyFood) {
@@ -218,18 +227,18 @@ function oneReceipt(text: string, fullText: string, pickupFields?: PickupField[]
   }
   if (Math.round(components.reduce((n, c) => n + c.amount, 0) * 100) !== total) fail('fare/food components do not reconcile');
   const paid = text.match(new RegExp(`\\bCash\\s+${amountPattern}\\b`, 'i'));
-  if (method.toLowerCase() === 'cash' && paid && cents(paid[1]) !== total) fail('cash payment disagrees with the receipt');
+  if (method?.toLowerCase() === 'cash' && paid && cents(paid[1]) !== total) fail('cash payment disagrees with the receipt');
   const pickups = pickupFields?.filter(f => f.reference === refs[0]);
   if (food && !legacyFood && pickups && pickups.length !== 1) fail('native restaurant column is missing or conflicting');
   // Legacy food email names a pickup address, not the restaurant. Preserve it
   // in the raw page, but do not invent a merchant from the street address.
   const merchant = food ? (legacyFood ? 'GrabFood' : pickups?.[0]?.merchant ?? text.match(/Pick up location:\s*([^\n]+)(?:\n|$)/i)?.[1]?.trim()) : 'Grab';
   if (!merchant || merchant.length > 160 || /\b(?:Subtotal|Description|Amount|Drop off|Booking)\b|₱/.test(merchant)) fail('merchant pickup label is incomplete');
-  const cash = method.toLowerCase() === 'cash';
-  const accountName = cash ? 'Cash' : /^GCash$/i.test(method) ? 'GCash' : 'GrabPay Wallet';
+  const cash = method?.toLowerCase() === 'cash';
+  const accountName = instrument ? `Payment account ending ${instrument}` : cash ? 'Cash' : /^GCash$/i.test(method!) ? 'GCash' : 'GrabPay Wallet';
   return { date: date.date, amount: (total / 100).toFixed(2), currency, type: 'expense', merchantRaw: merchant, merchantClean: merchant,
-    description: `${food ? 'GrabFood' : 'Grab ride'} • ${refs[0]}`, categoryName: food ? 'Food & Dining' : 'Transport', accountName, institution: cash ? null : accountName, confidence: 95,
-    rawPayload: { source: 'grab_email_receipt', kind: cash ? 'cash_transaction' : 'wallet_transaction', line: text, referenceNumber: refs[0], paymentMethod: accountName, accountType: cash ? 'cash' : 'wallet', payerAccountNumber: null, sourceTimestamp: date.sourceTimestamp, sourceClock: date.sourceClock, components, totalAmount: total / 100,
+    description: `${food ? 'GrabFood' : 'Grab ride'} • ${refs[0]}`, categoryName: food ? 'Food & Dining' : 'Transport', accountName, institution: instrument || cash ? null : accountName, confidence: 95,
+    rawPayload: { source: 'grab_email_receipt', kind: instrument ? 'payment_instrument_transaction' : cash ? 'cash_transaction' : 'wallet_transaction', line: text, referenceNumber: refs[0], paymentMethod: instrument ? 'Unspecified payment instrument' : accountName, accountType: instrument ? null : cash ? 'cash' : 'wallet', payerAccountNumber: null, ...(instrument ? { paymentAccountSuffix: instrument, paymentAccountSelectionRequired: true } : {}), sourceTimestamp: date.sourceTimestamp, sourceClock: date.sourceClock, components, totalAmount: total / 100,
       ...(visualHeadline ? { visualHeadlineEvidence: visualHeadline } : {}),
       parserEvidence: { currency, reconciled: true, noBankBalanceAnchor: true, fullNativePages: true, visualHeadlineRecovered: Boolean(visualHeadline) }, sourceDocumentText: fullText } };
 }
@@ -238,9 +247,14 @@ export function parseGrabEmailReceipt(text: string): { metadata: DetectedStateme
   const markers = text.split(/\r?\n/).filter(line => line.startsWith(prefix));
   if (!markers.length) return null;
   if (markers.length !== 1) fail('duplicate native-page proof');
-  let proof: { physicalPages: number; pages: Array<{ page: number; text: string }>; pickupFields?: PickupField[]; panelBodies?: string[]; visualHeadlines?: GrabVisualHeadline[] };
+  let proof: { sourceFormat?: string; wordParts?: Array<{ name: string; sha256: string; text: string }>; physicalPages: number; pages: Array<{ page: number; text: string }>; pickupFields?: PickupField[]; panelBodies?: string[]; visualHeadlines?: GrabVisualHeadline[] };
   try { proof = JSON.parse(markers[0].slice(prefix.length)); } catch { return fail('invalid native-page proof'); }
-  if (!Number.isInteger(proof.physicalPages) || proof.physicalPages < 1 || proof.physicalPages > 100 || !Array.isArray(proof.pages) || proof.pages.length !== proof.physicalPages || proof.pages.some((p, i) => p.page !== i + 1 || typeof p.text !== 'string' || !p.text.trim())) fail('missing native pages');
+  const word = proof.sourceFormat === 'docx';
+  if (word) {
+    if (!Array.isArray(proof.wordParts) || !proof.wordParts.length || proof.wordParts.length > 32 || proof.wordParts[0].name !== 'word/document.xml' || proof.wordParts.some(p => typeof p.text !== 'string' || p.text.length > 4 * 1024 * 1024 || !/^[a-f0-9]{64}$/.test(p.sha256)) || new Set(proof.wordParts.map(p => p.name)).size !== proof.wordParts.length || proof.wordParts.slice(1).some(p => !/^word\/(?:header|footer)\d+\.xml$/.test(p.name))) fail('invalid native Word part proof');
+    if (proof.physicalPages || proof.pages || proof.panelBodies || proof.pickupFields || proof.visualHeadlines) fail('mixed Word and PDF proof');
+  }
+  if (!word && (!Number.isInteger(proof.physicalPages) || proof.physicalPages < 1 || proof.physicalPages > 100 || !Array.isArray(proof.pages) || proof.pages.length !== proof.physicalPages || proof.pages.some((p, i) => p.page !== i + 1 || typeof p.text !== 'string' || !p.text.trim()))) fail('missing native pages');
   if (proof.pickupFields && (!Array.isArray(proof.pickupFields) || proof.pickupFields.some(f => typeof f.reference !== 'string' || typeof f.merchant !== 'string' || !Number.isInteger(f.page) || f.page < 1 || f.page > proof.physicalPages))) fail('invalid native restaurant column evidence');
   if (proof.visualHeadlines && (!Array.isArray(proof.visualHeadlines) || proof.visualHeadlines.length > proof.physicalPages || proof.visualHeadlines.some(f =>
     typeof f.reference !== 'string' || !/\b(?:ADR|IOS)-?[A-Z0-9]+(?:-[A-Z0-9]+)+\b/.test(f.reference) ||
@@ -248,16 +262,21 @@ export function parseGrabEmailReceipt(text: string): { metadata: DetectedStateme
     typeof f.amountText !== 'string' || !/^P\s*\d[\d,]*\.\d{2}$/i.test(f.amountText) ||
     typeof f.ocrText !== 'string' || f.ocrText.length > 200 ||
     typeof f.cropSha256 !== 'string' || !/^[a-f0-9]{64}$/.test(f.cropSha256)))) fail('invalid visual headline evidence');
-  const body = proof.pages.map(p => p.text).join('\n').replace(/\u00a0|\u202f/g, ' ');
+  const body = (word ? proof.wordParts!.map(p => p.text).join('\n') : proof.pages.map(p => p.text).join('\n')).replace(/\u00a0|\u202f/g, ' ');
   if (proof.panelBodies && (proof.physicalPages !== 1 || proof.panelBodies.length !== 2 || proof.panelBodies.some(p => typeof p !== 'string' || !p.trim()))) fail('invalid native panel proof');
   const readingOrder = proof.panelBodies?.join('\n') ?? body;
   const starts = [...readingOrder.matchAll(/Hope\s*you\s*(?:enjoyed|had an enjoyable)\s+(?:your\s+)?(?:food|ride)\s*!/gi)];
   if (!starts.length) fail('receipt body is missing');
+  if (word && (starts.length !== 1 || !/Your\s+Grab\s+E-?Receipt/i.test(body))) fail('one complete Word receipt is required');
   const declared = [...body.matchAll(/\b(\d+)\s+messages?\b/gi)].map(m => Number(m[1]));
   if (declared.some(n => n > starts.length)) fail('declared receipts are missing');
   const rows = starts.map((s, i) => {
-    const receiptText = readingOrder.slice(s.index!, starts[i + 1]?.index ?? readingOrder.length);
-    return oneReceipt(receiptText, body, proof.pickupFields, proof.visualHeadlines?.filter(evidence => receiptText.includes(evidence.reference)));
+    const receiptText = word ? readingOrder : readingOrder.slice(s.index!, starts[i + 1]?.index ?? readingOrder.length);
+    const row = oneReceipt(receiptText, body, proof.pickupFields, proof.visualHeadlines?.filter(evidence => receiptText.includes(evidence.reference)));
+    if (word) {
+      row.rawPayload = { ...row.rawPayload, sourceContainer: 'docx', wordParts: proof.wordParts, parserEvidence: { ...(row.rawPayload!.parserEvidence as object), fullNativePages: false, fullWordParts: true } };
+    }
+    return row;
   });
   const seen = new Map<string, string>();
   const unique = rows.filter(row => {
@@ -273,7 +292,8 @@ export function parseGrabEmailReceipt(text: string): { metadata: DetectedStateme
   const accountName = unique[0].accountName;
   if (!accountName) fail('payment account is missing');
   const cash = accountName === 'Cash';
-  return { rows: unique, metadata: { institution: cash ? null : accountName, accountName, accountNumber: null, accountType: cash ? 'cash' : 'wallet', currency: unique[0].currency, openingBalance: null, endingBalance: null, startDate: unique[0].date ?? null, endDate: unique.at(-1)?.date ?? null, confidence: 95, currencyConfidence: 100, institutionConfidence: cash ? 0 : 100, identityEvidence: ['grab-receipt-payment-method-only', 'Explicit receipt payment method; payer number and bank balances remain unknown', 'Complete native pages and reconciled receipt summary'] } };
+  const instrument = getGrabPaymentInstrumentSuffix(unique);
+  return { rows: unique, metadata: { institution: instrument || cash ? null : accountName, accountName, accountNumber: null, accountType: instrument ? null : cash ? 'cash' : 'wallet', currency: unique[0].currency, openingBalance: null, endingBalance: null, startDate: unique[0].date ?? null, endDate: unique.at(-1)?.date ?? null, confidence: 95, currencyConfidence: 100, institutionConfidence: instrument || cash ? 0 : 100, identityEvidence: ['grab-receipt-payment-method-only', 'Explicit receipt payment method; payer number and bank balances remain unknown', 'Complete native pages and reconciled receipt summary'] } };
 }
 
 export function hasVerifiedGrabReceiptRows(text: string, rows: Array<{ amount?: unknown; date?: unknown; currency?: unknown; rawPayload?: unknown }>): boolean {
@@ -284,7 +304,7 @@ export function hasVerifiedGrabReceiptRows(text: string, rows: Array<{ amount?: 
       const expected = source.rows[i].rawPayload!;
       const components = raw?.components as Array<{ label?: unknown; amount?: unknown }> | undefined;
       const required = expected.components as Array<{ label: string; amount: number }>;
-      return Number(r.amount) === Number(source.rows[i].amount) && r.date === source.rows[i].date && r.currency === source.rows[i].currency && raw?.source === 'grab_email_receipt' && raw.referenceNumber === expected.referenceNumber && raw.paymentMethod === expected.paymentMethod && raw.sourceTimestamp === expected.sourceTimestamp && raw.line === expected.line && JSON.stringify(raw.visualHeadlineEvidence ?? null) === JSON.stringify(expected.visualHeadlineEvidence ?? null) && (raw.parserEvidence as { currency?: unknown } | undefined)?.currency === source.rows[i].currency && Array.isArray(components) && components.length === required.length && components.every((c, j) => c.label === required[j].label && Number(c.amount) === required[j].amount);
+      return Number(r.amount) === Number(source.rows[i].amount) && r.date === source.rows[i].date && r.currency === source.rows[i].currency && raw?.source === 'grab_email_receipt' && JSON.stringify(raw.wordParts ?? null) === JSON.stringify(expected.wordParts ?? null) && raw.sourceContainer === expected.sourceContainer && raw.referenceNumber === expected.referenceNumber && raw.paymentMethod === expected.paymentMethod && raw.kind === expected.kind && raw.paymentAccountSuffix === expected.paymentAccountSuffix && raw.paymentAccountSelectionRequired === expected.paymentAccountSelectionRequired && raw.payerAccountNumber === expected.payerAccountNumber && raw.sourceTimestamp === expected.sourceTimestamp && raw.line === expected.line && JSON.stringify(raw.visualHeadlineEvidence ?? null) === JSON.stringify(expected.visualHeadlineEvidence ?? null) && (raw.parserEvidence as { currency?: unknown } | undefined)?.currency === source.rows[i].currency && Array.isArray(components) && components.length === required.length && components.every((c, j) => c.label === required[j].label && Number(c.amount) === required[j].amount);
     }));
   } catch { return false; }
 }
@@ -295,4 +315,28 @@ export function readGrabReceiptTimestamp(payload: unknown): Date | null {
   if (raw.source !== 'grab_email_receipt' || typeof raw.sourceTimestamp !== 'string' || !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\+08:00$/.test(raw.sourceTimestamp)) return null;
   const date = new Date(raw.sourceTimestamp);
   return Number.isNaN(date.getTime()) ? null : date;
+}
+
+/** Return only a consistent, reconciled native payment reference, never an issuer. */
+export function getGrabPaymentInstrumentSuffix(rows: Array<{ rawPayload?: unknown }>): string | null {
+  if (!rows.length) return null;
+  const suffixes = rows.map(row => {
+    const raw = row.rawPayload as Record<string, unknown> | null;
+    return raw?.source === 'grab_email_receipt' && raw.kind === 'payment_instrument_transaction' &&
+      raw.paymentAccountSelectionRequired === true && raw.payerAccountNumber === null &&
+      (raw.parserEvidence as Record<string, unknown> | null)?.reconciled === true &&
+      typeof raw.paymentAccountSuffix === 'string' && /^\d{4}$/.test(raw.paymentAccountSuffix)
+      ? raw.paymentAccountSuffix : null;
+  });
+  return suffixes.every(suffix => suffix === suffixes[0]) ? suffixes[0] : null;
+}
+
+/** Narrow marker for native Word cash receipts already validated against source. */
+export function isGrabWordCashReceipt(rows: Array<{ rawPayload?: unknown }>): boolean {
+  return rows.length === 1 && rows.every(row => {
+    const raw = row.rawPayload as Record<string, unknown> | null;
+    return raw?.source === 'grab_email_receipt' && raw.sourceContainer === 'docx' && raw.kind === 'cash_transaction' &&
+      (raw.parserEvidence as Record<string, unknown> | null)?.fullWordParts === true &&
+      (raw.parserEvidence as Record<string, unknown> | null)?.reconciled === true;
+  });
 }

@@ -33,7 +33,7 @@ export function fileProblem(file: SelectedFile) {
   const sizeProblem = uploadSizeProblem(file.name, file.mimeType, file.size);
   if (sizeProblem) return sizeProblem;
   if (
-    !/\.(pdf|csv|tsv|xlsx?|xlsm|xlsb|ods|png|jpe?g|webp|hei[cf]|ofx|qfx|qif|mt940|sta|xml|json)$/i.test(
+    !/\.(pdf|docx|csv|tsv|xlsx?|xlsm|xlsb|ods|png|jpe?g|webp|hei[cf]|ofx|qfx|qif|mt940|sta|xml|json)$/i.test(
       file.name,
     )
   )

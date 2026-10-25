@@ -2,7 +2,7 @@ import { normalizeReceiptCaptureLocation } from "../../shared/receipt-capture-lo
 import {hasVerifiedHeldNativeRows} from '@/lib/held-source-contracts';
 import { hasVerifiedMariBankNativeRows } from '@/lib/maribank-native-ledger';
 import { hasVerifiedMaybankIslamicRows } from '@/lib/maybank-islamic-statement';
-import { hasVerifiedGrabReceiptRows, readGrabReceiptTimestamp } from '@/lib/grab-email-receipt';
+import { hasVerifiedGrabReceiptRows, readGrabReceiptTimestamp, getGrabPaymentInstrumentSuffix, isGrabWordCashReceipt, GRAB_PAYMENT_ACCOUNT_REVIEW_PHASE } from '@/lib/grab-email-receipt';
 import { hasVerifiedGcashWalletHistoryRows, readGcashWalletHistoryTimestamp } from '@/lib/import-parser';
 import { hasVerifiedBcaTransferRows, parseBcaTransferProof } from "@/lib/bca-transfer-proof";
 import { enqueueLearningJob, processLearningJob, type LearningAction } from "@/lib/learning-jobs";
@@ -5683,6 +5683,31 @@ const resolveConfirmationAccount = async (params: {
 }) => {
   const workspaceId = String(params.importFile.workspaceId);
   const compatibleAccountColumns = await getCompatibleAccountColumns();
+  const paymentSuffix = getGrabPaymentInstrumentSuffix(params.parsedRows);
+  if (paymentSuffix) {
+    // The receipt cannot identify an issuer or distinguish debit from credit.
+    // Only an explicit selection of an existing matching account can resolve it.
+    if (!params.accountId) throw new Error(`Select the existing payment account ending ${paymentSuffix}. This receipt does not identify its issuer or balance.`);
+    const selected = await prisma.account.findFirst({ where: { id: params.accountId, workspaceId }, select: getCompatibleAccountSelect(compatibleAccountColumns) });
+    if (!selected || !['bank', 'credit_card'].includes(selected.type) || selected.currency !== params.statementMetadata?.currency ||
+        ![selected.accountNumber, selected.importIdentityAccountNumber].some(number => String(number ?? '').replace(/\D/g, '').endsWith(paymentSuffix))) {
+      throw new Error(`Choose an existing same-currency bank or card account whose stored payment number ends ${paymentSuffix}.`);
+    }
+    return selected; // Preserve every stored identity field, balance and timestamp.
+  }
+  if (isGrabWordCashReceipt(params.parsedRows)) {
+    const currency = String(params.statementMetadata?.currency ?? '');
+    if (!currency) throw new Error('The receipt currency requires review.');
+    const matches = await prisma.account.findMany({where:{workspaceId,type:'cash',currency},select:getCompatibleAccountSelect(compatibleAccountColumns)});
+    const selected = params.accountId ? matches.find(account => account.id === params.accountId) : matches.length === 1 ? matches[0] : null;
+    if ((params.accountId || matches.length > 1) && !selected) throw new Error('Select the existing Cash account in the receipt currency.');
+    if (selected) return selected;
+    const tombstone = await findDeletedAccountTombstoneMatch(workspaceId,{name:'Cash',type:'cash',currency,source:'upload'});
+    if (tombstone && !params.allowDeletedAccountRecreation) throw new Error('This receipt matches a deleted Cash account. Confirm before recreating it.');
+    const id = await resolveWorkspaceCashAccountId(workspaceId,currency);
+    if (!id) throw new Error('Unable to resolve the receipt Cash account.');
+    return prisma.account.findUniqueOrThrow({where:{id},select:getCompatibleAccountSelect(compatibleAccountColumns)});
+  }
   const verifiedGcashReceiptRows = params.parsedRows.length > 0 && params.parsedRows.every(row => {
     const raw = row.rawPayload as Record<string, unknown> | null;
     return raw?.source === 'gcash_bills_receipt' && (raw.parserEvidence as Record<string, unknown> | null)?.totalReconciled === true;
@@ -7629,6 +7654,18 @@ const markRemainingImportCleanupRowsForReview = async (
     },
   });
 
+const verifiedLegacySeaBankDirection = (row: EnrichedParsedImportRow | undefined): "income" | "expense" | null => {
+  const raw = row?.rawPayload;
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
+  const evidence = raw as Record<string, unknown>;
+  const reconciliation = evidence.reconciliation;
+  if (evidence.source !== "seabank_indonesia_legacy_daily" || evidence.balanceReconciled !== true ||
+      !reconciliation || typeof reconciliation !== "object" || Array.isArray(reconciliation) ||
+      (reconciliation as Record<string, unknown>).version !== "seabank-id-legacy-daily-v1" || row?.currency !== "IDR") return null;
+  const direction = evidence.direction === "incoming" ? "income" : evidence.direction === "outgoing" ? "expense" : null;
+  return direction && row.type === direction ? direction : null;
+};
+
 const strengthenEnrichmentRowForAttempt = (
   row: EnrichedParsedImportRow,
   parsedRow: EnrichedParsedImportRow | undefined,
@@ -8060,11 +8097,12 @@ export const processImportEnrichmentJobs = async (options: {
             rawPayload: row.rawPayload,
           });
           const unionBankDirection = resolveUnionBankExternalTransferDirection(row, parsedRow);
-          const canonicalType = migration ? rowType :
+          const trustedNativeDirection = verifiedLegacySeaBankDirection(parsedRow);
+          const canonicalType = trustedNativeDirection ?? (migration ? rowType :
             unionBankDirection ??
             (parsedRowType && parsedRowType !== "transfer" && shouldPreserveParserTransferDirection(row, parsedRow)
               ? parsedRowType
-              : coerceTransactionTypeFromCategoryName(categoryName, rowType));
+              : coerceTransactionTypeFromCategoryName(categoryName, rowType)));
           const isTransfer = migration ? canonicalType === "transfer" : canonicalType === "transfer" || isTransferCategoryName(categoryName);
           let categoryId = categoryByName.get(categoryName.toLowerCase());
           if (!categoryId) {
@@ -8113,7 +8151,9 @@ export const processImportEnrichmentJobs = async (options: {
             parserConfidence,
             reviewStatus: nextReviewStatus,
             isTransfer,
-            normalizedPayload: (row.normalizedPayload ?? {}) as Prisma.InputJsonValue,
+            normalizedPayload: trustedNativeDirection
+              ? { ...(row.normalizedPayload && typeof row.normalizedPayload === "object" && !Array.isArray(row.normalizedPayload) ? row.normalizedPayload : {}), type: trustedNativeDirection, sourceDirectionPreserved: true } as Prisma.InputJsonValue
+              : (row.normalizedPayload ?? {}) as Prisma.InputJsonValue,
             learnedRuleIdsApplied: (row.learnedRuleIdsApplied ?? []) as Prisma.InputJsonValue,
           });
         }
@@ -10021,6 +10061,12 @@ const processImportFileTextImpl = async (
   let effectiveImportMode = isTransactionHistoryImage() && importMode === "statement"
     ? "statement"
     : inferStructuredDocumentImportModeFromParsedRows(importMode, parsedRows, metadataForParse);
+  // Reuse the native row-confirmation flow; the generic receipt fallback to
+  // Cash cannot supply an unidentified payment instrument's account.
+  if (getGrabPaymentInstrumentSuffix(parsedRows) || isGrabWordCashReceipt(parsedRows)) {
+    effectiveImportMode = 'statement';
+    isDocumentImport = false;
+  }
   if (effectiveImportMode !== "statement") {
     isDocumentImport = true;
   }
@@ -13001,6 +13047,15 @@ const processImportFileTextImpl = async (
         error,
       });
     }
+  }
+
+  const unresolvedPaymentSuffix = getGrabPaymentInstrumentSuffix(rows);
+  if (unresolvedPaymentSuffix && !linkedImportAccountId) {
+    const message = `Select the existing payment account ending ${unresolvedPaymentSuffix} to finish this receipt. Clover has saved the source and parsed details; its issuer and balance remain unknown.`;
+    await updateImportFileCompat(importFileId, { status: 'processing', processingPhase: GRAB_PAYMENT_ACCOUNT_REVIEW_PHASE,
+      processingMessage: message, parsedRowsCount: rows.length, confirmedTransactionsCount: 0 });
+    return { imported: 0, duplicate: false, requiresInput: true, metadata: resolvedMetadata,
+      resolvedImportMode: effectiveImportMode, confirmedTransactionsCount: 0, status: 'error' };
   }
 
   if (!isDocumentImport && imageImport && rows.length === 0) {
@@ -16030,7 +16085,8 @@ export const confirmImportFile = async (
   const verifiedMariImport = parsedRows.length > 0 && parsedRows.every(row => (row.rawPayload as Record<string, unknown> | null)?.source === "maribank_native_columns");
   const verifiedMaybankIslamicImport = isVerifiedMaybankIslamicRowSet(parsedRows);
   const verifiedPosbImport = parsedRows.length > 0 && parsedRows.every(row => { const raw = row.rawPayload as Record<string, unknown> | null; return raw?.source === "posb_pdf_columns" && raw.balanceReconciled === true && (raw.reconciliation as Record<string, unknown> | null)?.version === "posb-column-reconciliation-v1"; });
-  const verifiedReadOnlyAccountImport = verifiedGcashReceiptImport || verifiedGcashLedgerImport || verifiedMaybankIslamicImport || verifiedHeldImport || verifiedPosbImport || verifiedMariImport || (parsedRows.length > 0 && parsedRows.every(row => (row.rawPayload as Record<string, unknown> | null)?.source === 'bca_transfer_proof'));
+  const verifiedGrabPaymentInstrumentImport = Boolean(getGrabPaymentInstrumentSuffix(parsedRows));
+  const verifiedReadOnlyAccountImport = isGrabWordCashReceipt(parsedRows) || verifiedGrabPaymentInstrumentImport || verifiedGcashReceiptImport || verifiedGcashLedgerImport || verifiedMaybankIslamicImport || verifiedHeldImport || verifiedPosbImport || verifiedMariImport || (parsedRows.length > 0 && parsedRows.every(row => (row.rawPayload as Record<string, unknown> | null)?.source === 'bca_transfer_proof'));
   const preserveExistingVerifiedBalance = verifiedReadOnlyAccountImport && (account.balance !== null || (await tx.account.findUniqueOrThrow({where:{id:resolvedAccountId},select:{createdAt:true}})).createdAt.getTime() <= importFile.uploadedAt.getTime());
   if (preserveExistingVerifiedBalance || consolidatedCimbImport) {
     reconciledAccountBalance = snapshotBalanceToString(account.balance);
@@ -16259,7 +16315,8 @@ export const confirmImportFile = async (
             parsedCategoryName,
             (rowType ?? "expense") as "income" | "expense" | "transfer"
           ));
-    const canonicalType = migration && rowType ? rowType : shouldTransferAtmWithdrawalToCash
+    const trustedNativeDirection = verifiedLegacySeaBankDirection(row as EnrichedParsedImportRow);
+    const canonicalType = trustedNativeDirection ?? (migration && rowType ? rowType : shouldTransferAtmWithdrawalToCash
       ? "transfer"
       : resolveTransferTypeAgainstWorkspaceAccounts({
           row: {
@@ -16277,7 +16334,7 @@ export const confirmImportFile = async (
           candidateType: categoryCoercedType,
           workspaceAccounts: workspaceAccountsForTransferMatching,
           currentAccountId: rowResolvedAccountId,
-        });
+        }));
     const learnedLabels = shouldTransferAtmWithdrawalToCash || canonicalType !== rowType ? undefined : confirmedImportLabels.get(index);
     const categoryName = shouldTransferAtmWithdrawalToCash ? "Cash & ATM" : learnedLabels?.categoryName ?? parsedCategoryName;
     const rowIsTransfer = migration ? canonicalType === "transfer" : canonicalType === "transfer" || isTransferCategoryName(categoryName);

@@ -64,8 +64,8 @@ export const validateImportFile = (params: {
 
   if (!isSupportedImportFile(params.fileName, params.contentType, { importMode: params.importMode ?? null })) {
     return params.importMode
-      ? "Only PDF, CSV, TSV, spreadsheets, financial exports, and common image files are supported for this import mode."
-      : "Only PDF, CSV, TSV, spreadsheets, financial exports, and common image files are supported.";
+      ? "Only PDF, DOCX receipts, CSV, TSV, spreadsheets, financial exports, and common image files are supported for this import mode."
+      : "Only PDF, DOCX receipts, CSV, TSV, spreadsheets, financial exports, and common image files are supported.";
   }
 
   return null;
@@ -78,8 +78,8 @@ export const validateImportFileMetadata = (params: { fileName: string; contentTy
 
   if (!isSupportedImportFile(params.fileName, params.contentType, { importMode: params.importMode ?? null })) {
     return params.importMode
-      ? "Only PDF, CSV, TSV, spreadsheets, financial exports, and common image files are supported for this import mode."
-      : "Only PDF, CSV, TSV, spreadsheets, financial exports, and common image files are supported.";
+      ? "Only PDF, DOCX receipts, CSV, TSV, spreadsheets, financial exports, and common image files are supported for this import mode."
+      : "Only PDF, DOCX receipts, CSV, TSV, spreadsheets, financial exports, and common image files are supported.";
   }
 
   return null;
@@ -115,6 +115,7 @@ export const validateImportFileBytes = (params: {
   const isZipSpreadsheet = /\.(?:xlsx|xlsm|xlsb|ods)$/.test(name);
   const isOleSpreadsheet = name.endsWith(".xls");
 
+  if ((name.endsWith('.docx') || normalizedContentType === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document') && !startsWith([0x50, 0x4b])) return 'The uploaded file is not a valid Word document.';
   if (isPdf && !startsWith([0x25, 0x50, 0x44, 0x46])) return "The uploaded file is not a valid PDF.";
   if (isPng && !startsWith([0x89, 0x50, 0x4e, 0x47])) return "The uploaded file is not a valid PNG image.";
   if (isJpeg && !startsWith([0xff, 0xd8, 0xff])) return "The uploaded file is not a valid JPEG image.";

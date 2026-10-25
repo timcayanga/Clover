@@ -51,7 +51,7 @@ export async function runUploadFormatCoverageRegression() {
   const csv = "Migration Source,Date,Description,Amount,Currency,Account,Type,Category\nspreadsheet,2026-09-13,Upload test,12.50,PHP,Upload Checking,Expense,Food";
   const ofx = "OFXHEADER:100\n<OFX><BANKMSGSRSV1><STMTTRNRS><STMTRS><CURDEF>PHP<BANKACCTFROM><ACCTID>1234</BANKACCTFROM><BANKTRANLIST><STMTTRN><TRNTYPE>DEBIT<DTPOSTED>20260913<TRNAMT>-12.50<FITID>upload-1<NAME>Upload test</STMTTRN></BANKTRANLIST></STMTRS></STMTTRNRS></BANKMSGSRSV1></OFX>";
   const mt940 = ":20:UPLOAD\n:25:1234\n:60F:C260901PHP100,00\n:61:260913D12,50NMSCREF\n:86:Upload test\n:62F:C260913PHP87,50";
-  const fixtures: Array<{ extension: string; bytes: Uint8Array }> = [
+  const fixtures: Array<{ extension: string; bytes: Uint8Array; expected?: { amount: number; date: string } }> = [
     { extension: ".csv", bytes: Buffer.from(csv) },
     { extension: ".tsv", bytes: Buffer.from(csv.replaceAll(",", "\t")) },
     { extension: ".ofx", bytes: Buffer.from(ofx) },
@@ -66,8 +66,10 @@ export async function runUploadFormatCoverageRegression() {
     const workbook = XLSX.read(csv, { type: "string", raw: true });
     fixtures.push({ extension, bytes: XLSX.write(workbook, { type: "buffer", bookType }) });
   }
+  fixtures.push({extension:'.docx',bytes:readFileSync('scripts/fixtures/reviewed-parser-corpus/grab-native-word.docx'),expected:{amount:250,date:'2026-08-14T12:00:00.000Z'}});
   const originalFetch = globalThis.fetch;
   const mimeByExtension: Record<string, string> = {
+    ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
     ".csv": "text/csv", ".tsv": "text/tab-separated-values", ".ofx": "application/x-ofx", ".qfx": "application/vnd.intu.qfx",
     ".qif": "application/qif", ".mt940": "application/x-mt940", ".sta": "text/mt940", ".xml": "application/xml", ".json": "application/json",
     ".xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", ".xls": "application/vnd.ms-excel",
@@ -77,7 +79,7 @@ export async function runUploadFormatCoverageRegression() {
   let networkCalls = 0;
   globalThis.fetch = async () => { networkCalls++; throw new Error("Structured upload tests must not call network/AI services"); };
   try {
-    for (const { extension, bytes } of fixtures) {
+    for (const { extension, bytes, expected } of fixtures) {
       for (const contentType of ["", "application/octet-stream", mimeByExtension[extension]]) {
         const form = new FormData();
         form.set("file", new File([bytes as BlobPart], `History${extension.toUpperCase()}`, { type: contentType }));
@@ -92,7 +94,7 @@ export async function runUploadFormatCoverageRegression() {
         const text = await readUploadedFileText(received);
         const rows = parseImportText(text, received.name, received.type, { currency: "PHP", accountName: "Upload Checking" });
         assert.equal(rows.length, 1, `${extension}: bytes must reach the parser`);
-        assert.equal(Number(rows[0].amount), 12.5); assert.equal(rows[0].date, "2026-09-13");
+        assert.equal(Number(rows[0].amount), expected?.amount ?? 12.5); assert.equal(rows[0].date, expected?.date ?? "2026-09-13");
         assert.equal(rows[0].currency, "PHP"); assert.equal(rows[0].type, "expense");
 
         const values = new Map<string, unknown>();

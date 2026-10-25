@@ -63,9 +63,9 @@ async function main() {
       const bytes = readFileSync(join(root, c.source));
       assert.equal(sha(bytes), c.sha256, "Source bytes changed after review");
       const ext = extname(c.source);
-      const mime: Record<string, string> = { ".csv": "text/csv", ".tsv": "text/tab-separated-values", ".ofx": "application/x-ofx", ".mt940": "application/x-mt940", ".xml": "application/xml", ".json": "application/json", ".qif": "application/qif", ".xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", ".xls": "application/vnd.ms-excel", ".xlsm": "application/vnd.ms-excel.sheet.macroEnabled.12", ".xlsb": "application/vnd.ms-excel.sheet.binary.macroEnabled.12", ".ods": "application/vnd.oasis.opendocument.spreadsheet" };
+      const mime: Record<string, string> = { ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document", ".csv": "text/csv", ".tsv": "text/tab-separated-values", ".ofx": "application/x-ofx", ".mt940": "application/x-mt940", ".xml": "application/xml", ".json": "application/json", ".qif": "application/qif", ".xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", ".xls": "application/vnd.ms-excel", ".xlsm": "application/vnd.ms-excel.sheet.macroEnabled.12", ".xlsb": "application/vnd.ms-excel.sheet.binary.macroEnabled.12", ".ods": "application/vnd.oasis.opendocument.spreadsheet" };
       const type = mime[ext] ?? "application/pdf";
-      const text = [".xlsx", ".xls", ".xlsm", ".xlsb", ".ods"].includes(ext)
+      const text = [".docx", ".xlsx", ".xls", ".xlsm", ".xlsb", ".ods"].includes(ext)
         ? await readUploadedFileText({ name: c.source, type, arrayBuffer: async () => Uint8Array.from(bytes).buffer })
         : bytes.toString("utf8");
       if (c.expectedMetadata) assertReviewedResult(detectStatementMetadataFromText(text), c.expectedMetadata, `${c.id}: metadata`);

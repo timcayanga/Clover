@@ -64,12 +64,71 @@ export function buildSeaBankIndonesiaPdfRows(items: Item[]): string[] {
   return [`SEABANK_ID_ROW_COUNT ${dates.length}`,...rows];
 }
 
+/** Preserve raw font runs; join only touching glyphs on the same native baseline. */
+function legacyHeaderLine(cells: NativeCell[]): string {
+  return cells.map((cell,i)=>`${i && cell.x-cells[i-1].end>0.4?' ':''}${cell.text}`).join('');
+}
+function legacyHeaderKind(line: string): 'account'|'period'|'publication'|null {
+  if(/^SEABANK ?ACCOUNT:\s*\d{12}(?![\dA-Za-z_])/.test(line)) return 'account';
+  if(/^\d{2} [A-Z]{3} \d{4} to \d{2} [A-Z]{3} \d{4}$/.test(line)) return 'period';
+  if(/^\d{2} [A-Z]{3} \d{4}$/.test(line)) return 'publication';
+  return null;
+}
+function legacyHeaderGlyphProof(cells: NativeCell[]): NativeCell[][] {
+  const groups: NativeCell[][]=[];
+  for(const cell of [...cells].sort((a,b)=>b.y-a.y||a.x-b.x)) {
+    const row=groups.at(-1);
+    if(row && Math.abs(row[0].y-cell.y)<0.25)row.push(cell);else groups.push([cell]);
+  }
+  return groups.filter(row=>{
+    const kind=legacyHeaderKind(legacyHeaderLine(row));
+    return kind && kind!==legacyHeaderKind(row.map(c=>c.text).join(' ')) &&
+      (kind==='publication'?row[0].y>750 && row[0].x>400:kind==='account'?row[0].x<110:row[0].x>150 && row[0].y>400);
+  });
+}
+function readLegacyHeaderGlyphProof(text: string): string {
+  const markers=[...text.matchAll(/^SEABANK_ID_LEGACY_HEADER_GLYPHS (.+)$/gm)];
+  const nativeLineCounts=new Map<string,number>();
+  for(const line of text.split(/\r?\n/).filter(line=>!line.startsWith('SEABANK_ID_LEGACY_HEADER_GLYPHS '))){const key=line.replace(/\s+/g,' ').trim();nativeLineCounts.set(key,(nativeLineCounts.get(key)??0)+1);}
+  if(markers.length>100)fail('legacy header glyph proof count');
+  return markers.flatMap(marker=>{
+    let rows:unknown;try{rows=JSON.parse(marker[1]);}catch{return fail('legacy header glyph proof JSON');}
+    if(!Array.isArray(rows) || rows.length>3)return fail('legacy header glyph proof rows');
+    return rows.map((candidate:unknown)=>{
+      if(!Array.isArray(candidate) || !candidate.length || candidate.length>32)fail('legacy header glyph proof shape');
+      const row=candidate as NativeCell[];
+      if(row.some((cell,i)=>!cell || typeof cell.text!=='string' || !cell.text || cell.text.length>160 || !Number.isFinite(cell.x)||!Number.isFinite(cell.y)||!Number.isFinite(cell.end)||cell.end<cell.x||cell.x<0||cell.end>600||Math.abs(cell.y-row[0].y)>=0.25||(i>0&&cell.x<row[i-1].end-0.4)))fail('legacy header glyph proof geometry');
+      const nativeLine=row.map(cell=>cell.text).join(' ').replace(/\s+/g,' ').trim();
+      const available=nativeLineCounts.get(nativeLine)??0;
+      if(available<1)fail('legacy header glyph proof is not bound to the raw source');
+      nativeLineCounts.set(nativeLine,available-1);
+      const line=legacyHeaderLine(row),kind=legacyHeaderKind(line);
+      if(!kind || kind===legacyHeaderKind(row.map(c=>c.text).join(' ')))fail('legacy header glyph proof does not resolve a split field');
+      if(kind==='publication' && !(row[0].y>750 && row[0].x>400))fail('legacy publication glyph position');
+      if(kind==='account' && row[0].x>=110)fail('legacy account glyph position');
+      if(kind==='period' && !(row[0].x>150 && row[0].y>400))fail('legacy period glyph position');
+      return line;
+    });
+  }).join('\n');
+}
+function legacyDateColumnCells(original: NativeCell[]): NativeCell[] {
+  const used=new Set<NativeCell>();const dates:NativeCell[]=[];
+  for(const month of original.filter(cell=>cell.x<110 && /^[A-Z]{3}$/.test(cell.text))) {
+    const days=original.filter(cell=>cell.x<month.x && /^\d{2}$/.test(cell.text) && Math.abs(cell.y-month.y)<0.25 && month.x-cell.end>=1 && month.x-cell.end<=4.5);
+    if(days.length===1){used.add(days[0]);used.add(month);dates.push({...days[0],text:days[0].text+' '+month.text,end:month.end});}
+    else if(days.length>1)fail('legacy native date glyph ambiguity');
+  }
+  return [...original.filter(cell=>!used.has(cell)),...dates].sort((a,b)=>b.y-a.y||a.x-b.x);
+}
+
 type LegacySeaBankSection = 'none' | 'transactions' | 'daily-interest' | 'done';
 /** The older Indonesian layout omits per-movement balances but prints a daily balance/interest proof. */
 export function buildSeaBankIndonesiaLegacyPdfEvidence(items: Item[], previous: LegacySeaBankSection): {lines:string[]; section:LegacySeaBankSection} {
-  const cells=nativeCells(items).sort((a,b)=>b.y-a.y || a.x-b.x);
+  const originalCells=nativeCells(items);
+  const cells=legacyDateColumnCells(originalCells);
   const money=nativeIdrAmounts(cells);
-  const lines:string[]=[];
+  const headerProof=legacyHeaderGlyphProof(originalCells);
+  const lines:string[]=headerProof.length?['SEABANK_ID_LEGACY_HEADER_GLYPHS '+JSON.stringify(headerProof)]:[];
   let section=previous, transactions=0, daily=0;
   const markers=cells.filter(c=>/^(?:SAVINGS - TRANSACTION DETAILS|TABUNGAN - RINCIAN TRANSAKSI|SAVINGS - INTEREST & TAX DETAILS|TABUNGAN - RINCIAN BUNGA & PAJAK|TIME DEPOSIT - INTEREST & TAX DETAILS|DEPOSITO - RINCIAN BUNGA & PAJAK)$/.test(c.text) || (c.x<110 && /^(?:\d{2} )?[A-Z]{3}$/.test(c.text)));
   for(const c of markers){
@@ -170,24 +229,28 @@ function parseSeaBankIndonesia(text: string) {
 }
 
 function parseSeaBankIndonesiaLegacy(text: string) {
+  const nativeHeaders=readLegacyHeaderGlyphProof(text);
   const english=/^SEABANK_ID_NATIVE_LANGUAGE EN$/m.test(text);
   const physical=[...text.matchAll(/^SEABANK_ID_NATIVE_PAGES (\d+)$/gm)];
   const pages=Number(physical[0]?.[1]);
   const printed=[...text.matchAll(english ? /page\s+(\d+)\s+of\s+(\d+)/gi : /halaman\s+(\d+)\s+dr\s+(\d+)/gi)];
   if(physical.length!==1 || pages<2 || pages>100 || printed.length!==pages || printed.some((m,i)=>Number(m[1])!==i+1 || Number(m[2])!==pages)) fail('legacy Indonesian page coverage');
   if(!(english ? /BANK STATEMENT/.test(text) && /SAVINGS - INTEREST & TAX DETAILS/.test(text) : /REKENING KORAN/.test(text) && /TABUNGAN - RINCIAN BUNGA & PAJAK/.test(text)) || !/cs@seabank\.co\.id/.test(text)) fail('legacy Indonesian source family');
-  const ids=[...text.matchAll(english ? /SEABANK ?ACCOUNT:[ \t]*(\d{12})(?![\dA-Za-z_])/g : /NO\. REKENING SEABANK:[ \t]*(\d{12})(?![\dA-Za-z_])/g)];
+  const ids=[...(english && !/SEABANK ?ACCOUNT:[ \t]*\d{12}(?![\dA-Za-z_])/.test(text)?nativeHeaders:text).matchAll(english ? /SEABANK ?ACCOUNT:[ \t]*(\d{12})(?![\dA-Za-z_])/g : /NO\. REKENING SEABANK:[ \t]*(\d{12})(?![\dA-Za-z_])/g)];
   if(ids.length!==1) fail('legacy full twelve-digit account');
-  const periods=[...text.matchAll(english ? /(\d{2}) ([A-Z]{3}) (\d{4}) to (\d{2}) ([A-Z]{3}) (\d{4})/g : /(\d{2}) ([A-Z]{3}) (\d{4}) sampai (\d{2}) ([A-Z]{3}) (\d{4})/g)];
+  const periods=[...(english && !/\d{2} [A-Z]{3} \d{4} to \d{2} [A-Z]{3} \d{4}/.test(text)?nativeHeaders:text).matchAll(english ? /(\d{2}) ([A-Z]{3}) (\d{4}) to (\d{2}) ([A-Z]{3}) (\d{4})/g : /(\d{2}) ([A-Z]{3}) (\d{4}) sampai (\d{2}) ([A-Z]{3}) (\d{4})/g)];
   if(periods.length!==1) fail('legacy one statement period');
   const p=periods[0],start=day(p[1],p[2],p[3]),end=day(p[4],p[5],p[6]);
   const periodDays=Math.round((Date.parse(end)-Date.parse(start))/86400000)+1;
   if(start>end || p[1]!=='01' || p[2]!==p[5] || p[3]!==p[6] || periodDays<28 || periodDays>31) fail('legacy complete monthly period');
   const serials=[...text.matchAll(/S\/N\s+S01-(\d{2})(\d{2})(\d{2})[A-Z]+/g)];
-  if(serials.length!==pages || serials.some(m=>m[1]!==p[3].slice(-2) || Number(m[2])!==months.indexOf(p[2])+1 || m[3]!==p[4] || m[0]!==serials[0][0])) fail('legacy serial/period contradiction');
+  const shortDailyCount=[...text.matchAll(/^SEABANK_ID_LEGACY_DAY \| /gm)].length;
+  const dormantCandidate=english && shortDailyCount>0 && shortDailyCount<periodDays;
+  const serialPeriodMatches=serials.length===pages && serials.every(m=>m[1]===p[3].slice(-2) && Number(m[2])===months.indexOf(p[2])+1 && m[3]===p[4] && m[0]===serials[0][0]);
+  if(!dormantCandidate && !serialPeriodMatches) fail('legacy serial/period contradiction');
   const sourceHeader=text.slice(0,text.indexOf(english?'ACCOUNT SUMMARY':'RINGKASAN REKENING'));
-  if(!/^INDONESIA$/m.test(sourceHeader) || /^PHILIPPINES$/m.test(sourceHeader)) fail('legacy Indonesian account jurisdiction');
-  const publicationDates=[...text.matchAll(/^\d{2} [A-Z]{3} \d{4}$/gm)].map(m=>m[0]);
+  if(!dormantCandidate && (!/^INDONESIA$/m.test(sourceHeader) || /^PHILIPPINES$/m.test(sourceHeader))) fail('legacy Indonesian account jurisdiction');
+  const publicationDates=[...(text+'\n'+nativeHeaders).matchAll(/^\d{2} [A-Z]{3} \d{4}$/gm)].map(m=>m[0]);
   const nextDate=new Date(Date.parse(end)+86400000).toISOString().slice(0,10);
   if(publicationDates.length!==pages || publicationDates.some(value=>day(value.slice(0,2),value.slice(3,6),value.slice(7))!==nextDate)) fail('legacy publication dates');
   const summary=text.slice(text.indexOf(english?'ACCOUNT SUMMARY':'RINGKASAN REKENING'),text.indexOf(english?'SAVINGS - TRANSACTION DETAILS':'TABUNGAN - RINCIAN TRANSAKSI'));
@@ -198,16 +261,33 @@ function parseSeaBankIndonesiaLegacy(text: string) {
   if(geometry.length!==4 || geometry.some((v,i)=>v!==printedValues[i]) || printedValues[3]!==printedValues[4]) fail('legacy summary cell disagreement');
   const [opening,outgoing,incoming,closing]=geometry;
   if(opening+incoming-outgoing!==closing) fail('legacy summary arithmetic');
+  // A zero-opening statement can omit the wholly dormant opening days. The
+  // separate contract proves no earlier movement from complete native totals;
+  // it does not invent zero rows or use a customer's mailing country as issuer.
+  if(dormantCandidate && (opening!==0 || outgoing!==0 || incoming<=0 ||
+    !/STARTING BALANCE \(IDR\) TOTAL OUTGOING \(IDR\) TOTAL INCOMING \(IDR\) ENDING BALANCE \(IDR\)/.test(summary.replace(/\s+/g,' ')) ||
+    !/PREVIOUS DAY BALANCE \(IDR\) INTEREST \(IDR\) TRANSACTION NO WITHHOLDING TAX \(IDR\)/.test(text.replace(/\s+/g,' ')) ||
+    !/PT Bank Seabank Indonesia \(formerly PT Bank Kesejahteraan Ekonomi\) is registered and supervised by Otoritas Jasa Keuangan \(OJK\)/i.test(text.replace(/\s+/g,' ')) ||
+    !/Lembaga Penjamin Simpanan \(LPS\)/i.test(text.replace(/\s+/g,' ')) ||
+    !/\+6221\s+5086\s+7070/.test(text) || serials.length!==pages || serials.some(m=>m[0]!==serials[0][0]))) fail('dormant-opening independent Indonesian issuer and zero-activity proof');
+  if(dormantCandidate && !serialPeriodMatches) {
+    const serial=serials[0],month=months[Number(serial[2])-1];
+    if(!month || day(serial[3],month,'20'+serial[1])>=start) fail('dormant-opening serial cannot contradict a source financial date');
+  }
   const counts=[...text.matchAll(/^SEABANK_ID_LEGACY_COUNTS (\d+) (\d+)$/gm)].map(m=>[Number(m[1]),Number(m[2])]);
   const transactions=[...text.matchAll(/^SEABANK_ID_LEGACY_TXN \| (.+)$/gm)],daily=[...text.matchAll(/^SEABANK_ID_LEGACY_DAY \| (.+)$/gm)],monthly=[...text.matchAll(/^SEABANK_ID_LEGACY_MONTH \| (.+)$/gm)];
-  if(text.includes('SEABANK_ID_LEGACY_INVALID_COLUMNS') || counts.length!==pages || counts.reduce((n,c)=>n+c[0],0)!==transactions.length || counts.reduce((n,c)=>n+c[1],0)!==daily.length || daily.length!==periodDays || monthly.length!==2) fail('legacy complete native table coverage');
+  if(text.includes('SEABANK_ID_LEGACY_INVALID_COLUMNS') || counts.length!==pages || counts.reduce((n,c)=>n+c[0],0)!==transactions.length || counts.reduce((n,c)=>n+c[1],0)!==daily.length || (!dormantCandidate && daily.length!==periodDays) || monthly.length!==2) fail('legacy complete native table coverage');
   const aggregates=new Map<string,number>();
   for(const m of monthly){const cells=m[1].split(/\s*\|\s*/);if(cells.length!==3 || cells[0]!==p[2] || !['interest','tax'].includes(cells[1]) || aggregates.has(cells[1])) fail('legacy monthly interest/tax');aggregates.set(cells[1],rupiah(cells[2]));}
   if(!aggregates.has('interest') || !aggregates.has('tax')) fail('legacy monthly interest/tax coverage');
-  const dailyRows=daily.map((m,i)=>{const cells=m[1].split(/\s*\|\s*/);if(cells.length!==4) fail('legacy daily row shape');const stamp=cells[0].match(/^(\d{2}) ([A-Z]{3})$/);if(!stamp) fail('legacy daily date');const date=day(stamp[1],stamp[2],p[3]);if(date!==new Date(Date.parse(start)+i*86400000).toISOString().slice(0,10)) fail('legacy daily date sequence');return {date,previous:rupiah(cells[1]),interest:rupiah(cells[2]),tax:rupiah(cells[3]),interestText:cells[2],taxText:cells[3],line:m[0]};});
+  const firstDailyStamp=daily[0]?.[1].split(/\s*\|\s*/)[0].match(/^(\d{2}) ([A-Z]{3})$/);
+  const firstDailyDate=dormantCandidate && firstDailyStamp ? day(firstDailyStamp[1],firstDailyStamp[2],p[3]) : start;
+  if(dormantCandidate && (firstDailyDate<=start || firstDailyDate>end || daily.length!==Math.round((Date.parse(end)-Date.parse(firstDailyDate))/86400000)+1)) fail('dormant-opening complete active-day coverage');
+  const dailyRows=daily.map((m,i)=>{const cells=m[1].split(/\s*\|\s*/);if(cells.length!==4) fail('legacy daily row shape');const stamp=cells[0].match(/^(\d{2}) ([A-Z]{3})$/);if(!stamp) fail('legacy daily date');const date=day(stamp[1],stamp[2],p[3]);if(date!==new Date(Date.parse(firstDailyDate)+i*86400000).toISOString().slice(0,10)) fail('legacy daily date sequence');return {date,previous:rupiah(cells[1]),interest:rupiah(cells[2]),tax:rupiah(cells[3]),interestText:cells[2],taxText:cells[3],line:m[0]};});
   if(dailyRows[0].previous!==opening || dailyRows.reduce((n,r)=>n+r.interest,0)!==aggregates.get('interest') || dailyRows.reduce((n,r)=>n+r.tax,0)!==aggregates.get('tax')) fail('legacy daily/monthly interest reconciliation');
   let lastMovementDate='';
   const movements=transactions.map(m=>{const cells=m[1].split(/\s*\|\s*/);if(cells.length!==4 || !['incoming','outgoing'].includes(cells[1]) || !cells[3]) fail('legacy transaction row shape');const stamp=cells[0].match(/^(\d{2}) ([A-Z]{3})$/);if(!stamp) fail('legacy movement date');const date=day(stamp[1],stamp[2],p[3]),amount=rupiah(cells[2]);if(date<start || date>end || amount<=0 || date<lastMovementDate) fail('legacy movement/date order');lastMovementDate=date;return {date,direction:cells[1],amount,amountText:cells[2],description:cells[3],line:m[0]};});
+  if(dormantCandidate && (!movements.length || movements[0].date!==firstDailyDate || movements.some(r=>r.date<firstDailyDate || r.direction!=='incoming') || aggregates.get('tax')!==0)) fail('dormant-opening earlier or outgoing movement');
   const totalIn=movements.filter(r=>r.direction==='incoming').reduce((n,r)=>n+r.amount,0)+aggregates.get('interest')!;
   const totalOut=movements.filter(r=>r.direction==='outgoing').reduce((n,r)=>n+r.amount,0)+aggregates.get('tax')!;
   if(totalIn!==incoming || totalOut!==outgoing) fail('legacy monthly movement totals');
@@ -216,8 +296,8 @@ function parseSeaBankIndonesiaLegacy(text: string) {
   const accountNumber=ids[0][1],accountName=`SeaBank Indonesia ${accountNumber.slice(-4)}`;
   const all=[...movements.map((m,i)=>({...m,sourceRowIndex:i,kind:'bank_transaction'})),...dailyRows.flatMap((r,i)=>[r.interest>0?{date:r.date,direction:'incoming',amount:r.interest,amountText:r.interestText,description:english?'Savings Interest':'Bunga Tabungan',line:r.line,sourceRowIndex:movements.length+i*2,kind:'daily_interest'}:null,r.tax>0?{date:r.date,direction:'outgoing',amount:r.tax,amountText:r.taxText,description:english?'Savings Withholding Tax':'Pajak Bunga Tabungan',line:r.line,sourceRowIndex:movements.length+i*2+1,kind:'daily_tax'}:null].filter((v):v is NonNullable<typeof v>=>v!==null))];
   all.sort((a,b)=>a.date.localeCompare(b.date) || a.sourceRowIndex-b.sourceRowIndex);
-  const rows:ParsedImportRow[]=all.map((r,i)=>({date:r.date,amount:r.amount.toFixed(2),currency:'IDR',type:r.direction==='incoming'?'income':'expense',categoryName:r.kind==='daily_interest'?'Income':r.kind==='daily_tax'?'Financial':/\bCash Withdrawal\b/i.test(r.description)?'Cash & ATM':/^(?:Biaya|Fee)\b/.test(r.description)?'Financial':/\bTransfer\b|Top Up - eWallet/.test(r.description)?'Transfers':'Other',merchantRaw:r.description,merchantClean:r.description,description:r.description,accountNumber,accountName,institution:'SeaBank Indonesia',confidence:90,rawPayload:{source:'seabank_indonesia_legacy_daily',kind:r.kind,line:r.line,sourceRowIndex:i,originalTableIndex:r.sourceRowIndex,accountNumber,accountCurrency:'IDR',accountType:'bank',direction:r.direction,notes:r.description,amountText:r.amountText,balanceReconciled:true,reconciliation:{version:'seabank-id-legacy-daily-v1',openingBalance:opening,endingBalance:closing,totalIncoming:incoming,totalOutgoing:outgoing,dailyRows:daily.length,physicalPages:pages},...(i===0?{sourceDocumentText:text}:{sourceDocumentTextRowIndex:1})}}));
-  return {rows,metadata:{institution:'SeaBank Indonesia',accountName,accountNumber,accountType:'bank' as const,currency:'IDR',openingBalance:opening,endingBalance:closing,startDate:start,endDate:end,confidence:90,currencyConfidence:100,institutionConfidence:100,identityEvidence:['seabank-id-legacy-daily-v1','Full account, IDR source columns, complete pages, daily interest and previous-day balance reconciliation']}};
+  const rows:ParsedImportRow[]=all.map((r,i)=>({date:r.date,amount:r.amount.toFixed(2),currency:'IDR',type:r.direction==='incoming'?'income':'expense',categoryName:r.kind==='daily_interest'?'Income':r.kind==='daily_tax'?'Financial':/\bCash Withdrawal\b/i.test(r.description)?'Cash & ATM':/^(?:Biaya|Fee)\b/.test(r.description)?'Financial':/\bTransfer\b|Top Up - eWallet/.test(r.description)?'Transfers':'Other',merchantRaw:r.description,merchantClean:r.description,description:r.description,accountNumber,accountName,institution:'SeaBank Indonesia',confidence:dormantCandidate && !serialPeriodMatches?85:90,rawPayload:{source:'seabank_indonesia_legacy_daily',kind:r.kind,line:r.line,sourceRowIndex:i,originalTableIndex:r.sourceRowIndex,accountNumber,accountCurrency:'IDR',accountType:'bank',direction:r.direction,notes:r.description,amountText:r.amountText,balanceReconciled:true,...(dormantCandidate && !serialPeriodMatches?{reviewRequired:true}:{}),...(dormantCandidate?{dormantOpeningProof:{firstActiveDate:firstDailyDate,zeroPriorActivityProved:true,sourceSerial:serials[0][0],serialPeriodConflict:!serialPeriodMatches,financialDateBasis:'explicit_statement_period_and_publication',issuerCountry:'ID',sourceMetadataNeedsReview:!serialPeriodMatches}}:{}),reconciliation:{version:dormantCandidate?'seabank-id-legacy-dormant-v1':'seabank-id-legacy-daily-v1',openingBalance:opening,endingBalance:closing,totalIncoming:incoming,totalOutgoing:outgoing,dailyRows:daily.length,physicalPages:pages},...(i===0?{sourceDocumentText:text}:{sourceDocumentTextRowIndex:1})}}));
+  return {rows,metadata:{institution:'SeaBank Indonesia',accountName,accountNumber,accountType:'bank' as const,currency:'IDR',openingBalance:opening,endingBalance:closing,startDate:start,endDate:end,confidence:dormantCandidate && !serialPeriodMatches?85:90,currencyConfidence:100,institutionConfidence:100,identityEvidence:[...(dormantCandidate?['seabank-id-legacy-dormant-v1','Complete zero-opening and active-day proof; explicit statement period and next-day publication determine financial dates',...(!serialPeriodMatches?['Review source metadata: older serial retained verbatim; it does not supply financial dates']:[])]:[]),'seabank-id-legacy-daily-v1','Full account, IDR source columns, complete pages, daily interest and previous-day balance reconciliation']}};
 }
 
 /** Only the completely empty, single SGD My Account layout; never generic DBS. */
@@ -248,6 +328,10 @@ export function buildDbsZeroPdfProof(items: Item[]): string[] {
   const [dd,mm,yy]=d.text.split('/');const date=day(dd,months[Number(mm)-1]??'',yy);
   return ['DBS_ZERO_COLUMN_PROOF '+JSON.stringify({product:product.text,accountNumber:id.text.slice(12),date,rows:1,movements:0,balance:0})];
 }
+// PostgreSQL JSONB and transport serializers may reorder these flat proof keys.
+const heldProofKey=(value:unknown)=>value && typeof value==='object' && !Array.isArray(value)
+  ? JSON.stringify(Object.entries(value).sort(([a],[b])=>a<b?-1:a>b?1:0))
+  : JSON.stringify(value??null);
 export function hasVerifiedHeldNativeRows(text: string, rows: Array<{date?: unknown; amount?: unknown; currency?: unknown; type?: unknown; accountNumber?: unknown; rawPayload?: unknown}>): boolean {
-  try{const source=parseHeldNativeSource(text);return Boolean(source && rows.length===source.rows.length && rows.every((r,i)=>{const raw=r.rawPayload as Record<string,unknown>|null,expected=source.rows[i];return r.date===expected.date && Number(r.amount)===Number(expected.amount) && r.currency===expected.currency && r.type===expected.type && r.accountNumber===expected.accountNumber && raw?.source===expected.rawPayload?.source && raw?.line===expected.rawPayload?.line && raw?.sourceRowIndex===i;}));}catch{return false;}
+  try{const source=parseHeldNativeSource(text);return Boolean(source && rows.length===source.rows.length && rows.every((r,i)=>{const raw=r.rawPayload as Record<string,unknown>|null,expected=source.rows[i];return r.date===expected.date && Number(r.amount)===Number(expected.amount) && r.currency===expected.currency && r.type===expected.type && r.accountNumber===expected.accountNumber && raw?.source===expected.rawPayload?.source && raw?.line===expected.rawPayload?.line && heldProofKey(raw?.dormantOpeningProof)===heldProofKey(expected.rawPayload?.dormantOpeningProof) && raw?.reviewRequired===expected.rawPayload?.reviewRequired && raw?.sourceRowIndex===i;}));}catch{return false;}
 }
