@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
 import { randomUUID } from 'node:crypto';
+import { eastwestProof } from './eastwest-transfer-proof-regression';
 import { SourceReviewRequiredError, SOURCE_REVIEW_PHASE } from '../lib/import-source-review';
 const url = new URL(process.env.DATABASE_URL ?? 'http://invalid');
 assert.equal(url.hostname, '127.0.0.1');
@@ -23,14 +24,14 @@ async function main() {
     const snapshot = async () => JSON.stringify([await db.account.findUniqueOrThrow({ where: { id: account.id } }), await db.transaction.findUniqueOrThrow({ where: { id: tx.id } })]);
     const before = await snapshot();
     const file = await db.importFile.create({ data: { workspaceId: workspace.id, fileName: 'unreadable-bank.txt', fileType: 'text/plain', storageKey: 'qa/'+randomUUID() } });
-    const execute = db.$executeRawUnsafe.bind(db);
+    const execute = db.$executeRawUnsafe;
     const delayedWrites: Promise<unknown>[] = [];
     Object.assign(db, { $executeRawUnsafe: (query: string, ...values: unknown[]) => {
       const run = async () => {
         if (query.startsWith('UPDATE "ImportFile"') && values.includes('identifying_transactions')) {
           await new Promise(resolve => setTimeout(resolve, 200));
         }
-        return execute(query, ...values);
+        return execute.call(db, query, ...values);
       };
       const write = run();
       if (values.includes('identifying_transactions')) delayedWrites.push(write);
@@ -50,6 +51,19 @@ async function main() {
     await assert.rejects(confirmImportFile(file.id), SourceReviewRequiredError);
     assert.equal(await db.auditLog.count({ where: { entityId: file.id, action: 'import.parser_usage' } }), 1, 'Repeated confirmation never restarts a terminal source');
     assert.equal(await snapshot(), before, 'Existing confirmed finance and account timestamps are untouched');
+    const sender = await db.account.create({ data: { workspaceId: workspace.id, name: 'Confirmed EastWest source', nameCustomized: true, type: 'bank', institution: 'EastWest', accountNumber: '123456781234', currency: 'PHP', balance: '543.21' } });
+    const senderBefore = JSON.stringify(sender);
+    const proof = await db.importFile.create({ data: { workspaceId: workspace.id, fileName: 'transfer.jpg', fileType: 'image/jpeg', storageKey: 'qa/'+randomUUID() } });
+    await processImportFileText(proof.id, { text: eastwestProof, importMode: 'statement', skipVisualBackupParser: true, actorUserId: user.clerkUserId });
+    const proofRows = await db.transaction.findMany({ where: { importFileId: proof.id } });
+    assert.deepEqual(proofRows.map(row => Number(row.amount)).sort((a,b)=>a-b), [10,1250]);
+    assert(proofRows.every(row => row.accountId === sender.id && row.reviewStatus !== 'confirmed'), 'The masked sender must match the existing source, with review retained');
+    assert.equal(JSON.stringify(await db.account.findUniqueOrThrow({ where: { id: sender.id } })), senderBefore, 'A proof must not replace a confirmed sender identity or balance');
+    await confirmImportFile(proof.id);
+    assert.equal(await db.transaction.count({ where: { importFileId: proof.id } }), 2, 'Proof confirmation must be idempotent');
+    assert.equal(await db.account.count({ where: { workspaceId: workspace.id, institution: 'UnionBank' } }), 0, 'A recipient is not a new user-owned bank account');
+    assert.equal(await snapshot(), before);
+
     // Confirmation invoked by a parser cannot re-enter the parser at all.
     const pending = await db.importFile.create({ data: { workspaceId: workspace.id, fileName: 'pending.txt', fileType: 'text/plain', storageKey: 'qa/'+randomUUID() } });
     const result = await confirmImportFile(pending.id, null, { recoverMissingRows: false });

@@ -38,3 +38,10 @@ This document captures the current EastWest parsing guidance for Clover.
 - The retained Excel/PDF and Word/PDF templates are distinct source variants. The former has a blank account field; the latter prints an account. Never copy an identity from a known template into a blank header.
 - Empty PDF layers must reach local OCR. Preserve table rows and read small header identifiers from a lossless crop, retaining the extracted source text.
 - Retain the learned 15-row template suggestions, but cap them at 45 confidence for review: the published variants contain inconsistent directions and running balances. Keep old balance hints under `templateBalanceHint`, never as an observed `balance` or part of a purported source description. Confirmed existing records remain unchanged.
+
+## InstaPay mobile transfer proofs
+
+- A successful EastWest proof explicitly separates From (masked sender) and To (recipient, recipient bank and recipient account). Use EastWest as the source institution; never create a user-owned recipient account solely because it appears on the proof.
+- Require the exact success heading, EastWest brand, sender role, masked account suffix, printed PHP principal, explicit PHP fee, InstaPay mode, valid complete date/time and reference. Pending/failed screens are not successful proof.
+- Keep principal and nonzero fee as separate outgoing components, each linked to the reference and source timestamp. Zero fee produces no invented extra expense. Do not manufacture hidden account digits, balances, or a matching incoming transfer.
+- Masked sender matching remains review-required. Preserve source text, recipient roles, component amounts and user-confirmed existing account identity/balance.

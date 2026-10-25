@@ -1,3 +1,4 @@
+import { parseEastwestTransferProof } from "./eastwest-transfer-proof";
 import {parseHeldNativeSource} from '@/lib/held-source-contracts';
 import { SourceReviewRequiredError } from '@/lib/import-source-review';
 import { parseMariBankNativeLedger } from '@/lib/maribank-native-ledger';
@@ -25168,6 +25169,8 @@ export const parseImportTextGenericOnly = (
   fileType: string,
   context: ImportParseContext = {}
 ) => {
+  const eastwestProof = parseEastwestTransferProof(text);
+  if (eastwestProof) return eastwestProof.rows;
   const structuredWorkbookRows = parseStructuredWorkbookImport(text, fileName, fileType, context);
   if (structuredWorkbookRows) {
     return structuredWorkbookRows;
@@ -26500,6 +26503,8 @@ export const detectStatementMetadata = (text: string, fileName = ""): DetectedSt
     };
   }
 
+  const eastwestProof = parseEastwestTransferProof(text);
+  if (eastwestProof) return eastwestProof.metadata;
   const heldNative = parseHeldNativeSource(text);
   if (heldNative) return heldNative.metadata;
   const maybankIslamic = parseMaybankIslamicStatement(text);
@@ -27390,6 +27395,8 @@ export const parseImportText = (
   fileType: string,
   context: ImportParseContext = {}
 ): ParsedImportRow[] => {
+  const eastwestProof = parseEastwestTransferProof(text);
+  if (eastwestProof) return eastwestProof.rows;
   const financialExchangeRows = parseFinancialExchangeImport(text, fileName, fileType, context);
   if (financialExchangeRows) {
     return financialExchangeRows;
