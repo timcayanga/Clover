@@ -5,7 +5,7 @@
     {
       "id": "seabank-id-legacy-daily",
       "source": "seabank-id-legacy-daily.txt",
-      "sha256": "164a59d7cdbe3ba5b002616271ea89ec20658c31ff29f06bc2a10aa4cb8fa02f",
+      "sha256": "6cac1b670a6434f9afc82a6679eba874e36d1c2eeeaf345e1fdad822c65d7c62",
       "kind": "statement",
       "representation": "synthetic PDF text-layer transcription plus reviewed native column proof",
       "provenance": {

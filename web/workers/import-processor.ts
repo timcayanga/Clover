@@ -7628,6 +7628,18 @@ const markRemainingImportCleanupRowsForReview = async (
     },
   });
 
+const verifiedLegacySeaBankDirection = (row: EnrichedParsedImportRow | undefined): "income" | "expense" | null => {
+  const raw = row?.rawPayload;
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
+  const evidence = raw as Record<string, unknown>;
+  const reconciliation = evidence.reconciliation;
+  if (evidence.source !== "seabank_indonesia_legacy_daily" || evidence.balanceReconciled !== true ||
+      !reconciliation || typeof reconciliation !== "object" || Array.isArray(reconciliation) ||
+      (reconciliation as Record<string, unknown>).version !== "seabank-id-legacy-daily-v1" || row?.currency !== "IDR") return null;
+  const direction = evidence.direction === "incoming" ? "income" : evidence.direction === "outgoing" ? "expense" : null;
+  return direction && row.type === direction ? direction : null;
+};
+
 const strengthenEnrichmentRowForAttempt = (
   row: EnrichedParsedImportRow,
   parsedRow: EnrichedParsedImportRow | undefined,
@@ -8059,11 +8071,12 @@ export const processImportEnrichmentJobs = async (options: {
             rawPayload: row.rawPayload,
           });
           const unionBankDirection = resolveUnionBankExternalTransferDirection(row, parsedRow);
-          const canonicalType = migration ? rowType :
+          const trustedNativeDirection = verifiedLegacySeaBankDirection(parsedRow);
+          const canonicalType = trustedNativeDirection ?? (migration ? rowType :
             unionBankDirection ??
             (parsedRowType && parsedRowType !== "transfer" && shouldPreserveParserTransferDirection(row, parsedRow)
               ? parsedRowType
-              : coerceTransactionTypeFromCategoryName(categoryName, rowType));
+              : coerceTransactionTypeFromCategoryName(categoryName, rowType)));
           const isTransfer = migration ? canonicalType === "transfer" : canonicalType === "transfer" || isTransferCategoryName(categoryName);
           let categoryId = categoryByName.get(categoryName.toLowerCase());
           if (!categoryId) {
@@ -8112,7 +8125,9 @@ export const processImportEnrichmentJobs = async (options: {
             parserConfidence,
             reviewStatus: nextReviewStatus,
             isTransfer,
-            normalizedPayload: (row.normalizedPayload ?? {}) as Prisma.InputJsonValue,
+            normalizedPayload: trustedNativeDirection
+              ? { ...(row.normalizedPayload && typeof row.normalizedPayload === "object" && !Array.isArray(row.normalizedPayload) ? row.normalizedPayload : {}), type: trustedNativeDirection, sourceDirectionPreserved: true } as Prisma.InputJsonValue
+              : (row.normalizedPayload ?? {}) as Prisma.InputJsonValue,
             learnedRuleIdsApplied: (row.learnedRuleIdsApplied ?? []) as Prisma.InputJsonValue,
           });
         }
@@ -16222,7 +16237,8 @@ export const confirmImportFile = async (
             parsedCategoryName,
             (rowType ?? "expense") as "income" | "expense" | "transfer"
           ));
-    const canonicalType = migration && rowType ? rowType : shouldTransferAtmWithdrawalToCash
+    const trustedNativeDirection = verifiedLegacySeaBankDirection(row as EnrichedParsedImportRow);
+    const canonicalType = trustedNativeDirection ?? (migration && rowType ? rowType : shouldTransferAtmWithdrawalToCash
       ? "transfer"
       : resolveTransferTypeAgainstWorkspaceAccounts({
           row: {
@@ -16240,7 +16256,7 @@ export const confirmImportFile = async (
           candidateType: categoryCoercedType,
           workspaceAccounts: workspaceAccountsForTransferMatching,
           currentAccountId: rowResolvedAccountId,
-        });
+        }));
     const learnedLabels = shouldTransferAtmWithdrawalToCash || canonicalType !== rowType ? undefined : confirmedImportLabels.get(index);
     const categoryName = shouldTransferAtmWithdrawalToCash ? "Cash & ATM" : learnedLabels?.categoryName ?? parsedCategoryName;
     const rowIsTransfer = migration ? canonicalType === "transfer" : canonicalType === "transfer" || isTransferCategoryName(categoryName);

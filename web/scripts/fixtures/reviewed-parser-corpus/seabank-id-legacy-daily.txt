@@ -23,7 +23,7 @@ SEABANK_ID_SUMMARY | 100 | 1.000 | 1.001 | 101
 SEABANK_ID_LEGACY_COUNTS 3 14
 SEABANK_ID_LEGACY_MONTH | FEB | interest | 1
 SEABANK_ID_LEGACY_MONTH | FEB | tax | 0
-SEABANK_ID_LEGACY_TXN | 01 FEB | incoming | 1.000 | Synthetic Transfer
+SEABANK_ID_LEGACY_TXN | 01 FEB | incoming | 1.000 | Pengembalian Dana - Shopee Pembayaran
 SEABANK_ID_LEGACY_TXN | 02 FEB | outgoing | 500 | Repeated Shop Payment
 SEABANK_ID_LEGACY_TXN | 02 FEB | outgoing | 500 | Repeated Shop Payment
 SEABANK_ID_LEGACY_DAY | 01 FEB | 100 | 1 | 0
