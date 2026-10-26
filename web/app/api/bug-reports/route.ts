@@ -4,12 +4,13 @@ import { prisma } from "@/lib/prisma";
 import { requireAuth } from "@/lib/auth";
 import { assertWorkspaceAccess } from "@/lib/workspace-access";
 import { createContactInquiry } from "@/lib/contact-inquiries";
-import { sendContactInquiryEmail } from "@/lib/contact-email";
+import { deliverContactNotification } from "@/lib/contact-notification.server";
 import { capturePostHogServerEvent } from "@/lib/analytics-server";
 import { assertContentLengthWithin, assertTrustedRequestOrigin, getRequestClientIp } from "@/lib/request-security";
 import { assertRateLimit } from "@/lib/rate-limit";
 
 export const dynamic = "force-dynamic";
+export const maxDuration = 60;
 
 const MAX_BODY_BYTES = 3 * 1024 * 1024;
 const MAX_ATTACHMENT_BYTES = 2 * 1024 * 1024;
@@ -165,19 +166,8 @@ export async function POST(request: Request) {
     });
 
     after(async () => {
-      try {
-        await sendContactInquiryEmail({
-          name: reporterName,
-          email: appUser.email,
-          message: payload.report,
-          attachment: payload.attachment ?? null,
-          sourcePage: sourcePath,
-          kind: "bug_report",
-          diagnostics,
-        });
-      } catch (error) {
-        console.error("Bug report email delivery failed", error);
-      }
+      try { await deliverContactNotification(inquiry.id); }
+      catch { console.error("Bug report notification dispatch could not finish", { inquiryId: inquiry.id }); }
     });
 
     void capturePostHogServerEvent("support_contacted", clerkUserId, {

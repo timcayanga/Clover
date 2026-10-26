@@ -17,8 +17,10 @@ export async function GET(request: Request) {
     const { sweepSwitchCampaign, dispatchSwitchEmails } = await import("@/lib/switch-campaign-notifications.server");
     const campaign = await sweepSwitchCampaign().catch(() => ({error:"Campaign lifecycle failed; retry required."}));
     const campaignEmails = await dispatchSwitchEmails().catch(() => ({error:"Campaign email delivery failed; inspect ledger."}));
+    const { dispatchContactNotifications } = await import("@/lib/contact-notification.server");
+    const supportNotifications = await dispatchContactNotifications().catch(() => ({ error: "Support email recovery could not finish; inspect delivery status." }));
     const bankConnections=await sweepBankConnections();
-    return Response.json({ ...(await dispatchNotificationEmails()), bankConnections, campaign, campaignEmails });
+    return Response.json({ ...(await dispatchNotificationEmails()), bankConnections, campaign, campaignEmails, supportNotifications });
   } catch {
     return Response.json(
       {

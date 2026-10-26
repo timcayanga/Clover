@@ -3,12 +3,16 @@ import { prisma } from "./prisma";
 import { getAdminDataEnvironment } from "./admin";
 import { sendNotificationMail } from "./notification-mail.server";
 import { getEnv } from "./env";
+import { mailFailure } from "./mail-delivery";
 export const supportMessageSchema = z
   .object({
     kind: z.enum(["reply", "note"]),
     subject: z.string().trim().max(200).optional(),
     body: z.string().trim().min(1).max(5000),
     idempotencyKey: z.string().uuid(),
+    retry: z.boolean().optional(),
+    confirmedNotSent: z.boolean().optional(),
+    resolutionNote: z.string().trim().min(10).max(1000).optional(),
   })
   .strict();
 export async function addSupportMessage(
@@ -22,10 +26,10 @@ export async function addSupportMessage(
   const inquiry = await prisma.contactInquiry.findFirstOrThrow({
     where: { id: inquiryId, environment: getAdminDataEnvironment() },
   });
-  const existing = await prisma.adminSupportMessage.findUnique({
+  let message = await prisma.adminSupportMessage.findUnique({
     where: { idempotencyKey: input.idempotencyKey },
   });
-  if (existing) {
+  const assertSame = (existing: NonNullable<typeof message>) => {
     if (
       existing.inquiryId !== inquiryId ||
       existing.actorId !== actorId ||
@@ -34,31 +38,133 @@ export async function addSupportMessage(
       existing.kind !== input.kind
     )
       throw new Error("This request key belongs to a different message.");
-    return existing;
+  };
+  if (message) assertSame(message);
+  else {
+    if (input.retry)
+      throw new Error("The saved message to retry was not found.");
+    if (input.kind === "reply" && !getEnv().ZOHO_SMTP_PASSWORD)
+      throw new Error(
+        "Email delivery is not configured. Your draft has not been sent.",
+      );
+    // A new UUID must not bypass an unresolved copy of the same reply after reload.
+    if (input.kind === "reply") {
+      const unresolved = await prisma.adminSupportMessage.findFirst({
+        where: {
+          inquiryId,
+          kind: "reply",
+          body: input.body,
+          subject: input.subject,
+          status: { in: ["unknown", "sending"] },
+        },
+      });
+      if (unresolved) return unresolved;
+    }
+    try {
+      message = await prisma.adminSupportMessage.create({
+        data: {
+          kind: input.kind,
+          subject: input.subject,
+          body: input.body,
+          idempotencyKey: input.idempotencyKey,
+          inquiryId,
+          actorId,
+          status: input.kind === "note" ? "internal" : "pending",
+        },
+      });
+    } catch (error) {
+      if ((error as { code?: string }).code !== "P2002") throw error;
+      message = await prisma.adminSupportMessage.findUniqueOrThrow({
+        where: { idempotencyKey: input.idempotencyKey },
+      });
+      assertSame(message);
+    }
   }
-  if (input.kind === "reply" && !getEnv().ZOHO_SMTP_PASSWORD)
-    throw new Error(
-      "Email delivery is not configured. Your draft has not been sent.",
-    );
-  const message = await prisma.adminSupportMessage.create({
-    data: {
-      ...input,
-      inquiryId,
-      actorId,
-      status: input.kind === "note" ? "internal" : "sending",
-    },
-  });
-  if (input.kind === "note") return message;
-  // SMTP has no idempotency support. A timeout is ambiguous; never retry it
-  // automatically or mark the inquiry responded until the server accepts mail.
-  try {
-    await sendNotificationMail(inquiry.email, input.subject!, input.body);
-  } catch {
-    return prisma.adminSupportMessage.update({
-      where: { id: message.id },
-      data: { status: "unknown" },
+  if (input.kind === "note" || message.status === "sent") return message;
+  if (
+    input.retry &&
+    input.confirmedNotSent &&
+    input.resolutionNote &&
+    (message.status === "unknown" ||
+      (message.status === "sending" &&
+        message.updatedAt.getTime() < Date.now() - 5 * 60_000))
+  ) {
+    const original = message;
+    message = await prisma.$transaction(async (tx) => {
+      const resolved = await tx.adminSupportMessage.updateMany({
+        where: {
+          id: original.id,
+          status: original.status,
+          updatedAt: original.updatedAt,
+        },
+        data: {
+          status: "failed",
+          deliveryErrorCode: "operator_confirmed_not_sent",
+        },
+      });
+      if (resolved.count)
+        await tx.adminSupportMessage.create({
+          data: {
+            inquiryId,
+            actorId,
+            kind: "note",
+            status: "internal",
+            body: `Verified not sent: ${original.id}. ${input.resolutionNote}`,
+            idempotencyKey: `delivery-resolution:${original.id}:${original.updatedAt.toISOString()}`,
+          },
+        });
+      return tx.adminSupportMessage.findUniqueOrThrow({
+        where: { id: original.id },
+      });
     });
   }
+  if (
+    message.status !== "pending" &&
+    !(input.retry && message.status === "failed")
+  )
+    return message;
+  const messageId =
+    message.mailMessageId ?? `<support-${message.id}@clover.ph>`;
+  const claim = await prisma.adminSupportMessage.updateMany({
+    where: {
+      id: message.id,
+      status: message.status,
+      updatedAt: message.updatedAt,
+    },
+    data: {
+      status: "sending",
+      deliveryErrorCode: null,
+      mailMessageId: messageId,
+    },
+  });
+  if (!claim.count)
+    return prisma.adminSupportMessage.findUniqueOrThrow({
+      where: { id: message.id },
+    });
+  try {
+    await sendNotificationMail(
+      inquiry.email,
+      input.subject!,
+      input.body,
+      undefined,
+      { messageId },
+    );
+  } catch (error) {
+    const failure = mailFailure(error);
+    console.error("Support reply email failed", {
+      messageId,
+      code: failure.code,
+      outcome: failure.outcome,
+    });
+    return prisma.adminSupportMessage.update({
+      where: { id: message.id },
+      data: {
+        status: failure.outcome === "not_sent" ? "failed" : "unknown",
+        deliveryErrorCode: failure.code,
+      },
+    });
+  }
+  // A failed acknowledgement write must retain 'sending', never become retryable.
   return prisma.$transaction(async (tx) => {
     await tx.contactInquiry.update({
       where: { id: inquiryId },
@@ -70,7 +176,7 @@ export async function addSupportMessage(
     });
     return tx.adminSupportMessage.update({
       where: { id: message.id },
-      data: { status: "sent" },
+      data: { status: "sent", deliveryErrorCode: null },
     });
   });
 }

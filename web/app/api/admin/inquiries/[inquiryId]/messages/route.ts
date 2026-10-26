@@ -2,6 +2,7 @@ import { requireAdminAuth, getAdminDataEnvironment } from "@/lib/admin";
 import { prisma } from "@/lib/prisma";
 import { addSupportMessage } from "@/lib/admin-support-messages";
 import { assertTrustedRequestOrigin } from "@/lib/request-security";
+export const maxDuration = 60;
 function failure(error: unknown) {
   const message =
     error instanceof Error ? error.message : "Unable to load messages.";

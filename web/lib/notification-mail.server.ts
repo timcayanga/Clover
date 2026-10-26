@@ -1,15 +1,17 @@
 import nodemailer from "nodemailer";
 import { getEnv } from "@/lib/env";
+import { MailDeliveryError, mailFailure } from "./mail-delivery";
 
 export async function sendNotificationMail(
   to: string,
   subject: string,
   text: string,
   html?: string,
+  options?: { messageId?: string },
 ) {
   const env = getEnv();
   if (!env.ZOHO_SMTP_PASSWORD)
-    throw new Error("Email delivery is not configured.");
+    throw new MailDeliveryError("not_sent", "configuration_missing");
   const username = env.ZOHO_SMTP_USER ?? "hello@clover.ph";
   const port = env.ZOHO_SMTP_PORT ?? 465;
   const transporter = nodemailer.createTransport({
@@ -27,10 +29,15 @@ export async function sendNotificationMail(
       to: to.trim().toLowerCase(),
       subject: subject.replace(/[\r\n]/g, " "),
       text,
+      ...(options?.messageId ? { messageId: options.messageId } : {}),
       ...(html ? { html } : {}),
     });
     if (result.accepted.length === 0)
-      throw new Error("Email was not accepted.");
+      throw new MailDeliveryError("not_sent", "recipient_rejected");
+    return { messageId: result.messageId };
+  } catch (error) {
+    const failure = mailFailure(error);
+    throw new MailDeliveryError(failure.outcome, failure.code);
   } finally {
     transporter.close();
   }

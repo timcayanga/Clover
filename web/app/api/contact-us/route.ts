@@ -2,12 +2,13 @@ import { after, NextResponse } from "next/server";
 import { createHash } from "node:crypto";
 import { z } from "zod";
 import { createContactInquiry } from "@/lib/contact-inquiries";
-import { sendContactInquiryEmail } from "@/lib/contact-email";
+import { deliverContactNotification } from "@/lib/contact-notification.server";
 import { capturePostHogServerEvent } from "@/lib/analytics-server";
 import { assertContentLengthWithin, assertTrustedRequestOrigin, getRequestClientIp } from "@/lib/request-security";
 import { assertRateLimit } from "@/lib/rate-limit";
 
 export const dynamic = "force-dynamic";
+export const maxDuration = 60;
 
 const MAX_CONTACT_BODY_BYTES = 3 * 1024 * 1024;
 const MAX_ATTACHMENT_BYTES = 2 * 1024 * 1024;
@@ -60,20 +61,9 @@ export async function POST(request: Request) {
       userAgent: request.headers.get("user-agent"),
     });
 
-    const emailInput = {
-      name: payload.name,
-      email: payload.email,
-      message: payload.message,
-      attachment: payload.attachment ?? null,
-      sourcePage: payload.sourcePage ?? request.headers.get("referer") ?? null,
-    };
-
     after(async () => {
-      try {
-        await sendContactInquiryEmail(emailInput);
-      } catch (error) {
-        console.error("Contact inquiry email delivery failed", error);
-      }
+      try { await deliverContactNotification(inquiry.id); }
+      catch { console.error("Support notification dispatch could not finish", { inquiryId: inquiry.id }); }
     });
 
     const anonymousContactId = createHash("sha256")

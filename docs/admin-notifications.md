@@ -95,3 +95,15 @@ registers the daily cron through `web/vercel.json`; previews do not send digests
 - Live PostgreSQL migration/application, Clerk Admin login, production scheduler,
   and actual SMTP delivery require a controlled deployment smoke test. They were
   not tested against real users or production settings during development.
+
+## Support email delivery
+
+Contact inquiries and bug reports are saved before email delivery. New inquiries start with a persisted pending notification; the response callback attempts delivery to `hello@clover.ph`. The daily notification job recovers pending work and retries only definite rejections, with a one-hour minimum interval and at most five automatic attempts. It stops a batch on missing configuration or an authentication rejection. Older inquiries default to untracked and are never automatically backfilled. Support staff can explicitly email an older inquiry or retry a definite failure from its case.
+
+Reply and inquiry delivery records retain a stable mail Message-ID for checking provider logs. SMTP acceptance is distinct from inbox delivery. An explicit authentication, recipient or DATA rejection is a definite failure; timeouts and socket closes remain uncertain. Nodemailer can label a connection loss after DATA as `CONN`, so that label is not proof that nothing was sent. A failed database write after SMTP acceptance retains an ambiguous sending state and must not trigger a resend.
+
+A saved reply can be retried after a definite failure using its original request key. An uncertain reply needs the original operator's explicit confirmation that Zoho's records show it was not sent, with a retained internal verification note. A new request UUID does not bypass an unresolved identical reply. Only a mail-server-accepted reply marks the case responded. Private notes never send mail.
+
+Manual notification sends require Support permission, trusted origin and the case's deployment environment. Preview notifications require a valid `SUPPORT_MAIL_TEST_RECIPIENT` controlled inbox; they never default to the production support address. Customer-facing forms cannot choose that recipient. SMTP credentials remain server-only; replacing a Vercel secret requires a deployment before the live service receives it.
+
+Verification includes loopback SMTP authentication/recipient/DATA rejection and a connection lost after a complete message, plus actual contact/Admin routes against a disposable local database. It covers safe retries, concurrent claims, callback recovery, retained attachments and correspondence, permission/environment boundaries, no historical backfill and no external mail. The root pre-push gate runs these checks.

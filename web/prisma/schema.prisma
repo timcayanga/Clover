@@ -750,6 +750,11 @@ model AppErrorLog {
 }
 
 model ContactInquiry {
+  notificationStatus String @default("untracked")
+  notificationErrorCode String?
+  notificationMessageId String?
+  notificationAttemptedAt DateTime?
+  notificationAttempts Int @default(0)
   supportMessages AdminSupportMessage[]
   assignedTo String?
   priority String @default("normal")
@@ -2314,6 +2319,8 @@ model AdminApproval {
 }
 
 model AdminSupportMessage {
+  deliveryErrorCode String?
+  mailMessageId String?
   inquiry ContactInquiry @relation(fields: [inquiryId], references: [id], onDelete: Cascade)
   id String @id @default(cuid())
   inquiryId String

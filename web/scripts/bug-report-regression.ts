@@ -18,6 +18,9 @@ assert.match(route, /MAX_ATTACHMENT_BYTES = 2 \* 1024 \* 1024/, "Report images m
 assert.match(route, /prisma\.appErrorLog\.findMany/, "The report should include recent structured Clover errors.");
 assert.match(route, /createContactInquiry/, "The report should remain visible in Clover Admin support.");
 assert.match(email, /kind\?: "contact" \| "bug_report"/, "Email delivery should distinguish bug reports from contact inquiries.");
-assert.match(email, /to: CONTACT_ADDRESS/, "Bug report email should use Clover's fixed support destination.");
+assert.match(email, /to: input\.recipient \?\? CONTACT_ADDRESS/, "Bug report email should use Clover's fixed support destination.");
 
+const dispatch = readFileSync(join(root, "lib/contact-notification.server.ts"), "utf8");
+assert.match(route, /await deliverContactNotification\(inquiry\.id\)/, "Persisted reports must use the durable notification claim.");
+assert.match(dispatch, /environment === "production"\s*\? "hello@clover.ph"/, "Production support notifications must retain the fixed staff destination.");
 console.log("[PASS] Bug launcher removed; retained support endpoint remains authenticated, bounded, diagnostic, and email-enabled");

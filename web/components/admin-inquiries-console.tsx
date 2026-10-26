@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
+import { mailFailureText } from "@/lib/mail-delivery";
 import type { AdminContactInquiry } from "@/lib/contact-inquiries";
 type Member = { clerkUserId: string; role: string };
 type Message = {
@@ -8,6 +9,9 @@ type Message = {
   body: string;
   subject: string | null;
   status: string;
+  deliveryErrorCode: string | null;
+  mailMessageId: string | null;
+  idempotencyKey: string;
   actorId: string;
   createdAt: string;
 };
@@ -191,6 +195,9 @@ function InquiryCase({
     [error, setError] = useState(""),
     [feedback, setFeedback] = useState("");
   const [revision, setRevision] = useState(0);
+  const [resolutionId, setResolutionId] = useState<string | null>(null);
+  const [resolutionNote, setResolutionNote] = useState("");
+  const [verifiedNotSent, setVerifiedNotSent] = useState(false);
   const [olderCursor, setOlderCursor] = useState<string | null>(null);
   const [historyLoading, setHistoryLoading] = useState(false);
   const replyDraft = useRef(item.adminReplyBody ?? ""),
@@ -201,7 +208,10 @@ function InquiryCase({
     let current = true;
     void api(`/api/admin/inquiries/${item.id}/messages`)
       .then((data) => {
-        if (current) { setMessages(data.messages); setOlderCursor(data.nextCursor); }
+        if (current) {
+          setMessages(data.messages);
+          setOlderCursor(data.nextCursor);
+        }
       })
       .catch((e) => {
         if (current) setError(e.message);
@@ -269,10 +279,37 @@ function InquiryCase({
         });
     } else {
       setFeedback(
-        "Delivery is uncertain or still processing. Do not resend; inspect the mail server outcome first.",
+        message.status === "failed"
+          ? mailFailureText(message.deliveryErrorCode)
+          : mailFailureText("delivery_unknown"),
       );
+      attempt.current = message.idempotencyKey;
       setPreview(false);
     }
+  };
+  const retryReply = async (message: Message, verified = false) => {
+    const result = await api(
+      `/api/admin/inquiries/${item.id}/messages`,
+      "POST",
+      {
+        kind: "reply",
+        subject: message.subject,
+        body: message.body,
+        idempotencyKey: message.idempotencyKey,
+        retry: true,
+        ...(verified ? { confirmedNotSent: true, resolutionNote } : {}),
+      },
+    );
+    if (result.message.status === "sent") {
+      setFeedback("Reply accepted by the mail server.");
+      setResolutionId(null);
+      onUpdate({
+        ...item,
+        status: "responded",
+        adminReplyAt: new Date(),
+        adminReplyBy: actor,
+      });
+    } else setFeedback(mailFailureText(result.message.deliveryErrorCode));
   };
   return (
     <div className="admin-governance">
@@ -282,6 +319,55 @@ function InquiryCase({
           {item.email} · {item.status}
         </p>
         <p>Case {item.id}</p>
+        <div aria-label="Inquiry email notification">
+          <h3>Email notification to hello@clover.ph</h3>
+          <p>
+            {item.notificationStatus === "sent"
+              ? "Accepted by the mail server."
+              : item.notificationStatus === "failed"
+                ? mailFailureText(item.notificationErrorCode)
+                : item.notificationStatus === "unknown"
+                  ? mailFailureText("delivery_unknown")
+                  : item.notificationStatus === "sending"
+                    ? "Sending notification…"
+                    : item.notificationStatus === "pending"
+                      ? "Saved and waiting for email delivery."
+                      : "No delivery record is available for this older inquiry."}
+          </p>
+          {item.notificationMessageId ? (
+            <p>Mail reference: {item.notificationMessageId}</p>
+          ) : null}
+          {canWrite &&
+          ["untracked", "pending", "failed"].includes(
+            item.notificationStatus ?? "untracked",
+          ) ? (
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() =>
+                void run(async () => {
+                  const result = await api(
+                    `/api/admin/inquiries/${item.id}/notification`,
+                    "POST",
+                    { retry: true },
+                  );
+                  onUpdate(result.inquiry);
+                  setFeedback(
+                    result.inquiry.notificationStatus === "sent"
+                      ? "Inquiry notification accepted by the mail server."
+                      : result.inquiry.notificationStatus === "pending"
+                        ? "Notification remains queued. Preview delivery requires a controlled test inbox."
+                        : mailFailureText(result.inquiry.notificationErrorCode),
+                  );
+                })
+              }
+            >
+              {item.notificationStatus === "failed"
+                ? "Retry notification"
+                : "Email inquiry to hello@clover.ph"}
+            </button>
+          ) : null}
+        </div>
         <h3>Assignment & context</h3>
         <label>
           Owner
@@ -360,13 +446,32 @@ function InquiryCase({
             </a>
           ) : null}
         </article>
-        {olderCursor ? <button type="button" disabled={historyLoading || busy} onClick={() => {
-          setHistoryLoading(true);
-          void api(`/api/admin/inquiries/${item.id}/messages?before=${encodeURIComponent(olderCursor)}`).then((data) => {
-            setMessages((current) => [...data.messages, ...current].filter((message, index, all) => all.findIndex((entry) => entry.id === message.id) === index));
-            setOlderCursor(data.nextCursor);
-          }).catch((error) => setError(error.message)).finally(() => setHistoryLoading(false));
-        }}>{historyLoading ? "Loading…" : "Load older messages"}</button> : null}
+        {olderCursor ? (
+          <button
+            type="button"
+            disabled={historyLoading || busy}
+            onClick={() => {
+              setHistoryLoading(true);
+              void api(
+                `/api/admin/inquiries/${item.id}/messages?before=${encodeURIComponent(olderCursor)}`,
+              )
+                .then((data) => {
+                  setMessages((current) =>
+                    [...data.messages, ...current].filter(
+                      (message, index, all) =>
+                        all.findIndex((entry) => entry.id === message.id) ===
+                        index,
+                    ),
+                  );
+                  setOlderCursor(data.nextCursor);
+                })
+                .catch((error) => setError(error.message))
+                .finally(() => setHistoryLoading(false));
+            }}
+          >
+            {historyLoading ? "Loading…" : "Load older messages"}
+          </button>
+        ) : null}
         {messages.map((message) => (
           <article key={message.id}>
             <strong>
@@ -378,6 +483,89 @@ function InquiryCase({
             </p>
             {message.subject ? <h3>{message.subject}</h3> : null}
             <p style={{ whiteSpace: "pre-wrap" }}>{message.body}</p>
+            {message.mailMessageId ? (
+              <p>Mail reference: {message.mailMessageId}</p>
+            ) : null}
+            {message.kind === "reply" &&
+            ["failed", "unknown"].includes(message.status) ? (
+              <p>{mailFailureText(message.deliveryErrorCode)}</p>
+            ) : null}
+            {canWrite &&
+            message.actorId === actor &&
+            message.kind === "reply" &&
+            message.status === "failed" ? (
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() => void run(() => retryReply(message))}
+              >
+                Retry saved reply
+              </button>
+            ) : null}
+            {canWrite &&
+            message.actorId === actor &&
+            message.kind === "reply" &&
+            message.status === "unknown" ? (
+              <>
+                <button
+                  type="button"
+                  disabled={busy}
+                  onClick={() => {
+                    setResolutionId(message.id);
+                    setResolutionNote("");
+                    setVerifiedNotSent(false);
+                  }}
+                >
+                  Resolve delivery before retrying
+                </button>
+                {resolutionId === message.id ? (
+                  <div>
+                    <p>
+                      Check Zoho’s delivery records first. Retrying sends the
+                      saved reply above.
+                    </p>
+                    <label>
+                      <input
+                        type="checkbox"
+                        checked={verifiedNotSent}
+                        onChange={(event) =>
+                          setVerifiedNotSent(event.target.checked)
+                        }
+                      />
+                      I checked Zoho and confirmed this reply was not sent.
+                    </label>
+                    <label>
+                      Delivery check notes
+                      <textarea
+                        value={resolutionNote}
+                        onChange={(event) =>
+                          setResolutionNote(event.target.value)
+                        }
+                        maxLength={1000}
+                      />
+                    </label>
+                    <button
+                      type="button"
+                      disabled={
+                        busy ||
+                        !verifiedNotSent ||
+                        resolutionNote.trim().length < 10
+                      }
+                      onClick={() => void run(() => retryReply(message, true))}
+                    >
+                      Retry verified unsent reply
+                    </button>
+                    <button
+                      type="button"
+                      disabled={busy}
+                      onClick={() => setResolutionId(null)}
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                ) : null}
+              </>
+            ) : null}
           </article>
         ))}
       </section>

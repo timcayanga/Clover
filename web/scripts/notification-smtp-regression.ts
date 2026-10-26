@@ -3,11 +3,13 @@ import { createServer, type Socket } from "node:net";
 import { once } from "node:events";
 import { sendContactInquiryEmail } from "../lib/contact-email";
 import { sendNotificationMail } from "../lib/notification-mail.server";
+import { MailDeliveryError } from "../lib/mail-delivery";
 
 // Exercise the installed mail library and Clover's real mail functions. Every
 // connection terminates at this loopback fixture; nothing leaves the machine.
 const messages: Array<{ recipients: string[]; body: string }> = [];
 const sockets = new Set<Socket>();
+let fault: "auth" | "data_reject" | "lost_ack" | null = null;
 const server = createServer((socket) => {
   sockets.add(socket);
   socket.on("close", () => sockets.delete(socket));
@@ -24,14 +26,16 @@ const server = createServer((socket) => {
       buffer = buffer.slice(end + 2);
       if (inData) {
         if (line === ".") {
+          if (fault === "data_reject") { inData = false; socket.write("451 Explicit message rejection\r\n"); continue; }
           messages.push({ recipients: [...recipients], body });
           inData = false;
+          if (fault === "lost_ack") { socket.destroy(); continue; }
           socket.write("250 Message accepted by local fixture\r\n");
         } else body += line.replace(/^\.\./, ".") + "\r\n";
       } else if (/^(?:EHLO|HELO) /i.test(line)) {
         socket.write("250-localhost\r\n250 AUTH PLAIN\r\n");
       } else if (/^AUTH PLAIN /i.test(line)) {
-        socket.write("235 Authentication accepted\r\n");
+        socket.write(fault === "auth" ? "535 5.7.8 Authentication Failed\r\n" : "235 Authentication accepted\r\n");
       } else if (/^MAIL FROM:/i.test(line)) {
         recipients = [];
         body = "";
@@ -85,7 +89,17 @@ async function main() {
     assert.match(messages[1]!.body, /Content-Type: text\/html; charset=utf-8/);
     await assert.rejects(sendNotificationMail("reject@example.invalid", "Rejected", "Must fail"), /550|rejected/i);
     assert.equal(messages.length, 2, "Rejected recipients must not be reported as delivered");
-    console.log("SMTP compatibility passed: contact attachments, reply address, notification HTML and recipient rejection, using loopback only.");
+    fault = "auth";
+    await assert.rejects(sendNotificationMail("user@example.invalid", "Auth fixture", "Unsent"), error => error instanceof MailDeliveryError && error.outcome === "not_sent" && error.code === "authentication_failed");
+    await assert.rejects(sendContactInquiryEmail({ name: "QA", email: "qa@example.invalid", message: "Unsent contact" }), error => error instanceof MailDeliveryError && error.outcome === "not_sent");
+    assert.equal(messages.length, 2);
+    fault = "data_reject";
+    await assert.rejects(sendNotificationMail("user@example.invalid", "Rejected DATA", "Unsent"), error => error instanceof MailDeliveryError && error.outcome === "not_sent");
+    assert.equal(messages.length, 2);
+    fault = "lost_ack";
+    await assert.rejects(sendNotificationMail("user@example.invalid", "Lost acknowledgement", "Accepted but no acknowledgement"), error => error instanceof MailDeliveryError && error.outcome === "unknown");
+    assert.equal(messages.length, 3, "A post-DATA connection loss can hide an accepted message; never auto-retry it");
+    console.log("SMTP compatibility passed: contact attachments, reply address, HTML, rejected recipient/auth/DATA and actual post-DATA lost acknowledgement, using loopback only.");
   } finally {
     clearTimeout(timeout);
     for (const [key, value] of Object.entries(original)) {

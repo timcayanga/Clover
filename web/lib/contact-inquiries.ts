@@ -39,7 +39,7 @@ export type AdminContactInquiry = Omit<ContactInquiry, "attachment"> & {
 
 const normalizeQuery = (value?: string) => value?.trim() ?? "";
 
-const readContactInquiryAttachment = (
+export const readContactInquiryAttachment = (
   value: Prisma.JsonValue | null,
 ): ContactInquiryAttachment | null => {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
@@ -91,7 +91,7 @@ export async function createContactInquiry(input: {
   const contactInquiry = (prisma as unknown as { contactInquiry?: { create: (args: { data: Record<string, unknown> }) => Promise<ContactInquiry> } }).contactInquiry;
 
   if (!contactInquiry) {
-    return null;
+    throw new Error("Support storage is unavailable. Please retry.");
   }
 
   return contactInquiry.create({
@@ -104,6 +104,7 @@ export async function createContactInquiry(input: {
       userAgent: input.userAgent?.trim() ? input.userAgent.trim().slice(0, 255) : null,
       environment: getDeploymentEnvironment(),
       status: "open",
+      notificationStatus: "pending",
     },
   });
 }
