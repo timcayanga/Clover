@@ -59,3 +59,7 @@ assert.equal(calendarDayStart('2026-09-01', 'Asia/Manila').toISOString(), '2026-
 const dst = calendarQueryRange({ gte: new Date('2026-11-01'), lte: new Date('2026-11-01T23:59:59.999Z') }, 'America/New_York');
 assert.equal(dst.gte!.toISOString(), '2026-11-01T04:00:00.000Z');
 assert.equal(dst.lte!.toISOString(), '2026-11-02T04:59:59.999Z');
+assert.deepEqual(adviserPaymentWindow('Which payments are due next month?', now, 'Asia/Manila'), { from: '2026-11-01', to: '2026-11-30', days: 30 });
+assert.deepEqual(adviserPaymentWindow('Which payments are due from 2026-11-01 to 2026-11-07?', now, 'Asia/Manila'), { from: '2026-11-01', to: '2026-11-07', days: 7 });
+
+assert.equal(adviserPaymentFacts([{...c,kind:'debt',amount:'1000000',tracking:null}],{from:'2026-10-01',to:'2026-10-31'},'PHP')[0].amount,null,'An outstanding debt is not a known installment');

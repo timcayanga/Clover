@@ -105,12 +105,20 @@ async function main() {
         assert.equal(reportBody.reports.find((r: {
             currency: string;
         }) => r.currency === 'PHP').analysis.current.expense, 2125, 'Reports must carry the exact reconciled expense total');
-        currentRequest = new Request('https://clover.ph/api/adviser/chat?workspaceId='+workspace.id,{method:'POST',body:JSON.stringify({messages:[{role:'user',content:'What were my three biggest spending categories this month?'},{role:'assistant',content:'Old summary: transfers 999999.'},{role:'user',content:`Use ${from} to ${end}, excluding transfers.`}]})});
-        const followUpResponse=await POST(currentRequest);const followUpBody=await followUpResponse.json();assert.equal(followUpBody.financialFacts.total,2125);assert.equal(followUpBody.financialFacts.categories.length,3);assert.equal(followUpBody.financialFacts.from,from);
+        currentRequest = new Request('https://clover.ph/api/adviser/chat?workspaceId=' + workspace.id, { method: 'POST', body: JSON.stringify({ messages: [{ role: 'user', content: 'What were my three biggest spending categories this month?' }, { role: 'assistant', content: 'Old summary: transfers 999999.' }, { role: 'user', content: `Use ${from} to ${end}, excluding transfers.` }] }) });
+        const followUpResponse = await POST(currentRequest);
+        const followUpBody = await followUpResponse.json();
+        assert.equal(followUpBody.financialFacts.total, 2125);
+        assert.equal(followUpBody.financialFacts.categories.length, 3);
+        assert.equal(followUpBody.financialFacts.from, from);
         const cashAnswer = await ask('How much available cash do I have?');
         assert.equal(cashAnswer.body.financialFacts.spendable, 1475);
         assert.equal(cashAnswer.body.grounding.workspaceId, workspace.id);
         assert.equal((await ask('How much available cash in USD?')).body.financialFacts.spendable, 900);
+        const unavailableCurrency = await ask('How much available cash in GBP?');
+        assert.equal(unavailableCurrency.body.dataUnavailable, true);
+        assert.equal(unavailableCurrency.body.financialFacts, undefined);
+        assert.equal(unavailableCurrency.body.visualization, null);
         const payments = await ask('Which payments are due in the next 30 days?');
         assert.equal(payments.body.financialFacts.payments.length, 25, 'Confirmed payments must not stop at a 20-record context cap');
         assert(payments.body.financialFacts.payments.some((p: {

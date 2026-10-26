@@ -41,7 +41,7 @@ export function resolveAdviserFactQuestion(latest: string, messages: Array<{
 }
 const months = ['january', 'february', 'march', 'april', 'may', 'june', 'july', 'august', 'september', 'october', 'november', 'december'];
 /** Inclusive calendar-day boundaries, exactly as Reports filters them. No observed-row date inference. */
-export function adviserFactWindow(question: string, now: Date, timeZone: string) {
+export function adviserFactWindow(question: string, now: Date, timeZone: string, allowFuture = false) {
     const today = reportDay(now, timeZone);
     const iso = [...question.matchAll(/\b(20\d{2}-\d{2}-\d{2})\b/g)].map(m => m[1]);
     let from: string, to: string;
@@ -53,18 +53,18 @@ export function adviserFactWindow(question: string, now: Date, timeZone: string)
     }
     else {
         const named = /\b(jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|jun(?:e)?|jul(?:y)?|aug(?:ust)?|sep(?:t(?:ember)?)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)\b/i.exec(question);
-        const relative = /\b(this|last|previous) month\b/i.exec(question);
+        const relative = /\b(this|last|previous|next) month\b/i.exec(question);
         const rolling = /\b(?:last|past)\s+(\d+)\s+days?\b/i.exec(question);
         const [year, month] = today.split('-').map(Number);
         if (named || relative) {
             const tail = named ? question.slice(named.index + named[0].length) : '';
             const dayRange = /^\s+(\d{1,2})(?!\d)(?:st|nd|rd|th)?(?:\s*(?:[-–—]|to|through)\s*(\d{1,2})(?!\d)(?:st|nd|rd|th)?)?/.exec(tail);
             const requestedYear = question.match(/\b(20\d{2})\b/)?.[1];
-            const date = new Date(Date.UTC(requestedYear ? Number(requestedYear) : year, named ? months.findIndex(m => m.startsWith(named[1].toLowerCase().slice(0, 3))) : month - 1 - (relative && relative[1].toLowerCase() !== 'this' ? 1 : 0), 1));
+            const date = new Date(Date.UTC(requestedYear ? Number(requestedYear) : year, named ? months.findIndex(m => m.startsWith(named[1].toLowerCase().slice(0, 3))) : month - 1 + (relative?.[1].toLowerCase() === 'next' ? 1 : relative && relative[1].toLowerCase() !== 'this' ? -1 : 0), 1));
             const ym = date.toISOString().slice(0, 7);
             from = ym + '-' + String(dayRange?.[1] ?? 1).padStart(2, '0');
             to = ym + '-' + String(dayRange ? (dayRange[2] ?? dayRange[1]) : new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth() + 1, 0)).getUTCDate()).padStart(2, '0');
-            if (!dayRange && to > today && from <= today)
+            if (!allowFuture && !dayRange && to > today && from <= today)
                 to = today;
         }
         else if (rolling) {
@@ -81,7 +81,7 @@ export function adviserFactWindow(question: string, now: Date, timeZone: string)
             from = shiftDay(today, -29);
         }
     }
-    if (!validReportDate(from) || !validReportDate(to) || from > to || to > today)
+    if (!validReportDate(from) || !validReportDate(to) || from > to || (!allowFuture && to > today))
         throw new Error('Please choose a valid spending period ending today or earlier.');
     return { from, to };
 }
@@ -102,6 +102,13 @@ export function adviserSpendingFacts(rows: ReportRow[], currency: string, window
     return { total: Math.round(expenses.reduce((sum, r) => sum + Math.abs(r.amount), 0) * 100) / 100, categories: limit ? ranked.slice(0, limit) : ranked, rowCount: expenses.length, allCategories: ranked };
 }
 export function adviserPaymentWindow(question: string, now: Date, timeZone: string) {
+    if (/\b(?:20\d{2}-\d{2}-\d{2}|january|february|march|april|may|june|july|august|september|october|november|december|(?:this|next|last|previous) month)\b/i.test(question)) {
+        const window = adviserFactWindow(question, now, timeZone, true);
+        const days = Math.round((Date.parse(window.to) - Date.parse(window.from)) / 86400000) + 1;
+        if (days < 1 || days > 366)
+            throw new Error('Choose a payment window from 1 to 366 days.');
+        return { ...window, days };
+    }
     const match = /\bnext\s+(\d+)\s+(days?|weeks?)\b/i.exec(question);
     const days = match ? Number(match[1]) * (match[2].toLowerCase().startsWith('week') ? 7 : 1) : 30;
     if (!Number.isSafeInteger(days) || days < 1 || days > 366)
@@ -128,7 +135,7 @@ export function adviserPaymentFacts(commitments: FinancialCommitmentSummary[], w
             const dueDate = recurringCompletionDate(c, dateKey);
             if (dateKey < window.from || dateKey > window.to || c.completedPaymentDates?.includes(dueDate))
                 continue;
-            result.push({ id: c.id, label: c.title, amount: recurringPaymentAmount(c, dateKey), date: dateKey, dueDate });
+            result.push({ id: c.id, label: c.title, amount: c.kind === "debt" ? c.tracking?.paymentAmount ?? null : recurringPaymentAmount(c, dateKey), date: dateKey, dueDate });
         }
     }
     return result.sort((a, b) => a.date.localeCompare(b.date) || a.label.localeCompare(b.label));
