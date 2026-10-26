@@ -28,6 +28,15 @@ export function resolveAdviserFactQuestion(latest: string, messages: Array<{
     const clarifies = /\b(?:20\d{2}|january|february|march|april|may|june|july|august|september|october|november|december|this month|last month|previous month|next \d+ days|PHP|USD|EUR|GBP|SGD|MYR|IDR|THB|transfers?|top \d+|three|five)\b/i.test(latest);
     if (!clarifies)
         return latest;
+    // A date or currency in an unrelated request is not a financial clarification.
+    // Restrict inherited scope to short date/currency/filter instructions.
+    const remainder = latest
+        .replace(/\b(?:20\d{2}|PHP|USD|EUR|GBP|SGD|HKD|JPY|AUD|CAD|CNY|INR|MYR|IDR|THB|VND|AED)\b/gi, '')
+        .replace(/\d+/g, ' ')
+        .replace(/\b(?:january|february|march|april|may|june|july|august|september|october|november|december|use|please|no|yes|only|the|for|from|to|through|on|in|and|with|without|exclude|excluding|include|including|transfers?|income|expenses?|spending|categor(?:y|ies)|breakdown|top|biggest|largest|highest|three|five|ten|full|whole|months?|calendar|this|last|previous|next|past|days?|weeks?|instead|same|show|it|that|these|those|as|of|about|actually|make|can|you|i|want|mean|meant|not|all|exact|exactly|dates?|st|nd|rd|th)\b/gi, '')
+        .replace(/[\d\s\p{P}\p{S}]/gu, '');
+    if (remainder)
+        return latest;
     const prior = messages.slice(0, -1).filter(m => m.role === 'user').slice(-1)[0]?.content;
     const intent = prior ? adviserFactIntent(prior) : null;
     if (!intent)

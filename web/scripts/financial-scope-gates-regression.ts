@@ -1,3 +1,4 @@
+import { resolveAdviserFactQuestion } from "../lib/adviser-facts";
 import { DEFAULT_ADVISER_MODEL } from "../lib/openai-model-policy";
 import assert from "node:assert/strict";
 import fs from "node:fs";
@@ -41,6 +42,20 @@ assert.equal(
   true,
   "financial follow-up should preserve scope"
 );
+const factualHistory: Array<{role:"user"|"assistant";content:string}> = [
+  {role:"user",content:"What were my three biggest spending categories last month?"},
+  {role:"assistant",content:"An older answer must not determine a new question's scope."},
+];
+for (const latest of ["Use September 1–30 and exclude transfers", "Exactly September 1st through 30th excluding transfers", "Show this in USD"]) {
+  const history=[...factualHistory,{role:"user" as const,content:latest}];
+  assert.equal(classifyAdviserScope(resolveAdviserFactQuestion(latest,history),history).allowed,true,"Recognized financial clarification stays in scope");
+}
+for (const latest of ["Write a history essay about September 2026", "Who was president in September 2026?", "Translate this story to PHP in 2026"]) {
+  const history=[...factualHistory,{role:"user" as const,content:latest}];
+  const resolved=resolveAdviserFactQuestion(latest,history);
+  assert.equal(resolved,latest,"An unrelated dated question must not inherit financial scope");
+  assert.equal(classifyAdviserScope(resolved,history).allowed,false,"Dated unrelated follow-ups remain rejected");
+}
 assert.match(ADVISER_OUT_OF_SCOPE_REPLY, /help with your finances in Clover/);
 assert.equal(ADVISER_OUT_OF_SCOPE_SUGGESTIONS.length, 3);
 
@@ -125,7 +140,9 @@ assert.equal(assessFinancialUploadScope({
 }).decision, "non_financial", "Long ordinary prose without financial evidence remains rejectable");
 
 const adviserRouteSource = fs.readFileSync(path.join(process.cwd(), "app/api/adviser/chat/route.ts"), "utf8");
-const adviserGuardIndex = adviserRouteSource.indexOf("classifyAdviserScope(latestIncomingQuestion");
+const factResolutionIndex = adviserRouteSource.indexOf("const factQuestion = resolveAdviserFactQuestion(latestIncomingQuestion, incomingMessages)");
+const adviserGuardIndex = adviserRouteSource.indexOf("classifyAdviserScope(factQuestion, incomingMessages)");
+assert.ok(factResolutionIndex >= 0 && factResolutionIndex < adviserGuardIndex, "The scope gate must assess the resolved user clarification before any financial read.");
 const adviserWorkspaceIndex = adviserRouteSource.indexOf("const workspace =");
 const adviserModelIndex = adviserRouteSource.indexOf('fetch("https://api.openai.com/v1/responses"');
 assert.ok(adviserGuardIndex >= 0, "Adviser route must call the deterministic scope gate.");
