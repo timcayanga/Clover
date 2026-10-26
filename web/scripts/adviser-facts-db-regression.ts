@@ -80,6 +80,10 @@ async function main() {
             label: string;
         }) => c.label), ['Travel', 'Housing', 'Food']);
         assert.equal(spending.body.financialFacts.from, from);
+        assert.deepEqual(spending.body.visualization.calendarWindow,{from,through:end});
+        assert.equal(reportDay(new Date(spending.body.visualization.from),'Asia/Manila'),from);
+        assert.equal(reportDay(new Date(spending.body.visualization.through),'Asia/Manila'),end);
+
         assert.equal(spending.body.financialFacts.to, end);
         assert.equal(spending.body.visualization.bars.reduce((s: number, c: {
             amount: number;

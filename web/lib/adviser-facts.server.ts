@@ -1,3 +1,4 @@
+import { calendarQueryRange } from "./calendar-query-window";
 import { prisma } from './prisma';
 import { buildActiveWorkspaceTransactionWhere } from './transaction-query';
 import { normalizeReportRows, reportTransactionSelect } from './report-rows';
@@ -46,7 +47,8 @@ export async function answerAdviserFact(input: {
             const facts = adviserSpendingFacts(normalizeReportRows(records, timeZone), currency, window, adviserTopCount(input.question));
             const scope = `${input.profileName} · ${window.from} to ${window.to} · ${currency}`;
             const params = new URLSearchParams({ section: 'spending', range: 'custom', from: window.from, to: window.to, currency, transfers: 'exclude' });
-            const visualization = facts.rowCount ? { title: `Spending categories · ${window.from} to ${window.to}`, currency, from: window.from + 'T00:00:00.000Z', through: window.to + 'T23:59:59.999Z', bars: facts.allCategories.slice(0, 6).concat(facts.allCategories.length > 6 ? [{ label: 'Other categories', amount: facts.allCategories.slice(6).reduce((s, c) => s + c.amount, 0) }] : []) } : null;
+            const instants=calendarQueryRange({gte:new Date(window.from),lte:new Date(window.to+'T23:59:59.999Z')},timeZone);
+            const visualization = facts.rowCount ? { title: `Spending categories · ${window.from} to ${window.to}`, currency, calendarWindow:{from:window.from,through:window.to}, from: instants.gte!.toISOString(), through: instants.lte!.toISOString(), bars: facts.allCategories.slice(0, 6).concat(facts.allCategories.length > 6 ? [{ label: 'Other categories', amount: facts.allCategories.slice(6).reduce((s, c) => s + c.amount, 0) }] : []) } : null;
             return { ...common, actions: action('/reports?' + params, 'View matching report'), reply: `${scope}\n\n${facts.rowCount ? facts.categories.map((c, i) => `${i + 1}. ${c.label}: ${adviserFactMoney(c.amount, currency)}`).join('\n') : 'No recorded expenses were found for this Profile, currency, and period.'}\n\nTotal recorded expenses: ${adviserFactMoney(facts.total, currency)}. Transfers are excluded; income is not spending. Only ${currency} transactions are included.`, grounding: { ...grounding, transactionCount: facts.rowCount, historyThrough: window.to }, visualization, financialFacts: { intent, ...window, currency, ...facts } };
         }
         if (intent === 'payments') {

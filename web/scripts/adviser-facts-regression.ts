@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { adviserFactIntent, adviserFactWindow, adviserPaymentWindow, adviserSpendingFacts, adviserTopCount, adviserPaymentFacts, adviserCashFacts, resolveAdviserFactQuestion } from '../lib/adviser-facts';
 import { getTransactionSummaryTypeOverrides } from '../lib/transaction-summary';
 import { buildAdviserChart } from '../lib/adviser-chart';
-import { parseAdviserChart } from '../../shared/adviser-chart';
+import { parseAdviserChart, adviserChartPeriodLabel, adviserChartReportHref } from '../../shared/adviser-chart';
 import { serializeFinancialCommitment } from '../lib/commitments';
 const now = new Date('2026-10-26T04:00:00Z');
 for (const q of ['What were my three biggest spending categories last month?', 'Show my spending by category for September 1–30, 2026, excluding transfers.']) {
@@ -63,3 +63,10 @@ assert.deepEqual(adviserPaymentWindow('Which payments are due next month?', now,
 assert.deepEqual(adviserPaymentWindow('Which payments are due from 2026-11-01 to 2026-11-07?', now, 'Asia/Manila'), { from: '2026-11-01', to: '2026-11-07', days: 7 });
 
 assert.equal(adviserPaymentFacts([{...c,kind:'debt',amount:'1000000',tracking:null}],{from:'2026-10-01',to:'2026-10-31'},'PHP')[0].amount,null,'An outstanding debt is not a known installment');
+
+const calendarChart=parseAdviserChart({...chart!,calendarWindow:{from:'2026-09-01',through:'2026-09-30'}})!;
+assert.equal(adviserChartPeriodLabel(calendarChart,'en-US'),'9/1/2026 – 9/30/2026');
+assert.equal(parseAdviserChart({...calendarChart,calendarWindow:{from:'2026-09-01',through:'2026-09-31'}}),null);
+assert.deepEqual(parseAdviserChart(JSON.parse(JSON.stringify(calendarChart)))?.calendarWindow,calendarChart.calendarWindow);
+
+const reportLink=new URL(adviserChartReportHref(calendarChart),'https://clover.ph');assert.equal(reportLink.pathname,'/reports');assert.equal(reportLink.searchParams.get('from'),'2026-09-01');assert.equal(reportLink.searchParams.get('to'),'2026-09-30');assert.equal(reportLink.searchParams.get('currency'),'PHP');
