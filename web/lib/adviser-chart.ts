@@ -1,6 +1,6 @@
 import type { AdviserChart } from "../../shared/adviser-chart";
 type Row={date:Date;amount:unknown;currency:string;type:string;category:{name:string}|null};
-export function buildAdviserChart(question:string,rows:Row[]):AdviserChart|null {
+export function buildAdviserChart(question:string,rows:Row[],window?:{from:string;through:string}):AdviserChart|null {
   if(!/\b(spend(?:ing)?|expenses?|report|money go|category|categories)\b/i.test(question))return null;
   const expenses=rows.filter(row=>row.type==="expense"&&Number.isFinite(Number(row.amount))&&Number(row.amount)!==0);
   const currencies=[...new Set(expenses.map(row=>row.currency))];
@@ -13,6 +13,7 @@ export function buildAdviserChart(question:string,rows:Row[]):AdviserChart|null 
   const ranked=[...totals].sort((a,b)=>b[1]-a[1]);
   const bars=ranked.slice(0,6).map(([label,amount])=>({label,amount:Math.round(amount*100)/100}));
   if(ranked.length>6)bars.push({label:"Other categories",amount:Math.round(ranked.slice(6).reduce((sum,item)=>sum+item[1],0)*100)/100});
+  if(!scoped.length)return null;
   const dates=scoped.map(row=>row.date.getTime());
-  return {title:"Spending mix · recent records",currency,from:new Date(Math.min(...dates)).toISOString(),through:new Date(Math.max(...dates)).toISOString(),bars};
+  return {title:"Spending mix · recent records",currency,from:window?.from??new Date(Math.min(...dates)).toISOString(),through:window?.through??new Date(Math.max(...dates)).toISOString(),bars};
 }

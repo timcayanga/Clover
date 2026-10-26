@@ -1454,6 +1454,7 @@ function AccountsPageContent() {
   const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
   const [selectedWorkspaceId, setSelectedWorkspaceId] = useState(initialWorkspaceId);
   const [selectedCurrency, setSelectedCurrency] = useState("PHP");
+  const requestedCurrencyFromQuery = searchParams?.get("currency")?.trim().toUpperCase() ?? "";
   const [accounts, setAccounts] = useState<Account[]>(initialCachedAccounts);
   const [draggedAccountId, setDraggedAccountId] = useState<string | null>(null);
   const [activeAccountDropType, setActiveAccountDropType] = useState<SupportedAccountType | null>(null);
@@ -2415,8 +2416,9 @@ function AccountsPageContent() {
       return;
     }
 
-    setSelectedCurrency(readSelectedCurrency(selectedWorkspaceId) ?? defaultCurrency);
-  }, [defaultCurrency, selectedWorkspaceId]);
+    const requested = requestedCurrencyFromQuery === "ALL" ? "" : /^[A-Z]{3}$/.test(requestedCurrencyFromQuery) ? requestedCurrencyFromQuery : null;
+    setSelectedCurrency(requested ?? readSelectedCurrency(selectedWorkspaceId) ?? defaultCurrency);
+  }, [defaultCurrency, selectedWorkspaceId, requestedCurrencyFromQuery]);
 
   useEffect(() => {
     setImportActivitySnapshot(readImportActivity());

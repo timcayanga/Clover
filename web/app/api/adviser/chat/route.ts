@@ -1,3 +1,7 @@
+import { resolveAdviserFactQuestion } from "@/lib/adviser-facts";
+import { normalizeReportRows, reportTransactionSelect } from "@/lib/report-rows";
+import { normalizeRegionalPreferences } from "@/lib/regional-preferences";
+import { answerAdviserFact, loadAdviserAccountFacts } from "@/lib/adviser-facts.server";
 import { extractFinalOpenAIText, createOpenAIFinalTextStream } from "@/lib/openai-response-text";
 import { DEFAULT_ADVISER_MODEL, openAIInteractiveOptions } from "@/lib/openai-model-policy";
 import { buildBudgetOverview } from "@/lib/budgeting";
@@ -27,11 +31,8 @@ import { getEnv } from "@/lib/env";
 import { formatCurrencyAmount, formatCurrencyCode } from "@/lib/currency-format";
 import { getGoalProgressSnapshot, normalizeGoalPlan, type GoalKey } from "@/lib/goals";
 import { getEffectiveTransactionCategoryName } from "@/lib/transaction-display";
-import { resolveFinancialTransactionType } from "@/lib/transaction-directions";
 import { recordAdviserChatQuestion, recordAdviserLocalResponse, recordAdviserModelCall } from "@/lib/adviser-actions";
 import { extractAdviserModelUsage, type AdviserModelCallStage, type AdviserModelCallStatus } from "@/lib/adviser-model-usage";
-import { deriveReconciledBalance } from "@/lib/account-balance";
-import { mobileAccountBalances } from "@/lib/mobile-account-balances";
 import { assertRateLimit } from "@/lib/rate-limit";
 import { getPlannedPaymentSuggestions } from "@/lib/planned-payment-suggestions";
 import { normalizeAdviserPreferences } from "@/lib/adviser-preferences";
@@ -317,26 +318,19 @@ const buildTransactionSummary = (
           source: transaction.importFileId ? "upload" : "manual",
           type: transaction.type,
         }) ?? "Uncategorized";
-      const transactionType = resolveFinancialTransactionType({
-        type: transaction.type,
-        amount: transaction.amount,
-        isTransfer: transaction.isTransfer,
-        categoryName,
-        merchantRaw: transaction.merchantRaw,
-        merchantClean: transaction.merchantClean,
-        description: transaction.description,
-        institution: transaction.account?.institution,
-      });
+      // Inputs already use Reports’ canonical read projection; resolving again
+      // would undo an evidenced pair whose stored isTransfer flag is false.
+      const transactionType = transaction.type;
       if (transactionType === "income") {
-        accumulator.income += amount;
+        accumulator.income += Math.abs(amount);
       } else if (transactionType === "expense") {
-        accumulator.expense += amount;
+        accumulator.expense += Math.abs(amount);
         accumulator.expenseCategories.set(
           categoryName,
           (accumulator.expenseCategories.get(categoryName) ?? 0) + Math.abs(amount)
         );
       } else {
-        accumulator.transfer += amount;
+        accumulator.transfer += Math.abs(amount);
       }
 
       return accumulator;
@@ -353,12 +347,13 @@ const buildMonthlySeries = (
     amount: unknown;
     type: "income" | "expense" | "transfer";
     date: Date;
+    calendarDay?: string;
   }>
 ) => {
   const monthlyBuckets = new Map<string, { income: number; expense: number; net: number }>();
 
   for (const transaction of transactions) {
-    const monthKey = `${transaction.date.getFullYear()}-${String(transaction.date.getMonth() + 1).padStart(2, "0")}`;
+    const monthKey = transaction.calendarDay?.slice(0,7) ?? transaction.date.toISOString().slice(0,7);
     const bucket = monthlyBuckets.get(monthKey) ?? { income: 0, expense: 0, net: 0 };
     const amount = Number(transaction.amount);
 
@@ -918,8 +913,9 @@ export async function POST(request: Request) {
     }
 
     const latestIncomingQuestion = incomingMessages[incomingMessages.length - 1]?.content?.trim() ?? "";
+    const factQuestion = resolveAdviserFactQuestion(latestIncomingQuestion, incomingMessages);
     const entryRequested = isEntryRequest(latestIncomingQuestion, formContext, entryDraft) || (hasAttachments && /^(?:please\s+)?(?:add|import|record|log|enter|create)\b/i.test(latestIncomingQuestion));
-    const scopeDecision = (entryRequested || hasAttachments) ? {allowed:true,reason:"clover" as const} : classifyAdviserScope(latestIncomingQuestion, incomingMessages);
+    const scopeDecision = (entryRequested || hasAttachments) ? {allowed:true,reason:"clover" as const} : classifyAdviserScope(factQuestion, incomingMessages);
     if (!scopeDecision.allowed) {
       console.info("[adviser-scope] rejected out-of-scope question before usage, workspace, or model work", {
         actorUserId: user.id,
@@ -1024,39 +1020,31 @@ export async function POST(request: Request) {
         orderBy: { createdAt: "asc" },
       }));
 
-    if (!workspace || ((nativeRequest || new URL(request.url).searchParams.has("workspaceId")) && workspace.id !== selectedWorkspaceId)) {
+    if (!workspace || (selectedWorkspaceId && workspace.id !== selectedWorkspaceId)) {
       return NextResponse.json({ error: "Workspace not found." }, { status: 404 });
     }
 
     await assertWorkspaceAccess(user.clerkUserId, workspace.id);
 
-    const reconcileChatAccountBalance = (
-      account: AdviserChatAccountSource,
-      transactions: NonNullable<AdviserChatAccountSource["transactions"]>
-    ) => {
-      const latestCheckpoint = account.statementCheckpoints[0] ?? null;
-      const checkpointBalance =
-        latestCheckpoint?.status !== "mismatch" && latestCheckpoint?.endingBalance ? latestCheckpoint.endingBalance : null;
-      const projectedBalance = deriveReconciledBalance({
-          accountType: account.type,
-          balance: account.balance as Parameters<typeof deriveReconciledBalance>[0]["balance"],
-          transactions: transactions as unknown as Parameters<typeof deriveReconciledBalance>[0]["transactions"],
-          checkpoints: latestCheckpoint ? ([latestCheckpoint] as unknown as Parameters<typeof deriveReconciledBalance>[0]["checkpoints"]) : [],
-          treatStoredBalanceAsOpening: account.source === "manual" || account.source === "adviser_manual",
-        });
-      const reconciledBalance = account.type === "cash" ? projectedBalance : checkpointBalance ?? projectedBalance;
-      const parsed = Number(reconciledBalance ?? account.balance ?? 0);
-      return Number.isFinite(parsed) ? account.type === "cash" ? Math.max(0, parsed) : parsed : 0;
-    };
+    if (!hasAttachments && !entryRequested) {
+      const fact = await answerAdviserFact({workspaceId:workspace.id,profileName:workspace.name,question:factQuestion,regionalPreferences:user.regionalPreferences,now});
+      if (fact) {
+        const signature = `facts-${randomUUID()}`;
+        await recordAdviserChatQuestion({workspaceId:workspace.id,actorUserId:user.clerkUserId,group:"cashflow",itemId:signature,label:"Financial facts",sourceAction:"chat",question:latestIncomingQuestion}).catch(()=>null);
+        await recordAdviserLocalResponse({workspaceId:workspace.id,actorUserId:user.clerkUserId,questionSignature:signature,reason:"canonical_financial_facts",routingVersion:"facts-v1"}).catch(()=>null);
+        return NextResponse.json(fact, {headers:{"Cache-Control":"private, no-store"}});
+      }
+    }
 
-    const displayCurrency = adviserCurrency(latestIncomingQuestion, workspace.accounts.map(account => account.currency ?? "PHP"));
+    const {baseCurrency, timeZone} = normalizeRegionalPreferences(user.regionalPreferences);
+    const displayCurrency = adviserCurrency(latestIncomingQuestion, workspace.accounts.map(account => account.currency ?? baseCurrency), baseCurrency);
     const requestedMonth = adviserMonthRange(latestIncomingQuestion, now);
     const nextSevenDays = new Date(now);
     nextSevenDays.setDate(nextSevenDays.getDate() + 7);
     const nextFourteenDays = new Date(now);
     nextFourteenDays.setDate(nextFourteenDays.getDate() + 14);
 
-    const [allTransactionsQuery, rawRecurringPatterns, rawFinancialCommitments, goalHistoryRows, rawInvestmentSnapshots, rawBudgets, splitBillWorkspaceData, rawPlannedPaymentSuggestions, cashBalances] =
+    const [allTransactionsQuery, rawRecurringPatterns, rawFinancialCommitments, goalHistoryRows, rawInvestmentSnapshots, rawBudgets, splitBillWorkspaceData, rawPlannedPaymentSuggestions, accountFacts] =
       await Promise.all([
         prisma.transaction.findMany({
           where: {
@@ -1064,33 +1052,7 @@ export async function POST(request: Request) {
             isExcluded: false,
             deletedAt: null,
           },
-          select: {
-            id: true,
-            accountId: true,
-            categoryId: true,
-            currency: true,
-            date: true,
-            createdAt: true,
-            amount: true,
-            type: true,
-            isTransfer: true,
-            merchantRaw: true,
-            merchantClean: true,
-            description: true,
-            rawPayload: true,
-            importFileId: true,
-            account: {
-              select: {
-                name: true,
-                institution: true,
-              },
-            },
-            category: {
-              select: {
-                name: true,
-              },
-            },
-          },
+          select: reportTransactionSelect(workspace.id),
           orderBy: { date: "desc" },
           take: 5000,
         }),
@@ -1169,7 +1131,7 @@ export async function POST(request: Request) {
         loadSplitBillWorkspaceData(user.id),
         getPlannedPaymentSuggestions(workspace.id),
         // Cash must replay its full ledger: flooring a truncated 5,000-row prompt history is not equivalent.
-        mobileAccountBalances(workspace.id, workspace.accounts.filter(account => account.type === "cash").map(account => account.id)),
+        loadAdviserAccountFacts(workspace.id),
       ]);
 
     const sameCurrency = (record: {currency: string | null}) => formatCurrencyCode(record.currency) === displayCurrency;
@@ -1311,49 +1273,27 @@ export async function POST(request: Request) {
         name: string;
       } | null;
     }>;
-    const transactionsByAccountId = new Map<string, NonNullable<AdviserChatAccountSource["transactions"]>>();
-    for (const transaction of allTransactions) {
-      const accountTransactions = transactionsByAccountId.get(transaction.accountId) ?? [];
-      accountTransactions.push({
-        id: transaction.id,
-        amount: transaction.amount,
-        type: transaction.type,
-        isTransfer: transaction.isTransfer,
-        isExcluded: false,
-        merchantRaw: transaction.merchantRaw,
-        merchantClean: transaction.merchantClean,
-        description: transaction.description,
-        date: transaction.date,
-        createdAt: transaction.createdAt,
-        rawPayload: transaction.rawPayload,
-      });
-      transactionsByAccountId.set(transaction.accountId, accountTransactions);
-    }
+    const accountFactsById = new Map(accountFacts.map(account => [account.id, account]));
     const chatAccounts = (workspace.accounts as AdviserChatAccountSource[]).map((account) => ({
       id: account.id,
       name: account.name,
       institution: account.institution,
-      type: account.type,
+      type: accountFactsById.get(account.id)?.type ?? account.type,
       currency: account.currency,
-      balance: account.type === "cash" ? Number(cashBalances.get(account.id) ?? account.balance ?? 0) : reconcileChatAccountBalance(account, transactionsByAccountId.get(account.id) ?? []),
+      balance: accountFactsById.get(account.id)?.balance ?? 0,
       investmentSubtype: account.investmentSubtype,
       investmentSymbol: account.investmentSymbol,
       investmentQuantity: Number(account.investmentQuantity ?? 0),
       investmentCostBasis: Number(account.investmentCostBasis ?? account.investmentPrincipal ?? 0),
       investmentMaturityDate: account.investmentMaturityDate,
     }));
-    const normalizedAllTransactions = allTransactions.filter(transaction => formatCurrencyCode(transaction.currency) === displayCurrency).map((transaction) => ({
+    const canonicalRows = new Map(normalizeReportRows(allTransactionsQuery, timeZone).map(row => [row.id,row]));
+    const normalizedAllTransactions = allTransactions.filter(transaction => formatCurrencyCode(transaction.currency) === displayCurrency).map(transaction => ({
       ...transaction,
-      type: resolveFinancialTransactionType({
-        type: transaction.type,
-        amount: transaction.amount,
-        isTransfer: transaction.isTransfer,
-        categoryName: transaction.category?.name,
-        merchantRaw: transaction.merchantRaw,
-        merchantClean: transaction.merchantClean,
-        description: transaction.description,
-        institution: transaction.account?.institution,
-      }),
+      amount: canonicalRows.get(transaction.id)?.amount ?? Math.abs(Number(transaction.amount)),
+      calendarDay: canonicalRows.get(transaction.id)?.date,
+      type: canonicalRows.get(transaction.id)?.type ?? transaction.type,
+      category: {name:canonicalRows.get(transaction.id)?.category ?? transaction.category?.name ?? "Uncategorized"},
     }));
 
     const analysisAnchorDate = requestedMonth ? new Date(requestedMonth.end.getTime() - 1) : normalizedAllTransactions[0]?.date ?? now;
@@ -1395,7 +1335,7 @@ export async function POST(request: Request) {
         ? previousWindowTransactions
         : normalizedAllTransactions.filter((transaction) => transaction.date <= currentWindowStart);
 
-    const visualization = buildAdviserChart(latestIncomingQuestion, activeTransactions);
+    const visualization = buildAdviserChart(latestIncomingQuestion, activeTransactions, requestedMonth ? {from:requestedMonth.start.toISOString(),through:new Date(requestedMonth.end.getTime()-1).toISOString()} : undefined);
     const currentSummary = buildTransactionSummary(activeTransactions);
     const previousSummary = buildTransactionSummary(comparisonWindowTransactions);
     const allSummary = buildTransactionSummary(normalizedAllTransactions);
@@ -1634,7 +1574,7 @@ export async function POST(request: Request) {
     const totalAccountMagnitude = accountAnalysisAccounts.reduce((sum, account) => sum + Math.abs(account.balance), 0);
     const spendableAccountBalance = accountAnalysisAccounts
       .filter((account) => ["bank", "wallet", "cash"].includes(account.type))
-      .reduce((sum, account) => sum + account.balance, 0);
+      .reduce((sum, account) => sum + Math.max(0, account.balance), 0);
     const liabilityAccountBalance = accountAnalysisAccounts
       .filter((account) => ["credit_card", "loan", "mortgage", "line_of_credit", "payable", "bnpl"].includes(account.type))
       .reduce((sum, account) => sum + Math.abs(account.balance), 0);

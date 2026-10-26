@@ -1,3 +1,5 @@
+import { calendarQueryRange } from "./calendar-query-window";
+import { reportDay } from "../../shared/reports/analysis";
 import { Prisma } from "@prisma/client";
 import { includedTransactionWhere } from "./transaction-review-inclusion-where";
 
@@ -305,7 +307,7 @@ const buildMerchantFilters = (merchantFilters: string[]) =>
 export const buildTransactionQueryWhere = (
   workspaceId: string,
   filters: TransactionQueryFilters,
-  options: { includeExcluded?: boolean } = {}
+  options: { includeExcluded?: boolean; timeZone?: string } = {}
 ): Prisma.TransactionWhereInput => {
   // History includes exclusions; financial consumers retain the active-only default.
   const where = options.includeExcluded
@@ -325,7 +327,7 @@ export const buildTransactionQueryWhere = (
   const typeFilters = filters.typeFilters ?? [];
   const merchantFilters = (filters.merchantFilters ?? []).filter((value) => normalizeFilterValue(value));
   const dateFilterMode = filters.dateFilterMode ?? "ltd";
-  const anchor = filters.dateFilterAnchor ?? new Date().toISOString().slice(0, 10);
+  const anchor = filters.dateFilterAnchor ?? reportDay(new Date(), options.timeZone ?? "UTC");
 
   if (query) {
     appendAndFilter(where, {
@@ -410,7 +412,7 @@ export const buildTransactionQueryWhere = (
                     lte: filters.customEnd ? endOfDayUtc(filters.customEnd) : undefined,
                   };
 
-    where.date = dateRange;
+    where.date = options.timeZone ? calendarQueryRange(dateRange, options.timeZone) : dateRange;
   }
 
   const amountMinValue = filters.amountMin?.trim() ?? "";

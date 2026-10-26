@@ -195,7 +195,7 @@
     "qa:plan-admin": "tsx scripts/plan-admin-analytics-regression.ts && tsx scripts/admin-bank-links-regression.ts",
     "qa:switch-campaign": "tsx scripts/switch-campaign-regression.ts",
     "qa:ai-consent": "tsx scripts/ai-consent-regression.ts",
-    "qa:adviser-reliability": "tsx scripts/adviser-reliability-regression.ts",
+    "qa:adviser-reliability": "tsx scripts/adviser-reliability-regression.ts && tsx scripts/adviser-facts-regression.ts",
     "qa:indonesian-import": "tsx scripts/indonesian-import-regression.ts && tsx scripts/indonesian-import-extended-regression.ts && tsx scripts/indonesian-layout-regression.ts && NODE_OPTIONS=--conditions=react-server tsx scripts/indonesian-enrichment-regression.ts",
     "qa:regional-corpus": "NODE_OPTIONS=--conditions=react-server tsx scripts/korea-indonesia-corpus-regression.ts",
     "qa:public-receipt-corpus": "NODE_OPTIONS=--conditions=react-server tsx scripts/korea-indonesia-public-receipt-regression.ts",

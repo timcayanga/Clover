@@ -32,7 +32,11 @@ assert.doesNotMatch(
   /transactions:\s*\{/,
   "Adviser must not load transaction history once per account before loading its bounded analysis set."
 );
-assert.match(adviserRouteSource, /const transactionsByAccountId = new Map/);
+assert.match(adviserRouteSource, /const accountFactsById = new Map/);
+assert.match(adviserRouteSource, /loadAdviserAccountFacts\(workspace\.id\)/, "Balances must use one complete Profile-scoped projection rather than the truncated prompt history.");
+const adviserFactsSource = readSource("lib/adviser-facts.server.ts");
+assert.match(adviserFactsSource, /prisma\.account\.findMany\(\{ where: \{ workspaceId \}/);
+assert.doesNotMatch(adviserFactsSource, /accounts\.map\(async/, "Account balances must not perform a separate database read per account.");
 assert.match(adviserRouteSource, /accountId: true/);
 
 const importParserSource = readSource("lib/openai-import-parser.ts");

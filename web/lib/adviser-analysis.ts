@@ -1,10 +1,10 @@
 import { formatCurrencyAmount } from "@/lib/currency-format";
 
 /** Keep arithmetic in one currency. Never relabel mixed raw amounts as PHP. */
-export function adviserCurrency(question: string, currencies: string[]) {
+export function adviserCurrency(question: string, currencies: string[], preferredCurrency = "PHP") {
   const explicit = question.match(/\b(PHP|USD|EUR|GBP|SGD|HKD|JPY|AUD|CAD|CNY|INR|MYR|IDR|THB|VND|AED)\b/i)?.[1]?.toUpperCase();
   const available = [...new Set(currencies.map(c => c.toUpperCase()))].sort();
-  return explicit ?? (question.includes("₱") ? "PHP" : available.includes("PHP") ? "PHP" : available[0] ?? "PHP");
+  return explicit ?? (question.includes("₱") ? "PHP" : available.includes(preferredCurrency) ? preferredCurrency : available[0] ?? preferredCurrency);
 }
 
 export function adviserMonthRange(question: string, now: Date) {

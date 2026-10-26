@@ -1,3 +1,4 @@
+import { normalizeRegionalPreferences } from "@/lib/regional-preferences";
 import { manualTransactionName, manualTransactionToday, validManualTransactionDate } from "../../../../shared/manual-transaction-defaults";
 import { actionableReviewIds } from "@/lib/actionable-transaction-review";
 import { includedTransactionWhere } from "@/lib/transaction-review-inclusion-where";
@@ -772,12 +773,14 @@ export async function GET(request: Request) {
     };
     const categoryFilterNames = await resolveCategoryFilterNames(workspaceId, filters.categoryIds);
     const hasEffectiveCategoryFilters = categoryFilterNames.size > 0;
+    const regionalUser = filters.dateFilterMode && filters.dateFilterMode !== "ltd" ? await prisma.user.findUnique({where:{clerkUserId:userId},select:{regionalPreferences:true}}) : null;
+    const filterTimeZone = normalizeRegionalPreferences(regionalUser?.regionalPreferences).timeZone;
     const where = buildTransactionQueryWhere(
       workspaceId,
       { ...filters, ...(hasEffectiveCategoryFilters ? { categoryIds: [] } : {}),
         // Review is evaluated after display mapping, just like the warning icon.
         ...(filters.reviewFilter === "pending" ? { reviewFilter: "" } : {}) },
-      { includeExcluded: true }
+      { includeExcluded: true, timeZone: filterTimeZone }
     );
     const visibleWhere = {
       ...where,
@@ -963,6 +966,8 @@ export async function GET(request: Request) {
                   { merchantRaw: { contains: "payment", mode: "insensitive" } },
                   { merchantClean: { contains: "payment", mode: "insensitive" } },
                   { description: { contains: "payment", mode: "insensitive" } },
+                  { rawPayload: { path: ["transferPairId"], not: Prisma.AnyNull } },
+                  { rawPayload: { path: ["splitBillId"], not: Prisma.AnyNull } },
                   { merchantRaw: { contains: "repayment", mode: "insensitive" } },
                   { merchantClean: { contains: "repayment", mode: "insensitive" } },
                   { description: { contains: "repayment", mode: "insensitive" } },
@@ -982,6 +987,8 @@ export async function GET(request: Request) {
             merchantClean: true,
             description: true,
             rawPayload: true,
+            normalizedPayload: true,
+            reviewStatus: true,
             category: { select: { name: true } },
             account: { select: { type: true, institution: true } },
           },
@@ -995,6 +1002,8 @@ export async function GET(request: Request) {
               { merchantRaw: { contains: "payment", mode: "insensitive" } },
               { merchantClean: { contains: "payment", mode: "insensitive" } },
               { description: { contains: "payment", mode: "insensitive" } },
+              { rawPayload: { path: ["transferPairId"], not: Prisma.AnyNull } },
+              { rawPayload: { path: ["splitBillId"], not: Prisma.AnyNull } },
               { merchantRaw: { contains: "repayment", mode: "insensitive" } },
               { merchantClean: { contains: "repayment", mode: "insensitive" } },
               { description: { contains: "repayment", mode: "insensitive" } },
@@ -1012,6 +1021,8 @@ export async function GET(request: Request) {
             merchantClean: true,
             description: true,
             rawPayload: true,
+            normalizedPayload: true,
+            reviewStatus: true,
             category: { select: { name: true } },
             account: { select: { type: true, institution: true } },
           },
@@ -1232,6 +1243,8 @@ export async function GET(request: Request) {
             { merchantRaw: { contains: "payment", mode: "insensitive" } },
             { merchantClean: { contains: "payment", mode: "insensitive" } },
             { description: { contains: "payment", mode: "insensitive" } },
+            { rawPayload: { path: ["transferPairId"], not: Prisma.AnyNull } },
+            { rawPayload: { path: ["splitBillId"], not: Prisma.AnyNull } },
             { merchantRaw: { contains: "repayment", mode: "insensitive" } },
             { merchantClean: { contains: "repayment", mode: "insensitive" } },
             { description: { contains: "repayment", mode: "insensitive" } },
@@ -1249,6 +1262,8 @@ export async function GET(request: Request) {
           merchantClean: true,
           description: true,
           rawPayload: true,
+          normalizedPayload: true,
+          reviewStatus: true,
           category: { select: { name: true } },
           account: { select: { type: true, institution: true } },
         },
@@ -1319,6 +1334,8 @@ export async function GET(request: Request) {
           merchantClean: transaction?.merchantClean ?? mappedTransaction.merchantClean,
           description: transaction?.description ?? mappedTransaction.description,
           rawPayload: transaction?.rawPayload ?? mappedTransaction.rawPayload,
+          normalizedPayload: transaction?.normalizedPayload,
+          reviewStatus: transaction?.reviewStatus,
         };
       });
     const summaryCandidateById = new Map<string, TransactionSummaryCandidate>(
