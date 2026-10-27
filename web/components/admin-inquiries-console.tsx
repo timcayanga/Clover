@@ -208,7 +208,12 @@ function InquiryCase({
   const [revision, setRevision] = useState(0);
   const [resolutionId, setResolutionId] = useState<string | null>(null);
   const [resolutionNote, setResolutionNote] = useState("");
-  const [verifiedNotSent, setVerifiedNotSent] = useState(false);
+  const [duplicateRiskAccepted, setDuplicateRiskAccepted] = useState(false);
+  const [resolutionVersion, setResolutionVersion] = useState<string | null>(null);
+  const retryPanel = useRef<HTMLElement>(null);
+  useEffect(() => {
+    if (resolutionId) retryPanel.current?.focus();
+  }, [resolutionId]);
   const [olderCursor, setOlderCursor] = useState<string | null>(null);
   const [historyLoading, setHistoryLoading] = useState(false);
   const [messagesLoading, setMessagesLoading] = useState(true);
@@ -257,6 +262,7 @@ function InquiryCase({
   };
   const editBody = (value: string) => {
     setBody(value);
+    setResolutionId(null);
     setPreview(false);
     attempt.current = null;
   };
@@ -296,7 +302,7 @@ function InquiryCase({
       setFeedback(
         message.status === "failed"
           ? mailFailureText(message.deliveryErrorCode)
-          : mailFailureText("delivery_unknown"),
+          : "Delivery was not confirmed. Your reply is saved. Choose Retry reply to decide whether to send it again.",
       );
       attempt.current = message.idempotencyKey;
       setPreview(false);
@@ -307,7 +313,22 @@ function InquiryCase({
     message.subject === subject.trim() && message.body === body.trim() &&
     ["sent", "unknown", "sending", "pending", "failed"].includes(message.status),
   );
-  const retryReply = async (message: Message, verified = false) => {
+  const canRetryUncertain = (message: Message) => !!message.updatedAt &&
+    (message.status === "unknown" || (message.status === "sending" &&
+      new Date(message.updatedAt).getTime() < Date.now() - 5 * 60_000));
+  const openRetry = (message: Message) => {
+    if (kind === "note") {
+      noteDraft.current = body;
+      setBody(replyDraft.current);
+      setKind("reply");
+    }
+    setResolutionId(message.id);
+    setResolutionVersion(message.updatedAt ?? null);
+    setResolutionNote("");
+    setDuplicateRiskAccepted(false);
+  };
+  const retryTarget = messages.find((message) => message.id === resolutionId);
+  const retryReply = async (message: Message, uncertain = false) => {
     const result = await api(
       `/api/admin/inquiries/${item.id}/messages`,
       "POST",
@@ -317,10 +338,16 @@ function InquiryCase({
         body: message.body,
         idempotencyKey: message.idempotencyKey,
         retry: true,
-        ...(verified ? { confirmedNotSent: true, resolutionNote } : {}),
+        ...(uncertain ? {
+          acknowledgeDuplicateRisk: true,
+          retryVersion: resolutionVersion,
+          ...(resolutionNote.trim() ? { resolutionNote: resolutionNote.trim() } : {}),
+        } : {}),
       },
     );
     setMessages((current) => current.map((row) => row.id === result.message.id ? result.message : row));
+    setResolutionId(null);
+    setDuplicateRiskAccepted(false);
     if (result.message.status === "sent") {
       setFeedback(`Sent to ${item.email}. Zoho accepted the email; inbox delivery and reading are not tracked.`);
       setResolutionId(null);
@@ -513,83 +540,29 @@ function InquiryCase({
             ) : null}
             {message.kind === "reply" &&
             ["failed", "unknown"].includes(message.status) ? (
-              <p>{mailFailureText(message.deliveryErrorCode)}</p>
+              <p>{message.status === "unknown"
+                ? "The earlier delivery was not confirmed. You can explicitly retry this reply, with a possible duplicate-delivery risk."
+                : mailFailureText(message.deliveryErrorCode)}</p>
             ) : null}
             {canWrite &&
             message.actorId === actor &&
             message.kind === "reply" &&
-            message.status === "failed" ? (
+            ["failed", "pending"].includes(message.status) ? (
               <button
                 type="button"
                 disabled={busy}
                 onClick={() => void run(() => retryReply(message))}
               >
-                Retry saved reply
+                {message.status === "pending" ? "Send saved reply" : "Retry saved reply"}
               </button>
             ) : null}
             {canWrite &&
             message.actorId === actor &&
             message.kind === "reply" &&
-            message.status === "unknown" ? (
-              <>
-                <button
-                  type="button"
-                  disabled={busy}
-                  onClick={() => {
-                    setResolutionId(message.id);
-                    setResolutionNote("");
-                    setVerifiedNotSent(false);
-                  }}
-                >
-                  Resolve delivery before retrying
-                </button>
-                {resolutionId === message.id ? (
-                  <div>
-                    <p>
-                      Check Zoho’s delivery records first. Retrying sends the
-                      saved reply above.
-                    </p>
-                    <label>
-                      <input
-                        type="checkbox"
-                        checked={verifiedNotSent}
-                        onChange={(event) =>
-                          setVerifiedNotSent(event.target.checked)
-                        }
-                      />
-                      I checked Zoho and confirmed this reply was not sent.
-                    </label>
-                    <label>
-                      Delivery check notes
-                      <textarea
-                        value={resolutionNote}
-                        onChange={(event) =>
-                          setResolutionNote(event.target.value)
-                        }
-                        maxLength={1000}
-                      />
-                    </label>
-                    <button
-                      type="button"
-                      disabled={
-                        busy ||
-                        !verifiedNotSent ||
-                        resolutionNote.trim().length < 10
-                      }
-                      onClick={() => void run(() => retryReply(message, true))}
-                    >
-                      Retry verified unsent reply
-                    </button>
-                    <button
-                      type="button"
-                      disabled={busy}
-                      onClick={() => setResolutionId(null)}
-                    >
-                      Cancel
-                    </button>
-                  </div>
-                ) : null}
-              </>
+            canRetryUncertain(message) ? (
+              <button type="button" disabled={busy} onClick={() => openRetry(message)}>
+                Retry reply…
+              </button>
             ) : null}
           </article>
         ))}
@@ -605,6 +578,7 @@ function InquiryCase({
                 noteDraft.current = body;
                 setBody(replyDraft.current);
                 setKind("reply");
+                setResolutionId(null);
                 setPreview(false);
                 attempt.current = null;
               }}
@@ -619,6 +593,7 @@ function InquiryCase({
                 replyDraft.current = body;
                 setBody(noteDraft.current);
                 setKind("note");
+                setResolutionId(null);
                 setPreview(false);
                 attempt.current = null;
               }}
@@ -636,6 +611,7 @@ function InquiryCase({
                 maxLength={200}
                 onChange={(e) => {
                   setSubject(e.target.value);
+                  setResolutionId(null);
                   setPreview(false);
                   attempt.current = null;
                 }}
@@ -656,10 +632,15 @@ function InquiryCase({
             <div className="admin-governance__tabs admin-reply-actions">
             <button
               className="admin-reply-send"
-              disabled={busy || messagesLoading || !subject.trim() || !body.trim() || !!matchingReply}
-              onClick={() => void run(send)}
+              disabled={busy || messagesLoading || !subject.trim() || !body.trim() ||
+                (!!matchingReply && !["failed", "pending"].includes(matchingReply.status) && !canRetryUncertain(matchingReply))}
+              onClick={() => matchingReply
+                ? ["failed", "pending"].includes(matchingReply.status)
+                  ? void run(() => retryReply(matchingReply))
+                  : openRetry(matchingReply)
+                : void run(send)}
             >
-              {busy ? "Working…" : "Send reply"}
+              {busy ? "Working…" : matchingReply && !["sent", "pending"].includes(matchingReply.status) ? "Retry reply…" : "Send reply"}
             </button>
             <button
               disabled={busy}
@@ -693,7 +674,38 @@ function InquiryCase({
           {kind === "reply" && matchingReply ? (
             <p role="status">{matchingReply.status === "sent"
               ? `This reply was already sent to ${item.email}. See the sent message in Conversation above, or edit the draft to write a new reply.`
-              : `This reply already has a delivery attempt: ${replyStatus(matchingReply.status)}. Use its delivery controls in Conversation above to check or retry it safely.`}</p>
+              : matchingReply.status === "pending"
+                ? "This saved reply hasn’t been sent. Choose Send reply to send it."
+                : matchingReply.status === "failed"
+                ? "The earlier attempt was not sent. Retry reply sends the saved reply again."
+                : canRetryUncertain(matchingReply)
+                  ? "The earlier attempt has no delivery confirmation. Choose Retry reply to decide whether to send it again."
+                  : "This reply is still processing. Refresh the case before trying again."}</p>
+          ) : null}
+          {kind === "reply" && retryTarget ? (
+            <section aria-label="Confirm reply retry" className="admin-governance__card" tabIndex={-1} ref={retryPanel}>
+              <h3>Retry this reply?</h3>
+              <p>To: {item.email}</p>
+              <strong>{retryTarget.subject}</strong>
+              <p style={{ whiteSpace: "pre-wrap" }}>{retryTarget.body}</p>
+              <p>We couldn’t confirm the earlier delivery. Sending again may deliver a duplicate email. This does not mark the earlier attempt as verified unsent.</p>
+              <label>
+                <input type="checkbox" checked={duplicateRiskAccepted}
+                  onChange={(event) => setDuplicateRiskAccepted(event.target.checked)} />
+                I understand this may send a duplicate email.
+              </label>
+              <label>Reason (optional)
+                <textarea value={resolutionNote} maxLength={1000}
+                  onChange={(event) => setResolutionNote(event.target.value)} />
+              </label>
+              <div className="admin-governance__tabs">
+                <button className="admin-reply-send" disabled={busy || !duplicateRiskAccepted || !resolutionVersion}
+                  onClick={() => void run(() => retryReply(retryTarget, true))}>
+                  Send reply again
+                </button>
+                <button disabled={busy} onClick={() => setResolutionId(null)}>Cancel retry</button>
+              </div>
+            </section>
           ) : null}
           {preview ? (
             <section>

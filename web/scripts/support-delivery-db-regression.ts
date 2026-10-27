@@ -237,6 +237,73 @@ async function main() {
       addSupportMessage(row.id, "other-actor", ambiguousInput),
       /different message/,
     );
+    // An operator may explicitly accept duplicate risk without falsely asserting
+    // provider verification. The consent is tied to exactly one saved attempt.
+    failure = { code: "ETIMEDOUT", command: "DATA" };
+    const riskInput = messageInput();
+    const riskUnknown = await addSupportMessage(row.id, "support-qa", riskInput);
+    const riskCount = sends;
+    const consent = { ...riskInput, retry: true, acknowledgeDuplicateRisk: true,
+      retryVersion: riskUnknown.updatedAt.toISOString() };
+    const missingVersion = await replyRoute.POST(request({ ...consent, retryVersion: undefined }),
+      { params: Promise.resolve({ inquiryId: row.id }) });
+    assert.equal(missingVersion.status, 400);
+    const conflictingIntent = await replyRoute.POST(request({ ...consent, confirmedNotSent: true,
+      resolutionNote: "This is not provider verification." }),
+      { params: Promise.resolve({ inquiryId: row.id }) });
+    assert.equal(conflictingIntent.status, 400);
+    await addSupportMessage(row.id, "support-qa", { ...riskInput, retry: true });
+    await addSupportMessage(row.id, "support-qa", { ...consent, retryVersion: new Date(0).toISOString() });
+    assert.equal(sends, riskCount, "No acknowledgement or stale acknowledgement cannot send");
+    const riskResponse = await replyRoute.POST(request(consent),
+      { params: Promise.resolve({ inquiryId: row.id }) });
+    assert.equal(riskResponse.status, 200);
+    const riskAgain = (await riskResponse.json()).message;
+    assert.equal(riskAgain.status, "unknown");
+    assert.equal(sends, riskCount + 1);
+    await addSupportMessage(row.id, "support-qa", consent);
+    assert.equal(sends, riskCount + 1, "Replaying old consent after another uncertain result cannot resend");
+    const audit = await db.adminSupportMessage.findMany({ where: {
+      inquiryId: row.id, kind: "note", body: { contains: `possible duplicate delivery: ${riskUnknown.id}` },
+    } });
+    assert.equal(audit.length, 1);
+    assert(audit[0].body.includes("was not verified"));
+    assert(!audit[0].body.includes("Verified not sent:"));
+    assert.equal(audit[0].actorId, "support-qa");
+    await assert.rejects(addSupportMessage(row.id, "other-actor", consent), /different message/);
+    failure = null;
+    await Promise.all(Array.from({ length: 6 }, () => addSupportMessage(row.id, "support-qa", {
+      ...consent, retryVersion: riskAgain.updatedAt,
+    })));
+    assert.equal(sends, riskCount + 2, "Concurrent explicit retries claim one send");
+    await addSupportMessage(row.id, "support-qa", { ...consent, retryVersion: riskAgain.updatedAt });
+    assert.equal(sends, riskCount + 2, "Accepted mail cannot be replayed");
+    const activeInput = messageInput();
+    failure = { code: "ETIMEDOUT", command: "DATA" };
+    const activeUnknown = await addSupportMessage(row.id, "support-qa", activeInput);
+    const active = await db.adminSupportMessage.update({ where: { id: activeUnknown.id },
+      data: { status: "sending" } });
+    const activeCount = sends;
+    await addSupportMessage(row.id, "support-qa", { ...activeInput, retry: true,
+      acknowledgeDuplicateRisk: true, retryVersion: active.updatedAt.toISOString() });
+    assert.equal(sends, activeCount, "Consent cannot interrupt an active send");
+    const stale = await db.adminSupportMessage.update({ where: { id: active.id },
+      data: { updatedAt: new Date(Date.now() - 6 * 60_000) } });
+    failure = null;
+    await addSupportMessage(row.id, "support-qa", { ...activeInput, retry: true,
+      acknowledgeDuplicateRisk: true, retryVersion: stale.updatedAt.toISOString() });
+    assert.equal(sends, activeCount + 1, "Stale interrupted sending can be retried with current consent");
+    failure = { code: "ETIMEDOUT", command: "DATA" };
+    const rejectionInput = messageInput();
+    const rejectionUnknown = await addSupportMessage(row.id, "support-qa", rejectionInput);
+    failure = { code: "EAUTH" };
+    const rejectionConsent = { ...rejectionInput, retry: true, acknowledgeDuplicateRisk: true,
+      retryVersion: rejectionUnknown.updatedAt.toISOString(), resolutionNote: "OK" };
+    assert.equal((await addSupportMessage(row.id, "support-qa", rejectionConsent)).status, "failed");
+    const rejectedCount = sends;
+    await addSupportMessage(row.id, "support-qa", rejectionConsent);
+    assert.equal(sends, rejectedCount, "Old consent cannot retry a newer definite failure");
+    failure = null;
     const concurrent = messageInput();
     pause = true;
     const first = addSupportMessage(row.id, "support-qa", concurrent);
@@ -262,14 +329,18 @@ async function main() {
     );
     const ackInput = messageInput();
     const tx = db.$transaction.bind(db);
-    (db as any).$transaction = async () => {
-      throw Error("Fixture DB acknowledgement failed");
+    let transactionCalls = 0;
+    const beforeAcknowledgement = sends;
+    (db as any).$transaction = async (work: any) => {
+      if (++transactionCalls === 2) throw Error("Fixture DB acknowledgement failed");
+      return tx(work);
     };
     await assert.rejects(
       addSupportMessage(row.id, "support-qa", ackInput),
       /acknowledgement/,
     );
     (db as any).$transaction = tx;
+    assert.equal(sends, beforeAcknowledgement + 1, "Acknowledgement failure occurs after SMTP accepted the message");
     const ackCount = sends;
     assert.equal(
       (await addSupportMessage(row.id, "support-qa", ackInput)).status,

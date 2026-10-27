@@ -12,9 +12,16 @@ export const supportMessageSchema = z
     idempotencyKey: z.string().uuid(),
     retry: z.boolean().optional(),
     confirmedNotSent: z.boolean().optional(),
-    resolutionNote: z.string().trim().min(10).max(1000).optional(),
+    acknowledgeDuplicateRisk: z.boolean().optional(),
+    retryVersion: z.string().datetime().optional(),
+    resolutionNote: z.string().trim().min(1).max(1000).optional(),
   })
-  .strict();
+  .strict()
+  .refine((input) => !input.acknowledgeDuplicateRisk ||
+    (input.kind === "reply" && input.retry && !!input.retryVersion && !input.confirmedNotSent),
+  "An uncertain retry requires the saved attempt version and explicit retry intent.")
+  .refine((input) => !input.confirmedNotSent || (input.resolutionNote?.length ?? 0) >= 10,
+    "Verified non-delivery requires verification notes of at least 10 characters.");
 export async function addSupportMessage(
   inquiryId: string,
   actorId: string,
@@ -81,6 +88,11 @@ export async function addSupportMessage(
     }
   }
   if (input.kind === "note" || message.status === "sent") return message;
+  const ambiguousRetry = !!(input.retry && input.acknowledgeDuplicateRisk &&
+    input.retryVersion === message.updatedAt.toISOString() &&
+    (message.status === "unknown" || (message.status === "sending" &&
+      message.updatedAt.getTime() < Date.now() - 5 * 60_000)));
+  if (input.acknowledgeDuplicateRisk && !ambiguousRetry) return message;
   if (
     input.retry &&
     input.confirmedNotSent &&
@@ -120,22 +132,32 @@ export async function addSupportMessage(
   }
   if (
     message.status !== "pending" &&
-    !(input.retry && message.status === "failed")
+    !(input.retry && message.status === "failed") && !ambiguousRetry
   )
     return message;
   const messageId =
     message.mailMessageId ?? `<support-${message.id}@clover.ph>`;
-  const claim = await prisma.adminSupportMessage.updateMany({
-    where: {
-      id: message.id,
-      status: message.status,
-      updatedAt: message.updatedAt,
-    },
-    data: {
-      status: "sending",
-      deliveryErrorCode: null,
-      mailMessageId: messageId,
-    },
+  const claimMessage = message;
+  const claim = await prisma.$transaction(async (tx) => {
+    const claimed = await tx.adminSupportMessage.updateMany({
+      where: {
+        id: claimMessage.id,
+        status: claimMessage.status,
+        updatedAt: claimMessage.updatedAt,
+      },
+      data: {
+        status: "sending",
+        deliveryErrorCode: null,
+        mailMessageId: messageId,
+      },
+    });
+    if (claimed.count && ambiguousRetry)
+      await tx.adminSupportMessage.create({data: {
+        inquiryId, actorId, kind: "note", status: "internal",
+        body: `Retry authorized despite possible duplicate delivery: ${claimMessage.id}. Prior outcome ${claimMessage.status} at ${claimMessage.updatedAt.toISOString()} was not verified. ${input.resolutionNote ?? "Operator explicitly accepted the duplicate-delivery risk."}`,
+        idempotencyKey: `delivery-risk-retry:${claimMessage.id}:${claimMessage.updatedAt.toISOString()}`,
+      }});
+    return claimed;
   });
   if (!claim.count)
     return prisma.adminSupportMessage.findUniqueOrThrow({
