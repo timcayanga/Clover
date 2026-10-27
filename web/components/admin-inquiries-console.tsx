@@ -2,6 +2,14 @@
 import { useEffect, useRef, useState } from "react";
 import { mailFailureText } from "@/lib/mail-delivery";
 import type { AdminContactInquiry } from "@/lib/contact-inquiries";
+const inquiryTime = (value: Date | string) =>
+  new Intl.DateTimeFormat("en-PH", {
+    dateStyle: "medium", timeStyle: "short", timeZone: "Asia/Manila",
+  }).format(new Date(value)) + " PHT";
+const replyStatus = (status: string) => ({
+  sent: "Sent", failed: "Not sent", unknown: "Delivery uncertain",
+  sending: "Sending", pending: "Waiting to send", internal: "Saved internally",
+}[status] ?? status);
 type Member = { clerkUserId: string; role: string };
 type Message = {
   id: string;
@@ -14,6 +22,7 @@ type Message = {
   idempotencyKey: string;
   actorId: string;
   createdAt: string;
+  updatedAt?: string;
 };
 async function api(path: string, method = "GET", body?: unknown) {
   const response = await fetch(path, {
@@ -132,6 +141,8 @@ export function AdminInquiriesConsole({
               {item.name} · {item.status} · {item.priority}
               <br />
               {item.email}
+              <br />
+              <small>Received {inquiryTime(item.createdAt)}</small>
             </button>
           ))}
           {!loading && !visible.length ? (
@@ -200,6 +211,7 @@ function InquiryCase({
   const [verifiedNotSent, setVerifiedNotSent] = useState(false);
   const [olderCursor, setOlderCursor] = useState<string | null>(null);
   const [historyLoading, setHistoryLoading] = useState(false);
+  const [messagesLoading, setMessagesLoading] = useState(true);
   const replyDraft = useRef(item.adminReplyBody ?? ""),
     noteDraft = useRef("");
   const pending = useRef(false),
@@ -215,6 +227,9 @@ function InquiryCase({
       })
       .catch((e) => {
         if (current) setError(e.message);
+      })
+      .finally(() => {
+        if (current) setMessagesLoading(false);
       });
     return () => {
       current = false;
@@ -246,7 +261,6 @@ function InquiryCase({
     attempt.current = null;
   };
   const send = async () => {
-    if (kind === "reply" && !preview) return;
     attempt.current ??= crypto.randomUUID();
     const result = await api(
       `/api/admin/inquiries/${item.id}/messages`,
@@ -259,6 +273,7 @@ function InquiryCase({
       },
     );
     const message = result.message as Message;
+    setMessages((current) => [...current.filter((row) => row.id !== message.id), message]);
     if (["sent", "internal"].includes(message.status)) {
       if (kind === "reply") replyDraft.current = "";
       else noteDraft.current = "";
@@ -267,7 +282,7 @@ function InquiryCase({
       attempt.current = null;
       setFeedback(
         kind === "reply"
-          ? "Reply accepted by the mail server."
+          ? `Sent to ${item.email}. Zoho accepted the email; inbox delivery and reading are not tracked.`
           : "Internal note saved.",
       );
       if (kind === "reply")
@@ -287,6 +302,11 @@ function InquiryCase({
       setPreview(false);
     }
   };
+  const matchingReply = messages.find((message) =>
+    message.kind === "reply" && message.actorId === actor &&
+    message.subject === subject.trim() && message.body === body.trim() &&
+    ["sent", "unknown", "sending", "pending", "failed"].includes(message.status),
+  );
   const retryReply = async (message: Message, verified = false) => {
     const result = await api(
       `/api/admin/inquiries/${item.id}/messages`,
@@ -300,8 +320,9 @@ function InquiryCase({
         ...(verified ? { confirmedNotSent: true, resolutionNote } : {}),
       },
     );
+    setMessages((current) => current.map((row) => row.id === result.message.id ? result.message : row));
     if (result.message.status === "sent") {
-      setFeedback("Reply accepted by the mail server.");
+      setFeedback(`Sent to ${item.email}. Zoho accepted the email; inbox delivery and reading are not tracked.`);
       setResolutionId(null);
       onUpdate({
         ...item,
@@ -319,11 +340,12 @@ function InquiryCase({
           {item.email} · {item.status}
         </p>
         <p>Case {item.id}</p>
+        <p>Received <time dateTime={new Date(item.createdAt).toISOString()}>{inquiryTime(item.createdAt)}</time></p>
         <div aria-label="Inquiry email notification">
-          <h3>Email notification to hello@clover.ph</h3>
+          <h3>Staff inbox copy · hello@clover.ph</h3>
           <p>
             {item.notificationStatus === "sent"
-              ? "Accepted by the mail server."
+              ? "Sent to the staff inbox. This is a copy of the inquiry, not a reply to the customer."
               : item.notificationStatus === "failed"
                 ? mailFailureText(item.notificationErrorCode)
                 : item.notificationStatus === "unknown"
@@ -435,6 +457,7 @@ function InquiryCase({
         <h2>Conversation</h2>
         <article>
           <strong>{item.name} · Customer</strong>
+          <p>Received <time dateTime={new Date(item.createdAt).toISOString()}>{inquiryTime(item.createdAt)}</time></p>
           <p style={{ whiteSpace: "pre-wrap" }}>{item.message}</p>
           {item.attachment ? (
             <a
@@ -476,11 +499,13 @@ function InquiryCase({
           <article key={message.id}>
             <strong>
               {message.kind === "reply" ? "Reply" : "Internal note"} ·{" "}
-              {message.status}
+              {replyStatus(message.status)}
             </strong>
             <p>
-              {message.actorId} · {new Date(message.createdAt).toLocaleString()}
+              {message.actorId} · Created {inquiryTime(message.createdAt)}
             </p>
+            {message.updatedAt ? <p>Status updated {inquiryTime(message.updatedAt)}</p> : null}
+            {message.status === "sent" ? <p>To: {item.email} · Accepted by Zoho. Inbox delivery and reading are not tracked.</p> : null}
             {message.subject ? <h3>{message.subject}</h3> : null}
             <p style={{ whiteSpace: "pre-wrap" }}>{message.body}</p>
             {message.mailMessageId ? (
@@ -601,6 +626,7 @@ function InquiryCase({
               Internal note
             </button>
           </div>
+          <p>{kind === "reply" ? `To: ${item.email}` : "Only your team can see this note. It will not be emailed."}</p>
           {kind === "reply" ? (
             <label>
               Subject
@@ -627,6 +653,14 @@ function InquiryCase({
             />
           </label>
           {kind === "reply" ? (
+            <div className="admin-governance__tabs admin-reply-actions">
+            <button
+              className="admin-reply-send"
+              disabled={busy || messagesLoading || !subject.trim() || !body.trim() || !!matchingReply}
+              onClick={() => void run(send)}
+            >
+              {busy ? "Working…" : "Send reply"}
+            </button>
             <button
               disabled={busy}
               onClick={() =>
@@ -641,14 +675,13 @@ function InquiryCase({
             >
               Save draft
             </button>
-          ) : null}
-          {kind === "reply" ? (
             <button
               disabled={busy || !subject.trim() || !body.trim()}
               onClick={() => setPreview(true)}
             >
               Preview reply
             </button>
+            </div>
           ) : (
             <button
               disabled={busy || !body.trim()}
@@ -657,17 +690,19 @@ function InquiryCase({
               Save internal note
             </button>
           )}
+          {kind === "reply" && matchingReply ? (
+            <p role="status">{matchingReply.status === "sent"
+              ? `This reply was already sent to ${item.email}. See the sent message in Conversation above, or edit the draft to write a new reply.`
+              : `This reply already has a delivery attempt: ${replyStatus(matchingReply.status)}. Use its delivery controls in Conversation above to check or retry it safely.`}</p>
+          ) : null}
           {preview ? (
             <section>
               <h3>Reply preview</h3>
               <p>To: {item.email}</p>
               <strong>{subject}</strong>
               <p style={{ whiteSpace: "pre-wrap" }}>{body}</p>
-              <button disabled={busy} onClick={() => void run(send)}>
-                {busy ? "Sending…" : "Send this reply"}
-              </button>
               <button disabled={busy} onClick={() => setPreview(false)}>
-                Cancel
+                Close preview
               </button>
             </section>
           ) : null}

@@ -928,6 +928,8 @@ html[data-theme="dark"] .admin-adoption-range input { background: #0b1521; color
 .admin-governance button { cursor: pointer; }
 .admin-governance button:disabled { opacity: .5; cursor: default; }
 .admin-governance button[aria-pressed=true] { background: #007f90; color: white; }
+.admin-governance .admin-reply-send { background: #007f90; color: #fff; border-color: #007f90; font-weight: 600; }
+.admin-reply-actions { align-items: center; }
 .admin-governance__table { overflow-x: auto; }
 .admin-governance table { width: 100%; border-collapse: collapse; }
 .admin-governance th, .admin-governance td { text-align: left; padding: 14px; border-bottom: 1px solid var(--border, #dbe3e8); }
