@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
 import { createRequire } from "node:module";
 import { randomUUID } from "node:crypto";
+import { readFileSync } from "node:fs";
+import { supportMessageSummary } from "../lib/support-message-display";
 import { mailFailure, mailFailureText } from "../lib/mail-delivery";
 const url = new URL(process.env.DATABASE_URL ?? "http://invalid");
 assert.equal(url.hostname, "127.0.0.1");
@@ -13,6 +15,7 @@ let environment = "production",
   permission = "support",
   failure: unknown = null,
   sends = 0;
+let identityUnavailable = false, identitySlow = false, identityCalls = 0;
 const outbound: Array<{ to: string; body: string; messageId: string }> = [];
 const staff: Array<{
   email: string;
@@ -26,11 +29,18 @@ let releaseSend: (() => void) | null = null,
 const saved = new Map<string, NodeModule | undefined>();
 const callbacks: Array<() => Promise<void>> = [];
 const mocks: Record<string, unknown> = {
+  "@clerk/nextjs/server": { clerkClient: async () => ({ users: { getUserList: async ({userId}: {userId:string[]}) => {
+    identityCalls++;
+    if (identitySlow) return new Promise<never>(()=>{});
+    if (identityUnavailable) throw Error("Fixture identity service unavailable");
+    return { data: userId.map(id => ({ id, firstName: "Tim", lastName: "Tester", primaryEmailAddressId: "primary",
+      emailAddresses: [{id:"primary",emailAddress:"staff@example.invalid"}] })) };
+  } } }) },
   "../lib/admin": {
     getAdminDataEnvironment: () => environment,
     requireAdminAuth: async () => {
       if (permission !== "support") throw Error("FORBIDDEN");
-      return { userId: "support-qa" };
+      return { userId: "support-qa", role: "owner" };
     },
   },
   "../lib/deployment-environment": {
@@ -79,6 +89,7 @@ globalThis.fetch = async () => {
 async function main() {
   const { prisma: db } = await import("../lib/prisma");
   const { addSupportMessage } = await import("../lib/admin-support-messages");
+  const { getSupportStaffLabels } = await import("../lib/support-staff.server");
   const { createContactInquiry } = await import("../lib/contact-inquiries");
   const { deliverContactNotification, dispatchContactNotifications } =
     await import("../lib/contact-notification.server");
@@ -120,6 +131,58 @@ async function main() {
       body: JSON.stringify(body),
     });
   try {
+    // Run the actual additive migration on a legacy support-only table. Original
+    // IDs, content and timestamps survive, and deleted numbers are not reused.
+    await db.$transaction(async tx => {
+      const schema = "support_number_" + randomUUID().replaceAll("-", "");
+      await tx.$executeRawUnsafe(`CREATE SCHEMA "${schema}"`);
+      await tx.$executeRawUnsafe(`SET LOCAL search_path TO "${schema}"`);
+      await tx.$executeRawUnsafe(`CREATE TABLE "ContactInquiry" (id TEXT PRIMARY KEY, message TEXT, "createdAt" TIMESTAMP)`);
+      await tx.$executeRawUnsafe(`INSERT INTO "ContactInquiry" VALUES ('old-a','Retain this message','2026-10-01'),('old-b','Retain this too','2026-10-02')`);
+      const before = await tx.$queryRawUnsafe<any[]>(`SELECT * FROM "ContactInquiry" ORDER BY id`);
+      const migration = readFileSync("prisma/migrations/20261028090000_support_case_numbers/migration.sql", "utf8");
+      for (const statement of migration.split(";").filter(value=>value.trim())) await tx.$executeRawUnsafe(statement);
+      const after = await tx.$queryRawUnsafe<any[]>(`SELECT * FROM "ContactInquiry" ORDER BY id`);
+      assert.deepEqual(after.map(({caseNumber,...row})=>row), before);
+      assert.equal(new Set(after.map(row=>row.caseNumber)).size, 2);
+      await tx.$executeRawUnsafe(`DELETE FROM "ContactInquiry" WHERE id='old-b'`);
+      const inserted = await tx.$queryRawUnsafe<any[]>(`INSERT INTO "ContactInquiry" (id,message) VALUES ('new','New case') RETURNING "caseNumber"`);
+      assert(inserted[0].caseNumber > Math.max(...after.map(row=>row.caseNumber)));
+      await tx.$executeRawUnsafe(`DROP SCHEMA "${schema}" CASCADE`);
+    });
+    const staffId = "user_fixture_" + randomUUID();
+    const names = await getSupportStaffLabels([staffId,staffId]);
+    assert.equal(names[staffId].displayName, "Tim Tester");
+    const calls = identityCalls;
+    await getSupportStaffLabels([staffId]);
+    assert.equal(identityCalls,calls,"Staff identity cache avoids repeated provider requests");
+    identityUnavailable = true;
+    const unknownStaff = "user_unknown_" + randomUUID();
+    assert.equal((await getSupportStaffLabels([unknownStaff]))[unknownStaff].displayName,"Team member");
+    identitySlow = true;
+    const timeoutId = "user_slow_" + randomUUID();
+    const lookupStarted = Date.now();
+    assert.equal((await getSupportStaffLabels([timeoutId]))[timeoutId].displayName,"Team member");
+    assert(Date.now()-lookupStarted<3000,"A stalled identity provider cannot stall the support queue");
+    identitySlow = false;
+    const fallbackId = "user_local_" + randomUUID();
+    const local = await db.user.create({data:{clerkUserId:fallbackId,email:"staff-fallback@example.invalid",environment:"staging"}});
+    try {
+      assert.equal((await getSupportStaffLabels([fallbackId]))[fallbackId].displayName,"Team member","Foreign-environment account identity is not exposed");
+      environment="staging";
+      assert.equal((await getSupportStaffLabels([fallbackId]))[fallbackId].displayName,"staff-fallback@example.invalid","Same-environment email is the fallback; caches remain scoped");
+    } finally { environment="production"; identityUnavailable=false; await db.user.delete({where:{id:local.id}}); }
+    const assignment={kind:"assignment",body:`Assignment: ${staffId}; priority: normal; snoozed until: Not snoozed`,idempotencyKey:randomUUID()};
+    const raw = assignment.body;
+    assert.equal(supportMessageSummary(assignment,names),"Assigned to Tim Tester.");
+    assert.equal(assignment.body,raw,"Display summaries do not rewrite stored audit text");
+    assert.equal(supportMessageSummary({...assignment,body:"Assignment: retired-identity; priority: normal; snoozed until: Not snoozed"},{}),"Assigned to a team member.");
+    assert(supportMessageSummary({...assignment,body:`Assignment: ${staffId}; priority: high; snoozed until: 2026-10-29T00:00:00Z`},names).includes("8:00 AM PHT"));
+    const numbered = await create();
+    assert(Number.isInteger(numbered.caseNumber) && numbered.caseNumber>0);
+    const found = await (await import("../lib/contact-inquiries")).getAdminContactInquiries({query:`#${numbered.caseNumber}`});
+    assert.deepEqual(found.items.map(item=>item.id),[numbered.id]);
+    assert.deepEqual((await (await import("../lib/contact-inquiries")).getAdminContactInquiries({query:`Case #${numbered.caseNumber}`})).items.map(item=>item.id),[numbered.id]);
     for (const code of [535, 554])
       assert.deepEqual(
         mailFailure({
@@ -475,6 +538,24 @@ async function main() {
     });
     assert.equal(replyResponse.status, 200);
     assert.equal((await replyResponse.json()).message.status, "sent");
+    const assignmentRecord = await db.adminSupportMessage.create({data:{
+      inquiryId:row.id, actorId:"support-qa", kind:"assignment", status:"internal", idempotencyKey:randomUUID(),
+      body:"Assignment: user_QAOtherStaff; priority: normal; snoozed until: Not snoozed",
+    }});
+    const historyResponse = await replyRoute.GET(new Request("https://clover.ph/api/admin/fixture/messages"),
+      {params:Promise.resolve({inquiryId:row.id})});
+    assert.equal(historyResponse.status,200);
+    const history = (await historyResponse.json()).messages;
+    assert(history.every((message:any)=>message.actorName==="Tim Tester"));
+    assert.equal(history.find((message:any)=>message.id===assignmentRecord.id).displayBody,"Assigned to Tim Tester.");
+    assert.equal((await db.adminSupportMessage.findUniqueOrThrow({where:{id:assignmentRecord.id}})).body,assignmentRecord.body);
+    assert(history.some((message:any)=>message.idempotencyKey.startsWith("delivery-risk-retry:")&&message.displayBody==="Retry authorized; possible duplicate delivery acknowledged."));
+    const queueRoute = await import("../app/api/admin/work-queue/route");
+    const queueResponse = await queueRoute.GET(new Request(`https://clover.ph/api/admin/work-queue?query=%23${row.caseNumber}`));
+    assert.equal(queueResponse.status,200);
+    const queue = await queueResponse.json();
+    assert.deepEqual(queue.items.map((item:any)=>item.id),[row.id]);
+    assert.equal(queue.members.find((member:any)=>member.clerkUserId==="support-qa").displayName,"Tim Tester");
     const manual = await notificationRoute.POST(request({ retry: true }), {
       params: Promise.resolve({ inquiryId: legacy.id }),
     });

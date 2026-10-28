@@ -750,6 +750,7 @@ model AppErrorLog {
 }
 
 model ContactInquiry {
+  caseNumber Int @unique @default(autoincrement())
   notificationStatus String @default("untracked")
   notificationErrorCode String?
   notificationMessageId String?

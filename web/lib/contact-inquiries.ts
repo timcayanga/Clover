@@ -134,6 +134,8 @@ export async function getAdminContactInquiries(filters: ContactInquiryFilters = 
   }
 
   try {
+    const numberQuery = /^(?:case\s*)?#?(\d+)$/.exec(query);
+    const caseNumber = numberQuery ? Number(numberQuery[1]) : null;
     const where: Prisma.ContactInquiryWhereInput = {
       environment: getAdminDataEnvironment(),
       ...(filters.queue === "mine" ? { assignedTo: filters.actorId ?? "" } : {}),
@@ -143,6 +145,8 @@ export async function getAdminContactInquiries(filters: ContactInquiryFilters = 
       ...(query
         ? {
             OR: [
+              ...(caseNumber !== null && caseNumber > 0 && caseNumber <= 2147483647
+                ? [{ caseNumber }] : []),
               { name: { contains: query, mode: "insensitive" } },
               { email: { contains: query, mode: "insensitive" } },
               { message: { contains: query, mode: "insensitive" } },

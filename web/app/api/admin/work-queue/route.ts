@@ -1,6 +1,7 @@
 import { requireAdminAuth } from "@/lib/admin";
 import { prisma } from "@/lib/prisma";
 import { getAdminContactInquiries } from "@/lib/contact-inquiries";
+import { getSupportStaffLabels } from "@/lib/support-staff.server";
 export async function GET(request: Request) {
   try {
     const actor = await requireAdminAuth();
@@ -23,11 +24,12 @@ export async function GET(request: Request) {
       !members.some((m) => m.clerkUserId === actor.userId)
     )
       members.push({ clerkUserId: actor.userId, role: actor.role });
+    const staff = await getSupportStaffLabels(members.map((member) => member.clerkUserId));
     return Response.json({
       ...result,
       actorId: actor.userId,
       role: actor.role,
-      members,
+      members: members.map((member) => ({ ...member, ...staff[member.clerkUserId] })),
     });
   } catch (error) {
     const message =

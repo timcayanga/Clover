@@ -2,6 +2,8 @@ import { requireAdminAuth, getAdminDataEnvironment } from "@/lib/admin";
 import { prisma } from "@/lib/prisma";
 import { addSupportMessage } from "@/lib/admin-support-messages";
 import { assertTrustedRequestOrigin } from "@/lib/request-security";
+import { getSupportStaffLabels } from "@/lib/support-staff.server";
+import { supportAssignmentId, supportMessageSummary } from "@/lib/support-message-display";
 export const maxDuration = 60;
 function failure(error: unknown) {
   const message =
@@ -32,7 +34,11 @@ export async function GET(
       ...(cursor ? { cursor: { id: cursor.id }, skip: 1 } : {}),
     });
     const page = rows.slice(0, 200);
-    return Response.json({ messages: [...page].reverse(), nextCursor: rows.length > 200 ? page.at(-1)?.id : null }, { headers: { "Cache-Control": "private, no-store" } });
+    const names = await getSupportStaffLabels(page.flatMap((message) => [message.actorId, supportAssignmentId(message) ?? ""]));
+    return Response.json({ messages: [...page].reverse().map((message) => ({
+      ...message, actorName: names[message.actorId]?.displayName ?? "Team member",
+      displayBody: supportMessageSummary(message, names),
+    })), nextCursor: rows.length > 200 ? page.at(-1)?.id : null }, { headers: { "Cache-Control": "private, no-store" } });
   } catch (error) {
     return failure(error);
   }

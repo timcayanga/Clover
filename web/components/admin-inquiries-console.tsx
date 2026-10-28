@@ -10,7 +10,7 @@ const replyStatus = (status: string) => ({
   sent: "Sent", failed: "Not sent", unknown: "Delivery uncertain",
   sending: "Sending", pending: "Waiting to send", internal: "Saved internally",
 }[status] ?? status);
-type Member = { clerkUserId: string; role: string };
+type Member = { clerkUserId: string; role: string; displayName?: string; email?: string | null };
 type Message = {
   id: string;
   kind: string;
@@ -21,6 +21,8 @@ type Message = {
   mailMessageId: string | null;
   idempotencyKey: string;
   actorId: string;
+  actorName?: string;
+  displayBody?: string;
   createdAt: string;
   updatedAt?: string;
 };
@@ -138,7 +140,7 @@ export function AdminInquiriesConsole({
               aria-pressed={selected === item.id}
               onClick={() => setSelected(item.id)}
             >
-              {item.name} · {item.status} · {item.priority}
+              #{item.caseNumber} · {item.name} · {item.status}
               <br />
               {item.email}
               <br />
@@ -366,13 +368,13 @@ function InquiryCase({
         <p>
           {item.email} · {item.status}
         </p>
-        <p>Case {item.id}</p>
+        <p>Case #{item.caseNumber}</p>
         <p>Received <time dateTime={new Date(item.createdAt).toISOString()}>{inquiryTime(item.createdAt)}</time></p>
         <div aria-label="Inquiry email notification">
-          <h3>Staff inbox copy · hello@clover.ph</h3>
+          <h3>Staff inbox copy</h3>
           <p>
             {item.notificationStatus === "sent"
-              ? "Sent to the staff inbox. This is a copy of the inquiry, not a reply to the customer."
+              ? "Copy sent to hello@clover.ph."
               : item.notificationStatus === "failed"
                 ? mailFailureText(item.notificationErrorCode)
                 : item.notificationStatus === "unknown"
@@ -383,9 +385,9 @@ function InquiryCase({
                       ? "Saved and waiting for email delivery."
                       : "No delivery record is available for this older inquiry."}
           </p>
-          {item.notificationMessageId ? (
-            <p>Mail reference: {item.notificationMessageId}</p>
-          ) : null}
+          <details><summary>Technical details</summary><p>Internal case ID: {item.id}</p>
+            {item.notificationMessageId ? <p>Mail reference: {item.notificationMessageId}</p> : null}
+          </details>
           {canWrite &&
           ["untracked", "pending", "failed"].includes(
             item.notificationStatus ?? "untracked",
@@ -419,7 +421,7 @@ function InquiryCase({
         </div>
         <h3>Assignment & context</h3>
         <label>
-          Owner
+          Assigned to
           <select
             disabled={busy || !canWrite}
             value={item.assignedTo ?? ""}
@@ -428,9 +430,11 @@ function InquiryCase({
             }
           >
             <option value="">Unassigned</option>
+            {item.assignedTo && !members.some((member) => member.clerkUserId === item.assignedTo)
+              ? <option disabled value={item.assignedTo}>Assigned team member (unavailable)</option> : null}
             {members.map((member) => (
               <option key={member.clerkUserId} value={member.clerkUserId}>
-                {member.clerkUserId} · {member.role}
+                {member.displayName ?? member.email ?? "Team member"} · {member.role}
               </option>
             ))}
           </select>
@@ -525,19 +529,23 @@ function InquiryCase({
         {messages.map((message) => (
           <article key={message.id}>
             <strong>
-              {message.kind === "reply" ? "Reply" : "Internal note"} ·{" "}
+              {message.kind === "reply" ? "Reply" : message.kind === "assignment" ? "Assignment" : "Internal note"} ·{" "}
               {replyStatus(message.status)}
             </strong>
             <p>
-              {message.actorId} · Created {inquiryTime(message.createdAt)}
+              {message.actorName ?? members.find((member) => member.clerkUserId === message.actorId)?.displayName ?? (message.actorId === actor ? "You" : "Team member")} · {inquiryTime(message.kind === "reply" ? message.updatedAt ?? message.createdAt : message.createdAt)}
             </p>
-            {message.updatedAt ? <p>Status updated {inquiryTime(message.updatedAt)}</p> : null}
-            {message.status === "sent" ? <p>To: {item.email} · Accepted by Zoho. Inbox delivery and reading are not tracked.</p> : null}
+            {message.status === "sent" ? <p>To: {item.email} · Accepted by Zoho</p> : null}
             {message.subject ? <h3>{message.subject}</h3> : null}
-            <p style={{ whiteSpace: "pre-wrap" }}>{message.body}</p>
-            {message.mailMessageId ? (
-              <p>Mail reference: {message.mailMessageId}</p>
-            ) : null}
+            <p style={{ whiteSpace: "pre-wrap" }}>{message.displayBody ?? message.body}</p>
+            <details><summary>Technical details</summary>
+              <p>Staff reference: {message.actorId}</p>
+              <p>Created {inquiryTime(message.createdAt)}</p>
+              {message.updatedAt ? <p>Updated {inquiryTime(message.updatedAt)}</p> : null}
+              {message.mailMessageId ? <p>Mail reference: {message.mailMessageId}</p> : null}
+              {message.displayBody && message.displayBody !== message.body ? <p style={{ whiteSpace: "pre-wrap" }}>{message.body}</p> : null}
+              {message.status === "sent" ? <p>Sent means accepted by Zoho. Inbox delivery and reading are not tracked.</p> : null}
+            </details>
             {message.kind === "reply" &&
             ["failed", "unknown"].includes(message.status) ? (
               <p>{message.status === "unknown"

@@ -60,7 +60,7 @@ const cachedErrorLogs = unstable_cache(
 
 const cachedInquiries = unstable_cache(
   async (_environment: string) => getAdminContactInquiries({ pageSize: 200 }),
-  ["admin-inquiries-v2"],
+  ["admin-inquiries-v3-case-numbers"],
   { revalidate: 15 },
 );
 
