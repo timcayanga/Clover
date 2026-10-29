@@ -1,5 +1,8 @@
 "use client";
 
+import { AdviserHeaderLink } from "./adviser-header-link";
+import { CurrencySelector } from "./currency-selector";
+import { getCurrencyCatalogCodes } from "@/lib/currencies";
 import { InterfaceIcon } from "@/components/interface-icon";
 
 import {
@@ -13,7 +16,10 @@ import {
 } from "react";
 import { CloverShell } from "@/components/clover-shell";
 import { CirclesWorkspace } from "@/components/circles-workspace";
-import { CollectionBack, useCollectionSelection } from "@/components/collection-navigation";
+import {
+  CollectionBack,
+  useCollectionSelection,
+} from "@/components/collection-navigation";
 import type { CircleSummary, CirclesWorkspaceData } from "@/lib/circles";
 import { isSplitBillBuiltInAvatarUrl } from "@/lib/split-bill-avatars";
 
@@ -207,7 +213,9 @@ function CircleTitleTabs({
                     onClick={cancelEditing}
                     disabled={savingCircleId === circle.id}
                     aria-label="Cancel renaming"
-                  ><InterfaceIcon name="close" /></button>
+                  >
+                    <InterfaceIcon name="close" />
+                  </button>
                 </form>
               ) : (
                 <button
@@ -247,8 +255,36 @@ export function CirclesPageClient({
   initialData: CirclesWorkspaceData;
 }) {
   const [circles, setCircles] = useState(initialData.circles);
-  const [requestedCircleId, setSelectedCircleId] = useCollectionSelection("circle");
-  const selectedCircleId = circles.some((circle) => circle.id === requestedCircleId) ? requestedCircleId : null;
+  const [requestedCircleId, setSelectedCircleId] =
+    useCollectionSelection("circle");
+  const selectedCircleId = circles.some(
+    (circle) => circle.id === requestedCircleId,
+  )
+    ? requestedCircleId
+    : null;
+  const [displayCurrencies, setDisplayCurrencies] = useState<
+    Record<string, string>
+  >({});
+  const displayCurrency =
+    (selectedCircleId && displayCurrencies[selectedCircleId]) ||
+    circles.find((c) => c.id === selectedCircleId)?.currency ||
+    "PHP";
+  const currencySelector = selectedCircleId ? (
+    <CurrencySelector
+      compact
+      showCurrencyCode
+      portalMenu
+      value={displayCurrency}
+      options={getCurrencyCatalogCodes()}
+      ariaLabel="Circle display currency"
+      onChange={(currency) =>
+        setDisplayCurrencies((current) => ({
+          ...current,
+          [selectedCircleId]: currency,
+        }))
+      }
+    />
+  ) : null;
   const [createRequest, setCreateRequest] = useState(0);
   const [circleRename, setCircleRename] = useState<CircleRenameEvent | null>(
     null,
@@ -283,31 +319,58 @@ export function CirclesPageClient({
   return (
     <CloverShell
       active="circles"
-      title={circles.find(circle => circle.id === selectedCircleId)?.name ?? "Circles"}
-      mobileBackAction={selectedCircleId ? () => setSelectedCircleId(null) : undefined}
-      actions={selectedCircleId ? <CollectionBack label="Circles" onClick={() => setSelectedCircleId(null)} /> :
-        <button
-          className="button button-primary button-small accounts-toolbar-add circles-topbar-action"
-          type="button"
-          onClick={() => setCreateRequest((current) => current + 1)}
-          aria-label="Add Circle"
-        >
-          <span className="circles-topbar-action__icon button-icon" aria-hidden="true">
-            <svg viewBox="0 0 20 20" fill="none">
-              <path
-                d="M10 4v12M4 10h12"
-                stroke="currentColor"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth="1.8"
-              />
-            </svg>
+      mobileLeadingAction={
+        selectedCircleId ? (
+          <span className="circle-header-currency-tools">
+            {currencySelector}
+            <AdviserHeaderLink />
           </span>
-          <span className="circles-topbar-action__label">Add Circle</span>
-        </button>
+        ) : undefined
+      }
+      title={
+        circles.find((circle) => circle.id === selectedCircleId)?.name ??
+        "Circles"
+      }
+      mobileBackAction={
+        selectedCircleId ? () => setSelectedCircleId(null) : undefined
+      }
+      actions={
+        selectedCircleId ? (
+          <>
+            <span className="circles-desktop-currency">{currencySelector}</span>
+            <CollectionBack
+              label="Circles"
+              onClick={() => setSelectedCircleId(null)}
+            />
+          </>
+        ) : (
+          <button
+            className="button button-primary button-small accounts-toolbar-add circles-topbar-action"
+            type="button"
+            onClick={() => setCreateRequest((current) => current + 1)}
+            aria-label="Add Circle"
+          >
+            <span
+              className="circles-topbar-action__icon button-icon"
+              aria-hidden="true"
+            >
+              <svg viewBox="0 0 20 20" fill="none">
+                <path
+                  d="M10 4v12M4 10h12"
+                  stroke="currentColor"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth="1.8"
+                />
+              </svg>
+            </span>
+            <span className="circles-topbar-action__label">Add Circle</span>
+          </button>
+        )
       }
     >
       <CirclesWorkspace
+        displayCurrency={displayCurrency}
         initialData={initialData}
         selectedCircleId={selectedCircleId}
         onSelectedCircleChange={setSelectedCircleId}

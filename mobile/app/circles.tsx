@@ -17,7 +17,7 @@ import { LinearGradient } from "expo-linear-gradient";
 import { SplitGroupDetails } from "../src/split-group-details";
 import { router, useLocalSearchParams } from "expo-router";
 import { useEffect, useState, useRef } from "react";
-import { Image, View } from "react-native";
+import { Image, View, Modal, Pressable, ScrollView } from "react-native";
 import { useSession } from "../src/session";
 import {
   Body,
@@ -121,6 +121,10 @@ export default function Circles() {
   const [resource, setResource] = useState<CircleAction | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState(false);
   const [memberDetail, setMemberDetail] = useState<string | null>(null);
+  const [displayCurrencies, setDisplayCurrencies] = useState<Record<string,string>>({});
+  const [currencyOpen, setCurrencyOpen] = useState(false);
+  const displayCurrency = selected ? displayCurrencies[selected.id] ?? selected.currency : 'PHP';
+  const currencyOptions = [...new Set([displayCurrency, ...(session.data?.currencyChoices ?? []).map(c => c.code), ...(selected?.expenses ?? []).map(e => e.currency), 'PHP','USD','IDR'])].sort();
   const [tab, setTab] = useState("Overview");
   const [search, setSearch] = useState("");
   const [editor, setEditor] = useState<{
@@ -248,9 +252,18 @@ export default function Circles() {
       {entryOverlay}
       <PlanHeader
         title={selected ? selected.name : "Circles"}
+        trailing={selected ? <Pressable accessibilityRole="button" accessibilityLabel={`Circle display currency: ${displayCurrency}`} onPress={()=>setCurrencyOpen(true)} style={{minHeight:44,minWidth:58,alignItems:'center',justifyContent:'center',flexDirection:'row',gap:4}}><Text style={{color:colors.teal,fontFamily:'Poppins-Medium',fontSize:13}}>{displayCurrency}</Text><Icon line name="chevron-down" size={14}/></Pressable> : undefined}
         back={selected ? () => setSelected(null) : undefined}
         add={() => setEditor({ circle: null })}
       />
+      <Modal visible={currencyOpen && !!selected} transparent animationType="fade" onRequestClose={()=>setCurrencyOpen(false)}>
+        <View style={{flex:1,justifyContent:'center',padding:24,backgroundColor:'#0007'}}>
+          <Pressable accessibilityLabel="Close currency selector" onPress={()=>setCurrencyOpen(false)} style={{position:'absolute',top:0,bottom:0,left:0,right:0}}/>
+          <View accessibilityViewIsModal style={{width:'100%',maxWidth:440,alignSelf:'center',maxHeight:'80%',backgroundColor:colors.white,borderRadius:20,padding:20,gap:12}}>
+            <Body>Display Currency</Body><ScrollView>{currencyOptions.map(code=><Pressable key={code} accessibilityRole="button" accessibilityLabel={code} accessibilityState={{selected:displayCurrency===code}} onPress={()=>{if(selected)setDisplayCurrencies(current=>({...current,[selected.id]:code}));setCurrencyOpen(false);}} style={{minHeight:48,flexDirection:'row',alignItems:'center',justifyContent:'space-between'}}><Text style={{color:colors.ink}}>{code}</Text>{displayCurrency===code?<Icon line name="checkmark"/>:null}</Pressable>)}</ScrollView><PlanAction title="Close" onPress={()=>setCurrencyOpen(false)}/>
+          </View>
+        </View>
+      </Modal>
       {error ? (
         <>
           <Notice>{error}</Notice>
@@ -285,7 +298,7 @@ export default function Circles() {
                 onPress={() => setRevision((v) => v + 1)}
               />
             </>
-          ) : <CircleDetailPanels circle={selected} tab={tab} onEdit={setResource} onInvite={()=>setInvitations(true)} onRefresh={()=>{setRevision(v=>v+1);reload();}} onArchive={()=>{setDeleteConfirm(true);}} onMember={setMemberDetail}/>}
+          ) : <CircleDetailPanels displayCurrency={displayCurrency} circle={selected} tab={tab} onEdit={setResource} onInvite={()=>setInvitations(true)} onRefresh={()=>{setRevision(v=>v+1);reload();}} onArchive={()=>{setDeleteConfirm(true);}} onMember={setMemberDetail}/>}
           {deleteConfirm&&selected.isOwner?<Card><Body>Archive this Circle? Shared history and personal transactions are preserved.</Body><PlanAction title="Archive Circle" tone="delete" disabled={loading} onPress={()=>{setLoading(true);void session.request(`circles/${selected.id}/archive?workspaceId=${encodeURIComponent(session.profileId)}`,{method:'POST'}).then(()=>{setSelected(null);setDeleteConfirm(false);reload();}).catch(e=>setDetailError(e.message)).finally(()=>setLoading(false));}}/><PlanAction title="Keep Circle" onPress={()=>setDeleteConfirm(false)}/></Card>:null}
         </>
       ) : (

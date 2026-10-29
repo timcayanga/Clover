@@ -61,6 +61,7 @@ type CirclesWorkspaceProps = {
   onSelectedCircleChange: (circleId: string | null) => void;
   onCirclesChange: (circles: CircleSummary[]) => void;
   createRequest: number;
+  displayCurrency?: string;
   circleRename: {
     circleId: string;
     name: string;
@@ -120,6 +121,7 @@ export function CirclesWorkspace({
   onCirclesChange,
   createRequest,
   circleRename,
+  displayCurrency,
 }: CirclesWorkspaceProps) {
   const avatarInputRef = useRef<HTMLInputElement>(null);
   const workspaceRef = useRef<HTMLElement>(null);
@@ -642,7 +644,7 @@ export function CirclesWorkspace({
           {selectedCircle ? (
             <main ref={workspaceRef} className="circles-workspace">
               <h2 className="collection-detail-name">{selectedCircle.name}</h2>
-              <CircleDetailWorkspace key={selectedCircle.id} circle={selectedCircle} onChanged={()=>refresh(selectedCircle.id)} />
+              <CircleDetailWorkspace displayCurrency={displayCurrency} key={selectedCircle.id} circle={selectedCircle} onChanged={()=>refresh(selectedCircle.id)} />
             </main>
           ) : null}
         </div>

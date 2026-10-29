@@ -1,12 +1,12 @@
 "use client";
-import { useState } from "react";
+import {
+  circleActivityEmoji,
+  circleCategoryTotals,
+} from "../../shared/circle-overview";
 import { CloverMascot } from "./clover-mascot";
 import { CollectionCard } from "./collection-card";
 import { CategoryBrandMark } from "./category-brand-mark";
-import {
-  getNavigationIconSrc,
-  type NavigationIconName,
-} from "@/lib/navigation-icons";
+import { getNavigationIconSrc } from "@/lib/navigation-icons";
 import { formatCurrencyAmount as money } from "@/lib/currency-format";
 import type {
   CircleSummary,
@@ -56,29 +56,13 @@ export function CircleEmpty({
   );
 }
 export function CircleActivityIcon({ action }: { action: string }) {
-  const key: NavigationIconName = /budget/.test(action)
-    ? "budgeting"
-    : /goal/.test(action)
-      ? "goals"
-      : /commitment|recurring/.test(action)
-        ? "recurring"
-        : /member|invit|join/.test(action)
-          ? "profiles"
-          : /contribution|payment/.test(action)
-            ? "accounts"
-            : /transaction|expense|bill/.test(action)
-              ? "transactions"
-              : "circles";
   return (
-    <img
-      className="circle-activity-icon"
-      src={getNavigationIconSrc(key)}
-      width={28}
-      height={28}
-      alt=""
-    />
+    <span className="circle-activity-icon" aria-hidden="true">
+      {circleActivityEmoji(action)}
+    </span>
   );
 }
+
 export function CirclePlanningCard({
   item,
   kind,
@@ -185,25 +169,18 @@ export function CirclePlanningCard({
 export function CircleOverviewReports({
   circle,
   onNavigate,
+  currency,
+  rates,
+  loading,
 }: {
+  currency: string;
+  rates: Record<string, number>;
+  loading: boolean;
   circle: CircleSummary;
   onNavigate: (tab: string) => void;
 }) {
-  const currencies = [...new Set(circle.expenses.map((e) => e.currency))];
-  const [selected, setSelected] = useState(circle.currency);
-  const currency = currencies.includes(selected)
-    ? selected
-    : (currencies[0] ?? circle.currency);
-  const expenseRows = circle.expenses.filter((e) => e.currency === currency);
-  const categories = Object.entries(
-    expenseRows.reduce<Record<string, number>>((r, e) => {
-      const key = e.categoryName ?? "Other";
-      r[key] = (r[key] ?? 0) + e.amount;
-      return r;
-    }, {}),
-  )
-    .filter(([, n]) => n > 0)
-    .sort((a, b) => b[1] - a[1]);
+  const converted = circleCategoryTotals(circle.expenses, currency, rates);
+  const categories = converted ?? [];
   const total = categories.reduce((n, [, amount]) => n + amount, 0),
     palette = [
       "#00abc0",
@@ -224,21 +201,12 @@ export function CircleOverviewReports({
       <section className="report-card glass report-v2-panel circle-report">
         <header className="circle-report__head">
           <h2>Where It Went</h2>
-          {currencies.length > 1 ? (
-            <label>
-              Currency
-              <select
-                value={currency}
-                onChange={(e) => setSelected(e.target.value)}
-              >
-                {currencies.map((c) => (
-                  <option key={c}>{c}</option>
-                ))}
-              </select>
-            </label>
-          ) : null}
         </header>
-        {categories.length ? (
+        {converted === null ? (
+          <p role="status">
+            {loading ? "Converting…" : "Conversion unavailable"}
+          </p>
+        ) : categories.length ? (
           <>
             <div
               className="report-v2-donut"

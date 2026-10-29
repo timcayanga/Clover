@@ -1,6 +1,8 @@
 "use client";
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import Link from "next/link";
+import { useExchangeRates } from "@/lib/use-exchange-rates";
+import { circleConvertedTotal } from "../../shared/circle-overview";
 import { AnimatedTabs } from "./animated-tabs";
 import {
   CircleTabIcon,
@@ -66,7 +68,9 @@ type Form = {
 export function CircleDetailWorkspace({
   circle,
   onChanged,
+  displayCurrency,
 }: {
+  displayCurrency?: string;
   circle: CircleSummary;
   onChanged: () => Promise<void>;
 }) {
@@ -86,6 +90,22 @@ export function CircleDetailWorkspace({
     [customExpense, setCustomExpense] = useState<string | null>(null),
     [photo, setPhoto] = useState<string | null | undefined>(),
     [photoBusy, setPhotoBusy] = useState(false);
+  const targetCurrency = displayCurrency ?? circle.currency;
+  const summaryExpenses = circle.expenseCurrencyTotals ?? {
+    [circle.currency]: circle.expenseTotalThisMonth,
+  };
+  const summaryContributions = circle.contributionCurrencyTotals ?? {
+    [circle.currency]: circle.contributionTotalThisMonth,
+  };
+  const fx = useExchangeRates(
+    [
+      ...Object.keys(summaryExpenses),
+      ...Object.keys(summaryContributions),
+      ...circle.expenses.map((e) => e.currency),
+    ],
+    targetCurrency,
+    tab === "Overview",
+  );
   const sentinel = useRef<HTMLDivElement>(null),
     lock = useRef(false),
     loadingRows = useRef(false);
@@ -663,18 +683,46 @@ export function CircleDetailWorkspace({
                     key={metric.title}
                   >
                     <p className="eyebrow">{metric.title}</p>
-                    {Object.entries(metric.totals).map(([c, n]) => (
-                      <strong
-                        key={c}
-                        className="accounts-overview-card__amount is-good"
-                      >
-                        {money(n, c)}
-                      </strong>
-                    ))}
+                    <strong
+                      className="accounts-overview-card__amount is-good"
+                      aria-live="polite"
+                    >
+                      {circleConvertedTotal(
+                        metric.totals,
+                        targetCurrency,
+                        fx.rates,
+                      ) === null
+                        ? fx.loading
+                          ? "Converting…"
+                          : "Conversion unavailable"
+                        : money(
+                            circleConvertedTotal(
+                              metric.totals,
+                              targetCurrency,
+                              fx.rates,
+                            )!,
+                            targetCurrency,
+                          )}
+                    </strong>
                   </article>
                 ))}
               </div>
-              <CircleOverviewReports circle={circle} onNavigate={setTab} />
+              {fx.unavailable.length ? (
+                <button
+                  type="button"
+                  className="circle-text-action"
+                  onClick={fx.retry}
+                >
+                  Retry Conversion
+                </button>
+              ) : null}
+              <CircleOverviewReports
+                circle={circle}
+                onNavigate={setTab}
+                currency={targetCurrency}
+                rates={fx.rates}
+                loading={fx.loading}
+              />
               {circle.isOwner ? (
                 <button
                   className="button button-danger"

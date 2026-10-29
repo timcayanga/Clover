@@ -300,6 +300,7 @@ export function usePlanData<T>(path: string, sample: T) {
 
 export function SummaryCard({
   help,
+  alignTop = false,
   title,
   value,
   detail,
@@ -312,6 +313,7 @@ export function SummaryCard({
   color?: string;
   detailColor?: string;
   help?: string;
+  alignTop?: boolean;
 }) {
   const { colors } = useTheme();
   const [cardWidth, setCardWidth] = useState(0);
@@ -341,7 +343,7 @@ export function SummaryCard({
         paddingHorizontal: 8,
         gap: 6,
         minHeight: 94,
-        justifyContent: "center",
+        justifyContent: alignTop ? "flex-start" : "center",
         alignItems: "center",
       }}
     >

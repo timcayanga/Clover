@@ -161,7 +161,7 @@
     "qa:mobile-navigation": "tsx scripts/mobile-navigation-regression.ts",
     "qa:pwa-ios": "tsx scripts/pwa-ios-regression.ts",
     "qa:recurring-ledger": "tsx scripts/recurring-ledger-regression.ts && tsx scripts/recurring-suggestion-regression.ts && tsx scripts/recurring-tracking-regression.ts",
-    "qa:circles": "tsx scripts/circles-regression.ts && tsx scripts/circle-experience-regression.ts",
+    "qa:circles": "tsx scripts/circles-regression.ts && tsx scripts/circle-experience-regression.ts && tsx scripts/circle-overview-regression.ts",
     "qa:feature-discovery": "tsx scripts/feature-discovery-regression.ts",
     "qa:spending-pace": "tsx scripts/spending-pace-regression.ts",
     "qa:growth-planner": "tsx scripts/growth-planner-regression.ts",

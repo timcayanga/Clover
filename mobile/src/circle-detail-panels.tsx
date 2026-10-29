@@ -1,3 +1,9 @@
+import { useExchangeRates } from "./use-exchange-rates";
+import {
+  circleActivityEmoji,
+  circleConvertedTotal,
+  circleCategoryTotals,
+} from "../../shared/circle-overview";
 import { useEffect, useState } from "react";
 import { Pressable, View, Alert } from "react-native";
 import { router } from "expo-router";
@@ -114,7 +120,9 @@ export function CircleDetailPanels({
   onRefresh,
   onArchive,
   onMember,
+  displayCurrency,
 }: {
+  displayCurrency?: string;
   circle: CircleDetail;
   tab: string;
   onEdit: (action: CircleAction) => void;
@@ -129,6 +137,30 @@ export function CircleDetailPanels({
     [error, setError] = useState(""),
     [busy, setBusy] = useState(false),
     [customExpense, setCustomExpense] = useState<string | null>(null);
+  const targetCurrency = displayCurrency ?? circle.currency;
+  const expenseTotals = circle.expenseCurrencyTotals ?? {
+    [circle.currency]: circle.expenseTotalThisMonth,
+  };
+  const contributionTotals = circle.contributionCurrencyTotals ?? {
+    [circle.currency]: circle.contributionTotalThisMonth,
+  };
+  const fx = useExchangeRates(
+    [
+      ...Object.keys(expenseTotals),
+      ...Object.keys(contributionTotals),
+      ...(circle.expenses ?? []).map((e) => e.currency),
+    ],
+    targetCurrency,
+    tab === "Overview",
+  );
+  const convertedValue = (totals: Record<string, number>) => {
+    const n = circleConvertedTotal(totals, targetCurrency, fx.rates);
+    return n === null
+      ? fx.loading
+        ? "Converting…"
+        : "Conversion unavailable"
+      : money(String(n), targetCurrency);
+  };
   const canEdit = circle.role !== "participant",
     members = (circle.members ?? []).filter((m) => m.status === "active"),
     people = members.map((m) => ({
@@ -192,20 +224,13 @@ export function CircleDetailPanels({
       }}
     >
       {activity ? (
-        <Icon
-          name={
-            /budget/.test(activity)
-              ? "wallet-outline"
-              : /goal/.test(activity)
-                ? "flag-outline"
-                : /member|invit|join/.test(activity)
-                  ? "people-outline"
-                  : /commitment|recurring/.test(activity)
-                    ? "repeat-outline"
-                    : "swap-horizontal-outline"
-          }
-          size={28}
-        />
+        <Text
+          accessibilityElementsHidden
+          importantForAccessibility="no"
+          style={{ fontSize: 24, width: 28, textAlign: "center" }}
+        >
+          {circleActivityEmoji(activity)}
+        </Text>
       ) : (
         <PersonAvatar name={main} imageUrl={avatar} size={32} />
       )}
@@ -236,93 +261,69 @@ export function CircleDetailPanels({
     </View>
   );
   if (tab === "Overview") {
-    const totals = circle.expenseCurrencyTotals ?? {
-      [circle.currency]: circle.expenseTotalThisMonth,
-    };
+    const entries = circleCategoryTotals(
+      circle.expenses ?? [],
+      targetCurrency,
+      fx.rates,
+    );
+    const unavailable =
+      entries === null ||
+      circleConvertedTotal(expenseTotals, targetCurrency, fx.rates) === null ||
+      circleConvertedTotal(contributionTotals, targetCurrency, fx.rates) ===
+        null;
     return (
       <>
-        {Array.from(
-          new Set([
-            ...Object.keys(totals),
-            ...Object.keys(
-              circle.contributionCurrencyTotals ?? {
-                [circle.currency]: circle.contributionTotalThisMonth,
-              },
-            ),
-          ]),
-        ).map((currency) => (
-          <View key={currency} style={{ flexDirection: "row", gap: 12 }}>
-            <SummaryCard
-              title="Shared Expenses"
-              value={money(String(totals[currency] ?? 0), currency)}
-            />
-            <SummaryCard
-              title="Contributions"
-              value={money(
-                String(
-                  (circle.contributionCurrencyTotals ?? {
-                    [circle.currency]: circle.contributionTotalThisMonth,
-                  })[currency] ?? 0,
-                ),
-                currency,
-              )}
-            />
-          </View>
-        ))}
+        <View style={{ flexDirection: "row", gap: 12 }}>
+          <SummaryCard
+            alignTop
+            title="Shared Expenses"
+            value={convertedValue(expenseTotals)}
+          />
+          <SummaryCard
+            alignTop
+            title="Contributions"
+            value={convertedValue(contributionTotals)}
+          />
+        </View>
+        {unavailable && !fx.loading ? (
+          <PlanAction title="Retry Conversion" onPress={fx.retry} />
+        ) : null}
         <Card>
           <Body muted={false}>Where It Went</Body>
-          {!(circle.expenses ?? []).length ? (
+          {entries === null ? (
+            <Body>{fx.loading ? "Converting…" : "Conversion unavailable"}</Body>
+          ) : !entries.length ? (
             <CloverEmptyState pose="reports">
               Share your first expense to see your category report
             </CloverEmptyState>
-          ) : null}
-          {Object.keys(currencyTotals(circle.expenses ?? [])).map(
-            (currency) => {
-              const entries = Object.entries(
-                (circle.expenses ?? [])
-                  .filter((e) => e.currency === currency)
-                  .reduce<Record<string, number>>((r, e) => {
-                    const name = e.categoryName ?? "Other";
-                    r[name] = (r[name] ?? 0) + e.amount;
-                    return r;
-                  }, {}),
-              ).sort((a, b) => b[1] - a[1]);
-              return (
-                <View key={currency}>
-                  <Body>{currency}</Body>
-                  <SpendingDonut
-                    currency={currency}
-                    categories={entries.map(([name, amount]) => ({
-                      name,
-                      amount,
-                    }))}
-                  />
-                  {entries.map(([name, amount]) => (
-                    <View
-                      key={name}
-                      style={{
-                        flexDirection: "row",
-                        alignItems: "center",
-                        gap: 8,
-                        paddingVertical: 10,
-                        borderBottomWidth: 1,
-                        borderColor: colors.line,
-                      }}
-                    >
-                      <CategoryMark name={name} size={28} />
-                      <Text
-                        style={{ flex: 1, fontSize: 13, color: colors.ink }}
-                      >
-                        {name}
-                      </Text>
-                      <Text style={{ fontSize: 13, color: colors.ink }}>
-                        {money(String(amount), currency)}
-                      </Text>
-                    </View>
-                  ))}
+          ) : (
+            <>
+              <SpendingDonut
+                currency={targetCurrency}
+                categories={entries.map(([name, amount]) => ({ name, amount }))}
+              />
+              {entries.map(([name, amount]) => (
+                <View
+                  key={name}
+                  style={{
+                    flexDirection: "row",
+                    alignItems: "center",
+                    gap: 8,
+                    paddingVertical: 10,
+                    borderBottomWidth: 1,
+                    borderColor: colors.line,
+                  }}
+                >
+                  <CategoryMark name={name} size={28} />
+                  <Text style={{ flex: 1, fontSize: 13, color: colors.ink }}>
+                    {name}
+                  </Text>
+                  <Text style={{ fontSize: 13, color: colors.ink }}>
+                    {money(String(amount), targetCurrency)}
+                  </Text>
                 </View>
-              );
-            },
+              ))}
+            </>
           )}
         </Card>
         <Body muted={false}>Budget Tracking</Body>

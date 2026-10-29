@@ -67134,3 +67134,10 @@ html[data-theme="dark"] .home-quick-add__income{background:#18382b;color:#a0eac2
 .circle-detail .circle-person-photo input[type="file"]{position:absolute;width:1px;height:1px;padding:0;overflow:hidden;opacity:0}
 .circle-person-photo label{position:relative;cursor:pointer}
 .circle-person-photo label:focus-within{outline:2px solid var(--accent);outline-offset:3px}
+/* Circle totals share the header display currency and keep both labels aligned. */
+.circle-detail .circle-summary-grid .summary-aligned-card{display:flex!important;flex-direction:column!important;justify-content:flex-start!important;align-items:center;gap:8px}
+.circle-summary-grid .eyebrow{margin:0;width:100%;text-align:center;min-height:20px}
+.circle-summary-grid .accounts-overview-card__amount{margin:0}
+.circle-activity-icon{display:inline-flex;align-items:center;justify-content:center;font-size:24px;line-height:1;width:28px;min-width:28px;height:28px}
+.circle-header-currency-tools{display:inline-flex;align-items:center;gap:6px}
+@media(max-width:1100px){.content--circles .circles-desktop-currency{display:none!important}}
