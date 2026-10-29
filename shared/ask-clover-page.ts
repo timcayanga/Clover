@@ -26,7 +26,7 @@ export function askPageContext(path: string, params: Record<string, unknown> = {
  const keys = ["transactionId", "accountId", "circleId", "billId", "budgetId", "goalId", "currency", "from", "to", "tab"] as const;
  for (const key of keys) { const value = params[key]; if (typeof value === "string" && /^[a-zA-Z0-9_ .:-]{1,80}$/.test(value)) context[key] = value; }
  if (segment === "transaction") { const id = clean.split("/")[2] || params.id; if (typeof id === "string" && /^[a-zA-Z0-9_-]{1,80}$/.test(id)) context.transactionId = id; }
- if (context.currency && !/^[A-Z]{3}$/.test(context.currency)) delete context.currency;
+ if (context.currency && (context.currency === "ALL" || !/^[A-Z]{3}$/.test(context.currency))) delete context.currency;
  for (const key of ["from", "to"] as const) if (context[key] && !/^\d{4}-\d{2}-\d{2}$/.test(context[key]!)) delete context[key];
  if (page === "reports" && typeof params.reportParams === "string" && params.reportParams.length <= 4000) context.reportParams = params.reportParams;
  return context;

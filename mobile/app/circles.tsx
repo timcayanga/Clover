@@ -153,7 +153,7 @@ export default function Circles() {
       }
     }
   }, [params.circleId, data, session.profileId]);
-  usePageAskScope({page:"circles", title:selected?.name || "Circles", circleId:selected?.id});
+  usePageAskScope({page:"circles", title:selected?.name || "Circles", circleId:selected?.id, currency:displayCurrency});
   const selectedId = selected?.id;
   useEffect(() => {
     if (!selectedId || session.demo) return;

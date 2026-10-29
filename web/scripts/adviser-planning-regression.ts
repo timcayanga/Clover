@@ -94,3 +94,6 @@ assert.match(pageChatSource,/hasScopedPage \? undefined : buildAdviserChart/);
 console.log("Page Ask Clover: product-specific chips, route-group normalization, validated hints, Profile-scoped references and safe fallback passed.");
 
 assert.match(pageChatSource,/askPagePrompts\(pageContext\).includes\(latestIncomingQuestion\)/,"Trusted page chips must not be rejected by the generic financial-topic classifier");
+
+assert.equal(askPageContext("/reports",{currency:"ALL"}).currency,undefined,"All currencies is a view option, not the Albanian lek display currency");
+assert.match(pageChatSource,/reportPageParams.set\("from",pageContext.from\)/,"Reports chat must use the exact visible reporting period");
