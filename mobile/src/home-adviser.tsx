@@ -1,3 +1,5 @@
+import { usePageAskClover } from "./page-ask-context";
+import type { AskPageContext } from "../../shared/ask-clover-page";
 import { useState } from "react";
 import { CloverEmptyState } from "./clover-mascot";
 import { router } from "expo-router";
@@ -6,7 +8,7 @@ import type { HomeInsight } from "../../shared/home-adviser-insights";
 import { Text } from "./app-text";
 import { Body, Card, money, useTheme } from "./ui";
 
-function openInsight(item: HomeInsight) {
+function openInsight(item: HomeInsight, askClover: (context: AskPageContext) => void) {
   if (item.actionLabel === "Upload now") {
     router.navigate({ pathname: "/add-transaction", params: { entry: "upload-files" } });
   } else if (item.href.startsWith("/recurring")) {
@@ -15,11 +17,12 @@ function openInsight(item: HomeInsight) {
     const category = item.href.split("?category=")[1];
     router.navigate({ pathname: "/(tabs)/transactions", params: { query: category ? decodeURIComponent(category) : "" } });
   } else {
-    router.navigate("/(tabs)/adviser");
+    askClover({page:"home",title:"Home"});
   }
 }
 
 export function HomeAdviser({ insights, hidden }: { insights: HomeInsight[]; hidden: boolean }) {
+  const askClover = usePageAskClover();
   const { colors, styles, dark } = useTheme();
   const { width } = useWindowDimensions();
   const [containerWidth, setContainerWidth] = useState(0);
@@ -30,7 +33,7 @@ export function HomeAdviser({ insights, hidden }: { insights: HomeInsight[]; hid
       {insights.map((item) => <View key={item.label} style={{ width: cardWidth, padding: 12, borderRadius: 12, gap: 8, backgroundColor: dark ? colors.pale : item.tone === "positive" ? "#E5F8EB" : item.tone === "warning" ? "#FFF0EB" : "#E7F7F6" }}>
         <Text style={{ color: colors.ink, fontFamily: "Poppins-SemiBold", fontSize: 13 }}>{item.emoji} {item.label}</Text>
         <Text style={{ color: colors.ink, fontSize: 13, lineHeight: 20 }}>{item.parts.map((part) => typeof part === "string" ? part : hidden ? "••••" : money(String(part.amount), part.currency)).join("")}</Text>
-        <Pressable accessibilityRole="button" accessibilityLabel={item.actionLabel} onPress={() => openInsight(item)} style={{ minHeight: 44, justifyContent: "center", alignSelf: "flex-start" }}>
+        <Pressable accessibilityRole="button" accessibilityLabel={item.actionLabel} onPress={() => openInsight(item, askClover)} style={{ minHeight: 44, justifyContent: "center", alignSelf: "flex-start" }}>
           <Text style={{ color: colors.teal, fontSize: 13, fontFamily: "Poppins-SemiBold" }}>{item.actionLabel} →</Text>
         </Pressable>
       </View>)}

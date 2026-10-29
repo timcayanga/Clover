@@ -1,187 +1,75 @@
 "use client";
 
 import Image from "next/image";
-import { useEffect, useId, useRef, useState } from "react";
+import { usePathname } from "next/navigation";
+import { askPageContext, askPagePrompts, type AskPage, type AskPageContext } from "../../shared/ask-clover-page";
+import { useEffect, useId, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
-import { AdviserChat, type AdviserPrompt } from "@/components/adviser-chat";
+import dynamic from "next/dynamic";
+const AdviserChat = dynamic(() => import("@/components/adviser-chat").then(module => module.AdviserChat), {loading: () => <p role="status">Opening Ask Clover…</p>});
+import { selectedWorkspaceEventName } from "@/lib/workspace-selection";
 import { hasFullFeatureAccess } from "@/lib/beta-access";
 import { getNavigationIconSrc } from "@/lib/navigation-icons";
 
-type AskCloverContext = "accounts" | "transactions" | "recurring" | "budgeting" | "goals";
+type AskCloverContext = AskPage;
 type PlanTier = "free" | "pro" | "premium" | "unknown";
 
 type ContextualAskCloverProps = {
   context: AskCloverContext;
   planTier?: PlanTier;
+  navigation?: ReactNode;
+  captureLinks?: boolean;
 };
 
-const contextCopy: Record<
-  AskCloverContext,
-  {
-    label: string;
-    title: string;
-    prompts: AdviserPrompt[];
-  }
-> = {
-  accounts: {
-    label: "Ask Clover about your accounts",
-    title: "Your accounts",
-    prompts: [
-      {
-        id: "accounts-cash-position",
-        group: "accounts",
-        label: "How much cash do I actually have?",
-        prompt: "Looking across my Clover accounts, how much cash do I actually have and what part of it is safe to use?",
-      },
-      {
-        id: "accounts-bill-cover",
-        group: "cashflow",
-        label: "Can my accounts cover upcoming bills?",
-        prompt: "Can my current account balances cover my known upcoming bills and recurring payments? Show me the important numbers.",
-      },
-      {
-        id: "accounts-concentration",
-        group: "accounts",
-        label: "Where is my balance concentrated?",
-        prompt: "Where is my balance concentrated across my Clover accounts, and is there anything worth reviewing?",
-      },
-      {
-        id: "accounts-safe-spend",
-        group: "cashflow",
-        label: "What can I safely spend?",
-        prompt: "Based on my accounts, upcoming commitments, goals, and recommended buffer, what can I safely spend right now?",
-      },
-    ],
-  },
-  transactions: {
-    label: "Ask Clover about your transactions",
-    title: "Your transactions",
-    prompts: [
-      {
-        id: "transactions-pattern",
-        group: "behavior",
-        label: "What spending pattern stands out?",
-        prompt: "What is the most useful spending pattern in my Clover transactions right now? Explain it with specific figures.",
-      },
-      {
-        id: "transactions-cleanup",
-        group: "cleanup",
-        label: "What needs a quick cleanup?",
-        prompt: "Which of my transactions most need categorization, review, or cleanup, and why?",
-      },
-      {
-        id: "transactions-change",
-        group: "trend",
-        label: "Why is my spending changing?",
-        prompt: "How has my spending changed across the transaction history Clover has, and what is driving that change?",
-      },
-      {
-        id: "transactions-unusual",
-        group: "transactions",
-        label: "Find unusual transactions",
-        prompt: "Find unusual or outlier transactions in my Clover history and tell me which ones are worth checking first.",
-      },
-    ],
-  },
-  recurring: {
-    label: "Ask Clover about your recurring transactions",
-    title: "Your recurring transactions",
-    prompts: [
-      {
-        id: "recurring-due-soon",
-        group: "recurring",
-        label: "What is due soon?",
-        prompt: "What recurring payments, debts, installments, or reminders are due soon, and how much should I keep available?",
-      },
-      {
-        id: "recurring-cover",
-        group: "cashflow",
-        label: "Can I cover upcoming bills?",
-        prompt: "Can my available account balances cover my upcoming recurring commitments? Show the expected pressure and remaining buffer.",
-      },
-      {
-        id: "recurring-change",
-        group: "recurring",
-        label: "Which recurring cost changed?",
-        prompt: "Have any of my recurring costs changed or become unusual compared with their history?",
-      },
-      {
-        id: "recurring-review",
-        group: "bills",
-        label: "What could I review or cancel?",
-        prompt: "Which recurring costs are most worth reviewing, reducing, or cancelling based on my Clover data?",
-      },
-    ],
-  },
-  budgeting: {
-    label: "Plan a budget with Ask Clover",
-    title: "Plan a budget",
-    prompts: [
-      {
-        id: "budgeting-design",
-        group: "budgeting",
-        label: "Help me design a budget",
-        prompt: "Help me create an appropriate budget from my recent spending. Ask only for details Clover cannot determine, then prepare a budget card for me to review.",
-      },
-      {
-        id: "budgeting-groceries",
-        group: "budgeting",
-        label: "Plan a grocery budget",
-        prompt: "Help me create a monthly grocery budget based on the spending Clover can see.",
-      },
-      {
-        id: "budgeting-room",
-        group: "cashflow",
-        label: "What limit can I afford?",
-        prompt: "What monthly spending limit fits my income, commitments, and current financial goals?",
-      },
-      {
-        id: "budgeting-review",
-        group: "budgeting",
-        label: "Review my current budgets",
-        prompt: "Review my current budgets and tell me which limit is least realistic based on my recent activity.",
-      },
-    ],
-  },
-  goals: {
-    label: "Plan a goal with Ask Clover",
-    title: "Plan a goal",
-    prompts: [
-      {
-        id: "goals-design",
-        group: "goals",
-        label: "Help me design a goal",
-        prompt: "Help me create a realistic financial goal using the cash flow Clover can see. Ask only for missing details, then prepare a goal card for me to review.",
-      },
-      {
-        id: "goals-emergency",
-        group: "goals",
-        label: "Plan an emergency fund",
-        prompt: "Help me create an emergency fund goal that fits my recent income, spending, and commitments.",
-      },
-      {
-        id: "goals-target",
-        group: "goals",
-        label: "Choose a realistic target",
-        prompt: "Suggest a realistic monthly goal target from my Clover data and explain the tradeoff briefly.",
-      },
-      {
-        id: "goals-progress",
-        group: "goals",
-        label: "Improve my current goal",
-        prompt: "Review my current goal progress and suggest one realistic adjustment.",
-      },
-    ],
-  },
+const contextCopy = {
+  accounts: { label: "Ask Clover about your accounts" },
+  transactions: { label: "Ask Clover about your transactions" },
+  recurring: { label: "Ask Clover about recurring payments" },
+  budgeting: { label: "Plan a budget with Ask Clover" },
+  goals: { label: "Plan a goal with Ask Clover" },
 };
 
-export function ContextualAskClover({ context, planTier = "unknown" }: ContextualAskCloverProps) {
+export function ContextualAskClover({ context, planTier = "unknown", navigation, captureLinks = false }: ContextualAskCloverProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [resolvedPlanTier, setResolvedPlanTier] = useState<PlanTier>(planTier);
   const triggerRef = useRef<HTMLButtonElement | null>(null);
   const panelRef = useRef<HTMLDivElement | null>(null);
   const titleId = useId();
-  const copy = contextCopy[context];
+  const pathname = usePathname();
+  const [pageContext, setPageContext] = useState<AskPageContext>(() => askPageContext(`/${context}`));
+  const legacy = context in contextCopy ? contextCopy[context as keyof typeof contextCopy] : undefined;
+  const copy = { label: legacy?.label || "Open Ask Clover", title: pageContext.title, prompts: askPagePrompts(pageContext).map((prompt, i) => ({id: `${context}-${i}`, group: context, label: prompt, prompt})) };
+  const openPanel = (prompt?: string) => {
+    const hints = Object.fromEntries(new URLSearchParams(window.location.search));
+    const scope = document.querySelector<HTMLElement>("[data-ask-page-context]");
+    if (scope) { try { Object.assign(hints, JSON.parse(scope.dataset.askPageContext || "{}")); } catch { /* Unavailable hints do not block chat. */ } }
+    setPageContext({...askPageContext(pathname || `/${context}`, hints), ...(prompt ? {prompt:prompt.slice(0,4000)} : {})});
+    setIsOpen(true);
+  };
+  useEffect(() => {
+    if (!captureLinks) return;
+    const intercept = (event: MouseEvent) => {
+      if (window.innerWidth > 1100 || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || !(event.target instanceof Element)) return;
+      const link = event.target.closest<HTMLAnchorElement>("a[href]");
+      if (!link || link.target === "_blank" || link.closest(".contextual-ask-clover__panel")) return;
+      const target = new URL(link.href,window.location.href);
+      if (target.origin !== window.location.origin || target.pathname !== "/adviser") return;
+      event.preventDefault(); event.stopPropagation(); openPanel(target.searchParams.get("prompt") || undefined);
+    };
+    document.addEventListener("click",intercept,true);
+    return () => document.removeEventListener("click",intercept,true);
+  }, [captureLinks, pathname, context]);
+  useEffect(() => { setIsOpen(false); }, [pathname]);
+  useEffect(() => { const close = () => setIsOpen(false); window.addEventListener(selectedWorkspaceEventName, close); return () => window.removeEventListener(selectedWorkspaceEventName, close); }, []);
+  useEffect(() => {
+    if (!isOpen) return;
+    const overflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    const background = Array.from(document.body.children).filter(el => el instanceof HTMLElement && !el.matches(".contextual-ask-clover__panel, .contextual-ask-clover__dismiss-layer, script, nextjs-portal")) as HTMLElement[];
+    const previous = background.map(el => el.inert);
+    background.forEach(el => { el.inert = true; });
+    return () => { document.body.style.overflow = overflow; background.forEach((el,i) => { el.inert = previous[i]; }); };
+  }, [isOpen]);
 
   useEffect(() => {
     if (planTier !== "unknown") {
@@ -218,9 +106,17 @@ export function ContextualAskClover({ context, planTier = "unknown" }: Contextua
     }
 
     const closeOnEscape = (event: KeyboardEvent) => {
+      if (document.querySelector("dialog[open]")) return;
+      if (event.key === "Tab") {
+        const focusable = panelRef.current?.querySelectorAll<HTMLElement>('button:not(:disabled), a[href], input:not(:disabled), textarea:not(:disabled), [tabindex="0"]');
+        const visible = Array.from(focusable || []).filter(element => element.getClientRects().length > 0);
+        const first = visible[0], last = visible[visible.length - 1];
+        if (event.shiftKey && (document.activeElement === first || document.activeElement === panelRef.current)) { event.preventDefault(); last?.focus(); }
+        else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first?.focus(); }
+      }
       if (event.key === "Escape") {
         setIsOpen(false);
-        triggerRef.current?.focus();
+        window.requestAnimationFrame(() => triggerRef.current?.focus());
       }
     };
 
@@ -231,28 +127,28 @@ export function ContextualAskClover({ context, planTier = "unknown" }: Contextua
 
   const closePanel = () => {
     setIsOpen(false);
-    triggerRef.current?.focus();
+    window.requestAnimationFrame(() => triggerRef.current?.focus());
   };
 
   return (
-    <span className="contextual-ask-clover">
+    <span hidden={captureLinks} className={navigation ? "contextual-ask-clover contextual-ask-clover--navigation" : "contextual-ask-clover"}>
       <button
         ref={triggerRef}
         type="button"
-        className="contextual-ask-clover__trigger"
+        className={navigation ? "shell-bottom-nav__item contextual-ask-clover__nav-trigger" : "contextual-ask-clover__trigger"}
         aria-label={copy.label}
         aria-expanded={isOpen}
         aria-haspopup="dialog"
-        onClick={() => setIsOpen((current) => !current)}
+        onClick={() => { if (isOpen) closePanel(); else openPanel(); }}
       >
-        <Image
+        {navigation || <Image
           src={getNavigationIconSrc("adviser")}
           alt=""
           width={96}
           height={96}
           className="contextual-ask-clover__icon"
           aria-hidden="true"
-        />
+        />}
         <span className="contextual-ask-clover__tooltip" role="tooltip">
           {copy.label}
         </span>
@@ -271,7 +167,7 @@ export function ContextualAskClover({ context, planTier = "unknown" }: Contextua
                 ref={panelRef}
                 className="contextual-ask-clover__panel"
                 role="dialog"
-                aria-modal="false"
+                aria-modal="true"
                 aria-labelledby={titleId}
                 tabIndex={-1}
               >
@@ -296,8 +192,10 @@ export function ContextualAskClover({ context, planTier = "unknown" }: Contextua
                     <AdviserChat
                       prompts={copy.prompts}
                       isPro={hasFullFeatureAccess(resolvedPlanTier)}
-                      storageKey={`clover-adviser-chat-${context}-v1`}
+                      storageKey={`clover-adviser-chat-${context}-${pageContext.transactionId || pageContext.circleId || pageContext.accountId || "page"}-v2`}
                       surface={context}
+                      pageContext={pageContext}
+                      initialPrompt={pageContext.prompt}
                       pageLabel={copy.title}
                     />
                   )}

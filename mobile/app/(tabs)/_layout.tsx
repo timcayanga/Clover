@@ -1,3 +1,6 @@
+import { usePageAskClover } from "../../src/page-ask-context";
+import { askPageContext } from "../../../shared/ask-clover-page";
+import { usePathname, useGlobalSearchParams } from "expo-router";
 import {
   GlassContent,
   GlassNavigationProvider,
@@ -18,6 +21,9 @@ import {
 } from "../../src/ui";
 export default function TabLayout() {
   const { colors, dark } = useTheme();
+  const askClover = usePageAskClover();
+  const path = usePathname();
+  const params = useGlobalSearchParams();
   const access = useAccess();
   const session = useSession();
   const coveredByEntry = !useIsFocused();
@@ -56,6 +62,7 @@ export default function TabLayout() {
                   return <NavigationItem key={route.key} label={route.name === "add" ? "Add" : String(options.title ?? route.name)}
                     selected={focused} add={route.name === "add"} color={color}
                     onPress={() => {
+                      if (route.name === "adviser") { askClover(askPageContext(path, params)); return; }
                       const event = navigation.emit({ type: "tabPress", target: route.key, canPreventDefault: true });
                       if (!focused && !event.defaultPrevented) navigation.navigate(route.name, route.params);
                     }}

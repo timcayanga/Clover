@@ -1,3 +1,4 @@
+import { usePageAskScope, usePageAskClover } from "./page-ask-context";
 import { ContextualUpgrade } from "./contextual-upgrade";
 import { ReportNavigation, ReportDirectory, ReportJumpTarget, ReportCurrencyScope } from "./report-navigation";
 import { ReportOutlook } from "./report-outlook";
@@ -82,6 +83,7 @@ function ReportWorkspace() {
     `reports/workspace?${query}`,
     sampleReportsWorkspace,
   );
+  usePageAskScope({page:"reports",title:"Reports",currency:data?.view.currency,from:data?.period.from,to:data?.period.to,reportParams:data ? reportViewParams(data.view).toString() : undefined});
   const [savedOpen, setSavedOpen] = useState(false),
     [saved, setSaved] = useState<SavedReport[]>([]),
     [selected, setSelected] = useState<SavedReport | null>(null),
@@ -541,6 +543,7 @@ function NativeReportPanels({
   setView: (f: (v: ReportView) => ReportView) => void;
   onChanged?:()=>void|Promise<unknown>;
 }) {
+  const askClover = usePageAskClover();
   const { colors } = useTheme();
   const a = r.analysis,
     c = r.currency,
@@ -834,12 +837,7 @@ function NativeReportPanels({
               title="Ask Clover"
               tone="ask"
               onPress={() =>
-                router.push({
-                  pathname: "/(tabs)/adviser",
-                  params: {
-                    prompt: `Explain my ${c} spending changes from ${a.from} to ${a.to}, compared with ${a.previousFrom} to ${a.previousTo}.`,
-                  },
-                })
+                askClover({page:"reports",title:"Reports",prompt:`Explain my ${c} spending changes from ${a.from} to ${a.to}, compared with ${a.previousFrom} to ${a.previousTo}.`})
               }
             />
           </ReportCard>
@@ -1082,7 +1080,7 @@ function NativeReportPanels({
               <PlanAction
                 title="Ask Clover"
                 tone="ask"
-                onPress={() => router.push("/(tabs)/adviser")}
+                onPress={() => askClover({page:"reports",title:"Reports"})}
               />
             </ReportCard>
             <ReportCard title="Goal Check">

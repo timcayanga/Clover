@@ -1,3 +1,4 @@
+import { usePageAskScope } from "../src/page-ask-context";
 import {CircleDetailPanels} from "../src/circle-detail-panels";
 import { ResourceUpgradeNotice } from "../src/contextual-upgrade";
 import { AdaptiveGrid } from "../src/adaptive";
@@ -152,6 +153,7 @@ export default function Circles() {
       }
     }
   }, [params.circleId, data, session.profileId]);
+  usePageAskScope({page:"circles", title:selected?.name || "Circles", circleId:selected?.id});
   const selectedId = selected?.id;
   useEffect(() => {
     if (!selectedId || session.demo) return;

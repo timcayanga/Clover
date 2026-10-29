@@ -1,4 +1,5 @@
 "use client";
+import type { AskPageContext } from "../../shared/ask-clover-page";
 import "./ask-clover-entry.css";
 import { entryExample } from "../../shared/entry-examples";
 
@@ -101,6 +102,7 @@ type AdviserChatProps = {
   minimal?: boolean;
   surface?: AdviserPlanningSurface;
   pageLabel?: string;
+  pageContext?: AskPageContext;
 };
 
 const adviserChatStorageKey = "clover-adviser-chat-session-v1";
@@ -166,9 +168,9 @@ export function AdviserChat(props: AdviserChatProps) {
     update(); window.addEventListener(selectedWorkspaceEventName,update);
     return () => { controller?.abort(); window.removeEventListener(selectedWorkspaceEventName,update); };
   }, [props.workspaceId]);
-  return scope ? <ScopedAdviserChat key={scope} {...props} workspaceId={scope} storageKey={`${adviserChatStorageKey}:${scope}`} /> : <div className="adviser-chat__loading" role="status" aria-label="Loading Ask Clover">Opening Ask Clover…</div>;
+  return scope ? <ScopedAdviserChat key={scope} {...props} workspaceId={scope} storageKey={`${props.storageKey || adviserChatStorageKey}:${scope}`} /> : <div className="adviser-chat__loading" role="status" aria-label="Loading Ask Clover">Opening Ask Clover…</div>;
 }
-function ScopedAdviserChat({ prompts, storageKey = adviserChatStorageKey, initialPrompt = "", layout = "embedded", minimal = false, surface = "general", pageLabel, workspaceId, formContext, onReviewForm }: AdviserChatProps & {workspaceId:string}) {
+function ScopedAdviserChat({ prompts, storageKey = adviserChatStorageKey, initialPrompt = "", layout = "embedded", minimal = false, surface = "general", pageLabel, pageContext, workspaceId, formContext, onReviewForm }: AdviserChatProps & {workspaceId:string}) {
   const [entryDraft,setEntryDraft] = useState<EntryDraft|null>(null);
   const [entryLocked,setEntryLocked] = useState(false);
 
@@ -286,6 +288,7 @@ function ScopedAdviserChat({ prompts, storageKey = adviserChatStorageKey, initia
           attachmentIds: attachments.map(file=>file.id),
           surface,
           pageLabel,
+          pageContext,
           activeDraft: entryDraft ? undefined : planningDraft,
           entryDraft: entryDraft || undefined,
           clientDate: `${new Date().getFullYear()}-${String(new Date().getMonth()+1).padStart(2,"0")}-${String(new Date().getDate()).padStart(2,"0")}`,

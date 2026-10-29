@@ -4,7 +4,7 @@ import vm from 'node:vm';
 import ts from 'typescript';
 const source = fs.readFileSync(new URL('../app/(tabs)/adviser.tsx', import.meta.url), 'utf8');
 const code = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, jsx: ts.JsxEmit.ReactJSX } }).outputText;
-function render(wide, keyboardOpen) {
+function render(wide, keyboardOpen, embedded = false) {
   let arrayCount = 0;
   const exports = {};
   const dependencies = {
@@ -22,7 +22,7 @@ function render(wide, keyboardOpen) {
     '../../src/adviser-input-tools': { AdviserInputTools: 'AdviserInputTools' },
   };
   vm.runInNewContext(code, { exports, require: name => dependencies[name] ?? new Proxy({}, { get: (_, key) => String(key) }) });
-  return exports.default();
+  return exports.AdviserConversation({embedded,pageContext:embedded ? {page:"transactions",title:"Transaction Details",transactionId:"tx-1"} : undefined});
 }
 function find(tree, predicate, parent) {
   if (Array.isArray(tree)) return tree.flatMap(child => find(child, predicate, parent));
@@ -37,3 +37,12 @@ for (const wide of [false, true]) for (const keyboard of [false, true]) {
   assert(find(tree, node => node.type === 'Screen').every(({ node }) => node.props.keyboardInsets === false), 'Chat uses its outer keyboard avoider, never a second inset');
 }
 console.log('PASS chat after-reply composer: phone/tablet, keyboard shown/hidden, dock clearance and one composer');
+
+for (const keyboard of [false, true]) {
+ const tree = render(false, keyboard, true);
+ const composer = find(tree, node => node.type === 'AdviserInputTools');
+ assert.equal(composer.length, 1);
+ assert.equal(composer[0].parent.props.style.paddingBottom, keyboard ? 16 : 50, 'Sheet composer clears safe area without reserving the covered dock');
+ assert(find(tree, node => node.type === 'Screen').every(({node}) => node.props.sheet === true), 'Embedded chat never mounts another bottom navigation');
+}
+console.log('PASS contextual chat sheet: keyboard and safe-area padding, no nested navigation');

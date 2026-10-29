@@ -1,3 +1,4 @@
+import { usePageAskClover, usePageAskScope } from "../src/page-ask-context";
 import { ResourceUpgradeNotice } from "../src/contextual-upgrade";
 import { AdaptiveGrid } from "../src/adaptive";
 import { CloverEmptyState } from "../src/clover-mascot";
@@ -78,6 +79,8 @@ export default function Budgeting() {
   const { colors, dark } = useTheme();
   const { data, setData, error, reload } = usePlanData("budgets", sample);
   const [selected, setSelected] = useState<Budget | null>(null);
+  const askClover = usePageAskClover();
+  usePageAskScope({page:"budgeting",title:selected?.name || "Budgeting",budgetId:selected?.id,currency:selected?.currency});
   const [tab, setTab] = useState("Overview");
   const [editor, setEditor] = useState<{
     budget: Budget | null;
@@ -222,13 +225,7 @@ export default function Budgeting() {
                 title="Ask Clover about this budget"
                 tone="ask"
                 onPress={() =>
-                  router.push({
-                    pathname: "/(tabs)/adviser",
-                    params: {
-                      page: "budgeting",
-                      prompt: `Help me understand my budget, ${selected.name}.`,
-                    },
-                  })
+                  askClover({page:"budgeting",title:selected.name,budgetId:selected.id,prompt:`Help me understand my budget, ${selected.name}.`})
                 }
               />
               <PlanAction

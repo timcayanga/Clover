@@ -1,3 +1,5 @@
+import { usePageAskClover } from "./page-ask-context";
+import { askPageContext } from "../../shared/ask-clover-page";
 import { Modal } from "./adaptive-modal";
 import { FocusVisibility, useKeyboardVisibility } from "./keyboard-visibility";
 import { useAccessibilityPreferences } from "./accessibility-preferences";
@@ -17,7 +19,7 @@ import { LinearGradient } from "expo-linear-gradient";
 import { useAccess } from "./access";
 import { useDisplayPreferences } from "./display-preferences";
 import Ionicons from "@expo/vector-icons/Ionicons";
-import { router, usePathname } from "expo-router";
+import { router, usePathname, useGlobalSearchParams } from "expo-router";
 import {
   Image,
   Animated,
@@ -466,11 +468,14 @@ export function AppHeader({
       active = false;
     };
   }, [panel, session.demo, session.profileId, session.request, revision]);
-  const adviser = usePathname().startsWith("/settings") ? null : (
+  const askClover = usePageAskClover();
+  const askPath = usePathname();
+  const askParams = useGlobalSearchParams();
+  const adviser = askPath.startsWith("/settings") ? null : (
     <Pressable
       accessibilityRole="button"
       accessibilityLabel="Open Ask Clover"
-      onPress={() => router.navigate("/(tabs)/adviser")}
+      onPress={() => askClover(askPageContext(askPath, askParams, title))}
       style={styles.iconButton}
     >
       <Icon name="chatbubble-ellipses-outline" size={32} />
@@ -1050,6 +1055,8 @@ export function DetailNavigation({
   const access = useAccess();
   const { colors, dark } = useTheme();
   const path = usePathname();
+  const params = useGlobalSearchParams();
+  const askClover = usePageAskClover();
   return (
     <NavigationBar dark={dark}>
       {(
@@ -1083,6 +1090,7 @@ export function DetailNavigation({
           add={item.title === "Add"}
           selected={path === item.route.replace("/(tabs)", "") || (item.title === "Home" && path === "/")}
           onPress={() => {
+            if (access.active && item.title === "Ask Clover") { askClover(askPageContext(path, params)); return; }
             onNavigate?.();
             if (access.active) router.navigate(item.route);
             else void access.signIn();

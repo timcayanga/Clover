@@ -282,7 +282,7 @@ export function ReportsWorkspaceView({
         </>
       }
     >
-      <div className="report-v2">
+      <div className="report-v2" data-ask-page-context={JSON.stringify({reportParams:reportViewParams(data.view).toString(),currency:data.view.currency,from:data.period.from,to:data.period.to})}>
         <div className="report-v2-toolbar">
           <p>
             {data.period.from} to {data.period.to} · {data.timeZone}

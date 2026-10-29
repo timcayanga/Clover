@@ -1,3 +1,4 @@
+import { askPagePrompts, type AskPageContext } from "../../../shared/ask-clover-page";
 import { useKeyboardOpen } from "../../src/navigation-bar";
 import { useAdaptiveLayout } from "../../src/adaptive";
 import { useDetailPane } from "../../src/adaptive-detail";
@@ -40,8 +41,10 @@ type Message = {
   content: string;
   visualization?: AdviserChart;
 };
-export default function Adviser() {
-  const wide = useDetailPane();
+export default function Adviser() { return <AdviserConversation />; }
+export function AdviserConversation({ pageContext, embedded = false, onClose }: {pageContext?: AskPageContext; embedded?: boolean; onClose?: () => void} = {}) {
+  const detailPane = useDetailPane();
+  const wide = !embedded && detailPane;
   const keyboardOpen = useKeyboardOpen();
   const adaptive = useAdaptiveLayout();
   const session = useSession();
@@ -123,8 +126,8 @@ export default function Adviser() {
     };
   }, [session.profileId]);
   useEffect(() => {
-    if (params.prompt) setDraft(params.prompt.slice(0, 4000));
-  }, [params.prompt]);
+    if (pageContext?.prompt || params.prompt) setDraft((pageContext?.prompt || params.prompt || "").slice(0, 4000));
+  }, [params.prompt, pageContext?.prompt]);
   const send = async (prompt = draft) => {
     const question = prompt.trim().slice(0, 4000);
     if (inFlight.current || history.busy || !question) return;
@@ -144,6 +147,7 @@ export default function Adviser() {
     setError("");
     try {
       if (useLocal) {
+        if (pageContext && (pageContext.transactionId || pageContext.accountId || pageContext.circleId || pageContext.billId || pageContext.from || pageContext.to || ["circles", "split-bills"].includes(pageContext.page))) throw new Error("This page’s detailed records are not available to on-device tools. Connect to the internet and use cloud tools to ask about this page.");
         if (!session.offline)
           throw new Error(
             "On-device tools require an updated native build with encrypted storage.",
@@ -187,7 +191,9 @@ export default function Adviser() {
           messages: next
             .slice(-6)
             .map((m) => ({ role: m.role, content: m.content.slice(0, 4000) })),
-          page: allowed.includes(params.page ?? "") ? params.page : "general",
+          surface: pageContext?.page || (allowed.includes(params.page ?? "") ? params.page : "general"),
+          pageLabel: pageContext?.title,
+          pageContext,
           clientDate: new Date().toLocaleDateString("en-CA", {
             timeZone: "Asia/Manila",
           }),
@@ -265,12 +271,12 @@ export default function Adviser() {
     <KeyboardAvoidingView
       style={{ flex: 1, backgroundColor: colors.bg }}
       behavior={Platform.OS === "ios" ? "padding" : undefined}
-      keyboardVerticalOffset={insets.top + 70}
+      keyboardVerticalOffset={embedded ? 0 : insets.top + 70}
     >
       <View style={{ flex: 1, flexDirection: wide ? "row" : "column", minHeight: 0, width: "100%", maxWidth: 1440, alignSelf: "center" }}>
-      <View style={{ width: wide ? 300 : "100%", maxHeight: wide ? "100%" : "40%", display: !useLocal && (wide || historyOpen) ? "flex" : "none" }}><Screen keyboardInsets={false}>{historyPanel}</Screen></View>
+      <View style={{ width: wide ? 300 : "100%", maxHeight: wide ? "100%" : "40%", display: !useLocal && (wide || historyOpen) ? "flex" : "none" }}><Screen keyboardInsets={false} sheet={embedded} onDismiss={onClose}>{historyPanel}</Screen></View>
       <View style={{ flex: 1, minWidth: 0 }}>
-      <Screen keyboardInsets={false}>
+      <Screen keyboardInsets={false} sheet={embedded} onDismiss={onClose}>
         {!useLocal && !session.demo && !wide ? (
           <PlanAction
             title="Your chats"
@@ -346,8 +352,8 @@ export default function Adviser() {
           </Card>
         ) : null}
         {!messages.length ? (
-          <View style={{ gap: 20, paddingTop: 32 }}>
-            <CloverMascot pose="welcome" size={128} />
+          <View style={{ gap: 16, paddingTop: embedded ? 0 : 32 }}>
+            {!embedded ? <CloverMascot pose="welcome" size={128} /> : null}
             <Text
               accessibilityRole="header"
               style={{
@@ -360,15 +366,15 @@ export default function Adviser() {
               {session.data?.firstName?.trim()
                 ? `Hi ${session.data.firstName.trim()}! `
                 : ""}
-              Ask Clover anything about your finances.
+              {embedded ? "How can I help with this page?" : "Ask Clover anything about your finances."}
             </Text>
             {composer}
             <View style={{ gap: 8 }}>
-              {[
+              {(pageContext ? askPagePrompts(pageContext) : [
                 "🍽️ Why is food spending up?",
                 "📅 What’s due before payday?",
                 "🎯 How are my goals doing?",
-              ].map((prompt) => (
+              ]).map((prompt) => (
                 <PlanAction
                   fullWidth
                   key={prompt}
@@ -457,7 +463,7 @@ export default function Adviser() {
         <View
           style={{
             padding: 16,
-            paddingBottom: keyboardOpen ? 16 : adaptive.dockHeight + insets.bottom + 16,
+            paddingBottom: keyboardOpen ? 16 : (embedded ? 0 : adaptive.dockHeight) + insets.bottom + 16,
             borderTopWidth: 1,
             borderTopColor: colors.line,
           }}

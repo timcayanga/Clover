@@ -1,3 +1,4 @@
+import { PageAskProvider } from "../src/page-ask-provider";
 import { WindowPane, WindowPaneProvider } from "../src/window-pane";
 import { AccessibilityPreferences, useAccessibilityPreferences } from "../src/accessibility-preferences";
 import { RouteReveal } from "../src/route-reveal";
@@ -275,7 +276,7 @@ function AppSession({
           }}
           edges={["top", "left", "right"]}
         >
-          <Routes />
+          <PageAskProvider><Routes /></PageAskProvider>
         </SafeAreaView></WindowPane>
       </SessionProvider>
     </AccessContext.Provider>

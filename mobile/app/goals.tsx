@@ -1,3 +1,4 @@
+import { usePageAskClover, usePageAskScope } from "../src/page-ask-context";
 import { ResourceUpgradeNotice } from "../src/contextual-upgrade";
 import { AdaptiveGrid } from "../src/adaptive";
 import { CloverEmptyState } from "../src/clover-mascot";
@@ -69,6 +70,8 @@ export default function Goals() {
   );
   const [deleteError, setDeleteError] = useState("");
   const [selected, setSelected] = useState<Goal | null>(null);
+  const askClover = usePageAskClover();
+  usePageAskScope({page:"goals",title:selected?.name || "Goals",goalId:selected?.id,currency:selected?.currency});
   const [editor, setEditor] = useState<{
     goal: Goal | null;
     preset?: string;
@@ -264,13 +267,7 @@ export default function Goals() {
                 title="Ask Clover about this goal"
                 tone="ask"
                 onPress={() =>
-                  router.push({
-                    pathname: "/(tabs)/adviser",
-                    params: {
-                      page: "goals",
-                      prompt: `Help me understand my goal, ${selected.name}.`,
-                    },
-                  })
+                  askClover({page:"goals",title:selected.name,goalId:selected.id,prompt:`Help me understand my goal, ${selected.name}.`})
                 }
               />
             </>

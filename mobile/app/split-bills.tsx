@@ -1,3 +1,4 @@
+import { usePageAskScope } from "../src/page-ask-context";
 import { useUser } from "@clerk/expo";
 import { type AccountCardPalette, accountCardPalette } from "../../shared/visual-identity";
 import { SplitItemGrid } from "../src/split-item-grid";
@@ -162,6 +163,7 @@ export default function SplitBills() {
         settlementStatus: "open",
       });
   }, [params.billId]);
+  usePageAskScope({page:"split-bills",title:selected?.title || "Split Bills",billId:selected?.id,currency:selected?.currency});
   const selectedId = selected?.id;
   useEffect(() => {
     if (!selectedId || session.demo || selected?.items?.length) return;

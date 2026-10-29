@@ -369,6 +369,7 @@ export function CirclesPageClient({
         )
       }
     >
+      <span hidden data-ask-page-context={JSON.stringify({circleId:selectedCircleId || undefined,currency:displayCurrency})} />
       <CirclesWorkspace
         displayCurrency={displayCurrency}
         initialData={initialData}

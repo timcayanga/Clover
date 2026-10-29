@@ -60,8 +60,8 @@ if (!("error" in parsedPhilippineHistory)) {
   assert.equal(filterMarketHistoryByRange(parsedPhilippineHistory.points, "1Y").length, 2);
 }
 
-assert.match(adviserHeaderLinkSource, /getNavigationIconSrc\("adviser"\)/);
-assert.match(adviserHeaderLinkSource, /aria-label="Open Ask Clover"/);
+assert.match(adviserHeaderLinkSource, /ContextualAskClover/);
+assert.match(readFileSync(resolve(process.cwd(), "components/contextual-ask-clover.tsx"), "utf8"), /Open Ask Clover/);
 assert.match(
   globalStyles,
   /\.content--investments \.adviser-header-link img \{\s*width: 48px;\s*height: 48px;/,

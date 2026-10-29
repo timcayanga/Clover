@@ -1,3 +1,4 @@
+import { usePageAskClover } from "./page-ask-context";
 import { useEffect, useRef, useState } from "react";
 import { View, ScrollView, Pressable, Switch } from "react-native";
 import { router } from "expo-router";
@@ -55,6 +56,7 @@ export function NativePlanner({
   currency: string;
   initial: number;
 }) {
+  const askClover = usePageAskClover();
   const session = useSession();
   const { colors } = useTheme();
   const [scenarios, setScenarios] = useState(() =>
@@ -411,10 +413,7 @@ export function NativePlanner({
           tone="ask"
           fullWidth
           onPress={() =>
-            router.push({
-              pathname: "/(tabs)/adviser",
-              params: { prompt: buildGrowthAdviserPrompt(scenarios, currency) },
-            })
+            askClover({page:"investments",title:"Investment Planner",prompt:buildGrowthAdviserPrompt(scenarios,currency)})
           }
         />
       </Card>

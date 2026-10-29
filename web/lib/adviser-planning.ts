@@ -2,6 +2,10 @@ import { randomUUID } from "node:crypto";
 import { GOAL_OPTIONS, type GoalKey } from "@/lib/goals";
 
 export type AdviserPlanningSurface =
+  | "home"
+  | "reports"
+  | "circles"
+  | "split-bills"
   | "general"
   | "accounts"
   | "transactions"
