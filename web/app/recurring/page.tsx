@@ -35,7 +35,7 @@ function RecurringUnavailableState() {
 export default async function RecurringPage({
   searchParams,
 }: {
-  searchParams: Promise<{ add?: string; tab?: string }>;
+  searchParams: Promise<{ add?: string; tab?: string; commitment?: string }>;
 }) {
   try {
     const session = await getPageSessionContext();
@@ -67,6 +67,7 @@ export default async function RecurringPage({
         planTier={user.planTier}
         initialTab={initialTab}
         initialAddOpen={showAddModal}
+        initialCommitmentId={params.commitment}
       />
     );
   } catch (error) {

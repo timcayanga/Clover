@@ -16,8 +16,10 @@ export function SplitItemGrid({
   currency,
   onChange,
   adjustment = 0,
+  onAddPerson,
 }: {
   adjustment?: number;
+  onAddPerson?: () => void;
   people: SplitPerson[];
   items: SplitItem[];
   currency: string;
@@ -29,7 +31,10 @@ export function SplitItemGrid({
     onChange(
       items.map((item, i) => (i === index ? { ...item, ...patch } : item)),
     );
-  const width = Math.max(310, 142 + people.length * 72);
+  const width = Math.max(
+    310,
+    182 + people.length * 116 + (onAddPerson ? 44 : 0),
+  );
   const method = items[0]?.splitMethod ?? "equal";
   return (
     <>
@@ -53,7 +58,7 @@ export function SplitItemGrid({
               {people.map((p) => (
                 <View
                   key={p.id}
-                  style={{ width: 72, alignItems: "center", gap: 4 }}
+                  style={{ width: 116, alignItems: "center", gap: 4 }}
                 >
                   <PersonAvatar
                     name={p.name}
@@ -72,6 +77,16 @@ export function SplitItemGrid({
                   </Text>
                 </View>
               ))}
+              {onAddPerson ? (
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel="Add Person"
+                  onPress={onAddPerson}
+                  style={{ width: 44, padding: 10 }}
+                >
+                  <Text style={{ color: colors.teal, fontSize: 24 }}>+</Text>
+                </Pressable>
+              ) : null}
             </View>
             {items.map((item, index) => (
               <View
@@ -112,24 +127,13 @@ export function SplitItemGrid({
                       minHeight: 28,
                     }}
                   />
-                  <Pressable
-                    accessibilityRole="button"
-                    accessibilityLabel={`Remove item ${index + 1}`}
-                    onPress={() =>
-                      onChange(items.filter((_, i) => i !== index))
-                    }
-                  >
-                    <Text style={{ color: colors.teal, fontSize: 11 }}>
-                      Remove
-                    </Text>
-                  </Pressable>
                 </View>
                 {people.map((p) => {
                   const checked = item.participantIds.includes(p.id);
                   return (
                     <View
                       key={p.id}
-                      style={{ width: 72, alignItems: "center", gap: 8 }}
+                      style={{ width: 116, alignItems: "center", gap: 8 }}
                     >
                       <Pressable
                         accessibilityRole="checkbox"
@@ -197,6 +201,14 @@ export function SplitItemGrid({
                     </View>
                   );
                 })}
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel={`Remove item ${index + 1}`}
+                  onPress={() => onChange(items.filter((_, i) => i !== index))}
+                  style={{ width: 40, padding: 10 }}
+                >
+                  <Text style={{ color: colors.danger, fontSize: 20 }}>×</Text>
+                </Pressable>
               </View>
             ))}
             <View
@@ -211,8 +223,8 @@ export function SplitItemGrid({
                 <Body muted={false}>To pay</Body>
               </View>
               {people.map((p) => (
-                <View key={p.id} style={{ width: 72 }}>
-                  <Text
+                <View key={p.id} style={{ width: 116 }}>
+                  <Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}
                     style={{
                       color: colors.teal,
                       fontFamily: "Poppins-SemiBold",
@@ -227,8 +239,9 @@ export function SplitItemGrid({
             </View>
           </View>
         </ScrollView>
-        <PlanAction
-          title="Add line item"
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Add Line Item"
           onPress={() =>
             onChange([
               ...items,
@@ -242,7 +255,11 @@ export function SplitItemGrid({
               },
             ])
           }
-        />
+        >
+          <Text style={{ color: colors.teal, paddingVertical: 12 }}>
+            + Add Line Item
+          </Text>
+        </Pressable>
       </Card>
       <Card>
         <Body muted={false}>Split Method</Body>

@@ -1,3 +1,4 @@
+import { validateCircleExpenseSplit } from "@/lib/circle-expense-split";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
@@ -15,6 +16,8 @@ import {
 import { capturePostHogServerEvent } from "@/lib/analytics-server";
 import { type AnalyticsEventName } from "@/lib/analytics";
 
+import { splitItemTotals } from "../../../../../../shared/split-bill-experience";
+
 const amount = z.coerce.number().positive().max(1_000_000_000);
 const optionalDate = z.string().datetime().nullable().optional();
 
@@ -25,12 +28,31 @@ const resourceSchema = z.discriminatedUnion("action", [
     targetAmount: amount,
     currency: z.string().trim().length(3).default("PHP"),
     cadence: z
-      .enum(["daily", "weekly", "biweekly", "monthly", "quarterly", "annual"])
+      .enum([
+        "daily",
+        "weekly",
+        "biweekly",
+        "monthly",
+        "quarterly",
+        "annual",
+        "once",
+      ])
       .default("monthly"),
     categoryName: z.string().trim().max(100).nullable().optional(),
+    startsAt: optionalDate,
+    endsAt: optionalDate,
   }),
   z.object({
     action: z.literal("update_budget"),
+    currency: z
+      .string()
+      .regex(/^[A-Z]{3}$/)
+      .optional(),
+    cadence: z
+      .enum(["weekly", "monthly", "quarterly", "annual", "once"])
+      .optional(),
+    startsAt: optionalDate,
+    endsAt: optionalDate,
     id: z.string().min(1),
     name: z.string().trim().min(1).max(100).optional(),
     targetAmount: amount.optional(),
@@ -47,6 +69,10 @@ const resourceSchema = z.discriminatedUnion("action", [
   }),
   z.object({
     action: z.literal("update_goal"),
+    currency: z
+      .string()
+      .regex(/^[A-Z]{3}$/)
+      .optional(),
     id: z.string().min(1),
     name: z.string().trim().min(1).max(100).optional(),
     status: z.enum(["active", "paused", "completed", "archived"]).optional(),
@@ -73,17 +99,25 @@ const resourceSchema = z.discriminatedUnion("action", [
       .default("monthly"),
     nextDueDate: optionalDate,
     assignedMemberId: z.string().min(1).nullable().optional(),
+    assignedMemberIds: z.array(z.string().min(1)).max(100).optional(),
     notes: z.string().trim().max(500).nullable().optional(),
   }),
   z.object({
     action: z.literal("update_commitment"),
-    recurrence: z.enum(["once", "weekly", "biweekly", "monthly", "quarterly", "annual"]).optional(),
+    currency: z
+      .string()
+      .regex(/^[A-Z]{3}$/)
+      .optional(),
+    recurrence: z
+      .enum(["once", "weekly", "biweekly", "monthly", "quarterly", "annual"])
+      .optional(),
     notes: z.string().trim().max(500).nullable().optional(),
     id: z.string().min(1),
     title: z.string().trim().min(1).max(120).optional(),
     amount: amount.nullable().optional(),
     nextDueDate: optionalDate,
     assignedMemberId: z.string().min(1).nullable().optional(),
+    assignedMemberIds: z.array(z.string().min(1)).max(100).optional(),
     isActive: z.boolean().optional(),
   }),
   z.object({
@@ -113,6 +147,33 @@ const resourceSchema = z.discriminatedUnion("action", [
   }),
   z.object({ action: z.literal("unshare_transaction"), id: z.string().min(1) }),
   z.object({
+    action: z.literal("update_expense_split"),
+    id: z.string().min(1),
+    items: z
+      .array(
+        z.object({
+          id: z.string().max(100).optional(),
+          description: z.string().trim().min(1).max(500),
+          amount: z.string().regex(/^\d+(?:\.\d{1,2})?$/),
+          participantIds: z.array(z.string().min(1)).min(1).max(100),
+          splitMethod: z
+            .enum(["equal", "exact", "percentage", "shares"])
+            .optional(),
+          allocations: z
+            .array(
+              z.object({
+                participantId: z.string(),
+                value: z.string().regex(/^\d+(?:\.\d{1,4})?$/),
+              }),
+            )
+            .max(100)
+            .optional(),
+        }),
+      )
+      .min(1)
+      .max(100),
+  }),
+  z.object({
     action: z.literal("share_investment"),
     accountId: z.string().min(1),
     visibility: z.enum(circleVisibilities).default("summary"),
@@ -132,6 +193,7 @@ const activityCopy: Record<string, string> = {
   add_participant: "added a Circle participant",
   update_member: "updated a Circle member",
   share_transaction: "shared a transaction",
+  update_expense_split: "updated an expense split",
   unshare_transaction: "stopped sharing a transaction",
   share_investment: "shared an investment summary",
   unshare_investment: "stopped sharing an investment summary",
@@ -158,6 +220,20 @@ export async function POST(
     const user = await getCircleCurrentUser();
     const { circleId } = await params;
     const body = resourceSchema.parse(await request.json());
+    if (
+      (body.action === "create_budget" || body.action === "update_budget") &&
+      body.startsAt &&
+      body.endsAt &&
+      new Date(body.startsAt) > new Date(body.endsAt)
+    )
+      throw new CircleAccessError("End Date must be after Start Date.", 400);
+    if (
+      (body.action === "create_commitment" ||
+        body.action === "update_commitment") &&
+      body.assignedMemberIds &&
+      body.assignedMemberIds.length === 0
+    )
+      throw new CircleAccessError("Choose at least one person.", 400);
     const requiresOrganizer =
       body.action === "add_participant" || body.action === "update_member";
     const access = await getCircleAccess(
@@ -179,7 +255,10 @@ export async function POST(
               name: body.name,
               targetAmount: body.targetAmount,
               currency: body.currency.toUpperCase(),
-              cadence: body.cadence,
+              cadence: body.cadence === "once" ? "monthly" : body.cadence,
+              oneTime: body.cadence === "once",
+              startsAt: body.startsAt ? new Date(body.startsAt) : null,
+              endsAt: body.endsAt ? new Date(body.endsAt) : null,
               categoryName: body.categoryName || null,
             },
           });
@@ -195,6 +274,24 @@ export async function POST(
               name: body.name,
               targetAmount: body.targetAmount,
               isActive: body.isActive,
+              currency: body.currency,
+              cadence: body.cadence === "once" ? "monthly" : body.cadence,
+              oneTime:
+                body.cadence === undefined
+                  ? undefined
+                  : body.cadence === "once",
+              startsAt:
+                body.startsAt === undefined
+                  ? undefined
+                  : body.startsAt
+                    ? new Date(body.startsAt)
+                    : null,
+              endsAt:
+                body.endsAt === undefined
+                  ? undefined
+                  : body.endsAt
+                    ? new Date(body.endsAt)
+                    : null,
             },
           });
           if (updated.count !== 1)
@@ -227,6 +324,7 @@ export async function POST(
             data: {
               name: body.name,
               status: body.status,
+              currency: body.currency,
               targetAmount: body.targetAmount,
               targetDate:
                 body.targetDate === undefined
@@ -306,6 +404,17 @@ export async function POST(
         }
         case "create_commitment": {
           if (
+            body.assignedMemberIds?.length &&
+            (await tx.circleMembership.count({
+              where: {
+                circleId,
+                status: "active",
+                id: { in: [...new Set(body.assignedMemberIds)] },
+              },
+            })) !== new Set(body.assignedMemberIds).size
+          )
+            throw new CircleAccessError("Assigned member not found.", 404);
+          if (
             body.assignedMemberId &&
             !(await tx.circleMembership.findFirst({
               where: { id: body.assignedMemberId, circleId },
@@ -321,7 +430,15 @@ export async function POST(
               currency: body.currency.toUpperCase(),
               recurrence: body.recurrence,
               nextDueDate: body.nextDueDate ? new Date(body.nextDueDate) : null,
-              assignedMemberId: body.assignedMemberId || null,
+              assignedMemberId:
+                body.assignedMemberIds?.[0] ?? body.assignedMemberId ?? null,
+              assignedMemberIds: body.assignedMemberIds
+                ? [...new Set(body.assignedMemberIds)]
+                : body.assignedMemberId === undefined
+                  ? undefined
+                  : body.assignedMemberId
+                    ? [body.assignedMemberId]
+                    : [],
               notes: body.notes || null,
             },
           });
@@ -331,6 +448,17 @@ export async function POST(
           break;
         }
         case "update_commitment": {
+          if (
+            body.assignedMemberIds?.length &&
+            (await tx.circleMembership.count({
+              where: {
+                circleId,
+                status: "active",
+                id: { in: [...new Set(body.assignedMemberIds)] },
+              },
+            })) !== new Set(body.assignedMemberIds).size
+          )
+            throw new CircleAccessError("Assigned member not found.", 404);
           if (
             body.assignedMemberId &&
             !(await tx.circleMembership.findFirst({
@@ -350,7 +478,17 @@ export async function POST(
                   : body.nextDueDate
                     ? new Date(body.nextDueDate)
                     : null,
-              assignedMemberId: body.assignedMemberId,
+              assignedMemberId: body.assignedMemberIds
+                ? (body.assignedMemberIds[0] ?? null)
+                : body.assignedMemberId,
+              assignedMemberIds: body.assignedMemberIds
+                ? [...new Set(body.assignedMemberIds)]
+                : body.assignedMemberId === undefined
+                  ? undefined
+                  : body.assignedMemberId
+                    ? [body.assignedMemberId]
+                    : [],
+              currency: body.currency,
               recurrence: body.recurrence,
               notes: body.notes,
               isActive: body.isActive,
@@ -433,7 +571,10 @@ export async function POST(
                 },
               ],
             }));
-          if (invitationMatch.length > 0 && (body.role || body.status === "removed")) {
+          if (
+            invitationMatch.length > 0 &&
+            (body.role || body.status === "removed")
+          ) {
             await tx.circleInvitation.updateMany({
               where: {
                 circleId,
@@ -503,6 +644,35 @@ export async function POST(
           value = created;
           entityType = "shared_transaction";
           entityId = created.id;
+          break;
+        }
+        case "update_expense_split": {
+          const share = await tx.circleSharedTransaction.findFirst({
+            where: { id: body.id, circleId },
+            include: { transaction: true },
+          });
+          if (!share || share.visibility === "summary")
+            throw new CircleAccessError("Shared expense not found.", 404);
+          if (access.role !== "organizer" && share.sharedByUserId !== user.id)
+            throw new CircleAccessError(
+              "Only the sharer or an Organizer can edit this split.",
+              403,
+            );
+          const members = await tx.circleMembership.findMany({
+            where: { circleId, status: "active" },
+            select: { id: true, displayName: true },
+          });
+          validateCircleExpenseSplit(
+            members,
+            body.items,
+            Math.abs(Number(share.sharedAmount ?? share.transaction.amount)),
+          );
+          value = await tx.circleSharedTransaction.update({
+            where: { id: share.id },
+            data: { splitConfig: { items: body.items } },
+          });
+          entityType = "shared_transaction";
+          entityId = share.id;
           break;
         }
         case "unshare_transaction": {

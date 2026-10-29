@@ -1,3 +1,4 @@
+import { useUser } from "@clerk/expo";
 import { SplitItemGrid } from "./split-item-grid";
 import { PaymentOptionMark } from "./payment-option-mark";
 import {
@@ -71,6 +72,12 @@ export function BillDetails({
   onDeleted: () => void;
 }) {
   const session = useSession();
+  const { user } = useUser();
+  const [addedParticipants, setAddedParticipants] = useState<
+    { id: string; name: string }[]
+  >([]);
+  const [addingPerson, setAddingPerson] = useState(false);
+  const [personName, setPersonName] = useState("");
   const alive = useRef(true);
   useEffect(() => {
     alive.current = true;
@@ -126,7 +133,7 @@ export function BillDetails({
     Number(bill.total) -
     (bill.items ?? []).reduce((sum, item) => sum + Number(item.amount), 0);
   const instantTotals = splitItemTotals(
-    bill.participants ?? [],
+    [...(bill.participants ?? []), ...addedParticipants],
     items,
     adjustment,
   );
@@ -224,8 +231,13 @@ export function BillDetails({
   };
   const [note, setNote] = useState("");
   const [message, setMessage] = useState("");
-  const payload = JSON.stringify({ title, items });
+  const payload = JSON.stringify({
+    title,
+    items,
+    ...(addedParticipants.length ? { addedParticipants } : {}),
+  });
   const changed =
+    addedParticipants.length > 0 ||
     title !== bill.title ||
     JSON.stringify(items) !==
       JSON.stringify(
@@ -291,8 +303,10 @@ export function BillDetails({
       });
       if (!alive.current) return;
       if (method === "DELETE") onDeleted();
-      else if (result.bill) onSaved(result.bill);
-      else {
+      else if (result.bill) {
+        setAddedParticipants([]);
+        onSaved(result.bill);
+      } else {
         const url = result.request?.shareUrl ?? "";
         const text = paymentRequestMessage(request?.fromParticipantName ?? "", [
           {
@@ -328,7 +342,7 @@ export function BillDetails({
     setItems((current) =>
       current.map((i) => (i.id === id ? { ...i, ...patch } : i)),
     );
-  const people = bill.participants ?? [];
+  const people = [...(bill.participants ?? []), ...addedParticipants];
   return (
     <>
       <SummaryCard
@@ -337,12 +351,47 @@ export function BillDetails({
         detail={`${bill.billDate.slice(0, 10)} · ${bill.resolved ? "Resolved" : bill.settlementStatus}`}
       />
       <Field label="Bill name" value={title} onChangeText={setTitle} />
+      {addingPerson ? (
+        <Card>
+          <Field
+            label="Person Name"
+            value={personName}
+            onChangeText={setPersonName}
+          />
+          <PlanAction
+            title="Add Person"
+            onPress={() => {
+              const name = personName.trim();
+              if (
+                !name ||
+                people.some((p) => p.name.toLowerCase() === name.toLowerCase())
+              ) {
+                setError("Choose a distinct person name.");
+                return;
+              }
+              setAddedParticipants((old) => [
+                ...old,
+                {
+                  id: `person-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+                  name,
+                },
+              ]);
+              setPersonName("");
+              setAddingPerson(false);
+            }}
+          />
+        </Card>
+      ) : null}
       <SplitItemGrid
-        people={(bill.participants ?? []).map((p) => ({
+        people={people.map((p) => ({
           ...p,
-          avatarUrl: peopleProfiles.find((profile) => profile.name === p.name)
-            ?.avatarUrl,
+          avatarUrl:
+            /^(you|me)$/i.test(p.name) || p.name === user?.fullName
+              ? user?.imageUrl
+              : peopleProfiles.find((profile) => profile.name === p.name)
+                  ?.avatarUrl,
         }))}
+        onAddPerson={() => setAddingPerson(true)}
         items={items}
         adjustment={adjustment}
         currency={bill.currency}

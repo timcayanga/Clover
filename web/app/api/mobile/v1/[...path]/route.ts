@@ -164,6 +164,10 @@ async function handle(
       const access = await getProAccess(user.id);
       return reply({ verifiedRecoveryAlias, purchaseRecoveryAvailable: config.purchaseRecoveryAvailable, available: config.enabled && !(access.user.planTierLocked && access.planTier === "free"), appUserId: userId, entitlementId: config.entitlementId, offeringId: config.offeringId, productIds: config.products, planTier: access.planTier, accessEndsAt: access.accessEndsAt, renewing: access.renewing, hasPaidSubscription: access.hasPaidSubscription, trial: access.trial, accessSource: access.source, billingProvider: access.storeSubscription?.expiresAt && access.storeSubscription.expiresAt > new Date() ? access.storeSubscription.store : access.hasPaidSubscription ? access.subscription?.provider ?? null : null });
     }
+    if (/^transactions\/[^/]+\/related$/.test(path.join("/"))) {
+      const transactionId=path[1];
+      return await withMobileRequestContext(userId,request,async()=> (await import("@/app/api/transactions/[transactionId]/related/route")).GET(request,{params:Promise.resolve({transactionId})}));
+    }
     if (operation === "settings-ai-consent") {
       const { getAiConsent, setAiConsent } = await import("@/lib/ai-consent");
       return reply(request.method === "GET" ? await getAiConsent(user.id) : await setAiConsent(user.id, await request.json()));

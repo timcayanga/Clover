@@ -1,79 +1,87 @@
 "use client";
-
 import Link from "next/link";
-import { useEffect, useRef, useState } from "react";
-import { FEATURE_NAVIGATION } from "@/lib/feature-navigation";
+import { useRef, useState } from "react";
+import { productPages } from "../../shared/circle-experience";
 import { getNavigationIconSrc } from "@/lib/navigation-icons";
-
-type Category = (typeof FEATURE_NAVIGATION)[number]["label"];
-const HISTORY_KEY = "cloverHomeFeatureCategory";
-
 export function HomeFeatureGrid() {
-  const [category, setCategory] = useState<Category | null>(null);
-  // Retain the outgoing panel during the reverse transition.
-  const [lastCategory, setLastCategory] = useState<Category>("Money");
-  const categoryButtons = useRef(new Map<Category, HTMLButtonElement>());
-  const backButton = useRef<HTMLButtonElement>(null);
-  const moveFocus = useRef(false);
-  const group = FEATURE_NAVIGATION.find((item) => item.label === (category ?? lastCategory))!;
-
-  useEffect(() => {
-    // Keep selection on this history entry only: returning from a feature restores
-    // its category, while a newly opened Home starts with the category directory.
-    const saved = window.history.state?.[HISTORY_KEY];
-    if (FEATURE_NAVIGATION.some((item) => item.label === saved)) {
-      setCategory(saved);
-      setLastCategory(saved);
-    }
-  }, []);
-
-  useEffect(() => {
-    if (!moveFocus.current) return;
-    moveFocus.current = false;
-    (category ? backButton.current : categoryButtons.current.get(lastCategory))?.focus({ preventScroll: true });
-  }, [category, lastCategory]);
-
-  function selectCategory(next: Category | null) {
-    moveFocus.current = true;
-    if (next) setLastCategory(next);
-    setCategory(next);
-    window.history.replaceState({ ...window.history.state, [HISTORY_KEY]: next }, "");
-  }
-
+  const track = useRef<HTMLDivElement>(null),
+    [page, setPage] = useState(0);
   return (
-    <nav className="home-feature-grid" aria-label="Explore Clover features">
-      <div className={`home-feature-grid__track${category ? " home-feature-grid__track--open" : ""}`}>
-        <div className="home-feature-grid__panel" inert={category !== null} aria-hidden={category !== null}>
-          {FEATURE_NAVIGATION.map((item) => (
-            <button
-              key={item.label}
-              type="button"
-              ref={(node) => { if (node) categoryButtons.current.set(item.label, node); else categoryButtons.current.delete(item.label); }}
-              className="home-feature-grid__item"
-              aria-expanded={category === item.label}
-              aria-controls="home-feature-category"
-              onClick={() => selectCategory(item.label)}
+    <section className="home-product-access">
+      <nav aria-label="Quick Access">
+        <div
+          ref={track}
+          className="home-product-access__track"
+          onScroll={(e) => {
+            const n = e.currentTarget;
+            setPage(Math.round(n.scrollLeft / n.clientWidth));
+          }}
+        >
+          {productPages.map((items, index) => (
+            <div
+              key={index}
+              className="home-product-access__page"
+              aria-label={`Quick Access ${index + 1} of 3`}
             >
-              <img src={item.label === "Plan" ? "/assets/3d%20icons/budgeting.png" : getNavigationIconSrc(item.icon)} alt="" width={48} height={48} />
-              <span>{item.label}</span>
-            </button>
+              {items.map((item) => (
+                <Link href={item.href} key={item.key} prefetch={false}>
+                  <img
+                    src={getNavigationIconSrc(item.key)}
+                    width={40}
+                    height={40}
+                    alt=""
+                  />
+                  <span>{item.label}</span>
+                </Link>
+              ))}
+            </div>
           ))}
         </div>
-        <div id="home-feature-category" className="home-feature-grid__panel" aria-label={`${group.label} features`} inert={category === null} aria-hidden={category === null}>
-          <button ref={backButton} type="button" className="home-feature-grid__item" aria-label="Back to feature categories" onClick={() => selectCategory(null)}>
-            <span className="home-feature-grid__back" aria-hidden="true">
-              <svg viewBox="0 0 24 24" width={24} height={24} fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round"><path d="m12 5-7 7 7 7M5 12h14" /></svg>
-            </span>
-            <span>Back</span>
-          </button>
-          {group.items.map((item) => (
-            <Link key={item.href} href={item.href} prefetch={false} className="home-feature-grid__item">
-              <img src={getNavigationIconSrc(item.key === "split-bill" ? "splitBills" : item.key)} alt="" width={48} height={48} />
-              <span>{item.label}</span>
-            </Link>
+        <div className="home-product-access__dots">
+          {productPages.map((_, index) => (
+            <button
+              key={index}
+              type="button"
+              aria-label={`Quick Access page ${index + 1}`}
+              aria-current={page === index ? "page" : undefined}
+              onClick={() =>
+                track.current?.scrollTo({
+                  left: track.current.clientWidth * index,
+                  behavior: "smooth",
+                })
+              }
+            />
           ))}
         </div>
+      </nav>
+      <div className="home-quick-add">
+        <button
+          type="button"
+          onClick={() =>
+            window.dispatchEvent(
+              new CustomEvent("clover:open-quick-transaction", {
+                detail: { type: "expense" },
+              }),
+            )
+          }
+          className="button button-secondary"
+        >
+          − Add Expense
+        </button>
+        <button
+          type="button"
+          onClick={() =>
+            window.dispatchEvent(
+              new CustomEvent("clover:open-quick-transaction", {
+                detail: { type: "income" },
+              }),
+            )
+          }
+          className="button button-secondary"
+        >
+          + Add Income
+        </button>
       </div>
-    </nav>
+    </section>
   );
 }

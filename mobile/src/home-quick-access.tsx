@@ -1,52 +1,121 @@
-import { useState, useRef, useEffect } from "react";
-import { Pressable, View, Animated, AccessibilityInfo } from "react-native";
+import { useRef, useState } from "react";
+import { Pressable, ScrollView, View } from "react-native";
 import { router, type Href } from "expo-router";
 import { Text } from "./app-text";
 import { Card, Icon, useTheme } from "./ui";
-import { navigationGroups } from "./navigation-groups";
+import { productPages } from "../../shared/circle-experience";
 export function HomeQuickAccess() {
-  const [selected, setSelected] = useState<string | null>(null),
-    { colors } = useTheme();
-  const groups = navigationGroups.filter((g) =>
-    ["Understand", "Money", "Together", "Plan"].includes(g.title),
-  );
-  const progress = useRef(new Animated.Value(0)).current;
-  const [panelWidth, setPanelWidth] = useState(0);
-  const reduced = useRef(false);
-  useEffect(() => { void AccessibilityInfo.isReduceMotionEnabled().then(value => { reduced.current = value; }); const sub = AccessibilityInfo.addEventListener("reduceMotionChanged", value => { reduced.current = value; }); return () => sub.remove(); }, []);
-  const openGroup = (title: string) => { setSelected(title); Animated.timing(progress, { toValue: 1, duration: reduced.current ? 0 : 220, useNativeDriver: true }).start(); };
-  const closeGroup = () => Animated.timing(progress, { toValue: 0, duration: reduced.current ? 0 : 220, useNativeDriver: true }).start(({finished}) => { if(finished)setSelected(null); });
-  const group = groups.find((g) => g.title === selected);
+  const { colors } = useTheme(),
+    [width, setWidth] = useState(0),
+    [page, setPage] = useState(0),
+    scroll = useRef<ScrollView>(null);
   const route = (path: string) =>
     (({
       "/accounts": "/(tabs)/accounts",
       "/transactions": "/(tabs)/transactions",
       "/recurring": "/(tabs)/recurring",
       "/adviser": "/(tabs)/adviser",
+      "/split-bill": "/split-bills",
     })[path] ?? path) as Href;
-  const items = group
-    ? [
-        {
-          label: "Back",
-          icon: "arrow-back-outline" as const,
-          action: closeGroup,
-        },
-        ...group.items.map((i) => ({
-          ...i,
-          action: () => router.navigate(route(i.route)),
-        })),
-      ]
-    : groups.map((g) => ({
-        label: g.title,
-        icon: g.icon,
-        action: () => openGroup(g.title),
-      }));
-  const primary = groups.map(g => ({label:g.title,icon:g.icon,action:()=>openGroup(g.title)}));
-  const render = (list: typeof items) => list.map(item => <Pressable key={item.label} accessibilityRole="button" onPress={item.action} style={{ flex:1,alignItems:"center",gap:8,paddingVertical:8 }}><Icon name={item.icon} size={36}/><Text style={{fontSize:11,color:colors.ink,fontFamily:"Poppins-SemiBold",textAlign:"center"}}>{item.label}</Text></Pressable>);
-  return <Card style={{padding:12,overflow:"hidden"}}><View onLayout={e=>setPanelWidth(e.nativeEvent.layout.width)} style={{overflow:"hidden"}}>
-    <Animated.View style={{flexDirection:"row",width:panelWidth*2,transform:[{translateX:progress.interpolate({inputRange:[0,1],outputRange:[0,-panelWidth]})}]}}>
-      <View accessibilityElementsHidden={!!selected} importantForAccessibility={selected ? "no-hide-descendants" : "auto"} style={{width:panelWidth,flexDirection:"row"}}>{render(primary)}</View>
-      <View accessibilityElementsHidden={!selected} importantForAccessibility={!selected ? "no-hide-descendants" : "auto"} style={{width:panelWidth,flexDirection:"row"}}>{group ? render(items) : null}</View>
-    </Animated.View>
-  </View></Card>;
+  return (
+    <>
+      <Card style={{ padding: 12 }}>
+        <View onLayout={(e) => setWidth(e.nativeEvent.layout.width)}>
+          <ScrollView
+            ref={scroll}
+            horizontal
+            pagingEnabled
+            showsHorizontalScrollIndicator={false}
+            onMomentumScrollEnd={(e) =>
+              setPage(
+                Math.round(e.nativeEvent.contentOffset.x / Math.max(1, width)),
+              )
+            }
+          >
+            {productPages.map((items, index) => (
+              <View key={index} style={{ width, flexDirection: "row" }}>
+                {items.map((item) => (
+                  <Pressable
+                    key={item.key}
+                    accessibilityRole="button"
+                    onPress={() => router.navigate(route(item.href))}
+                    style={{
+                      width: width / 4,
+                      alignItems: "center",
+                      gap: 8,
+                      paddingVertical: 12,
+                    }}
+                  >
+                    <Icon name={item.icon} size={36} />
+                    <Text
+                      style={{
+                        fontSize: 11,
+                        color: colors.ink,
+                        textAlign: "center",
+                      }}
+                    >
+                      {item.label}
+                    </Text>
+                  </Pressable>
+                ))}
+              </View>
+            ))}
+          </ScrollView>
+        </View>
+        <View
+          style={{ flexDirection: "row", justifyContent: "center", gap: 4 }}
+        >
+          {productPages.map((_, index) => (
+            <Pressable
+              key={index}
+              accessibilityLabel={`Quick Access page ${index + 1} of 3`}
+              accessibilityRole="button"
+              accessibilityState={{ selected: page === index }}
+              onPress={() => {
+                scroll.current?.scrollTo({ x: width * index, animated: true });
+                setPage(index);
+              }}
+              style={{ padding: 10 }}
+            >
+              <View
+                style={{
+                  width: 7,
+                  height: 7,
+                  borderRadius: 4,
+                  backgroundColor: page === index ? colors.teal : colors.line,
+                }}
+              />
+            </Pressable>
+          ))}
+        </View>
+      </Card>
+      <View style={{ flexDirection: "row", gap: 12 }}>
+        {(["expense", "income"] as const).map((type) => (
+          <Pressable
+            key={type}
+            accessibilityRole="button"
+            onPress={() =>
+              router.push({
+                pathname: "/add-transaction",
+                params: { entry: "manual", type },
+              })
+            }
+            style={{
+              flex: 1,
+              padding: 14,
+              borderRadius: 20,
+              borderWidth: 1,
+              borderColor: colors.line,
+              backgroundColor: colors.white,
+              alignItems: "center",
+            }}
+          >
+            <Text style={{ color: colors.teal }}>
+              {type === "expense" ? "− Add Expense" : "+ Add Income"}
+            </Text>
+          </Pressable>
+        ))}
+      </View>
+    </>
+  );
 }

@@ -1690,6 +1690,7 @@ model CircleActivity {
 }
 
 model CircleBudget {
+  oneTime Boolean @default(false)
   id           String        @id @default(cuid())
   circleId     String
   name         String
@@ -1727,6 +1728,7 @@ model CircleGoal {
 }
 
 model CircleCommitment {
+  assignedMemberIds Json?
   id               String               @id @default(cuid())
   circleId         String
   assignedMemberId String?
@@ -1773,6 +1775,7 @@ model CircleContribution {
 }
 
 model CircleSharedTransaction {
+  splitConfig Json?
   id             String           @id @default(cuid())
   circleId       String
   transactionId  String

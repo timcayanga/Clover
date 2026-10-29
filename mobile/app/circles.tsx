@@ -1,3 +1,4 @@
+import {CircleDetailPanels} from "../src/circle-detail-panels";
 import { ResourceUpgradeNotice } from "../src/contextual-upgrade";
 import { AdaptiveGrid } from "../src/adaptive";
 import { CloverEmptyState } from "../src/clover-mascot";
@@ -60,7 +61,7 @@ type Circle = {
   }[];
   contributions?: {
     id: string;
-    memberName: string;
+    memberName: string|null;
     amount: number;
     currency: string;
     contributionDate: string;
@@ -69,6 +70,8 @@ type Circle = {
   }[];
   memberCount: number;
   splitBillGroupId?: string | null;
+  expenseCurrencyTotals?:Record<string,number>;
+  contributionCurrencyTotals?:Record<string,number>;
   expenseTotalThisMonth: number;
   contributionTotalThisMonth: number;
   members?: {
@@ -77,7 +80,7 @@ type Circle = {
     avatarUrl?: string | null;
     role: string;
     status: string;
-    isOwner?: boolean;
+    isOwner?: boolean; isMe?:boolean;
   }[];
   budgets?: {
     id: string;
@@ -264,7 +267,7 @@ export default function Circles() {
               "Expenses",
               "Budgets",
               "Goals",
-              "Commitments",
+              "Recurring",
               "Contributions",
               "Activity",
               "People",
@@ -282,298 +285,8 @@ export default function Circles() {
                 onPress={() => setRevision((v) => v + 1)}
               />
             </>
-          ) : tab === "Overview" ? (
-            <>
-              <AdaptiveGrid minItemWidth={140} maxColumns={2} gap={12}>
-                <SummaryCard
-                  title="Shared expenses"
-                  value={money(
-                    String(selected.expenseTotalThisMonth ?? 0),
-                    selected.currency,
-                  )}
-                  color={colors.positive}
-                />
-                <SummaryCard
-                  title="Contributions"
-                  value={money(
-                    String(selected.contributionTotalThisMonth ?? 0),
-                    selected.currency,
-                  )}
-                  color={colors.positive}
-                />
-              </AdaptiveGrid>
-              <Body>
-                Only data shared with this Circle is shown. Personal accounts
-                stay private.
-              </Body>
-              {selected.isOwner ? (
-                <>
-                  <PlanAction
-                    title="Archive Circle"
-                    tone="delete"
-                    onPress={() => setDeleteConfirm(true)}
-                  />
-                  {deleteConfirm ? (
-                    <Card>
-                      <Body>
-                        Archive this Circle? Shared history and personal
-                        transactions are preserved.
-                      </Body>
-                      <PlanAction
-                        title="Confirm archive"
-                        tone="delete"
-                        disabled={loading}
-                        onPress={() => {
-                          setLoading(true);
-                          void session
-                            .request(
-                              `circles/${selected.id}/archive?workspaceId=${encodeURIComponent(session.profileId)}`,
-                              { method: "POST" },
-                            )
-                            .then(() => {
-                              setSelected(null);
-                              setDeleteConfirm(false);
-                              reload();
-                            })
-                            .catch((e) => setDetailError(e.message))
-                            .finally(() => setLoading(false));
-                        }}
-                      />
-                      <PlanAction
-                        title="Keep Circle"
-                        onPress={() => setDeleteConfirm(false)}
-                      />
-                    </Card>
-                  ) : null}
-                </>
-              ) : null}
-              {selected.role === "organizer" ? (
-                <PlanAction
-                  title="Edit Circle"
-                  tone="edit"
-                  onPress={() => setEditor({ circle: selected })}
-                />
-              ) : null}
-            </>
-          ) : tab === "Expenses" ? (
-            <>
-              {selected.role !== "participant" ? (
-                <PlanAction
-                  title="+ Share an expense"
-                  tone="primary"
-                  onPress={() => setResource({ action: "share_transaction" })}
-                />
-              ) : null}
-              {selected.expenses?.length ? (
-                selected.expenses.map((item) => (
-                  <Card key={item.id}>
-                    <Body muted={false}>{item.title}</Body>
-                    <Body>{money(String(item.amount), item.currency)}</Body>
-                    <Body>
-                      {item.date.slice(0, 10)} ·{" "}
-                      {item.visibility.replaceAll("_", " ")}
-                    </Body>
-                    {item.kind !== "split_bill" &&
-                    selected.role !== "participant" ? (
-                      <PlanAction
-                        title="Stop sharing"
-                        onPress={() =>
-                          setResource({
-                            action: "unshare_transaction",
-                            id: item.id,
-                          })
-                        }
-                      />
-                    ) : null}
-                    {item.kind === "split_bill" ? (
-                      <PlanAction
-                        title="View bill"
-                        onPress={() =>
-                          router.push({
-                            pathname: "/split-bills",
-                            params: { billId: item.id },
-                          })
-                        }
-                      />
-                    ) : null}
-                  </Card>
-                ))
-              ) : (
-                <CloverEmptyState pose="circles">No shared expenses yet.</CloverEmptyState>
-              )}
-            </>
-          ) : tab === "Commitments" || tab === "Contributions" ? (
-            <>
-              {selected.role !== "participant" ? (
-                <PlanAction
-                  title={
-                    tab === "Commitments"
-                      ? "+ Add commitment"
-                      : "+ Add contribution"
-                  }
-                  tone="primary"
-                  onPress={() =>
-                    setResource({
-                      action:
-                        tab === "Commitments"
-                          ? "create_commitment"
-                          : "add_contribution",
-                    })
-                  }
-                />
-              ) : null}
-              {tab === "Commitments"
-                ? selected.commitments?.map((item) => (
-                    <Card key={item.id}>
-                      <Body muted={false}>{item.title}</Body>
-                      <Body>
-                        {money(String(item.amount ?? 0), item.currency)}
-                      </Body>
-                      <Body>
-                        {item.assignedMemberName || "Unassigned"} ·{" "}
-                        {item.recurrence || "monthly"}
-                        {item.nextDueDate
-                          ? ` · Due ${item.nextDueDate.slice(0, 10)}`
-                          : ""}
-                      </Body>
-                      {item.notes ? <Body>{item.notes}</Body> : null}
-                      {selected.role !== "participant" ? (
-                        <PlanAction
-                          title="Edit commitment"
-                          onPress={() =>
-                            setResource({
-                              ...item,
-                              action: "update_commitment",
-                            })
-                          }
-                        />
-                      ) : null}
-                    </Card>
-                  ))
-                : selected.contributions?.map((item) => (
-                    <Card key={item.id}>
-                      <Body>
-                        {item.memberName} ·{" "}
-                        {money(String(item.amount), item.currency)}
-                      </Body>
-                      <Body>
-                        {item.contributionDate?.slice(0, 10)} ·{" "}
-                        {selected.goals?.find((g) => g.id === item.goalId)
-                          ?.name || "General contribution"}
-                      </Body>
-                      {item.note ? <Body>{item.note}</Body> : null}
-                    </Card>
-                  ))}
-            </>
-          ) : tab === "Budgets" || tab === "Goals" ? (
-            <>
-              {selected.role !== "participant" ? (
-                <PlanAction
-                  title={tab === "Budgets" ? "+ Add budget" : "+ Add goal"}
-                  tone="primary"
-                  onPress={() =>
-                    setResource({
-                      action:
-                        tab === "Budgets" ? "create_budget" : "create_goal",
-                    })
-                  }
-                />
-              ) : null}
-              {(tab === "Budgets" ? selected.budgets : selected.goals)
-                ?.length ? (
-                (tab === "Budgets" ? selected.budgets : selected.goals)!.map(
-                  (item) => (
-                    <Card key={item.id}>
-                      <Body muted={false}>{item.name}</Body>
-                      <Body>
-                        {money(
-                          String(
-                            "spentAmount" in item
-                              ? item.spentAmount
-                              : item.currentAmount,
-                          ),
-                          item.currency,
-                        )}{" "}
-                        of {money(String(item.targetAmount), item.currency)}
-                      </Body>
-                      {selected.role !== "participant" ? (
-                        <PlanAction
-                          title={
-                            tab === "Budgets" ? "Edit budget" : "Edit goal"
-                          }
-                          onPress={() =>
-                            setResource({
-                              ...item,
-                              action:
-                                tab === "Budgets"
-                                  ? "update_budget"
-                                  : "update_goal",
-                            })
-                          }
-                        />
-                      ) : null}
-                      <Progress value={item.progressPercent} />
-                      <Body>{Math.round(item.progressPercent)}%</Body>
-                    </Card>
-                  ),
-                )
-              ) : (
-                <CloverEmptyState pose="circles">No shared {tab.toLowerCase()} yet.</CloverEmptyState>
-              )}
-            </>
-          ) : tab === "Activity" ? (
-            <>
-              {selected.activities?.length ? (
-                selected.activities.map((item) => (
-                  <Card key={item.id}>
-                    <Body muted={false}>{item.summary}</Body>
-                    <Body>{item.createdAt.slice(0, 10)}</Body>
-                  </Card>
-                ))
-              ) : (
-                <CloverEmptyState pose="resting">No Circle activity yet.</CloverEmptyState>
-              )}
-            </>
-          ) : (
-            <>
-              {selected.role === "organizer" ? (
-                <PlanAction
-                  title="Invite people"
-                  tone="primary"
-                  onPress={() => setInvitations(true)}
-                />
-              ) : null}
-              {selected.role === "organizer" ? (
-                <PlanAction
-                  title="+ Add person"
-                  tone="primary"
-                  onPress={() => setResource({ action: "add_participant" })}
-                />
-              ) : null}
-              {selected.members?.map((member) => (
-                <Card key={member.id}>
-                  <View style={{flexDirection:"row",alignItems:"center",gap:10}}><CircleMemberPhoto member={member} /><Body muted={false}>{member.displayName}</Body></View>
-                  {selected.role === "organizer" ? (
-                    <PlanAction
-                      title="Edit person"
-                      onPress={() =>
-                        setResource({ ...member, action: "update_member" })
-                      }
-                    />
-                  ) : null}
-                  {selected.splitBillGroupId ? (
-                    <PlanAction
-                      title="View member balances"
-                      onPress={() => setMemberDetail(member.displayName)}
-                    />
-                  ) : null}
-                  <Body>
-                    {member.role} · {member.status}
-                  </Body>
-                </Card>
-              ))}
-            </>
-          )}
+          ) : <CircleDetailPanels circle={selected} tab={tab} onEdit={setResource} onInvite={()=>setInvitations(true)} onRefresh={()=>{setRevision(v=>v+1);reload();}} onArchive={()=>{setDeleteConfirm(true);}} onMember={setMemberDetail}/>}
+          {deleteConfirm&&selected.isOwner?<Card><Body>Archive this Circle? Shared history and personal transactions are preserved.</Body><PlanAction title="Archive Circle" tone="delete" disabled={loading} onPress={()=>{setLoading(true);void session.request(`circles/${selected.id}/archive?workspaceId=${encodeURIComponent(session.profileId)}`,{method:'POST'}).then(()=>{setSelected(null);setDeleteConfirm(false);reload();}).catch(e=>setDetailError(e.message)).finally(()=>setLoading(false));}}/><PlanAction title="Keep Circle" onPress={()=>setDeleteConfirm(false)}/></Card>:null}
         </>
       ) : (
         <>

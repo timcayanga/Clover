@@ -1,3 +1,8 @@
+import { parseReceiptLineItemsFromPayload } from "@/lib/receipt-line-items";
+import {
+  currencyTotals,
+  circlePeriodStart,
+} from "../../shared/circle-experience";
 import { loadCircleMemberPhotos } from "@/lib/circle-member-photos";
 import { prisma } from "@/lib/prisma";
 import { getUserDisplayName } from "@/lib/user-display-name";
@@ -62,7 +67,9 @@ export const loadCirclesWorkspaceData = async (
         take: 200,
       },
       sharedTransactions: {
-        where: { transaction: { deletedAt: null, isExcluded: false, type: "expense" } },
+        where: {
+          transaction: { deletedAt: null, isExcluded: false, type: "expense" },
+        },
         orderBy: { createdAt: "desc" },
         include: {
           transaction: { include: { category: true } },
@@ -108,7 +115,7 @@ export const loadCirclesWorkspaceData = async (
     );
     const memberContributionMap = new Map<string, number>();
     for (const entry of monthlyContributions) {
-      if (entry.memberId) {
+      if (entry.memberId && entry.currency === circle.currency) {
         memberContributionMap.set(
           entry.memberId,
           (memberContributionMap.get(entry.memberId) ?? 0) +
@@ -122,6 +129,7 @@ export const loadCirclesWorkspaceData = async (
         id: membership.id,
         userId: membership.userId,
         isOwner: membership.userId === circle.ownerUserId,
+        isMe: membership.userId === user.id,
         displayName: membership.displayName,
         avatarUrl: memberPhotos.get(membership.id) ?? null,
         email:
@@ -168,6 +176,34 @@ export const loadCirclesWorkspaceData = async (
         return {
           id: entry.id,
           kind: "shared_transaction",
+          canEditSplit:
+            role === "organizer" || entry.sharedByUserId === user.id,
+          canUnshare: entry.sharedByUserId === user.id,
+          transactionId: entry.transactionId,
+          categoryName: canSeeItem
+            ? (transaction.category?.name ?? null)
+            : null,
+          lineItems: canSeeItem
+            ? parseReceiptLineItemsFromPayload(
+                transaction.rawPayload,
+                transaction.normalizedPayload,
+              ).map((i) => ({
+                description: i.description,
+                amount: i.amount ?? null,
+                currency: i.currency,
+              }))
+            : [],
+          splitItems:
+            canSeeItem &&
+            entry.splitConfig &&
+            typeof entry.splitConfig === "object" &&
+            !Array.isArray(entry.splitConfig)
+              ? ((
+                  entry.splitConfig as {
+                    items?: import("../../shared/split-bill-experience").SplitItem[];
+                  }
+                ).items ?? [])
+              : [],
           title: canSeeItem
             ? entry.sharedTitle ||
               transaction.merchantClean ||
@@ -188,52 +224,44 @@ export const loadCirclesWorkspaceData = async (
       (left, right) =>
         new Date(right.date).getTime() - new Date(left.date).getTime(),
     );
-    const monthlySplitExpenseTotal = (circle.splitBillGroup?.bills ?? [])
-      .filter((bill) => bill.billDate >= start && bill.billDate < end)
-      .reduce((sum, bill) => sum + Math.abs(numberValue(bill.total)), 0);
-    const monthlySharedExpenseTotal = circle.sharedTransactions
-      .filter(
-        (entry) =>
-          entry.transaction.date >= start &&
-          entry.transaction.date < end &&
-          !splitBillTransactionIds.has(entry.transactionId),
-      )
-      .reduce(
-        (sum, entry) =>
-          sum +
-          Math.abs(
-            entry.sharedAmount === null
-              ? numberValue(entry.transaction.amount)
-              : numberValue(entry.sharedAmount),
-          ),
-        0,
-      );
-    const expenseTotalThisMonth =
-      monthlySplitExpenseTotal + monthlySharedExpenseTotal;
+    const monthlyExpenses = expenses.filter(
+      (e) =>
+        new Date(e.date) >= start &&
+        new Date(e.date) < end &&
+        (e.kind !== "shared_transaction" ||
+          !splitBillTransactionIds.has(e.transactionId ?? "")),
+    );
+    const expenseCurrencyTotals = currencyTotals(monthlyExpenses);
+    const contributionCurrencyTotals = currencyTotals(
+      monthlyContributions.map((e) => ({
+        amount: numberValue(e.amount),
+        currency: e.currency,
+      })),
+    );
+    const expenseTotalThisMonth = expenseCurrencyTotals[circle.currency] ?? 0;
 
     const budgets: CircleBudgetSummary[] = circle.budgets.map((budget) => {
       const normalizedCategory =
         budget.categoryName?.trim().toLowerCase() ?? "";
-      const spentAmount = normalizedCategory
-        ? circle.sharedTransactions
-            .filter(
-              (entry) =>
-                entry.transaction.date >= start &&
-                entry.transaction.date < end &&
-                entry.transaction.category?.name.trim().toLowerCase() ===
-                  normalizedCategory,
-            )
-            .reduce(
-              (sum, entry) =>
-                sum +
-                Math.abs(
-                  entry.sharedAmount === null
-                    ? numberValue(entry.transaction.amount)
-                    : numberValue(entry.sharedAmount),
-                ),
-              0,
-            )
-        : expenseTotalThisMonth;
+      const periodStart = circlePeriodStart(
+        budget.oneTime ? "once" : budget.cadence,
+        now,
+        budget.startsAt,
+      );
+      const periodEnd =
+        budget.endsAt ?? (budget.oneTime ? new Date(8640000000000000) : now);
+      const spentAmount = expenses
+        .filter(
+          (e) =>
+            e.currency === budget.currency &&
+            new Date(e.date) >= periodStart &&
+            new Date(e.date) <= periodEnd &&
+            (e.kind !== "shared_transaction" ||
+              !splitBillTransactionIds.has(e.transactionId ?? "")) &&
+            (!normalizedCategory ||
+              e.categoryName?.toLowerCase() === normalizedCategory),
+        )
+        .reduce((sum, e) => sum + e.amount, 0);
       const targetAmount = numberValue(budget.targetAmount);
       return {
         id: budget.id,
@@ -246,7 +274,9 @@ export const loadCirclesWorkspaceData = async (
             ? clampPercent((spentAmount / targetAmount) * 100)
             : 0,
         currency: budget.currency,
-        cadence: budget.cadence,
+        cadence: budget.oneTime ? "once" : budget.cadence,
+        startsAt: toIso(budget.startsAt),
+        endsAt: toIso(budget.endsAt),
         categoryName: budget.categoryName,
         isActive: budget.isActive,
       };
@@ -255,19 +285,20 @@ export const loadCirclesWorkspaceData = async (
     const goals: CircleGoalSummary[] = circle.goals.map((goal) => {
       const currentAmount =
         numberValue(goal.startingAmount) +
-        goal.contributions.reduce(
-          (sum, entry) => sum + numberValue(entry.amount),
-          0,
-        );
+        goal.contributions
+          .filter((e) => e.currency === goal.currency)
+          .reduce((sum, entry) => sum + numberValue(entry.amount), 0);
       const targetAmount = numberValue(goal.targetAmount);
       const forecast = calculateGoalForecast({
         currentAmount,
         targetAmount,
         now,
-        contributions: goal.contributions.map((entry) => ({
-          amount: numberValue(entry.amount),
-          contributionDate: entry.contributionDate,
-        })),
+        contributions: goal.contributions
+          .filter((e) => e.currency === goal.currency)
+          .map((entry) => ({
+            amount: numberValue(entry.amount),
+            contributionDate: entry.contributionDate,
+          })),
       });
       return {
         id: goal.id,
@@ -289,10 +320,8 @@ export const loadCirclesWorkspaceData = async (
       };
     });
 
-    const contributionTotalThisMonth = monthlyContributions.reduce(
-      (sum, entry) => sum + numberValue(entry.amount),
-      0,
-    );
+    const contributionTotalThisMonth =
+      contributionCurrencyTotals[circle.currency] ?? 0;
     const insights = buildCircleInsights({
       currency: circle.currency,
       expenseTotalThisMonth,
@@ -312,8 +341,10 @@ export const loadCirclesWorkspaceData = async (
       const keys = [invitation.email, invitation.displayName]
         .filter((value): value is string => Boolean(value?.trim()))
         .map((value) => value.trim().toLowerCase());
-      return keys.length === 0 ||
-        !keys.some((key) => membershipInvitationKeys.has(key));
+      return (
+        keys.length === 0 ||
+        !keys.some((key) => membershipInvitationKeys.has(key))
+      );
     }).length;
 
     return {
@@ -335,6 +366,8 @@ export const loadCirclesWorkspaceData = async (
         invitationOnlyCount,
       expenseTotalThisMonth,
       contributionTotalThisMonth,
+      expenseCurrencyTotals,
+      contributionCurrencyTotals,
       updatedAt: circle.updatedAt.toISOString(),
       members,
       budgets,
@@ -350,6 +383,13 @@ export const loadCirclesWorkspaceData = async (
         notes: commitment.notes,
         isActive: commitment.isActive,
         assignedMemberId: commitment.assignedMemberId,
+        assignedMemberIds: Array.isArray(commitment.assignedMemberIds)
+          ? commitment.assignedMemberIds.filter(
+              (id): id is string => typeof id === "string",
+            )
+          : commitment.assignedMemberId
+            ? [commitment.assignedMemberId]
+            : [],
         assignedMemberName: commitment.assignedMember?.displayName ?? null,
       })),
       contributions: circle.contributions.map((entry) => ({

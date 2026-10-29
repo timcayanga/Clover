@@ -9,7 +9,7 @@ import { recurringSummaryAmounts } from "../../src/recurring-summary";
 import { PlanTabs } from "../../src/plan-ui";
 import { Text } from "../../src/app-text";
 import { useFocusEffect, useLocalSearchParams, useNavigation } from "expo-router";
-import { useCallback, useEffect, useState, useLayoutEffect } from "react";
+import { useCallback, useEffect, useState, useLayoutEffect, useRef } from "react";
 import { Pressable, View } from "react-native";
 import { useSession } from "../../src/session";
 import { Choices } from "../../src/transaction-entry";
@@ -67,7 +67,25 @@ export default function Recurring() {
   const [day, setDay] = useState<string | null>(null);
   const [selected, setSelected] = useState<Item | null>(null);
   const [editor, setEditor] = useState(false);
-  const { add } = useLocalSearchParams<{ add?: string }>();
+  const { add, commitmentId } = useLocalSearchParams<{
+    add?: string;
+    commitmentId?: string;
+  }>();
+  const openedLink = useRef("");
+  useFocusEffect(
+    useCallback(() => {
+      openedLink.current = "";
+    }, [commitmentId]),
+  );
+  useEffect(() => {
+    if (!commitmentId || openedLink.current === commitmentId || !data) return;
+    const item = data.items.find((row) => row.id === commitmentId);
+    if (item) {
+      openedLink.current = commitmentId;
+      setEditor(false);
+      setSelected(item);
+    }
+  }, [data, commitmentId]);
   useEffect(() => {
     if (add) {
       setSelected(null);

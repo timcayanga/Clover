@@ -6,6 +6,7 @@ export function mobileOperation(method: string, segments: string[]) {
   if (segments.join("/") === "billing/store" && ["GET", "POST"].includes(method)) return "store-billing";
   if (segments.join("/") === "settings/preferences" && ["GET", "PATCH"].includes(method)) return "settings-preferences";
   const path = segments.join("/");
+  if(method==="GET"&&segments.length===3&&segments[0]==="transactions"&&segments[2]==="related")return "transaction-related";
   if (path === "fx-rate" && method === "GET") return "fx-rate";
   if(path === "reports/workspace" && method === "GET") return "reports-workspace";
   if(path === "reports/recoveries" && ["GET","POST"].includes(method)) return "reports-recoveries";

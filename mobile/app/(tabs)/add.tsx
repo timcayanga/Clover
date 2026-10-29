@@ -52,9 +52,10 @@ export default function Add({ sheet = false }: { sheet?: boolean } = {}) {
   const [tableMode, setTableMode] = useState(false);
   const [tab, setTab] = useState("manual");
   const [draft, setDraft] = useState(emptyTransaction);
-  const { entry, picker, importMode } = useLocalSearchParams<{
+  const { entry, picker, importMode, type } = useLocalSearchParams<{
     importMode?: "receipt" | "statement" | "portfolio" | "account_detail";
     entry?: string;
+    type?: "expense" | "income";
     picker?: string;
   }>();
   const handledPicker = useRef(false);
@@ -70,8 +71,8 @@ export default function Add({ sheet = false }: { sheet?: boolean } = {}) {
   }), [sheet]));
   useEffect(() => {
     setTab(entry?.startsWith("upload-") ? "upload" : "manual");
-    setDraft(emptyTransaction());
-  }, [entry, session.profileId]);
+    setDraft({...emptyTransaction(),type:type==="income"?"income":"expense"});
+  }, [entry, type, session.profileId]);
   const [locationFix, setLocationFix] = useState<ReceiptLocationFix | null>(null);
   const [locationBusy, setLocationBusy] = useState(false);
   const [locationNotice, setLocationNotice] = useState("");

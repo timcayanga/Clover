@@ -22,11 +22,11 @@ export async function loadCirclesDirectoryData(user: User): Promise<CirclesWorks
       sharedTransactions: {
         where: { transaction: { deletedAt: null, isExcluded: false, type: "expense" } },
         orderBy: { createdAt: "desc" }, take: 100,
-        select: { transactionId: true, sharedAmount: true, transaction: { select: { date: true, amount: true } } },
+        select: { transactionId: true, sharedAmount: true, transaction: { select: { date: true, amount: true, currency:true } } },
       },
       splitBillGroup: { select: { id: true, bills: {
         orderBy: [{ billDate: "desc" }, { updatedAt: "desc" }], take: 100,
-        select: { transactionId: true, billDate: true, total: true },
+        select: { transactionId: true, billDate: true, total: true, currency:true },
       } } },
     },
   });
@@ -37,10 +37,10 @@ export async function loadCirclesDirectoryData(user: User): Promise<CirclesWorks
       const bills = circle.splitBillGroup?.bills ?? [];
       const splitIds = new Set(bills.map((bill) => bill.transactionId).filter(Boolean));
       const expenseTotalThisMonth = bills
-        .filter((bill) => bill.billDate >= start && bill.billDate < end)
+        .filter((bill) => bill.currency===circle.currency && bill.billDate >= start && bill.billDate < end)
         .reduce((sum, bill) => sum + Math.abs(Number(bill.total)), 0)
         + circle.sharedTransactions
-          .filter((entry) => entry.transaction.date >= start && entry.transaction.date < end && !splitIds.has(entry.transactionId))
+          .filter((entry) => entry.transaction.currency===circle.currency && entry.transaction.date >= start && entry.transaction.date < end && !splitIds.has(entry.transactionId))
           .reduce((sum, entry) => sum + Math.abs(Number(entry.sharedAmount ?? entry.transaction.amount)), 0);
       return {
         id: circle.id, name: circle.name, type: circle.type, description: circle.description,

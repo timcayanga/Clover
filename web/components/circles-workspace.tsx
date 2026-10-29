@@ -1,4 +1,5 @@
 "use client";
+import {CircleDetailWorkspace} from "./circle-detail-workspace";
 import { usePullRefresh } from "@/lib/pull-refresh";
 import { useMobileCreationRoute } from "@/lib/use-mobile-creation-route";
 
@@ -669,97 +670,7 @@ export function CirclesWorkspace({
           {selectedCircle ? (
             <main ref={workspaceRef} className="circles-workspace">
               <h2 className="collection-detail-name">{selectedCircle.name}</h2>
-              <AnimatedTabs
-                className="investments-tabs circles-section-tabs mobile-icon-tabs"
-                activeKey={activeTab}
-                onChange={(key) => selectTab(key as CircleTab)}
-                tabs={tabs.map((tab) => ({
-                  key: tab,
-                  label:
-                    tab === "budget"
-                      ? "Budgeting"
-                      : tab[0].toUpperCase() + tab.slice(1),
-                  icon: <CircleTabIcon tab={tab} />,
-                  ariaLabel:
-                    tab === "budget"
-                      ? "Budgeting"
-                      : tab[0].toUpperCase() + tab.slice(1),
-                }))}
-              />
-              <input
-                ref={avatarInputRef}
-                className="sr-only"
-                type="file"
-                accept="image/*"
-                aria-label="Choose a Circle photo"
-                onChange={(event) => void updateCircleAvatar(event)}
-              />
-
-              {message ? (
-                <div className="circles-message" role="status">
-                  {message}
-                </div>
-              ) : null}
-
-              {activeTab === "overview" ? (
-                <CircleOverview
-                  circle={selectedCircle}
-                  openForm={openForm}
-                  setOpenForm={setOpenForm}
-                  submitCommitment={submitCommitment}
-                  isSaving={isSaving}
-                />
-              ) : null}
-              {activeTab === "expenses" ? (
-                <CircleExpenses
-                  circle={selectedCircle}
-                  transactions={data.personalTransactions}
-                  openForm={openForm}
-                  setOpenForm={setOpenForm}
-                  submitSharedTransaction={submitSharedTransaction}
-                  runResource={runResource}
-                  isSaving={isSaving}
-                />
-              ) : null}
-              {activeTab === "budget" ? (
-                <CircleBudgets
-                  circle={selectedCircle}
-                  openForm={openForm}
-                  setOpenForm={setOpenForm}
-                  submitBudget={submitBudget}
-                  runResource={runResource}
-                  isSaving={isSaving}
-                />
-              ) : null}
-              {activeTab === "goals" ? (
-                <CircleGoals
-                  circle={selectedCircle}
-                  investmentAccounts={data.investmentAccounts}
-                  openForm={openForm}
-                  setOpenForm={setOpenForm}
-                  submitGoal={submitGoal}
-                  submitContribution={submitContribution}
-                  submitInvestment={submitInvestment}
-                  runResource={runResource}
-                  isSaving={isSaving}
-                />
-              ) : null}
-              {activeTab === "activity" ? (
-                <CircleActivity circle={selectedCircle} />
-              ) : null}
-              {activeTab === "members" ? (
-                <CircleMembers
-                  circle={selectedCircle}
-                  latestInviteUrl={latestInviteUrl}
-                  submitInvite={submitInvite}
-                  updateMemberRole={updateMemberRole}
-                  removeMember={removeMember}
-                  manageInvitation={manageInvitation}
-                  deleteCircle={deleteCircle}
-                  onChangeCirclePhoto={() => avatarInputRef.current?.click()}
-                  isSaving={isSaving}
-                />
-              ) : null}
+              <CircleDetailWorkspace key={selectedCircle.id} circle={selectedCircle} onChanged={()=>refresh(selectedCircle.id)} />
             </main>
           ) : null}
         </div>

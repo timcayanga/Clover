@@ -59,13 +59,13 @@ const rows = (value: unknown, fields: string[]) => Array.isArray(value) ? value.
 const circleSummary = (value: unknown) => {
   const circle = record(value);
   return {
-    ...pick(circle, ["id", "name", "type", "description", "color", "avatarUrl", "currency", "role", "isOwner", "memberCount", "pendingCount", "expenseTotalThisMonth", "contributionTotalThisMonth", "detailsLoaded", "splitBillGroupId"]),
-    members: rows(circle.members, ["id", "displayName", "role", "status", "isOwner", "contributionTarget", "contributionCadence", "contributedThisMonth"]),
-    budgets: rows(circle.budgets, ["id", "name", "targetAmount", "spentAmount", "currency", "cadence", "progressPercent", "isActive"]),
+    ...pick(circle, ["id", "name", "type", "description", "color", "avatarUrl", "currency", "role", "isOwner", "memberCount", "pendingCount", "expenseTotalThisMonth", "contributionTotalThisMonth", "detailsLoaded", "splitBillGroupId", "expenseCurrencyTotals", "contributionCurrencyTotals"]),
+    members: rows(circle.members, ["id", "displayName", "avatarUrl", "isMe", "role", "status", "isOwner", "contributionTarget", "contributionCadence", "contributedThisMonth"]),
+    budgets: rows(circle.budgets, ["id", "name", "targetAmount", "spentAmount", "currency", "cadence", "startsAt", "endsAt", "progressPercent", "isActive"]),
     goals: rows(circle.goals, ["id", "name", "targetAmount", "currentAmount", "currency", "targetDate", "progressPercent", "status", "estimateConfidence", "estimateReason", "estimatedCompletionDate"]),
-    commitments: rows(circle.commitments, ["id", "title", "amount", "currency", "recurrence", "nextDueDate", "assignedMemberId", "assignedMemberName", "notes", "isActive"]),
+    commitments: rows(circle.commitments, ["id", "title", "amount", "currency", "recurrence", "nextDueDate", "assignedMemberId", "assignedMemberIds", "assignedMemberName", "notes", "isActive"]),
     contributions: rows(circle.contributions, ["id", "memberId", "memberName", "goalId", "amount", "currency", "contributionDate", "note"]),
-    expenses: rows(circle.expenses, ["id", "kind", "title", "amount", "currency", "date", "visibility"]),
+    expenses: rows(circle.expenses, ["id", "kind", "title", "amount", "currency", "date", "visibility", "transactionId", "categoryName", "lineItems", "splitItems", "canEditSplit", "canUnshare"]),
     investmentShares: rows(circle.investmentShares, ["id", "name", "institution", "balance", "currency", "visibility"]),
     activities: rows(circle.activities, ["id", "summary", "createdAt"]),
     insights: rows(circle.insights, ["id", "title", "detail", "confidence", "reason"]),

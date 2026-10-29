@@ -5,7 +5,7 @@ import { RecurringCreateForm } from "@/components/recurring-create-form";
 import { recurringCompletionDate } from "@/lib/recurring-tracking";
 import { InterfaceIcon } from "@/components/interface-icon";
 
-import { type CSSProperties, useEffect, useMemo, useState } from "react";
+import { type CSSProperties, useEffect, useMemo, useState, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { CurrencySelector } from "@/components/currency-selector";
 import {
@@ -54,6 +54,7 @@ type CommitmentsPanelProps = {
   activeTab?: "overview" | "planned" | "debt" | "owed" | "installments";
   initialKind?: CommitmentKind;
   showAddModal?: boolean;
+  initialCommitmentId?: string;
   creationPage?: boolean;
   onCloseAdd?: () => void;
 };
@@ -157,6 +158,7 @@ export function CommitmentsPanel({
   activeTab = "overview",
   initialKind = "planned_payment",
   showAddModal = false,
+  initialCommitmentId,
   creationPage = false,
   onCloseAdd,
 }: CommitmentsPanelProps) {
@@ -204,6 +206,25 @@ export function CommitmentsPanel({
   const [savingCommitmentId, setSavingCommitmentId] = useState<string | null>(null);
   const [completingCommitmentId, setCompletingCommitmentId] = useState<string | null>(null);
   const [calendarDetail, setCalendarDetail] = useState<{ commitmentId: string; occurrenceDate: string } | null>(null);
+
+  const openedLink = useRef("");
+  useEffect(() => {
+    if (!initialCommitmentId || openedLink.current === initialCommitmentId)
+      return;
+    const item = commitments.find((row) => row.id === initialCommitmentId);
+    if (item) {
+      openedLink.current = initialCommitmentId;
+      setCalendarDetail({
+        commitmentId: item.id,
+        occurrenceDate: (
+          item.nextDueDate ??
+          item.dueDate ??
+          new Date().toISOString()
+        ).slice(0, 10),
+      });
+    }
+  }, [initialCommitmentId, commitments]);
+
 
   useEffect(() => {
     setVisibleCommitments(commitments);

@@ -443,6 +443,7 @@ export function DashboardManualTransactionModal({
       }
 
       clearAccountsWorkspaceCache(workspaceId);
+      window.dispatchEvent(new CustomEvent("clover:transaction-created"));
       const createdTransaction = payload?.transaction ?? null;
       const splitBillDraftHasContent = manualSplitBillOpen && (manualSplitBillDraft.groupId.trim() || manualSplitBillDraft.participantNames.length > 0);
       if (splitBillDraftHasContent && createdTransaction?.id) {

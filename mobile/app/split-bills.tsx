@@ -1,3 +1,4 @@
+import { useUser } from "@clerk/expo";
 import { type AccountCardPalette, accountCardPalette } from "../../shared/visual-identity";
 import { SplitItemGrid } from "../src/split-item-grid";
 import { PaymentOptionMark } from "../src/payment-option-mark";
@@ -749,7 +750,15 @@ function BillEditor({
   const [date, setDate] = useState(
     sourceTransaction?.date.slice(0, 10) || new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Manila" }),
   );
-  const [reviewedItems, setReviewedItems] = useState<(Omit<SplitItem, "participantIds"> & { participantIds?: string[] })[]>([]);
+  const { user } = useUser();
+  const [addingPerson, setAddingPerson] = useState(false);
+  const [personName, setPersonName] = useState("");
+  const [reviewedItems, setReviewedItems] = useState<(Omit<SplitItem, "participantIds"> & { participantIds?: string[] })[]>(() => {
+    const items=(sourceTransaction?.receiptLineItems??[]).filter(i=>i.amount&&Number(i.amount)>0).map((i,index)=>({id:`receipt-${index}`,description:i.description,amount:i.amount!}));
+    const difference=Math.round((Number(sourceTransaction?.amount??0)-items.reduce((sum,i)=>sum+Number(i.amount),0))*100)/100;
+    if(items.length&&difference>0)items.push({id:'receipt-charges',description:'Other Charges',amount:difference.toFixed(2)});
+    return items;
+  });
   const [receipt, setReceipt] = useState<{
     fileName: string;
     mimeType: string;
@@ -974,9 +983,10 @@ function BillEditor({
           multiline
         />
         {receipt ? <Body>{receipt.fileName} · Check the extracted items and total before saving.</Body> : null}
-        <SplitItemGrid people={participants.map(p=>({id:p.name,name:p.name}))} currency={currency}
+        <SplitItemGrid people={participants.map(p=>({id:p.name,name:p.name,avatarUrl:/^(you|me)$/i.test(p.name)||p.name===user?.fullName?user?.imageUrl:null}))} currency={currency} onAddPerson={()=>setAddingPerson(true)}
           items={reviewedItems.map((item,index)=>({...item,id:item.id??`new-${index}`,participantIds:item.participantIds??participants.map(p=>p.name)}))}
           onChange={next=>{setReviewedItems(next);setTotal(next.reduce((sum,item)=>sum+(Number(item.amount)||0),0).toFixed(2));}} />
+        {addingPerson?<View><Field label="Person Name" value={personName} onChangeText={setPersonName}/><PlanAction title="Add Person" onPress={()=>{if(personName.trim()&&!participants.some(p=>p.name.toLowerCase()===personName.trim().toLowerCase())){setNames(v=>v.trim()+"\n"+personName.trim());setPersonName("");setAddingPerson(false);}}}/></View>:null}
         {suggestBillCategory(title,reviewedItems.map(item=>item.description)) ? <Body>Suggested category: {suggestBillCategory(title,reviewedItems.map(item=>item.description))?.name}</Body> : null}
         <Body>Who paid?</Body>
         <PlanAction

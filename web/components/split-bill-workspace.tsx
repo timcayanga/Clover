@@ -1,4 +1,5 @@
 "use client";
+import {useUser} from "@clerk/nextjs";
 import { SplitItemGrid } from "./split-item-grid";
 import { MobileSwipeDelete } from "@/components/mobile-swipe-delete";
 import { AdviserHeaderLink } from "@/components/adviser-header-link";
@@ -363,6 +364,7 @@ export function SplitBillWorkspace({
   people: initialPeople,
   currentUserName,
 }: SplitBillWorkspaceProps) {
+  const {user}=useUser();
   const searchParams = useSearchParams();
   const [homeTab, setHomeTab] = useState("Bills");
   const [bills, setBills] = useState(initialBills);
@@ -1181,8 +1183,9 @@ export function SplitBillWorkspace({
   };
 
   const renderBillItemsTable = (bill: SplitBillSerializedBill, editable: boolean) => <SplitItemGrid
-    people={(editable ? billEditorParticipants : bill.participants).map(person=>({id:person.id??"",name:person.name,avatarUrl:people.find(p=>p.name===person.name)?.avatarUrl}))}
+    people={(editable ? billEditorParticipants : bill.participants).map(person=>({id:person.id??"",name:person.name,avatarUrl:/^(you|me)$/i.test(person.name)||person.name===currentUserName?user?.imageUrl:people.find(p=>p.name===person.name)?.avatarUrl}))}
     items={(editable ? billEditorItems : bill.items).map(item=>({...item,participantIds:editable?item.participantIds:(item.participantIds.length?item.participantIds:bill.participants.map(p=>p.id))}))}
+    onAddPerson={editable||selectedBill?.id===bill.id?()=>{setIsEditingBill(true);addBillEditorParticipant();}:undefined}
     currency={bill.currency}
     adjustment={Number(bill.total??0)-bill.items.reduce((sum,item)=>sum+Number(item.amount),0)}
     onChange={editable || selectedBill?.id===bill.id ? next=>{setIsEditingBill(true);setSelectedBillDraft(current=>({...current??buildBillEditorDraft(bill),total:(Number(bill.total??0)+next.reduce((sum,item)=>sum+(Number(item.amount)||0),0)-bill.items.reduce((sum,item)=>sum+Number(item.amount),0)).toFixed(2),subtotal:next.reduce((sum,item)=>sum+(Number(item.amount)||0),0).toFixed(2),items:next.map(item=>({...item,id:item.id??createSplitBillDraftId(),splitMethod:item.splitMethod??"equal",allocations:item.allocations??[]}))}));} : undefined}

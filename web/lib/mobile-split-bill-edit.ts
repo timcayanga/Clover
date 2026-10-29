@@ -11,6 +11,17 @@ const amount = z
 export const mobileBillEdit = z
   .object({
     title: z.string().trim().min(1).max(100),
+    addedParticipants: z
+      .array(
+        z
+          .object({
+            id: z.string().min(1),
+            name: z.string().trim().min(1).max(100),
+          })
+          .strict(),
+      )
+      .max(30)
+      .optional(),
     items: z
       .array(
         z
@@ -42,7 +53,18 @@ export function mergeMobileBillEdit(
   input: unknown,
 ) {
   const body = mobileBillEdit.parse(input);
-  const people = new Set(bill.participants.map((p) => p.id));
+  const participants = [
+    ...bill.participants,
+    ...(body.addedParticipants ?? []),
+  ];
+  if (
+    participants.length > 30 ||
+    new Set(participants.map((p) => p.id)).size !== participants.length ||
+    new Set(participants.map((p) => p.name.trim().toLowerCase())).size !==
+      participants.length
+  )
+    throw new Error("Choose distinct people in this bill.");
+  const people = new Set(participants.map((p) => p.id));
   if (new Set(body.items.map((item) => item.id)).size !== body.items.length)
     throw new Error("Each line item must have a distinct ID.");
   for (const item of body.items) {
@@ -82,7 +104,8 @@ export function mergeMobileBillEdit(
     throw new Error("The bill total must remain positive.");
   return {
     ...bill,
-    ...body,
+    title: body.title,
+    participants,
     total: total.toFixed(2),
     subtotal: newItems.toFixed(2),
     items: body.items.map((item, index) => ({ ...item, sortOrder: index })),

@@ -1,6 +1,6 @@
 import type { CSSProperties } from "react";
 
-export const INTERFACE_ICON_NAMES = ["details", "upload", "download", "undo", "redo", "edit", "delete", "close", "cancel", "pause", "resume", "retry", "date"] as const;
+export const INTERFACE_ICON_NAMES = ["open", "details", "upload", "download", "undo", "redo", "edit", "delete", "close", "cancel", "pause", "resume", "retry", "date"] as const;
 export type InterfaceIconName = typeof INTERFACE_ICON_NAMES[number];
 
 // Mask the exported Figma mark so existing primary, destructive and disabled

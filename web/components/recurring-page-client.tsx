@@ -19,6 +19,7 @@ type RecurringPageClientProps = {
   planTier: "free" | "pro" | "premium";
   initialTab?: RecurringTab;
   initialAddOpen?: boolean;
+  initialCommitmentId?: string;
 };
 
 export type RecurringTab = "overview" | "planned" | "debt" | "owed" | "installments";
@@ -76,6 +77,7 @@ export function RecurringPageClient({
   planTier,
   initialTab = "overview",
   initialAddOpen = false,
+  initialCommitmentId,
 }: RecurringPageClientProps) {
   const router = useRouter();
   const [addOpen, setAddOpen] = useState(initialAddOpen);
@@ -207,6 +209,7 @@ export function RecurringPageClient({
           categoryOptions={categoryOptions}
           transactions={transactions}
           activeTab={activeTab}
+          initialCommitmentId={initialCommitmentId}
           initialKind={addKind}
           showAddModal={addOpen}
           creationPage={mobileCreation}

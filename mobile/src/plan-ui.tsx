@@ -101,7 +101,7 @@ export function PlanHeader({
 PlanHeader.screenHeader = true;
 
 const tabIcons: Record<string, ComponentProps<typeof Icon>["name"]> = {
-  Expenses: "receipt-outline", Budgets: "wallet-outline", Goals: "flag-outline", Commitments: "calendar-outline", Contributions: "gift-outline", Reports: "bar-chart-outline", Transactions: "swap-horizontal-outline", Roadmap: "map-outline", Progress: "trending-up-outline",
+  Recurring: "repeat-outline", Expenses: "receipt-outline", Budgets: "wallet-outline", Goals: "flag-outline", Commitments: "calendar-outline", Contributions: "gift-outline", Reports: "bar-chart-outline", Transactions: "swap-horizontal-outline", Roadmap: "map-outline", Progress: "trending-up-outline",
   Overview: "apps-outline", Bills: "receipt-outline", Groups: "people-outline",
   People: "person-outline", Payments: "card-outline", Spending: "bar-chart-outline",
   Trends: "trending-up-outline", Insights: "sparkles-outline", Portfolio: "briefcase-outline",

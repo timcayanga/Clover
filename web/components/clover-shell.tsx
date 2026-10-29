@@ -781,6 +781,8 @@ export function CloverShell({
   const [isProfileDrawerOpen, setIsProfileDrawerOpen] = useState(false);
   const [isQuickAddOpen, setIsQuickAddOpen] = useState(false);
   const [notificationsPopoverStyle, setNotificationsPopoverStyle] = useState<{ left: number; bottom: number } | null>(null);
+  const [quickTransactionType,setQuickTransactionType]=useState<"debit"|"credit">("debit");
+  useEffect(()=>{const open=(event:Event)=>{const type=(event as CustomEvent).detail?.type;setQuickTransactionType(type==="income"?"credit":"debit");void loadDashboardManualTransactionModal();setQuickAddModal("transaction");};window.addEventListener("clover:open-quick-transaction",open);return()=>window.removeEventListener("clover:open-quick-transaction",open);},[]);
   const [quickAddModal, setQuickAddModal] = useState<"transaction" | "import" | null>(null);
   const [quickAddSeedFiles, setQuickAddSeedFiles] = useState<File[] | null>(null);
   const [quickAddImportMode, setQuickAddImportMode] = useState<ImportImageMode>("statement");
@@ -1843,7 +1845,7 @@ export function CloverShell({
     if (window.matchMedia("(max-width: 1100px)").matches) {
       setIsQuickAddOpen(false);
       void loadDashboardManualTransactionModal();
-      setQuickAddModal("transaction");
+      setQuickTransactionType("debit");setQuickAddModal("transaction");
       return;
     }
     if (pathname?.startsWith("/accounts/institutions/")) {
@@ -1876,7 +1878,7 @@ export function CloverShell({
     void loadDashboardManualTransactionModal();
     void loadImportFilesModal();
     setIsQuickAddOpen(false);
-    setQuickAddModal("transaction");
+    setQuickTransactionType("debit");setQuickAddModal("transaction");
   };
 
   const closeQuickAddModal = () => {
@@ -2451,7 +2453,7 @@ export function CloverShell({
             role="menuitem"
             onClick={() => {
               setIsQuickAddOpen(false);
-              setQuickAddModal("transaction");
+              setQuickTransactionType("debit");setQuickAddModal("transaction");
             }}
           >
             <MenuIcon name="plus" />
@@ -2461,7 +2463,7 @@ export function CloverShell({
       ) : null}
 
       {quickAddModal === "transaction" && searchWorkspaceId ? (
-        <DashboardManualTransactionModal workspaceId={searchWorkspaceId} accounts={quickAddAccounts} onClose={closeQuickAddModal} />
+        <DashboardManualTransactionModal initialType={quickTransactionType} workspaceId={searchWorkspaceId} accounts={quickAddAccounts} onClose={closeQuickAddModal} />
       ) : null}
 
       {quickAddModal === "import" && searchWorkspaceId ? (

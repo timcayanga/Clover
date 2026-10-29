@@ -103,6 +103,7 @@ export const circleTemplates: CircleTemplate[] = [
 
 export type CircleMemberSummary = {
   avatarUrl?: string | null;
+  isMe?: boolean;
   id: string;
   userId: string | null;
   isOwner: boolean;
@@ -116,6 +117,7 @@ export type CircleMemberSummary = {
 };
 
 export type CircleBudgetSummary = {
+  startsAt?: string|null; endsAt?: string|null;
   id: string;
   name: string;
   targetAmount: number;
@@ -153,6 +155,7 @@ export type CircleCommitmentSummary = {
   nextDueDate: string | null;
   notes: string | null;
   isActive: boolean;
+  assignedMemberIds?: string[];
   assignedMemberId: string | null;
   assignedMemberName: string | null;
 };
@@ -169,6 +172,12 @@ export type CircleContributionSummary = {
 };
 
 export type CircleExpenseSummary = {
+  canEditSplit?: boolean;
+  canUnshare?: boolean;
+  transactionId?: string;
+  categoryName?: string | null;
+  lineItems?: {description:string;amount:string|null;currency?:string|null}[];
+  splitItems?: import("../../shared/split-bill-experience").SplitItem[];
   id: string;
   kind: "split_bill" | "shared_transaction";
   title: string;
@@ -219,6 +228,8 @@ export type CircleInsight = {
 };
 
 export type CircleSummary = {
+  expenseCurrencyTotals?: Record<string,number>;
+  contributionCurrencyTotals?: Record<string,number>;
   // Directory cards contain summaries only; never render their empty detail arrays.
   detailsLoaded?: boolean;
   id: string;

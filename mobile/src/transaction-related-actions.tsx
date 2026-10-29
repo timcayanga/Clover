@@ -1,61 +1,319 @@
-import { nextMonth, transactionRecurringInput } from "../../shared/transaction-recurring";
+import {
+  nextMonth,
+  transactionRecurringInput,
+} from "../../shared/transaction-recurring";
 import { useEffect, useState } from "react";
-import { View } from "react-native";
+import { Pressable, View } from "react-native";
 import { router } from "expo-router";
 import { useSession } from "./session";
-import { Body, Button, Card, Field, SectionTitle, Notice } from "./ui";
+import { Text } from "./app-text";
+import { PersonAvatar } from "./person-avatar";
+import {
+  Body,
+  Button,
+  Card,
+  Field,
+  SectionTitle,
+  Notice,
+  Icon,
+  useTheme,
+} from "./ui";
 import { ChoiceField } from "./transaction-entry";
 import type { Transaction } from "./types";
-
-export function TransactionRelatedActions({ transaction }: { transaction: Transaction }) {
-  const session = useSession();
-  const [panel, setPanel] = useState<"circles" | "recurring" | null>(null);
-  const [circles, setCircles] = useState<{ id: string; name: string }[]>([]);
-  const [circleId, setCircleId] = useState("");
-  const [dueDate, setDueDate] = useState(() => nextMonth(transaction.date));
-  const [recurrence, setRecurrence] = useState("monthly");
-  const [busy, setBusy] = useState(false);
-  const [message, setMessage] = useState("");
+type Related = {
+  splitBill: {
+    id: string;
+    title: string;
+    people: { name: string; avatarUrl?: string | null }[];
+  } | null;
+  circles: { id: string; name: string; avatarUrl?: string | null }[];
+  recurring: { id: string; title: string; categoryName: string | null }[];
+};
+export function TransactionRelatedActions({
+  transaction,
+}: {
+  transaction: Transaction;
+}) {
+  const session = useSession(),
+    { colors } = useTheme(),
+    [panel, setPanel] = useState<"circles" | "recurring" | null>(null),
+    [circles, setCircles] = useState<{ id: string; name: string }[]>([]),
+    [circleId, setCircleId] = useState(""),
+    [dueDate, setDueDate] = useState(() => nextMonth(transaction.date)),
+    [recurrence, setRecurrence] = useState("monthly"),
+    [busy, setBusy] = useState(false),
+    [message, setMessage] = useState(""),
+    [loadingRelated, setLoadingRelated] = useState(!session.demo),
+    [revision, setRevision] = useState(0),
+    [related, setRelated] = useState<Related>({
+      splitBill: transaction.splitBill
+        ? { ...transaction.splitBill, people: [] }
+        : null,
+      circles: [],
+      recurring: [],
+    });
   const title = transaction.merchantClean || transaction.merchantRaw;
   useEffect(() => {
-    let active = true;
-    if (panel !== "circles" || session.demo) return;
-    void session.request<{ circles: { id: string; name: string }[] }>(`circles?workspaceId=${encodeURIComponent(session.profileId)}`).then(data => {
-      if (active) { setCircles(data.circles); setCircleId(data.circles[0]?.id || ""); }
-    }).catch((e: Error) => { if (active) setMessage(e.message); });
-    return () => { active = false; };
-  }, [panel, session.demo, session.profileId, session.request]);
+    let live = true;
+    if (!session.demo) {
+      setLoadingRelated(true);
+      void session
+        .request<Related>(
+          `transactions/${transaction.id}/related?workspaceId=${encodeURIComponent(session.profileId)}`,
+        )
+        .then((r) => {
+          if (live) setRelated(r);
+        })
+        .catch((e) => {
+          if (live) setMessage(e.message);
+        })
+        .finally(() => {
+          if (live) setLoadingRelated(false);
+        });
+    }
+    return () => {
+      live = false;
+    };
+  }, [
+    transaction.id,
+    revision,
+    session.profileId,
+    session.request,
+    session.demo,
+  ]);
+  useEffect(() => {
+    let live = true;
+    if (panel === "circles" && !session.demo)
+      void session
+        .request<{ circles: { id: string; name: string }[] }>(
+          `circles?workspaceId=${encodeURIComponent(session.profileId)}`,
+        )
+        .then((r) => {
+          if (live) {
+            setCircles(r.circles);
+            setCircleId(r.circles[0]?.id ?? "");
+          }
+        })
+        .catch((e) => setMessage(e.message));
+    return () => {
+      live = false;
+    };
+  }, [panel, session.profileId, session.demo, session.request]);
   const save = async () => {
     if (busy || !panel) return;
-    setBusy(true); setMessage("");
+    setBusy(true);
     try {
-      if (panel === "circles") {
-        await session.request(`circles/${encodeURIComponent(circleId)}/resources?workspaceId=${encodeURIComponent(session.profileId)}`, { method: "POST", body: JSON.stringify({ action: "share_transaction", transactionId: transaction.id, visibility: "item", sharedTitle: title, sharedAmount: Math.abs(Number(transaction.amount)) }) });
-      } else {
-        await session.request(`recurring?workspaceId=${encodeURIComponent(session.profileId)}`, { method: "POST", body: JSON.stringify(transactionRecurringInput(transaction, title, dueDate, recurrence)) });
-      }
-      setMessage(panel === "circles" ? "Added to Circles." : "Added to Recurring."); setPanel(null);
-    } catch (e) { setMessage((e as Error).message); }
-    finally { setBusy(false); }
+      if (panel === "circles")
+        await session.request(
+          `circles/${circleId}/resources?workspaceId=${encodeURIComponent(session.profileId)}`,
+          {
+            method: "POST",
+            body: JSON.stringify({
+              action: "share_transaction",
+              transactionId: transaction.id,
+              visibility: "item",
+            }),
+          },
+        );
+      else
+        await session.request(
+          `recurring?workspaceId=${encodeURIComponent(session.profileId)}`,
+          {
+            method: "POST",
+            body: JSON.stringify(
+              transactionRecurringInput(
+                transaction,
+                title,
+                dueDate,
+                recurrence,
+              ),
+            ),
+          },
+        );
+      setRevision((v) => v + 1);
+      setPanel(null);
+      setMessage("");
+    } catch (e) {
+      setMessage((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
   };
-  return <Card>
-    <SectionTitle>Add To</SectionTitle>
-    <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
-      <Button title={transaction.splitBill ? "Open in Split Bills" : "Split Bills"} secondary disabled={busy || session.demo} onPress={() => router.push({ pathname: "/split-bills", params: transaction.splitBill ? { billId: transaction.splitBill.id } : { transactionId: transaction.id } })} />
-      <Button title="Circles" secondary disabled={busy || session.demo || transaction.type !== "expense"} onPress={() => { setPanel(panel === "circles" ? null : "circles"); setMessage(""); }} />
-      <Button title="Recurring" secondary disabled={busy || session.demo} onPress={() => { setPanel(panel === "recurring" ? null : "recurring"); setMessage(""); }} />
-    </View>
-    {panel === "circles" ? <>
-      <ChoiceField label="Circle" value={circleId} onChange={setCircleId} options={circles.map(c => ({ value: c.id, label: c.name }))} />
-      <Body>Adding shares this transaction with members of the selected Circle.</Body>
-      {!circles.length ? <Button title="Create Circle" secondary onPress={() => router.push("/circles")} /> : null}
-    </> : null}
-    {panel === "recurring" ? <>
-      <ChoiceField label="Repeat" value={recurrence} onChange={setRecurrence} options={["once", "weekly", "biweekly", "monthly", "quarterly", "annual"].map(value => ({ value, label: value.charAt(0).toUpperCase() + value.slice(1) }))} />
-      <Field label="Next due date (YYYY-MM-DD)" value={dueDate} onChangeText={setDueDate} />
-      <Body>Creates a schedule linked to this transaction. It does not move money.</Body>
-    </> : null}
-    {panel ? <Button title={busy ? "Adding…" : "Add"} disabled={busy || (panel === "circles" && !circleId)} onPress={() => void save()} /> : null}
-    {message ? <Notice>{message}</Notice> : null}
-  </Card>;
+  const link = (
+    label: string,
+    detail: string,
+    press: () => void,
+    icon: "people-outline" | "repeat-outline" | "receipt-outline",
+    avatars?: { name: string; avatarUrl?: string | null }[],
+  ) => (
+    <Pressable
+      key={label + detail}
+      accessibilityRole="link"
+      onPress={press}
+      style={{ paddingVertical: 10, gap: 6 }}
+    >
+      <View style={{ flexDirection: "row", gap: 8, alignItems: "center" }}>
+        <Icon name={icon} size={20} />
+        <Text style={{ color: colors.teal, fontSize: 13 }}>{label}</Text>
+        <Icon name="open-outline" size={16} />
+      </View>
+      <Body>{detail}</Body>
+      {avatars?.length ? (
+        <View style={{ flexDirection: "row", gap: 6 }}>
+          {avatars.map((p) => (
+            <PersonAvatar
+              key={p.name}
+              name={p.name}
+              imageUrl={p.avatarUrl}
+              size={28}
+            />
+          ))}
+        </View>
+      ) : null}
+    </Pressable>
+  );
+  return (
+    <Card>
+      <SectionTitle>Add To</SectionTitle>
+      {loadingRelated ? <Body>Loading Linked Items…</Body> : null}
+      <View style={{ flexDirection: "row", gap: 6 }}>
+        {!loadingRelated && !message && !related.splitBill ? (
+          <Pressable
+            style={{
+              flex: 1,
+              alignItems: "center",
+              gap: 4,
+              paddingVertical: 10,
+            }}
+            onPress={() =>
+              router.push({
+                pathname: "/split-bills",
+                params: { transactionId: transaction.id },
+              })
+            }
+          >
+            <Icon name="receipt-outline" size={24} />
+            <Text style={{ fontSize: 11, color: colors.teal }}>
+              Split Bills
+            </Text>
+          </Pressable>
+        ) : null}
+        {!loadingRelated &&
+        !message &&
+        !related.circles.length &&
+        transaction.type === "expense" ? (
+          <Pressable
+            style={{
+              flex: 1,
+              alignItems: "center",
+              gap: 4,
+              paddingVertical: 10,
+            }}
+            onPress={() => setPanel(panel === "circles" ? null : "circles")}
+          >
+            <Icon name="people-outline" size={24} />
+            <Text style={{ fontSize: 11, color: colors.teal }}>Circles</Text>
+          </Pressable>
+        ) : null}
+        {!loadingRelated && !message && !related.recurring.length ? (
+          <Pressable
+            style={{
+              flex: 1,
+              alignItems: "center",
+              gap: 4,
+              paddingVertical: 10,
+            }}
+            onPress={() => setPanel(panel === "recurring" ? null : "recurring")}
+          >
+            <Icon name="repeat-outline" size={24} />
+            <Text style={{ fontSize: 11, color: colors.teal }}>Recurring</Text>
+          </Pressable>
+        ) : null}
+      </View>
+      {related.splitBill
+        ? link(
+            "Open in Split Bills",
+            related.splitBill.title,
+            () =>
+              router.push({
+                pathname: "/split-bills",
+                params: { billId: related.splitBill!.id },
+              }),
+            "receipt-outline",
+            related.splitBill.people,
+          )
+        : null}
+      {related.circles.map((c) =>
+        link(
+          "Open in Circles",
+          c.name,
+          () =>
+            router.push({ pathname: "/circles", params: { circleId: c.id } }),
+          "people-outline",
+        ),
+      )}
+      {related.recurring.map((r) =>
+        link(
+          "Open in Recurring",
+          [r.title, r.categoryName].filter(Boolean).join(" · "),
+          () =>
+            router.push({
+              pathname: "/(tabs)/recurring",
+              params: { commitmentId: r.id },
+            }),
+          "repeat-outline",
+        ),
+      )}
+      {panel === "circles" ? (
+        <>
+          <ChoiceField
+            label="Circle"
+            value={circleId}
+            onChange={setCircleId}
+            options={circles.map((c) => ({ value: c.id, label: c.name }))}
+          />
+          {!circles.length ? (
+            <Button
+              title="Create Circle"
+              secondary
+              onPress={() => router.push("/circles")}
+            />
+          ) : null}
+        </>
+      ) : null}
+      {panel === "recurring" ? (
+        <>
+          <ChoiceField
+            label="Time Period"
+            value={recurrence}
+            onChange={setRecurrence}
+            options={[
+              "once",
+              "weekly",
+              "biweekly",
+              "monthly",
+              "quarterly",
+              "annual",
+            ].map((v) => ({
+              value: v,
+              label: v[0].toUpperCase() + v.slice(1),
+            }))}
+          />
+          <Field
+            label="Next Due Date (YYYY-MM-DD)"
+            value={dueDate}
+            onChangeText={setDueDate}
+          />
+        </>
+      ) : null}
+      {panel ? (
+        <Button
+          title="Add"
+          disabled={busy || (panel === "circles" && !circleId)}
+          onPress={() => void save()}
+        />
+      ) : null}
+      {message ? <Notice>{message}</Notice> : null}
+    </Card>
+  );
 }

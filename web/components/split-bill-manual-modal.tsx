@@ -1,4 +1,5 @@
 "use client";
+import {useUser} from "@clerk/nextjs";
 import { SplitItemGrid } from "./split-item-grid";
 import { suggestBillCategory, type SplitItem } from "../../shared/split-bill-experience";
 import { MobileSheetHandle } from "@/components/mobile-sheet-handle";
@@ -49,6 +50,7 @@ async function readJsonResponse<T>(response: Response): Promise<T> {
 }
 
 export function SplitBillManualModal({ open, currentUserName, people, groups, onClose, onSaved }: SplitBillManualModalProps) {
+  const {user}=useUser();
   const [lineItems,setLineItems]=useState<SplitItem[]>([]);
   const [entryUpload,setEntryUpload]=useState(false);
   const [receiptFile,setReceiptFile]=useState<File | null>(null);
@@ -331,7 +333,7 @@ export function SplitBillManualModal({ open, currentUserName, people, groups, on
           </label>
         </div>
 
-        <SplitItemGrid people={Array.from(new Set([currentUserName,...selectedPeople])).map(name=>({id:name,name,avatarUrl:people.find(p=>p.name===name)?.avatarUrl}))}
+        <SplitItemGrid people={Array.from(new Set([currentUserName,...selectedPeople])).map(name=>({id:name,name,avatarUrl:name===currentUserName?user?.imageUrl:people.find(p=>p.name===name)?.avatarUrl}))}
           items={lineItems} currency={currency} onChange={next=>{setLineItems(next);if(next.length)setAmount(next.reduce((sum,item)=>sum+(Number(item.amount)||0),0).toFixed(2));}} />
         {suggestBillCategory(description,lineItems.map(item=>item.description)) ? <small>Suggested category: {suggestBillCategory(description,lineItems.map(item=>item.description))?.name}</small> : null}
         <label className="settings-field">
@@ -359,7 +361,7 @@ export function SplitBillManualModal({ open, currentUserName, people, groups, on
                 <p>People</p>
                 {suggestions.people.map((person) => (
                   <button key={person.id} type="button" className="split-bill-manual-modal__suggestion" onClick={() => addPerson(person.name)}>
-                    <SplitBillEntityAvatar name={person.name} avatarUrl={null} />
+                    <SplitBillEntityAvatar name={person.name} avatarUrl={person.avatarUrl??null} />
                     <span>{person.name}</span>
                   </button>
                 ))}
