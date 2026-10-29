@@ -1,3 +1,4 @@
+import { usePageAskClover } from "../src/page-ask-context";
 import { Text } from "../src/app-text";
 import { router } from "expo-router";
 import {
@@ -15,6 +16,7 @@ import { Body, Button, Card, Heading, Notice, Screen } from "../src/ui";
 import type { OfflineMutation } from "../src/offline/types";
 import type { Transaction, TransactionPage } from "../src/types";
 export default function OfflineScreen() {
+  const askClover = usePageAskClover();
   const session = useSession(),
     engine = session.offline,
     status = session.offlineStatus;
@@ -160,7 +162,7 @@ export default function OfflineScreen() {
         <Button
           title="Open Ask Clover"
           secondary
-          onPress={() => router.push("/(tabs)/adviser")}
+          onPress={() => askClover({page:"general",title:"Offline Data"})}
         />
       </Card>
       <Heading>{session.queuedFiles.length} saved files</Heading>

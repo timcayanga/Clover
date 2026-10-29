@@ -1,3 +1,4 @@
+import { usePageAskClover } from "./page-ask-context";
 import { useCallback, useState } from "react";
 import { missionMascotPoses } from "../../shared/onboarding-missions";
 import { useFocusEffect, router, type Href } from "expo-router";
@@ -12,6 +13,7 @@ const destinations: Record<OnboardingMissionId, Href> = {
   add_transaction: "/add-transaction", set_budget: "/budgeting", create_goal: "/goals", ask_clover: "/(tabs)/adviser",
 };
 export function OnboardingMissions() {
+  const askClover = usePageAskClover();
   const session = useSession();
   const { colors } = useTheme();
   const [snapshot, setSnapshot] = useState<OnboardingMissionSnapshot | null>(null);
@@ -44,7 +46,7 @@ export function OnboardingMissions() {
     {snapshot.missions.map(mission => <View key={mission.id} style={{ flexDirection: "row", gap: 10, padding: 10, borderRadius: 14, backgroundColor: mission.id === next?.id ? colors.pale : "transparent" }}>
       <Text style={{ color: colors.teal }}>{mission.completed ? "✓" : "○"}</Text>
       <View style={{ flex: 1, gap: 8 }}><Text style={{ color: colors.ink, fontFamily: "Poppins-SemiBold", fontSize: 15 }}>{mission.title}</Text>
-        {!mission.completed && mission.id === next?.id ? <Button title={mission.actionLabel} onPress={() => router.push(destinations[mission.id])} /> : null}
+        {!mission.completed && mission.id === next?.id ? <Button title={mission.actionLabel} onPress={() => mission.id === "ask_clover" ? askClover({page:"home",title:"Home"}) : router.push(destinations[mission.id])} /> : null}
       </View>
     </View>)}
     {error ? <Body>{error}</Body> : null}

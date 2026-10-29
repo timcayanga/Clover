@@ -516,6 +516,7 @@ export function AppHeader({
       "/settings": "/settings",
     };
     closePanel(() => {
+      if (href === "/adviser") { askClover(askPageContext(askPath, askParams, title)); return; }
       if (native[href]) router.navigate(native[href]);
       else if (href.startsWith("/") && !href.startsWith("//"))
         void Linking.openURL(`${apiBase()}${href}`);

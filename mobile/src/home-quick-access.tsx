@@ -1,3 +1,4 @@
+import { usePageAskClover } from "./page-ask-context";
 import { useRef, useState } from "react";
 import { Pressable, ScrollView, View } from "react-native";
 import { router, type Href } from "expo-router";
@@ -5,6 +6,7 @@ import { Text } from "./app-text";
 import { Card, Icon, useTheme } from "./ui";
 import { productPages } from "../../shared/circle-experience";
 export function HomeQuickAccess() {
+  const askClover = usePageAskClover();
   const { colors, dark } = useTheme(),
     [width, setWidth] = useState(0),
     [page, setPage] = useState(0),
@@ -38,7 +40,7 @@ export function HomeQuickAccess() {
                   <Pressable
                     key={item.key}
                     accessibilityRole="button"
-                    onPress={() => router.navigate(route(item.href))}
+                    onPress={() => item.href === "/adviser" ? askClover({page:"home",title:"Home"}) : router.navigate(route(item.href))}
                     style={{
                       width: width / 4,
                       alignItems: "center",
