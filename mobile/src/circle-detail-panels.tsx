@@ -1,17 +1,28 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Pressable, View, Alert } from "react-native";
 import { router } from "expo-router";
 import { Text } from "./app-text";
 import { Body, Card, Notice, money, useTheme, CategoryMark, Icon } from "./ui";
 import { PersonAvatar } from "./person-avatar";
-import { PlanAction, Progress } from "./plan-ui";
+import { SpendingDonut } from "./spending-donut";
+import { CloverEmptyState } from "./clover-mascot";
+import { Choices } from "./transaction-entry";
+import {
+  PlanAction,
+  Progress,
+  SummaryCard,
+  PlanDirectoryCard,
+} from "./plan-ui";
 import { SplitItemGrid } from "./split-item-grid";
 import { useSession } from "./session";
 import { useCircleDateFormat } from "./circle-dates";
 import { displayDate } from "../../shared/localized-date";
 import { properLabel, currencyTotals } from "../../shared/circle-experience";
 import type { CircleAction } from "./circle-resource-editor";
-import type { SplitItem } from "../../shared/split-bill-experience";
+import {
+  splitItemTotals,
+  type SplitItem,
+} from "../../shared/split-bill-experience";
 export type CircleDetail = {
   id: string;
   currency: string;
@@ -88,7 +99,12 @@ export type CircleDetail = {
     contributionDate: string;
     note?: string | null;
   }[];
-  activities?: { id: string; summary: string; createdAt: string }[];
+  activities?: {
+    id: string;
+    action?: string;
+    summary: string;
+    createdAt: string;
+  }[];
 };
 export function CircleDetailPanels({
   circle,
@@ -112,7 +128,7 @@ export function CircleDetailPanels({
     session = useSession(),
     [error, setError] = useState(""),
     [busy, setBusy] = useState(false),
-    [whole, setWhole] = useState(false);
+    [customExpense, setCustomExpense] = useState<string | null>(null);
   const canEdit = circle.role !== "participant",
     members = (circle.members ?? []).filter((m) => m.status === "active"),
     people = members.map((m) => ({
@@ -162,6 +178,7 @@ export function CircleDetailPanels({
     amount?: string,
     avatar?: string | null,
     trailing?: React.ReactNode,
+    activity?: string,
   ) => (
     <View
       key={key}
@@ -169,14 +186,39 @@ export function CircleDetailPanels({
         flexDirection: "row",
         alignItems: "center",
         gap: 10,
-        paddingVertical: 14,
+        paddingVertical: 10,
         borderBottomWidth: 1,
         borderColor: colors.line,
       }}
     >
-      <PersonAvatar name={main} imageUrl={avatar} />
+      {activity ? (
+        <Icon
+          name={
+            /budget/.test(activity)
+              ? "wallet-outline"
+              : /goal/.test(activity)
+                ? "flag-outline"
+                : /member|invit|join/.test(activity)
+                  ? "people-outline"
+                  : /commitment|recurring/.test(activity)
+                    ? "repeat-outline"
+                    : "swap-horizontal-outline"
+          }
+          size={28}
+        />
+      ) : (
+        <PersonAvatar name={main} imageUrl={avatar} size={32} />
+      )}
       <View style={{ flex: 1, minWidth: 0 }}>
-        <Body muted={false}>{main}</Body>
+        <Text
+          style={{
+            fontSize: 14,
+            color: colors.ink,
+            fontFamily: "Poppins-Regular",
+          }}
+        >
+          {main}
+        </Text>
         <Text style={{ fontSize: 11, color: colors.muted }}>{sub}</Text>
       </View>
       {amount ? (
@@ -199,51 +241,135 @@ export function CircleDetailPanels({
     };
     return (
       <>
-        <Card>
-          <Body muted={false}>Shared Expenses This Month</Body>
-          {Object.entries(totals).map(([currency, n]) => (
-            <Body key={currency}>{money(String(n), currency)}</Body>
-          ))}
-          <Body muted={false}>Contributions This Month</Body>
-          {Object.entries(
-            circle.contributionCurrencyTotals ?? {
-              [circle.currency]: circle.contributionTotalThisMonth,
-            },
-          ).map(([currency, n]) => (
-            <Body key={currency}>{money(String(n), currency)}</Body>
-          ))}
-        </Card>
+        {Array.from(
+          new Set([
+            ...Object.keys(totals),
+            ...Object.keys(
+              circle.contributionCurrencyTotals ?? {
+                [circle.currency]: circle.contributionTotalThisMonth,
+              },
+            ),
+          ]),
+        ).map((currency) => (
+          <View key={currency} style={{ flexDirection: "row", gap: 12 }}>
+            <SummaryCard
+              title="Shared Expenses"
+              value={money(String(totals[currency] ?? 0), currency)}
+            />
+            <SummaryCard
+              title="Contributions"
+              value={money(
+                String(
+                  (circle.contributionCurrencyTotals ?? {
+                    [circle.currency]: circle.contributionTotalThisMonth,
+                  })[currency] ?? 0,
+                ),
+                currency,
+              )}
+            />
+          </View>
+        ))}
         <Card>
           <Body muted={false}>Where It Went</Body>
-          {Object.entries(
-            currencyTotals(
-              (circle.expenses ?? []).map((e) => ({
-                currency: e.currency,
-                amount: e.amount,
-              })),
-            ),
-          ).map(([currency, total]) => (
-            <View key={currency} style={{ gap: 10 }}>
-              <Body>{currency}</Body>
-              {Object.entries(
+          {!(circle.expenses ?? []).length ? (
+            <CloverEmptyState pose="reports">
+              Share your first expense to see your category report
+            </CloverEmptyState>
+          ) : null}
+          {Object.keys(currencyTotals(circle.expenses ?? [])).map(
+            (currency) => {
+              const entries = Object.entries(
                 (circle.expenses ?? [])
                   .filter((e) => e.currency === currency)
-                  .reduce<Record<string, number>>((all, e) => {
-                    const key = e.categoryName ?? "Shared Expenses";
-                    all[key] = (all[key] ?? 0) + e.amount;
-                    return all;
+                  .reduce<Record<string, number>>((r, e) => {
+                    const name = e.categoryName ?? "Other";
+                    r[name] = (r[name] ?? 0) + e.amount;
+                    return r;
                   }, {}),
-              ).map(([label, n]) => (
-                <View key={label}>
-                  <Body>
-                    {label} · {money(String(n), currency)}
-                  </Body>
-                  <Progress value={total ? (n / total) * 100 : 0} />
+              ).sort((a, b) => b[1] - a[1]);
+              return (
+                <View key={currency}>
+                  <Body>{currency}</Body>
+                  <SpendingDonut
+                    currency={currency}
+                    categories={entries.map(([name, amount]) => ({
+                      name,
+                      amount,
+                    }))}
+                  />
+                  {entries.map(([name, amount]) => (
+                    <View
+                      key={name}
+                      style={{
+                        flexDirection: "row",
+                        alignItems: "center",
+                        gap: 8,
+                        paddingVertical: 10,
+                        borderBottomWidth: 1,
+                        borderColor: colors.line,
+                      }}
+                    >
+                      <CategoryMark name={name} size={28} />
+                      <Text
+                        style={{ flex: 1, fontSize: 13, color: colors.ink }}
+                      >
+                        {name}
+                      </Text>
+                      <Text style={{ fontSize: 13, color: colors.ink }}>
+                        {money(String(amount), currency)}
+                      </Text>
+                    </View>
+                  ))}
                 </View>
-              ))}
-            </View>
-          ))}
+              );
+            },
+          )}
         </Card>
+        <Body muted={false}>Budget Tracking</Body>
+        {!circle.budgets?.length ? (
+          <CloverEmptyState pose="budget">
+            No shared budgets yet
+          </CloverEmptyState>
+        ) : (
+          (circle.budgets ?? []).slice(0, 2).map((e) => (
+            <PlanDirectoryCard
+              key={e.id}
+              color={
+                e.progressPercent >= 100
+                  ? "#e65064"
+                  : e.progressPercent >= 80
+                    ? "#d8841e"
+                    : "#00abc0"
+              }
+            >
+              <Icon name="wallet-outline" size={32} />
+              <Body muted={false}>{e.name}</Body>
+              <Body>
+                {money(String(e.spentAmount), e.currency)} of{" "}
+                {money(String(e.targetAmount), e.currency)}
+              </Body>
+              <Progress value={e.progressPercent} />
+            </PlanDirectoryCard>
+          ))
+        )}
+        <Body muted={false}>Goal Tracking</Body>
+        {!circle.goals?.length ? (
+          <CloverEmptyState pose="savings">
+            No shared goals yet
+          </CloverEmptyState>
+        ) : (
+          (circle.goals ?? []).slice(0, 2).map((e) => (
+            <PlanDirectoryCard key={e.id} color="#35b875">
+              <Icon name="flag-outline" size={32} />
+              <Body muted={false}>{e.name}</Body>
+              <Body>
+                {money(String(e.currentAmount), e.currency)} saved of{" "}
+                {money(String(e.targetAmount), e.currency)}
+              </Body>
+              <Progress value={e.progressPercent} />
+            </PlanDirectoryCard>
+          ))
+        )}
         {circle.isOwner ? (
           <PlanAction
             title="Archive Circle"
@@ -257,12 +383,7 @@ export function CircleDetailPanels({
   if (tab === "Expenses")
     return (
       <>
-        {canEdit
-          ? action("+ Share Transaction", () =>
-              onEdit({ action: "share_transaction" }),
-            )
-          : null}
-        <Card>
+        <View>
           {(circle.expenses ?? []).map((e) => (
             <CircleExpenseRow
               key={e.id}
@@ -270,6 +391,7 @@ export function CircleDetailPanels({
               people={people}
               editable={canEdit && e.canEditSplit !== false}
               format={format}
+              forceOpen={customExpense === e.id}
               onSave={(items) =>
                 run({ action: "update_expense_split", id: e.id, items })
               }
@@ -279,15 +401,19 @@ export function CircleDetailPanels({
             />
           ))}
           {!circle.expenses?.length ? (
-            <Body>No Shared Expenses Yet</Body>
+            <CloverEmptyState pose="circles">
+              No shared expenses yet
+            </CloverEmptyState>
           ) : null}
-        </Card>
+        </View>
+        {canEdit
+          ? action("+ Share Transaction", () =>
+              onEdit({ action: "share_transaction" }),
+            )
+          : null}
         {canEdit && circle.expenses?.some((e) => e.kind !== "split_bill") ? (
           <>
-            {action(whole ? "Split Per Transaction" : "Split Together", () =>
-              setWhole((v) => !v),
-            )}
-            {whole
+            {true
               ? [
                   ...new Set(
                     circle.expenses
@@ -299,8 +425,16 @@ export function CircleDetailPanels({
                   ),
                 ].map((currency) => (
                   <CircleWholeSplit
-                    key={currency}
+                    key={
+                      currency +
+                      JSON.stringify(
+                        circle.expenses
+                          ?.filter((e) => e.currency === currency)
+                          .map((e) => [e.id, e.amount, e.splitItems]),
+                      )
+                    }
                     currency={currency}
+                    onCustom={setCustomExpense}
                     expenses={circle.expenses!.filter(
                       (e) =>
                         e.kind !== "split_bill" &&
@@ -335,7 +469,7 @@ export function CircleDetailPanels({
   if (tab === "People")
     return (
       <>
-        <Card>
+        <View>
           {(circle.members ?? []).map((m) =>
             row(
               m.id,
@@ -344,26 +478,7 @@ export function CircleDetailPanels({
               undefined,
               m.avatarUrl,
               menu(`View ${m.displayName}`, () =>
-                Alert.alert(m.displayName, undefined, [
-                  ...(circle.role === "organizer"
-                    ? [
-                        {
-                          text: "Edit Person",
-                          onPress: () =>
-                            onEdit({ ...m, action: "update_member" }),
-                        },
-                      ]
-                    : []),
-                  ...(circle.splitBillGroupId
-                    ? [
-                        {
-                          text: "View Balances",
-                          onPress: () => onMember(m.displayName),
-                        },
-                      ]
-                    : []),
-                  { text: "Close", style: "cancel" },
-                ]),
+                onEdit({ ...m, action: "update_member" }),
               ),
             ),
           )}
@@ -372,7 +487,7 @@ export function CircleDetailPanels({
                 onEdit({ action: "add_participant" }),
               )
             : null}
-        </Card>
+        </View>
         {circle.role === "organizer" ? (
           <PlanAction title="Invite People" tone="primary" onPress={onInvite} />
         ) : null}
@@ -380,19 +495,34 @@ export function CircleDetailPanels({
     );
   if (tab === "Activity")
     return (
-      <Card>
+      <View>
         {(circle.activities ?? []).map((e) =>
-          row(e.id, e.summary, displayDate(e.createdAt, format)),
+          row(
+            e.id,
+            e.summary,
+            displayDate(e.createdAt, format),
+            undefined,
+            undefined,
+            undefined,
+            e.action ?? "activity",
+          ),
         )}
         {!circle.activities?.length ? (
-          <Body>No Circle Activity Yet</Body>
+          <CloverEmptyState pose="circles">
+            No Circle activity yet
+          </CloverEmptyState>
         ) : null}
-      </Card>
+      </View>
     );
   if (tab === "Contributions")
     return (
       <>
-        <Card>
+        {!circle.contributions?.length ? (
+          <CloverEmptyState pose="savings">
+            No contributions yet
+          </CloverEmptyState>
+        ) : null}
+        <View>
           {(circle.contributions ?? []).map((e) =>
             row(
               e.id,
@@ -402,7 +532,7 @@ export function CircleDetailPanels({
               members.find((m) => m.id === e.memberId)?.avatarUrl,
             ),
           )}
-        </Card>
+        </View>
         {canEdit
           ? action("+ Add Contribution", () =>
               onEdit({ action: "add_contribution" }),
@@ -413,9 +543,25 @@ export function CircleDetailPanels({
   if (tab === "Recurring")
     return (
       <>
+        {!circle.commitments?.length ? (
+          <CloverEmptyState pose="calendar">
+            No shared recurring payments yet
+          </CloverEmptyState>
+        ) : null}
         {(circle.commitments ?? []).map((e) => (
-          <Card key={e.id}>
-            <View style={{ flexDirection: "row", alignItems: "center" }}>
+          <View
+            key={e.id}
+            style={{
+              paddingVertical: 10,
+              gap: 6,
+              borderBottomWidth: 1,
+              borderColor: colors.line,
+            }}
+          >
+            <View
+              style={{ flexDirection: "row", alignItems: "center", gap: 10 }}
+            >
+              <Icon name="repeat-outline" size={28} />
               <View style={{ flex: 1 }}>
                 <Body muted={false}>{e.title}</Body>
               </View>
@@ -446,7 +592,7 @@ export function CircleDetailPanels({
             {e.nextDueDate ? (
               <Body>Next Due · {displayDate(e.nextDueDate, format)}</Body>
             ) : null}
-          </Card>
+          </View>
         ))}
         {canEdit
           ? action("+ Add Recurring", () =>
@@ -459,8 +605,25 @@ export function CircleDetailPanels({
     list = budgets ? (circle.budgets ?? []) : (circle.goals ?? []);
   return (
     <>
+      {!list.length ? (
+        <CloverEmptyState pose={budgets ? "budget" : "savings"}>
+          {budgets ? "No shared budgets yet" : "No shared goals yet"}
+        </CloverEmptyState>
+      ) : null}
       {list.map((e) => (
-        <Card key={e.id}>
+        <PlanDirectoryCard
+          key={e.id}
+          color={
+            budgets
+              ? e.progressPercent >= 100
+                ? "#e65064"
+                : e.progressPercent >= 80
+                  ? "#d8841e"
+                  : "#00abc0"
+              : "#35b875"
+          }
+        >
+          <Icon name={budgets ? "wallet-outline" : "flag-outline"} size={32} />
           <View style={{ flexDirection: "row", alignItems: "center" }}>
             <View style={{ flex: 1 }}>
               <Body muted={false}>{e.name}</Body>
@@ -503,7 +666,7 @@ export function CircleDetailPanels({
             />
           </View>
           <Body>{e.progressPercent}%</Body>
-        </Card>
+        </PlanDirectoryCard>
       ))}
       {canEdit
         ? action(budgets ? "+ Add Budget" : "+ Add Goal", () =>
@@ -520,6 +683,7 @@ function CircleExpenseRow({
   format,
   onSave,
   onRemove,
+  forceOpen,
 }: {
   expense: NonNullable<CircleDetail["expenses"]>[number];
   people: { id: string; name: string; avatarUrl?: string | null }[];
@@ -527,9 +691,13 @@ function CircleExpenseRow({
   format: string;
   onSave: (items: SplitItem[]) => Promise<void>;
   onRemove: () => void;
+  forceOpen?: boolean;
 }) {
   const { colors } = useTheme(),
     [open, setOpen] = useState(false);
+  useEffect(() => {
+    if (forceOpen) setOpen(true);
+  }, [forceOpen]);
   const initial = e.splitItems?.length
     ? e.splitItems
     : e.lineItems?.length
@@ -601,7 +769,11 @@ function CircleExpenseRow({
       </View>
       {open && e.visibility !== "summary" ? (
         <>
+          <Body muted={false}>
+            Transaction Details · Line Items & Custom Split
+          </Body>
           <SplitItemGrid
+            fixedItems
             people={people}
             items={items}
             currency={e.currency}
@@ -624,43 +796,88 @@ function CircleWholeSplit({
   people,
   currency,
   onSave,
+  onCustom,
 }: {
+  onCustom: (id: string) => void;
   expenses: NonNullable<CircleDetail["expenses"]>;
   people: { id: string; name: string; avatarUrl?: string | null }[];
   currency: string;
   onSave: (items: SplitItem[]) => Promise<void>;
 }) {
   const [items, setItems] = useState<SplitItem[]>(() =>
-      expenses.map((e) => ({
-        id: e.id,
-        description: e.title,
-        amount: String(e.amount),
-        participantIds: people.map((p) => p.id),
-      })),
+      expenses.map((e) => {
+        if (e.splitItems?.length) {
+          const totals = splitItemTotals(people, e.splitItems);
+          return {
+            id: e.id,
+            description: e.title,
+            amount: String(e.amount),
+            participantIds: people
+              .filter((p) => totals[p.id] > 0)
+              .map((p) => p.id),
+            splitMethod: "exact" as const,
+            allocations: people
+              .filter((p) => totals[p.id] > 0)
+              .map((p) => ({
+                participantId: p.id,
+                value: String(totals[p.id]),
+              })),
+          };
+        }
+        return {
+          id: e.id,
+          description: e.title,
+          amount: String(e.amount),
+          participantIds: people.map((p) => p.id),
+        };
+      }),
     ),
     [error, setError] = useState(""),
-    [busy, setBusy] = useState(false);
+    [busy, setBusy] = useState(false),
+    [method, setMethod] = useState("transactions");
   return (
-    <Card>
+    <View style={{ gap: 12 }}>
       <Body>Split Together · {currency}</Body>
-      <SplitItemGrid
-        people={people}
-        items={items}
-        currency={currency}
-        onChange={setItems}
-      />
-      <PlanAction
-        title="Save"
-        disabled={busy}
-        tone="primary"
-        onPress={() => {
-          setBusy(true);
-          void onSave(items)
-            .catch((e) => setError(e.message))
-            .finally(() => setBusy(false));
-        }}
+      {method === "custom" ? (
+        expenses.map((e) => (
+          <PlanAction
+            key={e.id}
+            title={`Custom Split · ${e.title}`}
+            onPress={() => onCustom(e.id)}
+          />
+        ))
+      ) : (
+        <>
+          <SplitItemGrid
+            fixedItems
+            people={people}
+            items={items}
+            currency={currency}
+            onChange={setItems}
+          />
+          <PlanAction
+            title="Save"
+            disabled={busy}
+            tone="primary"
+            onPress={() => {
+              setBusy(true);
+              void onSave(items)
+                .catch((e) => setError(e.message))
+                .finally(() => setBusy(false));
+            }}
+          />
+        </>
+      )}
+      <Body>Split By</Body>
+      <Choices
+        value={method}
+        onChange={setMethod}
+        options={[
+          { value: "transactions", label: "Per Transaction" },
+          { value: "custom", label: "Custom Line Items" },
+        ]}
       />
       {error ? <Notice>{error}</Notice> : null}
-    </Card>
+    </View>
   );
 }

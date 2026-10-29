@@ -17,7 +17,9 @@ export function SplitItemGrid({
   onChange,
   adjustment = 0,
   onAddPerson,
+  fixedItems = false,
 }: {
+  fixedItems?: boolean;
   adjustment?: number;
   onAddPerson?: () => void;
   people: SplitPerson[];
@@ -102,6 +104,7 @@ export function SplitItemGrid({
                 <View style={{ width: 142, paddingRight: 10, gap: 4 }}>
                   <TextInput
                     accessibilityLabel={`Item ${index + 1}`}
+                    editable={!fixedItems}
                     placeholder="Item name"
                     value={item.description}
                     onChangeText={(description) =>
@@ -116,6 +119,7 @@ export function SplitItemGrid({
                   />
                   <TextInput
                     accessibilityLabel={`Amount ${index + 1}`}
+                    editable={!fixedItems}
                     placeholder="0.00"
                     value={item.amount}
                     keyboardType="decimal-pad"
@@ -201,14 +205,20 @@ export function SplitItemGrid({
                     </View>
                   );
                 })}
-                <Pressable
-                  accessibilityRole="button"
-                  accessibilityLabel={`Remove item ${index + 1}`}
-                  onPress={() => onChange(items.filter((_, i) => i !== index))}
-                  style={{ width: 40, padding: 10 }}
-                >
-                  <Text style={{ color: colors.danger, fontSize: 20 }}>×</Text>
-                </Pressable>
+                {!fixedItems ? (
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel={`Remove item ${index + 1}`}
+                    onPress={() =>
+                      onChange(items.filter((_, i) => i !== index))
+                    }
+                    style={{ width: 40, padding: 10 }}
+                  >
+                    <Text style={{ color: colors.danger, fontSize: 20 }}>
+                      ×
+                    </Text>
+                  </Pressable>
+                ) : null}
               </View>
             ))}
             <View
@@ -224,7 +234,10 @@ export function SplitItemGrid({
               </View>
               {people.map((p) => (
                 <View key={p.id} style={{ width: 116 }}>
-                  <Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}
+                  <Text
+                    numberOfLines={1}
+                    adjustsFontSizeToFit
+                    minimumFontScale={0.7}
                     style={{
                       color: colors.teal,
                       fontFamily: "Poppins-SemiBold",
@@ -239,27 +252,29 @@ export function SplitItemGrid({
             </View>
           </View>
         </ScrollView>
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="Add Line Item"
-          onPress={() =>
-            onChange([
-              ...items,
-              {
-                id: `new-${Date.now()}-${Math.random().toString(36).slice(2)}`,
-                description: "",
-                amount: "",
-                participantIds: people.map((p) => p.id),
-                splitMethod: method,
-                allocations: [],
-              },
-            ])
-          }
-        >
-          <Text style={{ color: colors.teal, paddingVertical: 12 }}>
-            + Add Line Item
-          </Text>
-        </Pressable>
+        {!fixedItems ? (
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Add Line Item"
+            onPress={() =>
+              onChange([
+                ...items,
+                {
+                  id: `new-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+                  description: "",
+                  amount: "",
+                  participantIds: people.map((p) => p.id),
+                  splitMethod: method,
+                  allocations: [],
+                },
+              ])
+            }
+          >
+            <Text style={{ color: colors.teal, paddingVertical: 12 }}>
+              + Add Line Item
+            </Text>
+          </Pressable>
+        ) : null}
       </Card>
       <Card>
         <Body muted={false}>Split Method</Body>

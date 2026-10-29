@@ -1,3 +1,4 @@
+import * as ImagePicker from "expo-image-picker";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Pressable, ScrollView, View } from "react-native";
 import { router, useFocusEffect } from "expo-router";
@@ -24,6 +25,7 @@ export type CircleAction = {
   id?: string;
   name?: string;
   displayName?: string;
+  avatarUrl?: string | null;
   targetAmount?: number;
   title?: string;
   amount?: number;
@@ -69,6 +71,7 @@ export function CircleResourceEditor({
   const session = useSession(),
     { colors } = useTheme(),
     format = useCircleDateFormat();
+  const [photo, setPhoto] = useState<string | null | undefined>();
   const [listRevision, setListRevision] = useState(0);
   const listLoading = useRef(false);
   useFocusEffect(
@@ -188,6 +191,7 @@ export function CircleResourceEditor({
       return {
         ...base,
         displayName: name.trim(),
+        ...(photo !== undefined ? { avatarUrl: photo } : {}),
         role,
         ...(initial.id ? { status } : {}),
       };
@@ -291,11 +295,15 @@ export function CircleResourceEditor({
   return (
     <Screen>
       <PlanHeader
-        title={properLabel(
-          action
-            .replace("commitment", "recurring")
-            .replace("share_transaction", "share transaction"),
-        )}
+        title={
+          action === "update_member"
+            ? "Person Profile"
+            : properLabel(
+                action
+                  .replace("commitment", "recurring")
+                  .replace("share_transaction", "share transaction"),
+              )
+        }
         back={() => {
           if (!busy) {
             if (isShare && shared.length) onSaved();
@@ -303,12 +311,53 @@ export function CircleResourceEditor({
           }
         }}
       />
+      {isMember && initial.id ? (
+        <View style={{ alignItems: "center", gap: 12 }}>
+          <PersonAvatar
+            name={name}
+            imageUrl={photo === undefined ? initial.avatarUrl : photo}
+            size={72}
+          />
+          {organizer ? (
+            <>
+              <PlanAction
+                title="Change Photo"
+                onPress={() => {
+                  void ImagePicker.launchImageLibraryAsync({
+                    mediaTypes: ["images"],
+                    allowsEditing: true,
+                    aspect: [1, 1],
+                    quality: 0.2,
+                    base64: true,
+                  })
+                    .then((result) => {
+                      if (result.canceled) return;
+                      const base64 = result.assets[0]?.base64;
+                      if (!base64)
+                        throw new Error("Unable to read this photo.");
+                      const value = `data:image/jpeg;base64,${base64}`;
+                      if (value.length > 180000)
+                        throw new Error("Choose a smaller photo.");
+                      setPhoto(value);
+                    })
+                    .catch((e) => setError(e.message));
+                }}
+              />
+              <PlanAction
+                title="Use Default Photo"
+                onPress={() => setPhoto(null)}
+              />
+            </>
+          ) : null}
+        </View>
+      ) : null}
       {!isShare && !isRemove && !isContribution ? (
         <Field
           label={isMember ? "Name" : "Name"}
           value={name}
           onChangeText={setName}
           maxLength={120}
+          editable={!(isMember && initial.id && !organizer)}
         />
       ) : null}
       {!isShare && !isRemove && !isMember ? (
@@ -333,9 +382,9 @@ export function CircleResourceEditor({
           />
         </>
       ) : null}
-      {isMember && !initial.isOwner ? (
+      {isMember && !initial.isOwner && organizer ? (
         <>
-          <Body>Role</Body>
+          <Body>Member Type</Body>
           <Choices
             value={role}
             onChange={setRole}
@@ -525,7 +574,7 @@ export function CircleResourceEditor({
         />
       ) : null}
       {error ? <Notice>{error}</Notice> : null}
-      {!isShare ? (
+      {!isShare && !(isMember && initial.id && !organizer) ? (
         <PlanAction
           title={busy ? "Saving…" : "Save"}
           tone="primary"

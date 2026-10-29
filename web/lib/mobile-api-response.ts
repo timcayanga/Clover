@@ -67,7 +67,7 @@ const circleSummary = (value: unknown) => {
     contributions: rows(circle.contributions, ["id", "memberId", "memberName", "goalId", "amount", "currency", "contributionDate", "note"]),
     expenses: rows(circle.expenses, ["id", "kind", "title", "amount", "currency", "date", "visibility", "transactionId", "categoryName", "lineItems", "splitItems", "canEditSplit", "canUnshare"]),
     investmentShares: rows(circle.investmentShares, ["id", "name", "institution", "balance", "currency", "visibility"]),
-    activities: rows(circle.activities, ["id", "summary", "createdAt"]),
+    activities: rows(circle.activities, ["id", "action", "summary", "createdAt"]),
     insights: rows(circle.insights, ["id", "title", "detail", "confidence", "reason"]),
   };
 };

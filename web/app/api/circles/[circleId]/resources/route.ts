@@ -129,6 +129,17 @@ const resourceSchema = z.discriminatedUnion("action", [
   z.object({
     action: z.literal("update_member"),
     id: z.string().min(1),
+    avatarUrl: z
+      .string()
+      .max(180_000)
+      .nullable()
+      .optional()
+      .refine(
+        (value) =>
+          !value ||
+          /^data:image\/(?:png|jpeg|webp);base64,[a-z0-9+/=]+$/i.test(value),
+        "Choose a PNG, JPEG, or WebP photo",
+      ),
     displayName: z.string().trim().min(1).max(100).optional(),
     role: z.enum(circleRoles).optional(),
     contributionTarget: amount.nullable().optional(),
@@ -216,7 +227,7 @@ export async function POST(
 ) {
   try {
     assertTrustedRequestOrigin(request);
-    assertContentLengthWithin(request, 100_000);
+    assertContentLengthWithin(request, 250_000);
     const user = await getCircleCurrentUser();
     const { circleId } = await params;
     const body = resourceSchema.parse(await request.json());
@@ -548,6 +559,7 @@ export async function POST(
             where: { id: member.id },
             data: {
               displayName: body.displayName,
+              avatarUrl: body.avatarUrl,
               role: body.role,
               contributionTarget: body.contributionTarget,
               contributionCadence: body.contributionCadence,

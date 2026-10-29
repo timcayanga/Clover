@@ -1628,6 +1628,7 @@ model CircleMembership {
   id                  String               @id @default(cuid())
   circleId            String
   userId              String?
+  avatarUrl           String?              @db.Text
   displayName         String
   email               String?
   role                CircleRole           @default(member)

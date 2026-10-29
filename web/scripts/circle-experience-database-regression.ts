@@ -134,6 +134,63 @@ async function main() {
     );
     return { status: response.status, body: await response.json() };
   };
+  const photo =
+    "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aX0sAAAAASUVORK5CYII=";
+  assert.equal(
+    (await call({ action: "update_member", id: "mia", avatarUrl: photo }))
+      .status,
+    200,
+  );
+  assert.equal(
+    (await prisma.circleMembership.findUniqueOrThrow({ where: { id: "mia" } }))
+      .avatarUrl,
+    photo,
+  );
+  assert.equal(
+    (
+      await call({
+        action: "update_member",
+        id: "mia",
+        avatarUrl: "data:image/svg+xml;base64,PHN2Zz4=",
+      })
+    ).status,
+    400,
+  );
+  assert.equal(
+    (
+      await call({
+        action: "update_member",
+        id: "foreign-person",
+        avatarUrl: photo,
+      })
+    ).status,
+    404,
+  );
+  assert.equal(
+    (
+      await call(
+        { action: "update_member", id: "mia", avatarUrl: null },
+        "qa-stranger",
+      )
+    ).status,
+    404,
+  );
+  assert.equal(
+    (await prisma.circleMembership.findUniqueOrThrow({ where: { id: "mia" } }))
+      .avatarUrl,
+    photo,
+  );
+  assert.equal(
+    (await call({ action: "update_member", id: "mia", displayName: "Mia" }))
+      .status,
+    200,
+  );
+  assert.equal(
+    (await prisma.circleMembership.findUniqueOrThrow({ where: { id: "mia" } }))
+      .avatarUrl,
+    photo,
+    "Name-only edits retain Circle photo override",
+  );
   assert.equal(
     (
       await call({
@@ -301,28 +358,28 @@ async function main() {
     3,
   );
   assert.equal(data.circles[0].members.filter((m) => m.isMe).length, 1);
-    await prisma.financialCommitment.create({
-      data: {
-        id: "linked-recurring",
-        workspaceId: "personal",
-        kind: "planned_payment",
-        title: "Monthly Lunch",
-        transactionId: "meal",
-        currency: "PHP",
-      },
-    });
-    await prisma.splitBill.create({
-      data: {
-        id: "linked-bill",
-        userId: user.id,
-        transactionId: "meal",
-        title: "Lunch with Friends",
-        billDate: new Date(),
-        currency: "PHP",
-        total: 1200,
-        participants: { create: [{ name: "Me" }, { name: "Mia" }] },
-      },
-    });
+  await prisma.financialCommitment.create({
+    data: {
+      id: "linked-recurring",
+      workspaceId: "personal",
+      kind: "planned_payment",
+      title: "Monthly Lunch",
+      transactionId: "meal",
+      currency: "PHP",
+    },
+  });
+  await prisma.splitBill.create({
+    data: {
+      id: "linked-bill",
+      userId: user.id,
+      transactionId: "meal",
+      title: "Lunch with Friends",
+      billDate: new Date(),
+      currency: "PHP",
+      total: 1200,
+      participants: { create: [{ name: "Me" }, { name: "Mia" }] },
+    },
+  });
   const req = new Request(
     "https://clover.test/api/transactions/meal/related?workspaceId=personal",
   );

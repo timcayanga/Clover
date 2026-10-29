@@ -64,7 +64,7 @@ export function HomeFeatureGrid() {
               }),
             )
           }
-          className="button button-secondary"
+          className="button home-quick-add__expense"
         >
           − Add Expense
         </button>
@@ -77,7 +77,7 @@ export function HomeFeatureGrid() {
               }),
             )
           }
-          className="button button-secondary"
+          className="button home-quick-add__income"
         >
           + Add Income
         </button>

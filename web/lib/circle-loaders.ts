@@ -131,7 +131,7 @@ export const loadCirclesWorkspaceData = async (
         isOwner: membership.userId === circle.ownerUserId,
         isMe: membership.userId === user.id,
         displayName: membership.displayName,
-        avatarUrl: memberPhotos.get(membership.id) ?? null,
+        avatarUrl: membership.avatarUrl ?? memberPhotos.get(membership.id) ?? null,
         email:
           role === "organizer" || membership.userId === user.id
             ? membership.email

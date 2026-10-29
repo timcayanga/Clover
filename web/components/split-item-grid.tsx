@@ -14,9 +14,11 @@ export function SplitItemGrid({
   onChange,
   adjustment = 0,
   onAddPerson,
+  fixedItems = false,
 }: {
+  fixedItems?: boolean;
   adjustment?: number;
-  onAddPerson?:()=>void;
+  onAddPerson?: () => void;
   people: SplitPerson[];
   items: SplitItem[];
   currency: string;
@@ -44,14 +46,25 @@ export function SplitItemGrid({
                   <span>{p.name}</span>
                 </th>
               ))}
-              {onAddPerson?<th><button type="button" className="circle-text-action" aria-label="Add Person" onClick={onAddPerson}>+</button></th>:null}
+              {onAddPerson ? (
+                <th>
+                  <button
+                    type="button"
+                    className="circle-text-action"
+                    aria-label="Add Person"
+                    onClick={onAddPerson}
+                  >
+                    +
+                  </button>
+                </th>
+              ) : null}
             </tr>
           </thead>
           <tbody>
             {items.map((item, index) => (
               <tr key={item.id ?? index}>
                 <td>
-                  {onChange ? (
+                  {onChange && !fixedItems ? (
                     <>
                       <input
                         className="settings-input"
@@ -72,7 +85,6 @@ export function SplitItemGrid({
                           update(index, { amount: e.target.value })
                         }
                       />
-
                     </>
                   ) : (
                     <>
@@ -138,7 +150,20 @@ export function SplitItemGrid({
                     ) : null}
                   </td>
                 ))}
-                {onChange?<td><button type="button" className="circle-text-action" aria-label={`Remove item ${index+1}`} onClick={()=>onChange(items.filter((_,i)=>i!==index))}>×</button></td>:null}
+                {onChange && !fixedItems ? (
+                  <td>
+                    <button
+                      type="button"
+                      className="circle-text-action"
+                      aria-label={`Remove item ${index + 1}`}
+                      onClick={() =>
+                        onChange(items.filter((_, i) => i !== index))
+                      }
+                    >
+                      ×
+                    </button>
+                  </td>
+                ) : null}
               </tr>
             ))}
           </tbody>
@@ -156,25 +181,29 @@ export function SplitItemGrid({
       </div>
       {onChange ? (
         <>
-          <button
-            type="button"
-            className="circle-text-action"
-            onClick={() =>
-              onChange([
-                ...items,
-                {
-                  id: globalThis.crypto?.randomUUID?.() ?? `item-${Date.now()}-${Math.random().toString(36).slice(2)}`,
-                  description: "",
-                  amount: "",
-                  participantIds: people.map((p) => p.id),
-                  splitMethod: method,
-                  allocations: [],
-                },
-              ])
-            }
-          >
-            + Add Line Item
-          </button>
+          {!fixedItems ? (
+            <button
+              type="button"
+              className="circle-text-action"
+              onClick={() =>
+                onChange([
+                  ...items,
+                  {
+                    id:
+                      globalThis.crypto?.randomUUID?.() ??
+                      `item-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+                    description: "",
+                    amount: "",
+                    participantIds: people.map((p) => p.id),
+                    splitMethod: method,
+                    allocations: [],
+                  },
+                ])
+              }
+            >
+              + Add Line Item
+            </button>
+          ) : null}
           <section className="split-method-panel">
             <strong>Split Method</strong>
             <div role="group" aria-label="Split method">

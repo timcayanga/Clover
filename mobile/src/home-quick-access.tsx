@@ -5,7 +5,7 @@ import { Text } from "./app-text";
 import { Card, Icon, useTheme } from "./ui";
 import { productPages } from "../../shared/circle-experience";
 export function HomeQuickAccess() {
-  const { colors } = useTheme(),
+  const { colors, dark } = useTheme(),
     [width, setWidth] = useState(0),
     [page, setPage] = useState(0),
     scroll = useRef<ScrollView>(null);
@@ -105,12 +105,31 @@ export function HomeQuickAccess() {
               padding: 14,
               borderRadius: 20,
               borderWidth: 1,
-              borderColor: colors.line,
-              backgroundColor: colors.white,
+              borderColor: type === "expense" ? "#f3acb6" : "#8fd8ad",
+              backgroundColor:
+                type === "expense"
+                  ? dark
+                    ? "#40242d"
+                    : "#fff0f2"
+                  : dark
+                    ? "#18382b"
+                    : "#e7f8ed",
               alignItems: "center",
             }}
           >
-            <Text style={{ color: colors.teal }}>
+            <Text
+              style={{
+                color:
+                  type === "expense"
+                    ? dark
+                      ? "#ffb5c3"
+                      : "#b52e48"
+                    : dark
+                      ? "#a0eac2"
+                      : "#14683b",
+                fontFamily: "Poppins-Medium",
+              }}
+            >
               {type === "expense" ? "− Add Expense" : "+ Add Income"}
             </Text>
           </Pressable>
