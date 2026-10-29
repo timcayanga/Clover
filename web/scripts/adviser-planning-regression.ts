@@ -97,3 +97,5 @@ assert.match(pageChatSource,/askPagePrompts\(pageContext\).includes\(latestIncom
 
 assert.equal(askPageContext("/reports",{currency:"ALL"}).currency,undefined,"All currencies is a view option, not the Albanian lek display currency");
 assert.match(pageChatSource,/reportPageParams.set\("from",pageContext.from\)/,"Reports chat must use the exact visible reporting period");
+
+assert.match(pageChatSource,/pageFacts.account.balance = accountFactsById.get\(pageFacts.account.id\)\?\.balance/ ,"Selected-account context must use the same canonical balance as Accounts and existing Adviser tools");
