@@ -1,7 +1,7 @@
 import { verifyBracesPatch } from './braces-security-patch.mjs';
 import { execFileSync } from 'node:child_process';
 import { assessAudit } from './production-audit-policy.mjs';
-import { mitigation, mobileRoot, verifyForgePatch } from './forge-security-patch.mjs';
+import { mobileRoot, verifyForgePatch } from './forge-security-patch.mjs';
 
 const patchedPaths = verifyForgePatch();
 const bracesPaths = verifyBracesPatch();
@@ -19,5 +19,5 @@ try {
 }
 const result = assessAudit(JSON.parse(stdout), patchedPaths, Date.now(), bracesPaths);
 console.log(result.mitigated
-  ? `Mobile audit passed: node-forge and braces advisories are locally patched and tested; no other high/critical advisories. Review before ${mitigation.reviewBy}.`
+  ? `Mobile audit passed: braces advisory is locally patched and tested; published node-forge 1.4.2 verified; no other high/critical advisories.`
   : 'Mobile audit passed: no high/critical advisories.');

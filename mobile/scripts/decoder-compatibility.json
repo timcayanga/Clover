@@ -1,0 +1,7 @@
+{
+  "version": "7.1.3",
+  "originalHash": "caa3f2c8b45dfe1e91db22ae10743af68de8d96f26515132bb52485ec0f037fa",
+  "patchedHash": "895ebb192d78427820c879ff85eaf0870ba183dada7b4e401c6457fd470bce6d",
+  "old": "const decodeComponent = require('decode-uri-component');",
+  "new": "const decodeComponentModule = require('decode-uri-component');\nconst decodeComponent = decodeComponentModule.default || decodeComponentModule;"
+}

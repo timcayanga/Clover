@@ -5,7 +5,7 @@ import { createRequire } from 'node:module';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { assessAudit } from './production-audit-policy.mjs';
-import { applyForgePatch, hash, mitigation, mobileRoot, originalBlock, patchedBlock, verifyForgePatch } from './forge-security-patch.mjs';
+import { hash, publishedRelease, mobileRoot, verifyForgePatch } from './forge-security-patch.mjs';
 
 const require = createRequire(import.meta.url);
 const paths = verifyForgePatch();
@@ -20,12 +20,12 @@ const message = Buffer.from('Clover Expo signing regression; synthetic data only
 
 try {
   // Prove the regression detects the vulnerable release rather than merely
-  // asserting that the backported source text exists. Never modify real installs.
+  // asserting that the published source text exists. Never modify real installs.
   const baselinePath = join(temporary, 'baseline');
   cpSync(join(mobileRoot, paths[0]), baselinePath, { recursive: true });
   const rsaPath = join(baselinePath, 'lib/rsa.js');
-  const baselineSource = readFileSync(rsaPath, 'utf8').replace(patchedBlock, originalBlock);
-  assert.equal(hash(baselineSource), mitigation.originalHash);
+  const baselineSource = readFileSync(rsaPath, 'utf8').replace(/\/\*\*\n \* DER encode a DigestInfo[\s\S]*?(?=\/\*\*\n \* Wrap digest)/, '').replace(/          \/\/ require a canonical DER DigestInfo[\s\S]*?(?=          \/\/ compare the given digest)/, '');
+  assert.equal(hash(baselineSource), publishedRelease.vulnerableRsaHash);
   writeFileSync(rsaPath, baselineSource);
   const baseline = require(baselinePath);
   const baselinePublic = baseline.pki.publicKeyFromPem(publicKey);
@@ -78,7 +78,7 @@ try {
   const expoForge = createRequire(require.resolve('@expo/code-signing-certificates')).resolve('node-forge');
   const cliRequire = createRequire(require.resolve('@expo/cli', { paths: [join(mobileRoot, 'node_modules/expo')] }));
   for (const resolved of [expoForge, cliRequire.resolve('node-forge')]) {
-    assert(paths.some((path) => resolved.startsWith(join(mobileRoot, path) + '/')), 'Expo must resolve a verified patched copy');
+    assert(paths.some((path) => resolved.startsWith(join(mobileRoot, path) + '/')), 'Expo must resolve a verified published copy');
   }
   const keyPair = expo.convertKeyPairPEMToKeyPair({ privateKeyPEM: privateKey, publicKeyPEM: publicKey });
   const cert = expo.generateSelfSignedCodeSigningCertificate({ keyPair, commonName: 'Clover security test',
@@ -93,21 +93,19 @@ try {
     '00000000-0000-4000-8000-000000000000', '@clover/security-test');
   assert.equal(roundTrip.verify(development), true);
 
-  // Install-time guarantees: exact version/source, idempotency, all copies checked.
+  // The published package is immutable; install verification detects tampering.
   const fixtureRoot = join(temporary, 'install');
-  cpSync(baselinePath, join(fixtureRoot, 'node_modules/node-forge'), { recursive: true });
-  const lock = { packages: { 'node_modules/node-forge': { version: mitigation.version, integrity: mitigation.integrity } } };
-  writeFileSync(join(fixtureRoot, 'package-lock.json'), JSON.stringify(lock));
-  assert.throws(() => verifyForgePatch(fixtureRoot), /Unpatched/);
-  applyForgePatch(fixtureRoot);
-  applyForgePatch(fixtureRoot);
-  const fixtureRsa = join(fixtureRoot, 'node_modules/node-forge/lib/rsa.js');
-  writeFileSync(fixtureRsa, readFileSync(fixtureRsa, 'utf8') + '\n// unexpected change');
-  assert.throws(() => verifyForgePatch(fixtureRoot), /changed RSA/);
-  assert.throws(() => applyForgePatch(fixtureRoot), /unknown RSA/);
-  lock.packages['node_modules/node-forge'].version = '1.4.1';
-  writeFileSync(join(fixtureRoot, 'package-lock.json'), JSON.stringify(lock));
-  assert.throws(() => verifyForgePatch(fixtureRoot), /Unexpected node-forge/);
+  cpSync(join(mobileRoot, paths[0]), join(fixtureRoot, 'node_modules/node-forge'), {recursive:true});
+  const lock = {packages:{'node_modules/node-forge':{version:publishedRelease.version,integrity:publishedRelease.integrity}}};
+  writeFileSync(join(fixtureRoot,'package-lock.json'),JSON.stringify(lock));
+  verifyForgePatch(fixtureRoot);
+  verifyForgePatch(fixtureRoot);
+  const fixtureRsa=join(fixtureRoot,'node_modules/node-forge/lib/rsa.js');
+  writeFileSync(fixtureRsa,readFileSync(fixtureRsa,'utf8')+'\n// unexpected change');
+  assert.throws(()=>verifyForgePatch(fixtureRoot),/changed RSA/);
+  lock.packages['node_modules/node-forge'].version='1.4.0';
+  writeFileSync(join(fixtureRoot,'package-lock.json'),JSON.stringify(lock));
+  assert.throws(()=>verifyForgePatch(fixtureRoot),/Unexpected node-forge/);
 
   const report = {
     auditReportVersion: 2,
@@ -115,17 +113,17 @@ try {
     vulnerabilities: {
       expo: { severity: 'high', via: ['node-forge'] },
       'node-forge': { severity: 'high', nodes: paths,
-        via: [{ name: 'node-forge', severity: 'high', url: mitigation.advisory }] },
+        via: [{ name: 'node-forge', severity: 'high', url: 'https://github.com/advisories/GHSA-86w9-cpqp-85rv' }] },
     },
   };
   const now = Date.parse('2026-10-02T00:00:00Z');
-  assert.equal(assessAudit(report, paths, now).mitigated, true);
+  assert.throws(() => assessAudit(report, paths, now), /Unmitigated/, 'No node-forge advisory is suppressed after adopting the official release');
   const newAdvisory = structuredClone(report);
   newAdvisory.vulnerabilities['node-forge'].via.push({ name: 'node-forge', severity: 'high', url: 'https://example.invalid/new-advisory' });
   assert.throws(() => assessAudit(newAdvisory, paths, now), /Unmitigated/);
   assert.throws(() => assessAudit(report, ['node_modules/other'], now), /Unmitigated/);
   assert.throws(() => assessAudit(report, [], now), /missing patch/);
-  assert.throws(() => assessAudit(report, paths, Date.parse(mitigation.reviewBy)), /review is due/);
+  assert.throws(() => assessAudit(report, paths, Date.parse('2027-01-01')), /Unmitigated/);
   const cycle = structuredClone(report);
   cycle.vulnerabilities.expo.via = ['expo'];
   assert.throws(() => assessAudit(cycle, paths, now), /Invalid npm audit/);
@@ -133,7 +131,7 @@ try {
   delete missing.vulnerabilities['node-forge'];
   assert.throws(() => assessAudit(missing, paths, now), /Inconsistent/);
   assert.throws(() => assessAudit({ ...report, error: { code: 'ENOAUDIT' } }, paths, now), /Incomplete/);
-  console.log('Security regressions passed: vulnerable control, malformed/valid RSA signatures, Expo signing/CSR/certificates, patch integrity and fail-closed audit policy.');
+  console.log('Security regressions passed: vulnerable control, malformed/valid RSA signatures, Expo signing/CSR/certificates, published release integrity and fail-closed audit policy.');
 } finally {
   rmSync(temporary, { recursive: true, force: true });
 }

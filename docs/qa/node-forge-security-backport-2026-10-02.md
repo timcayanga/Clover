@@ -1,5 +1,7 @@
 # Expo dependency security mitigation, 2026-10-02
 
+Superseded on 3 November 2026 by the [published 1.4.2 upgrade](node-forge-published-fix-2026-11-03.md). The following records the historical temporary mitigation.
+
 ## Finding and scope
 
 The mobile dependency tree installs `node-forge@1.4.0` through Expo CLI and

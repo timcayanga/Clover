@@ -55,9 +55,9 @@
     "typescript": "~6.0.3"
   },
   "scripts": {
-    "postinstall": "node scripts/forge-security-patch.mjs && node scripts/braces-security-patch.mjs",
-    "eas-build-post-install": "node scripts/forge-security-check.mjs && node scripts/braces-security-check.mjs",
-    "qa:production-audit": "node scripts/zod-compatibility-check.mjs && node scripts/production-audit.mjs",
+    "postinstall": "node scripts/forge-security-patch.mjs && node scripts/braces-security-patch.mjs && node scripts/decoder-compatibility.mjs",
+    "eas-build-post-install": "node scripts/forge-security-check.mjs && node scripts/braces-security-check.mjs && node scripts/decoder-security-check.mjs",
+    "qa:production-audit": "node scripts/decoder-compatibility.mjs --verify && node scripts/decoder-security-check.mjs && node scripts/zod-compatibility-check.mjs && node scripts/production-audit.mjs",
     "start": "expo start",
     "android": "expo run:android",
     "ios": "expo run:ios",
@@ -80,6 +80,8 @@
   },
   "private": true,
   "overrides": {
-    "zod": "4.6.6"
+    "zod": "4.6.6",
+    "node-forge": "1.4.2",
+    "decode-uri-component": "0.5.1"
   }
 }
