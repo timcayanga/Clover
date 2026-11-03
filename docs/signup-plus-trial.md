@@ -1,6 +1,8 @@
-# Automatic signup Plus trial
+# Signup plans and legacy Plus trials
 
-This policy supersedes the original Free-default signup spec for newly eligible accounts. No trial checkout, payment method, subscription, automatic billing or provider-side trial is created. Internal `pro` is the public **Plus** tier; internal `premium` is public **Pro**.
+As of November 2026, automatic trial enrollment is retired. All new accounts start on Free and can choose a paid upgrade later. Both identity provisioning and webhook reconciliation only mark trial evaluation complete; they never create or revive a trial or access grant, even if the historical rollout policy remains in the database. Already-issued trials keep their original dates and normal expiry/reminders. Paid subscriptions, promotional rewards and Admin grants are unchanged. No financial records are modified.
+
+The remaining sections document previously issued trials, not eligibility for new signups. The historical policy superseded the original Free-default signup spec while enrollment was active. No trial checkout, payment method, subscription, automatic billing or provider-side trial is created. Internal `pro` is the public **Plus** tier; internal `premium` is public **Pro**.
 
 ## Eligibility and source of truth
 
@@ -44,10 +46,10 @@ Migration: `20261023020000_signup_plus_trial` adds server-only, deny-by-default 
 
 Meaningful coverage:
 - `qa:plans` includes `signup-trial-regression.ts`: exact boundaries, tiers, cancellation/remaining trial, pending checkout, fraud revocation, reminder windows, paid/preference suppression, parallel notice deduplication, retries and ambiguous-send handling.
-- The guarded disposable PostgreSQL release gate includes `signup-trial-db-regression.ts`: actual parallel enrollment and grant uniqueness, cross-Profile allocation locks, relink reuse, fixed window, paid carryover, inactive-user expiry, provider-revocation intent, preserved confirmed records and revoked-replay protection.
+- The guarded disposable PostgreSQL release gate includes `signup-trial-db-regression.ts`: parallel Free-default signup and explicit legacy-trial fixtures, grant uniqueness, cross-Profile allocation locks, relink reuse, fixed window, paid carryover, inactive-user expiry, provider-revocation intent, preserved confirmed records and revoked-replay protection.
 - Existing billing, store, bank lifecycle, notification SMTP and native plan-change tests remain required. They use sandbox/mock providers or loopback SMTP and no customer identities or actual bank authorizations.
 
-Delivery scope: staging only for this trial feature. No production rollout or new mobile binaries requested. Native presentation changes require a future authorized binary release; the server entitlement itself works through existing APIs.
+Retirement is enforced on the server for web and existing iOS/Android binaries. New signups receive no trial snapshot, so the existing trial summaries remain hidden. No native rebuild or schema/data migration is required.
 
 ## Dependency security discovered during this change
 

@@ -2,6 +2,8 @@ import assert from 'node:assert/strict';
 import { build } from 'esbuild';
 import { createRequire } from 'node:module';
 import { resolve } from 'node:path';
+import type { Prisma } from '@prisma/client';
+import { ensureSignupTrial } from '../lib/signup-trial';
 import { calculateProAccess, type AccessInput } from '../lib/pro-access-rules';
 import { signupTrialEligible, trialActive, trialMilestone, trialSnapshot, TRIAL_DAY_MS, TRIAL_DURATION_MS } from '../../shared/signup-trial';
 import { signupTrialEmail, signupTrialNotice, retryableTrialMailFailure } from '../lib/signup-trial-notices';
@@ -80,4 +82,27 @@ reset();`;
   api.reset({expired:true,otherGrant:true});await api.deliverTrialNotice('u');assert.match(api.state().sends[0][2],/current plan is Clover Plus/);assert.doesNotMatch(api.state().sends[0][2],/syncing has stopped/);
  } finally {if(old===undefined)delete process.env.ZOHO_SMTP_PASSWORD;else process.env.ZOHO_SMTP_PASSWORD=old;}
 }
-void deliveryChecks().then(() => console.log('Signup trial: entitlement precedence, exact expiry, original remaining trial, paid-through cancellation, fraud revocation, reminder windows, preference suppression, parallel dedupe, definitive failure retries, ambiguous-send protection and branded text/HTML passed.')).catch(error => { console.error(error); process.exitCode=1; });
+async function freeSignupChecks() {
+  const now = new Date('2026-11-03T00:00:00Z');
+  for (const sourceCreatedAt of [now, new Date('2026-10-24T00:00:00Z'), null, new Date(NaN)]) {
+    let evaluatedAt: Date | null = null;
+    const originalExpiry = new Date('2026-11-20T00:00:00Z');
+    const existing = { endsAt: originalExpiry, paid: true };
+    let updates = 0;
+    const forbidden = new Proxy({}, { get() { throw Error('Signup must not read policy or create/edit trial, billing or financial records'); } });
+    const tx = new Proxy({ user: { updateMany: async (input: { where: { id: string; signupTrialEvaluatedAt: null }; data: { signupTrialEvaluatedAt: Date } }) => {
+      assert.deepEqual(input.where, { id: 'new-user', signupTrialEvaluatedAt: null });
+      if (evaluatedAt) return { count: 0 };
+      evaluatedAt = input.data.signupTrialEvaluatedAt; updates++; return { count: 1 };
+    } } }, { get(target, key) { return key === 'user' ? target.user : forbidden; } }) as unknown as Prisma.TransactionClient;
+    await Promise.all(Array.from({ length: 8 }, () => ensureSignupTrial(tx, 'new-user', sourceCreatedAt, now)));
+    await ensureSignupTrial(tx, 'new-user', now, new Date(+now + TRIAL_DAY_MS));
+    assert.equal(updates, 1, 'Repeated callbacks mark evaluation once without creating a trial');
+    assert.equal(evaluatedAt, now);
+    assert.equal(existing.endsAt, originalExpiry);
+    assert.equal(existing.paid, true);
+  }
+  assert.equal(calculateProAccess({planTier:'free',planTierLocked:false,subscription:null,grants:[]},now).planTier,'free');
+  assert.equal(trialSnapshot(null,false,'free',now),null,'New signup has no trial banner');
+}
+void freeSignupChecks().then(deliveryChecks).then(() => console.log('Free-default signup, no automatic enrollment, legacy trial lifecycle, paid precedence and reminder delivery passed.')).catch(error => { console.error(error); process.exitCode=1; });

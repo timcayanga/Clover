@@ -20,9 +20,18 @@ async function main() {
  const createUser = async (suffix:string,createdAt=now) => { const u=await db.user.create({data:{clerkUserId:`trial-qa-${suffix}-${Date.now()}`,email:`trial-${suffix}-${Date.now()}@example.invalid`,environment:'local',verified:true,createdAt}});users.push(u.id);return u;};
  try {
   const user=await createUser('new');const sourceCreated=new Date(+now-15*day);
-  // Actual database lock/upserts reproduce concurrent callback and bootstrap requests.
+  // Actual database lock reproduces concurrent callback and bootstrap requests.
   const enroll=()=>db.$transaction(async tx=>{await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`clerk-identity:${user.clerkUserId}`}))`;await ensureSignupTrial(tx,user.id,sourceCreated,now);},{timeout:20_000});
   await Promise.all(Array.from({length:8},enroll));
+  assert.equal(await db.signupTrial.count({where:{userId:user.id}}),0,'Concurrent signup callbacks never enroll a trial');
+  assert.equal(await db.proAccessGrant.count({where:{userId:user.id}}),0,'Signup creates no complimentary grant');
+  assert.equal(await refreshProAccess(user.id),'free');
+  assert.equal((await getProAccess(user.id)).trial,null);
+  assert((await db.user.findUniqueOrThrow({where:{id:user.id}})).signupTrialEvaluatedAt);
+  // Explicitly seed a previously issued trial to keep testing its full lifecycle.
+  const legacy = await db.signupTrial.create({data:{userId:user.id,startsAt:sourceCreated,endsAt:new Date(+sourceCreated+30*day)}});
+  await db.proAccessGrant.create({data:{userId:user.id,planTier:'pro',startsAt:legacy.startsAt,endsAt:legacy.endsAt,source:'signup_trial',actorId:'system',reason:'Synthetic legacy trial',rewardId:`signup-trial:${legacy.id}`}});
+  await enroll();
   assert.equal(await db.signupTrial.count({where:{userId:user.id}}),1);assert.equal(await db.proAccessGrant.count({where:{userId:user.id,source:'signup_trial'}}),1);
   const trial=await db.signupTrial.findUniqueOrThrow({where:{userId:user.id}});assert.equal(+trial.startsAt,+sourceCreated);assert.equal(+trial.endsAt,+sourceCreated+30*day);
   assert.equal(await refreshProAccess(user.id),'pro');assert.equal((await getProAccess(user.id)).source,'trial');
@@ -84,7 +93,7 @@ async function main() {
   assert.equal((await getProAccess(reversedBeforeSignup.id)).planTier,'free');
   await Promise.all([recordGrowthPayment(payment),reverseGrowthPayment('paypal',paymentId)]);
   assert.equal((await getProAccess(reversedBeforeSignup.id)).planTier,'free','Repeated and reordered verified events never revive a revoked trial');
-  console.log('Signup trial database: parallel redemption, exact source timestamp, account-wide locking, stable relink identities, immutable allocation window, paid carryover and remaining trial, downgrade queue, existing-user exclusion, revoked replay protection, independent paid Pro and financial-record preservation passed.');
+  console.log('Signup trial database: Free-default signup, legacy trial preservation, exact source timestamp, account-wide locking, stable relink identities, immutable allocation window, paid carryover and remaining trial, downgrade queue, existing-user exclusion, revoked replay protection, independent paid Pro and financial-record preservation passed.');
  } finally {
   await db.user.deleteMany({where:{id:{in:users}}});
   if(policyBefore)await db.signupTrialPolicy.update({where:{id:'signup-plus-v1'},data:{startsAt:policyBefore.startsAt}});else await db.signupTrialPolicy.deleteMany({where:{id:'signup-plus-v1'}});
