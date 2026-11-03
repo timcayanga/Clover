@@ -110,3 +110,30 @@ for(const path of ['/transactions/new','/transactions/tags','/transactions/categ
 for(const path of ['/accounts/new','/accounts/institutions/bpi'])assert.equal(askWebPageContext(path).accountId,undefined);
 for(const path of ['/split-bill/new','/split-bill/request/token','/split-bill/groups/group-1','/split-bill/group-invite/token'])assert.equal(askWebPageContext(path).billId,undefined);
 console.log('PASS web/native route parity: selected transaction and bill context; reserved creation, institution and invitation routes stay unscoped');
+
+// Direct entry must verify a Profile before any transcript can be restored.
+import {resolveAdviserScope} from '../lib/adviser-chat-scope';
+void (async () => {
+ const calls:string[]=[];
+ const run = (options:Partial<Parameters<typeof resolveAdviserScope>[0]>, responses:Array<{status?:number;data:unknown}>) => resolveAdviserScope({signal:new AbortController().signal,...options,request:(async (input,init) => {
+  calls.push(String(input));assert.equal(init?.cache,'no-store');assert.equal(init?.method,undefined);assert.equal(init?.body,undefined);
+  const response=responses.shift();assert.ok(response,'Unexpected request');return new Response(JSON.stringify(response.data),{status:response.status??200});
+ }) as typeof fetch});
+ assert.equal(await run({workspaceId:'explicit',storedWorkspaceId:'stored',cookie:'clover.selected-workspace-id.v1=cookie'},[{data:{workspaceId:'explicit'}}]),'explicit');
+ assert.equal(calls.pop(),'/api/adviser/entries?workspaceId=explicit&scopeOnly=true');
+ assert.equal(await run({cookie:'clover.selected-workspace-id.v1=cookie-profile'},[{data:{workspaceId:'cookie-profile'}}]),'cookie-profile');
+ assert.equal(calls.pop(),'/api/adviser/entries?workspaceId=cookie-profile&scopeOnly=true');
+ assert.equal(await run({},[{data:{workspaces:[{id:'personal-default'},{id:'other'}]}},{data:{workspaceId:'personal-default'}}]),'personal-default');
+ assert.deepEqual(calls.splice(0),['/api/workspaces','/api/adviser/entries?workspaceId=personal-default&scopeOnly=true']);
+ await assert.rejects(run({storedWorkspaceId:'deleted-or-other-owner'},[{status:403,data:{error:'Forbidden'}}]),/verify this Profile/);
+ assert.deepEqual(calls.splice(0),['/api/adviser/entries?workspaceId=deleted-or-other-owner&scopeOnly=true'],'Never silently switch to another Profile after authorization fails');
+ await assert.rejects(run({workspaceId:'a'},[{data:{workspaceId:'b'}}]),/Profile changed/);
+ calls.length=0;
+ await assert.rejects(run({},[{data:{workspaces:[]}}]),/Choose a Profile/);
+ assert.deepEqual(calls.splice(0),['/api/workspaces']);
+ await assert.rejects(run({},[{status:503,data:{error:'Temporarily unavailable'}}]),/load your Profiles/);
+ const controller=new AbortController();controller.abort();
+ await assert.rejects(resolveAdviserScope({workspaceId:'a',signal:controller.signal,request:(async (_input,init)=>{assert.equal(init?.signal,controller.signal);throw new DOMException('Aborted','AbortError');}) as typeof fetch}),{name:'AbortError'});
+ assert.match(chat,/Retry Ask Clover/);assert.match(chat,/Opening Ask Clover took too long/);
+ console.log('PASS direct-entry chat: explicit/stored/cookie/default Profile, ownership verification, no silent Profile fallback, bounded loading/retry and cancellation; GET requests only');
+})().catch(error=>{console.error(error);process.exitCode=1;});

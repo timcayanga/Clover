@@ -18,6 +18,7 @@ import { readAdviserFormContext, clearAdviserFormContext } from "./adviser-form-
 import { entryDraftSchema } from "@/lib/adviser-entry-schema";
 import { type EntryDraft } from "@/lib/adviser-entry-types";
 import { readSelectedWorkspaceId, selectedWorkspaceEventName } from "@/lib/workspace-selection";
+import { resolveAdviserScope } from "@/lib/adviser-chat-scope";
 
 
 import type { FormEvent, KeyboardEvent } from "react";
@@ -152,23 +153,32 @@ const inferFeedbackGroup = (question: string) => {
 
 export function AdviserChat(props: AdviserChatProps) {
   const [scope, setScope] = useState("");
+  const [scopeError, setScopeError] = useState("");
+  const [scopeRevision, setScopeRevision] = useState(0);
   useEffect(() => {
     let controller: AbortController | undefined;
+    let deadline: ReturnType<typeof setTimeout> | undefined;
     const update = () => {
-      controller?.abort(); controller = new AbortController(); const signal = controller.signal;
-      setScope("");
-      const next = props.workspaceId || readSelectedWorkspaceId() || "";
-      if (!next) return;
+      controller?.abort(); clearTimeout(deadline);
+      controller = new AbortController(); const current = controller; const signal = current.signal;
+      setScope(""); setScopeError("");
+      let storedWorkspaceId = "";
+      try { storedWorkspaceId = readSelectedWorkspaceId(); } catch { /* Cookies and server Profile discovery remain available. */ }
       // Verify ownership before restoring any in-memory transcript. A stale
       // browser Profile selection must never reveal a previous user's chat.
-      void fetch(`/api/adviser/entries?workspaceId=${encodeURIComponent(next)}&scopeOnly=true`,{signal,cache:"no-store"})
-        .then(async response => { if (!response.ok) return; const data = await response.json(); if (!signal.aborted && data.workspaceId === next) setScope(next); })
-        .catch(() => {});
+      const timer = setTimeout(() => {
+        if (!signal.aborted) { setScopeError("Opening Ask Clover took too long. Please retry."); current.abort(); }
+      }, 15000);
+      deadline = timer;
+      void resolveAdviserScope({ workspaceId: props.workspaceId, storedWorkspaceId, cookie: document.cookie, signal })
+        .then(next => { if (!signal.aborted) setScope(next); })
+        .catch(error => { if (!signal.aborted) setScopeError(error instanceof Error ? error.message : "Unable to open Ask Clover. Please retry."); })
+        .finally(() => clearTimeout(timer));
     };
     update(); window.addEventListener(selectedWorkspaceEventName,update);
-    return () => { controller?.abort(); window.removeEventListener(selectedWorkspaceEventName,update); };
-  }, [props.workspaceId]);
-  return scope ? <ScopedAdviserChat key={scope} {...props} workspaceId={scope} storageKey={`${props.storageKey || adviserChatStorageKey}:${scope}`} /> : <div className="adviser-chat__loading" role="status" aria-label="Loading Ask Clover">Opening Ask Clover…</div>;
+    return () => { controller?.abort(); clearTimeout(deadline); window.removeEventListener(selectedWorkspaceEventName,update); };
+  }, [props.workspaceId, scopeRevision]);
+  return scope ? <ScopedAdviserChat key={scope} {...props} workspaceId={scope} storageKey={`${props.storageKey || adviserChatStorageKey}:${scope}`} /> : scopeError ? <div className="adviser-chat__loading"><p role="alert">{scopeError}</p><button type="button" className="button button--secondary" onClick={() => setScopeRevision(value => value + 1)}>Retry Ask Clover</button></div> : <div className="adviser-chat__loading" role="status" aria-label="Loading Ask Clover">Opening Ask Clover…</div>;
 }
 function ScopedAdviserChat({ prompts, storageKey = adviserChatStorageKey, initialPrompt = "", layout = "embedded", minimal = false, surface = "general", pageLabel, pageContext, workspaceId, formContext, onReviewForm }: AdviserChatProps & {workspaceId:string}) {
   const [entryDraft,setEntryDraft] = useState<EntryDraft|null>(null);
