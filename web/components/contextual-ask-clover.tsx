@@ -2,7 +2,8 @@
 
 import Image from "next/image";
 import { usePathname } from "next/navigation";
-import { askPageContext, askPagePrompts, type AskPage, type AskPageContext } from "../../shared/ask-clover-page";
+import { askPagePrompts, type AskPage, type AskPageContext } from "../../shared/ask-clover-page";
+import {askWebPageContext as askPageContext} from "@/lib/ask-clover-web-page";
 import { useEffect, useId, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import dynamic from "next/dynamic";

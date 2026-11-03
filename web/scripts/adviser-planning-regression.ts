@@ -99,3 +99,14 @@ assert.equal(askPageContext("/reports",{currency:"ALL"}).currency,undefined,"All
 assert.match(pageChatSource,/reportPageParams.set\("from",pageContext.from\)/,"Reports chat must use the exact visible reporting period");
 
 assert.match(pageChatSource,/pageFacts.account.balance = accountFactsById.get\(pageFacts.account.id\)\?\.balance/ ,"Selected-account context must use the same canonical balance as Accounts and existing Adviser tools");
+
+// Actual web routes differ from the native navigator and have reserved subpages.
+import {askWebPageContext} from '../lib/ask-clover-web-page';
+assert.equal(askWebPageContext('/transactions/tx-1').transactionId,'tx-1');
+assert.ok(askPagePrompts(askWebPageContext('/transactions/tx-1')).every(prompt=>prompt.includes('this transaction')));
+assert.equal(askWebPageContext('/split-bill/bill-1').page,'split-bills');
+assert.equal(askWebPageContext('/split-bill/bill-1/edit').billId,'bill-1');
+for(const path of ['/transactions/new','/transactions/tags','/transactions/categories'])assert.equal(askWebPageContext(path).transactionId,undefined);
+for(const path of ['/accounts/new','/accounts/institutions/bpi'])assert.equal(askWebPageContext(path).accountId,undefined);
+for(const path of ['/split-bill/new','/split-bill/request/token','/split-bill/groups/group-1','/split-bill/group-invite/token'])assert.equal(askWebPageContext(path).billId,undefined);
+console.log('PASS web/native route parity: selected transaction and bill context; reserved creation, institution and invitation routes stay unscoped');
