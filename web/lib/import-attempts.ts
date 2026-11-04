@@ -42,6 +42,19 @@ export async function claimImportAttempt(importId: string, actorUserId?: string 
     }
     const prior = await latest(tx, file.workspaceId, importId);
     const previous = readAttempt(prior?.metadata);
+    const completedOperation = previous?.phase === "complete" && file.confirmedAt !== null &&
+      (previous.outcome === "transaction_available" || previous.outcome === "completed_without_transaction");
+    if (completedOperation) {
+      // A second request may have begun upload preparation before the first
+      // committed. Reuse the completed operation even if that late preparation
+      // rewrote cosmetic status. Never reparse or recreate deleted finance.
+      if (file.status !== "done" || file.processingPhase !== "complete") {
+        await tx.importFile.update({ where: { id: importId }, data: {
+          status: "done", processingPhase: "complete", processingMessage: "This import is already complete.",
+        } });
+      }
+      return null;
+    }
     const legacy = !prior && (file.status !== "processing" || file.parsedRowsCount > 0 || file.confirmedAt !== null ||
       Boolean(await tx.auditLog.findFirst({ where: { workspaceId: file.workspaceId, entityId: importId, action: "import.parser_usage" }, select: { id: true } })));
     const now = new Date();
