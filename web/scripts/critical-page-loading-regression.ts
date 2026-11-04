@@ -1,5 +1,6 @@
 import { getHomePeriodChange } from "@/lib/home-period-change";
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import {
@@ -34,7 +35,20 @@ const readSource = (path: string) => readFileSync(resolve(process.cwd(), path), 
 
 const rootLayoutSource = readSource("app/layout.tsx");
 const globalStylesSource = readSource("app/globals.css");
-assert.match(rootLayoutSource, /import \{ Poppins, Raleway \} from "next\/font\/google"/);
+assert.match(rootLayoutSource, /import localFont from "next\/font\/local"/);
+assert.doesNotMatch(rootLayoutSource, /next\/font\/google/, "Release builds must not depend on mutable Google Fonts CSS responses.");
+const brandFontManifest = JSON.parse(readSource("app/fonts/provenance.json")) as { fonts: { family: string; weight: string; file: string; sha256: string }[] };
+assert.deepEqual(brandFontManifest.fonts.map(font => `${font.family}:${font.weight}`).sort(), ["Poppins:400", "Poppins:500", "Poppins:600", "Poppins:700", "Raleway:500", "Raleway:600", "Raleway:700"]);
+for (const font of brandFontManifest.fonts) {
+  const bytes = readFileSync(resolve(process.cwd(), "app/fonts", font.file));
+  assert.equal(bytes.subarray(0, 4).toString(), "wOF2", `${font.file} must be a real web font`);
+  assert.equal(createHash("sha256").update(bytes).digest("hex"), font.sha256);
+  assert(rootLayoutSource.includes(`path: "./fonts/${font.file}", weight: "${font.weight}"`), "Every required brand weight stays registered.");
+}
+for (const family of ["poppins", "raleway"]) {
+  assert(rootLayoutSource.includes(`variable: "--font-${family}"`));
+  assert.match(readSource(`app/fonts/${family}-OFL.txt`), /SIL OPEN FONT LICENSE/);
+}
 assert.doesNotMatch(globalStylesSource, /fonts\.googleapis\.com/);
 
 const shellSource = readSource("components/clover-shell.tsx");
