@@ -1,3 +1,4 @@
+import { recordBankLinkStage } from "@/lib/bank-link-journey";
 import { assertPlanQuota, PlanQuotaError } from "@/lib/plan-quota";
 import { getMobileRequestContext } from "@/lib/mobile-request-context";
 import { z } from "zod";
@@ -29,7 +30,8 @@ export async function POST(request: Request) {
     if ((await getProAccess(workspace.userId)).planTier === "free") return NextResponse.json({ error: "Upgrade to Clover Plus or Pro to connect your banks.", upgradeRequired: true }, { status: 403 });
     // Authorization may reconnect an already reserved account at a full allowance.
     // Distinct-account slots are enforced atomically when accounts are selected.
-    if (body.institutionId && !(await getFinverseBanks({ fresh: true })).banks.some(bank => bank.id === body.institutionId)) return NextResponse.json({ error: "This bank is no longer available. Refresh the bank list." }, { status: 400 });
+    const selectedBank = body.institutionId ? (await getFinverseBanks({ fresh: true })).banks.find(bank => bank.id === body.institutionId) : undefined;
+    if (body.institutionId && !selectedBank) return NextResponse.json({ error: "This bank is no longer available. Refresh the bank list." }, { status: 400 });
     const state = (getMobileRequestContext() ? "native." : "") + randomBytes(32).toString("base64url");
     const link = await createFinverseLink(workspace.userId, state, body.institutionId);
     if (!link.link_url) throw new Error("FINVERSE_LINK_URL_MISSING");
@@ -38,12 +40,15 @@ export async function POST(request: Request) {
       data: {
         userId: workspace.userId,
         workspaceId: workspace.id,
+        institutionId: selectedBank?.id,
+        institutionName: selectedBank?.name,
         stateHash: hashFinverseState(state),
         stateExpiresAt: new Date(Date.now() + 15 * 60_000),
       },
       select: { id: true },
     });
 
+    await recordBankLinkStage(connection.id, "started");
     return NextResponse.json({ connectionId: connection.id, linkUrl: link.link_url });
   } catch (error) {
     if (error instanceof PlanQuotaError) return NextResponse.json({error:error.message},{status:403});

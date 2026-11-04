@@ -2,7 +2,7 @@ import { prisma } from './prisma';
 import { getProAccess, refreshProAccess } from './pro-access';
 import { PLAN_CATALOG } from '../../shared/plan-catalog';
 import { hasUnlimitedPlanLimits } from './user-limits';
-import { inactivityDeadline, bankDisconnectDeadline, retainedBankLinks } from '../../shared/finverse-lifecycle';
+import { inactivityDeadline, bankDisconnectDeadline, retainedBankLinks, isPendingBankSelection } from '../../shared/finverse-lifecycle';
 import { getActiveFinverseToken } from './finverse-access-token';
 import { unlinkFinverseIdentity } from './finverse';
 import { bankLinkAllowance } from './bank-link-usage';
@@ -75,5 +75,5 @@ export async function sweepBankConnections() {
 export async function bankLifecycleOverview(userId:string) {
   const access=await getProAccess(userId);
   const connections=await prisma.finverseConnection.findMany({where:{userId},orderBy:{createdAt:'desc'},include:{accountLinks:{include:{account:{select:{id:true,name:true}}}}}});
-  return {limit:PLAN_CATALOG[access.planTier].linkedBanks,accessEndsAt:access.accessEndsAt,connections:connections.filter(c=>c.loginIdentityId||c.lastSyncedAt).map(c=>({id:c.id,workspaceId:c.workspaceId,name:c.institutionName||'Bank',status:c.status,lastSyncedAt:c.lastSyncedAt,disconnectReason:c.disconnectReason,disconnectError:c.disconnectError,disconnectAttempts:c.disconnectAttempts,disconnectRetryAt:c.disconnectRetryAt,disconnectedAt:c.disconnectedAt,inactivityDeadline:bankDisconnectDeadline(c.lastSyncedAt,c.createdAt,c.inactivityWarnedAt,c.syncFailureSince),accounts:c.accountLinks.map(l=>({id:l.id,accountId:l.accountId,name:l.account?.name||'Deleted account',retained:l.retainOnDowngrade,unlinkedAt:l.unlinkedAt}))}))};
+  return {limit:PLAN_CATALOG[access.planTier].linkedBanks,accessEndsAt:access.accessEndsAt,connections:connections.filter(c=>c.loginIdentityId||c.lastSyncedAt||isPendingBankSelection(c.status,c.accountLinks.some(l=>l.accountId&&!l.unlinkedAt),c.lastSyncedAt)).map(c=>({id:c.id,workspaceId:c.workspaceId,name:c.institutionName||'Bank',status:c.status,lastSyncedAt:c.lastSyncedAt,disconnectReason:c.disconnectReason,disconnectError:c.disconnectError,disconnectAttempts:c.disconnectAttempts,disconnectRetryAt:c.disconnectRetryAt,disconnectedAt:c.disconnectedAt,inactivityDeadline:bankDisconnectDeadline(c.lastSyncedAt,c.createdAt,c.inactivityWarnedAt,c.syncFailureSince),accounts:c.accountLinks.map(l=>({id:l.id,accountId:l.accountId,name:l.account?.name||'Deleted account',retained:l.retainOnDowngrade,unlinkedAt:l.unlinkedAt}))}))};
 }

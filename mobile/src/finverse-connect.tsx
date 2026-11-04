@@ -14,7 +14,7 @@ import { ApiError } from "./api";
 import { useSession } from "./session";
 
 type Bank = { id: string; name: string; reserved?: boolean; existingAccountName?: string | null; suggestedAccountId?:string|null; candidates?:{id:string;name:string;last4:string|null}[] };
-type SyncResult = { status: string; linkUrl?: string; connectionId?: string; remaining?: number; accounts?: Bank[]; transactions?: { imported: number }; error?: string };
+type SyncResult = { status: string; message?: string; linkUrl?: string; connectionId?: string; remaining?: number; accounts?: Bank[]; transactions?: { imported: number }; error?: string };
 export function FinverseConnect({ onSynced, callbackConnection, mode = "connect", accountId, onDismiss }: { onSynced: () => void; callbackConnection?: string; mode?: "connect" | "sync"; accountId?: string; onDismiss?:()=>void }) {
   const session = useSession();
   const { colors } = useTheme();
@@ -86,7 +86,8 @@ export function FinverseConnect({ onSynced, callbackConnection, mode = "connect"
           if (controller.signal.aborted) return;
           continue;
         }
-        setSelection(null); setPending(p=>p.filter(c=>c.id!==id)); setMessage(`${accountIds?.length ? `${accountIds.length} account${accountIds.length===1?"":"s"} linked. ` : ""}${data.transactions?.imported ? `${data.transactions.imported} new transactions added.` : "Already up to date."}`); setRevision(v=>v+1); syncedRef.current(); return;
+        if (data.status !== "ready") throw new Error("Bank sync has not completed. Please retry from Finish linking.");
+        setSelection(null); setPending(p=>p.filter(c=>c.id!==id)); setMessage(data.message || `${accountIds?.length ? `${accountIds.length} account${accountIds.length===1?"":"s"} linked. ` : ""}${data.transactions?.imported ? `${data.transactions.imported} new transactions added.` : "Already up to date."}`); setRevision(v=>v+1); syncedRef.current(); return;
       }
       setMessage("Finverse is still retrieving your accounts. Return through Finish linking or Notifications to check progress.");
     } catch (error) { if (active.current && !controller.signal.aborted) { setMessage(error instanceof Error ? error.message : "Unable to sync your bank."); setSelection(null); setRevision(v => v + 1); syncedRef.current(); setRetrySync({ id, accountIds, refresh }); setReconnectRequired(error instanceof ApiError && error.data?.reconnectRequired === true); } }

@@ -5,6 +5,7 @@ import { resolve } from "node:path";
 const requireFixture = createRequire(resolve("package.json"));
 async function main() {
   const fixture = `
+export const recordBankLinkStage=async()=>{};
 let verified=true;export function setVerified(value){verified=value;}
 let lifecycleCalls=0, discoveryReady=false, discoveryError=false, discoveryWrites=[];
 export function setDiscoveryReady(value){discoveryReady=value;}
@@ -53,7 +54,7 @@ export const encryptFinverseToken=()=> 'encrypted';
 export const exchangeFinverseCode=async()=>{exchanges++;return {login_identity_id:'identity',access_token:'secret',refresh_token:'secret',expires_in:3600};};
 export const prisma={user:{findUniqueOrThrow:async()=>({planTier,verified})},$transaction:async f=>f({}),finverseConnection:{
  findUniqueOrThrow:async()=>({status:"ready"}),
- findFirst:async({where})=>{if(where.workspaceId!=='profile'||where.user.clerkUserId!=='owner'||where.status.not!=='disconnected')throw Error('unsafe scope');return {id:'connection',userId:'owner',loginIdentityId:'identity',encryptedAccessToken:'cipher',accessTokenExpiresAt:new Date(Date.now()+3600000)};},
+ findFirst:async({where})=>{if(where.workspaceId!=='profile'||where.user.clerkUserId!=='owner'||where.status.not!=='disconnected')throw Error('unsafe scope');return {id:'connection',userId:'owner',loginIdentityId:'identity',encryptedRefreshToken:'cipher',encryptedAccessToken:'cipher',accessTokenExpiresAt:new Date(Date.now()+3600000)};},
  findMany:async({where,select})=>{if(where.workspaceId!=='profile'||where.user.clerkUserId!=='owner')throw Error('unsafe scope');return [{id:'failed',status:'error',institutionName:'Failed bank',lastSyncedAt:null,accountLinks:[]},{id:'cancelled',status:'cancelled',institutionName:'Cancelled bank',lastSyncedAt:null,accountLinks:[]},{id:'pending',status:'awaiting_selection',institutionId:'rcbc',institutionName:'RCBC - Personal',lastSyncedAt:null,accountLinks:[]},{id:'linked',status:'ready',institutionName:'Test bank',lastSyncedAt:new Date('2026-09-24T00:00:00Z'),encryptedRefreshToken:'cipher',accountLinks:[{account:{id:'account',name:'Savings',institution:'Test bank',accountNumber:'1234-5678-90',type:'bank'}}]}];},
  create:async({data})=>{created++;return{id:'connection'};},
  findUnique:async({where})=>['native.valid','native.refresh.valid'].includes(where.stateHash)?{id:'connection',workspaceId:'profile',stateExpiresAt:new Date(Date.now()+60000),status:claimed?'authorizing':'link_pending'}:null,
@@ -61,7 +62,7 @@ export const prisma={user:{findUniqueOrThrow:async()=>({planTier,verified})},$tr
  update:async({data})=>{updates.push(data);return{};}
 }};
 `;
-  const bundled = await build({ stdin: { contents: `export {observeFinverseDiscovery} from './lib/finverse-discovery-progress'; export {GET as catalog} from './app/api/admin/finverse/catalog/route'; export {POST as sync} from './app/api/integrations/finverse/sync/route'; export {GET as connections} from './app/api/integrations/finverse/connections/route'; export {GET as institutions} from './app/api/integrations/finverse/institutions/route'; export {POST as link} from './app/api/integrations/finverse/link/route'; export {GET as callback} from './app/api/integrations/finverse/callback/route'; export {reset,stats,setPlan,setRefreshLimit,setDiscoveryReady,setDiscoveryError,setVerified} from 'fixture';`, resolveDir: process.cwd() }, bundle: true, platform: "node", format: "cjs", packages: "external", write: false, plugins: [{ name: "finverse-boundaries", setup(b) { b.onResolve({filter:/^(fixture|@\/lib\/(admin|auth|finverse-refresh-limit|finverse-access-token|bank-link-usage|user-limits|account-limit-count|account-brand|finverse-lifecycle|workspace-access|finverse|prisma|plan-quota|pro-access|mobile-request-context))$/},()=>({path:"fixture",namespace:"test"})); b.onLoad({filter:/.*/,namespace:"test"},()=>({contents:fixture,loader:"ts",resolveDir:process.cwd()})); }}] });
+  const bundled = await build({ stdin: { contents: `export {observeFinverseDiscovery} from './lib/finverse-discovery-progress'; export {GET as catalog} from './app/api/admin/finverse/catalog/route'; export {POST as sync} from './app/api/integrations/finverse/sync/route'; export {GET as connections} from './app/api/integrations/finverse/connections/route'; export {GET as institutions} from './app/api/integrations/finverse/institutions/route'; export {POST as link} from './app/api/integrations/finverse/link/route'; export {GET as callback} from './app/api/integrations/finverse/callback/route'; export {reset,stats,setPlan,setRefreshLimit,setDiscoveryReady,setDiscoveryError,setVerified} from 'fixture';`, resolveDir: process.cwd() }, bundle: true, platform: "node", format: "cjs", packages: "external", write: false, plugins: [{ name: "finverse-boundaries", setup(b) { b.onResolve({filter:/^(fixture|@\/lib\/(bank-link-journey|admin|auth|finverse-refresh-limit|finverse-access-token|bank-link-usage|user-limits|account-limit-count|account-brand|finverse-lifecycle|workspace-access|finverse|prisma|plan-quota|pro-access|mobile-request-context))$/},()=>({path:"fixture",namespace:"test"})); b.onLoad({filter:/.*/,namespace:"test"},()=>({contents:fixture,loader:"ts",resolveDir:process.cwd()})); }}] });
   const Module = requireFixture("node:module"), mod = new Module(resolve("finverse-test.cjs")); mod.filename=resolve("finverse-test.cjs");mod.paths=Module._nodeModulePaths(process.cwd());mod._compile(bundled.outputFiles[0].text,mod.filename);
   const api=mod.exports;
   api.setVerified(false);
@@ -94,7 +95,7 @@ export const prisma={user:{findUniqueOrThrow:async()=>({planTier,verified})},$tr
   const connections=await api.connections(new Request('https://clover.test/api?workspaceId=profile'));
   assert.equal(connections.headers.get('cache-control'),'private, no-store');
   const linkedData=await connections.json();
-  assert.deepEqual(linkedData.pending,[{id:'pending',name:'RCBC',logoUrl:'/assets/banks/philippines/rcbc.png',status:'awaiting_selection'}]);
+  assert.deepEqual(linkedData.pending,[{id:'failed',name:'Failed bank',logoUrl:'/assets/account-types/bank.png',status:'error'},{id:'pending',name:'RCBC',logoUrl:'/assets/banks/philippines/rcbc.png',status:'awaiting_selection'}]);
   assert.equal(linkedData.accounts[0].last4,'7890');
   assert.equal(linkedData.accounts[0].logoUrl,'/assets/banks/philippines/bpi.png','variant-only bank branding must not use the generic icon');
   assert.equal(linkedData.accounts[0].lastSyncedAt,'2026-09-24T00:00:00.000Z');

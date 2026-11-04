@@ -17,6 +17,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 type SelectAccount = { id: string; name: string; reserved?: boolean; existingAccountName?: string | null; suggestedAccountId?:string|null; candidates?:{id:string;name:string;last4:string|null}[] };
 type SyncResponse = {
   status?: string;
+  message?: string;
   linkUrl?: string;
   connectionId?: string;
   remaining?: number;
@@ -160,15 +161,16 @@ export function FinverseConnectButton({
             setMessage("Finverse is still retrieving your accounts. You can continue using Clover and return through Finish linking or Notifications.");
             return;
           }
-          setMessage("Bank authorized. Retrieving your accounts… This can take up to a minute.");
+          setMessage("Bank authorized. Retrieving your accounts… Your bank may take a few minutes.");
           await waitForNextPoll(controller.signal);
           continue;
         }
 
+        if (body.status !== "ready") throw new Error("Bank sync has not completed. Please retry from Finish linking.");
         setPending(current=>current.filter(c=>c.id!==requestedConnectionId));
         await onSyncedRef.current?.();
         const imported = body.transactions?.imported ?? 0;
-        setMessage((selectedAccountIds?.length ? `${selectedAccountIds.length} account${selectedAccountIds.length===1?"":"s"} linked. ` : "") + (imported > 0 ? `Bank synced — ${imported} new transaction${imported === 1 ? "" : "s"} ready for review.` : "Already up to date."));
+        setMessage(body.message || (selectedAccountIds?.length ? `${selectedAccountIds.length} account${selectedAccountIds.length===1?"":"s"} linked. ` : "") + (imported > 0 ? `Bank synced — ${imported} new transaction${imported === 1 ? "" : "s"} ready for review.` : "Already up to date."));
         setBankRevision(v=>v+1);
         window.dispatchEvent(new Event("finverse-updated"));notifyInAppNotificationsChanged();
         if (mode === "connect") router.replace("/accounts", { scroll: false });

@@ -1,0 +1,96 @@
+import assert from "node:assert/strict";
+import { randomUUID } from "node:crypto";
+import { createRequire } from "node:module";
+const url = new URL(process.env.DATABASE_URL ?? "http://invalid");
+assert.equal(url.hostname, "127.0.0.1"); assert.equal(url.port, process.env.CLOVER_QA_PARSER_PORT ?? "55441"); assert.equal(url.pathname, "/clover_migration_qa"); assert(process.argv.includes("--execute"));
+process.env.FINVERSE_ENABLED = "true"; process.env.FINVERSE_MODE = "test";
+process.env.FINVERSE_CLIENT_ID = "fixture"; process.env.FINVERSE_CLIENT_SECRET = "fixture";
+process.env.FINVERSE_TOKEN_ENCRYPTION_KEY = Buffer.alloc(32, 3).toString("base64");
+process.env.FINVERSE_REDIRECT_URI = "https://staging.clover.ph/api/integrations/finverse/callback";
+const require = createRequire(import.meta.url);
+const saved = new Map<string, NodeModule | undefined>();
+const stub = (id: string, exports: unknown) => { const path = require.resolve(id); saved.set(path, require.cache[path]); require.cache[path] = { id: path, filename: path, loaded: true, exports } as NodeModule; };
+let identity: Record<string, unknown> = { status: "DATA_AVAILABLE", product_status: { accounts: { status: "SUCCESS" }, online_transactions: { status: "IN_PROGRESS" } } };
+let state = "", empty = false, badExchange = false, native = false, tier = "premium", transactionFetches = 0, noFinancialData = false;
+const products = (status: string) => ({ accounts: { status: "SUCCESS" }, online_transactions: { status } });
+globalThis.fetch = async (input, init) => {
+  const path = new URL(String(input)).pathname;
+  if (new URL(String(input)).hostname !== "api.prod.finverse.net") throw Error("External services prohibited in bank QA");
+  let body: unknown;
+  if (path === "/auth/customer/token") body = { access_token: "customer-token", expires_in: 3600 };
+  else if (path === "/institutions") body = [{ institution_id: "qa-bank", institution_name: "QA Bank", countries: ["PHL"], products_supported: ["ACCOUNTS", "TRANSACTIONS"], tags: ["test"], status: "SUPPORTED" }];
+  else if (path === "/link/token") { const sent = JSON.parse(String(init?.body)); state = sent.state; assert.equal(sent.redirect_uri, process.env.FINVERSE_REDIRECT_URI); assert.equal(sent.response_mode, "form_post"); body = { link_url: "https://link.finverse.com/fixture" }; }
+  else if (path === "/auth/token") { if (badExchange) return Response.json({ message: "Synthetic exchange failure" }, { status: 502 }); body = { access_token: "fixture-access", refresh_token: "fixture-refresh", expires_in: 3600, login_identity_id: randomUUID() }; }
+  else if (path === "/login_identity") body = { login_identity: identity, institution: { institution_name: "QA Bank", institution_id: "qa-bank" } };
+  else if (path === "/accounts") body = { accounts: empty ? [] : [{ account_id: "primary", account_name: "Savings", account_currency: "PHP", account_number_full: "0012345678", balance: noFinancialData ? undefined : { currency: "PHP", value: "2000" } }, { account_id: "unselected", account_currency: "PHP", account_name: "Other" }, { account_id: "parent", is_parent: true }] };
+  else if (path.startsWith("/account_numbers/")) body = { account_number: { number: "0012345678" } };
+  else if (path === "/transactions") { transactionFetches++; body = { transactions: noFinancialData ? [] : [{ transaction_id: "expense-1", account_id: "primary", posted_date: "2026-11-01", merchant_name: "Synthetic Lunch", amount: { currency: "PHP", value: -100 } }, { transaction_id: "salary-1", account_id: "primary", posted_date: "2026-11-01", merchant_name: "Salary", amount: { currency: "PHP", value: 1000 } }, { transaction_id: "other-account", account_id: "unselected", posted_date: "2026-11-01", amount: { currency: "PHP", value: -500 } }] }; }
+  else throw Error(`Unexpected provider path ${path}`);
+  return Response.json(body);
+};
+async function main() {
+  const { prisma: db } = await import("../lib/prisma");
+  const user = await db.user.create({ data: { clerkUserId: randomUUID(), email: `${randomUUID()}@example.invalid`, environment: "staging", verified: true, planTier: "premium", planTierLocked: true, proGrants: { create: { source: "qa", startsAt: new Date(Date.now() - 1000), endsAt: new Date(Date.now() + 86400000), planTier: "premium", reason: "Synthetic QA", actorId: "qa" } } } });
+  stub("../lib/auth", { requireAuth: async () => ({ userId: user.clerkUserId }) });
+  stub("../lib/workspace-access", { assertWorkspaceAccess: async (_id: string, id: string) => { const w = await db.workspace.findFirst({ where: { id, userId: user.id } }); if (!w) throw Error("WORKSPACE_NOT_FOUND"); return w; } });
+  stub("../lib/pro-access", { refreshProAccess: async () => tier, getProAccess: async () => ({ planTier: tier }) });
+  stub("../lib/mobile-request-context", { getMobileRequestContext: () => native ? { userId: user.clerkUserId } : null });
+  stub("../lib/finverse-enrichment", { enrichFinverseTransactions: async () => new Map(), canRefreshFinverseCategory: () => false });
+  stub("../lib/analytics-server", { capturePostHogServerEvent: async () => {} });
+  const next = require("next/server"); stub("next/server", { ...next, after: () => {} });
+  try {
+    const { POST: link } = await import("../app/api/integrations/finverse/link/route");
+    const { POST: callback } = await import("../app/api/integrations/finverse/callback/route");
+    const { POST: sync } = await import("../app/api/integrations/finverse/sync/route");
+    const { GET: connections } = await import("../app/api/integrations/finverse/connections/route");
+    const { finverseBalances } = await import("../lib/finverse-balances");
+    const workspace = await db.workspace.create({ data: { userId: user.id, name: "Disposable bank linking QA" } });
+    const account = await db.account.create({ data: { workspaceId: workspace.id, name: "My Savings", institution: "QA Bank", accountNumber: "0012345678", type: "bank", currency: "PHP", balance: 450 } });
+    const confirmed = await db.transaction.create({ data: { workspaceId: workspace.id, accountId: account.id, merchantRaw: "Salary", merchantClean: "Salary", date: new Date("2026-11-01"), amount: 1000, currency: "PHP", type: "income", reviewStatus: "confirmed" } });
+    const original = JSON.stringify(confirmed), accountBefore = JSON.stringify(account);
+    const request = (path: string, body: object) => new Request(`https://staging.clover.ph/api/integrations/finverse/${path}`, { method: "POST", headers: { origin: "https://staging.clover.ph", "content-type": "application/json" }, body: JSON.stringify(body) });
+    tier = "free"; assert.equal((await link(request("link", { workspaceId: workspace.id, institutionId: "qa-bank" }))).status, 403); tier = "premium";
+    const started = await link(request("link", { workspaceId: workspace.id, institutionId: "qa-bank" })); assert.equal(started.status, 200, await started.clone().text()); const connectionId = (await started.json()).connectionId;
+    assert.equal((await db.finverseConnection.findUniqueOrThrow({ where: { id: connectionId } })).institutionName, "QA Bank");
+    const unfinished = await connections(new Request(`https://staging.clover.ph/api/integrations/finverse/connections?view=picker&workspaceId=${workspace.id}`)); assert((await unfinished.json()).pending.some((c: { id: string }) => c.id === connectionId));
+    const send = (extra: object = {}) => sync(request("sync", { workspaceId: workspace.id, connectionId, ...extra }));
+    assert.equal((await send()).status, 409, "Unfinished authorization explicitly offers reconnection");
+    const form = new FormData(); form.set("state", state); form.set("code", "fixture-code");
+    const returned = await callback(new Request(process.env.FINVERSE_REDIRECT_URI!, { method: "POST", body: form })); assert.equal(returned.status, 303); assert(returned.headers.get("location")?.includes(`finverseWorkspace=${workspace.id}`)); assert(!returned.headers.get("location")?.includes("fixture-access"));
+    const poll = await send(); assert.equal((await poll.json()).status, "retrieving"); assert.equal(transactionFetches, 0); assert.equal((await db.finverseConnection.findUniqueOrThrow({ where: { id: connectionId } })).lastSyncedAt, null);
+    identity = { status: "DATA_RETRIEVAL_COMPLETE", product_status: products("SUCCESS"), session_status: "COMPLETED" };
+    identity = { status: "DATA_AVAILABLE", product_status: products("ERROR") };
+    assert.equal((await send()).status, 422, "Provider transaction failure cannot be reported as ready");
+    assert.equal(await db.transaction.count({ where: { workspaceId: workspace.id } }), 1);
+    identity = { status: "DATA_RETRIEVAL_COMPLETE", product_status: products("SUCCESS"), session_status: "COMPLETED" };
+    empty = true; assert.equal((await send()).status, 422); empty = false;
+    const selection = await send(); assert.equal((await selection.json()).status, "select_accounts");
+    assert.equal((await (await send({ selectedAccountIds: [] })).json()).status, "select_accounts", "Empty selection cannot become ready");
+    const complete = await send({ selectedAccountIds: ["primary"] }); assert.equal(complete.status, 200, await complete.clone().text()); const result = await complete.json(); assert.equal(result.status, "ready"); assert.equal(result.accounts, 1); assert.equal(result.transactions.imported, 1); assert.equal(result.transactions.existing, 1);
+    assert.equal(await db.transaction.count({ where: { workspaceId: workspace.id } }), 2);
+    assert.equal((await finverseBalances(workspace.id)).get(account.id)?.bankBalance, "2000.00", "Saved provider snapshot is visible through the Accounts/Home projection");
+    assert.equal(JSON.stringify(await db.transaction.findUnique({ where: { id: confirmed.id } })), original);
+    assert.equal(JSON.stringify(await db.account.findUnique({ where: { id: account.id } })), accountBefore);
+    assert.equal((await (await send()).json()).status, "ready", "Sync retains the original selection without prompting for unselected accounts"); assert.equal(await db.transaction.count({ where: { workspaceId: workspace.id } }), 2, "Repeated sync must not duplicate ledger rows");
+    assert.equal(await db.auditLog.count({ where: { entityId: connectionId, action: "bank_link.data_available" } }), 1);
+    identity = { status: "DATA_RETRIEVAL_PARTIALLY_SUCCESSFUL", product_status: { ...products("SUCCESS"), historical_transactions: { status: "ERROR" } } };
+    assert.equal((await (await send()).json()).dataStatus, "partial");
+    // A new setup with only pre-existing manual data must not count as bank-data activation.
+    noFinancialData = true;
+    const blankStarted = await link(request("link", { workspaceId: workspace.id, institutionId: "qa-bank" })); const blankId = (await blankStarted.json()).connectionId;
+    const blankForm = new FormData(); blankForm.set("state", state); blankForm.set("code", "blank-code");
+    await callback(new Request(process.env.FINVERSE_REDIRECT_URI!, { method: "POST", body: blankForm }));
+    const blank = await sync(request("sync", { workspaceId: workspace.id, connectionId: blankId, selectedAccountIds: ["unselected"] }));
+    const blankBody = await blank.json(); assert.equal(blank.status, 200, JSON.stringify(blankBody)); assert.equal(blankBody.dataStatus, "empty"); assert.match(blankBody.message, /no balances or booked transactions/i);
+    assert.equal(await db.auditLog.count({ where: { entityId: blankId, action: "bank_link.data_available" } }), 0);
+    assert.equal(await db.auditLog.count({ where: { entityId: blankId, action: "bank_link.empty_result" } }), 1);
+    noFinancialData = false;
+    native = true; badExchange = true;
+    const failed = await link(request("link", { workspaceId: workspace.id, institutionId: "qa-bank" })); const failedId = (await failed.json()).connectionId;
+    const bad = new FormData(); bad.set("state", state); bad.set("code", "bad-code");
+    const failedCallback = await callback(new Request(process.env.FINVERSE_REDIRECT_URI!, { method: "POST", body: bad })); assert(failedCallback.headers.get("location")?.startsWith("clover://accounts")); assert.equal((await db.finverseConnection.findUniqueOrThrow({ where: { id: failedId } })).status, "error");
+    assert.equal((await sync(request("sync", { workspaceId: "not-owned", connectionId }))).status, 404);
+    console.log("PASS bank journey: Free refusal, named start, unfinished recovery, POST callback, product readiness, no-data/empty-selection refusal, chosen account and booked transactions, visible balance projection, repeated sync, native exchange failure and confirmed-data preservation");
+  } finally { for (const [path, value] of saved) { if (value) require.cache[path] = value; else delete require.cache[path]; } await db.user.delete({ where: { id: user.id } }); await db.$disconnect(); }
+}
+main().catch(error => { console.error(error); process.exitCode = 1; });

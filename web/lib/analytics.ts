@@ -14,6 +14,7 @@ export type AnalyticsEventName = TelemetryEvent
   | "identity_environment_conflict"
   | "onboarding_started"
   | "onboarding_completed"
+  | "bank_link_stage"
   | "activation_prompt_viewed"
   | "activation_method_selected"
   | "activation_first_result_rendered"
@@ -173,6 +174,7 @@ export type AnalyticsEventName = TelemetryEvent
 // This is intentionally data-free: event names are safe to expose in internal tooling.
 export const ANALYTICS_EVENT_NAMES: AnalyticsEventName[] = Array.from(new Set<AnalyticsEventName>([
   ...TELEMETRY_EVENTS, "campaign_progress",
+  "bank_link_stage",
   "activation_prompt_viewed", "activation_method_selected", "activation_first_result_rendered",
   "signup_started", "signup_completed", "identity_environment_conflict", "onboarding_started", "onboarding_completed", "onboarding_missions_viewed",
   "onboarding_mission_started", "onboarding_mission_completed", "onboarding_missions_dismissed", "first_login",

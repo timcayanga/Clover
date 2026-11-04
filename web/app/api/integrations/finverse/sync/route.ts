@@ -1,3 +1,5 @@
+import { recordBankLinkStage } from "@/lib/bank-link-journey";
+import { finverseDataReadiness } from "@/lib/finverse-data-readiness";
 import { enrichFinverseTransactions, canRefreshFinverseCategory, type BankCategorySuggestion } from "@/lib/finverse-enrichment";
 import { bankInstitutionsMatch } from "@/lib/finverse-matching";
 import { reserveBankRefresh, BankRefreshLimitError } from "@/lib/finverse-refresh-limit";
@@ -26,7 +28,6 @@ import {
   getFinverseAccountNumber,
   getFinverseLoginIdentity,
   isFinverseEnabled,
-  isFinverseDataReady,
   normalizeFinverseAccount,
   normalizeFinverseTransaction,
   type FinverseAccount,
@@ -153,12 +154,14 @@ export async function POST(request: Request) {
         workspaceId: body.workspaceId,
         ...(body.connectionId ? { id: body.connectionId } : {}),
         user: { clerkUserId: userId },
-        encryptedRefreshToken: { not: null },
+        ...(!body.connectionId ? { encryptedRefreshToken: { not: null } } : {}),
         status: { not: "disconnected" },
       },
       orderBy: { createdAt: "desc" },
     });
     if (!connection) return NextResponse.json({ error: "No connected bank was found." }, { status: 404 });
+
+    if (!connection.encryptedRefreshToken) return NextResponse.json({ error: "Bank authorization was not completed. Choose your bank to reconnect securely.", reconnectRequired: true }, { status: 409 });
 
     const planTier = await refreshProAccess(connection.userId);
     if (planTier === "free") return NextResponse.json({error:"Bank sync requires Plus or Pro. Existing imported records are preserved."},{status:403});
@@ -175,6 +178,7 @@ export async function POST(request: Request) {
     const identityResult = await getFinverseLoginIdentity(token);
     const identity = identityResult.login_identity ?? {};
     const status = typeof identity.status === "string" ? identity.status : "UNKNOWN";
+    const readiness = finverseDataReadiness(identity);
     const institution = identityResult.institution ?? {};
     const institutionName = typeof institution.institution_name === "string" ? institution.institution_name : undefined;
     const institutionId = typeof institution.institution_id === "string" ? institution.institution_id : undefined;
@@ -194,17 +198,17 @@ export async function POST(request: Request) {
     const updatedState = await prisma.finverseConnection.updateMany({
       where: { id: connection.id, status: { not: "disconnected" }, disconnectRequestedAt:null },
       data: {
-        status: status === "ERROR" ? "error" : isFinverseDataReady(status) ? "ready" : "retrieving",
+        status: readiness.failed ? "error" : "retrieving",
         institutionId,
         institutionName,
         rawLoginIdentity: json(identityResult),
-        syncFailureSince: status === "ERROR" ? connection.syncFailureSince ?? new Date() : connection.syncFailureSince,
-        syncError: status === "ERROR" ? "Finverse could not retrieve data from this institution." : null,
+        syncFailureSince: readiness.failed ? connection.syncFailureSince ?? new Date() : connection.syncFailureSince,
+        syncError: readiness.failed ? "Finverse could not retrieve data from this institution." : null,
       },
     });
     if (!updatedState.count) return NextResponse.json({ error: "This bank was unlinked." }, { status: 409 });
-    if (status === "ERROR") return NextResponse.json({ error: "Finverse could not retrieve data from this institution. Try connecting again or choose another bank.", status, reconnectRequired: true }, { status: 422 });
-    if (!isFinverseDataReady(status)) {
+    if (readiness.failed) { await recordBankLinkStage(connection.id, "failed"); return NextResponse.json({ error: "Finverse could not retrieve data from this institution. Try connecting again or choose another bank.", status, reconnectRequired: true }, { status: 422 }); }
+    if (!readiness.ready) {
       console.info("[finverse-sync] retrieving", { connectionId: connection.id, providerStatus: status });
       return NextResponse.json({ status: "retrieving", providerStatus: status });
     }
@@ -212,11 +216,20 @@ export async function POST(request: Request) {
     const accountResult = await getFinverseAccounts(token);
     const resolvedInstitutionName = institutionName || (typeof accountResult.institution?.institution_name === "string" ? accountResult.institution.institution_name : undefined);
     const providerAccounts = (accountResult.accounts ?? []).filter(a => a.is_parent !== true);
-    for (const account of providerAccounts) {
-      const fullNumber = await getFinverseAccountNumber(token, account.account_id);
-      if (fullNumber) account.account_number_full = fullNumber;
+    // Avoid redundant requests and bound optional full-number discovery to three at a time.
+    for (let index = 0; index < providerAccounts.length; index += 3) {
+      await Promise.all(providerAccounts.slice(index, index + 3).map(async account => {
+        if (account.account_number_full) return;
+        const fullNumber = await getFinverseAccountNumber(token, account.account_id);
+        if (fullNumber) account.account_number_full = fullNumber;
+      }));
     }
-    const links = await prisma.finverseAccountLink.findMany({ where: { connectionId: connection.id, unlinkedAt: null }, select: { externalAccountId: true } });
+    if (!providerAccounts.length) {
+      await prisma.finverseConnection.updateMany({ where: { id: connection.id, disconnectRequestedAt: null }, data: { status: "error", syncError: "The bank returned no accounts. Reconnect or use Upload or Manual." } });
+      await recordBankLinkStage(connection.id, "failed");
+      return NextResponse.json({ error: "The bank returned no accounts. Reconnect or use Upload or Manual.", reconnectRequired: true }, { status: 422 });
+    }
+    const links = await prisma.finverseAccountLink.findMany({ where: { connectionId: connection.id, unlinkedAt: null, accountId: { not: null } }, select: { externalAccountId: true } });
     const linkedIds = new Set(links.map(l => l.externalAccountId));
     const allowance = await prisma.$transaction(async tx => {
       await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`plan-quota:${connection.userId}`}, 0))`;
@@ -235,8 +248,9 @@ export async function POST(request: Request) {
       const match = matches.length === 1 ? matches[0] : null;
       return match?.finverseAccountLink && /^\d+$/.test(cleanBankNumber(normalized.accountNumber)) && cleanBankNumber(match.accountNumber) === cleanBankNumber(normalized.accountNumber) && allowance.usedIds.has(bankLinkUsageIdentity(match.finverseAccountLink));
     }).map(a => a.account_id));
-    if ((!selectedIds && newAccounts.length > 0) || chosen.filter(a => !reservedIds.has(a.account_id)).length > allowance.remaining) {
+    if (((!selectedIds || selectedIds.size === 0) && linkedIds.size === 0 && newAccounts.length > 0) || chosen.filter(a => !reservedIds.has(a.account_id)).length > allowance.remaining) {
       await prisma.finverseConnection.updateMany({ where: { id: connection.id, status: { not: "disconnected" }, disconnectRequestedAt:null }, data: { status: "awaiting_selection" } });
+      await recordBankLinkStage(connection.id, "selection_required");
       return NextResponse.json({ status: "select_accounts", connectionId: connection.id, remaining: allowance.remaining, resetsAt: allowance.periodEnd, accounts: newAccounts.map(a => {
         const normalized = normalizeFinverseAccount(a, resolvedInstitutionName);
         const matches = matchingBankAccounts(cloverAccounts, normalized);
@@ -246,6 +260,8 @@ export async function POST(request: Request) {
     const accountsToImport = providerAccounts.filter(a => linkedIds.has(a.account_id) || chosen.some(c => c.account_id === a.account_id));
     for (const account of accountsToImport) await importAccount(connection.id, connection.workspaceId, account, resolvedInstitutionName, chosen.some(c => c.account_id === account.account_id), body.accountMappings?.[account.account_id]);
 
+    const usableLinks = await prisma.finverseAccountLink.findMany({ where: { connectionId: connection.id, workspaceId: connection.workspaceId, unlinkedAt: null, accountId: { not: null } }, select: { accountId: true, normalizedPayload: true } });
+    if (!usableLinks.length) return NextResponse.json({ error: "No bank accounts were linked. Choose accounts to finish linking.", reconnectRequired: true }, { status: 409 });
     const providerTransactions = await getAllFinverseTransactions(token);
     const categories = await prisma.category.findMany({ where: { workspaceId: connection.workspaceId, isArchived: false }, select: { id: true, name: true, type: true } });
     const suggestions = await enrichFinverseTransactions({ workspaceId: connection.workspaceId, transactions: providerTransactions, institution: resolvedInstitutionName, categories });
@@ -259,13 +275,18 @@ export async function POST(request: Request) {
       else if (result === "existing") existing += 1;
       else skipped += 1;
     }
-    await prisma.finverseConnection.updateMany({
+    const visibleTransactions = await prisma.transaction.count({ where: { workspaceId: connection.workspaceId, finverseTransactionRecord: { is: { connectionId: connection.id } }, accountId: { in: usableLinks.flatMap(link => link.accountId ? [link.accountId] : []) }, deletedAt: null, isExcluded: false, reviewStatus: { notIn: ["rejected", "duplicate_skipped"] } } });
+    const hasBalance = usableLinks.some(link => { const value = (link.normalizedPayload as { balance?: unknown } | null)?.balance; return value !== null && value !== undefined && Number.isFinite(Number(value)); });
+    const usableData = hasBalance || visibleTransactions > 0;
+    const completion = await prisma.finverseConnection.updateMany({
       where: { id: connection.id, status: { not: "disconnected" }, disconnectRequestedAt:null },
       data: { status: "ready", lastSyncedAt: new Date(), syncError: null, inactivityWarnedAt:null, syncFailureSince:null },
     });
+    if (!completion.count) return NextResponse.json({ error: "This bank was unlinked. Your saved records are preserved." }, { status: 409 });
+    await recordBankLinkStage(connection.id, usableData ? "data_available" : "empty_result", { accountCount: usableLinks.length, transactionCount: visibleTransactions });
     console.info("[finverse-sync] complete", {
       connectionId: connection.id,
-      accountCount: accountResult.accounts?.length ?? 0,
+      accountCount: usableLinks.length,
       importedTransactions: imported,
       existingTransactions: existing,
       skippedTransactions: skipped,
@@ -273,7 +294,9 @@ export async function POST(request: Request) {
     return NextResponse.json({
       status: "ready",
       connectionId: connection.id,
-      accounts: accountResult.accounts?.length ?? 0,
+      accounts: usableLinks.length,
+      dataStatus: !usableData ? "empty" : readiness.partial ? "partial" : "complete",
+      message: !usableData ? "Accounts linked, but no balances or booked transactions were returned. Try Sync again later, or use Upload or Manual." : readiness.partial ? "Bank data synced, but the bank returned only part of the requested data. Check your accounts and transactions." : imported > 0 ? `Bank synced — ${imported} new transaction${imported === 1 ? "" : "s"} ready for review.` : existing > 0 ? "Already up to date." : "Bank accounts linked. No booked transactions were returned for the selected accounts.",
       transactions: { imported, existing, skipped },
     });
   } catch (error) {
@@ -286,6 +309,7 @@ export async function POST(request: Request) {
     if (message === "WORKSPACE_NOT_FOUND") return NextResponse.json({ error: "Workspace not found." }, { status: 404 });
     if (message === "FINVERSE_DISABLED") return NextResponse.json({ error: "Bank connections are not available yet." }, { status: 404 });
     if (message === "FINVERSE_NOT_CONFIGURED") return NextResponse.json({ error: "Bank connections are not configured yet." }, { status: 503 });
+    if (attemptedConnection) await recordBankLinkStage(attemptedConnection, "failed");
     if (message === "FINVERSE_RELINK_REQUIRED" || (error instanceof Error && "status" in error && error.status === 401)) {
       if (attemptedConnection) await prisma.finverseConnection.updateMany({where:{id:attemptedConnection,disconnectRequestedAt:null},data:{syncError:"Bank authorization expired. Reconnect securely to sync again."}}).catch(()=>{});
       return NextResponse.json({ error: "Bank authorization expired. Reconnect securely to sync again.", reconnectRequired: true }, { status: 409 });

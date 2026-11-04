@@ -31,7 +31,7 @@ export const prisma={finverseConnection:{findMany:async({where,select})=>{
  if(where.workspaceId!=='profile'||where.user.clerkUserId!=='owner')throw Error('unsafe ownership');
  const detail=where.accountLinks?.some?.accountId;
  if(detail){if(detail!=='card')return []; if(where.status||where.encryptedRefreshToken)throw Error('history filtered out');if(select.accountLinks.where.workspaceId!=='profile'||select.accountLinks.where.accountId?.not!==null||select.accountLinks.where.unlinkedAt!==undefined)throw Error('missing shared login context');scoped=true;}
- else if(where.status?.not!=='disconnected'||where.encryptedRefreshToken?.not!==null||select.accountLinks.where.unlinkedAt!==null)throw Error('picker includes inactive');
+ else if(JSON.stringify(where.status?.notIn)!==JSON.stringify(['disconnected','cancelled'])||where.OR?.[0]?.encryptedRefreshToken?.not!==null||!where.OR?.[1]?.status?.in?.includes('link_pending')||select.accountLinks.where.unlinkedAt!==null)throw Error('picker includes inactive');
  return [{id:'revoked',institutionId:'bpi',institutionName:'BPI',status:'disconnected',encryptedRefreshToken:null,lastSyncedAt:new Date('2026-10-02'),syncError:null,accountLinks:[{unlinkedAt:new Date('2026-10-03'),account:{id:'card',name:'Savings',institution:'BPI',accountNumber:'1234',type:'bank'}},{unlinkedAt:new Date('2026-10-03'),account:{id:'shared-sibling',name:'Shared login savings',institution:'BPI',accountNumber:'5678',type:'bank'}}]},...(detail?[]:[{id:'active',institutionId:'bpi',status:'ready',encryptedRefreshToken:'NEVER-EXPOSE-TOKEN',lastSyncedAt:new Date('2026-10-04'),accountLinks:[{unlinkedAt:null,account:{id:'card',name:'Savings',accountNumber:'1234',type:'bank'}}]}])];
 }}};`;
 async function main(){

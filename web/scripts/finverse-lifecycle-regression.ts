@@ -4,7 +4,8 @@ import {createRequire} from 'node:module';
 import {resolve} from 'node:path';
 import {bankWarningStage,bankDisconnectDeadline,inactivityDeadline,retainedBankLinks,isPendingBankSelection} from '../../shared/finverse-lifecycle';
 async function main(){
- for (const status of ['error','cancelled','disconnected','disconnect_pending','link_pending']) assert.equal(isPendingBankSelection(status,false,null),false);
+ for (const status of ['cancelled','disconnected','disconnect_pending']) assert.equal(isPendingBankSelection(status,false,null),false);
+ for (const status of ['link_pending','authorizing','error']) assert.equal(isPendingBankSelection(status,false,null),true);
  assert.equal(isPendingBankSelection('awaiting_selection',false,null),true);
  assert.equal(isPendingBankSelection('retrieving',false,null),true);
  assert.equal(isPendingBankSelection('retrieving',true,null),false);

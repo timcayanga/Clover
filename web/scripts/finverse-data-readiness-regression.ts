@@ -1,0 +1,16 @@
+import assert from "node:assert/strict";
+import { finverseDataReadiness as ready } from "../lib/finverse-data-readiness";
+const products = (accounts: string, online: string, historical?: string) => ({ accounts: { status: accounts }, online_transactions: { status: online }, ...(historical ? { historical_transactions: { status: historical } } : {}) });
+for (const value of [null, {}, { status: "DATA_AVAILABLE" }, { status: "DATA_AVAILABLE", product_status: products("SUCCESS", "IN_PROGRESS") }, { status: "DATA_RETRIEVAL_COMPLETE", product_status: products("SUCCESS", "IN_PROGRESS") }, { status: "DATA_AVAILABLE", product_status: { accounts: { status: "SUCCESS" } } }, { product_status: products("UNKNOWN", "SUCCESS") }]) assert.equal(ready(value).ready, false, JSON.stringify(value));
+assert(ready({ status: "DATA_RETRIEVAL_COMPLETE" }).ready, "Legacy completed identities remain supported");
+assert(!ready({ status: "DATA_AVAILABLE", product_status: products("SUCCESS", "SUCCESS", "IN_PROGRESS") }).ready, "Wait for historical retrieval too");
+assert(ready({ status: "ERROR", product_status: products("SUCCESS", "SUCCESS") }).ready, "Product results take precedence over an unrelated product error");
+assert(ready({ status: "DATA_AVAILABLE", product_status: products("SUCCESS", "SUCCESS") }).ready);
+assert(ready({ product_status: products("SUCCESS", "SUCCESS", "ERROR") }).partial);
+assert(ready({ product_status: products("SUCCESS", "WARNING") }).partial);
+for (const product of ["ERROR", "TEMPORARILY_UNAVAILABLE_FOR_INSTITUTION"]) assert(ready({ product_status: products("SUCCESS", product) }).failed);
+assert(ready({ product_status: products("ERROR", "SUCCESS") }).failed);
+assert(ready({ status: "UNLINKED", product_status: products("SUCCESS", "SUCCESS") }).failed);
+assert(ready({ status: "ERROR" }).failed);
+assert(ready({ session_status: "COMPLETED", product_status: { accounts: { status: "SUCCESS" } } }).ready, "Completed account-only result is passed to empty-result handling, never presumed transaction success");
+console.log("Finverse readiness: late products, historical retrieval, partial failure, unavailable data, legacy completion and revoked authorization passed.");
