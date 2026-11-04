@@ -22,6 +22,7 @@ import { ImportPasswordModal } from "@/components/import-password-modal";
 import { PlanLimitNudge } from "@/components/plan-limit-nudge";
 import { ImportUploadDock } from "@/components/import-upload-dock";
 import { capturePostHogClientEvent, capturePostHogClientEventOnce, analyticsOnceKey } from "@/components/posthog-analytics";
+import { startClientImportTiming } from "@/lib/import-client-timing";
 import { formatDuplicateImportMessage } from "@/lib/import-duplicate-message";
 import {
   fileAnalyticsBase,
@@ -436,6 +437,7 @@ export function ImportFilesModal({
 }: ImportFilesModalProps) {
   const router = useRouter();
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const importJourneyTimingsRef = useRef(new Map<string, ReturnType<typeof startClientImportTiming>>());
   const aiPermissionPending = useRef(false);
   const photoLibraryInputRef = useRef<HTMLInputElement>(null);
   const cameraInputRef = useRef<HTMLInputElement>(null);
@@ -1835,6 +1837,16 @@ export function ImportFilesModal({
     // state update is still batched.
     itemsRef.current = nextItems;
     setItems(nextItems);
+    const next = nextItems.find(item => item.id === id);
+    const outcome = patch.status === "error" ? "failed"
+      : patch.status === "needs_password" ? "input_required"
+      : patch.confirmationState === "confirmed" || patch.status === "done"
+        ? Number(next?.importedRows ?? 0) > 0 ? "transaction_available" : "completed_without_transaction" : null;
+    const timing = outcome ? importJourneyTimingsRef.current.get(id)?.(outcome) : null;
+    if (timing) {
+      importJourneyTimingsRef.current.delete(id);
+      reportImportClientStage("upload_outcome", { ...timing, importFileId: next?.importFileId ?? null });
+    }
   };
 
   const requestPasswordForItem = (itemId: string, wrongPassword = false) => {
@@ -5276,6 +5288,7 @@ export function ImportFilesModal({
   const processFile = async (itemId: string, options?: { signal?: AbortSignal | null }): Promise<ImportProcessResult> => {
     const item = itemsRef.current.find((entry) => entry.id === itemId);
     if (!item) return { status: "error", importedRows: null, summary: null };
+    if (!importJourneyTimingsRef.current.has(itemId)) importJourneyTimingsRef.current.set(itemId, startClientImportTiming());
     const guessedIdentity = guessStatementIdentity(item.file.name);
     const canUseOptimisticGuess = Boolean(guessedIdentity?.accountName && guessedIdentity.accountNumber);
     const itemImportMode = inferImportModeForFile(item.file, item.importMode ?? "statement");

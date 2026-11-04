@@ -6,10 +6,21 @@ import { normalizeDefaultCurrency } from "./regional-preferences";
 export function hasReceiptPhotoEvidence(text: string) {
   const source = text.normalize("NFKC");
   const receiptHeader = /\b(?:sales\s*invoice|inv(?:oice)?\.?\s*(?:no\.?|number|#)\s*:?|official\s*receipt|sales\s*receipt|receipt\s*(?:no|number|#)|cashier|struk|kuitansi|kwitansi)\b|영수증|승인번호|領収書|收据|收據/iu.test(source) || /(?:^|\n)\s*(?:receipt|invoice|expense\s+record)\s*(?:\n|$)/iu.test(source);
-  const settlement = /\b(?:grand\s*total|total(?:\s+(?:due|amount|payment))?|amount\s*due|subtotal|vat(?:able)?\s*(?:sales|amount)|payment\s*(?:type|method)|kembalian)\b|합\s*계|결제금액|받을금액/iu.test(source);
+  const settlement = /\b(?:grand\s*total|total(?:\s+(?:due|amount|payment))?|amount\s*(?:due|to\s+pay)|sale\s+amount|subtotal|vat(?:able)?\s*(?:sales|amount)|payment\s*(?:type|method)|kembalian)\b|합\s*계|결제금액|받을금액/iu.test(source);
   const statementTable = /\b(?:transaction\s+history|account\s+activity|past\s+transactions|recent\s+transactions)\b|\b(?:opening|closing|starting|ending)\s+balance\b|\b(?:debit|withdrawal)\s+(?:credit|deposit)\s+balance\b|거래일자\s+입금\s+출금/iu.test(source);
   const printedPaidTotal = /^\s*total\s+paid\s*[:.]?\s*(?:(?:PHP|USD|EUR|GBP|SGD|MYR|IDR|₱|\$|€|£)\s*)\d[\d,]*\.\d{2}\s*$/imu.test(source);
-  return (receiptHeader || printedPaidTotal) && settlement && /\d/.test(source) && !statementTable;
+  // Restaurants often print BILL, with all labels before the amount column.
+  // Classification does not invent an amount or bypass receipt validation.
+  const itemizedBill = /^\s*(?:temporary\s+)?bill\s*$/imu.test(source) &&
+    /\b(?:table|dine\s*in|take\s*out|order)\b/iu.test(source) &&
+    /\d\s*[x×@]\s*(?:P(?:HP)?|₱|\$)?\s*\d/iu.test(source) &&
+    /\b(?:subtotal|sub\s+total|amount\s+due|service\s+charge)\b/iu.test(source);
+  const cardTerminalSlip = /\bmerchant\s+id\b/iu.test(source) && /\bterminal\s+id\b/iu.test(source) &&
+    /\bcard\s+type\b/iu.test(source) && /\btransaction\s+type\s*:?\s*sale\b/iu.test(source) &&
+    /\bsale\s+amount\b/iu.test(source) && /\bapproved\b/iu.test(source);
+  const retailSettlement = /\bsub\s*total\b/iu.test(source) && /\bamount\s+to\s+pay\b/iu.test(source) &&
+    /\b(?:VAT|TIN|GCash|cashier)\b/iu.test(source);
+  return (receiptHeader || printedPaidTotal || itemizedBill || cardTerminalSlip || retailSettlement) && settlement && /\d/.test(source) && !statementTable;
 }
 
 type ReceiptCurrencyDetails = {

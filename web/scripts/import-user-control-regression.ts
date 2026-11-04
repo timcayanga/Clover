@@ -3,15 +3,16 @@ import { build } from "esbuild";
 
 async function main() {
   const fixture = `
-    export const state = { file: {id:'import',workspaceId:'workspace',status:'processing',processingPhase:'reading_file',confirmedTransactionsCount:0,_count:{transactions:0}}, events:[], locked:false };
+    export const state = { file: {id:'import',workspaceId:'workspace',status:'processing',processingPhase:'reading_file',confirmedTransactionsCount:0,_count:{transactions:0}}, events:[], locked:false, leaseLost:false };
     const lookup=async()=>state.file;
     const log={findFirst:async({where})=>{if(where.workspaceId!=='workspace')throw Error('unscoped');return state.events.at(-1)||null;},create:async({data})=>{state.events.push(data);return data;}};
     const files={findUnique:lookup,update:async({data})=>Object.assign(state.file,data),updateMany:async({where,data})=>{if(where.confirmedTransactionsCount!==0||!where.transactions.none)throw Error('missing financial guard');if(!state.file.confirmedTransactionsCount&&!state.file._count.transactions)Object.assign(state.file,data);return {count:1};}};
     export const prisma={importFile:files,auditLog:log,$transaction:async run=>run({$queryRaw:async()=>{state.locked=true;return[];},importFile:{...files,findUnique:async()=>{if(!state.locked)throw Error('missing lock');return lookup();}},auditLog:log})};`;
-  const bundled = await build({stdin:{contents:"export * from './lib/import-user-control'; export {state} from 'fixture';",resolveDir:process.cwd()}, bundle:true,platform:"node",format:"cjs",packages:"external",write:false, plugins:[{name:"isolated-control-store",setup(b){b.onResolve({filter:/^(fixture|@\/lib\/prisma)$/},()=>({path:"fixture",namespace:"mock"}));b.onLoad({filter:/.*/,namespace:"mock"},()=>({contents:fixture,loader:"js"}));}}]});
+  const bundled = await build({stdin:{contents:"export * from './lib/import-user-control'; export {state} from 'fixture';",resolveDir:process.cwd()}, bundle:true,platform:"node",format:"cjs",packages:"external",write:false, plugins:[{name:"isolated-control-store",setup(b){b.onResolve({filter:/^\.\/import-attempts$/},()=>({path:"attempt-fence",namespace:"attempt"}));b.onLoad({filter:/.*/,namespace:"attempt"},()=>({contents:"import {state} from 'fixture'; export async function assertImportAttemptCurrent(){if(state.leaseLost) throw Error('attempt superseded');}",loader:"js"}));b.onResolve({filter:/^(fixture|@\/lib\/prisma)$/},()=>({path:"fixture",namespace:"mock"}));b.onLoad({filter:/.*/,namespace:"mock"},()=>({contents:fixture,loader:"js"}));}}]});
   const mod={exports:{} as any};new Function("module","exports",bundled.outputFiles[0].text)(mod,mod.exports);
   const {state,setImportUserControl,getImportUserControl,requireImportMayContinue,ImportUserControlError}=mod.exports;
   assert.equal(await getImportUserControl("import","workspace"),"running");
+  state.leaseLost=true;await assert.rejects(requireImportMayContinue("import","workspace"),/attempt superseded/);state.leaseLost=false;
   await setImportUserControl("import","user","pause");assert.equal(state.events.length,1);
   state.file.processingPhase="reading_file";
   await assert.rejects(requireImportMayContinue("import","workspace"),(e:any)=>e instanceof ImportUserControlError&&e.control==="paused");

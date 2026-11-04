@@ -1979,6 +1979,7 @@ export const isSuspiciousReceiptMerchantName = (value: string | null | undefined
   if (!normalized) {
     return true;
   }
+  if (/\b(?:reta[i1l]n?\s+this\s+copy|copy\s+(?:for|fon)\s+your\s+rec[o0]rds|customer\s+copy|merchant\s+copy)\b/i.test(normalized)) return true;
 
   if (
     /^(?:table|qty|item|description|product|invoice|cashier|server|guest|bill\s+no|ref[:#]?|pax|vat|amount due|bill total|total)\b/i.test(

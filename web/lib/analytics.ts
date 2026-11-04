@@ -54,6 +54,7 @@ export type AnalyticsEventName = TelemetryEvent
   | "import_processing_started"
   | "import_processing_completed"
   | "import_processing_stalled"
+  | "import_attempt_finished"
   | "import_parser_arbitrated"
   | "import_receipt_cache_reused"
   | "import_client_stage"

@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { assertImportAttemptCurrent } from "./import-attempts";
 
 export type ImportUserControl = "running" | "paused" | "cancelled";
 export class ImportUserControlError extends Error {
@@ -23,6 +24,7 @@ export async function getImportUserControl(importId: string, workspaceId?: strin
 
 /** Call at safe boundaries and before saving financial records. Never delete confirmed data. */
 export async function requireImportMayContinue(importId: string, workspaceId?: string) {
+  await assertImportAttemptCurrent(importId);
   const control = await getImportUserControl(importId, workspaceId);
   if (control === "running") return;
   await prisma.importFile.updateMany({

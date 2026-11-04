@@ -200,3 +200,10 @@ Status recovery uses a version-checked row lock before queueing an unchanged emp
 Production inline resumes and scheduled raw-file recovery carry the persisted attempt count into the worker, so moving recovery out of a status callback cannot reset the bounded retry budget. The isolated resume/sweep callbacks assert the passed attempt count against the stored import.
 
 When failure recovery can verify retained parsed rows, it repairs an understated parsed-row counter without changing those rows. This allows the next manual retry to confirm the retained checkpoint rather than pay for another extraction. A transaction-local lookup failure rolls back; missing data is never inferred from an exception.
+
+
+## November 4 import operations and receipt routing
+
+`restaurant-bill-regression.ts` adds independently invented BILL/terminal/retail routing and strict restaurant-column arithmetic checks, including missing/conflicting evidence and refund negatives. It does not change the reviewed financial corpus or its locks. `import-attempts-db-regression.ts` runs in the mandatory disposable database: overlapping real workers must claim one parser, preserve all source occurrences and existing confirmed finance, retain failure/retry/interruption outcomes, reject stale confirmation, and record first committed availability idempotently. Unknown historical attempts remain separate from the first-attempt denominator. `qa:import-timing` also verifies failure-inclusive aggregation and monotonic browser outcomes.
+
+See [Import reliability and timing](import-reliability-measurement.md) for measurement boundaries and the read-only report. Private retained OCR replay is routing/safety evidence, not new training or an assertion that incomplete sources became financially correct.

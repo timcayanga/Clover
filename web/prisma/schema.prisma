@@ -2275,6 +2275,7 @@ model AuditLog {
 
   @@index([workspaceId])
   @@index([actorUserId])
+  @@index([workspaceId, entityId, action, createdAt, id], map: "AuditLog_import_operation_idx")
 }
 
 model CloverDeploymentEnvironment {

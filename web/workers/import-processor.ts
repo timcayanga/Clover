@@ -20,6 +20,7 @@ import { creditFailedImportUsage } from "@/lib/clover-token-usage";
 import { finalizePortfolioImport, isHoldingsOnlyPortfolio, portfolioConfidence } from "@/lib/portfolio-import";
 import { assessImportEvidenceSafety, assertSafeImportEvidence } from "@/lib/import-evidence-safety";
 import { startImportTiming, measureImportTiming } from "@/lib/import-timing";
+import { claimImportAttempt, currentImportAttempt, withImportAttempt, finishImportAttempt, observeImportTransactionAvailability, assertImportAttemptCurrent, ImportAttemptLostError } from "@/lib/import-attempts";
 import { incompleteReceiptFields, receiptCurrencyForPersistence, receiptReviewMessage, RECEIPT_REVIEW_PHASE } from "@/lib/receipt-review";
 import { persistSourceReviewFailure } from "@/lib/import-source-review.server";
 import { SOURCE_REVIEW_PHASE, SourceReviewRequiredError } from "@/lib/import-source-review";
@@ -12510,6 +12511,7 @@ const processImportFileTextImpl = async (
     await rawFileReady;
   }
   const finishCandidateWriteTiming = startImportTiming(importFileId, "candidate_persistence");
+  await requireImportMayContinue(importFileId, String(importFile.workspaceId));
   if (await hasCompatibleTable("ParsedTransaction")) {
     await prisma.parsedTransaction.deleteMany({
       where: { importFileId },
@@ -13078,18 +13080,15 @@ const processImportFileTextImpl = async (
   if (!isDocumentImport && imageImport && rows.length === 0) {
     await reconciliationProgressWrite;
     const stalledInstitution = resolvedMetadata.institution ?? checkpointBankName ?? null;
-    await updateImportFileCompat(importFileId, {
-      status: "failed",
-      processingPhase: "repair_needed",
-      processingMessage: stalledInstitution && /wise/i.test(stalledInstitution)
+    const message = stalledInstitution && /wise/i.test(stalledInstitution)
         ? "Clover recognized this as Wise, but could not read enough visible transaction rows from the screenshot."
-        : "Clover could not read enough visible transaction rows from this screenshot.",
-      parsedRowsCount: 0,
-      confirmedTransactionsCount: 0,
-    });
+        : "Clover could not read enough visible transaction rows from this screenshot. Try a clearer source or add the transaction manually.";
+    // This completed extraction is not a transient transport failure. Repeating
+    // it unchanged from every resume/status request only spends more allowance.
+    await persistSourceReviewFailure(importFileId, new SourceReviewRequiredError(message));
     emitImportProcessingEvent("import_processing_stalled", {
       processing_status: "failed",
-      processing_phase: "repair_needed",
+      processing_phase: SOURCE_REVIEW_PHASE,
       reason: "image_statement_no_rows",
       institution: stalledInstitution,
       error_code: "I-104",
@@ -13947,25 +13946,46 @@ const processImportFileTextImpl = async (
 
 export const processImportFileText = async (...args: Parameters<typeof processImportFileTextImpl>): Promise<ProcessImportResult> => {
   const [importFileId] = args;
+  // Internal quality passes belong to the same claimed operation. A second
+  // HTTP request, cron sweep or queue worker must not run another parser race.
+  if (currentImportAttempt(importFileId)) return processImportFileTextImpl(...args);
+  let claim: Awaited<ReturnType<typeof claimImportAttempt>>;
   try {
     await requireImportMayContinue(importFileId);
-    return await processImportFileTextImpl(...args);
+    claim = await claimImportAttempt(importFileId, args[1]?.actorUserId);
   } catch (error) {
-    if (!(error instanceof ImportUserControlError)) {
-      await persistSourceReviewFailure(importFileId, error);
-      throw error;
-    }
-    // Inner recovery handlers may have set a generic failed phase. Restore the
-    // durable user intent once every parser/confirmation frame has unwound.
-    await requireImportMayContinue(importFileId).catch(() => undefined);
+    if (!(error instanceof ImportUserControlError)) throw error;
     return { imported: 0, confirmedTransactionsCount: 0, duplicate: false, requiresInput: true,
       metadata: detectStatementMetadataFromText("", ""), status: error.control === "paused" ? "staged" : "error" };
-  } finally {
-    const writes = importUsageWrites.get(importFileId);
-    if (writes) await Promise.allSettled([...writes]);
-    importUsageWrites.delete(importFileId);
-    await creditFailedImportUsage(importFileId).catch(() => undefined);
   }
+  if (!claim) return { imported: 0, duplicate: false, confirmedTransactionsCount: 0,
+    metadata: detectStatementMetadataFromText("", ""), status: "staged" };
+  let threw = false;
+  return withImportAttempt(claim, async () => {
+    try {
+      return await processImportFileTextImpl(...args);
+    } catch (error) {
+      threw = true;
+      if (error instanceof ImportAttemptLostError) throw error;
+      if (!(error instanceof ImportUserControlError)) {
+        await persistSourceReviewFailure(importFileId, error);
+        throw error;
+      }
+      // Inner recovery handlers may have set a generic failed phase. Restore the
+      // durable user intent once every parser/confirmation frame has unwound.
+      await requireImportMayContinue(importFileId).catch(() => undefined);
+      return { imported: 0, confirmedTransactionsCount: 0, duplicate: false, requiresInput: true,
+        metadata: detectStatementMetadataFromText("", ""), status: error.control === "paused" ? "staged" : "error" };
+    } finally {
+      const writes = importUsageWrites.get(importFileId);
+      if (writes) await Promise.allSettled([...writes]);
+      importUsageWrites.delete(importFileId);
+      await creditFailedImportUsage(importFileId).catch(() => undefined);
+      await finishImportAttempt(claim, threw).catch(error => {
+        console.warn("Unable to finish import attempt measurement", { importFileId, name: error instanceof Error ? error.name : "unknown" });
+      });
+    }
+  });
 };
 
 const normalizeImportMerchant = (transaction: {
@@ -14106,6 +14126,7 @@ async function lockImportForConfirmation(tx: Prisma.TransactionClient, importFil
   // Share the row lock used by pause/cancel: either control wins before commit,
   // or the completed transaction wins and the control endpoint reports saved.
   await tx.$queryRaw`SELECT "id" FROM "ImportFile" WHERE "id" = ${importFileId} FOR UPDATE`;
+  await assertImportAttemptCurrent(importFileId, tx);
   const event = await tx.auditLog.findFirst({
     where: { workspaceId, entityId: importFileId, action: "import.user_control" },
     orderBy: [{ createdAt: "desc" }, { id: "desc" }], select: { metadata: true },
@@ -14131,6 +14152,7 @@ export const confirmImportFile = async (
   accountId?: string | null,
   options?: { allowDeletedAccountRecreation?: boolean; recoverMissingRows?: boolean }
 ): Promise<ConfirmImportResult> => {
+  const result = await (async (): Promise<ConfirmImportResult> => {
   const startedAt = Date.now();
   await requireImportMayContinue(importFileId);
   const importFile = await fetchImportFileCompat(importFileId);
@@ -17355,4 +17377,9 @@ export const confirmImportFile = async (
   });
 
   return confirmationResult;
+  })();
+  await observeImportTransactionAvailability(importFileId).catch(error => {
+    console.warn("Unable to record import availability", { importFileId, name: error instanceof Error ? error.name : "unknown" });
+  });
+  return result;
 };

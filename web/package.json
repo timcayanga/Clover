@@ -185,7 +185,7 @@
     "qa:migrations": "tsx scripts/migration-runner-regression.ts",
     "qa:report-net-worth": "tsx scripts/report-net-worth-regression.ts && tsx scripts/report-filter-policy-regression.ts && tsx scripts/report-currency-regression.ts && tsx scripts/reports-workspace-regression.ts && tsx scripts/report-details-regression.ts && tsx scripts/report-history-regression.ts && tsx --require ./scripts/report-recoveries-fixture.cjs scripts/report-recoveries-api-regression.ts && tsx --require ./scripts/reports-api-fixture.cjs scripts/reports-api-regression.ts && tsx scripts/report-outlook-regression.ts && tsx scripts/fx-rate-regression.ts && tsx --require ./scripts/native-fx-fixture.cjs scripts/native-fx-regression.ts",
     "qa:shared-boundaries": "tsx scripts/shared-boundary-regression.ts",
-    "qa:import-timing": "tsx scripts/import-timing-regression.ts",
+    "qa:import-timing": "tsx scripts/import-timing-regression.ts && tsx scripts/import-client-timing-regression.ts && tsx scripts/import-reliability-regression.ts",
     "qa:transaction-table": "tsx scripts/default-transaction-account-regression.ts && tsx scripts/transaction-table-regression.ts && tsx scripts/receipt-transaction-order-regression.ts",
     "qa:app-font": "tsx scripts/app-font-regression.ts",
     "qa:receipt-detail-refresh": "tsx scripts/transaction-detail-refresh-regression.ts && tsx scripts/transaction-detail-extras-regression.ts && tsx scripts/review-refresh-state-regression.ts && tsx scripts/transaction-review-actions-regression.ts",
@@ -209,7 +209,8 @@
     "qa:contextual-upgrades": "tsx scripts/contextual-upgrades-regression.ts",
     "qa:wallet-motion": "tsx scripts/wallet-motion-regression.ts",
     "qa:learning-verification-response": "tsx scripts/learning-verification-response-regression.ts",
-    "qa:logos": "tsx scripts/investment-logo-matching-regression.ts && tsx scripts/merchant-logo-ui-regression.ts && tsx scripts/transaction-logo-projection-regression.ts"
+    "qa:logos": "tsx scripts/investment-logo-matching-regression.ts && tsx scripts/merchant-logo-ui-regression.ts && tsx scripts/transaction-logo-projection-regression.ts",
+    "report:import-reliability": "tsx scripts/import-reliability-report.ts"
   },
   "dependencies": {
     "@apple/app-store-server-library": "3.1.0",

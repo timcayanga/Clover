@@ -1,9 +1,10 @@
 import { joinReceiptColumnSettlement } from "./receipt-column-settlement";
+import { joinRestaurantBillColumns } from "./restaurant-bill-columns";
 
 /** Rejoin adjacent printed settlement cells without changing numeric tokens.
  * No item counts, invoice references, dates or arbitrary intervening text. */
 export function joinReceiptSettlementLines(source: string): string {
-  const lines = joinReceiptColumnSettlement(source).split(/\r?\n/);
+  const lines = joinReceiptColumnSettlement(joinRestaurantBillColumns(source)).split(/\r?\n/);
   const output: string[] = [];
   const label = /^(?:grand\s+total|bill\s+(?:total|amount)|amount\s+due|total(?:\s+(?:amount|paid|due))?)\s*[:.]?\s*$/i;
   const money = /^(?:(?:PHP|USD|EUR|GBP|SGD|AUD|CAD|MYR|IDR|Rp\.?|₱|P|\$|€|£)\s*)?\d[\d,]*\.\d{2}(?:\s*(?:PHP|USD|EUR|GBP|SGD|AUD|CAD|MYR|IDR))?\s*$/i;
