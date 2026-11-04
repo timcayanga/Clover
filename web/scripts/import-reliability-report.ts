@@ -13,8 +13,8 @@ async function main() {
   let files: ReliabilityFile[];
   try {
     await db.query("BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY");
-    const {rows} = await db.query<{id:string;uploadedAt:Date;availableAt:Date|null;attempts:ReliabilityFile["attempts"]}>(`
-      SELECT f."id", f."uploadedAt",
+    const {rows} = await db.query<{id:string;uploadedAt:Date;status:string;availableAt:Date|null;attempts:ReliabilityFile["attempts"]}>(`
+      SELECT f."id", f."uploadedAt", f."status",
         (SELECT MIN(t."createdAt") FROM "Transaction" t WHERE t."workspaceId"=f."workspaceId"
           AND (t."importFileId"=f."id" OR t."rawPayload"->>'sourceImportFileId'=f."id")) AS "availableAt",
         COALESCE((SELECT jsonb_agg(a."metadata" ORDER BY a."createdAt", a."id") FROM "AuditLog" a
@@ -23,6 +23,7 @@ async function main() {
       ORDER BY f."uploadedAt" LIMIT 20001`,[from,to]);
     if (rows.length>20000) throw new Error("Range exceeds 20,000 uploads; use a smaller interval. No partial report was emitted.");
     files = rows.map(r=>({id:r.id,uploadedAt:r.uploadedAt.toISOString(),hasTransactions:!!r.availableAt,
+      completedWithoutMeasuredAttempt:r.status === "done" && r.attempts.length === 0,
       availableAt:r.attempts.flatMap(a=>a.transactionObservedAt?[a.transactionObservedAt]:[]).sort()[0]??null,attempts:r.attempts}));
     await db.query("ROLLBACK");
   } finally { await db.end(); }

@@ -1,5 +1,5 @@
 export type ReliabilityFile = {
-  id: string; uploadedAt: string; availableAt: string | null; hasTransactions?: boolean;
+  id: string; uploadedAt: string; availableAt: string | null; hasTransactions?: boolean; completedWithoutMeasuredAttempt?: boolean;
   attempts: Array<{ attemptNumber: number; startedAt: string; endedAt?: string;
     leaseExpiresAt: string; outcome: string; historicalAttemptsUnknown?: boolean; transactionObservedAt?: string }>;
 };
@@ -17,11 +17,12 @@ export function summarizeImportReliability(files: ReliabilityFile[], now = new D
   let knownFirstAttempts = 0, firstAttemptSuccesses = 0, repeatedFiles = 0, extraAttempts = 0;
   let firstAttemptTransactionDeliveries = 0;
   let uninstrumentedFiles = 0, legacyFiles = 0, staleRunningAttempts = 0, under10s = 0, eligible10s = 0;
-  let filesWithTransactions = 0, unknownTimingUploads = 0;
+  let filesWithTransactions = 0, unknownTimingUploads = 0, unmeasuredCompletedUploads = 0;
   const availability: number[] = [], nonSuccess: number[] = [];
   for (const file of files) {
     const attempts = [...file.attempts].sort((a,b)=>a.attemptNumber-b.attemptNumber);
     if (!attempts.length) uninstrumentedFiles++;
+    if (!attempts.length && file.completedWithoutMeasuredAttempt) unmeasuredCompletedUploads++;
     if (attempts.length > 1) repeatedFiles++;
     extraAttempts += Math.max(0,attempts.length-1);
     const first = attempts[0];
@@ -44,7 +45,7 @@ export function summarizeImportReliability(files: ReliabilityFile[], now = new D
     // uploads have not yet had their ten-second observation window.
     if (now.getTime()-Date.parse(file.uploadedAt) >= 10_000) {
       eligible10s++;
-      if (file.hasTransactions && latency === null) unknownTimingUploads++;
+      if (latency === null && (file.hasTransactions || (!attempts.length && file.completedWithoutMeasuredAttempt))) unknownTimingUploads++;
       if (latency !== null && latency <= 10_000) under10s++;
     }
   }
@@ -53,7 +54,7 @@ export function summarizeImportReliability(files: ReliabilityFile[], now = new D
     firstAttemptSuccessRate: knownFirstAttempts ? firstAttemptSuccesses/knownFirstAttempts : null,
     firstAttemptTransactionDeliveries,
     firstAttemptTransactionDeliveryRate: knownFirstAttempts ? firstAttemptTransactionDeliveries/knownFirstAttempts : null,
-    firstOutcomes, uninstrumentedFiles, legacyFiles, repeatedFiles, extraAttempts, staleRunningAttempts,
+    firstOutcomes, uninstrumentedFiles, unmeasuredCompletedUploads, legacyFiles, repeatedFiles, extraAttempts, staleRunningAttempts,
     filesWithTransactions, filesWithoutTransactions: files.length-filesWithTransactions,
     filesWithTransactionsWithoutObservedTiming: filesWithTransactions-availability.length,
     availableWithin10Seconds: { successes: under10s, eligibleUploads: eligible10s,

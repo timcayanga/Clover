@@ -23,3 +23,9 @@ const removed=summarizeImportReliability([{...file("removed_after_delivery","tra
 assert.equal(removed.filesWithTransactions,1,"Retained successful delivery is not undone by later financial deletion");
 assert.equal(removed.filesWithTransactionsWithoutObservedTiming,0);
 console.log("Import reliability aggregation passed: failures, retries, missing dispatch, interruptions, legacy exclusions and honest ten-second denominator.");
+
+const reused=summarizeImportReliability([{...file("completed_without_worker"),completedWithoutMeasuredAttempt:true}],new Date(end));
+assert.equal(reused.unmeasuredCompletedUploads,1,"Canonical reuse or a historical completed import without an operation clock is reported separately");
+assert.equal(reused.knownFirstAttempts,0,"No first-attempt history may be invented for a reused result");
+assert.equal(reused.unknownTimingUploads,1);
+assert.equal(reused.availableWithin10Seconds.rate,null,"Unmeasured canonical reuse must not become a false slow/failure timing");
