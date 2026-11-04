@@ -136,7 +136,7 @@
     "qa:header-cta-typography": "tsx scripts/header-cta-typography-regression.ts",
     "qa:navigation-icons": "tsx scripts/navigation-icon-regression.ts",
     "qa:bug-report": "tsx scripts/bug-report-regression.ts",
-    "qa:auth-access": "tsx scripts/social-providers-regression.ts && tsx scripts/auth-access-regression.ts && tsx scripts/staging-qa-access-regression.ts",
+    "qa:auth-access": "node scripts/auth-device-trust-regression.cjs && tsx scripts/social-providers-regression.ts && tsx scripts/auth-access-regression.ts && tsx scripts/staging-qa-access-regression.ts",
     "qa:onboarding": "tsx scripts/onboarding-regression.ts && tsx --tsconfig scripts/tsconfig.qa.json scripts/first-use-activation-regression.tsx",
     "qa:starter-workspace-idempotency": "tsx scripts/starter-workspace-idempotency-regression.ts",
     "qa:new-user-regional-defaults": "tsx scripts/new-user-regional-defaults-regression.ts",

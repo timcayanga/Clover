@@ -7,6 +7,7 @@ import { beginTelemetry, browserContext, getTelemetryHeaders, requestTelemetry, 
 import { OfflineEngine } from "../../mobile/src/offline/engine";
 import { openOfflineStore } from "../../mobile/src/offline/store";
 import { apiRequest, ApiError, NetworkError } from "../../mobile/src/api";
+import { RequestCancelledError } from "../../mobile/src/request-lifecycle";
 import { normalizePlanAnalytics } from "../../shared/plan-analytics";
 async function main() {
 const events: Array<{ event: string; properties: TelemetryProperties }> = [];
@@ -47,9 +48,12 @@ try {
   assert.doesNotMatch(JSON.stringify(events), /Sensitive/);
   events.length = 0;
   const controller = new AbortController(); controller.abort();
-  globalThis.fetch = async () => { throw new Error("network"); };
-  await assert.rejects(apiRequest("token", "reports", {signal:controller.signal}), NetworkError);
+  let canceledFetches = 0;
+  globalThis.fetch = async () => { canceledFetches++; throw new Error("network"); };
+  await assert.rejects(apiRequest("token", "reports", {signal:controller.signal}), error => error instanceof RequestCancelledError && !(error instanceof NetworkError));
+  assert.equal(canceledFetches, 0, "A pre-canceled request must not reach the network");
   assert.equal(events.at(-1)?.event, "data_load_canceled");
+  assert.equal(events.at(-1)?.properties.reason, "user_abort");
   events.length = 0;
   globalThis.fetch = async () => Response.json({ items: [] });
   await apiRequest("token", "reports?from=private");

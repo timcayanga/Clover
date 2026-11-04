@@ -1,0 +1,23 @@
+import assert from 'node:assert/strict';
+import { boundedRequest, BootstrapRequests, RequestCancelledError, RequestTimeoutError } from '../src/request-lifecycle.ts';
+const deferred=()=>{let resolve;return {promise:new Promise(r=>resolve=r),resolve:v=>resolve(v)}};
+const tick=()=>new Promise(r=>setImmediate(r));
+// Native fetch/body may ignore abort: deadlines must settle and clear listeners.
+await assert.rejects(boundedRequest(()=>new Promise(()=>{}),{timeoutMs:5}),RequestTimeoutError);
+const c=new AbortController(); const slow=boundedRequest(()=>new Promise(()=>{}),{timeoutMs:5000,signal:c.signal});
+c.abort(new RequestCancelledError('app_background'));
+await assert.rejects(slow,e=>e instanceof RequestCancelledError && e.reason==='app_background');
+let called=false;const pre=new AbortController();pre.abort();
+await assert.rejects(boundedRequest(async()=>{called=true},{signal:pre.signal,timeoutMs:5000}),RequestCancelledError);assert(!called);
+const requests=new BootstrapRequests(),a=deferred();let reads=0;
+const first=requests.read(signal=>boundedRequest(async()=>{reads++;return a.promise},{signal,timeoutMs:5000}));
+const second=requests.read(()=>assert.fail('Duplicate bootstrap'));assert.equal(first,second);await tick();assert.equal(reads,1);
+requests.cancel('app_background');await assert.rejects(first,RequestCancelledError);
+const b=deferred();const fresh=requests.read(signal=>boundedRequest(()=>b.promise,{signal,timeoutMs:5000}));
+a.resolve('stale');await tick();assert.equal(requests.read(()=>assert.fail('Fresh work must remain in-flight')),fresh);
+b.resolve('new');assert.equal(await fresh,'new');
+assert.equal(await requests.read(async()=> 'next'), 'next','No permanent response cache');
+const failed=requests.read(async()=>{throw Error('offline')});await assert.rejects(failed,/offline/);
+assert.equal(await requests.read(async()=> 'recovered'),'recovered');
+const closed=requests.read(signal=>boundedRequest(()=>new Promise(()=>{}),{signal,timeoutMs:5000}));await tick();requests.cancel('session_closed');await assert.rejects(closed,e=>e.reason==='session_closed');
+console.log('PASS request lifecycle: deadline, ignored abort, pre-abort, shared bootstrap, suspend, stale completion, retry and session close');

@@ -1,3 +1,4 @@
+import { nativeStartup } from "../../src/startup-timing";
 import { FirstUseActivation } from "../../src/first-use-activation";
 import { Modal } from "../../src/adaptive-modal";
 import { AdaptiveGrid } from "../../src/adaptive";
@@ -87,6 +88,12 @@ export default function Home() {
   const [snapshot, setSnapshot] = useState(() => ({ path: basePath, value: readSnapshot() }));
   // Never paint another currency/Profile's balances while the focus effect catches up.
   const data = snapshot.path === basePath ? snapshot.value : readSnapshot();
+  useEffect(() => {
+    const landing = session.data?.preferences?.defaults.defaultLandingPage;
+    if (landing && landing !== "dashboard") nativeStartup.cancel("non_home_destination");
+    else if (data) nativeStartup.visible();
+    else if (error) nativeStartup.failed("home");
+  }, [data, error, session.data?.preferences?.defaults.defaultLandingPage]);
   const setData = useCallback((value: HomeData | null) => setSnapshot({ path: basePath, value }), [basePath]);
   const [currencyOpen, setCurrencyOpen] = useState(false);
   const [currencyOptions, setCurrencyOptions] = useState<string[]>([profileCurrency]);

@@ -8,6 +8,7 @@ export function useSessionRecovery(clerk: RecoveryClerk, loaded: boolean, userId
   const [recovering, setRecovering] = useState(true);
   const mounted = useRef(false);
   const blocked = useRef(false);
+  const authenticating = useRef(false);
   const checkVersion = useRef(0);
   const recoverSession = useCallback(async () => {
     if (blocked.current) return false;
@@ -24,12 +25,12 @@ export function useSessionRecovery(clerk: RecoveryClerk, loaded: boolean, userId
   useEffect(() => {
     if (!loaded) return;
     if (latest.current.userId) setRecovering(false);
-    else void recoverSession();
+    else if (!authenticating.current) void recoverSession();
     let previous = AppState.currentState;
     const listener = AppState.addEventListener('change', state => {
       const resumed = state === 'active' && previous !== 'active';
       previous = state;
-      if (resumed && !latest.current.userId) void recoverSession();
+      if (resumed && !latest.current.userId && !authenticating.current) void recoverSession();
     });
     return () => listener.remove();
   }, [loaded, recoverSession]);
@@ -41,5 +42,11 @@ export function useSessionRecovery(clerk: RecoveryClerk, loaded: boolean, userId
     try { await signOut(); }
     finally { blocked.current = false; }
   }, [controller]);
-  return { recovering, recoverSession, duringSignOut };
+  const duringAuthentication = useCallback(async <T,>(action: () => Promise<T>): Promise<T> => {
+    authenticating.current = true;
+    checkVersion.current++; controller.cancel(); setRecovering(false);
+    try { return await action(); }
+    finally { authenticating.current = false; }
+  }, [controller]);
+  return { recovering, recoverSession, duringSignOut, duringAuthentication };
 }

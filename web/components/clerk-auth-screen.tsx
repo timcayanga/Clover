@@ -1,5 +1,7 @@
 "use client";
 
+import { needsSignInVerification } from "../../shared/auth-failure";
+
 import Link from "next/link";
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
@@ -335,7 +337,7 @@ function ClerkAuthScreenInner({ mode, completeRedirectUrl }: { mode: "sign-in" |
         return;
       }
 
-      if (response.status === "needs_second_factor") {
+      if (needsSignInVerification(response.status)) {
         const factors = response.supportedSecondFactors ?? [];
         const factor =
           factors.find((candidate) => candidate.strategy === "totp") ??

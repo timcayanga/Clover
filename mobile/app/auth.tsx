@@ -1,3 +1,4 @@
+import { authFailure, needsSignInVerification } from "../../shared/auth-failure";
 import { beginTelemetry } from "../../shared/analytics";
 import { useEffect, useState, useRef } from "react";
 import { ActivityIndicator, Alert, Image, Platform, Pressable, Switch, View } from "react-native";
@@ -37,7 +38,7 @@ export default function Authentication() {
   );
 }
 function AuthForm() {
-  const { active, welcomeAllowed, beginAuthEntry, recoverSession } = useAccess();
+  const { active, welcomeAllowed, beginAuthEntry, recoverSession, duringAuthentication } = useAccess();
   const session = useSession();
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
@@ -70,22 +71,26 @@ function AuthForm() {
     const { error } = await result;
     if (error) throw error;
   };
-  const run = async (action: () => Promise<void>) => {
+  const run = async (action: () => Promise<void>, method = step === "sign-in" || step === "sign-up" ? "password" : "verification") => {
     if (pending.current || active) return;
     pending.current = true;
     setBusy(true);
     setError("");
     setMessage("");
-    const finish = beginTelemetry("flow", { operation: `auth_${step}`, phase: "authentication_step" });
+    const finish = beginTelemetry("flow", { operation: `auth_${step}`, phase: "authentication_step", method });
     try {
-      await action();
+      await duringAuthentication(action);
       finish("completed");
     } catch (e) {
       if (alreadySignedIn(e) && await recoverSession()) {
         finish("completed");
         return;
       }
-      finish("failed", { reason: "authentication_error" });
+      const failure = authFailure(e);
+      finish(failure.reason === "user_canceled" ? "canceled" : "failed", {
+        ...failure, reason: alreadySignedIn(e) ? "session_recovery_failed" : failure.reason,
+      });
+      if (failure.reason === "user_canceled") return;
       const problem = e as {
         message?: string;
         errors?: { longMessage?: string; message?: string }[];
@@ -104,7 +109,7 @@ function AuthForm() {
   };
   const finishSignIn = async () => {
     if (signIn.status === "complete") await check(signIn.finalize());
-    else if ((signIn.status === "needs_client_trust" || signIn.status === "needs_second_factor") && signIn.supportedSecondFactors?.some(factor => factor.strategy === "email_code")) {
+    else if (needsSignInVerification(signIn.status) && signIn.supportedSecondFactors?.some(factor => factor.strategy === "email_code")) {
       await check(signIn.mfa.sendEmailCode());
       setCode("");
       setStep("email-verification");
@@ -385,12 +390,12 @@ function AuthForm() {
           {initial ? (
             <>
               {Platform.OS === "ios" ? <Button title="Sign in with Apple" fullWidth secondary leading={<Ionicons name="logo-apple" size={20} color={colors.ink} />} disabled={busy} onPress={() => void run(async () => {
-                if (!(await confirmSocialTerms())) return;
+                if (!(await confirmSocialTerms())) throw { code: "ERR_REQUEST_CANCELED" };
                 await setRememberSession(remember);
                 const result = await startAppleAuthenticationFlow();
                 if (result.createdSessionId && result.setActive) await result.setActive({ session: result.createdSessionId });
                 else if (result.signIn?.status === "needs_second_factor" || result.signUp?.status === "missing_requirements") { setVerificationSignup(result.signUp?.status === "missing_requirements"); setStep("extra-verification"); setMessage("Complete your account verification to continue."); }
-              })} /> : null}
+              }, "apple")} /> : null}
               {(["google"] as const).map((provider) => (
                 <Button
                   key={provider}
@@ -401,23 +406,21 @@ function AuthForm() {
                   disabled={busy}
                   onPress={() =>
                     void run(async () => {
-                      if (!(await confirmSocialTerms())) return;
+                      if (!(await confirmSocialTerms())) throw { code: "ERR_REQUEST_CANCELED" };
                       await setRememberSession(remember);
                       const result = await startSSOFlow({
                         strategy: `oauth_${provider}`,
                       });
-                      if (
-                        !result.createdSessionId &&
-                        result.authSessionResult?.type !== "cancel" &&
-                        result.authSessionResult?.type !== "dismiss"
-                      ) {
+                      if (result.authSessionResult?.type === "cancel" || result.authSessionResult?.type === "dismiss")
+                        throw { code: "ERR_REQUEST_CANCELED" };
+                      if (!result.createdSessionId && !result.signIn?.existingSession) {
                         setVerificationSignup(result.signUp?.status === "missing_requirements");
                         setStep("extra-verification");
                         setMessage(
                           "Complete your account verification to continue.",
                         );
                       }
-                    })
+                    }, "google")
                   }
                 />
               ))}

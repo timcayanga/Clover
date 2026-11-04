@@ -200,45 +200,12 @@ export class OfflineEngine {
       try {
         const result = await this.transport<T>(path, options);
         if (!this.active) throw new Error("This session is closed.");
-        if (route === "bootstrap") {
-          const previous =
-            await this.store.get<CacheEntry<Bootstrap>>("cache:bootstrap");
-          if (
-            previous &&
-            (previous.value.offlineEpoch ?? null) !==
-              ((result as Bootstrap).offlineEpoch ?? null)
-          ) {
-            for (const prefix of [
-              "cache:",
-              "mutation:",
-              "receipt:",
-              "file:",
-              "file-bytes:",
-            ])
-              for (const key of await this.store.keys(prefix))
-                await this.store.remove(key);
-          }
-        }
-        if (cacheable.test(path))
+        if (route === "bootstrap") await this.acceptBootstrap(result as Bootstrap);
+        if (route !== "bootstrap" && cacheable.test(path))
           await this.store.set("cache:" + pathKey(path), {
             value: result,
             savedAt: this.now(),
           });
-        if (route === "bootstrap") {
-          const profiles = (result as Bootstrap).profiles.map((p) => p.id);
-          for (const key of await this.store.keys("cache:")) {
-            const id = workspace(key.slice(6));
-            if (id && !profiles.includes(id)) await this.store.remove(key);
-          }
-          for (const item of await this.pending())
-            if (!profiles.includes(item.workspaceId)) {
-              item.state = "blocked";
-              item.error =
-                "Access to this Profile was removed. This edit will not sync.";
-              await this.store.set("mutation:" + item.id, item);
-            }
-          await this.refreshCount();
-        }
         this.status.lastSync = this.now();
         await this.store.set("last-sync", this.status.lastSync);
         this.status.error = "";
@@ -267,6 +234,30 @@ export class OfflineEngine {
         "This page has not been downloaded yet. Connect once to load it.",
       );
     return this.overlay(path, cached.value);
+  }
+  /** Persist only a fresh authenticated response; offline reads must never extend access. */
+  async acceptBootstrap(result: Bootstrap) {
+    if (!this.active) return;
+    const previous = await this.store.get<CacheEntry<Bootstrap>>("cache:bootstrap");
+    if (previous && (previous.value.offlineEpoch ?? null) !== (result.offlineEpoch ?? null)) {
+      for (const prefix of ["cache:", "mutation:", "receipt:", "file:", "file-bytes:"])
+        for (const key of await this.store.keys(prefix)) await this.store.remove(key);
+    }
+    if (!this.active) return;
+    await this.store.set("cache:bootstrap", { value: result, savedAt: this.now() });
+    const profiles = result.profiles.map(p => p.id);
+    for (const key of await this.store.keys("cache:")) {
+      const id = workspace(key.slice(6));
+      if (id && !profiles.includes(id)) await this.store.remove(key);
+    }
+    for (const item of await this.pending()) {
+      if (!profiles.includes(item.workspaceId)) {
+        item.state = "blocked";
+        item.error = "Access to this Profile was removed. This edit will not sync.";
+        await this.store.set("mutation:" + item.id, item);
+      }
+    }
+    await this.refreshCount();
   }
   private async overlay<T>(path: string, value: T): Promise<T> {
     if (!path.startsWith("transactions")) return value;

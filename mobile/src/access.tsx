@@ -4,6 +4,7 @@ export type Access = {
   configured: boolean;
   loaded: boolean;
   recovering: boolean;
+  duringAuthentication: <T>(action: () => Promise<T>) => Promise<T>;
   recoverSession: () => Promise<boolean>;
   welcomeAllowed: boolean;
   authEntry: "sign-in" | "sign-up" | null;
@@ -20,6 +21,7 @@ export const AccessContext = createContext<Access>({
   configured: false,
   loaded: true,
   recovering: false,
+  duringAuthentication: action => action(),
   recoverSession: async () => false,
   welcomeAllowed: false,
   authEntry: null,

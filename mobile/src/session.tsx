@@ -1,3 +1,4 @@
+import { BootstrapRequests, RequestCancelledError, RequestTimeoutError, boundedRequest } from "./request-lifecycle";
 import type { ReceiptCaptureLocation } from "../../shared/receipt-capture-location";
 import { OnboardingPersistence } from "./onboarding-persistence";
 import { nativeImportIsComplete, needsNativeImportResume } from "../../shared/native-import-status";
@@ -16,7 +17,7 @@ import {
 import NetInfo from "@react-native-community/netinfo";
 import * as Crypto from "expo-crypto";
 import { Alert, Platform } from "react-native";
-import { apiBase, ApiError } from "./api";
+import { apiBase, ApiError, NetworkError } from "./api";
 import { OfflineEngine } from "./offline/engine";
 import { openOfflineStore } from "./offline/store";
 import type { CacheEntry } from "./offline/types";
@@ -80,7 +81,7 @@ export function SessionProvider({
   children: ReactNode;
   userId?: string | null;
   demo: boolean;
-  getToken: () => Promise<string | null>;
+  getToken: (options?: { skipCache?: boolean }) => Promise<string | null>;
   signOut: () => Promise<void>;
 }) {
   const [data, setData] = useState<Bootstrap | null>(
@@ -92,6 +93,9 @@ export function SessionProvider({
   const pageCache = useRef(new PageCache());
   const cached = useCallback(<T,>(path: string) => /^home\?/.test(path) ? pageCache.current.home<T>(path) : pageCache.current.peek<T>(path), []);
   const preferredProfile = useRef("");
+  const verifiedBootstrap = useRef<Bootstrap | null>(null);
+  const bootstrapDenied = useRef(false);
+  const manuallySelectedProfile = useRef(false);
   const [error, setError] = useState("");
   const [rows, setRows] = useState(sampleTransactions);
   const [revision, setRevision] = useState(0);
@@ -120,18 +124,32 @@ export function SessionProvider({
   const offlineReady = useRef<Promise<OfflineEngine | null>>(
     Promise.resolve(null),
   );
+  const [bootstrapRequests] = useState(() => new BootstrapRequests());
   const setupQueue = useRef<OnboardingPersistence | null>(null);
   const setupProfileRevision = useRef(0);
   const setupProfileResolved = useRef(false);
   const transport = useCallback(
     async <T,>(path: string, options?: RequestInit) => {
       if (demo) throw new Error("Sample mode never connects to your account.");
-      const token = await tokenRef.current();
-      if (!token)
-        throw new ApiError("Your session expired. Please sign in again.", 401);
-      return apiRequest<T>(token, path, options);
+      const load = async (signal?: AbortSignal) => {
+        const token = async (fresh = false) => {
+          try { return await boundedRequest(() => tokenRef.current(fresh ? { skipCache: true } : undefined), { signal, timeoutMs: 8000 }); }
+          catch (error) { if (error instanceof RequestTimeoutError) throw new NetworkError("Clover could not verify your session yet. Check your connection and try again."); throw error; }
+        };
+        let value = await token();
+        if (!value) throw new ApiError("Your session expired. Please sign in again.", 401);
+        try { return await apiRequest<T>(value, path, { ...options, ...(signal ? { signal } : {}) }); }
+        catch (error) {
+          // Refresh only a rejected read, once. Never replay a financial mutation.
+          if (!(error instanceof ApiError) || error.status !== 401 || (options?.method ?? "GET").toUpperCase() !== "GET") throw error;
+          value = await token(true);
+          if (!value) throw error;
+          return apiRequest<T>(value, path, { ...options, ...(signal ? { signal } : {}) });
+        }
+      };
+      return path === "bootstrap" && !options?.signal ? bootstrapRequests.read(load) : load(options?.signal ?? undefined);
     },
-    [demo],
+    [demo, bootstrapRequests],
   );
   useEffect(() => {
     if (demo || !userId || Platform.OS === "web") return;
@@ -161,17 +179,23 @@ export function SessionProvider({
         await setupQueue.current.init();
         preferredProfile.current = await store.get<string>("selected-profile") ?? "";
         const cached = await store.get<CacheEntry<Bootstrap>>("cache:bootstrap");
-        if (active && cached) {
+        if (active && verifiedBootstrap.current && !manuallySelectedProfile.current) {
+          setProfile(selectRecentProfile(verifiedBootstrap.current.profiles, preferredProfile.current, ""));
+        }
+        if (active && cached && !verifiedBootstrap.current && !bootstrapDenied.current) {
           try {
             await engine.assertLocalAccess();
             if (active) {
               const selected = selectRecentProfile(cached.value.profiles, "", preferredProfile.current);
-              for (const entry of await engine.presentationCache(selected)) {
+              const entries = await engine.presentationCache(selected);
+              if (!verifiedBootstrap.current) for (const entry of entries) {
                 if (isPageRead(entry.path)) pageCache.current.seed(entry.path, entry.value, entry.savedAt);
               }
               if (!active) { await engine.dispose(); return null; }
-              setProfile(selected);
-              setData(setupQueue.current?.pending ? { ...cached.value, needsOnboarding: false, defaultCurrency: setupQueue.current?.pending.currency } : cached.value);
+              if (!bootstrapDenied.current) {
+                setProfile(previous => previous || selected);
+                setData(previous => previous ?? (setupQueue.current?.pending ? { ...cached.value, needsOnboarding: false, defaultCurrency: setupQueue.current?.pending.currency } : cached.value));
+              }
             }
           } catch { /* Expired access waits for fresh authenticated bootstrap. */ }
         }
@@ -326,15 +350,38 @@ export function SessionProvider({
     return () => clearInterval(timer);
   }, [demo, flushSetup]);
   useEffect(() => {
-    if (demo) return;
+    if (demo || !userId) return;
     let current = true;
     const setupRevision = setupProfileRevision.current;
     setError("");
-    request<Bootstrap>("bootstrap")
+    // Start network verification alongside secure storage, not after every cached page is read.
+    let verified = false;
+    transport<Bootstrap>("bootstrap").then(result => { verified = true; return result; })
+      .catch(async error => {
+        if (error instanceof ApiError && (error.status === 401 || error.status === 403)) {
+          bootstrapDenied.current = true;
+          verifiedBootstrap.current = null;
+          pageCache.current.clear();
+          if (current) { setData(null); setProfile(""); }
+          void offlineReady.current.then(engine => engine?.store.remove("cache:bootstrap")).catch(() => {});
+        }
+        if (!(error instanceof NetworkError) || bootstrapDenied.current) throw error;
+        const engine = await offlineReady.current;
+        if (!engine) throw error;
+        await engine.assertLocalAccess();
+        const cached = await engine.store.get<CacheEntry<Bootstrap>>("cache:bootstrap");
+        if (!cached) throw error;
+        return cached.value;
+      })
       .then((result) => {
         // A bootstrap requested before setup completed must not replace the
         // newly authorized starter Profile with its older empty list.
         if (!current || setupRevision !== setupProfileRevision.current) return;
+        if (verified) {
+          bootstrapDenied.current = false;
+          verifiedBootstrap.current = result;
+          void offlineReady.current.then(engine => engine?.acceptBootstrap(result)).catch(() => {});
+        }
         if (result.profiles.length) setupProfileResolved.current = true;
         setData(previous => {
           if (previous && (previous.offlineEpoch !== result.offlineEpoch ||
@@ -349,15 +396,18 @@ export function SessionProvider({
         );
       })
       .catch((e: Error) => {
-        if (current && setupRevision === setupProfileRevision.current) setError(e.message);
+        if (current && !(e instanceof RequestCancelledError) && setupRevision === setupProfileRevision.current) setError(e.message);
       });
     return () => {
       current = false;
     };
-  }, [demo, request, revision]);
+  }, [demo, userId, transport, request, revision]);
   useEffect(() => {
     const subscription = AppState.addEventListener("change", (state) => {
+      if (state === "background") bootstrapRequests.cancel("app_background");
       if (state === "active") {
+        // Start current-session revalidation immediately, independent of reachability probes.
+        setRevision((n) => n + 1);
         void offlineReady.current.then(async (engine) => {
           // Recheck Clover reachability when returning from background.
           const connection = await NetInfo.fetch();
@@ -365,13 +415,12 @@ export function SessionProvider({
             connection.isConnected !== false &&
               connection.isInternetReachable !== false,
           );
-          setRevision((n) => n + 1);
           if (engine?.status.online) await fileQueueRef.current?.flush();
         }).catch(() => {});
       }
     });
-    return () => subscription.remove();
-  }, []);
+    return () => { subscription.remove(); bootstrapRequests.cancel("session_closed"); };
+  }, [bootstrapRequests]);
   return (
     <Context.Provider
       value={{
@@ -405,6 +454,7 @@ export function SessionProvider({
         },
         setProfileId: (id) => {
           if (data?.profiles.some((p) => p.id === id)) {
+            manuallySelectedProfile.current = true;
             preferredProfile.current = id;
             setProfile(id);
             void offlineReady.current.then(engine => engine?.store.set("selected-profile", id)).catch(() => {});
@@ -489,6 +539,7 @@ export function SessionProvider({
             );
             if (!confirmed) return;
           }
+          bootstrapRequests.cancel("session_closed");
           pageCache.current.clear();
           await fileQueue?.close();
           await offline?.clear();

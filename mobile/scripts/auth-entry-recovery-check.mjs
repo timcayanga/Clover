@@ -16,8 +16,9 @@ function harness(active, fails = false, bootstrapError = active, mode = "sign-in
     if (name === '@clerk/expo') return { useSignIn: () => ({ signIn: { password: async () => ({error:{errors:[{code:'session_exists',message:'Already signed in'}]}}) } }), useSignUp: () => ({ signUp: {} }) };
     if (name === '@clerk/expo/apple') return { useSignInWithApple: () => ({}) };
     if (name === '@clerk/expo/experimental') return { useSSO: () => ({}) };
-    if (name === '../src/access') return { useAccess: () => ({ active, welcomeAllowed: !active, beginAuthEntry() {}, recoverSession: async () => { calls.push('recover'); return recovery; } }) };
+    if (name === '../src/access') return { useAccess: () => ({ active, welcomeAllowed: !active, beginAuthEntry() {}, duringAuthentication: action => action(), recoverSession: async () => { calls.push('recover'); return recovery; } }) };
     if (name === '../src/session-recovery') return {alreadySignedIn: error => error?.errors?.[0]?.code === 'session_exists'};
+    if (name === '../../shared/auth-failure') return {authFailure: () => ({reason:'authentication_error',status:0}), needsSignInVerification: status => ['needs_second_factor','needs_client_trust'].includes(status)};
     if (name === '../../shared/analytics') return {beginTelemetry: () => () => {}};
     if (name === '../src/auth-token-cache') return {setRememberSession: async () => {}};
     if (name === '../src/session') return { useSession: () => session };

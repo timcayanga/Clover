@@ -1,3 +1,5 @@
+import { nativeStartup } from "../src/startup-timing";
+import { boundedRequest } from "../src/request-lifecycle";
 import { PageAskProvider } from "../src/page-ask-provider";
 import { WindowPane, WindowPaneProvider } from "../src/window-pane";
 import { AccessibilityPreferences, useAccessibilityPreferences } from "../src/accessibility-preferences";
@@ -11,7 +13,7 @@ import { Text } from "../src/app-text";
 import { resourceCache } from "@clerk/expo/resource-cache";
 import { disconnectStoreAccount } from "../src/store-billing";
 import { DisplayPreferences } from "../src/display-preferences";
-import { ClerkProvider, useAuth, useClerk } from "@clerk/expo";
+import { ClerkProvider, getClerkInstance, useAuth, useClerk } from "@clerk/expo";
 import * as SecureStore from "expo-secure-store";
 import { hasVisitedClover, rememberCloverVisit, launchDestination, nativeEntryAccess, type LaunchStorage } from "../src/launch-history";
 import { authTokenCache } from "../src/auth-token-cache";
@@ -30,6 +32,7 @@ import { ImportActivity } from "../src/import-activity";
 import { useTheme, AppHeader, Button, Notice } from "../src/ui";
 
 void SplashScreen.preventAutoHideAsync().catch(() => {});
+nativeStartup.start("cold");
 
 function PrivacyShield({ children }: { children: ReactNode }) {
   const { colors, styles, dark } = useTheme();
@@ -76,11 +79,19 @@ function Routes() {
   const publicPaymentRequest = path === "/payment-request";
   const entry = nativeEntryAccess(active, session.data?.needsOnboarding, authEntry, accountDeleted);
   const landed = useRef(false);
+  const [startupSlow, setStartupSlow] = useState(false);
+  useEffect(() => { if (session.error) nativeStartup.failed("bootstrap"); }, [session.error]);
+  useEffect(() => {
+    setStartupSlow(false);
+    if (!entry.coldStart) return;
+    const timer = setTimeout(() => setStartupSlow(true), 8000);
+    return () => clearTimeout(timer);
+  }, [entry.coldStart]);
   useEffect(() => {
     // Cold restored sessions stay under the native launch image until bootstrap.
     // New signups can choose onboarding preferences while bootstrap finishes.
-    if (publicPaymentRequest || !entry.coldStart || session.error) void SplashScreen.hideAsync().catch(() => {});
-  }, [entry.coldStart, session.error, publicPaymentRequest]);
+    if (publicPaymentRequest || !entry.coldStart || session.error || startupSlow) void SplashScreen.hideAsync().catch(() => {});
+  }, [entry.coldStart, session.error, startupSlow, publicPaymentRequest]);
   useEffect(() => {
     if (!active) {
       landed.current = false;
@@ -90,11 +101,12 @@ function Routes() {
     landed.current = true;
     if (!["/", "/welcome", "/auth"].includes(path)) return;
     const page = session.data.preferences?.defaults.defaultLandingPage;
+    if (page && page !== "dashboard") nativeStartup.cancel("non_home_destination");
     if (page === "transactions") router.replace("/(tabs)/transactions");
     else if (page === "reports") router.replace("/reports");
     else if (page === "accounts") router.replace("/(tabs)/accounts");
   }, [active, session.data, path]);
-  if (entry.coldStart && !publicPaymentRequest) return session.error ? <View style={{ flex: 1, justifyContent: "center", padding: 24, gap: 16 }}><Notice>{session.error}</Notice><Button title="Try again" onPress={session.refresh} /><Button title="Sign out" secondary onPress={() => void session.signOut()} /></View> : null;
+  if (entry.coldStart && !publicPaymentRequest) return session.error || startupSlow ? <View style={{ flex: 1, justifyContent: "center", padding: 24, gap: 16 }}><Notice>{session.error || "Clover is taking longer to connect. Check your connection or try again."}</Notice><Button title="Try again" onPress={() => { nativeStartup.start("retry"); session.refresh(); }} /><Button title="Sign out" secondary onPress={() => void session.signOut()} /></View> : null;
   return (
     <RouteReveal><PrivacyShield>
       <GlassNavigationProvider>
@@ -202,6 +214,7 @@ function AppSession({
   userId,
   getToken = noToken,
   recovering = false,
+  duringAuthentication = async action => action(),
   recoverSession = async () => false,
   login,
   logout,
@@ -209,9 +222,10 @@ function AppSession({
   configured: boolean;
   loaded: boolean;
   recovering?: boolean;
+  duringAuthentication?: <T>(action: () => Promise<T>) => Promise<T>;
   recoverSession?: () => Promise<boolean>;
   userId?: string | null;
-  getToken?: () => Promise<string | null>;
+  getToken?: (options?: { skipCache?: boolean }) => Promise<string | null>;
   login: (mode?: "sign-in" | "sign-up") => Promise<void>;
   logout: () => Promise<void>;
 }) {
@@ -225,6 +239,12 @@ function AppSession({
   const [accountDeleted, setAccountDeleted] = useState(false);
   const active = demo || Boolean(userId);
   const [visited, setVisited] = useState<boolean | null>(null);
+  const previouslyActive = useRef(active);
+  useEffect(() => {
+    if (active && !previouslyActive.current) nativeStartup.start("sign_in");
+    if (loaded && !active && !recovering) nativeStartup.cancel("signed_out_entry");
+    previouslyActive.current = active;
+  }, [active, loaded, recovering]);
   useEffect(() => {
     let mounted = true;
     void hasVisitedClover(launchStorage).then(value => { if (mounted) setVisited(value); });
@@ -244,6 +264,7 @@ function AppSession({
         configured,
         loaded,
         recovering,
+        duringAuthentication,
         recoverSession,
         welcomeAllowed: !active,
         authEntry,
@@ -286,14 +307,33 @@ function AuthenticatedApp() {
   const { isLoaded, userId, getToken, signOut } = useAuth();
   const clerk = useClerk();
   const recovery = useSessionRecovery(clerk, isLoaded, userId);
+  const { colors } = useTheme();
+  const [authSlow, setAuthSlow] = useState(false);
+  const [retryingAuth, setRetryingAuth] = useState(false);
+  useEffect(() => {
+    if (isLoaded) { setAuthSlow(false); return; }
+    const timer = setTimeout(() => {
+      setAuthSlow(true);
+      void SplashScreen.hideAsync().catch(() => {});
+    }, 8000);
+    return () => clearTimeout(timer);
+  }, [isLoaded]);
   useEffect(() => {
     if (isLoaded) identifyNativeAnalytics(userId ?? null);
   }, [isLoaded, userId]);
+  if (!isLoaded && authSlow) return <SafeAreaView style={{ flex: 1, backgroundColor: colors.bg, justifyContent: "center", padding: 24, gap: 16 }}>
+    <Notice>Clover could not finish connecting to secure sign-in. Check your connection and try again.</Notice>
+    <Button title="Try again" disabled={retryingAuth} onPress={() => {
+      setRetryingAuth(true);
+      void boundedRequest(() => getClerkInstance().load(), { timeoutMs: 8000 }).catch(() => {}).finally(() => setRetryingAuth(false));
+    }} />
+  </SafeAreaView>;
   return (
     <AppSession
       configured
       loaded={isLoaded}
       recovering={recovery.recovering}
+      duringAuthentication={recovery.duringAuthentication}
       recoverSession={recovery.recoverSession}
       userId={userId}
       getToken={getToken}
@@ -309,6 +349,13 @@ function AuthenticatedApp() {
   );
 }
 export default function RootLayout() {
+  useEffect(() => {
+    const listener = AppState.addEventListener("change", state => {
+      if (state === "background") nativeStartup.cancel("app_background");
+      if (state === "active") nativeStartup.foreground();
+    });
+    return () => listener.remove();
+  }, []);
   const [fontsLoaded, fontError] = useFonts({
     "Poppins-Bold": require("../assets/fonts/Poppins-Bold.ttf"),
     "Poppins-Medium": require("../assets/fonts/Poppins-Medium.ttf"),

@@ -1,0 +1,15 @@
+import assert from 'node:assert/strict';import fs from 'node:fs';import vm from 'node:vm';import ts from 'typescript';
+const compile=file=>ts.transpileModule(fs.readFileSync(new URL(file,import.meta.url),'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText;
+const recovery={};vm.runInNewContext(compile('../src/session-recovery.ts'),{exports:recovery,setTimeout,clearTimeout});
+const slots=[],effects=[],listeners=new Set();let index=0,reads=0,activations=0,user=null,finish;
+const clerk={client:{sessions:[],lastActiveSessionId:null,isNew:()=>false,reload:async()=>{reads++}},setActive:async()=>{activations++}};
+const hook={useRef:value=>{const i=index++;return slots[i]??(slots[i]={current:value})},useState:value=>{const i=index++;if(!(i in slots))slots[i]=typeof value==='function'?value():value;return [slots[i],v=>slots[i]=v]},useCallback:(fn,deps)=>{const i=index++;return slots[i]??(slots[i]=fn)},useEffect:(fn,deps)=>{const i=index++,old=slots[i];if(!old||deps.some((v,j)=>v!==old.deps[j]))effects.push(()=>{old?.cleanup?.();slots[i]={deps,cleanup:fn()}})}};
+const exports={};vm.runInNewContext(compile('../src/use-session-recovery.ts'),{exports,require:name=>name==='react'?hook:name==='./session-recovery'?recovery:{AppState:{currentState:'active',addEventListener:(_,fn)=>{listeners.add(fn);return {remove:()=>listeners.delete(fn)}}}}});
+const render=()=>{index=0;const value=exports.useSessionRecovery(clerk,true,user);while(effects.length)effects.shift()();return value};const tick=()=>new Promise(r=>setImmediate(r));const state=s=>listeners.forEach(fn=>fn(s));
+let value=render();await tick();const before=reads;
+const pending=value.duringAuthentication(()=>new Promise(r=>finish=r));state('background');state('active');await tick();assert.equal(reads,before,'Foreground must not reload and replace an unfinished auth resource');finish();await pending;
+state('background');state('active');await tick();assert.equal(reads,before+1,'Interrupted attempt is recoverable after provider work finishes');
+await assert.rejects(value.duringAuthentication(async()=>{throw Error('Canceled')}),/Canceled/);state('background');state('active');await tick();assert.equal(reads,before+2,'Canceled OAuth releases suppression');
+user='verified';value=render();const signedInReads=reads;state('background');state('active');await tick();assert.equal(reads,signedInReads);assert.equal(activations,0);
+for(const slot of slots)slot?.cleanup?.();
+console.log('PASS actual recovery hook: in-flight provider work survives resume, cancellation releases guard, signed-in resume never creates another login');
