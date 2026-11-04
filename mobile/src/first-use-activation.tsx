@@ -9,6 +9,7 @@ import { Body, Button, Card, Heading, money } from "./ui";
 export function FirstUseActivation({ hidden = false }: { hidden?: boolean }) {
   const session = useSession();
   const [snapshot, setSnapshot] = useState<Snapshot | null>(null);
+  const [dismissError, setDismissError] = useState("");
   const [acknowledgedId, setAcknowledgedId] = useState<string | null>(null);
   useFocusEffect(useCallback(() => {
     let active = true;
@@ -45,9 +46,10 @@ export function FirstUseActivation({ hidden = false }: { hidden?: boolean }) {
       <View style={{ gap: 10 }}><Button title="View your transaction" onPress={() => router.push({ pathname: "/transaction/[id]", params: { id: transaction.id } })} />
         <Button secondary title="Got it" onPress={() => {
           const profile = session.profileId;
-          void session.request(`activation?workspaceId=${encodeURIComponent(profile)}`, { method: "POST", body: JSON.stringify({ action: "acknowledge", transactionId: transaction.id }) }).then(() => setAcknowledgedId(transaction.id)).catch(() => {});
+          void session.request(`activation?workspaceId=${encodeURIComponent(profile)}`, { method: "POST", body: JSON.stringify({ action: "acknowledge", transactionId: transaction.id }) }).then(() => setAcknowledgedId(transaction.id)).catch(() => setDismissError("Could not dismiss this yet. Please try again."));
         }} /></View>
       <Body>Home and Reports use the transaction date, so an older receipt appears in its original period.</Body>
     </> : null}
+    {dismissError ? <View accessibilityLiveRegion="polite"><Body>{dismissError}</Body></View> : null}
   </Card>;
 }

@@ -5,9 +5,9 @@ import ts from 'typescript';
 const compile = file => ts.transpileModule(fs.readFileSync(new URL(file, import.meta.url), 'utf8'), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, jsx: ts.JsxEmit.ReactJSX } }).outputText;
 const loaders = {}; vm.runInNewContext(compile('../src/screen-refresh.ts'), { exports: loaders, Map, Set, Promise });
 const states = [], routes = [], requests = []; let stateIndex = 0, focus, cleanup;
-let payload = { state: 'start', workspaceId: 'profile-a' }, delayed = null;
+let payload = { state: 'start', workspaceId: 'profile-a' }, delayed = null, failAck = false;
 const session = { demo: false, profileId: 'profile-a', request: async (path, options) => {
-  requests.push({ path, options }); if (options) return {};
+  requests.push({ path, options }); if (options) { if (failAck && JSON.parse(options.body).action === "acknowledge") throw Error("Temporary failure"); return {}; }
   if (delayed) return new Promise(resolve => delayed.push(resolve));
   return { activation: payload };
 } };
@@ -37,6 +37,9 @@ assert(nodes.some(node => node.props.children === 'Your first transaction is in 
 assert(requests.some(request => request.options && JSON.parse(request.options.body).action === 'view'));
 nodes.find(node => node.props.title === 'View your transaction').props.onPress(); assert.equal(routes[1].params.id, 'saved-row');
 assert(!JSON.stringify(render(true)).includes('PHP 120'), 'Home privacy also masks the first result');
+failAck = true; nodes.find(node => node.props.title === 'Got it').props.onPress(); await tick();
+assert(JSON.stringify(render()).includes('Could not dismiss this yet'), 'A failed acknowledgement explains why nothing changed');
+failAck = false; render().find(node => node.props.title === 'Got it').props.onPress(); await tick(); assert.equal(render().length, 0);
 // A delayed read from the previous Profile cannot replace the new Profile state.
 delayed = []; const oldRefresh = loaders.refreshScreen('/'); await tick(); cleanup(); session.profileId = 'profile-b'; render(); delayed[0]({ activation: payload }); delayed = null;
 payload = { state: 'start', workspaceId: 'profile-b' }; cleanup = focus(); await oldRefresh; await tick();

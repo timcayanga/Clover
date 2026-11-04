@@ -8,6 +8,7 @@ import { capturePostHogClientEvent } from "@/components/posthog-analytics";
 
 export function FirstUseActivation({ workspaceId, resultOnly = false }: { workspaceId: string; resultOnly?: boolean }) {
   const [snapshot, setSnapshot] = useState<Snapshot | null>(null);
+  const [dismissError, setDismissError] = useState("");
   const [acknowledgedId, setAcknowledgedId] = useState<string | null>(null);
   useEffect(() => {
     let active = true;
@@ -40,11 +41,12 @@ export function FirstUseActivation({ workspaceId, resultOnly = false }: { worksp
     capturePostHogClientEvent("activation_prompt_viewed", { workspace_id: workspaceId, activation_state: state, surface: "home" });
   }, [state, workspaceId, resultOnly]);
   if (!snapshot || state === "hidden" || (resultOnly && state === "start")) return null;
-  return <FirstUseActivationCard snapshot={snapshot} onAcknowledge={async () => {
+  return <><FirstUseActivationCard snapshot={snapshot} onAcknowledge={async () => {
     if (!snapshot.transaction) return;
     const response = await fetch(`/api/activation?workspaceId=${encodeURIComponent(workspaceId)}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "acknowledge", transactionId: snapshot.transaction.id }) }).catch(() => null);
     if (response?.ok) { setAcknowledgedId(snapshot.transaction.id); setSnapshot(null); }
-  }} />;
+    else setDismissError("Could not dismiss this yet. Please try again.");
+  }} />{dismissError ? <p role="alert">{dismissError}</p> : null}</>;
 }
 
 export function FirstUseActivationCard({ snapshot, onAcknowledge }: { snapshot: Snapshot; onAcknowledge: () => void }) {
