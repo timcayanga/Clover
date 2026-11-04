@@ -1,3 +1,4 @@
+import { FirstUseActivation } from "../../src/first-use-activation";
 import { Modal } from "../../src/adaptive-modal";
 import { AdaptiveGrid } from "../../src/adaptive";
 import { mergeHomeDetails, type HomeDetails, type HomeSections } from "../../src/home-sections";
@@ -312,6 +313,7 @@ export default function Home() {
               ))}
             </View>
           </LinearGradient>
+          <FirstUseActivation key={session.profileId} hidden={hidden} />
           <HomeQuickAccess />
           <HomeAdviser insights={data.insights ?? []} hidden={hidden} />
           {detailsError ? <Body>Budgets and suggestions could not load. Pull down to retry.</Body> : data.detailsPending ? <Body>Loading budgets and suggestions…</Body> : null}

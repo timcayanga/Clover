@@ -1,6 +1,6 @@
 export const missionDefinitions = [
-  { id: "add_account", title: "Add your first account", href: "/accounts?add=1", actionLabel: "Add account" },
-  { id: "add_transaction", title: "Add a transaction", href: "/transactions?manual=1", actionLabel: "Add transaction" },
+  { id: "add_transaction", title: "Record your first transaction", href: "/transactions?manual=1", actionLabel: "Add transaction" },
+  { id: "add_account", title: "Add another account", href: "/accounts?add=1", actionLabel: "Add account" },
   { id: "set_budget", title: "Set a budget", href: "/budgeting", actionLabel: "Add budget" },
   { id: "create_goal", title: "Create a savings goal", href: "/goals", actionLabel: "Add goal" },
   { id: "ask_clover", title: "Ask Clover a question", href: "/adviser", actionLabel: "Ask Clover" },

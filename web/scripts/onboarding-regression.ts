@@ -35,7 +35,7 @@ assert.match(onboardingForm, /capture="environment"/u, "Mobile onboarding must o
 const sourceButtons = readFileSync(resolve(process.cwd(), "components/upload-source-buttons.tsx"), "utf8");
 assert.match(onboardingForm, /<UploadSourceButtons/u, "Onboarding must use the shared upload choices");
 for (const label of ["Photo library", "Take photo", "Choose files"]) assert.ok(sourceButtons.includes(label));
-assert.match(onboardingForm, /useState<"connect" \| "upload" \| "manual">\("connect"\)/u, "Connect must be the initial method");
+assert.match(onboardingForm, /useState<"connect" \| "upload" \| "manual">\("upload"\)/u, "Free upload must be the initial method");
 assert.match(onboardingForm, /\["connect", "upload", "manual"\]/u, "Account entry methods must follow the approved order");
 assert.match(onboardingForm, /onboarding=\$\{method\}/u, "Account handoff must retain the selected entry method");
 assert.doesNotMatch(onboardingForm, /show you the magic behind the import/u, "Onboarding upload copy must stay concrete and concise");

@@ -1,4 +1,5 @@
 "use client";
+import { FirstUseActivation } from "@/components/first-use-activation";
 import { TransactionConversion, QuickAddLineItem, TransactionLineItemRow } from "@/components/transaction-detail-extras";
 
 import { manualTransactionCategoryId, manualTransactionName, manualTransactionPlaceholder, manualTransactionToday } from "../../../shared/manual-transaction-defaults";
@@ -4220,11 +4221,14 @@ function TransactionsPageContent() {
   }, [urlSearchParams]);
 
   useEffect(() => {
-    if (urlSearchParams.get("manual") === "1") {
-      setManualOpen(true);
-      window.history.replaceState({}, "", "/transactions");
+    if (urlSearchParams.get("manual") === "1" && isWorkspaceDataReady && selectedWorkspaceId) {
+      // The deep link must initialize the default account just like the toolbar action.
+      void openManualAdd();
+      const nextUrl = new URL(window.location.href);
+      nextUrl.searchParams.delete("manual");
+      window.history.replaceState({}, "", `${nextUrl.pathname}${nextUrl.search}${nextUrl.hash}`);
     }
-  }, [urlSearchParams]);
+  }, [urlSearchParams, isWorkspaceDataReady, selectedWorkspaceId]);
 
   useEffect(() => {
     const handleOpenManual = () => {
@@ -7767,6 +7771,7 @@ function TransactionsPageContent() {
       mobileTrailingAction={<button className="icon-button" type="button" aria-label="Add transaction" onClick={() => void openManualAdd()}><ActionIcon name="plus" /></button>}
       actions={transactionsShellActions}
     >
+      {selectedWorkspaceId ? <FirstUseActivation key={selectedWorkspaceId} workspaceId={selectedWorkspaceId} resultOnly /> : null}
       <ImportFileInput
         ref={addFileInputRef}
         className="hidden-file-input"

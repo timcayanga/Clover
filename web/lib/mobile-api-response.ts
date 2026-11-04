@@ -90,6 +90,7 @@ export function mobileApiResponse(operation: string, value: unknown) {
   const data = record(value);
   if (operation === "import-process" && !data.error) return { ...pick(data, ["ok", "status", "queued", "duplicate", "canonicalImportFileId", "confirmedTransactionsCount", "visibleImportComplete"]) };
   if (data.error) return pick(data, ["error"]);
+  if (operation === "activation") return { activation: data.activation };
   if (operation === "split-group-create" || operation === "split-group-edit") return {group:pick(data.group,["id","name"]),...pick(data,["ok"])};
   if (operation === "preview") return pick(data,["settlement"]);
   if (operation === "split-receipt-preview") return { receiptStorageKey: data.receiptStorageKey, preview: pick(data.preview, ["merchantName", "billDate", "currency", "total", "receiptText", "confidence", "requiresReview", "currencyWarning", "items"]) };

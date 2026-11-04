@@ -1,3 +1,4 @@
+import { activationTransactionWhere } from "@/lib/first-use-activation";
 import { prisma } from "@/lib/prisma";
 import { buildOnboardingMissions, type OnboardingMissionSnapshot } from "../../shared/onboarding-missions";
 export type { OnboardingMission, OnboardingMissionId, OnboardingMissionSnapshot } from "../../shared/onboarding-missions";
@@ -10,7 +11,7 @@ export async function getOnboardingMissionSnapshot(actorUserIds: string[], works
       { type: { not: "cash" } }, { name: { not: "Cash" } }, { institution: { not: "Cash" } },
       { balance: { not: 0 } }, { transactions: { some: { deletedAt: null } } },
     ] } }),
-    prisma.transaction.count({ where: { workspaceId, deletedAt: null, isExcluded: false } }),
+    prisma.transaction.count({ where: activationTransactionWhere(workspaceId) }),
     prisma.budget.count({ where: { workspaceId } }),
     prisma.personalGoal.count({ where: { workspaceId } }),
     // Saved conversations contain an actual user question and a completed answer.

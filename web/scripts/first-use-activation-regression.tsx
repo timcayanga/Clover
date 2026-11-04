@@ -1,0 +1,37 @@
+import React from "react";
+import { renderToStaticMarkup } from "react-dom/server";
+import assert from "node:assert/strict";
+import { activationState, type FirstUseActivation } from "../../shared/first-use-activation";
+import { FirstUseActivationCard } from "../components/first-use-activation";
+import { mobileOperation } from "../lib/mobile-api-policy";
+import { mobileApiResponse } from "../lib/mobile-api-response";
+const now = new Date("2026-11-05T12:00:00Z");
+assert.equal(activationState(false, null, false, now), "start");
+assert.equal(activationState(true, now, false, now), "result");
+assert.equal(activationState(true, new Date("2026-10-01"), false, now), "hidden");
+assert.equal(activationState(true, now, true, now), "hidden");
+assert.equal(activationState(true, new Date("2027-01-01"), false, now), "hidden");
+const render = (snapshot: FirstUseActivation) => renderToStaticMarkup(<FirstUseActivationCard snapshot={snapshot} onAcknowledge={() => {}} />);
+const start = render({ state: "start", workspaceId: "profile-a" });
+assert.match(start, /Available on Free/);
+assert.match(start, /workspaceId=profile-a&amp;manual=1/);
+assert.match(start, /workspaceId=profile-a&amp;import=1/);
+assert.match(start, /Use Cash to start/);
+assert.doesNotMatch(start, /Upgrade|Connect a bank|trial/i);
+for (const type of ["expense", "income", "transfer"]) {
+  const snapshot: FirstUseActivation = { state: "result", workspaceId: "profile-a", transaction: { id: "actual-record", name: "Receipt & lunch", amount: "69000", currency: "IDR", date: "2026-09-09", type, category: type === "expense" ? "Food & Dining" : null, needsReview: true } };
+  const result = render(snapshot);
+  assert.match(result, /Receipt &amp; lunch/);
+  assert.match(result, /69,000/); assert.match(result, /Rp/);
+  assert.match(result, /Check the suggested details/);
+  assert.match(result, /\/transactions\/actual-record\?workspaceId=profile-a/);
+  assert.match(result, /older receipt appears in its original period/);
+  assert.doesNotMatch(result, /balance is|confirmed/i);
+  if (type === "transfer") assert.match(result, /separate from spending/);
+}
+assert.equal(render({ state: "hidden", workspaceId: "profile-a" }), "");
+assert.equal(mobileOperation("GET", ["activation"]), "activation");
+assert.equal(mobileOperation("POST", ["activation"]), "activation");
+assert.equal(mobileOperation("DELETE", ["activation"]), null);
+assert.deepEqual(mobileApiResponse("activation", { error: "Profile unavailable", secret: "private" }), { error: "Profile unavailable" });
+console.log("PASS activation UI: Free entry, profile-pinned record, suggested result, separate transfer semantics, original currency and period, expiry and mobile method/error boundary");

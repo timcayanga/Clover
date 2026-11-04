@@ -20,7 +20,7 @@ export default function Onboarding() {
   const session = useSession();
   const { colors } = useTheme();
   const [step, setStep] = useState<"experience" | "upload">("experience");
-  const [accountMethod, setAccountMethod] = useState("connect");
+  const [accountMethod, setAccountMethod] = useState("upload");
   const saving = useRef(false);
   const enteredBeforeBootstrap = useRef(!session.data);
   const [experience, setExperience] = useState<
@@ -37,7 +37,7 @@ export default function Onboarding() {
     if (destination !== null && session.data && !session.data.needsOnboarding)
       router.replace(
         destination === "connect" || destination === "manual"
-          ? { pathname: "/(tabs)/accounts", params: { add: destination === "connect" ? "connect" : "1", onboarding: "1" } }
+          ? destination === "manual" ? { pathname: "/(tabs)/add", params: { entry: "manual" } } : { pathname: "/(tabs)/accounts", params: { add: "connect", onboarding: "1" } }
           : destination !== "skip"
           ? {
               pathname: "/(tabs)/add",
@@ -174,13 +174,13 @@ export default function Onboarding() {
       ) : (
         <>
           <Card>
-            <Heading>Add your accounts</Heading>
+            <Heading>Record your first transaction</Heading>
             <EntrySelector value={accountMethod} items={["connect", "upload", "manual"]} onChange={setAccountMethod} disabled={busy} />
             {accountMethod !== "upload" ? <>
-              <Heading>{accountMethod === "connect" ? "Connect a supported bank" : "Add an account manually"}</Heading>
-              <Body>{accountMethod === "connect" ? "Choose your bank and securely link the accounts you want to see in Clover." : "Add a bank account, wallet, cash, or another account yourself."}</Body>
+              <Heading>{accountMethod === "connect" ? "Connect a supported bank" : "Add a transaction manually"}</Heading>
+              <Body>{accountMethod === "connect" ? "Choose your bank and securely link the accounts you want to see in Clover." : "Record something you spent or earned. You can use Cash and add other accounts later."}</Body>
               {accountMethod === "connect" ? <Body>Available with Plus and Pro</Body> : null}
-              <Button title={accountMethod === "connect" ? "Connect a bank" : "Add account"} disabled={busy} onPress={() => void finish(accountMethod === "connect" ? "connect" : "manual")} />
+              <Button title={accountMethod === "connect" ? "Connect a bank" : "Add transaction"} disabled={busy} onPress={() => void finish(accountMethod === "connect" ? "connect" : "manual")} />
             </> : (
               [
                 [

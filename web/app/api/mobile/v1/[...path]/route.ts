@@ -525,6 +525,14 @@ async function handle(
       const result = await saveMobileGoal(workspaceId, input);
       return result ? reply(result) : reply({ error: "Goal not found in this Profile." }, 404);
     }
+    if (operation === "activation") {
+      const { getFirstUseActivation, recordActivationResult } = await import("@/lib/first-use-activation");
+      if (request.method === "POST") {
+        const input = z.object({ action: z.enum(["view", "acknowledge"]), transactionId: z.string().min(1).max(240) }).strict().parse(await request.json());
+        if (!await recordActivationResult(user, workspaceId, input.transactionId, input.action)) return reply({ error: "First result no longer available." }, 409);
+      }
+      return reply({ activation: await getFirstUseActivation(workspaceId, user.id) });
+    }
     if (operation === "missions") {
       const { getOnboardingMissionSnapshot } = await import("@/lib/onboarding-missions");
       if (request.method === "POST") {

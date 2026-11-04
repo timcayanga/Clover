@@ -108,7 +108,7 @@ export function OnboardingForm({
   const [isPending, startTransition] = useTransition();
   const [isCompleting, setIsCompleting] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
-  const [accountMethod, setAccountMethod] = useState<"connect" | "upload" | "manual">("connect");
+  const [accountMethod, setAccountMethod] = useState<"connect" | "upload" | "manual">("upload");
   const [importSeedFiles, setImportSeedFiles] = useState<File[] | null>(null);
   const [regionalPreferences, setRegionalPreferences] = useState<RegionalPreferences>(regionalDefaults);
   const [currencyError, setCurrencyError] = useState<string | null>(null);
@@ -295,7 +295,7 @@ export function OnboardingForm({
 
   const uploadStep = (
     <>
-      <h3>Add your accounts</h3>
+      <h3>Record your first transaction</h3>
       <div className="transaction-creation-tabs" role="tablist" aria-label="Add your accounts"
         style={{ "--entry-tab-index": ["connect", "upload", "manual"].indexOf(accountMethod), "--entry-tab-count": 3 } as CSSProperties}>
         {(["connect", "upload", "manual"] as const).map((method, index, methods) => <button type="button" role="tab" key={method}
@@ -315,14 +315,14 @@ export function OnboardingForm({
           <input ref={libraryInputRef} className="sr-only" type="file" accept="image/*" multiple onChange={handleFilePickerChange} />
           <input ref={fileInputRef} className="sr-only" type="file" accept={PUBLIC_IMPORT_ACCEPT} multiple onChange={handleFilePickerChange} />
         </> : <>
-          <h4>{accountMethod === "connect" ? "Connect a supported bank" : "Add an account manually"}</h4>
-          <p className="onboarding-card__copy">{accountMethod === "connect" ? "Choose your bank and securely link the accounts you want to see in Clover." : "Add a bank account, wallet, cash, or another account yourself."}</p>
+          <h4>{accountMethod === "connect" ? "Connect a supported bank" : "Add a transaction manually"}</h4>
+          <p className="onboarding-card__copy">{accountMethod === "connect" ? "Choose your bank and securely link the accounts you want to see in Clover." : "Record something you spent or earned. You can use Cash and add other accounts later."}</p>
           {accountMethod === "connect" ? <p className="onboarding-card__copy onboarding-card__copy--subtle">Available with Plus and Pro</p> : null}
           <button className="button button-primary" type="button" disabled={isCompleting} onClick={() => {
             const method = accountMethod;
             setIsCompleting(true);
-            void persistOnboarding(method).then(() => router.replace(`/accounts?add=1&onboarding=${method}`)).catch(error => { setIsCompleting(false); setMessage(error instanceof Error ? error.message : "Unable to continue setup."); });
-          }}>{accountMethod === "connect" ? "Connect a bank" : "Add account"}</button>
+            void persistOnboarding(method).then(() => router.replace(method === "manual" ? "/transactions?manual=1" : `/accounts?add=1&onboarding=${method}`)).catch(error => { setIsCompleting(false); setMessage(error instanceof Error ? error.message : "Unable to continue setup."); });
+          }}>{accountMethod === "connect" ? "Connect a bank" : "Add transaction"}</button>
         </>}
       </div>
 

@@ -1,3 +1,4 @@
+import { FirstUseActivation } from "./first-use-activation";
 import { homeCurrencyScope } from "../../shared/home-currency-scope";
 import { HomeCurrencySelector } from "./home-currency-selector";
 import { AdviserHeaderLink } from "./adviser-header-link";
@@ -1043,6 +1044,7 @@ async function DashboardStream({
         }}
       />
       <section className="dashboard-home dashboard-home--figma">
+        <FirstUseActivation key={workspaceSummary.id} workspaceId={workspaceSummary.id} />
         <article
           className="dashboard-home__hero dashboard-home__hero--fresh dashboard-home__hero--balance glass"
           style={{ background: "linear-gradient(90deg, #03A8C0 0%, #34D3D0 100%)" }}

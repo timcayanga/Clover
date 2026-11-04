@@ -67156,3 +67156,10 @@ html[data-theme="dark"] .home-quick-add__income{background:#18382b;color:#a0eac2
 .shell-bottom-nav .contextual-ask-clover__tooltip { display: none; }
 
 .contextual-ask-clover[hidden] { display: none !important; }
+
+.first-use-activation { padding: 24px; display: grid; gap: 12px; }
+.first-use-activation h2 { font-size: 1.2rem; margin: 0; }
+.first-use-activation p { margin: 0; }
+.first-use-activation__actions { display: flex; flex-wrap: wrap; gap: 12px; }
+.first-use-activation__hint { color: var(--muted, #667085); font-size: .875rem; }
+@media (max-width: 640px) { .first-use-activation { padding: 18px; } .first-use-activation__actions { flex-direction: column; } }
