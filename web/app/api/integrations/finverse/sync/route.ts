@@ -276,7 +276,7 @@ export async function POST(request: Request) {
       else if (result === "existing") existing += 1;
       else skipped += 1;
     }
-    const visibleTransactions = await prisma.transaction.count({ where: { workspaceId: connection.workspaceId, finverseTransactionRecord: { is: { connectionId: connection.id } }, accountId: { in: usableLinks.flatMap(link => link.accountId ? [link.accountId] : []) }, deletedAt: null, isExcluded: false, reviewStatus: { notIn: ["rejected", "duplicate_skipped"] } } });
+    const visibleTransactions = await prisma.transaction.count({ where: { workspaceId: connection.workspaceId, OR: [{ finverseTransactionRecord: { is: { connectionId: connection.id } } }, { id: { in: [...claimedTransactionIds] } }], accountId: { in: usableLinks.flatMap(link => link.accountId ? [link.accountId] : []) }, deletedAt: null, isExcluded: false, reviewStatus: { notIn: ["rejected", "duplicate_skipped"] } } });
     const hasBalance = usableLinks.some(link => { const value = (link.normalizedPayload as { balance?: unknown } | null)?.balance; return value !== null && value !== undefined && Number.isFinite(Number(value)); });
     const usableData = hasBalance || visibleTransactions > 0;
     const completion = await prisma.finverseConnection.updateMany({

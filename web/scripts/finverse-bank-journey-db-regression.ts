@@ -12,7 +12,7 @@ const saved = new Map<string, NodeModule | undefined>();
 const stub = (id: string, exports: unknown) => { const path = require.resolve(id); saved.set(path, require.cache[path]); require.cache[path] = { id: path, filename: path, loaded: true, exports } as NodeModule; };
 let identity: Record<string, unknown> = { status: "DATA_AVAILABLE", product_status: { accounts: { status: "SUCCESS" }, online_transactions: { status: "IN_PROGRESS" } } };
 const invalidated: string[] = [];
-let state = "", empty = false, badExchange = false, native = false, tier = "premium", transactionFetches = 0, noFinancialData = false;
+let state = "", empty = false, badExchange = false, native = false, tier = "premium", transactionFetches = 0, noFinancialData = false, missingBalance = false;
 const products = (status: string) => ({ accounts: { status: "SUCCESS" }, online_transactions: { status } });
 globalThis.fetch = async (input, init) => {
   const path = new URL(String(input)).pathname;
@@ -23,7 +23,7 @@ globalThis.fetch = async (input, init) => {
   else if (path === "/link/token") { const sent = JSON.parse(String(init?.body)); state = sent.state; assert.equal(sent.redirect_uri, process.env.FINVERSE_REDIRECT_URI); assert.equal(sent.response_mode, "form_post"); body = { link_url: "https://link.finverse.com/fixture" }; }
   else if (path === "/auth/token") { if (badExchange) return Response.json({ message: "Synthetic exchange failure" }, { status: 502 }); body = { access_token: "fixture-access", refresh_token: "fixture-refresh", expires_in: 3600, login_identity_id: randomUUID() }; }
   else if (path === "/login_identity") body = { login_identity: identity, institution: { institution_name: "QA Bank", institution_id: "qa-bank" } };
-  else if (path === "/accounts") body = { accounts: empty ? [] : [{ account_id: "primary", account_name: "Savings", account_currency: "PHP", account_number_full: "0012345678", balance: noFinancialData ? undefined : { currency: "PHP", value: "2000" } }, { account_id: "unselected", account_currency: "PHP", account_name: "Other" }, { account_id: "parent", is_parent: true }] };
+  else if (path === "/accounts") body = { accounts: empty ? [] : [{ account_id: "primary", account_name: "Savings", account_currency: "PHP", account_number_full: "0012345678", balance: noFinancialData || missingBalance ? undefined : { currency: "PHP", value: "2000" } }, { account_id: "unselected", account_currency: "PHP", account_name: "Other" }, { account_id: "parent", is_parent: true }] };
   else if (path.startsWith("/account_numbers/")) body = { account_number: { number: "0012345678" } };
   else if (path === "/transactions") { transactionFetches++; body = { transactions: noFinancialData ? [] : [{ transaction_id: "expense-1", account_id: "primary", posted_date: "2026-11-01", merchant_name: "Synthetic Lunch", amount: { currency: "PHP", value: -100 } }, { transaction_id: "salary-1", account_id: "primary", posted_date: "2026-11-01", merchant_name: "Salary", amount: { currency: "PHP", value: 1000 } }, { transaction_id: "other-account", account_id: "unselected", posted_date: "2026-11-01", amount: { currency: "PHP", value: -500 } }] }; }
   else throw Error(`Unexpected provider path ${path}`);
@@ -78,6 +78,17 @@ async function main() {
     assert.equal(await db.auditLog.count({ where: { entityId: connectionId, action: "bank_link.data_available" } }), 1);
     identity = { status: "DATA_RETRIEVAL_PARTIALLY_SUCCESSFUL", product_status: { ...products("SUCCESS"), historical_transactions: { status: "ERROR" } } };
     assert.equal((await (await send()).json()).dataStatus, "partial");
+    missingBalance = true;
+    const aliasStarted = await link(request("link", { workspaceId: workspace.id, institutionId: "qa-bank" })); const aliasId = (await aliasStarted.json()).connectionId;
+    const aliasForm = new FormData(); aliasForm.set("state", state); aliasForm.set("code", "alias-code");
+    await callback(new Request(process.env.FINVERSE_REDIRECT_URI!, { method: "POST", body: aliasForm }));
+    const aliased = await sync(request("sync", { workspaceId: workspace.id, connectionId: aliasId, selectedAccountIds: ["primary"] })); const aliasBody = await aliased.json();
+    assert.equal(aliased.status, 200, JSON.stringify(aliasBody)); assert.equal(aliasBody.dataStatus, "partial", "A reconnect reusing original ledger provenance still has usable transaction data without a provider balance");
+    assert.equal(await db.transaction.count({ where: { workspaceId: workspace.id } }), 2, "Reauthorization aliases preserve the existing ledger");
+    const aliasMilestone = await db.auditLog.findFirstOrThrow({ where: { entityId: aliasId, action: "bank_link.data_available" } });
+    assert.equal((aliasMilestone.metadata as { transactionCount: number }).transactionCount, 2);
+    assert.equal(JSON.stringify(await db.transaction.findUnique({ where: { id: confirmed.id } })), original);
+    missingBalance = false;
     // A new setup with only pre-existing manual data must not count as bank-data activation.
     noFinancialData = true;
     const blankStarted = await link(request("link", { workspaceId: workspace.id, institutionId: "qa-bank" })); const blankId = (await blankStarted.json()).connectionId;
@@ -93,7 +104,7 @@ async function main() {
     const bad = new FormData(); bad.set("state", state); bad.set("code", "bad-code");
     const failedCallback = await callback(new Request(process.env.FINVERSE_REDIRECT_URI!, { method: "POST", body: bad })); assert(failedCallback.headers.get("location")?.startsWith("clover://accounts")); assert.equal((await db.finverseConnection.findUniqueOrThrow({ where: { id: failedId } })).status, "error");
     assert.equal((await sync(request("sync", { workspaceId: "not-owned", connectionId }))).status, 404);
-    console.log("PASS bank journey: Free refusal, named start, unfinished recovery, POST callback, product readiness, no-data/empty-selection refusal, chosen account and booked transactions, visible balance projection, scoped cache invalidation, repeated sync, native exchange failure and confirmed-data preservation");
+    console.log("PASS bank journey: Free refusal, named start, unfinished recovery, POST callback, product readiness, no-data/empty-selection refusal, chosen account and booked transactions, visible balance projection, scoped cache invalidation, reauthorization aliases, repeated sync, native exchange failure and confirmed-data preservation");
   } finally { for (const [path, value] of saved) { if (value) require.cache[path] = value; else delete require.cache[path]; } await db.user.delete({ where: { id: user.id } }); await db.$disconnect(); }
 }
 main().catch(error => { console.error(error); process.exitCode = 1; });
