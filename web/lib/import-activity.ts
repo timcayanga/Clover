@@ -40,6 +40,12 @@ export type ImportActivityState = ImportActivitySnapshot;
 // dismissal belongs to this import attempt, never to the document forever.
 export const getImportActivityDismissKey = (activity: ImportActivitySnapshot | null) => {
   if (!activity) return null;
+  // A source-held import cannot retry unchanged. Foreground and background
+  // observers may describe that same refusal differently; copy changes must
+  // not reopen a dismissed popup. A corrected upload has a new import ID.
+  if (activity.status === "error" && activity.errorCode === "I-109" && activity.importFileId) {
+    return JSON.stringify([activity.workspaceId, activity.importFileId, "source_review_required"]);
+  }
   return JSON.stringify([
     activity.workspaceId,
     activity.importFileId ?? activity.timing?.startedAt ?? activity.updatedAt,

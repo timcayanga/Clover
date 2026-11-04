@@ -25,6 +25,10 @@ async function main() {
   assert.notEqual(getImportActivityDismissKey(done), getImportActivityDismissKey({ ...done, importFileId: "attempt-2" }), "Retrying a dismissed filename needs its own confirmation.");
   assert.equal(getImportActivityDismissKey(done), getImportActivityDismissKey({ ...done, updatedAt: 2000 }), "A later update to the same attempt must stay dismissed.");
   assert.notEqual(getImportActivityDismissKey({ ...done, importFileId: null }), getImportActivityDismissKey({ ...done, importFileId: null, updatedAt: 2000 }));
+  const held: ImportActivitySnapshot = { ...active, status: "error", errorCode: "I-109", detail: "I-109 Source needs review" };
+  assert.equal(getImportActivityDismissKey(held), getImportActivityDismissKey({ ...held, detail: "Some details in this file need review", updatedAt: 9000 }), "Foreground/background copy changes must not reopen one dismissed source refusal.");
+  assert.notEqual(getImportActivityDismissKey(held), getImportActivityDismissKey({ ...held, importFileId: "corrected-upload" }), "A corrected new upload still has its own error notice.");
+  assert.notEqual(getImportActivityDismissKey(held), getImportActivityDismissKey({ ...held, workspaceId: "other-profile" }), "Dismissals remain Profile scoped.");
   const accountsPage = readFileSync("app/accounts/page.tsx", "utf8");
   assert.doesNotMatch(accountsPage, /clearImportActivity\(/, "Accounts data refresh must not delete active progress before terminal success.");
   const modal = readFileSync("components/import-files-modal.tsx", "utf8");
