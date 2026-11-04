@@ -1,3 +1,4 @@
+import { createScreenDataLoader, registerScreenRefresh } from "./screen-refresh";
 import { useCallback, useState } from "react";
 import { router, useFocusEffect } from "expo-router";
 import { View } from "react-native";
@@ -8,22 +9,27 @@ import { Body, Button, Card, Heading, money } from "./ui";
 export function FirstUseActivation({ hidden = false }: { hidden?: boolean }) {
   const session = useSession();
   const [snapshot, setSnapshot] = useState<Snapshot | null>(null);
+  const [acknowledgedId, setAcknowledgedId] = useState<string | null>(null);
   useFocusEffect(useCallback(() => {
     let active = true;
     setSnapshot(null);
-    if (!session.demo && session.profileId) {
-      void session.request<{ activation: Snapshot }>(`activation?workspaceId=${encodeURIComponent(session.profileId)}`)
-        .then(data => {
-          if (!active) return;
-          setSnapshot(data.activation);
-          if (data.activation.state === "result" && data.activation.transaction) {
-            void session.request(`activation?workspaceId=${encodeURIComponent(session.profileId)}`, { method: "POST", body: JSON.stringify({ action: "view", transactionId: data.activation.transaction.id }) }).catch(() => {});
-          }
-        }).catch(() => {});
-    }
-    return () => { active = false; };
+    if (session.demo || !session.profileId) return () => { active = false; };
+    const refresh = createScreenDataLoader({
+      load: () => session.request<{ activation: Snapshot }>(`activation?workspaceId=${encodeURIComponent(session.profileId)}`),
+      active: () => active,
+      error: () => {},
+      apply: data => {
+        setSnapshot(data.activation);
+        if (data.activation.state === "result" && data.activation.transaction) {
+          void session.request(`activation?workspaceId=${encodeURIComponent(session.profileId)}`, { method: "POST", body: JSON.stringify({ action: "view", transactionId: data.activation.transaction.id }) }).catch(() => {});
+        }
+      },
+    });
+    void refresh();
+    const unregister = registerScreenRefresh("/", refresh);
+    return () => { active = false; unregister(); };
   }, [session.demo, session.profileId, session.request]));
-  if (!snapshot || snapshot.workspaceId !== session.profileId || snapshot.state === "hidden") return null;
+  if (!snapshot || snapshot.workspaceId !== session.profileId || snapshot.state === "hidden" || (snapshot.transaction && snapshot.transaction.id === acknowledgedId)) return null;
   const transaction = snapshot.transaction;
   return <Card>
     {snapshot.state === "start" ? <>
@@ -39,7 +45,7 @@ export function FirstUseActivation({ hidden = false }: { hidden?: boolean }) {
       <View style={{ gap: 10 }}><Button title="View your transaction" onPress={() => router.push({ pathname: "/transaction/[id]", params: { id: transaction.id } })} />
         <Button secondary title="Got it" onPress={() => {
           const profile = session.profileId;
-          void session.request(`activation?workspaceId=${encodeURIComponent(profile)}`, { method: "POST", body: JSON.stringify({ action: "acknowledge", transactionId: transaction.id }) }).then(() => setSnapshot(null)).catch(() => {});
+          void session.request(`activation?workspaceId=${encodeURIComponent(profile)}`, { method: "POST", body: JSON.stringify({ action: "acknowledge", transactionId: transaction.id }) }).then(() => setAcknowledgedId(transaction.id)).catch(() => {});
         }} /></View>
       <Body>Home and Reports use the transaction date, so an older receipt appears in its original period.</Body>
     </> : null}
