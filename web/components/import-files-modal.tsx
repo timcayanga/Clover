@@ -1719,6 +1719,11 @@ export function ImportFilesModal({
     }
 
     if (additions.length > 0) {
+      // Include queueing, consent and password-probe wait in the initial browser
+      // journey. Resumed/retried operations start a new processing span below.
+      for (const item of additions) {
+        importJourneyTimingsRef.current.set(item.id, startClientImportTiming(undefined, "client_file_queued_to_import_state"));
+      }
       autoStartRef.current = true;
       autoCloseAfterStartRef.current = shouldAutoClose;
       reportImportClientStage("files_queued", {

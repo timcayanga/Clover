@@ -1,6 +1,7 @@
 export type ClientImportOutcome = "transaction_available" | "completed_without_transaction" | "failed" | "input_required";
 /** One browser clock and one UI attempt; never subtract server/device clocks. */
-export function startClientImportTiming(now: () => number = () => performance.now()) {
+export function startClientImportTiming(now: () => number = () => performance.now(),
+  timingBoundary: "client_submission_to_import_state" | "client_file_queued_to_import_state" = "client_submission_to_import_state") {
   const started = now();
   const attemptId = crypto.randomUUID();
   let finished = false;
@@ -8,6 +9,6 @@ export function startClientImportTiming(now: () => number = () => performance.no
     if (finished) return null;
     finished = true;
     return { clientAttemptId: attemptId, outcome, clientDurationMs: Math.max(0, Math.round(now()-started)),
-      timingBoundary: "client_submission_to_import_state" };
+      timingBoundary };
   };
 }

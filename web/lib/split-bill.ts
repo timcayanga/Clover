@@ -1,4 +1,5 @@
 import { joinReceiptSettlementLines } from "./receipt-summary-lines";
+import { readMerchantPaymentConfirmation } from "./merchant-payment-confirmation";
 import { normalizeLocalReceiptOcrText } from "./local-receipt-ocr-normalization";
 import { readLocalReceiptOcrText } from "./local-receipt-ocr-envelope";
 import { hasHangul } from "@/lib/korean-financial-text";
@@ -2246,6 +2247,9 @@ export const assessReceiptPreviewQuality = (preview: ReceiptPreviewResult): Rece
   const cleanItemCount = Math.max(0, preview.items.length - suspiciousItemCount);
   const maxItemAmount = itemAmounts.length > 0 ? Math.max(...itemAmounts) : null;
   const receiptText = String(preview.receiptText ?? "");
+  const merchantPayment = readMerchantPaymentConfirmation(readLocalReceiptOcrText(receiptText) ?? receiptText);
+  if (merchantPayment && merchantPayment.merchant === preview.merchantName &&
+      merchantPayment.amount === total && preview.billDate?.slice(0,10) === merchantPayment.date) score += 2;
   const declaredItemCount = extractDeclaredReceiptItemCount(receiptText);
   const hasExplicitSummaryLine = receiptText.split(/\r?\n/).some((line) =>
     /^\s*(?:sub\s*-?\s*total|amount due|grand total|bill total|total)\b/i.test(line) || /^(?:합계|총합계|총액|결제금액|총결제금액)/.test(line.replace(/\s+/g, ""))
@@ -2503,7 +2507,13 @@ export const parseReceiptText = (receiptText: string): ReceiptPreviewResult => {
   const sourceText = opticalText === null ? receiptText : normalizeLocalReceiptOcrText(opticalText);
   const settlementText = joinReceiptSettlementLines(sourceText);
   const parsed = parseReceiptTextCore(settlementText);
-  const result = settlementText === sourceText ? parsed : { ...parsed, receiptText };
+  const payment = readMerchantPaymentConfirmation(sourceText);
+  const result: ReceiptPreviewResult = payment && parsed.billDate?.slice(0,10) === payment.date
+    ? { ...parsed, receiptText, receiptType:"generic_receipt", merchantName:payment.merchant,
+        total:payment.amount.toFixed(2), documentNumber:payment.reference, items:[], participants:[], splitAllocations:[],
+        subtotal:null,serviceCharge:null,tax:null,tip:null,rounding:null,discount:null,
+        paymentMethod:null,receiptPayerName:null,receiptAccountMatch:null,requiresReview:true,confidence:69 }
+    : settlementText === sourceText ? parsed : { ...parsed, receiptText };
   // Optical confidence does not establish financial correctness. Until wider
   // field-level validation, this engine always asks the user to review.
   return opticalText === null ? result : { ...result, receiptText, requiresReview: true, confidence: Math.min(45, result.confidence) };

@@ -1,10 +1,12 @@
 import { normalizeReceiptCaptureLocation, locationMatchesReceiptDate } from "../../shared/receipt-capture-location";
 import { getRegionalParsingProfile } from "./context-corpus";
 import { normalizeDefaultCurrency } from "./regional-preferences";
+import { readMerchantPaymentConfirmation } from "./merchant-payment-confirmation";
 
 /** Classify the document, not a camera filename or incidental crypto substring. */
 export function hasReceiptPhotoEvidence(text: string) {
   const source = text.normalize("NFKC");
+  if (readMerchantPaymentConfirmation(source)) return true;
   const receiptHeader = /\b(?:sales\s*invoice|inv(?:oice)?\.?\s*(?:no\.?|number|#)\s*:?|official\s*receipt|sales\s*receipt|receipt\s*(?:no|number|#)|cashier|struk|kuitansi|kwitansi)\b|영수증|승인번호|領収書|收据|收據/iu.test(source) || /(?:^|\n)\s*(?:receipt|invoice|expense\s+record)\s*(?:\n|$)/iu.test(source);
   const settlement = /\b(?:grand\s*total|total(?:\s+(?:due|amount|payment))?|amount\s*(?:due|to\s+pay)|sale\s+amount|subtotal|vat(?:able)?\s*(?:sales|amount)|payment\s*(?:type|method)|kembalian)\b|합\s*계|결제금액|받을금액/iu.test(source);
   const statementTable = /\b(?:transaction\s+history|account\s+activity|past\s+transactions|recent\s+transactions)\b|\b(?:opening|closing|starting|ending)\s+balance\b|\b(?:debit|withdrawal)\s+(?:credit|deposit)\s+balance\b|거래일자\s+입금\s+출금/iu.test(source);

@@ -122,3 +122,10 @@ Purchase dates must outrank printer accreditation, permit issuance and validity 
 Cosmetic progress writes must test persisted completion, source/receipt review and pause/cancel phases atomically. A delayed update cannot reopen those states or change their timestamps. Incomplete receipts drain the pending reconciliation write before publishing their terminal review state.
 
 Printed Philippine BIR accreditation labels include Accr., Accred., and Accreditation. Recognize those bounded variants as location evidence for the existing editable PHP suggestion; a bare BIR acronym or conflicting countries is insufficient. Keep a distinct source for this suggestion instead of relabeling it as a printed currency.
+
+
+## Completed merchant-payment confirmations
+
+A single Transaction Details screen may be a merchant purchase rather than an account history. Require one Payment to merchant, one Amount heading with exactly one signed negative monetary value, one valid full purchase date/time and a labeled reference number. A following merchant code is not a funding-account suffix. Keep the source debit intact and normalize its magnitude to one pending-review expense; do not invent itemization, subtotal, issuer or payment method. Unknown currency uses the established editable receipt suggestion, with its provenance retained.
+
+Use existing institution aliases to keep bank/credit/wallet payments out of this purchase path. Transfers, incoming/refunded/failed/pending payments, account histories, additional charges, malformed dates/amounts and explicit funding-account fields remain outside the narrow rule. Generic parsing and review remain available for those sources; the rule must never relabel a transfer as spending or overwrite confirmed finance.

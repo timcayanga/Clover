@@ -52,6 +52,18 @@ async function main() {
     await assert.rejects(confirmImportFile(file.id), SourceReviewRequiredError);
     assert.equal(await db.auditLog.count({ where: { entityId: file.id, action: 'import.parser_usage' } }), 1, 'Repeated confirmation never restarts a terminal source');
     assert.equal(await snapshot(), before, 'Existing confirmed finance and account timestamps are untouched');
+    const emptyImage = await db.importFile.create({ data: { workspaceId: workspace.id, fileName: 'unreadable-bank.png', fileType: 'image/png', storageKey: 'qa/'+randomUUID() } });
+    await assert.rejects(processImportFileText(emptyImage.id, {
+      text: 'BANK ACCOUNT STATEMENT\nAccount number 12345678\nCurrency PHP\nOpening balance 100.00\nEnding balance 50.00\nTransaction records are unreadable',
+      importMode: 'statement', skipVisualBackupParser: true, actorUserId: user.clerkUserId,
+    }), SourceReviewRequiredError, 'An empty image must throw the typed source-review result, never resolve a successful HTTP-compatible response');
+    const imageState = await db.importFile.findUniqueOrThrow({where:{id:emptyImage.id}});
+    assert.equal(imageState.status, 'failed'); assert.equal(imageState.processingPhase, SOURCE_REVIEW_PHASE);
+    await assert.rejects(processImportFileText(emptyImage.id, {text:'unchanged',importMode:'statement',actorUserId:user.clerkUserId}), SourceReviewRequiredError);
+    assert.deepEqual(await db.importFile.findUniqueOrThrow({where:{id:emptyImage.id}}), imageState, 'A repeat attempt cannot reopen the held image');
+    assert.equal(await db.auditLog.count({where:{entityId:emptyImage.id,action:'import.parser_usage'}}),1);
+    assert.equal(await db.transaction.count({where:{importFileId:emptyImage.id}}),0);
+    assert.equal(await snapshot(),before);
     const sender = await db.account.create({ data: { workspaceId: workspace.id, name: 'Confirmed EastWest source', nameCustomized: true, type: 'bank', institution: 'EastWest', accountNumber: '123456781234', currency: 'PHP', balance: '543.21' } });
     const senderBefore = JSON.stringify(sender);
     const proof = await db.importFile.create({ data: { workspaceId: workspace.id, fileName: 'transfer.jpg', fileType: 'image/jpeg', storageKey: 'qa/'+randomUUID() } });

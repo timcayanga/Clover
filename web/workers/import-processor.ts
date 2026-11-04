@@ -13094,17 +13094,10 @@ const processImportFileTextImpl = async (
       error_code: "I-104",
     });
 
-    return {
-      imported: 0,
-      duplicate: false,
-      metadata: resolvedMetadata,
-      accountId: null,
-      accountSummaries: [],
-      confirmedTransactionsCount: 0,
-      insightSummary: undefined,
-      accountBalance: null,
-      status: "error",
-    };
+    // Propagate the typed terminal result through the process API's existing
+    // I-109 / HTTP 422 contract. Returning status:error inside a 200 response
+    // made clients enter a statement visibility loop after the server stopped.
+    throw new SourceReviewRequiredError(message);
   }
 
   if (
