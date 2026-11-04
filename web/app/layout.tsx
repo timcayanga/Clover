@@ -1,7 +1,7 @@
 import { ViewportAccessibility } from "@/components/viewport-accessibility";
 import type { Metadata, Viewport } from "next";
 import { cookies } from "next/headers";
-import { Poppins, Raleway } from "next/font/google";
+import localFont from "next/font/local";
 import "./globals.css";
 import "./shared-app-styles.css";
 import "./collection-layouts.css";
@@ -27,16 +27,24 @@ import { CRITICAL_NAVIGATION_ICON_NAMES, getNavigationIconSrc } from "@/lib/navi
 import { PwaServiceWorker } from "@/components/pwa-service-worker";
 import { getChunkRecoveryBootstrapScript } from "@/lib/chunk-error-bootstrap";
 
-const poppins = Poppins({
-  subsets: ["latin"],
-  weight: ["400", "500", "600", "700"],
+// Bundle licensed brand fonts so builds do not depend on mutable Google CSS responses.
+const poppins = localFont({
+  src: [
+    { path: "./fonts/Poppins-400.woff2", weight: "400", style: "normal" },
+    { path: "./fonts/Poppins-500.woff2", weight: "500", style: "normal" },
+    { path: "./fonts/Poppins-600.woff2", weight: "600", style: "normal" },
+    { path: "./fonts/Poppins-700.woff2", weight: "700", style: "normal" },
+  ],
   variable: "--font-poppins",
   display: "swap",
 });
 
-const raleway = Raleway({
-  subsets: ["latin"],
-  weight: ["500", "600", "700"],
+const raleway = localFont({
+  src: [
+    { path: "./fonts/Raleway-500.woff2", weight: "500", style: "normal" },
+    { path: "./fonts/Raleway-600.woff2", weight: "600", style: "normal" },
+    { path: "./fonts/Raleway-700.woff2", weight: "700", style: "normal" },
+  ],
   variable: "--font-raleway",
   display: "swap",
 });
