@@ -4222,11 +4222,14 @@ function TransactionsPageContent() {
 
   useEffect(() => {
     if (urlSearchParams.get("manual") === "1" && isWorkspaceDataReady && selectedWorkspaceId) {
-      // The deep link must initialize the default account just like the toolbar action.
-      void openManualAdd();
-      const nextUrl = new URL(window.location.href);
-      nextUrl.searchParams.delete("manual");
-      window.history.replaceState({}, "", `${nextUrl.pathname}${nextUrl.search}${nextUrl.hash}`);
+      // Run the normal default-account setup outside React's effect flush.
+      const timer = window.setTimeout(() => {
+        void openManualAdd();
+        const nextUrl = new URL(window.location.href);
+        nextUrl.searchParams.delete("manual");
+        window.history.replaceState({}, "", `${nextUrl.pathname}${nextUrl.search}${nextUrl.hash}`);
+      }, 0);
+      return () => window.clearTimeout(timer);
     }
   }, [urlSearchParams, isWorkspaceDataReady, selectedWorkspaceId]);
 
