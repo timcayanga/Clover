@@ -1,4 +1,5 @@
 "use client";
+import { publishWorkspaceDataChange, getAffectedWorkspaceDataDomains } from "@/lib/workspace-data-sync";
 import { SignupTrialSummary } from "./signup-trial-summary";
 import type { SignupTrialSnapshot } from "../../shared/signup-trial";
 import { ResourceUpgradeNotice } from "./contextual-upgrade";
@@ -168,6 +169,7 @@ export function FinverseConnectButton({
 
         if (body.status !== "ready") throw new Error("Bank sync has not completed. Please retry from Finish linking.");
         setPending(current=>current.filter(c=>c.id!==requestedConnectionId));
+        publishWorkspaceDataChange({ workspaceId, source: "transactions", affected: getAffectedWorkspaceDataDomains("transactions"), path: "/api/integrations/finverse/sync", revision: Date.now() });
         await onSyncedRef.current?.();
         const imported = body.transactions?.imported ?? 0;
         setMessage(body.message || (selectedAccountIds?.length ? `${selectedAccountIds.length} account${selectedAccountIds.length===1?"":"s"} linked. ` : "") + (imported > 0 ? `Bank synced — ${imported} new transaction${imported === 1 ? "" : "s"} ready for review.` : "Already up to date."));

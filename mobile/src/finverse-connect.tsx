@@ -42,6 +42,7 @@ export function FinverseConnect({ onSynced, callbackConnection, mode = "connect"
   const action = useRef(false);
   const abortRef = useRef<AbortController | null>(null);
   const requestRef = useRef(session.request); requestRef.current = session.request;
+  const refreshRef = useRef(session.refresh); refreshRef.current = session.refresh;
   const syncedRef = useRef(onSynced); syncedRef.current = onSynced;
   useEffect(() => { active.current = true; return () => { active.current = false; abortRef.current?.abort(); }; }, []);
   useEffect(() => {
@@ -87,7 +88,7 @@ export function FinverseConnect({ onSynced, callbackConnection, mode = "connect"
           continue;
         }
         if (data.status !== "ready") throw new Error("Bank sync has not completed. Please retry from Finish linking.");
-        setSelection(null); setPending(p=>p.filter(c=>c.id!==id)); setMessage(data.message || `${accountIds?.length ? `${accountIds.length} account${accountIds.length===1?"":"s"} linked. ` : ""}${data.transactions?.imported ? `${data.transactions.imported} new transactions added.` : "Already up to date."}`); setRevision(v=>v+1); syncedRef.current(); return;
+        setSelection(null); setPending(p=>p.filter(c=>c.id!==id)); setMessage(data.message || `${accountIds?.length ? `${accountIds.length} account${accountIds.length===1?"":"s"} linked. ` : ""}${data.transactions?.imported ? `${data.transactions.imported} new transactions added.` : "Already up to date."}`); setRevision(v=>v+1); refreshRef.current(); syncedRef.current(); return;
       }
       setMessage("Finverse is still retrieving your accounts. Return through Finish linking or Notifications to check progress.");
     } catch (error) { if (active.current && !controller.signal.aborted) { setMessage(error instanceof Error ? error.message : "Unable to sync your bank."); setSelection(null); setRevision(v => v + 1); syncedRef.current(); setRetrySync({ id, accountIds, refresh }); setReconnectRequired(error instanceof ApiError && error.data?.reconnectRequired === true); } }

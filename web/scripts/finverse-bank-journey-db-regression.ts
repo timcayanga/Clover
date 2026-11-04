@@ -11,6 +11,7 @@ const require = createRequire(import.meta.url);
 const saved = new Map<string, NodeModule | undefined>();
 const stub = (id: string, exports: unknown) => { const path = require.resolve(id); saved.set(path, require.cache[path]); require.cache[path] = { id: path, filename: path, loaded: true, exports } as NodeModule; };
 let identity: Record<string, unknown> = { status: "DATA_AVAILABLE", product_status: { accounts: { status: "SUCCESS" }, online_transactions: { status: "IN_PROGRESS" } } };
+const invalidated: string[] = [];
 let state = "", empty = false, badExchange = false, native = false, tier = "premium", transactionFetches = 0, noFinancialData = false;
 const products = (status: string) => ({ accounts: { status: "SUCCESS" }, online_transactions: { status } });
 globalThis.fetch = async (input, init) => {
@@ -36,6 +37,7 @@ async function main() {
   stub("../lib/pro-access", { refreshProAccess: async () => tier, getProAccess: async () => ({ planTier: tier }) });
   stub("../lib/mobile-request-context", { getMobileRequestContext: () => native ? { userId: user.clerkUserId } : null });
   stub("../lib/finverse-enrichment", { enrichFinverseTransactions: async () => new Map(), canRefreshFinverseCategory: () => false });
+  stub("../lib/workspace-summary-cache", { invalidateWorkspaceSummaryCache: (workspaceId: string) => invalidated.push(workspaceId) });
   stub("../lib/analytics-server", { capturePostHogServerEvent: async () => {} });
   const next = require("next/server"); stub("next/server", { ...next, after: () => {} });
   try {
@@ -57,7 +59,7 @@ async function main() {
     assert.equal((await send()).status, 409, "Unfinished authorization explicitly offers reconnection");
     const form = new FormData(); form.set("state", state); form.set("code", "fixture-code");
     const returned = await callback(new Request(process.env.FINVERSE_REDIRECT_URI!, { method: "POST", body: form })); assert.equal(returned.status, 303); assert(returned.headers.get("location")?.includes(`finverseWorkspace=${workspace.id}`)); assert(!returned.headers.get("location")?.includes("fixture-access"));
-    const poll = await send(); assert.equal((await poll.json()).status, "retrieving"); assert.equal(transactionFetches, 0); assert.equal((await db.finverseConnection.findUniqueOrThrow({ where: { id: connectionId } })).lastSyncedAt, null);
+    const poll = await send(); assert.equal((await poll.json()).status, "retrieving"); assert.equal(transactionFetches, 0); assert.equal(invalidated.length, 0, "Polling must not repeatedly invalidate financial summaries"); assert.equal((await db.finverseConnection.findUniqueOrThrow({ where: { id: connectionId } })).lastSyncedAt, null);
     identity = { status: "DATA_RETRIEVAL_COMPLETE", product_status: products("SUCCESS"), session_status: "COMPLETED" };
     identity = { status: "DATA_AVAILABLE", product_status: products("ERROR") };
     assert.equal((await send()).status, 422, "Provider transaction failure cannot be reported as ready");
@@ -67,6 +69,7 @@ async function main() {
     const selection = await send(); assert.equal((await selection.json()).status, "select_accounts");
     assert.equal((await (await send({ selectedAccountIds: [] })).json()).status, "select_accounts", "Empty selection cannot become ready");
     const complete = await send({ selectedAccountIds: ["primary"] }); assert.equal(complete.status, 200, await complete.clone().text()); const result = await complete.json(); assert.equal(result.status, "ready"); assert.equal(result.accounts, 1); assert.equal(result.transactions.imported, 1); assert.equal(result.transactions.existing, 1);
+    assert.deepEqual(invalidated, [workspace.id], "Completed bank sync invalidates only its Profile summaries");
     assert.equal(await db.transaction.count({ where: { workspaceId: workspace.id } }), 2);
     assert.equal((await finverseBalances(workspace.id)).get(account.id)?.bankBalance, "2000.00", "Saved provider snapshot is visible through the Accounts/Home projection");
     assert.equal(JSON.stringify(await db.transaction.findUnique({ where: { id: confirmed.id } })), original);
@@ -90,7 +93,7 @@ async function main() {
     const bad = new FormData(); bad.set("state", state); bad.set("code", "bad-code");
     const failedCallback = await callback(new Request(process.env.FINVERSE_REDIRECT_URI!, { method: "POST", body: bad })); assert(failedCallback.headers.get("location")?.startsWith("clover://accounts")); assert.equal((await db.finverseConnection.findUniqueOrThrow({ where: { id: failedId } })).status, "error");
     assert.equal((await sync(request("sync", { workspaceId: "not-owned", connectionId }))).status, 404);
-    console.log("PASS bank journey: Free refusal, named start, unfinished recovery, POST callback, product readiness, no-data/empty-selection refusal, chosen account and booked transactions, visible balance projection, repeated sync, native exchange failure and confirmed-data preservation");
+    console.log("PASS bank journey: Free refusal, named start, unfinished recovery, POST callback, product readiness, no-data/empty-selection refusal, chosen account and booked transactions, visible balance projection, scoped cache invalidation, repeated sync, native exchange failure and confirmed-data preservation");
   } finally { for (const [path, value] of saved) { if (value) require.cache[path] = value; else delete require.cache[path]; } await db.user.delete({ where: { id: user.id } }); await db.$disconnect(); }
 }
 main().catch(error => { console.error(error); process.exitCode = 1; });

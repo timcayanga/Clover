@@ -1,3 +1,4 @@
+import { invalidateWorkspaceSummaryCache } from "@/lib/workspace-summary-cache";
 import { recordBankLinkStage } from "@/lib/bank-link-journey";
 import { finverseDataReadiness } from "@/lib/finverse-data-readiness";
 import { enrichFinverseTransactions, canRefreshFinverseCategory, type BankCategorySuggestion } from "@/lib/finverse-enrichment";
@@ -283,6 +284,7 @@ export async function POST(request: Request) {
       data: { status: "ready", lastSyncedAt: new Date(), syncError: null, inactivityWarnedAt:null, syncFailureSince:null },
     });
     if (!completion.count) return NextResponse.json({ error: "This bank was unlinked. Your saved records are preserved." }, { status: 409 });
+    invalidateWorkspaceSummaryCache(connection.workspaceId);
     await recordBankLinkStage(connection.id, usableData ? "data_available" : "empty_result", { accountCount: usableLinks.length, transactionCount: visibleTransactions });
     console.info("[finverse-sync] complete", {
       connectionId: connection.id,
