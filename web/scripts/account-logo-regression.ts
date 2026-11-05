@@ -27,6 +27,19 @@ const main = async () => {
     assert.equal(hint?.institution, "BPI", `Account nickname should identify BPI: ${name}`);
     assert.ok(hint!.confidence >= 95);
   }
+  const ofbankLogo = findAdditionalBankLogo("Overseas Filipino Bank Philippines")!;
+  assert.ok(ofbankLogo?.src.includes("overseas-filipino-bank"));
+  for (const alias of ["Overseas Filipino Bank", "OFBank", "OF Bank", "OFB"]) {
+    const account = Object.freeze({ id: "ofbank", name: `${alias} Savings 1234`, institution: alias, currency: "PHP", type: "bank" });
+    assert.equal(getAccountBrand(account).label, "Overseas Filipino Bank");
+    assert.equal(getAccountBrand(account).logoSrc, ofbankLogo.src);
+    assert.equal(mobileAccountOption(account).brandLogoUrl, ofbankLogo.src, "Existing native clients receive the shared bank logo from the API");
+    assert.equal(suggestAccountInstitution(account.name)?.institution, "Overseas Filipino Bank");
+    assert(getInstitutionSuggestionGroups(alias, "account").flatMap(group => group.items).some(item => item.label === "Overseas Filipino Bank"));
+    assert.equal(getAccountBrand({ ...account, logoUrl: "data:image/png;base64,iVBORw0KGgo=" }).logoSrc,
+      "data:image/png;base64,iVBORw0KGgo=", "A user's selected logo keeps precedence");
+  }
+  assert.equal(getAccountBrand({ institution: "Landbank", type: "bank" }).label, "LandBank", "OFBank must not replace its parent bank's brand");
   assert.equal(suggestAccountInstitution("BPI Trade Personal", "bank")?.institution, "BPI Trade", "Specific provider wins over parent-bank substring.");
   assert.equal(suggestAccountInstitution("BPI and BDO savings"), null, "Conflicting providers require a user choice.");
   assert.equal(suggestAccountInstitution("Happiness fund"), null);

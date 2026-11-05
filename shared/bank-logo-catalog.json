@@ -748,5 +748,16 @@
       "VP Bank"
     ],
     "src": "/assets/banks/optimized/vietnam/vpbank-9d26c8d1a7.webp"
+  },
+  {
+    "file": "philippines/overseas filipino bank.png",
+    "region": "philippines",
+    "label": "Overseas Filipino Bank",
+    "aliases": [
+      "OFBank",
+      "OF Bank",
+      "OFB"
+    ],
+    "src": "/assets/banks/optimized/philippines/overseas-filipino-bank-a8a7b30e07.webp"
   }
 ]

@@ -143,7 +143,7 @@ for (const country of FINVERSE_COUNTRIES) if (country.flagSrc) {
   assert(existsSync(fileURLToPath(new URL(`../../${country.flagSrc.slice(1)}`, import.meta.url))));
   assert(existsSync(fileURLToPath(new URL(`../../mobile/${country.flagSrc.slice(1)}`, import.meta.url))));
 }
-for (const [input, expected, country] of [["BDO Personal", "BDO", "PHL"], ["BPI (Business)", "BPI", "PHL"], ["Citibank Personal", "Citibank", "SGP"], ["CitiDirect", "Citibank", "SGP"], ["HSBC Business", "HSBC", "HKG"]]) {
+for (const [input, expected, country] of [["OFBank Personal", "Overseas Filipino Bank", "PHL"], ["OF Bank Business", "Overseas Filipino Bank", "PHL"], ["Overseas Filipino Bank", "Overseas Filipino Bank", "PHL"], ["BDO Personal", "BDO", "PHL"], ["BPI (Business)", "BPI", "PHL"], ["Citibank Personal", "Citibank", "SGP"], ["CitiDirect", "Citibank", "SGP"], ["HSBC Business", "HSBC", "HKG"]]) {
   const display = finverseBankPresentation({name:input,countries:[country]});
   assert.equal(display.name, expected);
   assert(!display.logoUrl.includes("account-types"), `${input} must use a real bank logo`);
