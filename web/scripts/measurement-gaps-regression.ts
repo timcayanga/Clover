@@ -83,6 +83,12 @@ async function main() {
     assert.equal(event.properties.$geoip_disable,true,"do not attribute Vercel's location to the customer");
     assert.equal(event.properties.$set.analytics_audience,"customer");
     assert.doesNotMatch(JSON.stringify(requests),/real@example.org|PRIVATE/);
+    await capturePostHogServerEvent("plan_changed","user_customer",{...audienceProperties("unknown"),plan_tier:"free"});
+    const planEvent=requests.at(-1).batch?.[0] ?? requests.at(-1);
+    assert.equal(planEvent.properties.analytics_audience,"unknown","raw outcome remains diagnosable");
+    assert.equal(planEvent.properties.$set.plan_tier,"free");
+    assert.equal(planEvent.properties.$set.analytics_audience,undefined,"plan changes must not overwrite a known person with an unknown audience");
+    assert.equal(planEvent.properties.$set.analytics_excluded,undefined);
     const previousWarn=console.warn, warnings:unknown[][]=[];
     let failures=0;
     global.fetch=async()=>{failures++;return new Response("PRIVATE provider failure",{status:503});};
