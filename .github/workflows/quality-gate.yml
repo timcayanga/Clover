@@ -16,8 +16,12 @@ permissions:
 
 jobs:
   verify:
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
+    # Change runner distributions deliberately, with a successful complete gate.
+    runs-on: ubuntu-24.04
+    # Historical preservation replay can exceed 30 minutes before the final build.
+    timeout-minutes: 90
+    env:
+      NEXT_TELEMETRY_DISABLED: '1'
 
     steps:
       - name: Check out repository
@@ -32,13 +36,24 @@ jobs:
             web/package-lock.json
             mobile/package-lock.json
 
+      - name: Check CI prerequisite discovery
+        run: npm run qa:ci
+
+      - name: Ensure disposable PostgreSQL is available for parser preservation checks
+        run: |
+          if ! node web/scripts/ci-postgres.mjs; then
+            sudo apt-get -o Acquire::Retries=3 update
+            sudo apt-get -o Acquire::Retries=3 install -y --no-install-recommends postgresql
+            node web/scripts/ci-postgres.mjs
+          fi
+
       - name: Install dependencies
         run: |
           npm ci --prefix web
           npm ci --prefix mobile
 
       - name: Set up Java for Android compatibility regression checks
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: '17'
@@ -46,17 +61,21 @@ jobs:
       - name: Generate Prisma Client
         run: npm --prefix web exec -- prisma generate --schema web/prisma/schema.prisma
 
-      - name: Ensure disposable PostgreSQL is available for parser preservation checks
-        run: |
-          if [ ! -x /usr/lib/postgresql/16/bin/initdb ]; then
-            sudo apt-get update
-            sudo apt-get install -y postgresql-16
-          fi
-          echo "CLOVER_QA_PG_BIN=/usr/lib/postgresql/16/bin" >> "$GITHUB_ENV"
-
       # qa:prepush includes both production dependency audits; keep one gate
       # entry point so a passing local push cannot skip GitHub's security checks.
       # Mobile verifies the pinned node-forge backport and braces depth guards
       # before accounting for those tested mitigations in the fresh npm audit.
       - name: Run the same pre-push quality gate used locally
-        run: npm run qa:prepush
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts
+          npm run qa:prepush 2>&1 | tee artifacts/quality-gate.log
+
+      - name: Preserve failed quality-gate diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: quality-gate-${{ github.run_id }}-${{ github.run_attempt }}
+          path: artifacts/quality-gate.log
+          if-no-files-found: ignore
+          retention-days: 7
