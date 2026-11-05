@@ -30,7 +30,6 @@ import { FinancialAccountCard } from "@/components/financial-account-card";
 import { InstitutionAutocomplete } from "@/components/institution-autocomplete";
 import { PlanLimitNudge } from "@/components/plan-limit-nudge";
 import { PageFileDropZone } from "@/components/page-file-drop-zone";
-import { AccountWallet, AccountWalletPocket } from "@/components/account-wallet";
 import { MobileSwipeDelete } from "@/components/mobile-swipe-delete";
 import { formatCurrencyAmount, formatCurrencyCode, formatCurrencySymbol } from "@/lib/currency-format";
 import { deriveReconciledBalance, normalizeAccountBalanceSign } from "@/lib/account-balance";
@@ -181,7 +180,6 @@ const ACCOUNT_LOADING_TIMEOUT_MS = 45_000;
 const ACCOUNT_LOADING_PULSE_MS = 5_000;
 const PAGE_LOADING_TIMEOUT_MS = 12_000;
 const WORKSPACE_RETRY_AFTER_TRANSIENT_FAILURE_MS = 2_500;
-const MOBILE_EXPANDED_ACCOUNT_STORAGE_KEY = "clover.accounts.mobile-expanded.v1";
 
 const isImageImportFile = (file: File) =>
   /\.(jpe?g|png|webp|heic|heif)$/i.test(file.name.toLowerCase()) || file.type.startsWith("image/");
@@ -1495,7 +1493,6 @@ function AccountsPageContent() {
   const [importSeedFiles, setImportSeedFiles] = useState<File[] | null>(null);
   const [importBackgroundOnly, setImportBackgroundOnly] = useState(false);
   const [drawerAccountId, setDrawerAccountId] = useState<string | null>(null);
-  const [mobileExpandedAccountKey, setMobileExpandedAccountKey] = useState<string | null>(null);
   const [manualType, setManualType] = useState<Account["type"]>("bank");
   const [manualName, setManualName] = useState("");
   const [manualInstitution, setManualInstitution] = useState("");
@@ -3274,51 +3271,6 @@ function AccountsPageContent() {
       .filter((group) => group.rows.length > 0 || draggedAccountId !== null);
   }, [accountExchangeRates.rates, defaultCurrencyCode, draggedAccountId, investmentSnapshots, isAllCurrenciesView, liveInvestmentValues, visibleAccounts]);
 
-  const mobileAccountRows = useMemo(
-    () => accountGroups.flatMap((group) => group.rows),
-    [accountGroups]
-  );
-
-  useEffect(() => {
-    if (mobileAccountRows.length === 0) {
-      if (mobileExpandedAccountKey !== null) setMobileExpandedAccountKey(null);
-      return;
-    }
-
-    const availableKeys = new Set(mobileAccountRows.map((row) => row.id));
-    const storageKey = `${MOBILE_EXPANDED_ACCOUNT_STORAGE_KEY}:${selectedWorkspaceId}:${selectedCurrency || "all"}`;
-    let rememberedKey: string | null = null;
-
-    try {
-      rememberedKey = window.sessionStorage.getItem(storageKey);
-    } catch {
-      rememberedKey = null;
-    }
-
-    const nextKey = rememberedKey && availableKeys.has(rememberedKey)
-      ? rememberedKey
-      : null;
-
-    const resolvedKey = mobileExpandedAccountKey && availableKeys.has(mobileExpandedAccountKey) ? mobileExpandedAccountKey : nextKey;
-    if (resolvedKey !== mobileExpandedAccountKey) setMobileExpandedAccountKey(resolvedKey);
-  }, [mobileAccountRows, mobileExpandedAccountKey, selectedCurrency, selectedWorkspaceId]);
-
-  const setExpandedMobileAccount = (rowKey: string) => {
-    const nextKey = mobileExpandedAccountKey === rowKey ? null : rowKey;
-    setMobileExpandedAccountKey(nextKey);
-
-    const storageKey = `${MOBILE_EXPANDED_ACCOUNT_STORAGE_KEY}:${selectedWorkspaceId}:${selectedCurrency || "all"}`;
-    try {
-      if (nextKey) {
-        window.sessionStorage.setItem(storageKey, nextKey);
-      } else {
-        window.sessionStorage.removeItem(storageKey);
-      }
-    } catch {
-      // The accordion still works when private browsing blocks storage.
-    }
-  };
-
   const selectedAccount = useMemo(
     () => reconciledAccounts.find((account) => account.id === drawerAccountId) ?? null,
     [drawerAccountId, reconciledAccounts]
@@ -3752,7 +3704,7 @@ function AccountsPageContent() {
     setActiveAccountDropType(null);
   };
 
-  const renderAccountCard = (row: Account | InvestmentInstitutionCard, key: string) => {
+  const renderAccountCard = (row: Account | InvestmentInstitutionCard, key: string, mobileOverview = false) => {
     if (isInvestmentInstitutionCard(row)) {
       const accountBrand = getAccountBrand({
         institution: row.institution,
@@ -3771,6 +3723,7 @@ function AccountsPageContent() {
           openLabel={`Open ${row.institution} investment institution`}
           className={[
             "financial-account-card--investment-institution",
+            mobileOverview ? "financial-account-card--mobile-overview" : null,
             luxuryAccountCardsEnabled ? getLuxuryAccountCardClass(row.id) : null,
           ].filter(Boolean).join(" ")}
         />
@@ -3863,16 +3816,16 @@ function AccountsPageContent() {
                 : formatAccountAmount(balanceValue, row.currency)
           }
           onOpen={() => openAccountDrawer(row)}
-          editableName={row.name}
-          editableAccountNumber={fallbackAccountNumber ?? ""}
-          editableAmount={Math.abs(parseAmount(loadingContext.displayedBalance ?? row.balance)).toFixed(2)}
+          editableName={mobileOverview ? undefined : row.name}
+          editableAccountNumber={mobileOverview ? undefined : fallbackAccountNumber ?? ""}
+          editableAmount={mobileOverview ? undefined : Math.abs(parseAmount(loadingContext.displayedBalance ?? row.balance)).toFixed(2)}
           onNameCommit={(value) => saveInlineAccountField(row, "name", value)}
           onAccountNumberCommit={(value) => saveInlineAccountField(row, "accountNumber", value)}
           onAmountCommit={(value) => saveInlineAccountField(row, "balance", value)}
           logoUrl={row.logoUrl}
-          onLogoCommit={isCashFallbackAccount(row) ? undefined : (logoUrl) => saveAccountLogo(row, logoUrl)}
+          onLogoCommit={mobileOverview || isCashFallbackAccount(row) ? undefined : (logoUrl) => saveAccountLogo(row, logoUrl)}
           openLabel={`Open ${accountCardName} account`}
-          className={luxuryAccountCardsEnabled ? getLuxuryAccountCardClass(row.id) : undefined}
+          className={[mobileOverview ? "financial-account-card--mobile-overview" : null, luxuryAccountCardsEnabled ? getLuxuryAccountCardClass(row.id) : null].filter(Boolean).join(" ")}
           state={isDeleting ? "deleting" : loadingContext.isLoading ? "loading" : undefined}
         />
       </div>
@@ -3880,18 +3833,13 @@ function AccountsPageContent() {
   };
 
   const renderMobileListRow = (row: Account | InvestmentInstitutionCard, key: string) => {
-    const isExpanded = mobileExpandedAccountKey === row.id;
-    const investment = isInvestmentInstitutionCard(row);
-    const name = investment ? row.institution : getAccountDisplayName(row);
-    const brand = getAccountBrand({ institution: row.institution, name, type: investment ? "investment" : getEffectiveAccountType(row), logoUrl: investment ? undefined : row.logoUrl });
-    const pocket = <AccountWalletPocket expanded={isExpanded} label={name} foreground={brand.foreground} onToggle={() => setExpandedMobileAccount(row.id)}>
-      {renderAccountCard(row, `${key}-card`)}
-    </AccountWalletPocket>;
-    if (investment) return <div key={key}>{pocket}</div>;
-    return <MobileSwipeDelete key={key} className={`accounts-mobile-swipe${isExpanded ? " is-expanded" : ""}`}
+    const card = renderAccountCard(row, `${key}-card`, true);
+    if (isInvestmentInstitutionCard(row)) return <div key={key}>{card}</div>;
+    const name = getAccountDisplayName(row);
+    return <MobileSwipeDelete key={key} className="accounts-mobile-grid-swipe"
       deleteLabel={`Delete ${name}`} disabled={accountDeleteBusy || deletingAccountIdsSet.has(row.id) || isCashFallbackAccount(row)}
       confirmationMessage={`Delete account "${name}" and its linked transactions? This cannot be undone.`}
-      onDelete={() => deleteAccount(row, true)}>{pocket}</MobileSwipeDelete>;
+      onDelete={() => deleteAccount(row, true)}>{card}</MobileSwipeDelete>;
   };
 
   useEffect(() => {
@@ -4537,9 +4485,9 @@ function AccountsPageContent() {
                         <div className="accounts-group__empty-drop-hint">Move account here</div>
                       ) : null}
                     </div>
-                    <AccountWallet label={`${group.title} account list`}>
+                    <div className="accounts-mobile-card-grid" aria-label={`${group.title} account list`}>
                       {group.rows.map((row) => renderMobileListRow(row, `${group.title}-mobile-${row.id}`))}
-                    </AccountWallet>
+                    </div>
                     </article>
                 ))
               ) : (

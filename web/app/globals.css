@@ -67163,3 +67163,47 @@ html[data-theme="dark"] .home-quick-add__income{background:#18382b;color:#a0eac2
 .first-use-activation__actions { display: flex; flex-wrap: wrap; gap: 12px; }
 .first-use-activation__hint { color: var(--muted, #667085); font-size: .875rem; }
 @media (max-width: 640px) { .first-use-activation { padding: 18px; } .first-use-activation__actions { flex-direction: column; } }
+
+/* Mobile Accounts: always-visible two-column cards, without wallet sleeves. */
+.accounts-mobile-card-grid { display: none; }
+@media (max-width: 1100px) {
+  .content--accounts .accounts-mobile-card-grid {
+    display: grid; grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px; align-items: stretch; width: 100%;
+  }
+  .accounts-mobile-card-grid > *,
+  .accounts-mobile-card-grid .accounts-card-drag-shell { min-width: 0; height: 100%; }
+  .content--accounts .accounts-mobile-card-grid .mobile-swipe-delete,
+  .content--accounts .accounts-mobile-card-grid .mobile-swipe-delete__content { border-radius: 16px; height: 100%; }
+  .content--accounts .financial-account-card--mobile-overview {
+    position: relative; width: 100%; height: 100%; min-height: 210px;
+    padding: 14px 12px; border-radius: 16px; transform: none;
+  }
+  .content--accounts .financial-account-card--mobile-overview .financial-account-card__content {
+    min-height: 180px; gap: 6px;
+  }
+  .content--accounts .financial-account-card--mobile-overview .financial-account-card__identity {
+    display: flex; flex-direction: column; align-items: flex-start; width: 100%; gap: 8px;
+  }
+  .content--accounts .financial-account-card--mobile-overview .financial-account-card__head { display: block; }
+  .content--accounts .financial-account-card--mobile-overview .financial-account-card__name {
+    width: 100%; max-width: none; white-space: normal; overflow: visible;
+    overflow-wrap: anywhere; font-size: 13px !important; font-weight: 600 !important; line-height: 1.5;
+  }
+  .content--accounts .financial-account-card--mobile-overview .financial-account-card__number {
+    white-space: normal; overflow-wrap: anywhere; letter-spacing: .4px; font-size: 11px !important; font-weight: 500 !important;
+  }
+  .content--accounts .financial-account-card--mobile-overview .financial-account-card__amount {
+    position: static; width: 100%; max-width: none; margin-top: auto;
+    padding-bottom: 48px; font-size: clamp(14px, 4.2vw, 20px) !important; font-weight: 600 !important; line-height: 1.5;
+    white-space: normal; overflow-wrap: anywhere; text-align: left;
+  }
+  .content--accounts .financial-account-card--mobile-overview .financial-account-card__chevron {
+    position: absolute; right: 10px; bottom: 10px; top: auto;
+    width: 44px; height: 44px; min-height: 44px; margin: 0; padding: 0;
+    display: grid; place-items: center; border-radius: 50%;
+    color: inherit; background: rgb(255 255 255 / .16); border: 1px solid rgb(255 255 255 / .2);
+  }
+  .content--accounts .financial-account-card--mobile-overview .financial-account-card__chevron span { font-size: 26px; line-height: 1; }
+  .content--accounts .financial-account-card--mobile-overview:is(:hover,:focus-within) { transform: none; }
+}

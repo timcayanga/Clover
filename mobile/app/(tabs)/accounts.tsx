@@ -3,7 +3,7 @@ import { SwipeDeleteRow } from "../../src/swipe-delete-row";
 import { recordedSummary } from "../../src/recorded-summary";
 import { Modal } from "../../src/adaptive-modal";
 import { AdaptiveDetail } from "../../src/adaptive-detail";
-import { AccountWallet, AccountWalletCard } from "../../src/account-wallet";
+import { AccountGrid, AccountGridCard } from "../../src/account-grid";
 import { useLiveInvestmentValues } from "../../src/use-live-investment-values";
 import { CloverEmptyState } from "../../src/clover-mascot";
 import { institutionGroups } from "../../src/institution-groups";
@@ -56,7 +56,6 @@ function AccountsContent() {
   async function deleteRow(account: Account) {
     await session.request(`accounts/${account.id}?workspaceId=${encodeURIComponent(session.profileId)}`, { method: "DELETE" });
     setAccounts(current => current.filter(row => row.id !== account.id));
-    setExpandedAccount(null);
     session.refresh();
   }
   const [currencyFilter, setCurrencyFilter] = useState("");
@@ -64,7 +63,6 @@ function AccountsContent() {
   const [recordedAccounts, setAccounts] = useState<Account[]>([]);
   const liveValues = useLiveInvestmentValues(recordedAccounts.filter(account => account.type === "investment").map(account => ({ id: account.id, name: account.name, currency: account.currency, subtype: account.investmentSubtype, symbol: account.investmentSymbol, quantity: account.investmentQuantity })));
   const accounts = recordedAccounts.map(account => liveValues[account.id] === undefined ? account : { ...account, displayBalance: String(liveValues[account.id]) });
-  const [expandedAccount, setExpandedAccount] = useState<string | null>(null);
   const [institutionId, setInstitutionId] = useState<string | null>(null);
   const [selected, setSelected] = useState<Account | null>(null);
   const [adding, setAdding] = useState(false);
@@ -355,16 +353,16 @@ function AccountsContent() {
                   })()}
                 </Text>
               </View>
-              <AccountWallet>
+              <AccountGrid>
               {group.title === "Investments" ? institutionGroups(group.rows, accountSectionType).map(institution => {
                 const representative = institution.assets[0];
                 const palette = accountCardPalette(representative);
                 const value = recordedSummary(institution.assets.map(a => accountDisplayBalance(a) ?? "0"));
-                return <AccountWalletCard key={institution.id} expanded={expandedAccount === institution.id} name={institution.name}
+                return <AccountGridCard key={institution.id} name={institution.name}
                   identifier={`${institution.assets.length} ${institution.assets.length === 1 ? "asset" : "assets"}`}
                   amount={(money(String(value.value ?? 0), institution.currency)) + (value.missing > 0 && value.known > 0 ? "*" : "")}
                   palette={palette} logo={<AccountBrandLogo account={representative} size={32} radius={7} />}
-                  onToggle={() => setExpandedAccount(current => current === institution.id ? null : institution.id)} onOpen={() => setInstitutionId(institution.id)} />;
+                  onOpen={() => setInstitutionId(institution.id)} />;
               }) : [...group.rows]
                 .sort(
                   (a, b) =>
@@ -374,19 +372,18 @@ function AccountsContent() {
                 )
                 .map((account) => {
                   const palette = accountCardPalette(account);
-                  const expanded = expandedAccount === account.id;
                   const balance = accountDisplayBalance(account);
                   return (
-                    <SwipeDeleteRow wallet expanded={expanded} key={account.id} label={label(account)} disabled={session.demo || account.id.startsWith("fallback-cash-")} message={`Delete "${label(account)}" and its linked transactions? This cannot be undone.`} onOpen={() => setSelected(account)} onDelete={() => deleteRow(account)}>
-                      <AccountWalletCard expanded={expanded} name={label(account)}
+                    <SwipeDeleteRow key={account.id} label={label(account)} disabled={session.demo || account.id.startsWith("fallback-cash-")} message={`Delete "${label(account)}" and its linked transactions? This cannot be undone.`} onOpen={() => setSelected(account)} onDelete={() => deleteRow(account)}>
+                      <AccountGridCard name={label(account)}
                         identifier={account.lastFour ? `•••• ${account.lastFour}` : account.type === "cash" ? "Cash on hand" : account.type.replaceAll("_", " ")}
                         amount={money(balance ?? "0", account.currency)} palette={palette}
                         logo={<AccountBrandLogo account={account} size={32} radius={7} />}
-                        onToggle={() => setExpandedAccount(current => current === account.id ? null : account.id)} onOpen={() => setSelected(account)} />
+                        onOpen={() => setSelected(account)} />
                     </SwipeDeleteRow>
                   );
                 })}
-              </AccountWallet>
+              </AccountGrid>
             </View>
           ))
       )}

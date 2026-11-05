@@ -553,13 +553,18 @@ async function main() {
   );
   assert.match(
     accountsSource,
-    /<AccountWalletPocket expanded=\{isExpanded\}[\s\S]{0,220}setExpandedMobileAccount\(row.id\)/,
-    "Mobile account rows must expose an accessible vertical accordion interaction."
+    /className="accounts-mobile-card-grid"/,
+    "Mobile Accounts must render always-visible account cards in each section."
+  );
+  assert.doesNotMatch(
+    accountsSource,
+    /AccountWalletPocket|MOBILE_EXPANDED_ACCOUNT_STORAGE_KEY/,
+    "Mobile account details must open directly instead of expanding a wallet pocket first."
   );
   assert.match(
-    accountsSource,
-    /MOBILE_EXPANDED_ACCOUNT_STORAGE_KEY[\s\S]{0,1800}sessionStorage\.getItem\(storageKey\)/,
-    "Mobile Accounts must remember the expanded row for each workspace and currency."
+    globalStyles,
+    /\.content--accounts \.accounts-mobile-card-grid \{[\s\S]{0,100}grid-template-columns: repeat\(2, minmax\(0, 1fr\)\)/,
+    "Mobile Accounts must retain two equal columns without horizontal overflow."
   );
   assert.doesNotMatch(
     accountsSource,
