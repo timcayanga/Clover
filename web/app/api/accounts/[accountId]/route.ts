@@ -1,3 +1,4 @@
+import { matchesDurableImportedAccountIdentity } from "@/lib/workspace-cache";
 import { cardReplacementSchema } from "@/lib/card-replacement-input";
 import { CardReplacementError, replaceAccountCard } from "@/lib/card-replacement";
 import { assertTrustedRequestOrigin } from "@/lib/request-security";
@@ -383,8 +384,15 @@ export async function GET(_request: Request, { params }: { params: Promise<{ acc
         const checkpointNumber = typeof sourceMetadata?.accountNumber === "string" ? sourceMetadata.accountNumber : null;
         const matchesAccount =
           checkpoint.accountId === accountId ||
-          (accountKey !== "" && checkpointKey === accountKey) ||
-          accountNumbersMayMatch(accountNumber, checkpointNumber);
+          (readCardReplacements(account.cardNumberHistory).length
+            ? !checkpoint.accountId && matchesDurableImportedAccountIdentity(account, {
+                name: typeof sourceMetadata?.accountName === "string" ? sourceMetadata.accountName : null,
+                institution: typeof sourceMetadata?.institution === "string" ? sourceMetadata.institution : null,
+                accountNumber: checkpointNumber,
+                type: typeof sourceMetadata?.accountType === "string" ? sourceMetadata.accountType : null,
+                currency: typeof sourceMetadata?.currency === "string" ? sourceMetadata.currency : null,
+              })
+            : (accountKey !== "" && checkpointKey === accountKey) || accountNumbersMayMatch(accountNumber, checkpointNumber));
 
         if (!matchesAccount) {
           continue;
@@ -540,8 +548,11 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ ac
       try {
         const saved = await replaceAccountCard(accountId, payload.workspaceId, userId, payload.replacement);
         invalidateWorkspaceSummaryCache(saved.workspaceId);
-        const bankSnapshot = (await finverseBalances(saved.workspaceId, [saved.id])).get(saved.id);
-        return NextResponse.json({ account: serializeAccount({ ...saved, ...bankSnapshot, balance: bankSnapshot?.bankBalance ?? saved.balance }) });
+        // Return the same balance/checkpoint/count projection as opening the
+        // account normally; replacing a number must not reset its visible total.
+        const response = await GET(request, { params: Promise.resolve({ accountId: saved.id }) });
+        if (!response.ok) throw new Error("Replacement projection unavailable");
+        return response;
       } catch (error) {
         if (error instanceof CardReplacementError) return NextResponse.json({ error: error.message }, { status: error.status });
         console.error("Card replacement could not complete", error instanceof Error ? error.name : "Unknown error");

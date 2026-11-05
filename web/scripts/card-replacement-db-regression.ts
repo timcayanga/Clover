@@ -29,6 +29,7 @@ async function main() {
     const transaction = await db.transaction.create({ data: { workspaceId: workspace.id, accountId: account.id, date: new Date("2026-10-01"), amount: "97.25", type: "expense", currency: "PHP", merchantRaw: "Original raw merchant", merchantClean: "User corrected", reviewStatus: "confirmed", rawPayload: { untouched: "source evidence" }, normalizedPayload: { userNote: "Keep this" } } });
     const makeInput = (expectedLastFour: string | null, newLastFour: string) => ({ requestId: randomUUID(), expectedLastFour, newLastFour, effectiveDate: "2026-11-05", reason: "stolen" as const, confirmed: true as const });
     const send = (replacement: unknown, extra = {}, origin = "https://clover.test", id = account.id) => PATCH(new Request(`https://clover.test/api/accounts/${id}`, { method: "PATCH", headers: { "Content-Type": "application/json", Origin: origin }, body: JSON.stringify({ workspaceId: workspace.id, replacement, ...extra }) }), { params: Promise.resolve({ accountId: id }) });
+    await db.accountStatementCheckpoint.create({data:{workspaceId:workspace.id,statementEndDate:new Date("2026-11-05"),endingBalance:"999999",status:"reconciled",sourceMetadata:{accountName:"Unrelated BDO account",institution:"BDO",accountNumber:"****8745",accountType:"bank",currency:"USD",importMode:"statement"}}});
     const first = makeInput("3012", "8745");
     assert.equal((await send(first, {}, "https://evil.test")).status, 403);
     assert.equal((await send({ ...first, confirmed: false })).status, 400);
@@ -43,6 +44,8 @@ async function main() {
     for (const response of responses) assert.equal(response.status, 200, await response.clone().text());
     const publicAccount = (await responses[0].json()).account;
     assert.equal(publicAccount.cardNumberHistory.length, 1);
+    assert.equal(publicAccount.transactionCount, 1, "Replacement response retains the normal Account Details projection");
+    assert.equal(publicAccount.balance, "765.43");
     assert(!JSON.stringify(publicAccount.cardNumberHistory).includes(user.clerkUserId));
     assert(!JSON.stringify(publicAccount.cardNumberHistory).includes(first.requestId));
     let current = await db.account.findUniqueOrThrow({ where: { id: account.id } });
