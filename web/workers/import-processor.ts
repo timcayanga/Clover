@@ -1,3 +1,4 @@
+import { bankInstitutionsMatch } from "@/lib/finverse-matching";
 import { cardLastFour, matchesConfirmedCardNumber, readCardReplacements, supportsCardReplacement } from "../../shared/card-replacement";
 import { hasVerifiedEastwestTransferRows } from "@/lib/eastwest-transfer-proof";
 import { normalizeReceiptCaptureLocation } from "../../shared/receipt-capture-location";
@@ -6027,7 +6028,7 @@ const resolveConfirmationAccount = async (params: {
       cardLastFour(account.accountNumber) !== cardLastFour(next.accountNumber) && !matchesConfirmedCardNumber(account, next.accountNumber)) {
       throw new Error("A different card number was detected. Open Account Details → Replace Card to confirm a replacement, then retry this import, or choose a separate account.");
     }
-    if (hasReplacements && next.institution && normalizeBankName(next.institution) !== normalizeBankName(account.institution)) throw new Error("This document has a different institution. Choose a separate account.");
+    if (hasReplacements && next.institution && !bankInstitutionsMatch(next.institution, account.importIdentityInstitution ?? account.institution)) throw new Error("This document has a different institution. Choose a separate account.");
     if (hasReplacements && ((next.currency && next.currency !== account.currency) || (next.type && next.type !== account.type))) throw new Error("This document has a different currency or account type. Choose a separate account.");
     const data: Record<string, unknown> = {};
     const explicitInventoryName =

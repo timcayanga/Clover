@@ -70,6 +70,7 @@ async function main() {
       assert.equal(matchingBankAccounts([current], identity).length, 0);
       assert.equal(scoreDurableImportedAccountIdentityMatch(current, identity), 0);
     }
+    assert.equal(scoreDurableImportedAccountIdentityMatch({...current,institution:"Personal vault",importIdentityInstitution:"BPI"},incoming("3012")),100,"A customized display institution retains its original source identity");
     const collision = await db.account.create({ data: { workspaceId: workspace.id, name: "Separate BPI", institution: "BPI", type: "bank", currency: "PHP", accountNumber: "5555" } });
     assert.equal((await send(makeInput(finalSuffix, "5555"))).status, 409);
     const cash = await db.account.create({ data: { workspaceId: workspace.id, name: "Cash", type: "cash", currency: "PHP" } });
@@ -99,6 +100,13 @@ async function main() {
     assert.equal((await db.account.findUniqueOrThrow({ where: { id: account.id } })).accountNumber, current.accountNumber);
     assert.deepEqual(await db.transaction.findUniqueOrThrow({ where: { id: transaction.id } }), transaction);
 
+    const unfamiliar = await db.account.create({data:{workspaceId:otherProfile.id,name:"Unfamiliar bank",institution:"Original Unfamiliar Bank",accountNumber:"12343012",type:"bank",currency:"PHP",source:"manual",balance:"42"}});
+    await replaceAccountCard(unfamiliar.id,otherProfile.id,user.clerkUserId,makeInput("3012","8745"));
+    const wrongInstitution = await db.importFile.create({data:{workspaceId:otherProfile.id,accountId:unfamiliar.id,fileName:"other-bank.csv",fileType:"text/csv",storageKey:"qa/"+randomUUID(),status:"processing"}});
+    await db.parsedTransaction.create({data:{workspaceId:otherProfile.id,importFileId:wrongInstitution.id,institution:"Other Unfamiliar Bank",accountName:"Other Unfamiliar Bank 8745",accountNumber:"****8745",date:new Date("2026-10-23"),amount:11,currency:"PHP",type:"expense",merchantRaw:"Other bank purchase",confidence:99,rawPayload:{source:"structured_transaction_csv",sourceRowIndex:1,accountType:"bank",parserConfidence:100}}});
+    await assert.rejects(confirmImportFile(wrongInstitution.id,unfamiliar.id),/different institution/);
+    assert.equal(await db.transaction.count({where:{importFileId:wrongInstitution.id}}),0);
+    assert.equal((await db.account.findUniqueOrThrow({where:{id:unfamiliar.id}})).institution,"Original Unfamiliar Bank");
     // Force the real worker's read/save interleaving: a user confirms a
     // replacement after identity inference but before the account UPDATE.
     const raceAccount = await db.account.create({data:{workspaceId:otherProfile.id,name:"Old user-visible title",institution:"BPI",type:"bank",currency:"PHP",accountNumber:"123456783012",source:"upload",balance:"500"}});

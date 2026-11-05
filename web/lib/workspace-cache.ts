@@ -550,7 +550,7 @@ export const scoreDurableImportedAccountIdentityMatch = (
   incoming: ImportedAccountIdentityLike
 ) => {
   if (readCardReplacements(account.cardNumberHistory).length) {
-    const institution = canonicalImportedInstitutionKey(account.institution);
+    const institution = canonicalImportedInstitutionKey(account.importIdentityInstitution ?? account.institution);
     return institution && institution === canonicalImportedInstitutionKey(incoming.institution) &&
       account.type === incoming.type && normalizeImportedCurrencyCode(account.currency) === normalizeImportedCurrencyCode(incoming.currency) &&
       matchesConfirmedCardNumber(account, incoming.accountNumber) ? 100 : 0;
