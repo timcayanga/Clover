@@ -1193,9 +1193,16 @@ function Expense({
         <CategoryBrandMark categoryName={e.categoryName ?? "Other"} size={32} />
         <div className="circle-expense-body">
           {e.kind === "split_bill" ? (
-            <Link href={e.href}>{e.title}</Link>
+            <Link className="circle-expense-title" href={e.href}>
+              {e.title}
+            </Link>
           ) : (
-            <button className="circle-text-action" onClick={onExpand}>
+            <button
+              type="button"
+              className="circle-expense-title"
+              aria-expanded={expanded}
+              onClick={onExpand}
+            >
               {e.title}
             </button>
           )}
@@ -1239,6 +1246,7 @@ function Expense({
           <h4>Line Items & Custom Split</h4>
           <SplitItemGrid
             fixedItems
+            compactPeople
             people={people}
             items={items}
             currency={e.currency}
@@ -1323,6 +1331,7 @@ function WholeSplit({
         <>
           <SplitItemGrid
             fixedItems
+            compactPeople
             people={people}
             items={items}
             currency={currency}

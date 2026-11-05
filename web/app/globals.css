@@ -67113,6 +67113,38 @@ html[data-theme="dark"] .home-quick-add__income{background:#18382b;color:#a0eac2
 .circle-detail .circle-product-tabs .animated-tabs__label{display:inline!important;font:inherit!important;white-space:nowrap!important}
 @media(max-width:700px){.circle-detail .circle-product-tabs.clover-tabs{grid-template-columns:repeat(6,minmax(0,1fr))}.circle-detail .circle-product-tabs.clover-tabs>button.animated-tabs__tab{font-size:clamp(10px,2.8vw,12px)!important;grid-column:span 2}.circle-detail .circle-product-tabs.clover-tabs>button.animated-tabs__tab:nth-last-child(-n+2){grid-column:span 3}.circle-detail .circle-product-tabs svg{width:16px;height:16px}}
 .circle-expense-body{flex:1;min-width:0}
+.circle-detail .circle-expense-title {
+  display: block;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--text);
+  font: inherit;
+  text-align: start;
+  overflow-wrap: anywhere;
+  cursor: pointer;
+}
+.circle-detail .circle-expense-title:hover { text-decoration: underline; }
+
+.circle-detail .split-item-grid--compact { table-layout: fixed; }
+.circle-detail .split-item-grid--compact :is(th, td) {
+  min-width: 0;
+  padding-inline: 4px;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+.circle-detail .split-item-grid--compact :is(th, td):first-child {
+  width: 84px;
+  padding-inline: 8px;
+}
+@media (min-width: 701px) {
+  .circle-detail .split-item-grid--compact :is(th, td):first-child { width: 25%; }
+}
+.circle-detail .split-item-grid--compact td:not(:first-child) .settings-input {
+  width: 100%;
+  min-width: 0;
+  padding-inline: 4px;
+}
 .circle-ledger-head{display:none}
 @media(min-width:1101px){
  .circle-detail .circle-ledger-head{display:grid;gap:10px;align-items:center;padding:8px;color:var(--muted);font-size:12px;font-weight:400}
@@ -67123,7 +67155,6 @@ html[data-theme="dark"] .home-quick-add__income{background:#18382b;color:#a0eac2
  .circle-contrib-ledger .circle-ledger-head,.circle-detail .circle-contrib-ledger>article{display:grid;grid-template-columns:32px minmax(0,1fr) 110px 140px}
  .circle-detail .circle-ledger>article,.circle-detail .circle-expense-entry>.circle-ledger__row{min-height:48px;padding:8px}
  .circle-detail .circle-ledger .circles-avatar{width:32px;height:32px;flex-basis:32px}
- .circle-detail .circle-expense-body .circle-text-action{text-align:left}
 }
 .circle-split-together .split-item-grid-scroll{border-radius:0;box-shadow:none;border:0;background:transparent}
 .circle-split-together .split-item-grid td:first-child strong{font-weight:500;font-size:13px}

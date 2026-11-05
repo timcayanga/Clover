@@ -15,8 +15,10 @@ export function SplitItemGrid({
   adjustment = 0,
   onAddPerson,
   fixedItems = false,
+  compactPeople = false,
 }: {
   fixedItems?: boolean;
+  compactPeople?: boolean;
   adjustment?: number;
   onAddPerson?: () => void;
   people: SplitPerson[];
@@ -32,8 +34,20 @@ export function SplitItemGrid({
   const method = items[0]?.splitMethod ?? "equal";
   return (
     <div className="split-item-editor">
-      <div className="split-item-grid-scroll">
-        <table className="split-item-grid">
+      <div
+        className="split-item-grid-scroll"
+        role={compactPeople ? "region" : undefined}
+        aria-label={compactPeople ? "Split allocations" : undefined}
+        tabIndex={compactPeople ? 0 : undefined}
+      >
+        <table
+          className={
+            compactPeople ? "split-item-grid split-item-grid--compact" : "split-item-grid"
+          }
+          style={
+            compactPeople ? { minWidth: 84 + people.length * 62 } : undefined
+          }
+        >
           <thead>
             <tr>
               <th>Item</th>
@@ -43,7 +57,9 @@ export function SplitItemGrid({
                     name={p.name}
                     avatarUrl={p.avatarUrl ?? null}
                   />
-                  <span>{p.name}</span>
+                  <span title={compactPeople ? p.name : undefined}>
+                    {compactPeople ? p.name.trim().split(/\s+/)[0] : p.name}
+                  </span>
                 </th>
               ))}
               {onAddPerson ? (
