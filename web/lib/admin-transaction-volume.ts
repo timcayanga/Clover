@@ -1,3 +1,5 @@
+import { customerAnalyticsSqlPredicate } from "./analytics-audience-sql";
+import { getAdminDataEnvironment } from "./admin";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { adminRealUserSqlPredicate } from "@/lib/admin-data-scope";
@@ -20,7 +22,7 @@ type AdminTransactionVolumeRow = {
   trackedAmount: Prisma.Decimal | string | number | null;
 };
 
-export async function getAdminTransactionVolumeSnapshot(): Promise<AdminTransactionVolumeSnapshot> {
+export async function getAdminTransactionVolumeSnapshot(customerOnly = false): Promise<AdminTransactionVolumeSnapshot> {
   const rows = await prisma.$queryRaw<AdminTransactionVolumeRow[]>(Prisma.sql`
     SELECT
       UPPER(COALESCE(NULLIF(TRIM(t."currency"), ''), 'PHP')) AS "currency",
@@ -40,7 +42,7 @@ export async function getAdminTransactionVolumeSnapshot(): Promise<AdminTransact
       ) AS "trackedAmount"
     FROM "Transaction" t
     INNER JOIN "Workspace" w ON w."id" = t."workspaceId"
-    INNER JOIN "User" u ON u."id" = w."userId" AND ${adminRealUserSqlPredicate("u")}
+    INNER JOIN "User" u ON u."id" = w."userId" AND ${customerOnly ? customerAnalyticsSqlPredicate("u", getAdminDataEnvironment()) : adminRealUserSqlPredicate("u")}
     WHERE t."deletedAt" IS NULL
     GROUP BY UPPER(COALESCE(NULLIF(TRIM(t."currency"), ''), 'PHP'))
   `);

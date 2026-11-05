@@ -2,7 +2,9 @@ import { prisma } from "./prisma";
 import { headers } from "next/headers";
 import { after } from "next/server";
 import { browserContext } from "../../shared/analytics";
-import { capturePostHogServerEvent as capture, type AnalyticsEventName, type AnalyticsProperties } from "./analytics";
+import { type AnalyticsEventName, type AnalyticsProperties } from "./analytics";
+import { capturePostHogServerEvent as capture } from "./analytics-capture";
+import { getAnalyticsAudience } from "./analytics-audience";
 export async function capturePostHogServerEvent(event: AnalyticsEventName, distinctId: string, properties: AnalyticsProperties = {}) {
   let context: AnalyticsProperties = { event_source: "server", platform: "server" };
   try {
@@ -28,7 +30,8 @@ export async function capturePostHogServerEvent(event: AnalyticsEventName, disti
     try {
       if (identity.startsWith("user_") && await prisma.clerkIdentityDeletion.findUnique({ where: { clerkUserId: identity }, select: { clerkUserId: true } })) return;
     } catch { return; /* Analytics must not block billing or capture an unverified deleted identity. */ }
-    await capture(event, identity, { ...context, ...properties });
+    const audience = await getAnalyticsAudience(identity);
+    await capture(event, identity, { ...context, ...properties, ...audience, event_source: "server" });
   };
   try { after(send); } catch { await send(); }
 }

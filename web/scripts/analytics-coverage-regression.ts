@@ -91,7 +91,8 @@ vm.runInNewContext(serverCode, { exports: serverModule.exports, require: (id: st
   if (id === "next/headers") return { headers: async () => { if (!requestHeaders) throw Error("worker"); return requestHeaders; } };
   if (id === "next/server") return { after: (run: () => Promise<void>) => { if (!requestHeaders) throw Error("worker"); scheduled.push(run); } };
   if (id.endsWith("shared/analytics")) return { browserContext };
-  if (id === "./analytics") return { capturePostHogServerEvent: async (...args: any[]) => { outgoing.push(args); } };
+  if (id === "./analytics-capture") return { capturePostHogServerEvent: async (...args: any[]) => { outgoing.push(args); } };
+  if (id === "./analytics-audience") return { getAnalyticsAudience: async () => ({analytics_audience:"customer",analytics_excluded:false,analytics_audience_version:1}) };
   if (id === "./prisma") return { prisma: { user: { findUnique: async () => ({ clerkUserId: "user_billing" }) }, clerkIdentityDeletion: { findUnique: async () => deletedIdentity ? { clerkUserId: "user_billing" } : null } } };
   throw Error(id);
 } });

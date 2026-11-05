@@ -1,8 +1,7 @@
+import { customerAnalyticsUserWhere } from "./analytics-audience";
 import { prisma } from "@/lib/prisma";
 import type { AdminCommandCenterSnapshot } from "@/components/admin-command-center";
 import {
-  getAdminRealUserWhere,
-  getAdminRealWorkspaceWhere,
   getCurrentDeploymentErrorWhere,
 } from "@/lib/admin-data-scope";
 import { FEATURE_FUNNEL_DEFINITIONS } from "@/lib/feature-adoption";
@@ -39,8 +38,8 @@ export async function getAdminCommandCenterSnapshot(
   const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
   const eightWeeksAgo = new Date(now.getTime() - 8 * 7 * 24 * 60 * 60 * 1000);
   const activeImportCutoff = getAdminImportActivityCutoff(now);
-  const realUser = getAdminRealUserWhere();
-  const realWorkspace = getAdminRealWorkspaceWhere();
+  const realUser = await customerAnalyticsUserWhere(getAdminDataEnvironment());
+  const realWorkspace = { user: realUser };
   const activeTransaction = { deletedAt: null } as const;
   const activeImport = { status: { not: "deleted" } } as const;
   const recentActivity = {
@@ -102,7 +101,7 @@ export async function getAdminCommandCenterSnapshot(
     prisma.account.count({
       where: { workspace: realWorkspace },
     }),
-    getAdminTransactionVolumeSnapshot(),
+    getAdminTransactionVolumeSnapshot(true),
     prisma.importFile.count({
       where: { ...activeImport, workspace: realWorkspace },
     }),

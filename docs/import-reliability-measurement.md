@@ -33,7 +33,7 @@ From `web`, with the intended database explicitly configured:
 npm run report:import-reliability -- 2026-11-04T00:00:00Z 2026-11-05T00:00:00Z
 ```
 
-End is exclusive. The report uses a repeatable-read/read-only transaction, refuses ranges above 93 days or 20,000 uploads, and prints only aggregates. It includes staff/test uploads; segment those separately before presenting customer conversion. Account deletion legitimately removes retained evidence, so this is not an immutable lifetime count. Missing samples never become zero milliseconds. Do not present an old-cohort run as a post-release measurement.
+End is exclusive. The report uses a repeatable-read/read-only transaction, refuses ranges above 93 days or 20,000 uploads, and prints only aggregates. Customer summaries now exclude known staff/test identities and report their upload counts separately; an all-upload diagnostic summary remains available. The optional third argument selects production (default) or staging. Account deletion legitimately removes retained evidence, so this is not an immutable lifetime count. Missing samples never become zero milliseconds. Do not present an old-cohort run as a post-release measurement.
 
 ## Verification contracts
 

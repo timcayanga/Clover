@@ -1,4 +1,5 @@
 import "server-only";
+import { scopeCustomerAnalyticsQuery } from "./analytics-query-scope";
 
 import {
   ANALYTICS_BETA_EPOCH,
@@ -225,7 +226,7 @@ const queryPostHog = async (
     const response = await fetch(`${config.appUrl}/api/projects/${encodeURIComponent(config.projectId)}/query/`, {
       method: "POST",
       headers: { Authorization: `Bearer ${config.personalApiKey}`, "Content-Type": "application/json" },
-      body: JSON.stringify({ query: { kind: "HogQLQuery", query }, name, refresh: "blocking" }),
+      body: JSON.stringify({ query: { kind: "HogQLQuery", query: await scopeCustomerAnalyticsQuery(query, environment) }, name, refresh: "blocking" }),
       cache: "no-store",
       signal: controller.signal,
     });
@@ -314,7 +315,7 @@ export async function getPostHogGrowthAnalytics(
     GROUP BY channel, source
   `;
   const engagementQuery = `
-    SELECT toString(properties.route) AS route, count(*) AS views,
+    SELECT coalesce(nullIf(toString(properties.public_resource_path), ''), toString(properties.route)) AS route, count(*) AS views,
       count(DISTINCT distinct_id) AS unique_visitors,
       avg(toFloat(properties.duration_ms)) AS average_duration_ms,
       avg(toFloat(properties.max_scroll_percent)) AS average_scroll_percent
@@ -323,7 +324,7 @@ export async function getPostHogGrowthAnalytics(
     GROUP BY route ORDER BY views DESC LIMIT 30
   `;
   const heatmapQuery = `
-    SELECT toString(properties.route) AS route,
+    SELECT coalesce(nullIf(toString(properties.public_resource_path), ''), toString(properties.route)) AS route,
       floor(toFloat(properties.x_percent) / 20) AS x_bucket,
       floor(toFloat(properties.y_percent) / 20) AS y_bucket,
       count(*) AS clicks, count(DISTINCT distinct_id) AS unique_visitors
@@ -540,7 +541,7 @@ export async function getPostHogFeatureFunnels(
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        query: { kind: "HogQLQuery", query },
+        query: { kind: "HogQLQuery", query: await scopeCustomerAnalyticsQuery(query, environment) },
         name: `clover_admin_feature_funnels_${environment}_${ANALYTICS_BETA_EPOCH}_${rangeStart.slice(0, 10)}_${rangeEnd.slice(0, 10)}`,
         refresh: "blocking",
       }),
@@ -609,7 +610,7 @@ export async function getPostHogLiveAnalytics(
       body: JSON.stringify({
         query: {
           kind: "HogQLQuery",
-          query,
+          query: await scopeCustomerAnalyticsQuery(query, environment),
         },
         name: `clover_admin_event_coverage_${environment}_${ANALYTICS_BETA_EPOCH}`,
         refresh: "blocking",

@@ -64,7 +64,7 @@ export function KnowledgeArticle({
         </div>
       </header>
       <div className={styles.articleLayout}>
-        <article className={styles.articleBody}>
+        <article data-analytics-resource={preview ? undefined : entry.path} className={styles.articleBody}>
           {content.category === "plans-billing" ? (
             <aside className={styles.callout}>
               <p>

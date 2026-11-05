@@ -30,14 +30,12 @@ assert.match(scopeSource, /seed-demo-user/);
 assert.match(scopeSource, /getCurrentDeploymentErrorWhere/);
 assert.match(scopeSource, /deploymentId: build\.deploymentId/);
 
-for (const file of [
-  "lib/admin-command-center.ts",
-  "lib/admin-analytics.ts",
-  "lib/admin-operations.ts",
-]) {
+for (const file of ["lib/admin-command-center.ts", "lib/admin-analytics.ts"]) {
   const source = readSource(file);
-  assert.match(source, /getAdminReal(?:User|Workspace)Where/);
+  assert.match(source, /await customerAnalyticsUserWhere\(getAdminDataEnvironment\(\)\)/);
 }
+// Operational inspection still includes staff/test records; customer metrics use the stricter scope.
+assert.match(readSource("lib/admin-operations.ts"), /getAdminReal(?:User|Workspace)Where/);
 
 const commandCenterSource = readSource("lib/admin-command-center.ts");
 assert.match(commandCenterSource, /getCurrentDeploymentErrorWhere/);
@@ -51,7 +49,7 @@ assert.match(analyticsSource, /betaParticipantUser/);
 assert.match(analyticsSource, /betaTransaction/);
 assert.match(analyticsSource, /betaImport/);
 assert.match(analyticsSource, /getPostHogLiveAnalytics\(getAdminDataEnvironment\(\)\)/);
-assert.match(analyticsSource, /environment: getAdminDataEnvironment\(\)/);
+assert.match(analyticsSource, /customerAnalyticsUserWhere\(getAdminDataEnvironment\(\)\)/);
 assert.match(
   analyticsSource,
   /Added data in 30d/,
@@ -105,10 +103,10 @@ const inquiriesComponentSource = readSource(
 );
 assert.match(inquiriesComponentSource, /View attachment/);
 assert.doesNotMatch(inquiriesComponentSource, /attachment\.dataUrl/);
-assert.match(
-  inquiriesComponentSource,
-  /if \(!normalized\) \{\s*return items;/,
-);
+// Search is server-paginated now: preserve all returned rows and encode the submitted query.
+assert.ok(inquiriesComponentSource.includes("query=${encodeURIComponent(search)}"));
+assert.match(inquiriesComponentSource, /const visible = items;/);
+assert.match(inquiriesComponentSource, /setSearch\(query\);\s*setPage\(1\)/);
 
 const attachmentRouteSource = readSource(
   "app/api/admin/inquiries\/[inquiryId]\/attachment/route.ts",

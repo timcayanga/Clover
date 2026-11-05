@@ -64,7 +64,7 @@ export function LandingSignupModal({ enabled, children }: LandingSignupModalProp
 
   if (!enabled) {
     return (
-      <Link className="button button-primary button-pill" href="/sign-up" prefetch={false}>
+      <Link data-analytics-action="signup" className="button button-primary button-pill" href="/sign-up" prefetch={false}>
         {children}
       </Link>
     );
@@ -72,7 +72,7 @@ export function LandingSignupModal({ enabled, children }: LandingSignupModalProp
 
   return (
     <>
-      <button ref={triggerRef} className="button button-primary button-pill" type="button" onClick={() => setOpen(true)}>
+      <button data-analytics-action="signup" ref={triggerRef} className="button button-primary button-pill" type="button" onClick={() => setOpen(true)}>
         {children}
       </button>
 

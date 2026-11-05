@@ -1,5 +1,6 @@
 "use client";
 
+import { isPublicAnalyticsPath, namedAnalyticsAction } from "../../shared/analytics-measurement";
 import { normalizePlanAnalytics } from "../../shared/plan-analytics";
 import Script from "next/script";
 import { browserContext, safeRoute, routeSegments, safeAction } from "../../shared/analytics";
@@ -43,6 +44,13 @@ type PostHogPersonPropertiesProps = {
 
 const normalizeHost = (host: string) => host.replace(/\/$/, "");
 const redactAnalyticsPath = (pathname: string | null | undefined) => safeRoute(pathname || "/");
+
+// Only a rendered, published knowledge article may declare a resource path.
+const publicResourceProperties = (pathname: string | null = window.location.pathname) => {
+  const path = document.querySelector("[data-analytics-resource]")?.getAttribute("data-analytics-resource");
+  return path === pathname && path === window.location.pathname && /^\/(guides\/[a-z0-9-]+|help\/[a-z0-9-]+\/[a-z0-9-]+)$/.test(path)
+    ? { public_resource_path: path } : {};
+};
 
 const getSafeAnalyticsLocation = (pathname: string | null | undefined = window.location.pathname) => {
   const safePathname = redactAnalyticsPath(pathname);
@@ -109,7 +117,9 @@ const safeCapture = (event: string, properties: Record<string, unknown> = {}) =>
       ...getAnalyticsEpochProperties(),
       ...browserContext(navigator.userAgent, window.innerWidth, navigator.maxTouchPoints),
       event_source: "web",
-      analytics_schema_version: 2,
+      analytics_schema_version: 3,
+      analytics_audience: "anonymous",
+      analytics_excluded: false,
       analytics_environment: getClientAnalyticsEnvironment(),
       ...currentPlanProperties,
       ...normalizePlanAnalytics(properties ?? {}),
@@ -157,10 +167,6 @@ type FirstTouchAttribution = {
   source: string;
   landingPath: string;
 };
-
-const PUBLIC_ANALYTICS_PATHS = ["/", "/features", "/pricing", "/contact-us", "/privacy-policy", "/terms-of-service", "/sign-in", "/sign-up", "/install"];
-const isPublicAnalyticsPath = (pathname: string) =>
-  PUBLIC_ANALYTICS_PATHS.some((path) => pathname === path || (path !== "/" && pathname.startsWith(`${path}/`)));
 
 const classifyAttribution = (): FirstTouchAttribution => {
   const params = new URLSearchParams(window.location.search);
@@ -247,10 +253,12 @@ function PostHogPageViews() {
   const pathname = usePathname();
 
   useEffect(() => {
+    const resourceProperties = publicResourceProperties(pathname);
     runWhenPostHogReady(() => {
       const attribution = getFirstTouchAttribution();
       safeCapture("$pageview", {
         ...getSafeAnalyticsLocation(pathname),
+        ...resourceProperties,
         route: redactAnalyticsPath(pathname),
         is_public_website: isPublicAnalyticsPath(pathname || "/"),
         ...(attribution ? {
@@ -275,6 +283,7 @@ function PostHogBehaviorSignals() {
     let maximumScroll = 0;
     let sent = false;
     const route = redactAnalyticsPath(pathname);
+    const resourceProperties = publicResourceProperties(pathname);
     const updateScroll = (event?: Event) => {
       const target = event?.target;
       const element = target instanceof Element ? target : document.scrollingElement;
@@ -293,11 +302,17 @@ function PostHogBehaviorSignals() {
           : target.closest("header") ? "header"
             : target.closest("aside") ? "sidebar"
               : target.closest("footer") ? "footer" : "main";
+      const namedAction = namedAnalyticsAction({ action: target.getAttribute("data-analytics-action"), href: target.getAttribute("href"), label: target.getAttribute("aria-label"), origin: window.location.origin });
+      const section = target.closest("[data-analytics-section]")?.getAttribute("data-analytics-section");
       safeCapture("ui_interaction", {
+        ...resourceProperties,
         route,
         x_percent: Math.min(99, Math.max(0, Math.floor((event.clientX / Math.max(1, window.innerWidth)) * 100))),
         y_percent: Math.min(99, Math.max(0, Math.floor((event.clientY / Math.max(1, window.innerHeight)) * 100))),
-        action: safeAction(target.getAttribute("aria-label") || target.textContent),
+        action: namedAction ?? safeAction(target.getAttribute("aria-label")),
+        action_named: Boolean(namedAction),
+        is_public_website: isPublicAnalyticsPath(pathname || "/"),
+        ...(section && ["hero", "final_cta", "pricing", "features"].includes(section) ? { cta_placement: section } : {}),
         target_type: target.getAttribute("role") || target.tagName.toLowerCase(),
         target_area: area,
         viewport_class: getCloverViewportLayout(window.innerWidth),
@@ -318,7 +333,9 @@ function PostHogBehaviorSignals() {
       const durationMs = Math.max(0, Math.round(activeDurationMs + (document.visibilityState === "visible" ? performance.now() - activeStartedAt : 0)));
       if (durationMs >= 500) {
         safeCapture("page_engagement", {
+          ...resourceProperties,
           route,
+          is_public_website: isPublicAnalyticsPath(pathname || "/"),
           duration_ms: durationMs,
           max_scroll_percent: maximumScroll,
           viewport_class: getCloverViewportLayout(window.innerWidth),

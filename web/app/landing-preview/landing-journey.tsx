@@ -98,7 +98,7 @@ function ComparisonTable() {
 
 export function JourneyActions({ authEnabled, final = false }: { authEnabled: boolean; final?: boolean }) {
   return <div className={styles.actions}>
-    {authEnabled ? <LandingSignupModal enabled>Organize my finances for free <span aria-hidden="true">→</span></LandingSignupModal> : <Link className="button button-primary button-pill" href="/sign-up" prefetch={false}>Organize my finances for free <span aria-hidden="true">→</span></Link>}
+    {authEnabled ? <LandingSignupModal enabled>Organize my finances for free <span aria-hidden="true">→</span></LandingSignupModal> : <Link className="button button-primary button-pill" data-analytics-action="signup" href="/sign-up" prefetch={false}>Organize my finances for free <span aria-hidden="true">→</span></Link>}
     {!final && <Link className="button button-secondary button-pill" href="/sign-in" prefetch={false}>Log in</Link>}
   </div>;
 }
@@ -208,7 +208,7 @@ export function JourneyHeader({ featureBasePath = "/features", homeHref = "/" }:
           <div ref={featuresRef} className={styles.featureMenu}>
             <button
               type="button"
-              className={styles.navTrigger}
+              data-analytics-action="view_features" className={styles.navTrigger}
               aria-expanded={featuresOpen}
               aria-controls="preview-features-menu"
               onClick={() => setFeaturesOpen((open) => !open)}

@@ -72,7 +72,7 @@ export function Action({
   href?: string;
 }) {
   return (
-    <Link prefetch={false} className={s.action} href={href}>
+    <Link data-analytics-action="signup" prefetch={false} className={s.action} href={href}>
       {children}
       <Icon />
     </Link>
@@ -574,14 +574,14 @@ export function Plans({ initialMarket }: { initialMarket: PricingMarket }) {
           <button
             type="button"
             aria-pressed={annual}
-            onClick={() => setAnnual(true)}
+            data-analytics-action="pricing_yearly" onClick={() => setAnnual(true)}
           >
             Yearly
           </button>
           <button
             type="button"
             aria-pressed={!annual}
-            onClick={() => setAnnual(false)}
+            data-analytics-action="pricing_monthly" onClick={() => setAnnual(false)}
           >
             Monthly
           </button>
@@ -694,7 +694,7 @@ export function Plans({ initialMarket }: { initialMarket: PricingMarket }) {
         <div className={s.carouselControls}>
           <button
             type="button"
-            aria-label="Previous plan"
+            data-analytics-action="pricing_previous" aria-label="Previous plan"
             onClick={() => move(-1)}
           >
             <Icon kind="back" />
@@ -705,7 +705,7 @@ export function Plans({ initialMarket }: { initialMarket: PricingMarket }) {
               {active + 1} / {plans.length}
             </small>
           </span>
-          <button type="button" aria-label="Next plan" onClick={() => move(1)}>
+          <button type="button" data-analytics-action="pricing_next" aria-label="Next plan" onClick={() => move(1)}>
             <Icon />
           </button>
         </div>
@@ -851,7 +851,7 @@ export function Showcase({ initialMarket, authEnabled = false, homeHref = "/land
         <div className={s.mainPurchase} data-main-purchase aria-hidden="true"><div className={s.mainPaper}><div className={s.mainReceiptBody}><Receipt /></div></div><img className={s.mainFlyingBrand} src="/assets/logo-library/company logos/food/starbucks/icon.png" width={64} height={64} alt="" /></div>
         <ScrollScene id="together" className={s.hero} flow>
           <div className={s.storyGrid}>
-            <div className={s.copy}>
+            <div data-analytics-section="hero" className={s.copy}>
               <Heading
                 hero
                 text="Connect supported banks, upload statements and receipts, or add details manually. Understand your money and take one clearer step at a time."
@@ -1001,7 +1001,7 @@ export function Showcase({ initialMarket, authEnabled = false, homeHref = "/land
           </Heading>
           <Plans initialMarket={initialMarket} />
         </section>
-        <section data-scroll-scene id="start-with-clover" className={s.finalCta} aria-labelledby="final-cta-title">
+        <section data-analytics-section="final_cta" data-scroll-scene id="start-with-clover" className={s.finalCta} aria-labelledby="final-cta-title">
           <div className={s.finalFriends} aria-hidden="true">
             <div className={s.finalFriend} data-side="left"><svg viewBox="790 120 365 750" role="presentation" focusable="false"><image href="/assets/landing-story-v2/06-life.webp" width="1693" height="900" /></svg></div>
             <div className={s.finalFriend} data-side="right"><svg viewBox="1155 120 430 750" role="presentation" focusable="false"><image href="/assets/landing-story-v2/06-life.webp" width="1693" height="900" /></svg></div>

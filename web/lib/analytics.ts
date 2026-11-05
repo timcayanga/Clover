@@ -1,4 +1,3 @@
-import { normalizePlanAnalytics } from "../../shared/plan-analytics";
 import { TELEMETRY_EVENTS, type TelemetryEvent } from "../../shared/analytics";
 import { getDeploymentEnvironment } from "@/lib/deployment-environment";
 
@@ -256,41 +255,6 @@ export const getPostHogClientHost = () => {
 };
 
 export const getPostHogServerHost = () => getPostHogConfig().host;
-
-export const capturePostHogServerEvent = async (
-  event: AnalyticsEventName,
-  distinctId: string,
-  properties: AnalyticsProperties = {}
-) => {
-  const { key } = getPostHogConfig();
-  const host = getPostHogServerHost();
-  const scopedDistinctId = scopeAnalyticsDistinctId(distinctId);
-
-  if (!key) {
-    return;
-  }
-
-  const response = await fetch(`${host}/capture/`, {
-    signal: AbortSignal.timeout(5000),
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      api_key: key,
-      event,
-      distinct_id: scopedDistinctId,
-      properties: {
-        ...getAnalyticsEpochProperties(),
-        analytics_environment: getAnalyticsEnvironment(),
-        ...normalizePlanAnalytics(properties),
-        ...(event === "plan_changed" ? { $set: normalizePlanAnalytics(properties) } : {}),
-      },
-      timestamp: new Date().toISOString(),
-    }),
-  }).catch(() => null);
-  if (!response?.ok) console.warn("[analytics] delivery_failed", { event, status: response?.status ?? 0 });
-};
 
 export const analyticsOnceKey = (event: AnalyticsEventName, scope: string) =>
   `posthog:${ANALYTICS_BETA_EPOCH}:${event}:${scope}`;

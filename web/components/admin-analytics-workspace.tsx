@@ -159,7 +159,7 @@ export function AdminAnalyticsWorkspace({ snapshot }: { snapshot: AdminAnalytics
                 </tbody>
               </table>
             </div>
-            <p className="admin-analytics__footnote">Unique accounts come from Clover's database. Attribution is first-touch and begins at the tracking date, so earlier accounts are intentionally excluded.</p>
+            <p className="admin-analytics__footnote">Customer analytics exclude known staff, demo/test identities, simulators and browser bots. Operational server events are retained. Unique accounts come from Clover's database. Attribution is first-touch and begins at the tracking date, so earlier accounts are intentionally excluded.</p>
           </>
         ) : (
           <p className="panel-muted">Acquisition aggregates are {growth.status === "not_configured" ? "not configured" : "temporarily unavailable"}. Database account counts and the other analytics panels remain available.</p>

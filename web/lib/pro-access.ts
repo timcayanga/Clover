@@ -1,3 +1,4 @@
+import { getAnalyticsAudience } from "./analytics-audience";
 import { trialSnapshot } from "../../shared/signup-trial";
 import { revokeSignupTrial } from "./signup-trial";
 import { after } from "next/server";
@@ -27,7 +28,7 @@ export async function getProAccess(userId: string) {
   return {
     ...access,
     trial: trialSnapshot(user.signupTrial, access.hasPaidSubscription, access.planTier, new Date(), access.source),
-    analytics: planContext(access.planTier, access.source, user.storeAccess?.expiresAt && user.storeAccess.expiresAt > new Date() ? user.storeAccess.store : user.billingSubscription?.provider, access.hasPaidSubscription),
+    analytics: { ...planContext(access.planTier, access.source, user.storeAccess?.expiresAt && user.storeAccess.expiresAt > new Date() ? user.storeAccess.store : user.billingSubscription?.provider, access.hasPaidSubscription), ...await getAnalyticsAudience(user.clerkUserId, user.email) },
     user: {
       id: user.id,
       email: user.email,

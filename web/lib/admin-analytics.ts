@@ -1,9 +1,8 @@
+import { customerAnalyticsUserWhere } from "./analytics-audience";
 import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { getAdminDataEnvironment } from "@/lib/admin";
 import {
-  getAdminRealUserWhere,
-  getAdminRealWorkspaceWhere,
   getCurrentDeploymentErrorWhere,
 } from "@/lib/admin-data-scope";
 import {
@@ -112,8 +111,8 @@ export async function getAdminAnalyticsSnapshot(): Promise<AdminAnalyticsSnapsho
   const thirtyDaysAgo = sinceBeta(new Date(now - 30 * 24 * 60 * 60 * 1000));
   const oneDayAgo = sinceBeta(new Date(now - 24 * 60 * 60 * 1000));
   const staleImportCutoff = getAdminImportActivityCutoff(new Date(now));
-  const productionUser = getAdminRealUserWhere();
-  const productionWorkspace = getAdminRealWorkspaceWhere();
+  const productionUser = await customerAnalyticsUserWhere(getAdminDataEnvironment());
+  const productionWorkspace = { user: productionUser };
   const betaParticipantUser: Prisma.UserWhereInput = {
     AND: [
       productionUser,
