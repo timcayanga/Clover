@@ -13,6 +13,9 @@ background subscription, or coordinate upload is involved. This avoids VPN-based
 country mistakes, though browser/device location itself is still an imperfect hint.
 
 The native helper requests balanced foreground location only after the explicit action.
+As of November 5, Android requests approximate/coarse permission only; precise and
+background permissions are removed by manifest merge. iOS retains its foreground
+permission. See `docs/google-play-policy-october-2026.md` for the policy assessment.
 The location lookup is capped at four seconds after the permission decision. Poor accuracy
 (over 5 km), Android mocked fixes, stale fixes, and uncertain border locations are declined.
 The fix must be captured within ten minutes; the receipt's date must be within 36 hours

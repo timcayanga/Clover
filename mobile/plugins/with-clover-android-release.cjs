@@ -1,4 +1,4 @@
-const { withAndroidManifest, withAppBuildGradle, withDangerousMod } = require("expo/config-plugins");
+const { withAndroidManifest, withAppBuildGradle, withGradleProperties, withDangerousMod } = require("expo/config-plugins");
 const fs = require("node:fs/promises");
 const path = require("node:path");
 
@@ -36,9 +36,38 @@ function configureOptionalLocation(manifest) {
   return manifest;
 }
 
+function configureLegacyCameraStorage(manifest) {
+  // The SDK's external camera contract requires WRITE permission on API 26–28.
+  // Retain that compatibility only there; API 29+ camera and system file/photo
+  // pickers do not need broad storage access. Override SDK manifests' maxSdk=32.
+  manifest.$ = { ...manifest.$, "xmlns:tools": "http://schemas.android.com/tools" };
+  manifest["uses-permission"] = [
+    ...(manifest["uses-permission"] || []).filter(item => item.$?.["android:name"] !== "android.permission.WRITE_EXTERNAL_STORAGE"),
+    { $: { "android:name": "android.permission.WRITE_EXTERNAL_STORAGE", "android:maxSdkVersion": "28", "tools:replace": "android:maxSdkVersion" } },
+  ];
+  return manifest;
+}
+
+function configureOptimizationProperties(properties) {
+  const settings = {
+    "android.r8.optimizedResourceShrinking": "true",
+    "android.enableR8.fullMode": "true",
+  };
+  return [
+    ...properties.filter(item => item.type !== "property" || !(item.key in settings)),
+    ...Object.entries(settings).map(([key, value]) => ({ type: "property", key, value })),
+  ];
+}
+
 module.exports = config => {
+  config = withGradleProperties(config, config => {
+    // AGP 8.12 supports this pipeline, but doesn't enable it by default.
+    config.modResults = configureOptimizationProperties(config.modResults);
+    return config;
+  });
   config = withAndroidManifest(config, config => {
     configureOptionalLocation(config.modResults.manifest);
+    configureLegacyCameraStorage(config.modResults.manifest);
     return config;
   });
   config = withAppBuildGradle(config, config => {
@@ -71,3 +100,5 @@ module.exports = config => {
 };
 module.exports.configureGradle = configureGradle;
 module.exports.configureOptionalLocation = configureOptionalLocation;
+module.exports.configureOptimizationProperties = configureOptimizationProperties;
+module.exports.configureLegacyCameraStorage = configureLegacyCameraStorage;

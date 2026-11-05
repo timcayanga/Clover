@@ -21,6 +21,27 @@ const config: ExpoConfig = {
   android: {
     package: process.env.CLOVER_ANDROID_PACKAGE_ID || "ph.clover.preview",
     allowBackup: false,
+    // Country-only receipt suggestions never need precise/background location.
+    // Remove these even when a dependency contributes them during manifest merge.
+    blockedPermissions: [
+      "android.permission.ACCESS_FINE_LOCATION",
+      "android.permission.ACCESS_BACKGROUND_LOCATION",
+      "android.permission.FOREGROUND_SERVICE_LOCATION",
+      "android.permission.READ_CONTACTS",
+      "android.permission.WRITE_CONTACTS",
+      "android.permission.MANAGE_CONTACTS",
+      "android.permission.ACCESS_LOCAL_NETWORK",
+      "android.permission.MANAGE_EXTERNAL_STORAGE",
+      "android.permission.READ_EXTERNAL_STORAGE",
+      "android.permission.READ_MEDIA_IMAGES",
+      "android.permission.READ_MEDIA_VIDEO",
+      "android.permission.READ_MEDIA_AUDIO",
+      "android.permission.READ_SMS",
+      "android.permission.RECEIVE_SMS",
+      "android.permission.SEND_SMS",
+      "android.permission.READ_CALL_LOG",
+      "android.permission.WRITE_CALL_LOG",
+    ],
     intentFilters: [{
       action: "VIEW", autoVerify: true, category: ["BROWSABLE", "DEFAULT"],
       data: ["clover.ph", "staging.clover.ph"].map(host => ({ scheme: "https", host, pathPrefix: "/split-bill/request/" })),

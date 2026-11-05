@@ -6,7 +6,7 @@ import { execFileSync } from "node:child_process";
 import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
 const require = createRequire(import.meta.url);
-const { configureGradle, configureOptionalLocation } = require("../plugins/with-clover-android-release.cjs");
+const { configureGradle, configureOptionalLocation, configureOptimizationProperties } = require("../plugins/with-clover-android-release.cjs");
 const camera = { $: { "android:name": "android.hardware.camera", "android:required": "false" } };
 for (const features of [undefined, [camera], [camera, { $: { "android:name": "android.hardware.location", "android:required": "true" } }]]) {
   const manifest = { ...(features ? { "uses-feature": structuredClone(features) } : {}), "uses-permission": [{ $: { "android:name": "android.permission.ACCESS_COARSE_LOCATION" } }] };
@@ -19,6 +19,16 @@ for (const features of [undefined, [camera], [camera, { $: { "android:name": "an
   const first = structuredClone(manifest);
   assert.deepEqual(configureOptionalLocation(manifest), first, "Repeated prebuilds preserve optional hardware and unrelated entries");
 }
+const properties = [{ type: "comment", value: "Keep existing settings" },
+  { type: "property", key: "unrelated", value: "unchanged" },
+  { type: "property", key: "android.enableR8.fullMode", value: "false" },
+  { type: "property", key: "android.r8.optimizedResourceShrinking", value: "false" }];
+const optimized = configureOptimizationProperties(properties);
+for (const key of ["android.enableR8.fullMode", "android.r8.optimizedResourceShrinking"]) {
+  assert.deepEqual(optimized.filter(item => item.key === key), [{ type: "property", key, value: "true" }]);
+}
+assert.deepEqual(optimized.slice(0, 2), properties.slice(0, 2));
+assert.deepEqual(configureOptimizationProperties(optimized), optimized);
 const source = 'proguardFiles getDefaultProguardFile("proguard-android.txt"), "proguard-rules.pro"';
 assert.match(configureGradle(source), /proguard-android-optimize\.txt/);
 assert.equal(configureGradle(configureGradle(source)), configureGradle(source));
@@ -106,3 +116,5 @@ try {
     fileURLToPath(new URL("../plugins/android-release/AndroidCompatibility.java", import.meta.url))], { stdio: "pipe" });
   execFileSync(java("java"), ["-cp", temporary, "ReleaseCheck"], { stdio: "inherit" });
 } finally { rmSync(temporary, { recursive: true, force: true }); }
+
+await import("./android-permission-policy-check.mjs");

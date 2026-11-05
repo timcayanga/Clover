@@ -5,6 +5,14 @@ The Expo config plugin installs this configuration again after every clean
 prebuild. Do not edit the generated `mobile/android` tree as the source of truth.
 Keep the R8 mapping with each release; the AAB embeds it for Google Play.
 
+As of November 5, the prebuild also enables R8 full mode and
+`android.r8.optimizedResourceShrinking=true` for the pinned AGP 8.12 toolchain.
+The latter is supported in AGP 8.12 but is not enabled by default until AGP 9.
+The actual Expo plugin output is checked in `check:android-release` alongside
+the restricted-permission removal markers and legacy camera storage cap.
+See `docs/google-play-policy-october-2026.md` for deadlines and the remaining
+uploaded-bundle DEX/memory checks; flags alone do not prove Play's percentages.
+
 ## Compatibility shims
 
 The pinned React Native 0.86.3, Clerk Android API 1.1.5, and Material 1.13.0
