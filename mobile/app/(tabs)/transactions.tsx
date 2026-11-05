@@ -350,13 +350,13 @@ export default function Transactions() {
               {error ? "Pull down to retry." : hasTransactionFilters(filterValues, search) ? "No matching transactions. Try another search or filter." : "Add your first transaction. Upload a receipt or add one manually."}
             </CloverEmptyState>
           ) : (
-            !refreshing ? <View accessibilityLabel="Loading transactions" accessibilityRole="progressbar" style={{ padding: 24, alignItems: "center" }}><ActivityIndicator color={colors.teal} /></View> : null
+            !refreshing ? <View accessibilityLabel="Loading transactions" accessibilityRole="progressbar" style={{ padding: 24, alignItems: "center" }}><ActivityIndicator color={colors.teal} /></View> : undefined
           )
         }
         ListFooterComponent={
           rows.length > 0 && rows.length < total && !demo && !refreshing ? (
-            busy ? <View accessibilityLabel="Loading more transactions" accessibilityRole="progressbar" style={{padding:16}}><ActivityIndicator color={colors.teal}/></View> : null
-          ) : null
+            busy ? <View accessibilityLabel="Loading more transactions" accessibilityRole="progressbar" style={{padding:16}}><ActivityIndicator color={colors.teal}/></View> : undefined
+          ) : undefined
         }
       />
     </View>

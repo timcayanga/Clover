@@ -1,6 +1,6 @@
 import { usePageAskClover } from "./page-ask-context";
 import { useRef, useState } from "react";
-import { Pressable, ScrollView, View } from "react-native";
+import { Pressable, ScrollView, type ScrollViewInstance, View } from "react-native";
 import { router, type Href } from "expo-router";
 import { Text } from "./app-text";
 import { Card, Icon, useTheme } from "./ui";
@@ -10,7 +10,7 @@ export function HomeQuickAccess() {
   const { colors, dark } = useTheme(),
     [width, setWidth] = useState(0),
     [page, setPage] = useState(0),
-    scroll = useRef<ScrollView>(null);
+    scroll = useRef<ScrollViewInstance>(null);
   const route = (path: string) =>
     (({
       "/accounts": "/(tabs)/accounts",

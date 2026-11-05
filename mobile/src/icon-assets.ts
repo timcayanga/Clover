@@ -1,6 +1,6 @@
-import type { ImageSourcePropType } from "react-native";
+// Metro returns numeric handles for these bundled images.
 
-export const mobileNavigationIcons: Record<string, ImageSourcePropType> = {
+export const mobileNavigationIcons: Record<string, number> = {
   "log-out-outline": require("../assets/icons/navigation/signOut.png"),
   "help-circle-outline": require("../assets/icons/navigation/help.png"),
   "home-outline": require("../assets/icons/web/home.webp"),
@@ -27,7 +27,7 @@ export const mobileNavigationIcons: Record<string, ImageSourcePropType> = {
   "trending-up-outline": require("../assets/icons/web/investments.webp"),
   "notifications-outline": require("../assets/icons/navigation/notifications.png"),
 };
-export const mobileInterfaceIcons: Record<string, ImageSourcePropType> = {
+export const mobileInterfaceIcons: Record<string, number> = {
   "cloud-upload-outline": require("../assets/icons/interface/upload.png"),
   "cloud-download-outline": require("../assets/icons/interface/download.png"),
   "pencil-outline": require("../assets/icons/interface/edit.png"),
@@ -42,7 +42,7 @@ export const mobileInterfaceIcons: Record<string, ImageSourcePropType> = {
   "calendar-outline": require("../assets/icons/interface/date.png"),
   "information-circle-outline": require("../assets/icons/interface/details.png"),
 };
-export const mobileCategoryIcons: Record<string, ImageSourcePropType> = {
+export const mobileCategoryIcons: Record<string, number> = {
   income: require("../assets/icons/categories/income.png"),
   "food & dining": require("../assets/icons/categories/food-dining.png"),
   transport: require("../assets/icons/categories/transport.png"),

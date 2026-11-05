@@ -43,15 +43,18 @@ try {
   assert.ok(!plist.UIBackgroundModes?.includes("location"));
   const scene = plist.UIApplicationSceneManifest;
   assert.equal(scene?.UISceneConfigurations?.UIWindowSceneSessionRoleApplication?.[0]?.UISceneDelegateClassName,
-    "EXExpoAppSceneDelegate", "iOS 27 requires a configured Expo scene delegate in the generated app");
+    "$(PRODUCT_MODULE_NAME).SceneDelegate", "iOS 27 requires a configured Expo scene delegate in the generated app");
   assert.equal(scene.UIApplicationSupportsMultipleScenes, false);
   const delegate = readFileSync(join(native, "AppDelegate.swift"), "utf8");
   assert.match(delegate, /class AppDelegate: ExpoAppDelegate, ExpoReactNativeFactoryProvider/);
   assert.match(delegate, /reactNativeFactory = factory/);
   assert.doesNotMatch(delegate, /window = UIWindow\(frame: UIScreen\.main\.bounds\)/);
   assert.doesNotMatch(delegate, /factory\.startReactNative\(/);
-  assert.match(delegate, /open url: URL/);
-  assert.match(delegate, /continue userActivity: NSUserActivity/);
+  const sceneDelegate = readFileSync(join(native, "SceneDelegate.swift"), "utf8");
+  assert.match(sceneDelegate, /class SceneDelegate: ExpoAppSceneDelegate/);
+  const expoScene = readFileSync(join(dirname(require.resolve("expo/package.json")), "ios/Expo/ExpoAppSceneDelegate.swift"), "utf8");
+  assert.match(expoScene, /openURLContexts/);
+  assert.match(expoScene, /continue userActivity: NSUserActivity/);
   assert.ok(plist.CFBundleURLTypes.some(type => type.CFBundleURLSchemes?.includes("clover")));
   assert.ok(existsSync(join(native, "Clover.entitlements")));
   const entitlements = parse(readFileSync(join(native, "Clover.entitlements"), "utf8"));

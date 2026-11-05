@@ -8,10 +8,10 @@ import {
   type ReactNode,
   type RefObject,
 } from "react";
-import { AccessibilityInfo, ScrollView, View } from "react-native";
+import { AccessibilityInfo, type ScrollViewInstance, View, type ViewInstance } from "react-native";
 import { ChoiceField } from "./transaction-entry";
 import { useAccessibilityPreferences } from "./accessibility-preferences";
-type Entry = { id: string; title: string; ref: RefObject<View | null> };
+type Entry = { id: string; title: string; ref: RefObject<ViewInstance | null> };
 const CurrencyContext = createContext("");
 export function ReportCurrencyScope({
   currency,
@@ -36,7 +36,7 @@ export function ReportNavigation({
   controller,
 }: {
   children: ReactNode;
-  controller: { ref: RefObject<ScrollView | null>; offset: RefObject<number> };
+  controller: { ref: RefObject<ScrollViewInstance | null>; offset: RefObject<number> };
 }) {
   const [entries, setEntries] = useState<Entry[]>([]);
   const { reduceMotion } = useAccessibilityPreferences();
@@ -82,7 +82,7 @@ export function ReportJumpTarget({
   const currency = useContext(CurrencyContext);
   const context = useContext(Context),
     register = context?.register;
-  const ref = useRef<View>(null),
+  const ref = useRef<ViewInstance>(null),
     id = useRef(Math.random().toString(36).slice(2));
   useEffect(
     () =>

@@ -1,15 +1,15 @@
 import { createContext, useCallback, useEffect, useRef } from "react";
-import { Keyboard, Platform, type ScrollView, type TextInput } from "react-native";
+import { Keyboard, Platform, type ScrollViewInstance, type TextInputInstance } from "react-native";
 import { focusScrollDelta, type Rect } from "./device-geometry";
 
-export const FocusVisibility = createContext<(input: TextInput | null) => void>(() => {});
+export const FocusVisibility = createContext<(input: TextInputInstance | null) => void>(() => {});
 
 /** Supplement native keyboard insets with focused-field visibility, including
  * floating keyboards. Measure AFTER native layout rather than adding a second inset. */
 export function useKeyboardVisibility(bottomOcclusion = 0) {
   const reservedBottom = useRef(bottomOcclusion); reservedBottom.current = bottomOcclusion;
-  const scroll = useRef<ScrollView>(null);
-  const focused = useRef<TextInput | null>(null);
+  const scroll = useRef<ScrollViewInstance>(null);
+  const focused = useRef<TextInputInstance | null>(null);
   const keyboard = useRef<Rect | null>(null);
   const offset = useRef(0);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -39,6 +39,6 @@ export function useKeyboardVisibility(bottomOcclusion = 0) {
     }), Keyboard.addListener("keyboardDidHide", () => { keyboard.current = null; })];
     return () => { subscriptions.forEach(subscription => subscription.remove()); if (timer.current) clearTimeout(timer.current); };
   }, [ensureVisible]);
-  const focus = useCallback((input: TextInput | null) => { focused.current = input; if (input) ensureVisible(); }, [ensureVisible]);
+  const focus = useCallback((input: TextInputInstance | null) => { focused.current = input; if (input) ensureVisible(); }, [ensureVisible]);
   return { scroll, offset, focus, ensureVisible };
 }

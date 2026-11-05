@@ -1,6 +1,6 @@
 import { Text } from "../src/app-text";
 import { useEffect, useRef, useState } from "react";
-import { Image, Pressable, ScrollView, StyleSheet, View, useWindowDimensions } from "react-native";
+import { Image, Pressable, ScrollView, type ScrollViewInstance, StyleSheet, View, useWindowDimensions } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAccess } from "../src/access";
@@ -18,7 +18,7 @@ export default function Welcome() {
   const access = useAccess();
   const { width, height, fontScale } = useWindowDimensions();
   const insets = useSafeAreaInsets();
-  const pager = useRef<ScrollView>(null);
+  const pager = useRef<ScrollViewInstance>(null);
   const [index, setIndex] = useState(0);
   const [pageWidth, setPageWidth] = useState(width);
   const [error, setError] = useState("");

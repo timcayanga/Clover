@@ -34,6 +34,7 @@ import {
   StyleSheet,
   View,
   type ColorValue,
+  type ScrollViewInstance,
   type TextInputProps,
   type ViewStyle,
 } from "react-native";
@@ -75,6 +76,8 @@ export function Icon({
   line?: boolean;
 }) {
   const { colors, styles, dark } = useTheme();
+  const resolvedColor = color ?? colors.teal;
+  const iconColor = typeof resolvedColor === "number" ? `#${(resolvedColor >>> 0).toString(16).padStart(8, "0")}` : resolvedColor;
   const source = line
     ? undefined
     : (mobileNavigationIcons[name] ?? mobileInterfaceIcons[name]);
@@ -96,7 +99,7 @@ export function Icon({
         }}
       />
     );
-  return <Ionicons accessible={false} importantForAccessibility="no" name={name} color={color ?? colors.teal} size={size} />;
+  return <Ionicons accessible={false} importantForAccessibility="no" name={name} color={iconColor} size={size} />;
 }
 export function CategoryMark({
   name,
@@ -243,7 +246,7 @@ export function Screen({
   scrollKey?: string;
   layout?: "reading" | "dashboard" | "form";
   keyboardInsets?: boolean;
-  scrollController?: {ref: import("react").RefObject<ScrollView|null>;offset:import("react").RefObject<number>};
+  scrollController?: {ref: import("react").RefObject<ScrollViewInstance|null>;offset:import("react").RefObject<number>};
   onDismiss?: () => void;
 }) {
   const { colors, styles, dark } = useTheme();

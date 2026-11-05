@@ -81,9 +81,12 @@ npm run build:android
 
 Requirements for this version:
 
+- Expo 58.0.23, React Native 0.88.1, React 19.3, AGP 9.2.1 and Gradle 9.4.1.
+  Use Node 24 (`nvm use` in `mobile/`); Node 25 is not supported by this Expo SDK.
+
 - iOS: full Xcode 26.4+, an iOS Simulator runtime, CocoaPods 1.15.2+.
   Clerk's native dependency raises this app's minimum iOS target to **17.0**.
-- Android: Android Studio or equivalent SDK tooling, JDK 17, SDK platform 36,
+- Android: Android Studio or equivalent SDK tooling, JDK 17, SDK platform 37 (target SDK remains 36),
   platform-tools, and an emulator system image. Set `ANDROID_HOME` and `JAVA_HOME` explicitly. The bundled Java 25 triggered CMake/prefab configuration errors in this task; use the installed Java 17 toolchain.
 - Toolchains are available on the development Mac. See the verification ledger for installed-build and device-test results.
 - Run one emulator at a time on this 8 GB Mac. Keep Metro at two workers if needed.

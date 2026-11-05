@@ -7,7 +7,7 @@ import { ReportCoverageDetails, ReportSpendingDetails } from "./report-details";
 import { exportReport } from "./report-export";
 import { reportTransactionParams } from "../../shared/reports/drilldown";
 import { useEffect, useState, useRef, type ReactNode } from "react";
-import { Alert, Pressable, ScrollView, View } from "react-native";
+import { Alert, Pressable, ScrollView, type ScrollViewInstance, View } from "react-native";
 import { router } from "expo-router";
 import { useSession } from "./session";
 import { Text } from "./app-text";
@@ -71,7 +71,7 @@ export function NativeReportsWorkspace() {
   return <ReportWorkspace key={session.profileId} />;
 }
 function ReportWorkspace() {
-  const scrollRef = useRef<ScrollView>(null), scrollOffset = useRef(0);
+  const scrollRef = useRef<ScrollViewInstance>(null), scrollOffset = useRef(0);
   const session = useSession(),
     { colors } = useTheme();
   const [view, setView] = useState<ReportView>(defaultReportView),

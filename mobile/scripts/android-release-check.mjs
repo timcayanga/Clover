@@ -33,6 +33,12 @@ const source = 'proguardFiles getDefaultProguardFile("proguard-android.txt"), "p
 assert.match(configureGradle(source), /proguard-android-optimize\.txt/);
 assert.equal(configureGradle(configureGradle(source)), configureGradle(source));
 assert.throws(() => configureGradle("new template"), /Review/);
+const catalog = readFileSync(new URL("../node_modules/@react-native/gradle-plugin/gradle/libs.versions.toml", import.meta.url), "utf8");
+const agp = /^agp = "([^"]+)"$/m.exec(catalog)?.[1];
+assert.equal(agp, "9.2.1", "The reviewed SDK must resolve AGP 9, not just a Gradle 9 wrapper");
+const buildSrc = readFileSync(new URL("../plugins/android-release/build.gradle", import.meta.url), "utf8");
+assert.ok(buildSrc.includes(`com.android.tools.build:gradle:${agp}`), "Instrumentation must compile against the application's AGP");
+assert.match(configureGradle(source), /verifyCloverReleaseOptimization/);
 const config = readFileSync(new URL("../app.config.ts", import.meta.url), "utf8");
 assert.match(config, /enableMinifyInReleaseBuilds: true/);
 assert.match(config, /enableShrinkResourcesInReleaseBuilds: true/);
@@ -72,7 +78,7 @@ const files = {
     public class ReleaseCheck {
       static void check(boolean value) { if (!value) throw new AssertionError(); }
       public static void main(String[] args) {
-        for (int sdk : new int[] {26,28,30,34,35,36}) {
+        for (int sdk : new int[] {26,28,30,34,35,36,37}) {
           Build.VERSION.SDK_INT=sdk; Window w=new Window();
           check(AndroidCompatibility.getStatusBarColor(w)==(sdk>=35?0:123));
           AndroidCompatibility.setStatusBarColor(w,17); AndroidCompatibility.setNavigationBarColor(w,18);
@@ -100,7 +106,7 @@ const files = {
         try { AndroidCompatibility.decodeProfilePhoto("not-image.pdf"); throw new AssertionError(); }
         catch (IllegalArgumentException expected) {}
         check(BitmapFactory.pixelCalls==before);
-        System.out.println("Android release checks passed: API 26–36 compatibility, bounded decoding, corrupt image handling, repeatable prebuild.");
+        System.out.println("Android release checks passed: API 26–37 compatibility, bounded decoding, corrupt image handling, repeatable prebuild.");
       }
     }`,
 };

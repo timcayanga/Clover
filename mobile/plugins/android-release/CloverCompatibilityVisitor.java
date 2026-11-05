@@ -15,8 +15,6 @@ public final class CloverCompatibilityVisitor extends ClassVisitor {
 
   public static boolean isTarget(String name) {
     return name.equals(IMAGE)
-        || name.equals("com/facebook/react/modules/statusbar/StatusBarModule")
-        || name.equals("com/facebook/react/modules/statusbar/StatusBarModule$setColor$1")
         || name.equals("com/facebook/react/views/view/WindowUtilKt")
         || name.equals("com/google/android/material/internal/EdgeToEdgeUtils")
         || name.equals("com/google/android/material/bottomsheet/BottomSheetDialog")

@@ -11,10 +11,10 @@ import {
   type ReactNode,
   type RefObject,
 } from "react";
-import { AccessibilityInfo, StyleSheet, View, Platform } from "react-native";
+import { AccessibilityInfo, StyleSheet, View, type ViewInstance, Platform } from "react-native";
 import { BlurView, BlurTargetView } from "expo-blur";
 import { GlassView, isGlassEffectAPIAvailable, isLiquidGlassAvailable } from "expo-glass-effect";
-type Target = RefObject<View | null> | undefined;
+type Target = RefObject<ViewInstance | null> | undefined;
 const GlassTargetContext = createContext<{target:Target; setTarget:Dispatch<SetStateAction<Target>>} | null>(null);
 export function GlassNavigationProvider({ children }: { children: ReactNode }) {
   const [target,setTarget] = useState<Target>(undefined);
@@ -25,7 +25,7 @@ export function GlassNavigationProvider({ children }: { children: ReactNode }) {
   );
 }
 export function GlassContent({ children }: { children: ReactNode }) {
-  const target = useRef<View>(null);
+  const target = useRef<ViewInstance>(null);
   const setTarget = useContext(GlassTargetContext)?.setTarget;
   useFocusEffect(useCallback(() => {
     setTarget?.(target);

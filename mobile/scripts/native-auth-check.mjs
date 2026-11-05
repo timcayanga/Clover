@@ -45,7 +45,7 @@ async function checkFlow(outcome) {
   const { subscribe } = loadModule(require.resolve("expo-router/build/link/linking.js"), {
     "expo-linking": Linking, "react-native": { Platform: { OS: "android" } },
     "../fork/extractPathFromURL": {}, "../fork/getPathFromState": {},
-    "../fork/getStateFromPath": {}, "../fork/useLinking": {},
+    "../fork/getStateFromPath": {}, "../fork/getInitialURLWithTimeout": {},
     "../getRoutesRedirects": { applyRedirects: url => url },
   });
   const unsubscribe = subscribe({ redirectSystemPath })(url => navigations.push(url));

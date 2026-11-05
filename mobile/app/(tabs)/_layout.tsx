@@ -19,6 +19,8 @@ import {
   ProfileGate,
   useTheme,
 } from "../../src/ui";
+export const unstable_settings = { initialRouteName: "index" };
+
 export default function TabLayout() {
   const { colors, dark } = useTheme();
   const askClover = usePageAskClover();
@@ -52,8 +54,7 @@ export default function TabLayout() {
             screenLayout={({ children }) => (
               <GlassContent>{children}</GlassContent>
             )}
-            initialRouteName="index"
-            tabBar={({ state, descriptors, navigation }) => (
+            tabBar={({ state, descriptors, emitter, navigateToTab }) => (
               <NavigationBar dark={dark}>
                 {state.routes.filter(route => ["index", "transactions", "add", "adviser", "account"].includes(route.name)).map(route => {
                   const options = descriptors[route.key].options;
@@ -63,10 +64,10 @@ export default function TabLayout() {
                     selected={focused} add={route.name === "add"} color={color}
                     onPress={() => {
                       if (route.name === "adviser") { askClover(askPageContext(path, params)); return; }
-                      const event = navigation.emit({ type: "tabPress", target: route.key, canPreventDefault: true });
-                      if (!focused && !event.defaultPrevented) navigation.navigate(route.name, route.params);
+                      const event = emitter.emit({ type: "tabPress", target: route.key, canPreventDefault: true });
+                      if (!focused && !event.defaultPrevented) navigateToTab(route.key);
                     }}
-                    onLongPress={() => navigation.emit({ type: "tabLongPress", target: route.key })}>
+                    onLongPress={() => emitter.emit({ type: "tabLongPress", target: route.key })}>
                     {options.tabBarIcon?.({ focused, color, size: 34 })}
                   </NavigationItem>;
                 })}

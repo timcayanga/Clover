@@ -5,6 +5,8 @@ import {
   Text as NativeText,
   TextInput as NativeTextInput,
   type TextProps,
+  type TextInstance,
+  type TextInputInstance,
   type TextInputProps,
 } from "react-native";
 import { FocusVisibility } from "./keyboard-visibility";
@@ -12,7 +14,7 @@ import { resolveAppFont } from "./app-font";
 
 const FontContext = createContext("Poppins-Regular");
 
-export const Text = forwardRef<NativeText, TextProps>(function AppText(
+export const Text = forwardRef<TextInstance, TextProps>(function AppText(
   { style, children, ...props }, ref,
 ) {
   const inherited = useContext(FontContext);
@@ -28,11 +30,11 @@ export const Text = forwardRef<NativeText, TextProps>(function AppText(
   );
 });
 
-export const TextInput = forwardRef<NativeTextInput, TextInputProps>(function AppTextInput(
+export const TextInput = forwardRef<TextInputInstance, TextInputProps>(function AppTextInput(
   { style, ...props }, ref,
 ) {
   const fontFamily = resolveAppFont(StyleSheet.flatten(style) ?? {});
-  const localRef = useRef<NativeTextInput | null>(null);
+  const localRef = useRef<TextInputInstance | null>(null);
   const focus = useContext(FocusVisibility);
   return <NativeTextInput {...props} ref={node => { localRef.current = node; if (typeof ref === "function") ref(node); else if (ref) ref.current = node; }} onFocus={event => { focus(localRef.current); props.onFocus?.(event); }} onBlur={event => { focus(null); props.onBlur?.(event); }} style={[style, { fontFamily, ...(fontFamily.startsWith("Poppins-") ? { fontWeight: "normal" as const } : {}) }]} />;
 });

@@ -12,7 +12,7 @@ const cliRoot=dirname(cliPath);
 const {PluginSchema}=require(resolve(cliRoot,'build/src/start/server/devtools/DevToolsPlugin.schema.js'));
 const {createMCPDevToolsExtensionSchema}=require(resolve(cliRoot,'build/src/start/server/mcp/createMCPDevToolsExtensionSchema.js'));
 const plugin={packageName:'clover-qa',packageRoot:'/tmp/clover-qa',cliExtensions:{description:'QA',entryPoint:'qa.js',commands:[{name:'inspect',title:'Inspect',environments:['mcp'],parameters:[{name:'count',type:'number'},{name:'enabled',type:'confirm'},{name:'label',type:'text'}]}]}};
-// SDK 57.0.32 uses JSON Schema for plugin metadata and injects Zod into MCP schemas.
+// SDK 58.0.23 uses JSON Schema for plugin metadata and injects Zod into MCP schemas.
 const {validate}=cliRequire('@expo/schema-utils');
 const {z}=cliRequire('zod');
 assert.doesNotThrow(()=>validate(PluginSchema,plugin));

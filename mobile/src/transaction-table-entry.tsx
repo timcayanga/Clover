@@ -1,4 +1,4 @@
-import { useNavigation } from "expo-router";
+import { usePreventRemove } from "expo-router";
 import { useEffect, useRef, useState } from "react";
 import { Alert, View } from "react-native";
 import * as Crypto from "expo-crypto";
@@ -77,19 +77,12 @@ export function TransactionTableEntry() {
     );
     setReviewed(false);
   };
-  const navigation = useNavigation();
-  useEffect(
-    () =>
-      navigation.addListener("beforeRemove", (event) => {
-        if (!busy && !uncertain) return;
-        event.preventDefault();
-        Alert.alert(
-          "Keep this draft open",
-          "Wait for the save to finish, or retry the same draft safely if the result is uncertain.",
-        );
-      }),
-    [navigation, busy, uncertain],
-  );
+  usePreventRemove(busy || uncertain, () => {
+    Alert.alert(
+      "Keep this draft open",
+      "Wait for the save to finish, or retry the same draft safely if the result is uncertain.",
+    );
+  });
   const populated = rows.filter(populatedRow);
   const duplicates = duplicateTableKeys(rows);
   const row = editing === null ? null : rows[editing];
