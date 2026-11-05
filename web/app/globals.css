@@ -67208,3 +67208,17 @@ html[data-theme="dark"] .home-quick-add__income{background:#18382b;color:#a0eac2
   .content--accounts .financial-account-card--mobile-overview .financial-account-card__chevron span { font-size: 26px; line-height: 1; }
   .content--accounts .financial-account-card--mobile-overview:is(:hover,:focus-within) { transform: none; }
 }
+
+/* Replacement identity is confirmed separately from financial edits. */
+.card-replacement-panel { width:100%; max-width:560px; padding:20px; border:1px solid var(--stroke); border-radius:20px; background:var(--surface); color:var(--text); }
+.card-replacement-panel__head { display:flex; flex-wrap:wrap; justify-content:space-between; align-items:center; gap:12px; }
+.card-replacement-panel h3,.card-replacement-panel h4 { margin:0; font-size:14px; font-weight:600; }
+.card-replacement-panel form,.card-replacement-panel__confirmation { display:grid; gap:14px; margin-top:16px; }
+.card-replacement-panel p { margin:0; font-size:13px; line-height:1.65; overflow-wrap:anywhere; }
+.card-replacement-panel label { display:grid; gap:6px; font-size:13px; }
+.card-replacement-panel input,.card-replacement-panel select { width:100%; min-width:0; min-height:44px; border:1px solid var(--stroke); border-radius:12px; padding:10px 12px; background:var(--surface); color:var(--text); font:inherit; }
+.card-replacement-panel__link { display:inline-flex; width:fit-content; padding:8px 0; border:0; background:transparent; color:var(--accent); font:inherit; font-size:13px; cursor:pointer; }
+.card-replacement-panel__history { display:grid; gap:8px; margin-top:16px; }
+.card-replacement-panel__history-row { display:grid; gap:4px; padding:12px 0; border-bottom:1px solid var(--stroke); font-size:13px; }
+.card-replacement-panel small { color:var(--muted); font-size:11px; }
+.card-replacement-panel .button { justify-self:start; white-space:normal; }

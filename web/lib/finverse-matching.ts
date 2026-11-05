@@ -1,3 +1,4 @@
+import { matchesConfirmedCardNumber } from "../../shared/card-replacement";
 import { normalizeBankName } from "./data-qa-banks";
 /** Preserve the first metered identity when Finverse rotates IDs on reauthorization. */
 export function bankLinkUsageIdentity(link: { externalAccountId: string; normalizedPayload?: unknown }) {
@@ -15,9 +16,9 @@ export function bankNumbersMatch(left?: string | null, right?: string | null) {
   if (a.length !== b.length || (a.match(/\d/g)?.length ?? 0) < 4 || (b.match(/\d/g)?.length ?? 0) < 4) return false;
   return [...a].every((c, i) => c === b[i] || /[*x•]/i.test(c) || /[*x•]/i.test(b[i]));
 }
-export function matchingBankAccounts<T extends { institution?: string | null; accountNumber?: string | null; currency: string; type: string }>(accounts: T[], incoming: { institution?: string | null; accountNumber?: string | null; currency: string; type: string }) {
+export function matchingBankAccounts<T extends { institution?: string | null; accountNumber?: string | null; cardNumberHistory?: unknown; currency: string; type: string }>(accounts: T[], incoming: { institution?: string | null; accountNumber?: string | null; currency: string; type: string }) {
   const institution = institutionKey(incoming.institution);
-  return accounts.filter(a => institution && institutionKey(a.institution) === institution && a.currency === incoming.currency && a.type === incoming.type && bankNumbersMatch(a.accountNumber, incoming.accountNumber));
+  return accounts.filter(a => institution && institutionKey(a.institution) === institution && a.currency === incoming.currency && a.type === incoming.type && (bankNumbersMatch(a.accountNumber, incoming.accountNumber) || matchesConfirmedCardNumber(a, incoming.accountNumber)));
 }
 export const bankTransactionText = (value?: string | null) => (value ?? '').normalize('NFKC').toLowerCase().replace(/[^\p{L}\p{N}]/gu, '');
 const genericBankLabel = (text: string) => /^(banktransaction|fundtransfer|fundstransfer|transfer|banktransfer|instapay|pesonet|cashin|cashout|instapaycashin|deposit|withdrawal|credit|debit)$/.test(text);

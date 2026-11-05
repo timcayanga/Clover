@@ -1,3 +1,4 @@
+import { cardLastFour, matchesConfirmedCardNumber, readCardReplacements } from "../../../../../../shared/card-replacement";
 import { invalidateWorkspaceSummaryCache } from "@/lib/workspace-summary-cache";
 import { recordBankLinkStage } from "@/lib/bank-link-journey";
 import { finverseDataReadiness } from "@/lib/finverse-data-readiness";
@@ -53,6 +54,7 @@ const importAccount = async (connectionId: string, workspaceId: string, account:
     if (sameIdentity && !sameIdentity.accountId && !explicitlySelected) return null;
     const allowance = await bankLinkAllowance(tx, workspace.userId);
     if (allowance.limit === 0) throw new PlanQuotaError("Bank syncing requires current Plus or Pro access. Your imported history stays available.");
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`card-replacement:${workspaceId}`}, 0))`;
     const candidates = await tx.account.findMany({ where: { workspaceId }, include: { finverseAccountLink: true } });
     const matches = matchingBankAccounts(candidates, normalized);
     if (!targetAccountId && !sameIdentity && matches.length > 1) throw new PlanQuotaError("More than one Clover account matches this bank account. Review the duplicate accounts before linking; no records have been changed.");
@@ -60,8 +62,9 @@ const importAccount = async (connectionId: string, workspaceId: string, account:
     if(targetAccountId && !target) throw new PlanQuotaError("Choose an existing account in this Profile with the same bank, currency and account type.");
     const match = target ?? (sameIdentity?.accountId ? candidates.find(a => a.id === sameIdentity.accountId) : matches[0]);
     const priorLink = sameIdentity ?? match?.finverseAccountLink;
+    if (match && ((cardLastFour(match.accountNumber) && cardLastFour(normalized.accountNumber) && cardLastFour(match.accountNumber) !== cardLastFour(normalized.accountNumber) && !matchesConfirmedCardNumber(match, normalized.accountNumber)) || (readCardReplacements(match.cardNumberHistory).length && ((normalized.accountNumber && !matchesConfirmedCardNumber(match, normalized.accountNumber)) || match.currency !== normalized.currency || match.type !== normalized.type || !bankInstitutionsMatch(match.institution, normalized.institution))))) throw new PlanQuotaError("Confirm the new card in Account Details → Replace Card before linking it to this account.");
     if (priorLink && !explicitlySelected && (priorLink.unlinkedAt || priorLink.connectionId !== connectionId)) return null;
-    if (priorLink && priorLink.externalAccountId !== account.account_id && (!/^\d+$/.test(cleanBankNumber(normalized.accountNumber)) || cleanBankNumber(match?.accountNumber) !== cleanBankNumber(normalized.accountNumber))) throw new PlanQuotaError("This Clover account is already linked to a different bank account. Review its link first.");
+    if (priorLink && priorLink.externalAccountId !== account.account_id && !matchesConfirmedCardNumber(match ?? {}, normalized.accountNumber) && (!/^\d+$/.test(cleanBankNumber(normalized.accountNumber)) || cleanBankNumber(match?.accountNumber) !== cleanBankNumber(normalized.accountNumber))) throw new PlanQuotaError("This Clover account is already linked to a different bank account. Review its link first.");
     const quotaIdentity = priorLink ? bankLinkUsageIdentity(priorLink) : account.account_id;
     if (!allowance.usedIds.has(quotaIdentity) && allowance.remaining === 0) throw new PlanQuotaError("Your bank-account allowance is full for this allocation period. You can reconnect an account already used this period.");
     const activeCount=await tx.finverseAccountLink.count({where:{workspace:{userId:workspace.userId},accountId:{not:null},unlinkedAt:null,connection:{status:{not:'disconnected'},disconnectRequestedAt:null},NOT:{id:priorLink?.id??''}}});
@@ -75,7 +78,7 @@ const importAccount = async (connectionId: string, workspaceId: string, account:
       accountId = created.id;
     }
     // Never replace a saved full number with a provider mask or change confirmed metadata.
-    if (match && normalized.accountNumber && (!match.accountNumber || (match.source === "finverse" && /[*x•]/i.test(match.accountNumber) && /^\d+$/.test(normalized.accountNumber)))) await tx.account.update({ where: { id: match.id }, data: { accountNumber: normalized.accountNumber } });
+    if (match && !readCardReplacements(match.cardNumberHistory).length && normalized.accountNumber && (!match.accountNumber || (match.source === "finverse" && /[*x•]/i.test(match.accountNumber) && /^\d+$/.test(normalized.accountNumber)))) await tx.account.update({ where: { id: match.id }, data: { accountNumber: normalized.accountNumber } });
     const payload = { connectionId, workspaceId, externalAccountId: account.account_id, accountId, rawPayload: json(account), normalizedPayload: json({ ...normalized, quotaIdentity }), lastSeenAt: new Date(), unlinkedAt: null };
     if (priorLink) await tx.finverseAccountLink.update({ where: { id: priorLink.id }, data: payload });
     else await tx.finverseAccountLink.create({ data: payload });
@@ -247,7 +250,7 @@ export async function POST(request: Request) {
       const normalized = normalizeFinverseAccount(a, resolvedInstitutionName);
       const matches = matchingBankAccounts(cloverAccounts, normalized);
       const match = matches.length === 1 ? matches[0] : null;
-      return match?.finverseAccountLink && /^\d+$/.test(cleanBankNumber(normalized.accountNumber)) && cleanBankNumber(match.accountNumber) === cleanBankNumber(normalized.accountNumber) && allowance.usedIds.has(bankLinkUsageIdentity(match.finverseAccountLink));
+      return match?.finverseAccountLink && (matchesConfirmedCardNumber(match, normalized.accountNumber) || (/^\d+$/.test(cleanBankNumber(normalized.accountNumber)) && cleanBankNumber(match.accountNumber) === cleanBankNumber(normalized.accountNumber))) && allowance.usedIds.has(bankLinkUsageIdentity(match.finverseAccountLink));
     }).map(a => a.account_id));
     if (((!selectedIds || selectedIds.size === 0) && linkedIds.size === 0 && newAccounts.length > 0) || chosen.filter(a => !reservedIds.has(a.account_id)).length > allowance.remaining) {
       await prisma.finverseConnection.updateMany({ where: { id: connection.id, status: { not: "disconnected" }, disconnectRequestedAt:null }, data: { status: "awaiting_selection" } });

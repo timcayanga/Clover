@@ -1,3 +1,5 @@
+import { CardReplacementPanel } from "./card-replacement-panel";
+import { supportsCardReplacement, type PublicCardReplacement } from "../../shared/card-replacement";
 import { Pressable } from "react-native";
 import { suggestedDraftInstitution } from "../../shared/account-institution";
 import { investmentNameLabel, investmentTickerMatches, investmentTickerHint, investmentTypeLabel } from "../../shared/investment-entry";
@@ -29,6 +31,7 @@ export type AccountRecord = {
   brandLogoUrl?: string | null;
   brandPalette?: import("../../shared/visual-identity").AccountCardPalette;
   lastFour?: string;
+  cardNumberHistory?: PublicCardReplacement[];
   source?: string;
   favorite?: boolean;
   transactionCount?: number;
@@ -66,7 +69,7 @@ const labels: Record<string, string> = {
   institution: "Institution",
   currency: "Currency",
   balance: "Opening balance",
-  accountNumber: "Replace account number",
+  accountNumber: "Account number",
   creditLimit: "Credit limit",
   creditPeriodStart: "Statement period start",
   creditPeriodEnd: "Statement period end",
@@ -286,7 +289,7 @@ export function AccountEditor({
   const investmentTypes = ["stock","etf","mutual_fund","money_market_fund","uitf","reit","crypto","real_world_asset","bond","time_deposit","savings","other"];
   const fixedIncome = ["bond", "time_deposit", "savings"].includes(draft.investmentSubtype);
   const investmentFields = fixedIncome ? ["investmentPrincipal", "investmentStartDate", "investmentMaturityDate", "investmentInterestRate", "investmentMaturityValue"] : ["investmentSymbol", "investmentQuantity", "investmentCostBasis"];
-  const extra = [...(record ? ["accountNumber", ...(record.source === "manual" ? ["balance"] : [])] : ["balance"]), ...(["credit_card", "line_of_credit"].includes(draft.type) ? ["creditLimit", "creditPeriodStart", "creditPeriodEnd"] : []), ...(draft.type === "investment" ? investmentFields : [])];
+  const extra = [...(record ? [...(supportsCardReplacement(record.type) ? [] : ["accountNumber"]), ...(record.source === "manual" ? ["balance"] : [])] : ["balance"]), ...(["credit_card", "line_of_credit"].includes(draft.type) ? ["creditLimit", "creditPeriodStart", "creditPeriodEnd"] : []), ...(draft.type === "investment" ? investmentFields : [])];
   return (
     <Screen sheet={editing && !record} onDismiss={() => { if (!busy) onClose(); }}>
       <PlanHeader
@@ -413,6 +416,7 @@ export function AccountEditor({
           ) : (
             <>
               <AccountIdentity account={record} onEdit={beginEdit} />
+              <CardReplacementPanel key={record.id} account={record} onChanged={setRecord} />
               <FinverseConnect mode="sync" accountId={record.id} onSynced={()=>{}} />
               {Object.keys(labels)
                 .filter(

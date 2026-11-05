@@ -1,3 +1,7 @@
+import { cardReplacementSchema } from "@/lib/card-replacement-input";
+import { CardReplacementError, replaceAccountCard } from "@/lib/card-replacement";
+import { assertTrustedRequestOrigin } from "@/lib/request-security";
+import { publicCardHistory, readCardReplacements } from "../../../../../shared/card-replacement";
 import { after } from "next/server";
 import { enqueueLearningJob, processPendingLearningJobs } from "@/lib/learning-jobs";
 import { finverseBalances } from "@/lib/finverse-balances";
@@ -66,6 +70,7 @@ const getCompatibleAccountSelect = (columns: Set<string>) => ({
   ...(columns.has("institutionCustomized") ? { institutionCustomized: true } : {}),
   ...(columns.has("logoCustomized") ? { logoCustomized: true } : {}),
   ...(columns.has("accountNumber") ? { accountNumber: true } : {}),
+  ...(columns.has("cardNumberHistory") ? { cardNumberHistory: true } : {}),
   ...(columns.has("favorite") ? { favorite: true } : {}),
   investmentSubtype: true,
   investmentSymbol: true,
@@ -132,6 +137,7 @@ const accountPatchSchema = z.object({
     message: "Choose a supported account logo.",
   }),
   accountNumber: z.string().nullable().optional(),
+  replacement: cardReplacementSchema.optional(),
   favorite: z.boolean().optional(),
   creditLimit: z.union([z.string(), z.number(), z.null()]).optional(),
   creditPeriodStart: z.union([z.string(), z.number(), z.null()]).optional(),
@@ -176,6 +182,7 @@ const serializeAccount = <T extends {
 }>(account: T) => ({
   ...account,
   accountNumber: account.accountNumber ?? null,
+  cardNumberHistory: publicCardHistory((account as { cardNumberHistory?: unknown }).cardNumberHistory),
   favorite: account.favorite ?? false,
   transactionCount: Number(account.transactionCount ?? 0),
   currency: normalizeAccountCurrency(account),
@@ -526,6 +533,22 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ ac
     if (!existingAccount || existingAccount.workspaceId !== payload.workspaceId) {
       return NextResponse.json({ error: "Account not found" }, { status: 404 });
     }
+    if (payload.replacement) {
+      assertTrustedRequestOrigin(request);
+      if (Object.keys(payload).some(key => !["workspaceId", "replacement"].includes(key))) return NextResponse.json({ error: "Save card replacement separately from other account edits." }, { status: 400 });
+      if (!compatibleColumns.has("cardNumberHistory")) return NextResponse.json({ error: "Card replacement is temporarily unavailable. Please try again shortly." }, { status: 503 });
+      try {
+        const saved = await replaceAccountCard(accountId, payload.workspaceId, userId, payload.replacement);
+        invalidateWorkspaceSummaryCache(saved.workspaceId);
+        const bankSnapshot = (await finverseBalances(saved.workspaceId, [saved.id])).get(saved.id);
+        return NextResponse.json({ account: serializeAccount({ ...saved, ...bankSnapshot, balance: bankSnapshot?.bankBalance ?? saved.balance }) });
+      } catch (error) {
+        if (error instanceof CardReplacementError) return NextResponse.json({ error: error.message }, { status: error.status });
+        console.error("Card replacement could not complete", error instanceof Error ? error.name : "Unknown error");
+        return NextResponse.json({ error: "Unable to save the replacement. Please retry with the same details." }, { status: 503 });
+      }
+    }
+    if (payload.accountNumber !== undefined && readCardReplacements(existingAccount.cardNumberHistory).length && payload.accountNumber !== existingAccount.accountNumber) return NextResponse.json({ error: "Use Replace Card to change this number and retain its history." }, { status: 409 });
     const nextInstitution =
       payload.institution === undefined
         ? inferredInstitutionFromName ?? existingAccount.institution
@@ -609,6 +632,11 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ ac
       };
 
     const saveAccount = (data: Parameters<typeof prisma.account.update>[0]["data"]) => prisma.$transaction(async tx => {
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`card-replacement:${payload.workspaceId}`}, 0))`;
+      if (compatibleColumns.has("cardNumberHistory") && payload.accountNumber !== undefined) {
+        const latest = await tx.account.findUniqueOrThrow({ where: { id: accountId }, select: { accountNumber: true, cardNumberHistory: true } });
+        if (readCardReplacements(latest.cardNumberHistory).length && payload.accountNumber !== latest.accountNumber) throw new CardReplacementError("Use Replace Card to change this number and retain its history.");
+      }
       const saved = await tx.account.update({
         where: { id: accountId },
         data, select: getCompatibleAccountSelect(compatibleColumns),
@@ -645,7 +673,10 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ ac
     invalidateWorkspaceSummaryCache(account.workspaceId);
     const bankSnapshot=(await finverseBalances(account.workspaceId,[account.id])).get(account.id);
     return NextResponse.json({ account: serializeAccount({...account,...bankSnapshot,balance:bankSnapshot?.bankBalance ?? account.balance}) });
-  } catch {
+  } catch (error) {
+    if (error instanceof CardReplacementError) return NextResponse.json({ error: error.message }, { status: error.status });
+    if (error instanceof z.ZodError) return NextResponse.json({ error: "Please check the entered account details." }, { status: 400 });
+    if (error instanceof Error && error.message === "Untrusted request origin.") return NextResponse.json({ error: "Untrusted request origin." }, { status: 403 });
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 }

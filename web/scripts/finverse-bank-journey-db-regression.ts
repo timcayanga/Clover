@@ -12,6 +12,7 @@ const saved = new Map<string, NodeModule | undefined>();
 const stub = (id: string, exports: unknown) => { const path = require.resolve(id); saved.set(path, require.cache[path]); require.cache[path] = { id: path, filename: path, loaded: true, exports } as NodeModule; };
 let identity: Record<string, unknown> = { status: "DATA_AVAILABLE", product_status: { accounts: { status: "SUCCESS" }, online_transactions: { status: "IN_PROGRESS" } } };
 const invalidated: string[] = [];
+let providerNumber = "0012345678", providerId = "primary";
 let state = "", empty = false, badExchange = false, native = false, tier = "premium", transactionFetches = 0, noFinancialData = false, missingBalance = false;
 const products = (status: string) => ({ accounts: { status: "SUCCESS" }, online_transactions: { status } });
 globalThis.fetch = async (input, init) => {
@@ -23,8 +24,8 @@ globalThis.fetch = async (input, init) => {
   else if (path === "/link/token") { const sent = JSON.parse(String(init?.body)); state = sent.state; assert.equal(sent.redirect_uri, process.env.FINVERSE_REDIRECT_URI); assert.equal(sent.response_mode, "form_post"); body = { link_url: "https://link.finverse.com/fixture" }; }
   else if (path === "/auth/token") { if (badExchange) return Response.json({ message: "Synthetic exchange failure" }, { status: 502 }); body = { access_token: "fixture-access", refresh_token: "fixture-refresh", expires_in: 3600, login_identity_id: randomUUID() }; }
   else if (path === "/login_identity") body = { login_identity: identity, institution: { institution_name: "QA Bank", institution_id: "qa-bank" } };
-  else if (path === "/accounts") body = { accounts: empty ? [] : [{ account_id: "primary", account_name: "Savings", account_currency: "PHP", account_number_full: "0012345678", balance: noFinancialData || missingBalance ? undefined : { currency: "PHP", value: "2000" } }, { account_id: "unselected", account_currency: "PHP", account_name: "Other" }, { account_id: "parent", is_parent: true }] };
-  else if (path.startsWith("/account_numbers/")) body = { account_number: { number: "0012345678" } };
+  else if (path === "/accounts") body = { accounts: empty ? [] : [{ account_id: providerId, account_name: "Savings", account_currency: "PHP", account_number_full: providerNumber, balance: noFinancialData || missingBalance ? undefined : { currency: "PHP", value: "2000" } }, { account_id: "unselected", account_currency: "PHP", account_name: "Other" }, { account_id: "parent", is_parent: true }] };
+  else if (path.startsWith("/account_numbers/")) body = { account_number: { number: providerNumber } };
   else if (path === "/transactions") { transactionFetches++; body = { transactions: noFinancialData ? [] : [{ transaction_id: "expense-1", account_id: "primary", posted_date: "2026-11-01", merchant_name: "Synthetic Lunch", amount: { currency: "PHP", value: -100 } }, { transaction_id: "salary-1", account_id: "primary", posted_date: "2026-11-01", merchant_name: "Salary", amount: { currency: "PHP", value: 1000 } }, { transaction_id: "other-account", account_id: "unselected", posted_date: "2026-11-01", amount: { currency: "PHP", value: -500 } }] }; }
   else throw Error(`Unexpected provider path ${path}`);
   return Response.json(body);
@@ -89,6 +90,28 @@ async function main() {
     assert.equal((aliasMilestone.metadata as { transactionCount: number }).transactionCount, 2);
     assert.equal(JSON.stringify(await db.transaction.findUnique({ where: { id: confirmed.id } })), original);
     missingBalance = false;
+    // The card is replaced explicitly, then old/new provider numbers and a
+    // rotated provider ID must preserve the same account and metered identity.
+    const { replaceAccountCard } = await import("../lib/card-replacement");
+    await replaceAccountCard(account.id, workspace.id, user.clerkUserId, { requestId: randomUUID(), expectedLastFour: "5678", newLastFour: "8745", effectiveDate: "2026-11-05", reason: "stolen", confirmed: true });
+    const meteringBefore = await db.bankLinkUsage.count({ where: { userId: user.id } });
+    const syncAlias = (extra: object = {}) => sync(request("sync", { workspaceId: workspace.id, connectionId: aliasId, ...extra }));
+    assert.equal((await syncAlias()).status, 200, "Retired provider number remains matched");
+    providerNumber = "0099998745";
+    assert.equal((await syncAlias()).status, 200, "Confirmed replacement number matches");
+    assert.equal((await db.account.findUniqueOrThrow({ where: { id: account.id } })).accountNumber, "•••• 8745");
+    providerNumber = "0099991111";
+    assert.equal((await syncAlias()).status, 403, "Unknown provider number requires explicit replacement confirmation");
+    assert.equal((await db.account.findUniqueOrThrow({ where: { id: account.id } })).accountNumber, "•••• 8745");
+    providerNumber = "0099998745"; providerId = "rotated-primary";
+    const rotated = await syncAlias({ selectedAccountIds: [providerId] });
+    assert.equal(rotated.status, 200, await rotated.clone().text());
+    const rotatedLink = await db.finverseAccountLink.findFirstOrThrow({ where: { workspaceId: workspace.id, externalAccountId: providerId } });
+    assert.equal(rotatedLink.accountId, account.id);
+    assert.equal((rotatedLink.normalizedPayload as { quotaIdentity: string }).quotaIdentity, "primary");
+    assert.equal(await db.bankLinkUsage.count({ where: { userId: user.id } }), meteringBefore);
+    assert.equal(JSON.stringify(await db.transaction.findUnique({ where: { id: confirmed.id } })), original);
+    providerNumber = "0012345678"; providerId = "primary";
     // A new setup with only pre-existing manual data must not count as bank-data activation.
     noFinancialData = true;
     const blankStarted = await link(request("link", { workspaceId: workspace.id, institutionId: "qa-bank" })); const blankId = (await blankStarted.json()).connectionId;

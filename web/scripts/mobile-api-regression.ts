@@ -171,6 +171,10 @@ async function main() {
   for (const extra of [{ workspaceId: "other" }, { accountNumber: "change-existing" }, { balance: "NaN" }, { name: "" }, { rawPayload: {} }]) {
     assert.equal(mobileAccountCreateSchema.safeParse({ ...newAccount, ...extra }).success, false);
   }
+  const cardHistory = mobileApiResponse("account", {account:{id:"card",accountNumber:"•••• 8745",cardNumberHistory:[{previousLastFour:"3012",newLastFour:"8745",effectiveDate:"2026-11-05",reason:"stolen",confirmedAt:"2026-11-05T00:00:00Z",confirmedBy:"private-principal",requestId:"private-request"}]}}) as {account:{lastFour:string;cardNumberHistory:object[]}};
+  assert.equal(cardHistory.account.lastFour,"8745");
+  assert.deepEqual(cardHistory.account.cardNumberHistory,[{previousLastFour:"3012",newLastFour:"8745",effectiveDate:"2026-11-05",reason:"stolen",confirmedAt:"2026-11-05T00:00:00Z"}]);
+  assert(!JSON.stringify(cardHistory).includes("private"));
   assert.deepEqual(mobileApiResponse("account-create", { account: { id: "a", name: "Travel", rawPayload: { secret: true } } }), { account: { id: "a", name: "Travel" } });
   assert.equal(mobileOperation("GET", ["home"]), "home");
   assert.equal(mobileOperation("GET", ["notifications"]), "notifications");

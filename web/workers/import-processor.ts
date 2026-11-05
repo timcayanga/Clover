@@ -1,3 +1,4 @@
+import { cardLastFour, matchesConfirmedCardNumber, readCardReplacements, supportsCardReplacement } from "../../shared/card-replacement";
 import { hasVerifiedEastwestTransferRows } from "@/lib/eastwest-transfer-proof";
 import { normalizeReceiptCaptureLocation } from "../../shared/receipt-capture-location";
 import {hasVerifiedHeldNativeRows} from '@/lib/held-source-contracts';
@@ -1957,6 +1958,7 @@ const getCompatibleAccountSelect = (columns: Set<string>) => ({
   ...(columns.has("importIdentityName") ? { importIdentityName: true } : {}),
   ...(columns.has("importIdentityInstitution") ? { importIdentityInstitution: true } : {}),
   ...(columns.has("importIdentityAccountNumber") ? { importIdentityAccountNumber: true } : {}),
+  ...(columns.has("cardNumberHistory") ? { cardNumberHistory: true } : {}),
   ...(columns.has("nameCustomized") ? { nameCustomized: true } : {}),
   ...(columns.has("institutionCustomized") ? { institutionCustomized: true } : {}),
   ...(columns.has("accountNumber") ? { accountNumber: true } : {}),
@@ -5990,6 +5992,7 @@ const resolveConfirmationAccount = async (params: {
       importIdentityName?: string | null;
       importIdentityInstitution?: string | null;
       importIdentityAccountNumber?: string | null;
+      cardNumberHistory?: unknown;
       nameCustomized?: boolean;
       institutionCustomized?: boolean;
     },
@@ -6019,6 +6022,13 @@ const resolveConfirmationAccount = async (params: {
       (row.rawPayload as Record<string, unknown> | null)?.source === "eastwest_transfer_proof")) {
       return account;
     }
+    const hasReplacements = readCardReplacements(account.cardNumberHistory).length > 0;
+    if (supportsCardReplacement(account.type) && cardLastFour(account.accountNumber) && cardLastFour(next.accountNumber) &&
+      cardLastFour(account.accountNumber) !== cardLastFour(next.accountNumber) && !matchesConfirmedCardNumber(account, next.accountNumber)) {
+      throw new Error("A different card number was detected. Open Account Details → Replace Card to confirm a replacement, then retry this import, or choose a separate account.");
+    }
+    if (hasReplacements && next.institution && normalizeBankName(next.institution) !== normalizeBankName(account.institution)) throw new Error("This document has a different institution. Choose a separate account.");
+    if (hasReplacements && ((next.currency && next.currency !== account.currency) || (next.type && next.type !== account.type))) throw new Error("This document has a different currency or account type. Choose a separate account.");
     const data: Record<string, unknown> = {};
     const explicitInventoryName =
       accountSnapshotInventory && typeof next.name === "string" && next.name.trim()
@@ -6032,10 +6042,10 @@ const resolveConfirmationAccount = async (params: {
         next.accountNumber ?? account.accountNumber,
         next.type ?? account.type
       );
-    if (!account.nameCustomized && displayName.trim() && displayName.trim() !== account.name) {
+    if (!hasReplacements && !account.nameCustomized && displayName.trim() && displayName.trim() !== account.name) {
       data.name = displayName.trim();
     }
-    if (!account.institutionCustomized && next.institution !== undefined && (next.institution ?? null) !== account.institution) {
+    if (!hasReplacements && !account.institutionCustomized && next.institution !== undefined && (next.institution ?? null) !== account.institution) {
       data.institution = next.institution === null ? null : next.institution.trim() || null;
     }
     if (
@@ -6062,7 +6072,7 @@ const resolveConfirmationAccount = async (params: {
     ) {
       data.importIdentityAccountNumber = next.accountNumber.trim();
     }
-    if (compatibleAccountColumns.has("accountNumber")) {
+    if (!hasReplacements && compatibleAccountColumns.has("accountNumber")) {
       const normalizedAccountNumber = next.accountNumber?.trim() || null;
       if ((account.accountNumber ?? null) !== normalizedAccountNumber) {
         data.accountNumber = normalizedAccountNumber;
@@ -6143,7 +6153,11 @@ const resolveConfirmationAccount = async (params: {
 
     const updateAccount = (nextData: Record<string, unknown>) =>
       prisma.account.update({
-        where: { id: account.id },
+        // Compare the history read for this import, so a replacement confirmed
+        // while parsing cannot be overwritten by the delayed account update.
+        where: { id: account.id, ...(compatibleAccountColumns.has("cardNumberHistory") ? {
+          cardNumberHistory: { equals: account.cardNumberHistory == null ? Prisma.DbNull : account.cardNumberHistory as Prisma.InputJsonValue },
+        } : {}) },
         data: nextData,
         select: getCompatibleAccountSelect(compatibleAccountColumns),
       });
@@ -6359,14 +6373,13 @@ const resolveConfirmationAccount = async (params: {
   };
   const accountMatchesImportIdentity = (account: (typeof workspaceAccounts)[number]) =>
     matchesDurableImportedAccountIdentity(account, incomingImportIdentity);
-  const bestDurableImportIdentityMatch = (accounts: typeof workspaceAccounts) =>
-    accounts
-      .map((account) => ({ account, score: scoreDurableImportedAccountIdentityMatch(account, incomingImportIdentity) }))
-      .filter((candidate) => candidate.score > 0)
-      .sort(
-        (left, right) =>
-          right.score - left.score || sortImportedAccountsByFreshness(left.account, right.account)
-      )[0]?.account ?? null;
+  const bestDurableImportIdentityMatch = (accounts: typeof workspaceAccounts) => {
+    const candidates = accounts.map(account => ({account, score:scoreDurableImportedAccountIdentityMatch(account, incomingImportIdentity)}))
+      .filter(candidate => candidate.score > 0).sort((left,right)=>right.score-left.score||sortImportedAccountsByFreshness(left.account,right.account));
+    const replacementMatches = candidates.filter(candidate => matchesConfirmedCardNumber(candidate.account, inferredAccountNumber));
+    if (replacementMatches.length && candidates.filter(candidate => matchesConfirmedCardNumber(candidate.account, inferredAccountNumber) || cardLastFour(candidate.account.accountNumber) === cardLastFour(inferredAccountNumber)).length > 1) throw new Error("More than one account matches this card number. Choose the correct account before importing.");
+    return candidates[0]?.account ?? null;
+  };
   const accountHasNoAccountNumber = (account: (typeof workspaceAccounts)[number]) =>
     !String(account.accountNumber ?? "").replace(/\D/g, "");
   const isWiseWalletImport =
@@ -6489,7 +6502,7 @@ const resolveConfirmationAccount = async (params: {
       })
     : null;
   if (directAccount) {
-    const canonicalIdentityAccount =
+    const canonicalIdentityAccount = (readCardReplacements(directAccount.cardNumberHistory).length || (cardLastFour(directAccount.accountNumber) && workspaceAccounts.some(account => matchesConfirmedCardNumber(account, inferredAccountNumber)))) ? null :
       (isWiseWalletImport
         ? workspaceAccounts
             .filter((account) => account.id !== directAccount.id)

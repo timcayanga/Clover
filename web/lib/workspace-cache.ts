@@ -1,3 +1,4 @@
+import { hasAmbiguousReplacementMatch, matchesConfirmedCardNumber, readCardReplacements } from "../../shared/card-replacement";
 import type { Prisma } from "@prisma/client";
 import { hasTransactionUserEdits } from "@/lib/transaction-user-edits";
 import { getEffectiveTransactionCategoryName } from "@/lib/transaction-display";
@@ -541,13 +542,20 @@ export type DurableImportedAccountIdentityLike = ImportedAccountIdentityLike & {
   importIdentityName?: string | null;
   importIdentityInstitution?: string | null;
   importIdentityAccountNumber?: string | null;
+  cardNumberHistory?: unknown;
 };
 
 export const scoreDurableImportedAccountIdentityMatch = (
   account: DurableImportedAccountIdentityLike,
   incoming: ImportedAccountIdentityLike
-) =>
-  Math.max(
+) => {
+  if (readCardReplacements(account.cardNumberHistory).length) {
+    const institution = canonicalImportedInstitutionKey(account.institution);
+    return institution && institution === canonicalImportedInstitutionKey(incoming.institution) &&
+      account.type === incoming.type && normalizeImportedCurrencyCode(account.currency) === normalizeImportedCurrencyCode(incoming.currency) &&
+      matchesConfirmedCardNumber(account, incoming.accountNumber) ? 100 : 0;
+  }
+  return Math.max(
     scoreImportedAccountIdentityMatch(account, incoming),
     scoreImportedAccountIdentityMatch(
     {
@@ -559,6 +567,7 @@ export const scoreDurableImportedAccountIdentityMatch = (
     incoming
     )
   );
+};
 
 export const matchesDurableImportedAccountIdentity = (
   account: DurableImportedAccountIdentityLike,
@@ -566,12 +575,14 @@ export const matchesDurableImportedAccountIdentity = (
 ) => scoreDurableImportedAccountIdentityMatch(account, incoming) > 0;
 
 export const findBestImportedAccountMatch = <T extends ImportedAccountIdentityLike>(accounts: T[], identity: ImportedAccountIdentityLike) => {
+  const matching = accounts.filter(account => scoreDurableImportedAccountIdentityMatch(account as DurableImportedAccountIdentityLike, identity) > 0);
+  if (hasAmbiguousReplacementMatch(matching, identity.accountNumber)) return null;
   let bestMatch: T | null = null;
   let bestScore = 0;
   let tied = false;
 
   for (const account of accounts) {
-    const score = scoreImportedAccountIdentityMatch(account, identity);
+    const score = scoreDurableImportedAccountIdentityMatch(account as DurableImportedAccountIdentityLike, identity);
     if (score > bestScore) {
       bestMatch = account;
       bestScore = score;

@@ -857,6 +857,7 @@ model Account {
   institutionCustomized   Boolean                      @default(false)
   logoCustomized          Boolean                      @default(false)
   accountNumber           String?
+  cardNumberHistory       Json?
   investmentSubtype       String?
   investmentSymbol        String?
   investmentQuantity      Decimal?                     @db.Decimal(18, 8)

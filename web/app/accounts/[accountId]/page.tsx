@@ -1,4 +1,6 @@
 "use client";
+import { CardReplacementPanel } from "@/components/card-replacement-panel";
+import { supportsCardReplacement, type PublicCardReplacement } from "../../../../shared/card-replacement";
 import { FinverseConnectButton } from "@/components/finverse-connect-button";
 
 import { InterfaceIcon } from "@/components/interface-icon";
@@ -116,6 +118,7 @@ type Account = {
   institution: string | null;
   logoUrl?: string | null;
   accountNumber: string | null;
+  cardNumberHistory?: PublicCardReplacement[];
   investmentSubtype: InvestmentSubtype | null;
   investmentSymbol: string | null;
   investmentQuantity: string | null;
@@ -4105,16 +4108,18 @@ function AccountDetailPageContent() {
                   amount={isPendingBalance ? (transactionsError ? "Unavailable" : "Loading...") : formatAccountAmount(accountCardBalance, account.currency)}
                   amountLabel={`Change ${accountCardName} balance`}
                   editableName={account.type === "investment" ? undefined : account.name}
-                  editableAccountNumber={account.type === "investment" ? undefined : account.accountNumber ?? ""}
+                  editableAccountNumber={account.type === "investment" || supportsCardReplacement(account.type) ? undefined : account.accountNumber ?? ""}
                   editableAmount={Math.abs(parseAmount(displayBalance)).toFixed(2)}
                   onNameCommit={account.type === "investment" ? undefined : (value) => saveInlineCardIdentity("name", value)}
-                  onAccountNumberCommit={account.type === "investment" ? undefined : (value) => saveInlineCardIdentity("accountNumber", value)}
+                  onAccountNumberCommit={account.type === "investment" || supportsCardReplacement(account.type) ? undefined : (value) => saveInlineCardIdentity("accountNumber", value)}
                   onAmountCommit={isPendingBalance || account.bankBalance != null ? undefined : saveInlineCardBalance}
                   logoUrl={account.logoUrl}
                   onLogoCommit={saveAccountLogo}
                   showChevron={false}
                   showEditAction
                 />
+
+                <CardReplacementPanel key={`replacement-${account.id}`} account={account} onChanged={next=>{setAccount(next);setAccountEditDraft({name:next.name,accountNumber:next.accountNumber??""});}} />
 
                 <FinverseConnectButton key={`${account.workspaceId}:${account.id}`} mode="sync" accountId={account.id} workspaceId={account.workspaceId} />
 

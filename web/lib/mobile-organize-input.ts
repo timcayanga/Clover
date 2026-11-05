@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { cardReplacementSchema } from "./card-replacement-input";
 import { ACCOUNT_TYPES } from "./account-types";
 const date = z
   .string()
@@ -15,6 +16,7 @@ export const mobileAccountPatch = z
     name: text.min(1).optional(),
     institution: text.nullable().optional(),
     accountNumber: text.nullable().optional(),
+    replacement: cardReplacementSchema.optional(),
     favorite: z.boolean().optional(),
     type: z.enum(ACCOUNT_TYPES).optional(),
     currency: z
