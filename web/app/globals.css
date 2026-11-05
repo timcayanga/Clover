@@ -67228,3 +67228,43 @@ html[data-theme="dark"] .home-quick-add__income{background:#18382b;color:#a0eac2
 @media (max-width:767px) {
   .mobile-return-greeting { display:flex; position:fixed; inset:0; z-index:10000; align-items:center; justify-content:center; width:100%; height:100dvh; border:0; border-radius:0; padding:24px; background:#00aabd; color:#fff; font:600 clamp(30px,8vw,42px)/1.3 var(--font-poppins),sans-serif; cursor:pointer; }
 }
+
+/* Bank access and shared-money layouts, November 2026. */
+.finverse-country-strip { display:flex;gap:8px;overflow-x:auto;padding:4px 2px 10px; }
+.finverse-country-strip button { flex:0 0 auto;display:grid;justify-items:center;gap:4px;padding:10px;border:1px solid var(--stroke);border-radius:14px;background:var(--surface);color:var(--text);font:inherit;font-size:12px;cursor:pointer; }
+.finverse-country-strip img {width:40px;height:30px;object-fit:contain;}
+.finverse-country-strip button[aria-pressed="true"] {border-color:var(--accent);background:color-mix(in srgb,var(--accent) 12%,var(--surface));}
+.circles-page .collection-card--circle .collection-card__head {align-items:flex-start;flex-direction:row;}
+.collection-card--circle .collection-card__icon {order:0;flex:0 0 64px;}
+.collection-card--circle .collection-card__head > span {order:1;}
+.collection-card--circle .collection-custom-photo {width:64px;height:64px;object-fit:cover;border-radius:16px;}
+.adviser-header-link {border:0;background:transparent;box-shadow:none;}
+.split-balance-scroll {overflow-x:auto;}
+.split-balance-table {width:100%;border-collapse:collapse;font-size:13px;}
+.split-balance-table th,.split-balance-table td {padding:12px 8px;border-bottom:1px solid var(--stroke);text-align:right;white-space:nowrap;font-weight:400;}
+.split-balance-table th:first-child,.split-balance-table td:first-child {text-align:left;}
+.split-balance-person {display:flex;align-items:center;gap:8px;}
+.split-bill-detail-modal__list-row:has(> div) {display:flex;flex-direction:column;align-items:stretch;gap:10px;}
+.split-bill-detail-modal__list-row > div p {padding:8px 0;margin:0;border-bottom:1px solid var(--stroke);}
+.split-payment-dropdown {border:1px solid var(--stroke);border-radius:16px;padding:12px;}
+.split-payment-dropdown summary {cursor:pointer;}
+
+.split-payment-dropdown .split-payment-option {display:flex;align-items:center;gap:10px;min-height:48px;width:100%;color:var(--text);background:transparent;}
+
+.adviser-header-link:hover, .adviser-header-link:focus-visible, html[data-theme="dark"] .adviser-header-link {background:transparent;border:0;box-shadow:none;}
+.split-contribution-total {display:flex;justify-content:space-between;gap:16px;padding:12px 0;}
+.transaction-creation-tabs button img[src*="/organize/method-"] {filter:none!important;width:26px;height:26px;}
+
+.split-bill-payment-tools__request-form {align-items:start;}
+.split-payment-dropdown summary::marker {font-size:0;}
+.split-payment-dropdown summary::-webkit-details-marker {display:none;}
+.split-payment-dropdown summary::after {content:"⌄";float:right;color:var(--accent);}
+
+.split-payment-dropdown .account-brand-mark {width:32px;height:32px;flex:0 0 32px;}
+
+.split-payment-field {display:grid;gap:5px;min-width:0;}
+.split-payment-field__label {font-size:.76rem;color:var(--text-secondary);font-weight:600;}
+.split-payment-dropdown {padding:8px 12px;background:var(--surface);}
+.split-payment-dropdown summary {display:flex;align-items:center;justify-content:space-between;gap:8px;list-style:none;min-height:32px;}
+.split-payment-dropdown summary::after {float:none;flex:none;}
+.split-payment-dropdown summary > .split-payment-option {padding:0;margin:0;min-height:32px;font-size:.9rem;color:var(--text);display:flex;box-sizing:border-box;}

@@ -1,3 +1,6 @@
+import { ChoiceField } from "./transaction-entry";
+import { PersonAvatar } from "./person-avatar";
+import { ScrollView } from "react-native";
 import { useUser } from "@clerk/expo";
 import { SplitItemGrid } from "./split-item-grid";
 import { PaymentOptionMark } from "./payment-option-mark";
@@ -35,6 +38,21 @@ export type EditableBill = {
   billDate: string;
   settlementStatus: string;
   resolved?: boolean;
+  payments?: {
+    id: string;
+    participantId: string;
+    amount: string;
+    note?: string | null;
+  }[];
+  transferSettlements?: {
+    id: string;
+    fromParticipantId: string;
+    toParticipantId: string;
+    fromParticipantName: string;
+    toParticipantName: string;
+    amount: string;
+    createdAt: string;
+  }[];
   participants?: { id: string; name: string }[];
   items?: BillItem[];
   settlement?: {
@@ -113,9 +131,12 @@ export function BillDetails({
       active = false;
     };
   }, [bill.id, session.demo, session.profileId, session.request]);
+  const [requestCurrency, setRequestCurrency] = useState(bill.currency);
+  const [billAmount, setBillAmount] = useState("");
+  const [paymentOptionsOpen, setPaymentOptionsOpen] = useState(false);
   const [paymentProfileId, setPaymentProfileId] = useState("");
   const availableProfiles = paymentProfiles.filter(
-    (profile) => profile.currency === bill.currency,
+    (profile) => profile.currency === requestCurrency,
   );
   const [title, setTitle] = useState(bill.title);
   const [items, setItems] = useState(() =>
@@ -145,7 +166,7 @@ export function BillDetails({
   const [request, setRequest] = useState<Transfer | null>(null);
   const [requestAmount, setRequestAmount] = useState("");
   const [extraBills, setExtraBills] = useState<string[]>([]);
-  const candidates = relatedBills
+  const candidates = (requestCurrency === bill.currency ? relatedBills : [])
     .filter(
       (b) => b.id !== bill.id && !b.resolved && b.currency === bill.currency,
     )
@@ -189,6 +210,9 @@ export function BillDetails({
               recipientParticipantId: entry.transfer.fromParticipantId,
               payeeParticipantId: entry.transfer.toParticipantId,
               amount,
+              currency: requestCurrency,
+              billAmount:
+                requestCurrency === bill.currency ? undefined : billAmount,
               paymentProfileId,
               note,
             }),
@@ -197,7 +221,7 @@ export function BillDetails({
         ready.push({
           title: entry.bill.title,
           amount,
-          currency: entry.bill.currency,
+          currency: requestCurrency,
           date: entry.bill.billDate,
           url: `${apiBase()}${result.request.shareUrl}`,
           note,
@@ -312,7 +336,7 @@ export function BillDetails({
           {
             title: bill.title,
             amount: requestAmount,
-            currency: bill.currency,
+            currency: requestCurrency,
             date: bill.billDate,
             url: `${apiBase()}${url}`,
             note,
@@ -443,27 +467,119 @@ export function BillDetails({
       <Body muted={false}>
         {changed ? "Preview · not saved" : "People and balances"}
       </Body>
-      {(preview?.participants ?? bill.settlement?.participants)?.map((p) => (
-        <View
-          key={p.id}
-          style={{
-            flexDirection: "row",
-            justifyContent: "space-between",
-            paddingVertical: 10,
-            borderBottomWidth: 1,
-            borderColor: colors.line,
-          }}
-        >
-          <Body muted={false}>{p.name}</Body>
-          <Body>
-            {money(
-              String(changed ? (instantTotals[p.id] ?? 0) : p.owed),
-              bill.currency,
-            )}{" "}
-            share
-          </Body>
+      <ScrollView horizontal>
+        <View style={{ minWidth: 510 }}>
+          <View style={{ flexDirection: "row", paddingVertical: 10 }}>
+            {["Person", "Paid", "Share", "Owed"].map((label, i) => (
+              <Text
+                key={label}
+                style={{ width: i === 0 ? 174 : 112, color: colors.muted }}
+              >
+                {label}
+              </Text>
+            ))}
+          </View>
+          {(preview?.participants ?? bill.settlement?.participants ?? []).map(
+            (p) => {
+              const paid = p.paid;
+              const share = changed ? (instantTotals[p.id] ?? 0) : p.owed;
+              const settled = (bill.transferSettlements ?? []).reduce(
+                (sum, t) =>
+                  sum +
+                  (t.fromParticipantId === p.id
+                    ? Number(t.amount)
+                    : t.toParticipantId === p.id
+                      ? -Number(t.amount)
+                      : 0),
+                0,
+              );
+              const balance = paid - share + settled;
+              return (
+                <View
+                  key={p.id}
+                  style={{
+                    flexDirection: "row",
+                    alignItems: "center",
+                    paddingVertical: 10,
+                    borderBottomWidth: 1,
+                    borderColor: colors.line,
+                  }}
+                >
+                  <View
+                    style={{
+                      width: 174,
+                      flexDirection: "row",
+                      alignItems: "center",
+                      gap: 8,
+                    }}
+                  >
+                    <PersonAvatar
+                      name={p.name}
+                      imageUrl={
+                        /^(you|me)$/i.test(p.name) || p.name === user?.fullName
+                          ? user?.imageUrl
+                          : peopleProfiles.find(
+                              (person) => person.name === p.name,
+                            )?.avatarUrl
+                      }
+                    />
+                    <Text style={{ flex: 1, color: colors.ink }}>{p.name}</Text>
+                  </View>
+                  {[
+                    money(String(paid), bill.currency),
+                    money(String(share), bill.currency),
+                    Math.abs(balance) < 0.005
+                      ? "Settled"
+                      : `${balance > 0 ? "Is owed" : "Owes"} ${money(String(Math.abs(balance)), bill.currency)}`,
+                  ].map((v, i) => (
+                    <Text key={i} style={{ width: 112, color: colors.ink }}>
+                      {v}
+                    </Text>
+                  ))}
+                </View>
+              );
+            },
+          )}
         </View>
-      ))}
+      </ScrollView>
+      <Card>
+        <Body muted={false}>Total Contributions</Body>
+        <Body>
+          {money(
+            String(
+              (bill.payments ?? []).reduce(
+                (sum, p) => sum + Number(p.amount),
+                0,
+              ),
+            ),
+            bill.currency,
+          )}
+        </Body>
+      </Card>
+      <Card>
+        <Body muted={false}>Contributions</Body>
+        {(bill.payments ?? []).map((p) => (
+          <Body key={p.id}>
+            {bill.participants?.find((person) => person.id === p.participantId)
+              ?.name ?? "Participant"}{" "}
+            contributed {money(p.amount, bill.currency)}
+            {p.note ? ` · ${p.note}` : ""}
+          </Body>
+        ))}
+        {!bill.payments?.length ? <Body>No contributions recorded</Body> : null}
+      </Card>
+      <Card>
+        <Body muted={false}>Settlement</Body>
+        {(bill.transferSettlements ?? []).map((t) => (
+          <Body key={t.id}>
+            {t.fromParticipantName} paid {t.toParticipantName}{" "}
+            {money(t.amount, bill.currency)}
+          </Body>
+        ))}
+        {!bill.transferSettlements?.length ? (
+          <Body>No settlements recorded</Body>
+        ) : null}
+      </Card>
       <PlanAction
         title={busy ? "Saving…" : "Save changes"}
         tone="primary"
@@ -494,11 +610,19 @@ export function BillDetails({
                 onPress={() => {
                   setPaymentProfileId(
                     (
-                      availableProfiles.find((profile) => profile.isDefault) ??
-                      availableProfiles[0]
+                      paymentProfiles.find(
+                        (profile) =>
+                          profile.currency === bill.currency &&
+                          profile.isDefault,
+                      ) ??
+                      paymentProfiles.find(
+                        (profile) => profile.currency === bill.currency,
+                      )
                     )?.id ?? "",
                   );
                   setExtraBills([]);
+                  setRequestCurrency(bill.currency);
+                  setBillAmount("");
                   setRequest(t);
                   setRequestAmount(String(t.amount));
                   setNote("");
@@ -514,11 +638,58 @@ export function BillDetails({
       )}
       {request ? (
         <Card>
-          <Body muted={false}>
-            Request payment from {request.fromParticipantName}
-          </Body>
+          <Body muted={false}>Request From</Body>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+            <PersonAvatar
+              name={request.toParticipantName}
+              imageUrl={
+                /^(you|me)$/i.test(request.toParticipantName) ||
+                request.toParticipantName === user?.fullName
+                  ? user?.imageUrl
+                  : peopleProfiles.find(
+                      (p) => p.name === request.toParticipantName,
+                    )?.avatarUrl
+              }
+            />
+            <Body muted={false}>{request.toParticipantName}</Body>
+          </View>
+          <Body>Request To: {request.fromParticipantName}</Body>
+          <ChoiceField
+            label="Currency"
+            value={requestCurrency}
+            options={Array.from(
+              new Set([
+                bill.currency,
+                ...paymentProfiles.map((p) => p.currency),
+                ...(session.data?.currencyChoices ?? []).map((c) => c.code),
+                "PHP",
+                "USD",
+                "IDR",
+                "SGD",
+                "EUR",
+                "GBP",
+                "THB",
+                "JPY",
+              ]),
+            ).map((c) => ({ value: c, label: c }))}
+            onChange={(c) => {
+              setRequestCurrency(c);
+              setRequestAmount("");
+              setBillAmount("");
+              setPaymentProfileId("");
+              setExtraBills([]);
+            }}
+          />
+          {requestCurrency !== bill.currency ? (
+            <Field
+              label={`Amount Settled in ${bill.currency}`}
+              value={billAmount}
+              keyboardType="decimal-pad"
+              onChangeText={setBillAmount}
+            />
+          ) : null}
           <Field
-            label="Amount requested"
+            label="Agreed Amount"
             value={requestAmount}
             keyboardType="decimal-pad"
             onChangeText={setRequestAmount}
@@ -550,39 +721,70 @@ export function BillDetails({
               </Body>
             </Pressable>
           ))}
-          <Body muted={false}>Payment option</Body>
-          {availableProfiles.map((profile) => (
-            <Pressable
-              key={profile.id}
-              accessibilityRole="radio"
-              accessibilityState={{ checked: paymentProfileId === profile.id }}
-              onPress={() => setPaymentProfileId(profile.id)}
-              style={{
-                padding: 14,
-                borderWidth: 1,
-                borderRadius: 12,
-                borderColor:
-                  paymentProfileId === profile.id ? colors.teal : colors.line,
-              }}
-            >
+          <Pressable
+            accessibilityRole="button"
+            accessibilityState={{ expanded: paymentOptionsOpen }}
+            onPress={() => setPaymentOptionsOpen((v) => !v)}
+          >
+            <Body muted={false}>Payment Option ⌄</Body>
+            {availableProfiles.find((p) => p.id === paymentProfileId) ? (
               <PaymentOptionMark
-                provider={profile.provider}
-                identity={profile}
-                label={profile.label}
-                selected={paymentProfileId === profile.id}
+                provider={
+                  availableProfiles.find((p) => p.id === paymentProfileId)!
+                    .provider
+                }
+                label={
+                  availableProfiles.find((p) => p.id === paymentProfileId)!
+                    .label
+                }
               />
-            </Pressable>
-          ))}
-          {!availableProfiles.length ? (
-            <Body>
-              Save bank details or a QR image in Payments so they appear with
-              your request.
-            </Body>
+            ) : (
+              <Body>Choose Payment Option</Body>
+            )}
+          </Pressable>
+          {paymentOptionsOpen ? (
+            <>
+              {availableProfiles.map((profile) => (
+                <Pressable
+                  key={profile.id}
+                  accessibilityRole="radio"
+                  accessibilityState={{
+                    checked: paymentProfileId === profile.id,
+                  }}
+                  onPress={() => {
+                    setPaymentProfileId(profile.id);
+                    setPaymentOptionsOpen(false);
+                  }}
+                  style={{
+                    padding: 14,
+                    borderWidth: 1,
+                    borderRadius: 12,
+                    borderColor:
+                      paymentProfileId === profile.id
+                        ? colors.teal
+                        : colors.line,
+                  }}
+                >
+                  <PaymentOptionMark
+                    provider={profile.provider}
+                    identity={profile}
+                    label={profile.label}
+                    selected={paymentProfileId === profile.id}
+                  />
+                </Pressable>
+              ))}
+              {!availableProfiles.length ? (
+                <Body>
+                  Save bank details or a QR image in Payments so they appear
+                  with your request.
+                </Body>
+              ) : null}
+              <PlanAction
+                title="+ Add Payment Option"
+                onPress={onManagePaymentOptions}
+              />
+            </>
           ) : null}
-          <PlanAction
-            title="Manage payment options"
-            onPress={onManagePaymentOptions}
-          />
           <Field label="Note" value={note} onChangeText={setNote} />
           <PlanAction
             title="Cancel request"

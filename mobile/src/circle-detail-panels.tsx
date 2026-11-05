@@ -103,6 +103,7 @@ export type CircleDetail = {
     amount: number;
     currency: string;
     contributionDate: string;
+    destinationLabel?: string | null;
     note?: string | null;
   }[];
   activities?: {
@@ -527,7 +528,7 @@ export function CircleDetailPanels({
           {(circle.contributions ?? []).map((e) =>
             row(
               e.id,
-              e.memberName ?? "Me",
+              `${e.memberName ?? "Me"}${e.destinationLabel ? ` → ${e.destinationLabel}` : ""}`,
               displayDate(e.contributionDate, format),
               money(String(e.amount), e.currency),
               members.find((m) => m.id === e.memberId)?.avatarUrl,

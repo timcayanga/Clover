@@ -64,7 +64,7 @@ const circleSummary = (value: unknown) => {
     budgets: rows(circle.budgets, ["id", "name", "targetAmount", "spentAmount", "currency", "cadence", "startsAt", "endsAt", "progressPercent", "isActive"]),
     goals: rows(circle.goals, ["id", "name", "targetAmount", "currentAmount", "currency", "targetDate", "progressPercent", "status", "estimateConfidence", "estimateReason", "estimatedCompletionDate"]),
     commitments: rows(circle.commitments, ["id", "title", "amount", "currency", "recurrence", "nextDueDate", "assignedMemberId", "assignedMemberIds", "assignedMemberName", "notes", "isActive"]),
-    contributions: rows(circle.contributions, ["id", "memberId", "memberName", "goalId", "amount", "currency", "contributionDate", "note"]),
+    contributions: rows(circle.contributions, ["id", "memberId", "memberName", "goalId", "amount", "currency", "contributionDate", "destinationLabel", "note"]),
     expenses: rows(circle.expenses, ["id", "kind", "title", "amount", "currency", "date", "visibility", "transactionId", "categoryName", "lineItems", "splitItems", "canEditSplit", "canUnshare"]),
     investmentShares: rows(circle.investmentShares, ["id", "name", "institution", "balance", "currency", "visibility"]),
     activities: rows(circle.activities, ["id", "action", "summary", "createdAt"]),
@@ -77,6 +77,8 @@ const splitDetail = (value: unknown) => {
   return { ...splitSummary(bill),
     group: bill.group ? pick(bill.group, ["id", "name"]) : null,
     categoryName: typeof record(record(bill.transaction).category).name === "string" ? record(record(bill.transaction).category).name : suggestBillCategory(String(bill.title??""))?.name ?? null,
+    payments: rows(bill.payments, ["id", "participantId", "amount", "note"]),
+    transferSettlements: rows(bill.transferSettlements,["id","fromParticipantId","toParticipantId","fromParticipantName","toParticipantName","amount","createdAt"]),
     participants: rows(bill.participants, ["id", "name"]),
     items: rows(bill.items, ["id", "description", "amount", "participantIds", "splitMethod", "allocations"]),
     settlement: {
@@ -118,7 +120,7 @@ export function mobileApiResponse(operation: string, value: unknown) {
   if (operation === "split-bills") return data.bill ? { bill: splitDetail(data.bill) } : { ...pick(data, ["page", "hasMore"]), bills: Array.isArray(data.bills) ? data.bills.map(splitDetail) : [] };
   if (operation === "split-bill" || operation === "transfer-settlements" || operation === "resolution") return data.bill ? { bill: splitDetail(data.bill) } : pick(data,["deleted","ok"]);
   if (operation === "payment-profile-delete") return pick(data,["deleted","ok"]);
-  if (operation === "payment-requests") return { ...pick(data,["shareUrl"]), request: pick(data.request,["id","amount","currency","status","shareUrl"]), requests: rows(data.requests,["id","amount","currency","status","shareUrl","recipientName","note"]) };
+  if (operation === "payment-requests") return { ...pick(data,["shareUrl"]), request: pick(data.request,["id","amount","currency","billAmount","billCurrency","status","shareUrl"]), requests: rows(data.requests,["id","amount","currency","status","shareUrl","recipientName","note"]) };
   if (operation === "budgets" || operation === "budget") return {
     budget: pick(data.budget, ["id"]),
     ...(data.history ? { history: pick(data.history, ["points", "recentTransactions"]) } : {}),

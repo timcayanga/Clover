@@ -1,3 +1,4 @@
+import { paymentOptionLabel } from "../../shared/payment-request-amount";
 import { View, Image } from "react-native";
 import { Text } from "./app-text";
 import {
@@ -66,7 +67,7 @@ export function PaymentOptionMark({
           fontFamily: "Poppins-Medium",
         }}
       >
-        {label} · {provider}
+        {paymentOptionLabel(provider, label)}
       </Text>
       {selected ? <Text style={{ color: palette.foreground }}>✓</Text> : null}
     </View>

@@ -66,6 +66,7 @@ type Circle = {
     amount: number;
     currency: string;
     contributionDate: string;
+    destinationLabel?: string | null;
     goalId?: string | null;
     note?: string | null;
   }[];
@@ -306,11 +307,11 @@ export default function Circles() {
       ) : (
         <>
 
-          <Body>
+          {data.circles.length === 0 ? <Body>
             Split bills, coordinate shared expenses, track commitments, and work
             toward budgets and goals together—while keeping personal accounts
             private.
-          </Body>
+          </Body> : null}
           <Field
             label="Find a Circle"
             value={search}
@@ -340,16 +341,6 @@ export default function Circles() {
                     alignItems: "center",
                   }}
                 >
-                  <Text
-                    style={{
-                      color: colors.ink,
-                      fontFamily: "Poppins-SemiBold",
-                      fontSize: 16,
-                      flex: 1,
-                    }}
-                  >
-                    {circle.name}
-                  </Text>
                   <Image
                     source={
                       circle.avatarUrl &&
@@ -362,6 +353,17 @@ export default function Circles() {
                     accessible={false}
                     style={{ width: 64, height: 64, borderRadius: 16 }}
                   />
+                  <Text
+                    style={{
+                      color: colors.ink,
+                      fontFamily: "Poppins-SemiBold",
+                      fontSize: 16,
+                      flex: 1,
+                    }}
+                  >
+                    {circle.name}
+                  </Text>
+
                 </View>
                 <View style={{ flexDirection: "row", gap: 6 }}>
                   {(circle.members ?? []).slice(0, 5).map((member) => (

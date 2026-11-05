@@ -400,6 +400,7 @@ export const loadCirclesWorkspaceData = async (
         amount: numberValue(entry.amount),
         currency: entry.currency,
         contributionDate: entry.contributionDate.toISOString(),
+        destinationLabel: entry.destinationLabel,
         note: entry.note,
       })),
       expenses,

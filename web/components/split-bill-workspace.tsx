@@ -160,17 +160,6 @@ const formatPaymentContributions = (bill: SplitBillSerializedBill) => {
     .join(" · ");
 };
 
-const formatSettlementTransfers = (bill: SplitBillSerializedBill) => {
-  if (bill.settlement.transfers.length === 0) {
-    return bill.settlementStatus === "settled"
-      ? "Settled"
-      : formatSplitBillSettlementStatus(bill.settlementStatus);
-  }
-
-  return bill.settlement.transfers
-    .map((transfer) => `${transfer.fromParticipantName} owes ${transfer.toParticipantName} ${formatSplitBillAmount(transfer.amount, bill.currency)}`)
-    .join(" · ");
-};
 
 const formatParticipantShare = (bill: SplitBillSerializedBill, participantName: string) => {
   const participant = bill.settlement.participants.find((entry) => entry.name === participantName);
@@ -1196,21 +1185,8 @@ export function SplitBillWorkspace({
       <div className="split-bill-detail-modal__section-head">
         <strong>People and balances</strong>
       </div>
-      <div className="split-bill-detail-modal__allocation-grid">
-        {bill.settlement.participants.map((participant) => {
-          const outstanding = getParticipantOutstandingBalance(bill, participant.id);
-          return (
-          <article key={participant.id}>
-            <strong>{participant.name}</strong>
-            <span>Paid {formatSplitBillAmount(participant.paid, bill.currency)}</span>
-            <span>Share {formatSplitBillAmount(participant.owed, bill.currency)}</span>
-            <span className={outstanding >= 0 ? "is-positive" : "is-negative"}>
-              {Math.abs(outstanding) < 0.005 ? "Settled" : outstanding >= 0 ? "Is owed" : "Owes"}{" "}
-              {formatSplitBillAmount(Math.abs(outstanding), bill.currency)}
-            </span>
-          </article>
-        );})}
-      </div>
+      <div className="split-contribution-total"><span>Total Contributions</span><strong>{formatSplitBillAmount(bill.payments.reduce((sum,p)=>sum+Number(p.amount),0),bill.currency)}</strong></div>
+      <div className="split-balance-scroll"><table className="split-balance-table"><thead><tr><th>Person</th><th>Paid</th><th>Share</th><th>Owed</th></tr></thead><tbody>{bill.settlement.participants.map(p=>{const outstanding=getParticipantOutstandingBalance(bill,p.id);const avatarUrl=/^(you|me)$/i.test(p.name)||p.name===currentUserName?user?.imageUrl:people.find(person=>person.name===p.name)?.avatarUrl;return <tr key={p.id}><td><span className="split-balance-person"><SplitBillEntityAvatar name={p.name} avatarUrl={avatarUrl??null}/>{p.name}</span></td><td>{formatSplitBillAmount(p.paid,bill.currency)}</td><td>{formatSplitBillAmount(p.owed,bill.currency)}</td><td className={outstanding>=0?"is-positive":"is-negative"}>{Math.abs(outstanding)<0.005?"Settled":`${outstanding>=0?"Is owed":"Owes"} ${formatSplitBillAmount(Math.abs(outstanding),bill.currency)}`}</td></tr>})}</tbody></table></div>
       <div className="split-bill-detail-modal__allocation-transfers">
         <strong>Who pays whom</strong>
         {bill.settlement.transfers.length > 0 ? (
@@ -1452,14 +1428,15 @@ export function SplitBillWorkspace({
                     <div className="split-bill-detail-modal__list">
                       <div className="split-bill-detail-modal__list-row">
                         <strong>Contributions</strong>
-                        <span>{formatPaymentContributions(selectedBill)}</span>
+                        <div>{selectedBill.payments.map(p=><p key={p.id}>{getParticipantName(selectedBill,p.participantId)} contributed {formatSplitBillAmount(Number(p.amount),selectedBill.currency)}{p.note ? ` · ${p.note}` : ""}</p>)}{!selectedBill.payments.length ? <p>No contributions recorded</p>:null}</div>
                       </div>
                       <div className="split-bill-detail-modal__list-row">
                         <strong>Settlement</strong>
-                        <span>{formatSettlementTransfers(selectedBill)}</span>
+                        <div>{(selectedBill.transferSettlements??[]).map(t=><p key={t.id}>{t.fromParticipantName} paid {t.toParticipantName} {formatSplitBillAmount(Number(t.amount),selectedBill.currency)}</p>)}{!selectedBill.transferSettlements?.length?<p>No settlements recorded</p>:null}</div>
                       </div>
                     </div>
                     <SplitBillPaymentTools
+                      people={people} currentUserName={currentUserName} currentUserAvatar={user?.imageUrl}
                       relatedBills={bills}
                       bill={selectedBill}
                       onBillUpdated={(updatedBill) => setBills((current) => current.map((entry) => (entry.id === updatedBill.id ? updatedBill : entry)))}
@@ -1498,11 +1475,11 @@ export function SplitBillWorkspace({
                     <div className="split-bill-detail-modal__list">
                       <div className="split-bill-detail-modal__list-row">
                         <strong>Contributions</strong>
-                        <span>{formatPaymentContributions(selectedBill)}</span>
+                        <div>{selectedBill.payments.map(p=><p key={p.id}>{getParticipantName(selectedBill,p.participantId)} contributed {formatSplitBillAmount(Number(p.amount),selectedBill.currency)}{p.note ? ` · ${p.note}` : ""}</p>)}{!selectedBill.payments.length ? <p>No contributions recorded</p>:null}</div>
                       </div>
                       <div className="split-bill-detail-modal__list-row">
                         <strong>Settlement</strong>
-                        <span>{formatSettlementTransfers(selectedBill)}</span>
+                        <div>{(selectedBill.transferSettlements??[]).map(t=><p key={t.id}>{t.fromParticipantName} paid {t.toParticipantName} {formatSplitBillAmount(Number(t.amount),selectedBill.currency)}</p>)}{!selectedBill.transferSettlements?.length?<p>No settlements recorded</p>:null}</div>
                       </div>
                     </div>
                     {selectedBill.settlementStatus === "needs_payer_confirmation" ? (
@@ -1515,6 +1492,7 @@ export function SplitBillWorkspace({
                       </button>
                     ) : null}
                     <SplitBillPaymentTools
+                      people={people} currentUserName={currentUserName} currentUserAvatar={user?.imageUrl}
                       relatedBills={bills}
                       bill={selectedBill}
                       onBillUpdated={(updatedBill) => setBills((current) => current.map((entry) => (entry.id === updatedBill.id ? updatedBill : entry)))}

@@ -154,12 +154,12 @@ export function AddEntryMethods({
               }
             }}
           >
-            <img src={method === "ask" ? getNavigationIconSrc("adviser") : `/assets/organize/method-${method === "connect" ? "sync" : method}.svg`} width="20" height="20" alt="" />
+            <img src={method === "ask" ? getNavigationIconSrc("adviser") : `/assets/organize/method-${method === "connect" ? "sync" : method}.png`} width="20" height="20" alt="" />
             {method === "manual"
               ? "Manual"
               : method === "ask"
                 ? "Ask Clover"
-                : method === "connect" ? "Connect" : "Upload"}
+                : method === "connect" ? "Sync" : "Upload"}
           </button>
         ))}
       </div>

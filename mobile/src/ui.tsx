@@ -476,7 +476,7 @@ export function AppHeader({
       accessibilityRole="button"
       accessibilityLabel="Open Ask Clover"
       onPress={() => askClover(askPageContext(askPath, askParams, title))}
-      style={styles.iconButton}
+      style={[styles.iconButton, {backgroundColor:"transparent",borderWidth:0,shadowOpacity:0,elevation:0}]}
     >
       <Icon name="chatbubble-ellipses-outline" size={32} />
     </Pressable>

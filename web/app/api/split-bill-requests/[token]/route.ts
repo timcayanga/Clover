@@ -56,6 +56,8 @@ export async function GET(
       recipientName: entry.recipientName,
       amount: entry.amount.toString(),
       currency: entry.currency,
+      billAmount: entry.billAmount?.toString() ?? entry.amount.toString(),
+      billCurrency: entry.billCurrency ?? entry.bill.currency,
       dueDate: entry.dueDate,
       status: isSplitBillResolved(entry.bill.rawPayload)
         ? "resolved"

@@ -86,6 +86,7 @@ const resourceSchema = z.discriminatedUnion("action", [
     sourceTransactionId: z.string().min(1).nullable().optional(),
     amount,
     currency: z.string().trim().length(3).default("PHP"),
+    destinationLabel: z.string().trim().max(120).nullable().optional(),
     contributionDate: z.string().datetime().optional(),
     note: z.string().trim().max(240).nullable().optional(),
   }),
@@ -402,6 +403,7 @@ export async function POST(
               sourceTransactionId: body.sourceTransactionId || null,
               amount: body.amount,
               currency: body.currency.toUpperCase(),
+              destinationLabel: body.destinationLabel || null,
               contributionDate: body.contributionDate
                 ? new Date(body.contributionDate)
                 : new Date(),

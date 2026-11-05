@@ -256,6 +256,7 @@ export function CircleDetailWorkspace({
         currency,
         memberId: fd.get("memberId") || null,
         contributionDate: date ? parseDisplayDate(date, format) : undefined,
+        destinationLabel: fd.get("destinationLabel") || null,
         note: fd.get("note"),
       };
     else if (action.includes("commitment") && !assigned.length) {
@@ -635,6 +636,7 @@ export function CircleDetailWorkspace({
                         </label>
                       ))}
                   </fieldset>
+                  <label>Contributed To (Optional)<input name="destinationLabel" maxLength={120} placeholder="e.g. GCash" /></label>
                   <label>
                     Note (Optional)
                     <input name="note" />
@@ -1097,7 +1099,7 @@ export function CircleDetailWorkspace({
                       members.find((m) => m.id === e.memberId)?.avatarUrl,
                     )}
                     <div className="circle-rows__body">
-                      <span>{e.memberName ?? "Me"}</span>
+                      <span>{e.memberName ?? "Me"}{e.destinationLabel ? ` → ${e.destinationLabel}` : ""}</span>
                       <small>{displayDate(e.contributionDate, format)}</small>
                     </div>
                     <span>{money(e.amount, e.currency)}</span>

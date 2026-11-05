@@ -72,22 +72,7 @@ export function EntrySelector({
             backgroundColor: wrapped && value === method ? colors.teal : "transparent",
           }}
         >
-          <Icon
-            line={method !== "ask"}
-            name={
-              method === "manual"
-                ? "pencil-outline"
-                : method === "ask"
-                  ? "chatbubble-ellipses-outline"
-                  : method === "upload"
-                    ? "cloud-upload-outline"
-                    : method === "connect"
-                      ? "business-outline"
-                      : "sync-outline"
-            }
-            size={20}
-            color={value === method ? "white" : colors.teal}
-          />
+          {method === "ask" ? <Icon name="chatbubble-ellipses-outline" size={26}/> : <Image source={method === "manual" ? require("../assets/organize/method-manual.png") : method === "upload" ? require("../assets/organize/method-upload.png") : require("../assets/organize/method-sync.png")} style={{width:26,height:26}} resizeMode="contain" accessible={false}/>}
           <Text
             style={{
               fontSize: 12,
@@ -101,7 +86,7 @@ export function EntrySelector({
           >
             {method === "ask"
               ? "Ask Clover"
-              : method[0].toUpperCase() + method.slice(1)}
+              : method === "connect" ? "Sync" : method[0].toUpperCase() + method.slice(1)}
           </Text>
         </Pressable>
       ))}

@@ -590,11 +590,11 @@ export function CirclesWorkspace({
     <section className="circles-page">
       {!selectedCircle ? (
         <>
-        <div className="collection-directory-heading"><p>Split bills, coordinate shared expenses, track commitments, and work toward budgets and goals together—while keeping personal accounts private.</p></div>
+        {data.circles.length === 0 ? <div className="collection-directory-heading"><p>Split bills, coordinate shared expenses, track commitments, and work toward budgets and goals together—while keeping personal accounts private.</p></div> : null}
         <div className="collection-card-grid" aria-label="Your Circles">
           {data.circles.map(circle => <CollectionCard key={circle.id} kind="circle" color={circle.type === "household" ? "#63cdbb" : "#b19be8"} name={circle.name} subtitle="" editable={circle.role === "organizer"} icon={<img className="collection-custom-photo" src={getCircleAvatarUrl(circle)} alt="" width={64} height={64}/>} onOpen={() => onSelectedCircleChange(circle.id)} onSave={(name, _emoji, photo) => updateCardIdentity(circle, name, photo)}>
             <div className="split-bill-avatars">{circle.members.filter(m => m.status === "active").slice(0,5).map(member => <span key={member.id} className="circles-avatar" title={member.displayName}><MemberPhoto member={member} /></span>)}{circle.memberCount > 5 ? <span>+{circle.memberCount - 5}</span> : null}</div>
-            <span>{formatMoney(circle.expenseTotalThisMonth,circle.currency)} shared this month</span>
+
           </CollectionCard>)}
           <button type="button" className="collection-create-card" onClick={() => openCreate()}><span aria-hidden="true">＋</span><strong>Add Circle</strong><small>Start sharing with a new group</small></button>
         </div>

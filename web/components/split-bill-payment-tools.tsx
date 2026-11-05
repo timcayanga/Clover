@@ -1,4 +1,7 @@
 "use client";
+import { getCurrencyCatalogCodes } from "@/lib/currencies";
+import { SplitBillEntityAvatar } from "./split-bill-entity-avatar";
+import { paymentOptionLabel } from "../../shared/payment-request-amount";
 import { paymentRequestMessage } from "../../shared/split-bill-experience";
 import { getAccountWalletBrand as getAccountBrand } from "@/lib/account-brand";
 import { AccountBrandMark } from "./account-brand-mark";
@@ -35,6 +38,9 @@ type PaymentRequest = {
 
 type SplitBillPaymentToolsProps = {
   bill: SplitBillSerializedBill;
+  people?: { name: string; avatarUrl?: string | null }[];
+  currentUserName?: string;
+  currentUserAvatar?: string | null;
   relatedBills?: SplitBillSerializedBill[];
   onBillUpdated?: (bill: SplitBillSerializedBill) => void;
 };
@@ -43,6 +49,8 @@ const emptyRequest = {
   recipientParticipantId: "",
   payeeParticipantId: "",
   amount: "",
+  currency: "",
+  billAmount: "",
   recipientEmail: "",
   dueDate: "",
   paymentProfileId: "",
@@ -53,6 +61,9 @@ export function SplitBillPaymentTools({
   bill,
   onBillUpdated,
   relatedBills = [],
+  people = [],
+  currentUserName,
+  currentUserAvatar,
 }: SplitBillPaymentToolsProps) {
   const [preparedMessage, setPreparedMessage] = useState("");
   const [preparedEmail, setPreparedEmail] = useState("");
@@ -125,10 +136,10 @@ export function SplitBillPaymentTools({
     () =>
       profiles.filter(
         (p) =>
-          p.currency === bill.currency &&
+          p.currency === (requestDraft.currency || bill.currency) &&
           (!p.personName || p.personName === receivingPerson),
       ),
-    [profiles, bill.currency, receivingPerson],
+    [profiles, bill.currency, requestDraft.currency, receivingPerson],
   );
   useEffect(() => {
     const firstTransfer = transferOptions[0];
@@ -145,7 +156,10 @@ export function SplitBillPaymentTools({
         current.payeeParticipantId || firstTransfer?.toParticipantId || "",
       amount:
         current.amount ||
-        (firstTransfer ? firstTransfer.amount.toFixed(2) : ""),
+        (!current.currency || current.currency === bill.currency
+          ? (firstTransfer?.amount.toFixed(2) ?? "")
+          : ""),
+      currency: current.currency || bill.currency,
       paymentProfileId: availableProfiles.some(
         (profile) => profile.id === current.paymentProfileId,
       )
@@ -156,13 +170,25 @@ export function SplitBillPaymentTools({
 
   const shareRequest = (entry: PaymentRequest) => {
     setPreparedEmail(entry.recipientEmail ?? "");
-    setPreparedMessage(paymentRequestMessage(entry.recipientName, [{
-      title: bill.title, amount: entry.amount, currency: entry.currency,
-      date: bill.billDate, url: `${window.location.origin}${entry.shareUrl}`, note: entry.note,
-    }]));
+    setPreparedMessage(
+      paymentRequestMessage(entry.recipientName, [
+        {
+          title: bill.title,
+          amount: entry.amount,
+          currency: entry.currency,
+          date: bill.billDate,
+          url: `${window.location.origin}${entry.shareUrl}`,
+          note: entry.note,
+        },
+      ]),
+    );
   };
 
-  const candidates = relatedBills
+  const candidates = (
+    requestDraft.currency && requestDraft.currency !== bill.currency
+      ? []
+      : relatedBills
+  )
     .filter(
       (b) => b.id !== bill.id && !b.resolved && b.currency === bill.currency,
     )
@@ -193,7 +219,13 @@ export function SplitBillPaymentTools({
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(requestDraft),
+          body: JSON.stringify({
+            ...requestDraft,
+            billAmount:
+              requestDraft.currency === bill.currency
+                ? undefined
+                : requestDraft.billAmount || undefined,
+          }),
         },
       );
       const payload = await response.json();
@@ -227,6 +259,7 @@ export function SplitBillPaymentTools({
               recipientParticipantId: entry.transfer.fromParticipantId,
               payeeParticipantId: entry.transfer.toParticipantId,
               amount: String(entry.transfer.amount),
+              billAmount: undefined,
             }),
           },
         );
@@ -266,32 +299,40 @@ export function SplitBillPaymentTools({
     );
   return (
     <section className="split-bill-payment-tools">
-      <PaymentRequestShareDialog message={preparedMessage} email={preparedEmail} onClose={() => setPreparedMessage("")} />
+      <PaymentRequestShareDialog
+        message={preparedMessage}
+        email={preparedEmail}
+        onClose={() => setPreparedMessage("")}
+      />
       <div className="split-bill-detail-modal__section-head">
         <div>
           <strong>Request Payment</strong>
-          <p className="split-bill-table__hint">
-            Choose how you want to be paid, then share the request.
-          </p>
         </div>
-        <button
-          className="button button-primary button-small transactions-action-button"
-          type="button"
-          onClick={() =>
-            window.dispatchEvent(new Event("clover:open-payment-option"))
-          }
-        >
-          <span aria-hidden="true">+</span>
-          Add Option
-        </button>
       </div>
 
       {transferOptions.length > 0 ? (
         <div className="split-bill-payment-tools__request-form">
+          <div>
+            <span>Request From</span>
+            <span className="split-balance-person">
+              <SplitBillEntityAvatar
+                name={receivingPerson ?? "You"}
+                avatarUrl={
+                  receivingPerson === currentUserName ||
+                  /^(you|me)$/i.test(receivingPerson ?? "")
+                    ? (currentUserAvatar ?? null)
+                    : (people.find((p) => p.name === receivingPerson)
+                        ?.avatarUrl ?? null)
+                }
+              />
+              {receivingPerson}
+            </span>
+          </div>
           <label>
-            <span>Request from</span>
+            <span>Request To</span>
             <select
               className="settings-input"
+              aria-label="Request To"
               value={`${requestDraft.recipientParticipantId}:${requestDraft.payeeParticipantId}`}
               onChange={(event) => {
                 setExtraBills([]);
@@ -307,7 +348,11 @@ export function SplitBillPaymentTools({
                     current.recipientParticipantId,
                   payeeParticipantId:
                     transfer?.toParticipantId ?? current.payeeParticipantId,
-                  amount: transfer?.amount.toFixed(2) ?? current.amount,
+                  amount:
+                    current.currency === bill.currency
+                      ? (transfer?.amount.toFixed(2) ?? current.amount)
+                      : "",
+                  billAmount: "",
                 }));
               }}
             >
@@ -316,13 +361,42 @@ export function SplitBillPaymentTools({
                   key={`${transfer.fromParticipantId}-${transfer.toParticipantId}`}
                   value={`${transfer.fromParticipantId}:${transfer.toParticipantId}`}
                 >
-                  {transfer.fromParticipantName} → {transfer.toParticipantName}
+                  {transfer.fromParticipantName}
                 </option>
               ))}
             </select>
           </label>
+
           <label>
-            <span>Amount</span>
+            <span>Currency</span>
+            <select
+              aria-label="Currency"
+              className="settings-input"
+              value={requestDraft.currency || bill.currency}
+              onChange={(e) => {
+                setExtraBills([]);
+                setRequestDraft((current) => ({
+                  ...current,
+                  currency: e.target.value,
+                  amount: "",
+                  billAmount: "",
+                  paymentProfileId: "",
+                }));
+              }}
+            >
+              {Array.from(
+                new Set([
+                  bill.currency,
+                  ...profiles.map((p) => p.currency),
+                  ...getCurrencyCatalogCodes(),
+                ]),
+              ).map((c) => (
+                <option key={c}>{c}</option>
+              ))}
+            </select>
+          </label>
+          <label>
+            <span>Agreed Amount</span>
             <input
               className="settings-input"
               inputMode="decimal"
@@ -335,6 +409,25 @@ export function SplitBillPaymentTools({
               }
             />
           </label>
+          {requestDraft.currency !== bill.currency ? (
+            <label>
+              <span>Amount Settled in {bill.currency}</span>
+              <input
+                className="settings-input"
+                inputMode="decimal"
+                value={requestDraft.billAmount}
+                onChange={(e) =>
+                  setRequestDraft((current) => ({
+                    ...current,
+                    billAmount: e.target.value,
+                  }))
+                }
+              />
+              <small>
+                Enter the original bill amount this agreed payment settles.
+              </small>
+            </label>
+          ) : null}
           {candidates.length ? (
             <fieldset className="split-payment-options">
               <legend>Include other bills</legend>
@@ -357,54 +450,68 @@ export function SplitBillPaymentTools({
               ))}
             </fieldset>
           ) : null}
-          <div
-            className="split-payment-options"
-            role="radiogroup"
-            aria-label="Payment option"
-          >
-            {availableProfiles.map((profile) => {
-              const brand = getAccountBrand({
-                institution: profile.provider,
-                name: profile.label,
-                type: "bank",
-              });
-              return (
+          <div className="split-payment-field"><span className="split-payment-field__label">Payment Option</span><details className="split-payment-dropdown">
+            <summary>
+              {(() => {
+                const p = availableProfiles.find(
+                  (p) => p.id === requestDraft.paymentProfileId,
+                );
+                return p ? (
+                  <span className="split-payment-option">
+                    <AccountBrandMark
+                      accountBrand={getAccountBrand({
+                        institution: p.provider,
+                        name: p.label,
+                        type: "bank",
+                      })}
+                      label={p.provider}
+                    />
+                    {paymentOptionLabel(p.provider, p.label)}
+                  </span>
+                ) : (
+                  <span>Choose Payment Option</span>
+                );
+              })()}
+            </summary>
+            <div>
+              {availableProfiles.map((profile) => (
                 <button
                   key={profile.id}
                   type="button"
-                  role="radio"
-                  aria-checked={requestDraft.paymentProfileId === profile.id}
+                  aria-pressed={requestDraft.paymentProfileId === profile.id}
                   className="split-payment-option"
-                  style={{
-                    background: brand.background,
-                    color: brand.foreground,
-                  }}
-                  onClick={() =>
+                  onClick={(e) => {
                     setRequestDraft((current) => ({
                       ...current,
                       paymentProfileId: profile.id,
-                    }))
-                  }
+                    }));
+                    e.currentTarget.closest("details")?.removeAttribute("open");
+                  }}
                 >
                   <AccountBrandMark
-                    accountBrand={brand}
+                    accountBrand={getAccountBrand({
+                      institution: profile.provider,
+                      name: profile.label,
+                      type: "bank",
+                    })}
                     label={profile.provider}
                   />
                   <span>
-                    {profile.label} · {profile.provider}
+                    {paymentOptionLabel(profile.provider, profile.label)}
                   </span>
-                  {requestDraft.paymentProfileId === profile.id ? (
-                    <span aria-hidden="true">✓</span>
-                  ) : null}
                 </button>
-              );
-            })}
-            {!availableProfiles.length ? (
-              <span>
-                No matching payment option. Add one to receive {bill.currency}.
-              </span>
-            ) : null}
-          </div>
+              ))}
+              <button
+                type="button"
+                className="split-payment-option"
+                onClick={() =>
+                  window.dispatchEvent(new Event("clover:open-payment-option"))
+                }
+              >
+                + Add Payment Option
+              </button>
+            </div>
+          </details></div>
           <label>
             <span>
               Email <small>Optional</small>

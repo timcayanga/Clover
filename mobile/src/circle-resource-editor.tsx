@@ -71,6 +71,7 @@ export function CircleResourceEditor({
   const session = useSession(),
     { colors } = useTheme(),
     format = useCircleDateFormat();
+  const [destinationLabel,setDestinationLabel] = useState("");
   const [photo, setPhoto] = useState<string | null | undefined>();
   const [listRevision, setListRevision] = useState(0);
   const listLoading = useRef(false);
@@ -204,6 +205,7 @@ export function CircleResourceEditor({
         amount: Number(amount),
         memberId: organizer ? memberId || null : undefined,
         contributionDate: date ? parseDisplayDate(date, format) : undefined,
+        destinationLabel: destinationLabel.trim() || null,
         note,
       };
     if (!name.trim()) throw new Error("Enter a name.");
@@ -405,6 +407,7 @@ export function CircleResourceEditor({
           ) : null}
         </>
       ) : null}
+      {isContribution ? <Field label="Contributed To (Optional)" value={destinationLabel} onChangeText={setDestinationLabel} placeholder="e.g. GCash"/> : null}
       {isRecurring || (isContribution && organizer) ? (
         <>
           <Body>{isRecurring ? "Assigned To" : "Contributed By"}</Body>

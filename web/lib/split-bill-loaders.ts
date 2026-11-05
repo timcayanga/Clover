@@ -237,3 +237,5 @@ export const loadSplitBillGroup = async (userId: string, groupId: string) =>
       },
     },
   });
+
+export { billInclude as splitBillRecordInclude };

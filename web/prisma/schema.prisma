@@ -1761,6 +1761,7 @@ model CircleContribution {
   amount              Decimal           @db.Decimal(18, 2)
   currency            String            @default("PHP")
   contributionDate    DateTime          @default(now())
+  destinationLabel String?
   note                String?
   createdAt           DateTime          @default(now())
   circle              Circle            @relation(fields: [circleId], references: [id], onDelete: Cascade)
@@ -1947,6 +1948,8 @@ model SplitBillPaymentRequest {
   payeeName              String
   recipientEmail         String?
   amount                 Decimal                       @db.Decimal(18, 2)
+  billAmount Decimal? @db.Decimal(18, 2)
+  billCurrency String?
   currency               String                        @default("PHP")
   dueDate                DateTime?
   status                 SplitBillPaymentRequestStatus @default(requested)

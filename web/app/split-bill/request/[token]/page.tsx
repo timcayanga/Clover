@@ -7,6 +7,8 @@ type PublicRequest = {
   recipientName: string;
   items?: { description: string; amount: string }[];
   amount: string;
+  billAmount?: string;
+  billCurrency?: string;
   currency: string;
   dueDate: string | null;
   status: string;
@@ -127,7 +129,7 @@ export default function SplitBillPaymentRequestPage({
             <strong>Your shared items</strong>
             {request.items.map((item, i) => (
               <p key={i}>
-                {item.description} · {request.currency}{" "}
+                {item.description} · {request.billCurrency || request.currency}{" "}
                 {Number(item.amount).toFixed(2)}
               </p>
             ))}
@@ -139,6 +141,7 @@ export default function SplitBillPaymentRequestPage({
         <strong className="split-bill-public-request__amount">
           {request.currency} {Number(request.amount).toLocaleString()}
         </strong>
+        {request.billCurrency && request.billCurrency !== request.currency ? <p>Settles {request.billCurrency} {Number(request.billAmount).toLocaleString()} of the original bill.</p> : null}
         {request.paymentProfile ? (
           <div
             className="split-bill-public-request__method"

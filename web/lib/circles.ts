@@ -168,6 +168,7 @@ export type CircleContributionSummary = {
   amount: number;
   currency: string;
   contributionDate: string;
+  destinationLabel?: string | null;
   note: string | null;
 };
 
