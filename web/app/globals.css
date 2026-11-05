@@ -67175,6 +67175,7 @@ html[data-theme="dark"] .home-quick-add__income{background:#18382b;color:#a0eac2
   .accounts-mobile-card-grid .accounts-card-drag-shell { min-width: 0; height: 100%; }
   .content--accounts .accounts-mobile-card-grid .mobile-swipe-delete,
   .content--accounts .accounts-mobile-card-grid .mobile-swipe-delete__content { border-radius: 16px; height: 100%; }
+  .accounts-mobile-card-grid .mobile-swipe-delete:has(.mobile-swipe-delete__confirmation) :is(.mobile-swipe-delete__content, .accounts-card-drag-shell, .financial-account-card--mobile-overview) { height: auto; }
   .content--accounts .financial-account-card--mobile-overview {
     position: relative; width: 100%; height: 100%; min-height: 210px;
     padding: 14px 12px; border-radius: 16px; transform: none;
