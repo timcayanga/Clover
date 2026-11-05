@@ -42,9 +42,10 @@ export function ContextualAskClover({ context, planTier = "unknown", navigation,
   const copy = { label: legacy?.label || "Open Ask Clover", title: pageContext.title, prompts: askPagePrompts(pageContext).map((prompt, i) => ({id: `${context}-${i}`, group: context, label: prompt, prompt})) };
   const openPanel = (prompt?: string) => {
     const hints = Object.fromEntries(new URLSearchParams(window.location.search));
-    const scope = document.querySelector<HTMLElement>("[data-ask-page-context]");
+    const scope = triggerRef.current?.closest<HTMLElement>("[data-ask-page-context]") ??
+      document.querySelector<HTMLElement>('[data-ask-page-context]:not([role="dialog"])');
     if (scope) { try { Object.assign(hints, JSON.parse(scope.dataset.askPageContext || "{}")); } catch { /* Unavailable hints do not block chat. */ } }
-    setPageContext({...askPageContext(pathname || `/${context}`, hints), ...(prompt ? {prompt:prompt.slice(0,4000)} : {})});
+    setPageContext({...askPageContext(pathname || `/${context}`, hints, scope?.dataset.askPageTitle), ...(prompt ? {prompt:prompt.slice(0,4000)} : {})});
     setIsOpen(true);
   };
   useEffect(() => {
@@ -193,7 +194,7 @@ export function ContextualAskClover({ context, planTier = "unknown", navigation,
                     <AdviserChat
                       prompts={copy.prompts}
                       isPro={hasFullFeatureAccess(resolvedPlanTier)}
-                      storageKey={`clover-adviser-chat-${context}-${pageContext.transactionId || pageContext.circleId || pageContext.accountId || "page"}-v2`}
+                      storageKey={`clover-adviser-chat-${context}-${pageContext.transactionId || pageContext.billId || pageContext.circleId || pageContext.accountId || "page"}-v2`}
                       surface={context}
                       pageContext={pageContext}
                       initialPrompt={pageContext.prompt}

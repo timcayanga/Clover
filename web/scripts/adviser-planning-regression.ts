@@ -106,6 +106,13 @@ assert.equal(askWebPageContext('/transactions/tx-1').transactionId,'tx-1');
 assert.ok(askPagePrompts(askWebPageContext('/transactions/tx-1')).every(prompt=>prompt.includes('this transaction')));
 assert.equal(askWebPageContext('/split-bill/bill-1').page,'split-bills');
 assert.equal(askWebPageContext('/split-bill/bill-1/edit').billId,'bill-1');
+assert.equal(askWebPageContext('/dashboard').page, 'home');
+assert.deepEqual(
+  askWebPageContext('/split-bill', {billId:'bill-2', currency:'PHP'}, 'Lunch with friends'),
+  {page:'split-bills', title:'Lunch with friends', billId:'bill-2', currency:'PHP'},
+);
+assert.equal(askWebPageContext('/split-bill/bill-1', {billId:'bill-2'}).billId, 'bill-2');
+
 for(const path of ['/transactions/new','/transactions/tags','/transactions/categories'])assert.equal(askWebPageContext(path).transactionId,undefined);
 for(const path of ['/accounts/new','/accounts/institutions/bpi'])assert.equal(askWebPageContext(path).accountId,undefined);
 for(const path of ['/split-bill/new','/split-bill/request/token','/split-bill/groups/group-1','/split-bill/group-invite/token'])assert.equal(askWebPageContext(path).billId,undefined);

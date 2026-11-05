@@ -66782,7 +66782,7 @@ input.transaction-inline-edit[aria-invalid="true"] { box-shadow: inset 0 -1px va
 /* Keep the compact mascot at the shared header icon size; retain the touch target. */
 .content.content .adviser-header-link img,
 .content.content .contextual-ask-clover__trigger > .contextual-ask-clover__icon,
-.split-detail-mobile-adviser .contextual-ask-clover__trigger > .contextual-ask-clover__icon {
+.split-detail-header-actions .contextual-ask-clover__trigger > .contextual-ask-clover__icon {
   width: 32px !important;
   height: 32px !important;
   min-width: 32px !important;
@@ -67307,7 +67307,13 @@ html[data-theme="dark"] .home-quick-add__income{background:#18382b;color:#a0eac2
 .split-payment-dropdown summary::after {float:none;flex:none;}
 .split-payment-dropdown summary > .split-payment-option {padding:0;margin:0;min-height:32px;font-size:.9rem;color:var(--text);display:flex;box-sizing:border-box;}
 
-.split-detail-mobile-adviser .contextual-ask-clover__trigger {
+.split-detail-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: none;
+}
+.split-detail-header-actions .contextual-ask-clover__trigger {
   width: 44px;
   height: 44px;
 }

@@ -12,6 +12,6 @@ export default async function SplitBillPage() {
   const { bills, groups, people } = await loadSplitBillWorkspaceData(user.id);
 
   return (
-    <SplitBillWorkspace bills={bills} groups={groups} people={people} currentUserName={currentUserName} />
+    <SplitBillWorkspace bills={bills} groups={groups} people={people} currentUserId={user.id} currentUserName={currentUserName} />
   );
 }

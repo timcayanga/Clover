@@ -38,6 +38,7 @@ type SplitBillWorkspaceProps = {
   bills: SplitBillSerializedBill[];
   groups: SplitBillGroupSummary[];
   people: SplitBillPersonSummary[];
+  currentUserId: string;
   currentUserName: string;
 };
 
@@ -351,6 +352,7 @@ export function SplitBillWorkspace({
   bills: initialBills,
   groups: initialGroups,
   people: initialPeople,
+  currentUserId,
   currentUserName,
 }: SplitBillWorkspaceProps) {
   const {user}=useUser();
@@ -372,6 +374,7 @@ export function SplitBillWorkspace({
   const consumedBillQueryRef = useRef<string | null>(null);
 
   const selectedBill = selected?.kind === "bill" ? bills.find((bill) => bill.id === selected.id) ?? null : null;
+  const askBill = selectedBill?.userId === currentUserId ? selectedBill : null;
   const selectedGroup = selected?.kind === "group" ? groups.find((group) => group.id === selected.id) ?? null : null;
   const selectedPerson = selected?.kind === "person" ? people.find((person) => person.id === selected.id) ?? null : null;
   const selectedGroupBills = selectedGroup ? getSplitBillBillsForGroup(bills, selectedGroup.id) : [];
@@ -1254,7 +1257,11 @@ export function SplitBillWorkspace({
 
       {selected && typeof document !== "undefined" ? createPortal(
         <div className="split-bill-modal split-bill-detail-backdrop" role="presentation" onClick={closeDetail}>
-          <section className="split-bill-modal__card glass split-bill-detail-modal" role="dialog" aria-modal="true" aria-label={selectedDetailLabel} onClick={(event) => event.stopPropagation()}>
+          <section className="split-bill-modal__card glass split-bill-detail-modal" role="dialog" aria-modal="true" aria-label={selectedDetailLabel}
+            data-ask-page-context={askBill ? JSON.stringify({ billId: askBill.id, currency: askBill.currency }) : undefined}
+            data-ask-page-title={askBill?.title}
+            onClick={(event) => event.stopPropagation()}
+          >
             <div className="split-bill-manual-modal__head">
               <button className="split-detail-mobile-back icon-button" type="button" aria-label="Back to Split Bills" onClick={closeDetail}><span aria-hidden="true">‹</span></button>
               <div>
@@ -1263,7 +1270,12 @@ export function SplitBillWorkspace({
                 </p>
                 <h3>{selectedDetailLabel}</h3>
               </div>
-              <span className="split-detail-mobile-adviser"><AdviserHeaderLink /></span><button className="split-bill-icon-button split-detail-desktop-close" type="button" onClick={closeDetail} aria-label="Close details"><InterfaceIcon name="close" /></button>
+              <div className="split-detail-header-actions">
+                <AdviserHeaderLink key={selected.id} />
+                <button className="split-bill-icon-button split-detail-desktop-close" type="button" onClick={closeDetail} aria-label="Close details">
+                  <InterfaceIcon name="close" />
+                </button>
+              </div>
             </div>
 
             {selectedBill ? (

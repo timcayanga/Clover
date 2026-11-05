@@ -1114,7 +1114,14 @@ export function CircleDetailWorkspace({
             </>
           ) : null}
           {tab === "Activity" ? (
-            <section className="circle-ledger circle-rows">
+            <section className="circle-ledger circle-rows circle-activity">
+              {circle.activities.length ? (
+                <div className="circle-ledger-head">
+                  <span />
+                  <span>Activity</span>
+                  <span>Date</span>
+                </div>
+              ) : null}
               {!circle.activities.length ? (
                 <CircleEmpty title="No Circle activity yet" />
               ) : null}

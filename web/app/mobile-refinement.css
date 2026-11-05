@@ -49,7 +49,7 @@
   .entry-table-toggle { min-width:40px !important; width:40px !important; }
 }
 @media(prefers-reduced-motion:reduce) { .add-entry-methods [role="tabpanel"], .transactions-entry--figma [role="tabpanel"] {animation:none !important;} }
-.split-detail-mobile-back,.split-detail-mobile-adviser {display:none;}
+.split-detail-mobile-back {display:none;}
 @media(max-width:1100px) {
   .circles-page .collection-create-card {background:var(--surface,#fff) !important;border:1px dashed var(--teal,#03a8c0) !important;box-shadow:none !important;}
   .content--has-back .budget-single-view__head {display:none;}
@@ -62,9 +62,10 @@
   .transaction-detail-page__amount {margin:0 !important;white-space:nowrap;}
   .transaction-detail-page__edit-button {display:none !important;}
   .transaction-detail-page__actions .button-danger {color:var(--danger,#ff3b5c) !important;}
-  .split-detail-mobile-back,.split-detail-mobile-adviser {display:inline-flex;}
+  .split-detail-mobile-back {display:inline-flex;}
+  .split-detail-header-actions {justify-content:center;}
   .split-detail-desktop-close {display:none !important;}
-  .split-bill-detail-modal .split-bill-manual-modal__head {position:sticky !important;top:0;background:var(--surface,#fff);z-index:4;display:grid;grid-template-columns:36px minmax(0,1fr) 36px;align-items:center;}
+  .split-bill-detail-modal .split-bill-manual-modal__head {position:sticky !important;top:0;background:var(--surface,#fff);z-index:4;display:grid;grid-template-columns:44px minmax(0,1fr) 44px;align-items:center;}
   .split-bill-detail-modal .split-bill-manual-modal__head h3 {font-size:18px;text-align:center;}
   .split-bill-detail-modal .split-bill-manual-modal__head .eyebrow {display:none;}
   .recurring-calendar-detail__header {position:sticky;top:0;z-index:4;background:var(--surface,#fff);}
