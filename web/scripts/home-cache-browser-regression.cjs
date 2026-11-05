@@ -27,12 +27,12 @@ const adapters = {
 window.now=new Date(2026,9,8,12).getTime();window.cache=new PageCache(()=>window.now);window.focused=true;window.pending=[];
 window.value=(balance,currency='PHP')=>({currency,balance,month:{income:0,expense:0},previousMonth:{income:0,expense:0},weekly:{income:0,expense:0,days:[]},monthly:{income:0,expense:0,days:[]},upcoming:[]});
 window.homePath='home?workspaceId=p&currency=PHP&section=overview';window.cache.seed(window.homePath,window.value(1200),window.now);
-window.session={profileId:'p',data:{defaultCurrency:'PHP'},demo:false,rows:[],cached:path=>window.cache.home(path),request:path=>window.cache.read(path,()=>new Promise((resolve,reject)=>window.pending.push({path,resolve,reject})))};
+window.session={profileId:'p',data:{defaultCurrency:'PHP'},demo:false,rows:[],cached:path=>window.cache.home(path),request:path=>path.startsWith('activation?')?Promise.resolve({activation:{workspaceId:window.session.profileId,state:'hidden'}}):path==='split-bills?homeSummary=true'?Promise.resolve({pending:{count:0,bills:[]}}):window.cache.read(path,()=>new Promise((resolve,reject)=>window.pending.push({path,resolve,reject})))};
 function App(){const[n,setN]=useState(0);window.redraw=()=>setN(n=>n+1);return <Home/>}createRoot(document.getElementById('root')).render(<App/>);`, resolveDir: root, loader: 'tsx' },
     bundle: true, write: false, format: 'iife', jsx: 'automatic', alias: { react },
     plugins: [{ name: 'native-dom-adapters', setup(build) {
       build.onResolve({filter: /.*/}, args => {
-        const key = adapters[args.path] ? args.path : args.path.match(/\/src\/([^/]+)$/)?.[1];
+        const key = adapters[args.path] ? args.path : (args.path.startsWith('.') ? path.basename(args.path) : null);
         if (key && adapters[key]) return {path: key, namespace:'adapter'};
       });
       build.onLoad({filter:/.*/,namespace:'adapter'}, args => ({contents:adapters[args.path],loader:'jsx',resolveDir:root}));

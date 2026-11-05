@@ -1,3 +1,4 @@
+import { HomePendingSplitBills } from "@/components/home-pending-split-bills";
 import { FirstUseActivation } from "./first-use-activation";
 import { homeCurrencyScope } from "../../shared/home-currency-scope";
 import { HomeCurrencySelector } from "./home-currency-selector";
@@ -1139,6 +1140,8 @@ async function DashboardStream({
             </article>
           )))}
         </div>
+
+        <HomePendingSplitBills key={`split-bills-${workspaceSummary.id}`} />
 
         <DashboardBudgetPulse currency={selectedCurrency} key={workspaceSummary.id} workspaceId={workspaceSummary.id} refreshKey={now.toISOString()} />
 

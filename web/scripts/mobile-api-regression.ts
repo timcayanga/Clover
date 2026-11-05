@@ -21,6 +21,8 @@ import { assertTrustedRequestOrigin } from "../lib/request-security";
 import { getSessionContext, isLocalDevHost } from "../lib/auth";
 
 async function main() {
+  assert.deepEqual(mobileApiResponse("split-bills", {pending:{count:1,rawPayload:"private",bills:[{id:"one",title:"Lunch",currency:"PHP",remaining:125,rawPayload:"private",receiptStorageKey:"private"}]}}), {pending:{count:1,bills:[{id:"one",title:"Lunch",currency:"PHP",remaining:125}]}});
+
   const resume = mobileApiResponse("import-status", {canResume:true, statementSelfHeal:{reason:"stale_statement_image_queue",rawPayload:"private"}, importFile:{status:"failed",processingPhase:"queued_retry",processingMessage:"Waiting to resume"}}) as {canResume:boolean;statementSelfHeal:{reason:string}};
   assert.equal(resume.canResume,true);
   const cleanReceipt = { id: "receipt", reviewStatus: "pending_review", merchantRaw: "Cafe", categoryId: "food", categoryName: "Food & Dining", parserConfidence: 98, categoryConfidence: 98, accountMatchConfidence: 98 };

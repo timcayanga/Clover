@@ -1,4 +1,5 @@
 "use client";
+import { MobileReturnGreeting } from "@/components/mobile-return-greeting";
 import { PUBLIC_IMPORT_ACCEPT } from "@/lib/import-format-policies";
 
 import {
@@ -1966,6 +1967,7 @@ export function CloverShell({
   return (
     <CloverChromeContext.Provider value={{ closeChrome, setMobileOverlayChrome }}>
       <RegionalPreferencesSync />
+      <MobileReturnGreeting />
       <ContextualAskClover context={askPageContext(pathname || "/").page} captureLinks />
       <div className={`app-shell ${isSidebarOpen ? "is-sidebar-open" : ""}`} ref={shellRef}>
       <div

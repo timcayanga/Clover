@@ -1,3 +1,4 @@
+import { ReturnGreeting } from "../src/return-greeting";
 import { nativeStartup } from "../src/startup-timing";
 import { boundedRequest } from "../src/request-lifecycle";
 import { PageAskProvider } from "../src/page-ask-provider";
@@ -5,7 +6,6 @@ import { WindowPane, WindowPaneProvider } from "../src/window-pane";
 import { AccessibilityPreferences, useAccessibilityPreferences } from "../src/accessibility-preferences";
 import { RouteReveal } from "../src/route-reveal";
 import { GlassNavigationProvider } from "../src/glass-backdrop";
-import { Image } from "expo-image";
 import * as SplashScreen from "expo-splash-screen";
 import { NativeAnalytics } from "../src/analytics-provider";
 import { identifyNativeAnalytics } from "../src/analytics";
@@ -21,7 +21,7 @@ import { Stack, usePathname, router } from "expo-router";
 import { useFonts } from "expo-font";
 import { allowLayoutPreview } from "../src/layout-preview";
 import { StatusBar } from "expo-status-bar";
-import { useRef, useState, type ReactNode } from "react";
+import { useRef, useState } from "react";
 import { ActivityIndicator, AppState, Platform, StyleSheet, View } from "react-native";
 import { useEffect } from "react";
 import { SafeAreaProvider, SafeAreaView } from "react-native-safe-area-context";
@@ -34,42 +34,6 @@ import { useTheme, AppHeader, Button, Notice } from "../src/ui";
 void SplashScreen.preventAutoHideAsync().catch(() => {});
 nativeStartup.start("cold");
 
-function PrivacyShield({ children }: { children: ReactNode }) {
-  const { colors, styles, dark } = useTheme();
-  const [hidden, setHidden] = useState(false);
-  useEffect(() => {
-    const listener = AppState.addEventListener("change", (state) =>
-      setHidden(state !== "active"),
-    );
-    return () => listener.remove();
-  }, []);
-  return (
-    <View style={{ flex: 1 }}>
-      {children}
-      {hidden && Platform.OS !== "web" && (
-        <View
-          accessibilityViewIsModal
-          style={[
-            StyleSheet.absoluteFill,
-            {
-              backgroundColor: colors.bg,
-              justifyContent: "center",
-              alignItems: "center",
-              zIndex: 100,
-            },
-          ]}
-        >
-          <Image
-            source={Platform.OS === "android" ? require("../assets/welcome-clover.png") : require("../assets/splash-brand.png")}
-            contentFit="contain"
-            style={Platform.OS === "android" ? { width: 106, height: 106 } : { width: 220, height: 184 }}
-            accessibilityLabel="Clover"
-          />
-        </View>
-      )}
-    </View>
-  );
-}
 function Routes() {
   const { reduceMotion } = useAccessibilityPreferences();
   const { colors, styles, dark } = useTheme();
@@ -108,7 +72,7 @@ function Routes() {
   }, [active, session.data, path]);
   if (entry.coldStart && !publicPaymentRequest) return session.error || startupSlow ? <View style={{ flex: 1, justifyContent: "center", padding: 24, gap: 16 }}><Notice>{session.error || "Clover is taking longer to connect. Check your connection or try again."}</Notice><Button title="Try again" onPress={() => { nativeStartup.start("retry"); session.refresh(); }} /><Button title="Sign out" secondary onPress={() => void session.signOut()} /></View> : null;
   return (
-    <RouteReveal><PrivacyShield>
+    <RouteReveal>
       <GlassNavigationProvider>
         <StatusBar style={active && dark ? "light" : "dark"} />
           <View style={{ flex: 1 }} accessibilityElementsHidden={!publicPaymentRequest && !active && recovering} importantForAccessibility={!publicPaymentRequest && !active && recovering ? "no-hide-descendants" : "auto"}>
@@ -192,12 +156,13 @@ function Routes() {
             <Stack.Screen name="payment-request" options={{headerShown:false}} />
           </Stack>
           {entry.app ? <ImportActivity /> : null}
+          {entry.app && session.data ? <ReturnGreeting firstName={session.data.firstName} /> : null}
           </View>
           {!publicPaymentRequest && !active && recovering ? <View accessibilityViewIsModal style={[StyleSheet.absoluteFill, { backgroundColor: colors.bg, justifyContent: "center", alignItems: "center", zIndex: 200 }]}>
             <ActivityIndicator color={colors.teal} accessibilityLabel="Finishing sign-in" />
           </View> : null}
       </GlassNavigationProvider>
-    </PrivacyShield></RouteReveal>
+    </RouteReveal>
   );
 }
 const noToken = async () => null;

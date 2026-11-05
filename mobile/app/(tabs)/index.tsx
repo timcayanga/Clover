@@ -1,3 +1,5 @@
+import { HomePendingSplitBills } from "../../src/home-pending-split-bills";
+import { dateInTimeZone, paymentCountdown, shortPaymentDate } from "../../../shared/home-return";
 import { nativeStartup } from "../../src/startup-timing";
 import { FirstUseActivation } from "../../src/first-use-activation";
 import { Modal } from "../../src/adaptive-modal";
@@ -76,6 +78,8 @@ export default function Home() {
   const { colors, styles } = useTheme();
   const session = useSession();
   const [error, setError] = useState("");
+  const [today, setToday] = useState(() => dateInTimeZone());
+  useEffect(() => { const timer = setInterval(() => setToday(dateInTimeZone()), 60000); return () => clearInterval(timer); }, []);
   const [detailsError, setDetailsError] = useState(false);
   const [hidden, setHidden] = useState(true);
   const profileCurrency = session.data?.defaultCurrency ?? "PHP";
@@ -456,7 +460,7 @@ export default function Home() {
                     justifyContent: "space-between",
                   }}
                 >
-                  <Text style={{ flex: 1, minWidth: 0, color: colors.muted, fontSize: 14 }}>{item.title}</Text>
+                  <View style={{ flex: 1, minWidth: 0, gap: 4 }}><Text style={{ color: colors.ink, fontSize: 14 }}>{item.title}</Text><Text style={{ color: colors.muted, fontSize: 12 }}>{[shortPaymentDate(item.date), paymentCountdown(item.date, today)].filter(Boolean).join(" · ")}</Text></View>
                   <Text style={{ flexShrink: 1, maxWidth: "48%", textAlign: "right", color: colors.muted, fontSize: 14 }}>{amount(item.amount, item.currency)}</Text>
                 </View>
               ))
@@ -469,6 +473,7 @@ export default function Home() {
               onPress={() => router.navigate("/(tabs)/recurring")}
             />
           </Card>
+          <HomePendingSplitBills hidden={hidden} />
           <Card>
             <Text style={styles.sectionTitle}>Things to review</Text>
             <Body muted={false}>Transactions</Body>

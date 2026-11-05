@@ -1,3 +1,4 @@
+import { homePendingSplitBills } from "../../../../shared/home-split-bills";
 import { splitBillBalanceSummary } from "@/lib/split-bill-balance-summary";
 import { loadSplitBillWorkspaceData } from "@/lib/split-bill-loaders";
 import { getUserDisplayName } from "@/lib/user-display-name";
@@ -520,6 +521,10 @@ export async function GET(request: Request) {
   try {
     const user = await getSplitBillCurrentUser();
     const native = getMobileRequestContext()?.request === request && request !== undefined;
+    if (new URL(request.url).searchParams.get("homeSummary") === "true") {
+      const { bills } = await loadSplitBillWorkspaceData(user.id);
+      return NextResponse.json({ pending: homePendingSplitBills(bills) }, { headers: { "Cache-Control": "private, no-store" } });
+    }
     if (native && new URL(request.url).searchParams.get("summaryOnly") === "true") {
       const { bills } = await loadSplitBillWorkspaceData(user.id);
       return NextResponse.json({ summary: splitBillBalanceSummary(bills, getUserDisplayName(user)) });

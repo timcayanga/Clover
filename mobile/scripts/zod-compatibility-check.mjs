@@ -9,12 +9,15 @@ const cliPath=expoRequire.resolve('@expo/cli/package.json');
 const cliRequire=createRequire(cliPath);
 assert.equal(cliRequire('zod/package.json').version,'4.6.6');
 const cliRoot=dirname(cliPath);
-const {PluginSchema}=require(resolve(cliRoot,'build/src/start/server/DevToolsPlugin.schema.js'));
-const {createMCPDevToolsExtensionSchema}=require(resolve(cliRoot,'build/src/start/server/createMCPDevToolsExtensionSchema.js'));
+const {PluginSchema}=require(resolve(cliRoot,'build/src/start/server/devtools/DevToolsPlugin.schema.js'));
+const {createMCPDevToolsExtensionSchema}=require(resolve(cliRoot,'build/src/start/server/mcp/createMCPDevToolsExtensionSchema.js'));
 const plugin={packageName:'clover-qa',packageRoot:'/tmp/clover-qa',cliExtensions:{description:'QA',entryPoint:'qa.js',commands:[{name:'inspect',title:'Inspect',environments:['mcp'],parameters:[{name:'count',type:'number'},{name:'enabled',type:'confirm'},{name:'label',type:'text'}]}]}};
-assert.equal(PluginSchema.safeParse(plugin).success,true);
-assert.equal(PluginSchema.safeParse({...plugin,packageName:''}).success,false);
-const schema=createMCPDevToolsExtensionSchema(plugin);
+// SDK 57.0.32 uses JSON Schema for plugin metadata and injects Zod into MCP schemas.
+const {validate}=cliRequire('@expo/schema-utils');
+const {z}=cliRequire('zod');
+assert.doesNotThrow(()=>validate(PluginSchema,plugin));
+assert.throws(()=>validate(PluginSchema,{...plugin,packageName:''}));
+const schema=createMCPDevToolsExtensionSchema(plugin,z);
 assert.equal(schema.safeParse({command:'inspect',count:2,enabled:true,label:'Clover'}).success,true);
 assert.equal(schema.safeParse({command:'inspect',count:'bad'}).success,false);
 assert.equal(schema.safeParse({command:'inspect',unknown:true}).success,false);
@@ -26,7 +29,7 @@ for(const path of Object.keys(lock.packages).filter(p=>p.endsWith('/abitype'))){
  assert.equal(abi.Abi.safeParse([{type:'function',name:'transfer',inputs:'invalid'}]).success,false,path);
  assert.equal(abi.TypedData.safeParse({Message:[{name:'contents',type:'string'}]}).success,true,path);
 }
-const {z}=cliRequire('zod');let visits=0;
+let visits=0;
 const element=z.string().refine(()=>{visits++;return true;});
 assert.equal(z.array(element).max(2).safeParse(Array(1000).fill('x')).success,false);
 assert.equal(visits,0,'Oversized bounded input must stop before parsing elements');

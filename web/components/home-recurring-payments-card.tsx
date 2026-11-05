@@ -1,5 +1,6 @@
 "use client";
 
+import { dateInTimeZone, paymentCountdown } from "../../shared/home-return";
 import { HomeSensitiveAmount } from "@/components/home-sensitive-amount";
 
 import Link from "next/link";
@@ -33,6 +34,8 @@ export function HomeRecurringPaymentsCard({
   suggestions: HomeRecurringSuggestionItem[];
 }) {
   const router = useRouter();
+  const [today, setToday] = useState(() => dateInTimeZone());
+  useEffect(() => { const timer = setInterval(() => setToday(dateInTimeZone()), 60000); return () => clearInterval(timer); }, []);
   const [items, setItems] = useState(payments);
   const savingRef = useRef<string | null>(null);
   const [savingId, setSavingId] = useState<string | null>(null);
@@ -114,7 +117,7 @@ export function HomeRecurringPaymentsCard({
               </button>
               <div className="dashboard-home__action-row-copy">
                 <strong>{item.title}</strong>
-                <small>{item.detail}{item.amountLabel ? <> · <HomeSensitiveAmount value={item.amountLabel} currency={item.currency} /></> : null}</small>
+                <small>{item.detail}{paymentCountdown(item.dueDate,today) ? ` · ${paymentCountdown(item.dueDate,today)}` : ""}{item.amountLabel ? <> · <HomeSensitiveAmount value={item.amountLabel} currency={item.currency} /></> : null}</small>
               </div>
             </div>
           ))}

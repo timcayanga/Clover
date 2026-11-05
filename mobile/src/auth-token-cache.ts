@@ -1,40 +1,20 @@
-import type { TokenCache } from "@clerk/expo";
-import { tokenCache } from "@clerk/expo/token-cache";
-import * as SecureStore from "expo-secure-store";
-import { Platform } from "react-native";
-const preferenceKey = "clover-remember-session";
-const transient = new Map<string, string>();
-const seen = new Set<string>();
-let remember: boolean | undefined;
-async function remembered() {
-  if (remember === undefined)
-    remember =
-      (Platform.OS === "web"
-        ? localStorage.getItem(preferenceKey)
-        : await SecureStore.getItemAsync(preferenceKey)) !== "false";
-  return remember;
-}
-export async function setRememberSession(value: boolean) {
-  if (Platform.OS === "web") localStorage.setItem(preferenceKey, String(value));
-  else await SecureStore.setItemAsync(preferenceKey, String(value));
-  remember = value;
-  if (!value) for (const key of seen) await tokenCache?.clearToken?.(key);
-}
-export const authTokenCache: TokenCache = {
-  async getToken(key) {
-    seen.add(key);
-    return (await remembered())
-      ? tokenCache?.getToken(key)
-      : (transient.get(key) ?? null);
+import type { TokenCache } from '@clerk/expo';
+import * as SecureStore from 'expo-secure-store';
+import { Platform } from 'react-native';
+import { createPersistentTokenCache } from './persistent-token-cache';
+// Keep the existing Clerk keys and accessibility policy so installed sessions
+// migrate in place. Browser Clerk continues to own its cookies.
+const options = { keychainAccessible: SecureStore.AFTER_FIRST_UNLOCK };
+const persistent = createPersistentTokenCache({
+  get: async key => Platform.OS === 'web' ? localStorage.getItem(key) : SecureStore.getItemAsync(key, options),
+  set: async (key, value) => {
+    if (Platform.OS === 'web') localStorage.setItem(key, value);
+    else await SecureStore.setItemAsync(key, value, options);
   },
-  async saveToken(key, token) {
-    seen.add(key);
-    transient.set(key, token);
-    if (await remembered()) await tokenCache?.saveToken(key, token);
-    else await tokenCache?.clearToken?.(key);
+  remove: async key => {
+    if (Platform.OS === 'web') localStorage.removeItem(key);
+    else await SecureStore.deleteItemAsync(key, options);
   },
-  async clearToken(key) {
-    transient.delete(key);
-    await tokenCache?.clearToken?.(key);
-  },
-};
+});
+export const setRememberSession = persistent.setRememberSession;
+export const authTokenCache: TokenCache = persistent.cache;
