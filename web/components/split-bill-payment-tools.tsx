@@ -4,11 +4,12 @@ import { SplitBillEntityAvatar } from "./split-bill-entity-avatar";
 import { paymentOptionLabel } from "../../shared/payment-request-amount";
 import { paymentRequestMessage } from "../../shared/split-bill-experience";
 import { getAccountWalletBrand as getAccountBrand } from "@/lib/account-brand";
+import { CategoryBrandMark } from "./category-brand-mark";
 import { AccountBrandMark } from "./account-brand-mark";
 import { PaymentRequestShareDialog } from "./payment-request-share-dialog";
 
 import { useEffect, useMemo, useState, useRef } from "react";
-import type { SplitBillSerializedBill } from "@/lib/split-bill";
+import { formatSplitBillAmount, type SplitBillSerializedBill } from "@/lib/split-bill";
 
 type PaymentProfile = {
   id: string;
@@ -45,6 +46,12 @@ type SplitBillPaymentToolsProps = {
   onBillUpdated?: (bill: SplitBillSerializedBill) => void;
 };
 
+const recentBillCount = 3;
+const billDateFormat = new Intl.DateTimeFormat("en-PH", {
+  dateStyle: "medium",
+  timeZone: "UTC",
+});
+
 const emptyRequest = {
   recipientParticipantId: "",
   payeeParticipantId: "",
@@ -68,6 +75,8 @@ export function SplitBillPaymentTools({
   const [preparedMessage, setPreparedMessage] = useState("");
   const [preparedEmail, setPreparedEmail] = useState("");
   const [extraBills, setExtraBills] = useState<string[]>([]);
+  const [billSearch, setBillSearch] = useState("");
+  const billPicker = useRef<HTMLDialogElement>(null);
   const [profiles, setProfiles] = useState<PaymentProfile[]>([]);
   const [requests, setRequests] = useState<PaymentRequest[]>([]);
   const [requestDraft, setRequestDraft] = useState(emptyRequest);
@@ -126,12 +135,13 @@ export function SplitBillPaymentTools({
     };
   }, [bill.id]);
 
+  const selectedTransfer = transferOptions.find(
+    (transfer) =>
+      transfer.fromParticipantId === requestDraft.recipientParticipantId &&
+      transfer.toParticipantId === requestDraft.payeeParticipantId,
+  );
   const receivingPerson =
-    transferOptions.find(
-      (t) =>
-        t.fromParticipantId === requestDraft.recipientParticipantId &&
-        t.toParticipantId === requestDraft.payeeParticipantId,
-    )?.toParticipantName ?? transferOptions[0]?.toParticipantName;
+    selectedTransfer?.toParticipantName ?? transferOptions[0]?.toParticipantName;
   const availableProfiles = useMemo(
     () =>
       profiles.filter(
@@ -193,19 +203,42 @@ export function SplitBillPaymentTools({
       (b) => b.id !== bill.id && !b.resolved && b.currency === bill.currency,
     )
     .flatMap((b) => {
-      const current = transferOptions.find(
-        (t) =>
-          t.fromParticipantId === requestDraft.recipientParticipantId &&
-          t.toParticipantId === requestDraft.payeeParticipantId,
-      );
       const transfer = b.settlement.transfers.find(
         (t) =>
-          t.fromParticipantName === current?.fromParticipantName &&
-          t.toParticipantName === current?.toParticipantName &&
+          t.fromParticipantName === selectedTransfer?.fromParticipantName &&
+          t.toParticipantName === selectedTransfer?.toParticipantName &&
           t.amount > 0,
       );
       return transfer ? [{ bill: b, transfer }] : [];
-    });
+    })
+    .sort((a, b) => b.bill.billDate.localeCompare(a.bill.billDate));
+
+  const normalizedSearch = billSearch.trim().toLowerCase();
+  const matchingBills = candidates.filter(({ bill }) =>
+    bill.title.toLowerCase().includes(normalizedSearch),
+  );
+  const renderBillRow = ({ bill: entry, transfer }: (typeof candidates)[number]) => (
+    <label className="split-payment-bill-row" key={entry.id}>
+      <input
+        type="checkbox"
+        checked={extraBills.includes(entry.id)}
+        onChange={(event) => {
+          const checked = event.target.checked;
+          setExtraBills((ids) =>
+            checked ? [...ids, entry.id] : ids.filter((id) => id !== entry.id),
+          );
+        }}
+      />
+      <CategoryBrandMark categoryName={entry.categoryName ?? "Other"} size={28} />
+      <span className="split-payment-bill-row__title">
+        {entry.title}
+        <small>{billDateFormat.format(new Date(entry.billDate))}</small>
+      </span>
+      <span className="split-payment-bill-row__amount">
+        {formatSplitBillAmount(transfer.amount, entry.currency)}
+      </span>
+    </label>
+  );
   const requestLock = useRef(false);
   const createRequest = async () => {
     if (requestLock.current) return;
@@ -430,24 +463,54 @@ export function SplitBillPaymentTools({
           ) : null}
           {candidates.length ? (
             <fieldset className="split-payment-options">
-              <legend>Include other bills</legend>
-              {candidates.map((entry) => (
-                <label key={entry.bill.id}>
-                  <input
-                    type="checkbox"
-                    checked={extraBills.includes(entry.bill.id)}
-                    onChange={(e) =>
-                      setExtraBills((ids) =>
-                        e.target.checked
-                          ? [...ids, entry.bill.id]
-                          : ids.filter((id) => id !== entry.bill.id),
-                      )
-                    }
-                  />
-                  {entry.bill.title} · {entry.bill.currency}{" "}
-                  {entry.transfer.amount.toFixed(2)}
-                </label>
-              ))}
+              <legend>Include Other Bills</legend>
+              {candidates
+                .filter((entry, index) => index < recentBillCount || extraBills.includes(entry.bill.id))
+                .map(renderBillRow)}
+              {candidates.length > recentBillCount ? (
+                <>
+                  <button
+                    type="button"
+                    className="circle-text-action"
+                    aria-haspopup="dialog"
+                    onClick={() => {
+                      setBillSearch("");
+                      billPicker.current?.showModal();
+                    }}
+                  >
+                    + Add More
+                  </button>
+                  <dialog
+                    ref={billPicker}
+                    className="split-request-share-dialog split-payment-bill-picker"
+                    aria-label="Add more bills"
+                  >
+                    <header>
+                      <h2>Add More Bills</h2>
+                      <button
+                        type="button"
+                        className="button button-secondary button-small"
+                        onClick={() => billPicker.current?.close()}
+                      >
+                        Done
+                      </button>
+                    </header>
+                    <input
+                      type="search"
+                      className="settings-input"
+                      aria-label="Search eligible bills"
+                      placeholder="Search bills"
+                      value={billSearch}
+                      onChange={(event) => setBillSearch(event.target.value)}
+                    />
+                    <div className="split-payment-bill-picker__rows">
+                      {matchingBills.length
+                        ? matchingBills.map(renderBillRow)
+                        : <p>No matching bills</p>}
+                    </div>
+                  </dialog>
+                </>
+              ) : null}
             </fieldset>
           ) : null}
           <div className="split-payment-field"><span className="split-payment-field__label">Payment Option</span><details className="split-payment-dropdown">
@@ -473,7 +536,7 @@ export function SplitBillPaymentTools({
                 );
               })()}
             </summary>
-            <div>
+            <div className="split-payment-method-grid">
               {availableProfiles.map((profile) => (
                 <button
                   key={profile.id}
@@ -503,7 +566,7 @@ export function SplitBillPaymentTools({
               ))}
               <button
                 type="button"
-                className="split-payment-option"
+                className="split-payment-option split-payment-option--add"
                 onClick={() =>
                   window.dispatchEvent(new Event("clover:open-payment-option"))
                 }

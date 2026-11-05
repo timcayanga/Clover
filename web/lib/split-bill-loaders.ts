@@ -173,6 +173,7 @@ export const loadSplitBillWorkspaceData = async (userId: string) => {
       } as Parameters<typeof serializeSplitBillRecord>[0]);
       return {
         ...serializedBill,
+        categoryName: bill.userId === userId ? bill.transaction?.category?.name ?? null : null,
         paymentRequests: bill.paymentRequests.map((request) => ({
           id: request.id,
           recipientName: request.recipientName,

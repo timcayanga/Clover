@@ -216,6 +216,7 @@ export const splitBillItemOrderBy: Prisma.SplitBillItemOrderByWithRelationInput[
 ];
 
 export type SplitBillSerializedBill = {
+  categoryName?: string | null;
   resolved?: boolean;
   id: string;
   userId: string;

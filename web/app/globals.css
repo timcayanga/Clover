@@ -66781,7 +66781,8 @@ input.transaction-inline-edit[aria-invalid="true"] { box-shadow: inset 0 -1px va
 }
 /* Keep the compact mascot at the shared header icon size; retain the touch target. */
 .content.content .adviser-header-link img,
-.content.content .contextual-ask-clover__icon {
+.content.content .contextual-ask-clover__trigger > .contextual-ask-clover__icon,
+.split-detail-mobile-adviser .contextual-ask-clover__trigger > .contextual-ask-clover__icon {
   width: 32px !important;
   height: 32px !important;
   min-width: 32px !important;
@@ -67274,3 +67275,87 @@ html[data-theme="dark"] .home-quick-add__income{background:#18382b;color:#a0eac2
 .split-payment-dropdown summary {display:flex;align-items:center;justify-content:space-between;gap:8px;list-style:none;min-height:32px;}
 .split-payment-dropdown summary::after {float:none;flex:none;}
 .split-payment-dropdown summary > .split-payment-option {padding:0;margin:0;min-height:32px;font-size:.9rem;color:var(--text);display:flex;box-sizing:border-box;}
+
+.split-detail-mobile-adviser .contextual-ask-clover__trigger {
+  width: 44px;
+  height: 44px;
+}
+
+.split-payment-options {
+  min-inline-size: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  gap: 0;
+}
+.split-payment-options legend {
+  padding: 0;
+  margin-bottom: 6px;
+  font-weight: 600;
+}
+.split-payment-options .split-payment-bill-row {
+  display: grid;
+  grid-template-columns: 24px 28px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  min-height: 52px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--stroke);
+  color: var(--text);
+  cursor: pointer;
+}
+.split-payment-bill-row input[type="checkbox"] {
+  appearance: auto;
+  inline-size: 16px;
+  block-size: 16px;
+  min-inline-size: 0;
+  min-block-size: 0;
+  margin: 0 auto;
+  padding: 0;
+  accent-color: var(--accent);
+}
+.split-payment-bill-row__title { overflow-wrap: anywhere; }
+.split-payment-bill-row__title small { display: block; color: var(--muted); }
+.split-payment-bill-row__amount { font-variant-numeric: tabular-nums; }
+.split-payment-bill-picker header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.split-payment-bill-picker header h2 { margin: 0; }
+.split-payment-bill-picker__rows { min-height: 0; overflow-y: auto; }
+.split-payment-method-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin-top: 8px;
+}
+.split-payment-method-grid .split-payment-option {
+  min-width: 0;
+  padding: 8px;
+  border: 1px solid var(--stroke);
+  overflow-wrap: anywhere;
+}
+.split-payment-method-grid .split-payment-option[aria-pressed="true"] {
+  border-color: var(--accent);
+}
+.split-payment-method-grid .split-payment-option--add { grid-column: 1 / -1; }
+@media (max-width: 700px) {
+  .split-payment-bill-picker {
+    position: fixed;
+    inset: auto 0 0;
+    width: 100%;
+    max-width: none;
+    margin: 0;
+    padding: 16px 16px max(16px, env(safe-area-inset-bottom));
+    border-radius: 24px 24px 0 0;
+  }
+}
+@media (max-width: 340px) {
+  .split-payment-method-grid .split-payment-option .account-brand-mark {
+    width: 24px;
+    height: 24px;
+    flex-basis: 24px;
+  }
+}
