@@ -50,6 +50,8 @@ async function main() {
   const where=await audienceModule.exports.customerAnalyticsUserWhere("production");assert.equal(where.environment,"production");assert.ok(JSON.stringify(where).includes("user_staff"));
   unavailable=true;assert.equal((await audienceModule.exports.getAnalyticsAudience("user_unknown")).analytics_audience,"unknown");assert.equal(writes,0);
 
+  const captureCode=ts.transpileModule(readFileSync("lib/analytics-capture.ts","utf8"),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText;
+  assert.throws(()=>vm.runInNewContext(captureCode,{exports:{},window:{},require:()=>({})}),/cannot run in a browser/);
   // Use the real pinned Node SDK and real transport; intercept every network request.
   const previousFetch=global.fetch, previousKey=process.env.NEXT_PUBLIC_POSTHOG_KEY;
   process.env.NEXT_PUBLIC_POSTHOG_KEY="synthetic-ingestion-key";

@@ -1,4 +1,5 @@
-import "server-only";
+// Also supports standalone Node workers and regression scripts outside Next's RSC loader.
+if (typeof window !== "undefined") throw new Error("Server analytics cannot run in a browser.");
 import { PostHog } from "posthog-node";
 import { normalizePlanAnalytics } from "../../shared/plan-analytics";
 import { getPostHogConfig, getAnalyticsEnvironment, getAnalyticsEpochProperties, scopeAnalyticsDistinctId, type AnalyticsEventName, type AnalyticsProperties } from "./analytics";
