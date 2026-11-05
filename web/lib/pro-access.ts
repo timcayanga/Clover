@@ -25,10 +25,11 @@ export async function getProAccess(userId: string) {
       subscription: user.billingSubscription,
       grants: user.proGrants,
     });
+  const audience = await getAnalyticsAudience(user.clerkUserId, user.email);
   return {
     ...access,
     trial: trialSnapshot(user.signupTrial, access.hasPaidSubscription, access.planTier, new Date(), access.source),
-    analytics: { ...planContext(access.planTier, access.source, user.storeAccess?.expiresAt && user.storeAccess.expiresAt > new Date() ? user.storeAccess.store : user.billingSubscription?.provider, access.hasPaidSubscription), ...await getAnalyticsAudience(user.clerkUserId, user.email) },
+    analytics: { ...planContext(access.planTier, access.source, user.storeAccess?.expiresAt && user.storeAccess.expiresAt > new Date() ? user.storeAccess.store : user.billingSubscription?.provider, access.hasPaidSubscription), ...(audience.analytics_audience === "unknown" ? {} : audience) },
     user: {
       id: user.id,
       email: user.email,

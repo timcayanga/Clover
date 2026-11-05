@@ -50,6 +50,23 @@ async function main() {
   const where=await audienceModule.exports.customerAnalyticsUserWhere("production");assert.equal(where.environment,"production");assert.ok(JSON.stringify(where).includes("user_staff"));
   unavailable=true;assert.equal((await audienceModule.exports.getAnalyticsAudience("user_unknown")).analytics_audience,"unknown");assert.equal(writes,0);
 
+  // Existing web/native consumers identify from plan metadata: unknown must not replace known traits.
+  let metadataAudience=audienceProperties("customer");
+  const accessModule={exports:{} as any};
+  const accessCode=ts.transpileModule(readFileSync("lib/pro-access.ts","utf8"),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText;
+  vm.runInNewContext(accessCode,{exports:accessModule.exports,Date,require:(id:string)=>{
+    if(id==="./analytics-audience")return {getAnalyticsAudience:async()=>metadataAudience};
+    if(id.includes("shared/signup-trial"))return {trialSnapshot:()=>({})};
+    if(id.includes("shared/plan-analytics"))return {planContext:()=>({plan_tier:"free",is_paid_subscriber:false})};
+    if(id==="@/lib/prisma")return {prisma:{user:{findUniqueOrThrow:async()=>({...regular,id:"synthetic-user",storeAccess:null,billingSubscription:null,proGrants:[]})}}};
+    if(id==="@/lib/pro-access-rules")return {calculateProAccess:()=>({planTier:"free",source:"free",hasPaidSubscription:false})};
+    if(id==="@/lib/user-limits")return {hasStagingProAccess:()=>false,hasStagingQaAccess:()=>false};
+    return {};
+  }});
+  assert.equal((await accessModule.exports.getProAccess("synthetic-user")).analytics.analytics_audience,"customer");
+  metadataAudience=audienceProperties("unknown");
+  const unknownAccess=await accessModule.exports.getProAccess("synthetic-user");
+  assert.equal(unknownAccess.planTier,"free");assert.equal(unknownAccess.analytics.analytics_audience,undefined);assert.equal(unknownAccess.analytics.analytics_excluded,undefined);
   const captureCode=ts.transpileModule(readFileSync("lib/analytics-capture.ts","utf8"),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText;
   assert.throws(()=>vm.runInNewContext(captureCode,{exports:{},window:{},require:()=>({})}),/cannot run in a browser/);
   // Use the real pinned Node SDK and real transport; intercept every network request.
