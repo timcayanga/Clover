@@ -72,7 +72,7 @@ export function Action({
   href?: string;
 }) {
   return (
-    <Link data-analytics-action="signup" prefetch={false} className={s.action} href={href}>
+    <Link prefetch={false} className={s.action} href={href}>
       {children}
       <Icon />
     </Link>

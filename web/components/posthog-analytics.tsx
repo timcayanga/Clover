@@ -309,7 +309,7 @@ function PostHogBehaviorSignals() {
         route,
         x_percent: Math.min(99, Math.max(0, Math.floor((event.clientX / Math.max(1, window.innerWidth)) * 100))),
         y_percent: Math.min(99, Math.max(0, Math.floor((event.clientY / Math.max(1, window.innerHeight)) * 100))),
-        action: namedAction ?? safeAction(target.getAttribute("aria-label")),
+        action: namedAction ?? safeAction(target.getAttribute("aria-label") || target.textContent),
         action_named: Boolean(namedAction),
         is_public_website: isPublicAnalyticsPath(pathname || "/"),
         ...(section && ["hero", "final_cta", "pricing", "features"].includes(section) ? { cta_placement: section } : {}),

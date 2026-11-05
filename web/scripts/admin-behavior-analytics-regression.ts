@@ -20,7 +20,9 @@ assert.match(client, /max_scroll_percent/);
 assert.match(client, /x_percent/);
 assert.match(client, /y_percent/);
 assert.match(client, /target_area/);
-assert.doesNotMatch(client, /\.textContent|\.innerText|target_value|input_value/);
+// Text is only compared to a fixed action allowlist; raw labels/values never enter the payload.
+assert.match(client, /action: namedAction \?\? safeAction\(/);
+assert.doesNotMatch(client, /target_value|input_value|action:\s*target\.(textContent|innerText)/);
 
 assert.match(queries, /getPostHogGrowthAnalytics/);
 assert.match(queries, /properties\.analytics_environment/);

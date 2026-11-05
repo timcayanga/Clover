@@ -12,7 +12,7 @@ async function main() {
   for (const path of ["/", "/help", "/help/imports/receipts", "/guides/migrate", "/refund-policy", "/dispute-resolution", "/business-registration", "/features/accounts"]) assert.equal(isPublicAnalyticsPath(path),true,path);
   for (const path of ["/accounts", "/helpful", "/api/help/feedback", "/guides-private"]) assert.equal(isPublicAnalyticsPath(path),false,path);
   const origin="https://clover.ph";
-  for(const [href,action] of [["/sign-up?intent=pro","signup"],["/sign-in","login"],["/help/imports/receipts","view_help"],["https://apps.apple.com/ph/app/clover-personal-finance/id6811711508","download_ios"],["https://play.google.com/store/apps/details?id=ph.clover.app","download_android"],["https://www.youtube.com/@cloverpersonalfinance","social_youtube"]]) assert.equal(namedAnalyticsAction({href,origin}),action);
+  for(const [href,action] of [["/pricing","view_pricing"],["/sign-up?intent=pro","signup"],["/sign-in","login"],["/help/imports/receipts","view_help"],["https://apps.apple.com/ph/app/clover-personal-finance/id6811711508","download_ios"],["https://play.google.com/store/apps/details?id=ph.clover.app","download_android"],["https://www.youtube.com/@cloverpersonalfinance","social_youtube"]]) assert.equal(namedAnalyticsAction({href,origin}),action);
   assert.equal(namedAnalyticsAction({action:"signup",label:"PRIVATE",origin}),"signup");
   assert.equal(namedAnalyticsAction({action:"private-account",href:"https://other.invalid/sign-up?password=PRIVATE",label:"PRIVATE",origin}),null);
   assert.equal(namedAnalyticsAction({href:"https://apps.apple.com/app/id999",origin}),null);
@@ -124,7 +124,7 @@ async function main() {
   let pathname="/help/imports/receipts", now=0;
   const browserEvents:any[]=[], effects:Array<()=>void>=[], listeners=new Map<string,Function>();
   class ElementDouble {
-    constructor(public attrs:Record<string,string>={},public tagName="A"){}
+    constructor(public attrs:Record<string,string>={},public tagName="A",public textContent=""){}
     getAttribute(key:string){return this.attrs[key] ?? null;}
     closest(selector:string){if(selector.startsWith("a,button"))return this;if(selector==="[data-analytics-section]")return new ElementDouble({"data-analytics-section":"hero"});return null;}
   }
@@ -152,6 +152,12 @@ async function main() {
   assert.equal(browserEvents.at(-1).properties.action,"signup");assert.equal(browserEvents.at(-1).properties.cta_placement,"hero");
   listeners.get("click")!({target:new ElementDouble({"href":"https://play.google.com/store/apps/details?id=ph.clover.app"}),clientX:30,clientY:20});
   assert.equal(browserEvents.at(-1).properties.action,"download_android");
+  listeners.get("click")!({target:new ElementDouble({"href":"/pricing"}),clientX:30,clientY:20});
+  assert.equal(browserEvents.at(-1).properties.action,"view_pricing","paid-card pricing navigation is not a signup");
+  listeners.get("click")!({target:new ElementDouble({},"BUTTON","Save"),clientX:30,clientY:20});
+  assert.equal(browserEvents.at(-1).properties.action,"save","preserve existing fixed-vocabulary actions");
+  listeners.get("click")!({target:new ElementDouble({},"BUTTON","PRIVATE FINANCIAL LABEL"),clientX:30,clientY:20});
+  assert.equal(browserEvents.at(-1).properties.action,"other");
   listeners.get("click")!({target:new ElementDouble({"aria-label":"PRIVATE 12345"},"BUTTON"),clientX:30,clientY:20});
   assert.equal(browserEvents.at(-1).properties.action,"other");
   pathname="/accounts";location.pathname=pathname;now=1000;effects.forEach(fn=>fn());
