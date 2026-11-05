@@ -74,11 +74,12 @@
 
 @media(max-width:1100px) {
   body:has(.mobile-sheet-handle) .content-body {animation:none !important;transform:none !important;}
-  .content.content.content--has-back > :is(.topbar,.shell-compact-bar) {display:grid !important;grid-template-columns:40px minmax(0,1fr) 40px !important;gap:8px !important;}
+  /* Reserve the full action group: a single 40px slot stacks Ask Clover and Add. */
+  .content.content.content--has-back > :is(.topbar,.shell-compact-bar) {display:grid !important;grid-template-columns:40px minmax(0,1fr) minmax(40px,max-content) !important;gap:8px !important;}
   .content.content.content--has-back > :is(.topbar,.shell-compact-bar) .shell-topbar-leading {position:static !important;grid-column:1 !important;width:40px !important;}
   .content.content.content--has-back > :is(.topbar,.shell-compact-bar) .collection-back {display:none !important;}
   .content.content.content--has-back > :is(.topbar,.shell-compact-bar) :is(.topbar__title-wrap,.shell-compact-bar__copy) {position:static !important;transform:none !important;grid-column:2 !important;width:100% !important;max-width:100% !important;min-width:0 !important;}
-  .content.content.content--has-back > :is(.topbar,.shell-compact-bar) :is(.topbar-actions,.shell-compact-bar__actions) {position:static !important;grid-column:3 !important;width:40px !important;max-width:40px !important;}
+  .content.content.content--has-back > :is(.topbar,.shell-compact-bar) :is(.topbar-actions,.shell-compact-bar__actions) {position:static !important;grid-column:3 !important;grid-row:1 !important;align-self:center !important;display:flex !important;flex-flow:row nowrap !important;width:max-content !important;max-width:none !important;}
   .content.content.content--has-back > :is(.topbar,.shell-compact-bar) .topbar__title-row {width:100% !important;min-width:0 !important;}
   .content.content.content--has-back > :is(.topbar,.shell-compact-bar) .topbar__title-row h1 {display:block !important;width:100% !important;max-width:100% !important;min-width:0 !important;white-space:nowrap !important;overflow:hidden !important;text-overflow:ellipsis !important;text-align:center !important;font-size:18px !important;}
   .budget-editor-page .budget-editor.budget-editor--page {position:relative !important;width:100% !important;height:auto !important;min-height:0 !important;max-height:100% !important;overflow-y:auto !important;padding:8px 20px 24px !important;border-radius:24px 24px 0 0 !important;}
