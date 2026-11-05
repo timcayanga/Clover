@@ -300,6 +300,7 @@ export function CircleDetailPanels({
           ) : (
             <>
               <SpendingDonut
+                variant="category"
                 currency={targetCurrency}
                 categories={entries.map(([name, amount]) => ({ name, amount }))}
               />

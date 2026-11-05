@@ -3,6 +3,7 @@ import {
   circleActivityEmoji,
   circleCategoryTotals,
 } from "../../shared/circle-overview";
+import { categoryIconColor } from "../../shared/category-icon-colors";
 import { CloverMascot } from "./clover-mascot";
 import { CollectionCard } from "./collection-card";
 import { CategoryBrandMark } from "./category-brand-mark";
@@ -181,20 +182,12 @@ export function CircleOverviewReports({
 }) {
   const converted = circleCategoryTotals(circle.expenses, currency, rates);
   const categories = converted ?? [];
-  const total = categories.reduce((n, [, amount]) => n + amount, 0),
-    palette = [
-      "#00abc0",
-      "#35b878",
-      "#8771bb",
-      "#d8841e",
-      "#db5774",
-      "#6286b7",
-    ];
+  const total = categories.reduce((sum, [, amount]) => sum + amount, 0);
   let offset = 0;
-  const slices = categories.map(([, n], i) => {
+  const slices = categories.map(([label, amount]) => {
     const start = offset;
-    offset += total ? (n / total) * 100 : 0;
-    return `${palette[i % palette.length]} ${start}% ${offset}%`;
+    offset += (amount / total) * 100;
+    return `${categoryIconColor(label)} ${start}% ${offset}%`;
   });
   return (
     <>
@@ -217,16 +210,10 @@ export function CircleOverviewReports({
               <span>{money(total, currency)}</span>
             </div>
             <div className="circle-ledger circle-category-report">
-              {categories.map(([label, n], i) => (
+              {categories.map(([label, n]) => (
                 <div className="circle-ledger__row" key={label}>
                   <CategoryBrandMark categoryName={label} size={30} />
-                  <span className="circle-ledger__body">
-                    <span
-                      className="circle-category-dot"
-                      style={{ background: palette[i % palette.length] }}
-                    />
-                    {label}
-                  </span>
+                  <span className="circle-ledger__body">{label}</span>
                   <span className="circle-ledger__amount">
                     {money(n, currency)}{" "}
                     <small>· {((n / total) * 100).toFixed(1)}%</small>

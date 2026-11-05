@@ -1,3 +1,4 @@
+import { categoryIconColor } from "../../shared/category-icon-colors";
 import { Text } from "./app-text";
 import { View } from "react-native";
 import Svg, { Circle } from "react-native-svg";
@@ -13,9 +14,11 @@ const palette = [
 export function SpendingDonut({
   categories,
   currency,
+  variant = "default",
 }: {
   categories: { name: string; amount: number }[];
   currency: string;
+  variant?: "default" | "category";
 }) {
   const { colors } = useTheme();
   const values = categories.filter(
@@ -23,7 +26,10 @@ export function SpendingDonut({
   );
   const total = values.reduce((sum, c) => sum + c.amount, 0);
   if (!total) return null;
-  const circumference = 2 * Math.PI * 78;
+  const useCategoryColors = variant === "category";
+  const strokeWidth = useCategoryColors ? 36 : 26;
+  const radius = useCategoryColors ? 73 : 78;
+  const circumference = 2 * Math.PI * radius;
   let offset = 0;
   return (
     <View
@@ -46,10 +52,10 @@ export function SpendingDonut({
               key={c.name}
               cx={105}
               cy={105}
-              r={78}
+              r={radius}
               fill="none"
-              stroke={palette[index % palette.length]}
-              strokeWidth={26}
+              stroke={useCategoryColors ? categoryIconColor(c.name) : palette[index % palette.length]}
+              strokeWidth={strokeWidth}
               strokeDasharray={`${length} ${circumference}`}
               strokeDashoffset={-start}
               rotation={-90}

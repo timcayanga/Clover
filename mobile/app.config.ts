@@ -6,8 +6,8 @@ const config: ExpoConfig = {
   owner: "clover-innovations",
   extra: { eas: { projectId: "742a3fe2-1cb2-4d71-8ed7-bc7e2e89b0ff" } },
   scheme: process.env.CLOVER_APP_SCHEME || "clover-preview",
-  version: "1.1.1",
-  icon: "./assets/clover-icon-dark.png",
+  version: "1.1.2",
+  icon: "./assets/clover-liquid-glass-icon.png",
   userInterfaceStyle: "automatic",
   orientation: "default",
   ios: {
@@ -46,7 +46,7 @@ const config: ExpoConfig = {
       action: "VIEW", autoVerify: true, category: ["BROWSABLE", "DEFAULT"],
       data: ["clover.ph", "staging.clover.ph"].map(host => ({ scheme: "https", host, pathPrefix: "/split-bill/request/" })),
     }],
-    adaptiveIcon: { foregroundImage: "./assets/android-clover-symbol.png", backgroundColor: "#18343A" },
+    adaptiveIcon: { foregroundImage: "./assets/clover-liquid-glass-icon.png", backgroundColor: "#1F2933" },
     predictiveBackGestureEnabled: true,
   },
   plugins: [
