@@ -62,7 +62,7 @@ const importAccount = async (connectionId: string, workspaceId: string, account:
     if(targetAccountId && !target) throw new PlanQuotaError("Choose an existing account in this Profile with the same bank, currency and account type.");
     const match = target ?? (sameIdentity?.accountId ? candidates.find(a => a.id === sameIdentity.accountId) : matches[0]);
     const priorLink = sameIdentity ?? match?.finverseAccountLink;
-    if (match && ((cardLastFour(match.accountNumber) && cardLastFour(normalized.accountNumber) && cardLastFour(match.accountNumber) !== cardLastFour(normalized.accountNumber) && !matchesConfirmedCardNumber(match, normalized.accountNumber)) || (readCardReplacements(match.cardNumberHistory).length && ((normalized.accountNumber && !matchesConfirmedCardNumber(match, normalized.accountNumber)) || match.currency !== normalized.currency || match.type !== normalized.type || !bankInstitutionsMatch(match.institution, normalized.institution))))) throw new PlanQuotaError("Confirm the new card in Account Details → Replace Card before linking it to this account.");
+    if (match && readCardReplacements(match.cardNumberHistory).length && ((normalized.accountNumber && !matchesConfirmedCardNumber(match, normalized.accountNumber)) || match.currency !== normalized.currency || match.type !== normalized.type || !bankInstitutionsMatch(match.institution, normalized.institution))) throw new PlanQuotaError("Confirm the new card in Account Details → Replace Card before linking it to this account.");
     if (priorLink && !explicitlySelected && (priorLink.unlinkedAt || priorLink.connectionId !== connectionId)) return null;
     if (priorLink && priorLink.externalAccountId !== account.account_id && !matchesConfirmedCardNumber(match ?? {}, normalized.accountNumber) && (!/^\d+$/.test(cleanBankNumber(normalized.accountNumber)) || cleanBankNumber(match?.accountNumber) !== cleanBankNumber(normalized.accountNumber))) throw new PlanQuotaError("This Clover account is already linked to a different bank account. Review its link first.");
     const quotaIdentity = priorLink ? bankLinkUsageIdentity(priorLink) : account.account_id;
@@ -78,7 +78,7 @@ const importAccount = async (connectionId: string, workspaceId: string, account:
       accountId = created.id;
     }
     // Never replace a saved full number with a provider mask or change confirmed metadata.
-    if (match && !readCardReplacements(match.cardNumberHistory).length && normalized.accountNumber && (!match.accountNumber || (match.source === "finverse" && /[*x•]/i.test(match.accountNumber) && /^\d+$/.test(normalized.accountNumber)))) await tx.account.update({ where: { id: match.id }, data: { accountNumber: normalized.accountNumber } });
+    if (match && !readCardReplacements(match.cardNumberHistory).length && normalized.accountNumber && (!match.accountNumber || (match.source === "finverse" && /[*x•]/i.test(match.accountNumber) && /^\d+$/.test(normalized.accountNumber) && cardLastFour(match.accountNumber) === cardLastFour(normalized.accountNumber)))) await tx.account.update({ where: { id: match.id }, data: { accountNumber: normalized.accountNumber } });
     const payload = { connectionId, workspaceId, externalAccountId: account.account_id, accountId, rawPayload: json(account), normalizedPayload: json({ ...normalized, quotaIdentity }), lastSeenAt: new Date(), unlinkedAt: null };
     if (priorLink) await tx.finverseAccountLink.update({ where: { id: priorLink.id }, data: payload });
     else await tx.finverseAccountLink.create({ data: payload });
