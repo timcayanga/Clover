@@ -1,4 +1,4 @@
-import { hasAmbiguousReplacementMatch, matchesConfirmedCardNumber, readCardReplacements } from "../../shared/card-replacement";
+import { hasAmbiguousReplacementMatch, matchesConfirmedCardNumber, readPublicCardHistory } from "../../shared/card-replacement";
 import type { Prisma } from "@prisma/client";
 import { hasTransactionUserEdits } from "@/lib/transaction-user-edits";
 import { getEffectiveTransactionCategoryName } from "@/lib/transaction-display";
@@ -549,7 +549,7 @@ export const scoreDurableImportedAccountIdentityMatch = (
   account: DurableImportedAccountIdentityLike,
   incoming: ImportedAccountIdentityLike
 ) => {
-  if (readCardReplacements(account.cardNumberHistory).length) {
+  if (readPublicCardHistory(account.cardNumberHistory).length) {
     const institution = canonicalImportedInstitutionKey(account.importIdentityInstitution ?? account.institution);
     return institution && institution === canonicalImportedInstitutionKey(incoming.institution) &&
       account.type === incoming.type && normalizeImportedCurrencyCode(account.currency) === normalizeImportedCurrencyCode(incoming.currency) &&

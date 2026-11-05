@@ -20,7 +20,7 @@ export function readCardReplacements(value: unknown): CardReplacement[] {
 }
 /** Only explicitly confirmed replacement history authorizes these suffix aliases. */
 export function matchesConfirmedCardNumber(account: { accountNumber?: string | null; cardNumberHistory?: unknown }, incoming?: string | null) {
-  const suffix = cardLastFour(incoming), history = readCardReplacements(account.cardNumberHistory);
+  const suffix = cardLastFour(incoming), history = readPublicCardHistory(account.cardNumberHistory);
   return Boolean(suffix && history.length && [cardLastFour(account.accountNumber), ...history.flatMap(row => [row.previousLastFour, row.newLastFour])].includes(suffix));
 }
 export function hasAmbiguousReplacementMatch(accounts: Array<{ accountNumber?: string | null; cardNumberHistory?: unknown }>, incoming?: string | null) {
@@ -30,3 +30,15 @@ export function hasAmbiguousReplacementMatch(accounts: Array<{ accountNumber?: s
 }
 export type PublicCardReplacement = Pick<CardReplacement, "previousLastFour" | "newLastFour" | "effectiveDate" | "reason" | "confirmedAt">;
 export const publicCardHistory = (value: unknown) => readCardReplacements(value).map(({ previousLastFour, newLastFour, effectiveDate, reason, confirmedAt }) => ({ previousLastFour, newLastFour, effectiveDate, reason, confirmedAt }));
+
+/** Public cached accounts carry masked history without internal audit IDs. */
+export function readPublicCardHistory(value: unknown): PublicCardReplacement[] {
+  if (!Array.isArray(value)) return [];
+  return value.filter((row): row is PublicCardReplacement => Boolean(row && typeof row === "object" &&
+    typeof row.newLastFour === "string" && /^\d{4}$/.test(row.newLastFour) &&
+    (row.previousLastFour === null || (typeof row.previousLastFour === "string" && /^\d{4}$/.test(row.previousLastFour))) &&
+    typeof row.effectiveDate === "string" && /^\d{4}-\d{2}-\d{2}$/.test(row.effectiveDate) &&
+    typeof row.confirmedAt === "string" && Number.isFinite(Date.parse(row.confirmedAt)) &&
+    CARD_REPLACEMENT_REASONS.includes(row.reason)))
+    .map(({previousLastFour,newLastFour,effectiveDate,reason,confirmedAt})=>({previousLastFour,newLastFour,effectiveDate,reason,confirmedAt}));
+}

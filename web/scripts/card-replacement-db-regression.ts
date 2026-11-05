@@ -68,6 +68,7 @@ async function main() {
     for (const digits of ["3012", "8745", finalSuffix]) {
       assert.equal(matchingBankAccounts([current], incoming(digits)).length, 1);
       assert.equal(scoreDurableImportedAccountIdentityMatch(current, incoming(digits)), 100);
+      assert.equal(scoreDurableImportedAccountIdentityMatch({...current,cardNumberHistory:publicCardHistory(current.cardNumberHistory)},incoming(digits)),100,"Browser caches match the same aliases without receiving internal audit IDs");
     }
     for (const identity of [incoming("1111"), { ...incoming("3012"), currency: "USD" }, { ...incoming("3012"), institution: "BDO" }, { ...incoming("3012"), type: "credit_card" }]) {
       assert.equal(matchingBankAccounts([current], identity).length, 0);
