@@ -1,4 +1,5 @@
 "use client";
+import { TransactionSourceMatches } from "@/components/transaction-source-matches";
 import { TransactionConversion, QuickAddLineItem } from "@/components/transaction-detail-extras";
 import type { QuickLineItem } from "../../../../shared/transaction-detail-extras";
 import { TransactionReviewControls } from "@/components/transaction-review-controls";
@@ -35,6 +36,7 @@ import {
 import { createSplitBillFromTransaction, type SplitBillTransactionLinkDraft } from "@/lib/split-bill-transaction-link";
 
 type Transaction = {
+  sourceMatches?: import("../../../../shared/transaction-source-match").TransactionSourceMatch[];
   createdAt?: string;
   id: string;
   workspaceId: string;
@@ -561,6 +563,31 @@ export default function TransactionDetailPage() {
               </details>
             ) : null}
 
+                {!editing ? <TransactionSourceMatches
+                  key={transaction.id}
+                  matches={transaction.sourceMatches}
+                  canCopy={!draft.receiptLineItems.length}
+                  busy={saving}
+                  onReview={async (sourceId, action) => {
+                    setSaving(true);
+                    try {
+                      const response = await fetch(`/api/transactions/${encodeURIComponent(transaction.id)}`, {
+                        method: "PATCH", headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ [action]: sourceId }),
+                      });
+                      const data = await response.json() as DetailPayload;
+                      if (!response.ok || !data.transaction) throw new Error(data.error || "Couldn’t copy line items.");
+                      const updated = data.transaction;
+                      setTransaction(updated);
+                        setDraft(buildTransactionDetailDraft(updated, {
+                          merchantClean: updated.merchantClean ?? updated.merchantRaw,
+                          effectiveType: updated.type, categoryId: updated.categoryId, isTransfer: updated.isTransfer,
+                        }));
+                      clearJsonRequestCache(`transactions:list:${updated.workspaceId}:`);
+                      window.dispatchEvent(new CustomEvent("clover:transactions-changed", { detail: { workspaceId: updated.workspaceId } }));
+                    } finally { setSaving(false); }
+                  }}
+                /> : null}
             <TransactionReviewControls
               transaction={{ ...transaction, isExcluded: editing ? draft.isExcluded : transaction.isExcluded }}
               busy={saving} editing={editing}

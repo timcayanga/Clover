@@ -8,7 +8,7 @@ import { exportReport } from "./report-export";
 import { reportTransactionParams } from "../../shared/reports/drilldown";
 import { useEffect, useState, useRef, type ReactNode } from "react";
 import { Alert, Pressable, ScrollView, type ScrollViewInstance, View } from "react-native";
-import { router } from "expo-router";
+import { router, useLocalSearchParams } from "expo-router";
 import { useSession } from "./session";
 import { Text } from "./app-text";
 import {
@@ -68,15 +68,24 @@ function ReportCard({
 }
 export function NativeReportsWorkspace() {
   const session = useSession();
-  return <ReportWorkspace key={session.profileId} />;
+  const { section, range, from, to, currency, transfers } = useLocalSearchParams<{
+    section?: string; range?: string; from?: string; to?: string; currency?: string; transfers?: string;
+  }>();
+  const initialView: ReportView = (section === "spending" || section === "overview") && range === "custom" &&
+    !!from && !!to && validReportDate(from) && validReportDate(to) && from <= to &&
+    !!currency && /^[A-Z]{3}$/.test(currency) && transfers === "exclude"
+    ? { ...defaultReportView, section, range, from, to, currency, transfers }
+    : defaultReportView;
+  const initialQuery = initialView === defaultReportView ? "" : reportViewParams(initialView).toString();
+  return <ReportWorkspace key={`${session.profileId}:${initialQuery}`} initialView={initialView} initialQuery={initialQuery} />;
 }
-function ReportWorkspace() {
+function ReportWorkspace({ initialView, initialQuery }: { initialView: ReportView; initialQuery: string }) {
   const scrollRef = useRef<ScrollViewInstance>(null), scrollOffset = useRef(0);
   const session = useSession(),
     { colors } = useTheme();
-  const [view, setView] = useState<ReportView>(defaultReportView),
+  const [view, setView] = useState<ReportView>(initialView),
     [draft, setDraft] = useState(view),
-    [query, setQuery] = useState(""),
+    [query, setQuery] = useState(initialQuery),
     [filters, setFilters] = useState(false),
     [filterError, setFilterError] = useState("");
   const { data, error, reload } = usePlanData<ReportsWorkspace>(

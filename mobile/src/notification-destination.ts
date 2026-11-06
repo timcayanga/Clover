@@ -25,6 +25,7 @@ export function notificationDestination(href: string): string | null {
     "/investments": "/investments",
     "/circles": "/circles",
     "/split-bill": "/split-bills",
+    "/split-bills": "/split-bills",
     "/notifications": "/notifications",
   };
   if (path === "/settings") {
@@ -53,6 +54,19 @@ export function notificationDestination(href: string): string | null {
       [...url.searchParams.keys()].every(key => ["finverse", "finverseConnection", "finverseWorkspace"].includes(key)) &&
       ["finverseConnection", "finverseWorkspace"].every(key => /^[a-zA-Z0-9_-]+$/.test(url.searchParams.get(key) ?? ""))) {
     return `/(tabs)/accounts${url.search}`;
+  }
+  if (path === "/reports" && url.search && [...url.searchParams.keys()].every(
+    key => ["section", "range", "from", "to", "currency", "transfers"].includes(key),
+  )) return `/reports${url.search}`;
+  if (path === "/recurring" && url.searchParams.size === 1 && /^[a-zA-Z0-9_-]+$/.test(url.searchParams.get("commitment") ?? "")) {
+    return `/(tabs)/recurring?commitmentId=${encodeURIComponent(url.searchParams.get("commitment")!)}`;
+  }
+  if (path === "/accounts" && url.searchParams.size === 1 && /^[A-Z]{3}$/.test(url.searchParams.get("currency") ?? "")) {
+    return `/(tabs)/accounts${url.search}`;
+  }
+  if (path === "/transactions" && url.searchParams.get("report") === "1" &&
+      [...url.searchParams.keys()].every(key => ["report", "currency", "dateFilterMode", "customStart", "customEnd", "types", "categories"].includes(key))) {
+    return `/(tabs)/transactions?report=${encodeURIComponent(url.searchParams.toString())}`;
   }
   if (url.search) return null;
   const nativeDetail=path.match(/^\/(accounts|budgeting|budgets|goals|circles)\/([a-zA-Z0-9_-]+)$/);

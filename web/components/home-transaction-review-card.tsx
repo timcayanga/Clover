@@ -1,4 +1,6 @@
 "use client";
+import { clearJsonRequestCache } from "@/lib/request-dedupe";
+import { TransactionSourceMatches } from "@/components/transaction-source-matches";
 import { TransactionConversion, QuickAddLineItem, TransactionLineItemRow } from "@/components/transaction-detail-extras";
 import { createEmptyReceiptLineItem, getReceiptLineItemComputedAmount } from "@/lib/receipt-line-items";
 import type { QuickLineItem } from "../../shared/transaction-detail-extras";
@@ -36,6 +38,7 @@ export type HomeReviewTransaction = {
 };
 
 type DetailTransaction = {
+  sourceMatches?: import("../../shared/transaction-source-match").TransactionSourceMatch[];
   id: string;
   workspaceId: string;
   accountId: string;
@@ -359,6 +362,28 @@ export function HomeTransactionDetailModal({
                   {draft.receiptLineItems.length ? draft.receiptLineItems.map((item,index)=><TransactionLineItemRow key={index} description={item.description} amount={<HomeSensitiveAmount value={formatCurrencyAmount(getReceiptLineItemComputedAmount(item) ?? 0,item.currency||draft.currency)} currency={item.currency||draft.currency} />} />) : <p>No line items yet.</p>}
                   <QuickAddLineItem key={`${detail.id}:${editing}`} currency={draft.currency} count={draft.receiptLineItems.length} disabled={saving} onAdd={addQuickLineItem} />
                 </section>
+                {!editing ? <TransactionSourceMatches
+                  key={detail.id}
+                  matches={detail.sourceMatches}
+                  canCopy={!draft.receiptLineItems.length}
+                  busy={saving}
+                  onReview={async (sourceId, action) => {
+                    setSaving(true);
+                    try {
+                      const response = await fetch(`/api/transactions/${encodeURIComponent(detail.id)}`, {
+                        method: "PATCH", headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ [action]: sourceId }),
+                      });
+                      const data = await response.json() as DetailPayload;
+                      if (!response.ok || !data.transaction) throw new Error(data.error || "Couldn’t copy line items.");
+                      const updated = data.transaction;
+                      setDetail(updated);
+                        setDraft(createDraft(updated));
+                      clearJsonRequestCache(`transactions:list:${updated.workspaceId}:`);
+                      window.dispatchEvent(new CustomEvent("clover:transactions-changed", { detail: { workspaceId: updated.workspaceId } }));
+                    } finally { setSaving(false); }
+                  }}
+                /> : null}
                 {message ? <p className="transaction-detail-page__message" role="status">{message}</p> : null}
                 {editing ? (
                   <div className="transaction-drawer-edit-footer">

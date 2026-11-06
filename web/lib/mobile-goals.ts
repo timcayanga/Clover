@@ -31,10 +31,11 @@ export async function loadGoalActivity(workspaceId: string, currency: string, pe
   const totals = goalActivityTotals(rows);
   return { ...totals, start: start.toISOString(), end: end.toISOString() };
 }
-export async function mobileGoals(workspaceId: string, userId: string) {
+export async function mobileGoals(workspaceId: string, userId: string, options: { goalId?: string; now?: Date } = {}) {
+  const { goalId, now } = options;
   const [saved, user, currencies] = await Promise.all([
     prisma.personalGoal.findMany({
-      where: { workspaceId },
+      where: { workspaceId, ...(goalId ? { id: goalId } : {}) },
       orderBy: { createdAt: "asc" },
       select: {
         id: true,
@@ -44,30 +45,23 @@ export async function mobileGoals(workspaceId: string, userId: string) {
         goalPlan: true,
       },
     }),
-    prisma.user.findUnique({
+    goalId && goalId !== "primary" ? null : prisma.user.findUnique({
       where: { id: userId },
       select: { primaryGoal: true, goalPlan: true, goalTargetAmount: true },
     }),
-    prisma.account.findMany({
+    goalId && goalId !== "primary" ? [] : prisma.account.findMany({
       where: { workspaceId },
       select: { currency: true },
       distinct: ["currency"],
     }),
   ]);
-  const activity = new Map(
-    await Promise.all(
-      [
-        ...new Set([
-          ...saved.map((goal) => goal.currency),
-          ...currencies.map((row) => row.currency ?? "PHP"),
-          "PHP",
-        ]),
-      ].map(
-        async (currency) =>
-          [currency, await loadGoalActivity(workspaceId, currency)] as const,
-      ),
-    ),
-  );
+  const legacyCurrency = currencies.length === 1 ? currencies[0].currency ?? "PHP" : "PHP";
+  const activityCurrencies = new Set(saved.map(goal => goal.currency));
+  if (user?.primaryGoal) activityCurrencies.add(legacyCurrency);
+  const period = mobileHomePeriods(now).rolling(30);
+  const activity = new Map(await Promise.all([...activityCurrencies].map(async currency =>
+    [currency, await loadGoalActivity(workspaceId, currency, period)] as const,
+  )));
   const goals = saved.map((goal) => {
     const plan = normalizeGoalPlan(
       goal.goalPlan,
@@ -129,19 +123,13 @@ export async function mobileGoals(workspaceId: string, userId: string) {
               : user.goalTargetAmount
                 ? Number(user.goalTargetAmount)
                 : null,
-          currency:
-            currencies.length === 1 ? (currencies[0].currency ?? "PHP") : "PHP",
+          currency: legacyCurrency,
           cadence: plan?.cadence ?? "monthly",
           purpose: plan?.purpose ?? "",
           legacy: true,
-          activity: activity.get(
-            currencies.length === 1 ? (currencies[0].currency ?? "PHP") : "PHP",
-          ),
+          activity: activity.get(legacyCurrency),
           progress: (() => {
-            const currency =
-              currencies.length === 1
-                ? (currencies[0].currency ?? "PHP")
-                : "PHP";
+            const currency = legacyCurrency;
             const v = activity.get(currency)!;
             return getGoalProgressSnapshot(
               {

@@ -1,3 +1,5 @@
+import { adviserFactIntent, adviserRequestedCurrency, resolveAdviserFactQuestion } from "../lib/adviser-facts";
+import { adviserCountryCurrencyAnswer, resolveAdviserCountryCurrency, adviserBudgetDestination, adviserCurrencyExplanation, adviserRegionalBudgetReply, adviserRegionalContext, resolveAdviserLocalCurrency, resolveAdviserRegionalBudget } from "../lib/adviser-regional";
 import { selectExistingClerkSession } from "../lib/clerk-initial-session";
 import assert from "node:assert/strict";
 import { adviserCurrency, adviserMonthRange, isSpendingSummaryQuestion, commitmentInstallment, upcomingBillsReply } from "../lib/adviser-analysis";
@@ -92,3 +94,80 @@ assert.match(tripReply, /planning ceiling/);
 assert.match(spendingRoomReply({...room, safeToSpend:0, roomAfterProtection:-1000}, "How much can I put towards my next trip?"), /hold off.*₱1,000.00/);
 
 assert.doesNotMatch(tripReply, /\*\*/, "The chat displays plain text, so template replies must not include Markdown emphasis markers.");
+
+const singapore = adviserRegionalContext({ countryCode: "SG", detectionSource: "manual", baseCurrency: "PHP" }, ["USD", "USD", "SGD", "PHP"]);
+assert.equal(singapore.dominantCurrency, "USD");
+assert.equal(singapore.localCurrency, "SGD");
+assert.match(adviserRegionalBudgetReply(singapore, "USD"), /main budget in USD.*Singapore.*separate SGD budget.*public transport/s);
+assert.match(adviserRegionalBudgetReply(singapore, "SGD"), /main budget in SGD.*Keep USD, PHP/s);
+assert.equal(adviserRegionalContext({ baseCurrency: "GBP", locale: "en-GB", detectionSource: "manual" }, ["EUR", "GBP"]).dominantCurrency, "GBP");
+assert.equal(adviserRegionalContext({ locale: "ja-JP", detectionSource: "manual" }, []).countryCode, "JP");
+assert.equal(adviserRegionalContext(null, ["EUR"]).countryCode, null);
+assert.equal(adviserRegionalContext({ countryCode: "PH", locale: "en-PH", detectionSource: "fallback" }, ["EUR"]).countryCode, null);
+
+const regionalTurns = (...questions: string[]) => questions.map(content => ({ role: "user", content }));
+assert.deepEqual(resolveAdviserRegionalBudget(regionalTurns("How should I budget for living expenses here?", "In SGD", "Show me a chart")), { currency: "SGD", chart: true });
+assert.deepEqual(resolveAdviserRegionalBudget(regionalTurns("How should I budget across currencies with a chart?", "Just the numbers")), { currency: undefined, chart: false });
+assert.equal(resolveAdviserRegionalBudget(regionalTurns("How should I budget for living expenses here?", "How much cash do I have?", "Show me a chart")), null);
+
+assert.match(adviserCurrencyExplanation(singapore, "USD", "default"), /2 USD accounts.*SGD/);
+assert.match(adviserCurrencyExplanation(singapore, "SGD", "page"), /SGD.*selected on this page/);
+assert.match(adviserCurrencyExplanation(singapore, "PHP", "request"), /PHP.*you asked for/);
+assert.match(adviserRegionalBudgetReply(singapore, "SGD", true), /local expenses in SGD/);
+assert.deepEqual(resolveAdviserRegionalBudget(regionalTurns("Help me plan a realistic budget", "In USD", "In my local currency", "Show me a chart")), { currency: undefined, useLocalCurrency: true, chart: true });
+assert.deepEqual(resolveAdviserRegionalBudget(regionalTurns("Help me plan a realistic budget", "In my local currency", "In USD")), { currency: "USD", chart: undefined });
+
+assert.equal(resolveAdviserLocalCurrency("Show that in my local currency.", "SGD"), "In SGD");
+assert.equal(resolveAdviserLocalCurrency("How much did I spend in my local currency?", "SGD"), "How much did I spend in SGD?");
+assert.equal(resolveAdviserLocalCurrency("In my local currency"), null);
+assert.equal(resolveAdviserLocalCurrency("What is a local currency account?", "SGD"), "What is a local currency account?");
+assert.deepEqual(resolveAdviserRegionalBudget(regionalTurns("How should I budget for living expenses in my local currency?")), { currency: undefined, useLocalCurrency: true, chart: undefined });
+
+const localizedTurns = regionalTurns("Show my spending by category last month in USD", "In my local currency", "Show me a chart")
+  .map(turn => ({ ...turn, content: resolveAdviserLocalCurrency(turn.content, "SGD") ?? turn.content }));
+const localizedFact = resolveAdviserFactQuestion(localizedTurns[2].content, localizedTurns);
+assert.equal(adviserFactIntent(localizedFact), "spending");
+assert.equal(adviserRequestedCurrency(localizedFact), "SGD");
+assert.match(localizedFact, /last month/i);
+
+assert.deepEqual(resolveAdviserRegionalBudget(regionalTurns("Help me plan a realistic budget in Swiss francs")), { currency: "CHF", chart: undefined });
+assert.deepEqual(resolveAdviserRegionalBudget(regionalTurns("Help me plan a realistic budget", "Show me in Mexican pesos", "Show me a chart")), { currency: "MXN", chart: true });
+
+assert.deepEqual(resolveAdviserRegionalBudget(regionalTurns("How should I budget for living expenses in Canada?", "Show me a chart")), {
+  currency: undefined, useLocalCurrency: true, countryCode: "CA", chart: true,
+});
+assert.deepEqual(resolveAdviserRegionalBudget(regionalTurns("How should I budget in the UK?", "What about Japan?", "In USD")), {
+  currency: "USD", countryCode: "JP", chart: undefined,
+});
+assert.deepEqual(resolveAdviserRegionalBudget(regionalTurns("Help me plan a realistic budget in USD", "What about in Mexico?")), {
+  currency: undefined, useLocalCurrency: true, countryCode: "MX", chart: undefined,
+});
+assert.equal(resolveAdviserRegionalBudget(regionalTurns("Tell me about Japan", "What about Canada?")), null);
+const canada = adviserBudgetDestination(singapore, "CA");
+assert.equal(canada.countryName, "Canada");
+assert.equal(canada.localCurrency, "CAD");
+assert.equal(canada.dominantCurrency, "USD");
+assert.equal(singapore.localCurrency, "SGD");
+
+assert.match(adviserCountryCurrencyAnswer("México").reply, /MXN.*Mexico/);
+assert.match(adviserCountryCurrencyAnswer("日本").reply, /JPY.*Japan/);
+assert.match(adviserCountryCurrencyAnswer("the UAE").reply, /AED/);
+assert.match(adviserCountryCurrencyAnswer("Ivory Coast").reply, /XOF/);
+assert.match(adviserCountryCurrencyAnswer("Atlantis").reply, /couldn’t match/);
+assert.deepEqual(resolveAdviserCountryCurrency(regionalTurns("What currency should I use in Canada?", "What about Japan?", "How about Mexico?")), { country: "Mexico" });
+assert.equal(resolveAdviserCountryCurrency(regionalTurns("Tell me about Canada", "What about Japan?")), null);
+assert.deepEqual(resolveAdviserRegionalBudget(regionalTurns(adviserCountryCurrencyAnswer("España").suggestions[0].prompt)), {
+  currency: undefined, useLocalCurrency: true, countryCode: "ES", chart: undefined,
+});
+assert.deepEqual(resolveAdviserCountryCurrency(regionalTurns("What currency is used in Côte d’Ivoire?")), { country: "Côte d’Ivoire" });
+
+assert.equal(resolveAdviserLocalCurrency("Show spending last month in Japan’s currency"), "Show spending last month in JPY");
+assert.equal(resolveAdviserLocalCurrency("In the currency used in Côte d’Ivoire"), "in XOF");
+assert.equal(resolveAdviserLocalCurrency("What about Canada’s currency?"), "in CAD");
+assert.equal(resolveAdviserLocalCurrency("Show cash in Atlantis’s currency"), null);
+assert.equal(resolveAdviserLocalCurrency("In my local currency", "SGD"), "In SGD");
+const countryCurrencyTurns = regionalTurns("Show my spending by category last month", "What about Canada’s currency?", "Show me a chart")
+  .map(turn => ({ ...turn, content: resolveAdviserLocalCurrency(turn.content) ?? turn.content }));
+const countryCurrencyFact = resolveAdviserFactQuestion(countryCurrencyTurns[2].content, countryCurrencyTurns);
+assert.equal(adviserRequestedCurrency(countryCurrencyFact), "CAD");
+assert.match(countryCurrencyFact, /last month/);

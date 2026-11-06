@@ -267,7 +267,7 @@ export default function Goals() {
                 title="Ask Clover about this goal"
                 tone="ask"
                 onPress={() =>
-                  askClover({page:"goals",title:selected.name,goalId:selected.id,prompt:`Help me understand my goal, ${selected.name}.`})
+                  askClover({page:"goals",title:selected.name,goalId:selected.id,prompt:"How is this goal progressing?"})
                 }
               />
             </>

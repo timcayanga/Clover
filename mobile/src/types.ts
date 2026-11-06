@@ -1,4 +1,5 @@
 export type Transaction = {
+  sourceMatches?: import("../../shared/transaction-source-match").TransactionSourceMatch[];
   merchantLogoUrl?: string | null;
   merchantLogoNameKey?: string;
   splitBill?: { id: string; title: string } | null;

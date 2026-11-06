@@ -186,7 +186,7 @@ export function CircleResourceEditor({
   }, [isShare, search, page, session.request, session.profileId, listRevision]);
   const payload = (transactionId?: string) => {
     const base = { action, ...(initial.id ? { id: initial.id } : {}) };
-    if (isShare) return { ...base, transactionId, visibility: "item" };
+    if (isShare) return { ...base, transactionId, visibility: "item", paidByMemberId: memberId || undefined };
     if (isRemove) return base;
     if (isMember)
       return {
@@ -499,6 +499,9 @@ export function CircleResourceEditor({
       ) : null}
       {isShare ? (
         <>
+          <Body>Paid by</Body>
+          <Choices value={memberId} onChange={setMemberId}
+            options={members.filter(member => member.status === "active").map(member => ({ value: member.id, label: member.isMe ? "Me" : member.displayName }))} />
           <PlanAction
             title="+ Add Transaction"
             tone="primary"

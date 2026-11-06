@@ -1644,6 +1644,7 @@ model CircleMembership {
   user                User?                @relation(fields: [userId], references: [id], onDelete: SetNull)
   assignedCommitments CircleCommitment[]
   contributions       CircleContribution[]
+  paidExpenses        CircleSharedTransaction[]
 
   @@unique([circleId, userId])
   @@index([circleId, status])
@@ -1783,6 +1784,7 @@ model CircleSharedTransaction {
   circleId       String
   transactionId  String
   sharedByUserId String
+  paidByMemberId String?
   visibility     CircleVisibility @default(item)
   sharedAmount   Decimal?         @db.Decimal(18, 2)
   sharedTitle    String?
@@ -1793,7 +1795,10 @@ model CircleSharedTransaction {
   transaction    Transaction      @relation(fields: [transactionId], references: [id], onDelete: Cascade)
   sharedBy       User             @relation(fields: [sharedByUserId], references: [id], onDelete: Cascade)
 
+  paidBy         CircleMembership? @relation(fields: [paidByMemberId], references: [id], onDelete: SetNull)
+
   @@unique([circleId, transactionId])
+  @@index([paidByMemberId])
   @@index([circleId, createdAt])
   @@index([transactionId])
   @@index([sharedByUserId])

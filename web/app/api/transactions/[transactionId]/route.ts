@@ -1,3 +1,6 @@
+import { assertTrustedRequestOrigin } from "@/lib/request-security";
+import { loadTransactionSourceMatches, scoreTransactionSourceMatch, sourceMatchSelect, sourceMatchDecisionWhere, sourceMatchDismissedAction, sourceMatchConfirmedAction } from "@/lib/transaction-source-matches";
+import { parseReceiptLineItemsFromPayload } from "@/lib/receipt-line-items";
 import { appendedLineItems, lineItemAdditionSchema } from "@/lib/transaction-line-item-addition";
 import { transactionReviewDisplayFields } from "@/lib/actionable-transaction-review";
 import { isAutomaticReviewExclusion, exclusionAfterTransactionEdit } from "@/lib/transaction-review-inclusion";
@@ -22,6 +25,9 @@ import { invalidateWorkspaceSummaryCache } from "@/lib/workspace-summary-cache";
 export const dynamic = "force-dynamic";
 
 const patchSchema = z.object({
+  confirmSourceMatchId: z.string().min(1).max(128).optional(),
+  dismissSourceMatchId: z.string().min(1).max(128).optional(),
+  copyReceiptFromTransactionId: z.string().min(1).max(128).optional(),
   appendReceiptLineItem: lineItemAdditionSchema.optional(),
   categoryId: z.string().nullable().optional(),
   accountId: z.string().min(1).optional(),
@@ -131,8 +137,8 @@ export async function GET(_request: Request, { params }: { params: Promise<{ tra
     }
 
     const receiptRefresh = new URL(_request.url).searchParams.get("receiptRefresh") === "1";
-    const [, accounts, categories] = await Promise.all([
-      assertWorkspaceAccess(userId, transaction.workspaceId),
+    await assertWorkspaceAccess(userId, transaction.workspaceId);
+    const [accounts, categories, sourceMatches] = await Promise.all([
       receiptRefresh ? Promise.resolve([]) : prisma.account.findMany({
         where: { workspaceId: transaction.workspaceId, type: { not: "investment" } },
         orderBy: [{ name: "asc" }],
@@ -143,6 +149,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ tra
         orderBy: [{ isSystem: "desc" }, { name: "asc" }],
         select: { id: true, name: true, type: true },
       }),
+      receiptRefresh ? Promise.resolve([]) : loadTransactionSourceMatches(prisma, transaction).catch(() => []),
     ]);
 
     const display = transactionReviewDisplayFields(transaction);
@@ -151,6 +158,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ tra
     return NextResponse.json({
       transaction: {
         warningReason,
+        sourceMatches,
         id: transaction.id,
         createdAt: transaction.createdAt.toISOString(),
         updatedAt: transaction.updatedAt.toISOString(),
@@ -209,6 +217,59 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ tr
     }
 
     await assertWorkspaceAccess(userId, transaction.workspaceId);
+    const candidateId = payload.dismissSourceMatchId ?? payload.confirmSourceMatchId ?? payload.copyReceiptFromTransactionId;
+    if (candidateId) {
+      assertTrustedRequestOrigin(request);
+      const sourceId = candidateId;
+      if (Object.keys(payload).length !== 1 || sourceId === transactionId)
+        return NextResponse.json({ error: "Review a match separately from other edits." }, { status: 400 });
+      const copied = await prisma.$transaction(async db => {
+        await db.$queryRaw`SELECT id FROM "Transaction" WHERE "workspaceId" = ${transaction.workspaceId}
+          AND id IN (${transactionId}, ${sourceId}) ORDER BY id FOR UPDATE`;
+        const rows = await db.transaction.findMany({
+          where: { id: { in: [transactionId, sourceId] }, workspaceId: transaction.workspaceId, deletedAt: null },
+          select: sourceMatchSelect,
+        });
+        const target = rows.find(row => row.id === transactionId);
+        const source = rows.find(row => row.id === sourceId);
+        if (!target || !source) return false;
+        const dismissed = await db.auditLog.findFirst({ where: sourceMatchDecisionWhere(target.workspaceId, target.id, [source.id]), select: { id: true } });
+        if (dismissed) return Boolean(payload.dismissSourceMatchId);
+        const confirmation = payload.confirmSourceMatchId || payload.dismissSourceMatchId
+          ? await db.auditLog.findFirst({ where: sourceMatchDecisionWhere(target.workspaceId, target.id, [source.id], sourceMatchConfirmedAction), select: { id: true } })
+          : null;
+        if (confirmation && payload.confirmSourceMatchId) return true;
+        if (!scoreTransactionSourceMatch(target, source) && !(confirmation && payload.dismissSourceMatchId)) return false;
+        if (payload.dismissSourceMatchId || payload.confirmSourceMatchId) {
+          await db.auditLog.create({
+            data: { workspaceId: target.workspaceId, actorUserId: userId, action: payload.dismissSourceMatchId ? sourceMatchDismissedAction : sourceMatchConfirmedAction,
+              entity: "Transaction", entityId: target.id, metadata: { candidateId: source.id } },
+          });
+          return true;
+        }
+        const current = target.normalizedPayload;
+        const normalized = current && typeof current === "object" && !Array.isArray(current) ? current : {};
+        if (normalized.receiptLineItemsSourceTransactionId === sourceId) return true;
+        if (parseReceiptLineItemsFromPayload(target.rawPayload, current).length) return false;
+        const items = parseReceiptLineItemsFromPayload(source.rawPayload, source.normalizedPayload);
+        const raw = source.rawPayload;
+        const isReceipt = raw && typeof raw === "object" && !Array.isArray(raw) &&
+          (raw.source === "receipt" || raw.documentType === "receipt" || raw.receiptDocumentId);
+        if (!isReceipt || source.currency !== target.currency || !items.length || items.some(item => item.currency && item.currency !== target.currency)) return false;
+        await db.transaction.update({
+          where: { id: target.id },
+          data: { normalizedPayload: { ...normalized, receiptLineItems: items, receiptLineItemsSourceTransactionId: sourceId } as Prisma.InputJsonValue },
+        });
+        await db.auditLog.create({
+          data: { workspaceId: target.workspaceId, actorUserId: userId, action: "transaction_receipt_items_copied",
+            entity: "Transaction", entityId: target.id, metadata: { sourceTransactionId: source.id, sourceImportFileId: source.importFileId } },
+        });
+        return true;
+      });
+      if (!copied) return NextResponse.json({ error: !payload.copyReceiptFromTransactionId ? "This match is no longer available." : "These line items are no longer available to copy, or this transaction already has line items." }, { status: 409 });
+      if (payload.copyReceiptFromTransactionId) invalidateWorkspaceSummaryCache(transaction.workspaceId);
+      return GET(request, { params: Promise.resolve({ transactionId }) });
+    }
     if (payload.appendReceiptLineItem) {
       if (Object.keys(payload).length !== 1) return NextResponse.json({ error: "Add line items separately from other edits." }, { status: 400 });
       await prisma.$transaction(async db => {
@@ -462,6 +523,10 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ tr
         })
       : null;
 
+    const rawSource = transaction.rawPayload as { sourceImportFileId?: unknown } | null;
+    const sourceImportFileId = transaction.importFileId ??
+      (typeof rawSource?.sourceImportFileId === "string" && /^[a-zA-Z0-9_-]{1,80}$/.test(rawSource.sourceImportFileId)
+        ? rawSource.sourceImportFileId : null);
     void capturePostHogServerEvent("transaction_updated", userId, {
       workspace_id: transaction.workspaceId,
       transaction_id: updated.id,
@@ -469,6 +534,10 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ tr
       amount_signed: Number(updated.amount),
       currency: updated.currency,
       transaction_type: updated.type,
+      import_file_id: sourceImportFileId,
+      import_category_corrected: sourceImportFileId !== null && transaction.categoryId !== updated.categoryId,
+      import_merchant_corrected: sourceImportFileId !== null &&
+        (transaction.merchantClean ?? transaction.merchantRaw) !== (updated.merchantClean ?? updated.merchantRaw),
       is_manual_edit: true,
     });
     if (payload.categoryId !== undefined && category) {

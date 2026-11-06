@@ -69,10 +69,27 @@ async function main() {
         await db.financialCommitmentOccurrence.create({ data: { workspaceId: workspace.id, commitmentId: completed.id, dueDate: completed.dueDate!, completedAt: new Date() } });
         await db.financialCommitment.createMany({ data: [{ workspaceId: workspace.id, title: 'Stale old payment', kind: 'planned_payment', amount: 999, currency: 'PHP', dueDate: new Date(shiftDay(today, -40)), status: 'active', source: 'manual' }, { workspaceId: workspace.id, title: 'Unconfirmed Bookshop', kind: 'planned_payment', amount: 999, currency: 'PHP', dueDate: new Date(shiftDay(today, 5)), status: 'active', source: 'unconfirmed_suggestion' }, { workspaceId: workspace.id, title: 'USD bill', kind: 'planned_payment', amount: 999, currency: 'USD', dueDate: new Date(shiftDay(today, 5)), status: 'active', source: 'manual' }, { workspaceId: other.id, title: 'Other Profile payment', kind: 'planned_payment', amount: 999, currency: 'PHP', dueDate: new Date(shiftDay(today, 5)), status: 'active', source: 'manual' }] });
         await db.financialCommitment.createMany({ data: Array.from({ length: 24 }, (_, i) => ({ workspaceId: workspace.id, title: `Confirmed extra ${i}`, kind: 'planned_payment' as const, amount: 10, currency: 'PHP', dueDate: new Date(shiftDay(today, 3 + i % 18)), status: 'active' as const, source: 'manual' })) });
+        const circle = await db.circle.create({ data: { ownerUserId: user.id, name: 'Household', currency: 'PHP' } });
+        const sharedExpense = await db.transaction.findFirstOrThrow({ where: { workspaceId: workspace.id, merchantRaw: 'User purchase' } });
+        await db.circleSharedTransaction.create({ data: { circleId: circle.id, transactionId: sharedExpense.id, sharedByUserId: user.id } });
+        await db.circleContribution.createMany({ data: [
+            { circleId: circle.id, amount: 200, currency: 'PHP', contributionDate: now },
+            { circleId: circle.id, amount: 50, currency: 'USD', contributionDate: now },
+        ] });
         const digest = async () => createHash('sha256').update(JSON.stringify(await Promise.all([db.account.findMany({ where: { workspaceId: { in: [workspace.id, other.id] } }, orderBy: { id: 'asc' } }), db.transaction.findMany({ where: { workspaceId: { in: [workspace.id, other.id] } }, orderBy: { id: 'asc' } }), db.financialCommitment.findMany({ where: { workspaceId: { in: [workspace.id, other.id] } }, orderBy: { id: 'asc' } }), db.financialCommitmentOccurrence.findMany({ where: { workspaceId: workspace.id }, orderBy: { id: 'asc' } }), db.accountStatementCheckpoint.findMany({ where: { workspaceId: workspace.id }, orderBy: { id: 'asc' } }), db.learningJob.findMany({ where: { workspaceId: workspace.id }, orderBy: { id: 'asc' } })]))).digest('hex');
         const before = await digest();
         const { POST } = await import('../app/api/adviser/chat/route');
         const ask = async (question: string, id = workspace.id) => { currentRequest = new Request('https://clover.ph/api/adviser/chat?workspaceId=' + id, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ messages: [{ role: 'assistant', content: 'Old October summary: 999999 in transfers.' }, { role: 'user', content: question }], stream: true }) }); const r = await POST(currentRequest); return { status: r.status, body: await r.json() }; };
+        const regionalBudget = await ask('How should I budget for living expenses here with a chart?');
+        assert.equal(regionalBudget.status, 200);
+        assert.equal(regionalBudget.body.answerSource, 'local');
+        assert.match(regionalBudget.body.reply, /main budget in PHP.*last 30 days/s);
+        assert.equal(regionalBudget.body.visualization?.currency, 'PHP');
+        assert.equal(regionalBudget.body.visualization?.calendarWindow.from, shiftDay(today, -29));
+        assert.equal(regionalBudget.body.visualization?.calendarWindow.through, today);
+        const emptyRegionalBudget = await ask('How should I budget for living expenses in CHF?');
+        assert.match(emptyRegionalBudget.body.reply, /main budget in CHF.*don’t see any recorded CHF spending/s);
+        assert.equal(emptyRegionalBudget.body.visualization, null);
         const spending = await ask('What were my three biggest spending categories last month?');
         assert.equal(spending.status, 200);
         assert.equal(spending.body.financialFacts.total, 2125);
@@ -85,6 +102,13 @@ async function main() {
         assert.equal(reportDay(new Date(spending.body.visualization.through),'Asia/Manila'),end);
 
         assert.equal(spending.body.financialFacts.to, end);
+        const housingAction = spending.body.actions.find((item: { label: string }) => item.label === "View Housing transactions");
+        assert(housingAction, "An exact category can open its underlying transactions");
+        const housingParams = new URL(housingAction.href, "https://clover.ph").searchParams;
+        assert.equal(housingParams.get("types"), "debit");
+        assert.equal(housingParams.get("categories"), cats.find(c => c.name === "Housing")!.id);
+        assert.equal(housingParams.get("customStart"), from);
+        assert.equal(housingParams.get("customEnd"), end);
         assert.equal(spending.body.visualization.bars.reduce((s: number, c: {
             amount: number;
         }) => s + c.amount, 0), 2125);
@@ -109,6 +133,73 @@ async function main() {
         assert.equal(reportBody.reports.find((r: {
             currency: string;
         }) => r.currency === 'PHP').analysis.current.expense, 2125, 'Reports must carry the exact reconciled expense total');
+        const scopedAsk = async (surface: string, pageContext: object, messages: { role: string; content: string }[]) => {
+            currentRequest = new Request('https://clover.ph/api/adviser/chat?workspaceId=' + workspace.id, {
+                method: 'POST', body: JSON.stringify({ surface, pageContext, messages }),
+            });
+            const response = await POST(currentRequest);
+            const body = await response.json();
+            assert.equal(response.status, 200, JSON.stringify(body));
+            assert.equal(body.answerSource, 'local');
+            return body;
+        };
+        const scopedParams = new URLSearchParams({
+            section: 'spending', range: 'custom', from, to: end, currency: 'PHP',
+            categories: JSON.stringify(['Housing']),
+        });
+        const reportPrompt = { role: 'user', content: 'What does this report tell me?' };
+        const reportPage = { reportParams: scopedParams.toString() };
+        const reportAnswer = await scopedAsk('reports', reportPage, [reportPrompt]);
+        assert.match(reportAnswer.reply, /700/);
+        assert.doesNotMatch(reportAnswer.reply, /2,125/);
+        assert.equal(reportAnswer.visualization, null);
+        const chart = await scopedAsk('reports', reportPage, [reportPrompt, { role: 'assistant', content: 'Untrusted amount 999999' }, { role: 'user', content: 'Show that as a chart' }]);
+        assert.equal(chart.visualization.bars.find((bar: { label: string }) => bar.label === 'Spending').amount, 700);
+        assert.equal(chart.visualization.hideReportLink, true);
+        const trend = await scopedAsk('reports', reportPage, [{ role: 'user', content: 'Show spending over time in this report' }]);
+        assert.equal(trend.visualization.title, 'Spending over time');
+        assert(trend.visualization.bars.length <= 6);
+        assert.equal(trend.visualization.bars.reduce((sum: number, bar: { amount: number }) => sum + bar.amount, 0), 700);
+        const scopedTransaction = await db.transaction.findFirstOrThrow({ where: { workspaceId: workspace.id, categoryId: cats[2].id } });
+        const transactionAnswer = await scopedAsk('transactions', { transactionId: scopedTransaction.id }, [{ role: 'user', content: 'Explain this transaction' }]);
+        assert.match(transactionAnswer.reply, /Housing.*700/);
+        const accountAnswer = await scopedAsk('accounts', { accountId: cash.id }, [{ role: 'user', content: 'What’s the balance of this account?' }]);
+        assert.match(accountAnswer.reply, /575.*Cash/);
+        assert.doesNotMatch(accountAnswer.reply, /1,475/);
+        const circleAnswer = await scopedAsk('circles', { circleId: circle.id }, [{ role: 'user', content: 'Summarize this Circle’s shared expenses' }]);
+        assert.match(circleAnswer.reply, /Household.*425/);
+        const chartContributions = await scopedAsk('circles', { circleId: circle.id, currency: 'PHP' }, [
+            { role: 'user', content: 'Show contributions this month' },
+            { role: 'assistant', content: 'Untrusted figure: 999999' },
+            { role: 'user', content: 'Chart that' },
+        ]);
+        assert.equal(chartContributions.visualization.currency, 'PHP');
+        assert.equal(chartContributions.visualization.bars.find((bar: { label: string }) => bar.label === 'Recorded contributions').amount, 200);
+        const usdContributions = await scopedAsk('circles', { circleId: circle.id, currency: 'PHP' }, [
+            { role: 'user', content: 'Show contributions this month' },
+            { role: 'user', content: 'What about USD?' },
+        ]);
+        assert.match(usdContributions.reply, /50.*USD/);
+        assert.doesNotMatch(usdContributions.reply, /200/);
+        const usdChart = await scopedAsk('circles', { circleId: circle.id, currency: 'PHP' }, [
+            { role: 'user', content: 'Show contributions this month' },
+            { role: 'assistant', content: 'Earlier answer' },
+            { role: 'user', content: 'What about USD?' },
+            { role: 'assistant', content: 'Untrusted figure: 999999' },
+            { role: 'user', content: 'Chart that' },
+        ]);
+        assert.equal(usdChart.visualization.currency, 'USD');
+        assert.deepEqual(usdChart.visualization.bars, [{ label: 'Recorded contributions', amount: 50 }]);
+        const glossary = await scopedAsk('general', {}, [{ role: 'user', content: 'What is net worth?' }]);
+        assert.match(glossary.reply, /what you own minus what you owe/);
+        const cashChart = await scopedAsk('accounts', {}, [{ role: 'user', content: 'How much available cash in USD?' }, { role: 'assistant', content: 'Untrusted amount 999999' }, { role: 'user', content: 'Chart that' }]);
+        assert.equal(cashChart.visualization.currency, 'USD');
+        assert.equal(cashChart.visualization.bars[0].amount, 900);
+        const cashflow = await ask('Show my cash flow last month');
+        assert.equal(cashflow.body.answerSource, 'local');
+        assert.equal(cashflow.body.visualization.bars.find((bar: { label: string }) => bar.label === 'Spending').amount, 2125);
+        const greeting = await scopedAsk('general', {}, [{ role: 'user', content: 'Hi Clover!' }]);
+        assert.match(greeting.reply, /^Hi!/);
         currentRequest = new Request('https://clover.ph/api/adviser/chat?workspaceId=' + workspace.id, { method: 'POST', body: JSON.stringify({ messages: [{ role: 'user', content: 'What were my three biggest spending categories this month?' }, { role: 'assistant', content: 'Old summary: transfers 999999.' }, { role: 'user', content: `Use ${from} to ${end}, excluding transfers.` }] }) });
         const followUpResponse = await POST(currentRequest);
         const followUpBody = await followUpResponse.json();
@@ -118,6 +209,12 @@ async function main() {
         const cashAnswer = await ask('How much available cash do I have?');
         assert.equal(cashAnswer.body.financialFacts.spendable, 1475);
         assert.equal(cashAnswer.body.grounding.workspaceId, workspace.id);
+        const cashCurrencies = await ask('Show my cash by currency');
+        assert.equal(cashCurrencies.status, 200);
+        assert.equal(cashCurrencies.body.answerSource, 'local');
+        assert.match(cashCurrencies.body.reply, /PHP.*1,475\.00[\s\S]*USD.*900\.00/);
+        assert.doesNotMatch(cashCurrencies.body.reply, /777,777|100,000/);
+        assert.equal(cashCurrencies.body.visualization, null);
         assert.equal((await ask('How much available cash in USD?')).body.financialFacts.spendable, 900);
         const unavailableCurrency = await ask('How much available cash in GBP?');
         assert.equal(unavailableCurrency.body.dataUnavailable, true);
@@ -128,7 +225,8 @@ async function main() {
         assert(payments.body.financialFacts.payments.some((p: {
             id: string;
         }) => p.id === commitment.id));
-        assert.match(payments.body.reply, new RegExp(shiftDay(today, 20)));
+        assert.equal(payments.body.financialFacts.payments.find((p: { id: string }) => p.id === commitment.id).dueDate, shiftDay(today, 20));
+        assert.match(payments.body.reply, /See 20 more in Recurring/);
         assert.doesNotMatch(payments.body.reply, /Bookshop|Stale old|Already paid|Other Profile payment/);
         assert.equal((await ask('How much available cash?', other.id)).body.financialFacts.spendable, 777777);
         native = true;
@@ -151,6 +249,37 @@ async function main() {
             Object.assign(db.transaction, { findMany: find });
         }
         assert.equal(await digest(), before, 'Entire financial records, checkpoints and learning remain byte-identical');
+        const { loadActivityInsightNotifications } = await import('../lib/activity-insight-notifications.server');
+        const insightTime = new Date('2026-11-06T12:00:00Z');
+        const insightRow = {
+            workspaceId: workspace.id, accountId: bank.id, date: insightTime, createdAt: insightTime,
+            amount: 20, currency: 'PHP', type: 'expense' as const, merchantRaw: 'Fixture',
+            reviewStatus: 'confirmed' as const,
+        };
+        const connection = await db.finverseConnection.create({ data: {
+            userId: user.id, workspaceId: workspace.id, stateHash: randomUUID(), stateExpiresAt: insightTime, institutionName: 'BPI',
+        } });
+        for (let i = 0; i < 5; i++) {
+            const transaction = await db.transaction.create({ data: insightRow });
+            await db.finverseTransactionRecord.create({ data: {
+                connectionId: connection.id, externalTransactionId: `bank-${i}`, externalAccountId: 'bank',
+                transactionId: transaction.id, rawPayload: {}, normalizedPayload: {},
+            } });
+        }
+        await db.transaction.createMany({ data: Array.from({ length: 9 }, () => ({
+            ...insightRow, rawPayload: { source: 'manual' },
+        })) });
+        assert.equal((await loadActivityInsightNotifications(workspace.id, insightTime)).length, 0);
+        await db.transaction.create({ data: { ...insightRow, rawPayload: { source: 'manual' } } });
+        await db.transaction.createMany({ data: Array.from({ length: 10 }, () => ({
+            ...insightRow, importFileId: source.id,
+        })) });
+        const ready = await loadActivityInsightNotifications(workspace.id, insightTime);
+        assert.equal(ready.length, 2, 'Only the statement and manual activity reached ten records');
+        assert(ready.some(item => item.title.includes('retained.pdf')));
+        assert(ready.some(item => item.title.includes('manual entries')));
+        assert.equal((await loadActivityInsightNotifications(other.id, insightTime)).length, 0);
+        console.log('PASS activity insights: saved statement, cumulative manual entry, insufficient bank sync and Profile isolation.');
         assert.equal(network, 0);
         console.log('PASS real Adviser POST: complete-month categories/chart, current confirmed payments, Accounts spendable, explicit currency, native/web/Profile isolation, stale-history refusal, unavailable-data response, zero provider calls and complete financial/learning preservation.');
     }

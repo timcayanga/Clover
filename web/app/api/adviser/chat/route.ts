@@ -1,13 +1,15 @@
+import { adviserCircleCurrencyFollowUp, adviserCircleQuestion, adviserQuickReply, answerAdviserAccount, answerAdviserBudgets, answerAdviserCircle, answerAdviserGoals, answerAdviserPage, asksForChart, isAdviserAccountQuestion, isAdviserBudgetStatusQuestion, isAdviserCircleQuestion, isAdviserGoalStatusQuestion, isAdviserReportQuestion } from "@/lib/adviser-page-answer";
+import { getMonthBounds } from "@/lib/circles";
 import { askPageContext, askPagePrompts } from "../../../../../shared/ask-clover-page";
-import { resolveAdviserFactQuestion } from "@/lib/adviser-facts";
+import { adviserFactIntent, adviserRequestedCurrency, isAdviserChartFollowUp, resolveAdviserFactQuestion } from "@/lib/adviser-facts";
 import { normalizeReportRows, reportTransactionSelect } from "@/lib/report-rows";
-import { normalizeRegionalPreferences } from "@/lib/regional-preferences";
-import { answerAdviserFact, loadAdviserAccountFacts } from "@/lib/adviser-facts.server";
+import { adviserCountryCurrencyAnswer, resolveAdviserCountryCurrency, adviserBudgetDestination, adviserCurrencyExplanation, adviserRegionalBudgetReply, adviserRegionalContext, isAdviserCurrencyExplanation, resolveAdviserLocalCurrency, resolveAdviserRegionalBudget } from "@/lib/adviser-regional";
+import { answerAdviserFact, loadAdviserAccountFacts, loadAdviserBudgetBaseline } from "@/lib/adviser-facts.server";
 import { extractFinalOpenAIText, createOpenAIFinalTextStream } from "@/lib/openai-response-text";
 import { DEFAULT_ADVISER_MODEL, openAIInteractiveOptions } from "@/lib/openai-model-policy";
 import { buildBudgetOverview } from "@/lib/budgeting";
 import { spendingRoomOptions, spendingRoomReply, spendingRoomChart } from "@/lib/adviser-spending-room";
-import { adviserCurrency, adviserMonthRange, isSpendingSummaryQuestion, commitmentInstallment, upcomingBillsReply } from "@/lib/adviser-analysis";
+import { adviserMonthRange, isSpendingSummaryQuestion, commitmentInstallment, upcomingBillsReply } from "@/lib/adviser-analysis";
 import { getStrongMerchantCategoryHint } from "@/lib/merchant-category-hints";
 import { assertCloudAiConsent, maySendToCloudAi } from "@/lib/ai-consent";
 import { parseAddFormDraft } from "../../../../../shared/add-form-draft";
@@ -920,10 +922,62 @@ export async function POST(request: Request) {
     }
 
     const latestIncomingQuestion = incomingMessages[incomingMessages.length - 1]?.content?.trim() ?? "";
-    const factQuestion = resolveAdviserFactQuestion(latestIncomingQuestion, incomingMessages);
     const entryRequested = isEntryRequest(latestIncomingQuestion, formContext, entryDraft) || (hasAttachments && /^(?:please\s+)?(?:add|import|record|log|enter|create)\b/i.test(latestIncomingQuestion));
-    const isPageSuggestion = askPagePrompts(pageContext).includes(latestIncomingQuestion);
-    const scopeDecision = (entryRequested || hasAttachments || isPageSuggestion) ? {allowed:true,reason:"clover" as const} : classifyAdviserScope(factQuestion, incomingMessages);
+    const courtesy = !hasAttachments && !entryRequested ? adviserQuickReply(latestIncomingQuestion) : null;
+    if (courtesy) return NextResponse.json({
+      reply: courtesy, actions: [], suggestions: [], answerSource: "local",
+    }, { headers: { "Cache-Control": "private, no-store" } });
+    const countryCurrency = !hasAttachments && !entryRequested ? resolveAdviserCountryCurrency(incomingMessages) : null;
+    if (countryCurrency) {
+      return NextResponse.json({
+        ...adviserCountryCurrencyAnswer(countryCurrency.country), actions: [], answerSource: "local",
+      }, { headers: { "Cache-Control": "private, no-store" } });
+    }
+    const locationCurrency = adviserRegionalContext(user.regionalPreferences, []).localCurrency;
+    const localizedQuestion = resolveAdviserLocalCurrency(latestIncomingQuestion, locationCurrency);
+    const factMessages = incomingMessages.map(message => message.role === "user"
+      ? { ...message, content: resolveAdviserLocalCurrency(message.content.trim(), locationCurrency) ?? message.content }
+      : message);
+    const factQuestion = resolveAdviserFactQuestion(localizedQuestion ?? latestIncomingQuestion, factMessages);
+    const chartFollowUp = !hasAttachments && !entryRequested && isAdviserChartFollowUp(latestIncomingQuestion);
+    const reportChartFollowUp = planningSurface === "reports" && chartFollowUp;
+    const priorQuestion = incomingMessages.slice(0, -1).reverse().find(message =>
+      message.role === "user" && !isAdviserChartFollowUp(message.content),
+    )?.content;
+    const circleTurns = pageContext.circleId ? incomingMessages.slice(0, -1).reverse().filter(message => message.role === "user") : [];
+    const currencyFollowUp = adviserCircleCurrencyFollowUp(localizedQuestion ?? latestIncomingQuestion) ??
+      (chartFollowUp && priorQuestion ? adviserCircleCurrencyFollowUp(resolveAdviserLocalCurrency(priorQuestion.trim(), locationCurrency) ?? priorQuestion) : undefined);
+    const circleQuestion = chartFollowUp || currencyFollowUp
+      ? circleTurns.find(message => !isAdviserChartFollowUp(message.content) && !adviserCircleCurrencyFollowUp(resolveAdviserLocalCurrency(message.content.trim(), locationCurrency) ?? message.content))?.content ?? ""
+      : latestIncomingQuestion;
+    const circleAnswerRequested = !!pageContext.circleId && isAdviserCircleQuestion(circleQuestion);
+    const budgetDetail = planningSurface === "budgeting" && !!pageContext.budgetId;
+    const budgetQuestion = chartFollowUp
+      ? priorQuestion ?? (budgetDetail ? "Chart this budget’s progress" : "")
+      : latestIncomingQuestion;
+    const budgetAnswerRequested = !hasAttachments && !entryRequested &&
+      isAdviserBudgetStatusQuestion(budgetQuestion, budgetDetail) &&
+      (budgetDetail || !/\bthis budget\b/i.test(budgetQuestion));
+    const goalDetail = planningSurface === "goals" && !!pageContext.goalId;
+    const goalQuestion = chartFollowUp
+      ? priorQuestion ?? (goalDetail ? "Chart this goal’s progress" : "")
+      : latestIncomingQuestion;
+    const goalAnswerRequested = !hasAttachments && !entryRequested &&
+      isAdviserGoalStatusQuestion(goalQuestion, goalDetail);
+    const accountAnswerRequested = !!pageContext.accountId && isAdviserAccountQuestion(latestIncomingQuestion);
+    const regionalBudget = !hasAttachments && !entryRequested ? resolveAdviserRegionalBudget(incomingMessages) : null;
+    const regionalBudgetRequested = Boolean(regionalBudget);
+    const currencyExplanationRequested = !hasAttachments && !entryRequested && isAdviserCurrencyExplanation(latestIncomingQuestion);
+    const previousRegionalBudget = currencyExplanationRequested ? resolveAdviserRegionalBudget(incomingMessages.slice(0, -1)) : null;
+    if (chartFollowUp && !reportChartFollowUp && !circleAnswerRequested && !budgetAnswerRequested && !goalAnswerRequested && !regionalBudgetRequested && factQuestion === latestIncomingQuestion) {
+      return NextResponse.json({
+        reply: "What would you like to see in the chart? Try spending by category, income and spending, or spendable cash by account.",
+        actions: [], suggestions: [], answerSource: "local",
+      }, { headers: { "Cache-Control": "private, no-store" } });
+    }
+    const isPageSuggestion = askPagePrompts(pageContext).includes(latestIncomingQuestion) ||
+      (planningSurface === "reports" && isAdviserReportQuestion(latestIncomingQuestion));
+    const scopeDecision = (entryRequested || hasAttachments || isPageSuggestion || reportChartFollowUp || circleAnswerRequested || accountAnswerRequested || budgetAnswerRequested || goalAnswerRequested || regionalBudgetRequested || currencyExplanationRequested || (!hasAttachments && !entryRequested && localizedQuestion === null)) ? {allowed:true,reason:"clover" as const} : classifyAdviserScope(factQuestion, incomingMessages);
     if (!scopeDecision.allowed) {
       console.info("[adviser-scope] rejected out-of-scope question before usage, workspace, or model work", {
         actorUserId: user.id,
@@ -1036,31 +1090,120 @@ export async function POST(request: Request) {
     // Never trust client snapshots or resolve page references outside the selected Profile.
     const pageTransaction = pageContext.transactionId ? await prisma.transaction.findFirst({where:{id:pageContext.transactionId,workspaceId:workspace.id,deletedAt:null},select:{id:true,date:true,merchantClean:true,merchantRaw:true,amount:true,currency:true,type:true,isTransfer:true,category:{select:{name:true}}}}) : null;
     const pageAccount = pageContext.accountId ? workspace.accounts.find(account => account.id === pageContext.accountId) : null;
-    const pageCircle = pageContext.circleId ? (await (await import("@/lib/circle-loaders")).loadCirclesWorkspaceData(user, pageContext.circleId)).circles[0] : null;
+    const pageCircle = pageContext.circleId ? (await (await import("@/lib/circle-loaders")).loadCirclesWorkspaceData(user, pageContext.circleId, { now, includeMemberPhotos: false })).circles[0] : null;
     const pageBill = pageContext.billId ? await prisma.splitBill.findFirst({where:{id:pageContext.billId,userId:user.id,OR:[{transactionId:null},{transaction:{workspaceId:workspace.id,deletedAt:null}}]},select:{id:true,title:true,currency:true,total:true,billDate:true,participants:{select:{id:true,name:true}},items:{select:{description:true,amount:true,participants:{select:{participantId:true}}}},payments:{select:{participantId:true,amount:true}}}}) : null;
     if ((pageContext.circleId && !pageCircle) || (pageContext.billId && !pageBill)) return NextResponse.json({error:"This shared item is unavailable. Reopen Ask Clover from an item you can access."},{status:404});
     const reportPageParams = new URLSearchParams(pageContext.reportParams || "");
+    if (pageContext.currency && !reportPageParams.has("currency")) reportPageParams.set("currency", pageContext.currency);
     if (pageContext.from && pageContext.to) { reportPageParams.set("from",pageContext.from); reportPageParams.set("to",pageContext.to); }
     const pageReport = planningSurface === "reports" ? await (await import("@/lib/reports-workspace")).loadReportsWorkspace(user.id,workspace.id,(await import("@/lib/report-view")).reportViewFromParams(reportPageParams),now) : null;
     const pageBudget = pageContext.budgetId ? await prisma.budget.findFirst({where:{id:pageContext.budgetId,workspaceId:workspace.id},select:{id:true,name:true,targetAmount:true,currency:true,cadence:true,isActive:true}}) : null;
     const pageGoal = pageContext.goalId ? await prisma.personalGoal.findFirst({where:{id:pageContext.goalId,workspaceId:workspace.id},select:{id:true,goalKey:true,targetAmount:true,currency:true,goalPlan:true}}) : null;
-    if ((pageContext.budgetId && !pageBudget) || (pageContext.goalId && !pageGoal)) return NextResponse.json({error:"This item is unavailable in the selected Profile."},{status:404});
+    if ((pageContext.budgetId && !pageBudget) || (pageContext.goalId && !pageGoal && !(goalAnswerRequested && goalDetail && pageContext.goalId === "primary"))) return NextResponse.json({error:"This item is unavailable in the selected Profile."},{status:404});
     const pageFacts = {budget:pageBudget,goal:pageGoal,report:pageReport ? {period:pageReport.period,view:pageReport.view,currencies:pageReport.reports.map(report=>({currency:report.currency,analysis:report.analysis,coverage:report.coverage,goal:report.goal,budgets:report.budgets}))} : null,circle:pageCircle ? {id:pageCircle.id,name:pageCircle.name,currency:pageCircle.currency,expenseCurrencyTotals:pageCircle.expenseCurrencyTotals,contributionCurrencyTotals:pageCircle.contributionCurrencyTotals,budgets:pageCircle.budgets,goals:pageCircle.goals,recurring:pageCircle.commitments,expenseCount:pageCircle.expenses.length,expenses:pageCircle.expenses.slice(0,60).map(({title,date,currency,amount,settled,categoryName})=>({title,date,currency,amount,settled,categoryName}))} : null, bill:pageBill, transaction:pageTransaction,account:pageAccount ? {id:pageAccount.id,name:pageAccount.name,currency:pageAccount.currency,balance:pageAccount.balance === null ? null : Number(pageAccount.balance),type:pageAccount.type} : null};
     if ((pageContext.transactionId && !pageTransaction) || (pageContext.accountId && !pageAccount)) return NextResponse.json({error:"This item is unavailable in the selected Profile. Close Ask Clover and reopen it from the current page."},{status:404});
 
-    const hasScopedPage = Boolean(pageContext.budgetId || pageContext.goalId || pageContext.transactionId || pageContext.accountId || pageContext.circleId || pageContext.billId || pageContext.from || pageContext.to || pageContext.currency || ["circles", "split-bills", "reports"].includes(planningSurface));
-    if (!hasAttachments && !entryRequested && !hasScopedPage) {
-      const fact = await answerAdviserFact({workspaceId:workspace.id,profileName:workspace.name,question:factQuestion,regionalPreferences:user.regionalPreferences,now});
+    const hasScopedPage = Boolean(pageContext.budgetId || pageContext.goalId || pageContext.transactionId || pageContext.accountId || pageContext.circleId || pageContext.billId || pageContext.from || pageContext.to || ["circles", "split-bills", "reports"].includes(planningSurface));
+    const accountCurrencies = workspace.accounts.map(account => account.currency);
+    const region = adviserRegionalContext(user.regionalPreferences, accountCurrencies);
+    const { timeZone } = region;
+    const requestedCurrency = adviserRequestedCurrency(factQuestion);
+    const displayCurrency = requestedCurrency ?? pageContext.currency ?? region.dominantCurrency;
+    const budgetRegion = adviserBudgetDestination(region, regionalBudget?.countryCode);
+    const previousBudgetRegion = adviserBudgetDestination(region, previousRegionalBudget?.countryCode);
+    const previousBudgetCurrency = previousRegionalBudget?.useLocalCurrency ? previousBudgetRegion.localCurrency : previousRegionalBudget?.currency;
+
+    if (!hasAttachments && !entryRequested && !(nativeRequest && body?.selectedRecord)) {
+      let pageAnswer = answerAdviserPage({ question: latestIncomingQuestion, report: pageReport, transaction: pageTransaction, timeZone, priorQuestion });
+      if (!pageAnswer && accountAnswerRequested && pageAccount) {
+        const account = await loadAdviserAccountFacts(workspace.id, pageAccount.id).then(accounts => accounts[0]).catch(() => null);
+        pageAnswer = {
+          reply: account ? answerAdviserAccount(account, now, timeZone) : "I couldn’t check this account’s balance right now. Please try again.",
+          visualization: null,
+        };
+      }
+      if (!pageAnswer && circleAnswerRequested && pageCircle) {
+        const { start, end } = getMonthBounds(now);
+        const day = (date: Date) => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+        pageAnswer = answerAdviserCircle(pageCircle, {
+          from: day(start), to: day(new Date(+end - 1)),
+        }, circleQuestion, chartFollowUp || asksForChart(latestIncomingQuestion),
+          currencyFollowUp ?? adviserCircleQuestion(circleQuestion).currency ?? pageContext.currency);
+      }
+      if (!pageAnswer && localizedQuestion === null && !regionalBudgetRequested) {
+        pageAnswer = {
+          reply: "I couldn’t identify the currency for that request. Which currency code should I use?",
+          visualization: null,
+        };
+      }
+      if (!pageAnswer && currencyExplanationRequested) {
+        const history = factMessages.slice(0, -1);
+        while (history.length && history[history.length - 1].role !== "user") history.pop();
+        const lastQuestion = history[history.length - 1]?.content;
+        const previousFactQuestion = lastQuestion ? resolveAdviserFactQuestion(lastQuestion, history) : "";
+        const priorCurrency = previousBudgetCurrency ?? (adviserFactIntent(previousFactQuestion) ? adviserRequestedCurrency(previousFactQuestion) : undefined);
+        const explicit = requestedCurrency ?? priorCurrency;
+        pageAnswer = {
+          reply: adviserCurrencyExplanation(region, explicit ?? displayCurrency, explicit ? "request" : pageContext.currency ? "page" : "default"),
+          visualization: null,
+        };
+      }
+      if (!pageAnswer && regionalBudget?.useLocalCurrency && !budgetRegion.localCurrency) {
+        pageAnswer = { reply: regionalBudget.countryCode ? `Which currency should I use for your ${budgetRegion.countryName} budget?` : "I don’t have a local currency from your regional settings. Which currency should I use for your budget?", visualization: null };
+      }
+      if (!pageAnswer && regionalBudget) {
+        const currency = (regionalBudget.useLocalCurrency ? budgetRegion.localCurrency : regionalBudget.currency) ?? displayCurrency;
+        const guidance = adviserRegionalBudgetReply(budgetRegion, currency, regionalBudget.useLocalCurrency);
+        const baseline = await loadAdviserBudgetBaseline({ workspaceId: workspace.id, currency, timeZone, now, chart: regionalBudget.chart })
+          .catch(() => ({ reply: "I couldn’t load your recent spending right now.", visualization: null }));
+        const contextNote = regionalBudget.countryCode
+          ? `\n\nThe baseline uses your Profile’s ${currency} activity across locations.`
+          : "";
+        pageAnswer = { reply: `${guidance}\n\n${baseline.reply}${contextNote}`, visualization: baseline.visualization };
+      }
+      if (!pageAnswer && budgetAnswerRequested) {
+        try {
+          const { loadBudgetWorkspaceData } = await import("@/lib/budgeting-data");
+          const { overview } = await loadBudgetWorkspaceData(workspace.id, now, { directory: true });
+          pageAnswer = answerAdviserBudgets(
+            [...overview.budgets, ...overview.inactiveBudgets], budgetQuestion, now,
+            chartFollowUp || asksForChart(latestIncomingQuestion), planningSurface === "budgeting" ? pageContext.budgetId : undefined,
+          );
+        } catch {
+          pageAnswer = { reply: "I couldn’t check your budgets right now. Please try again.", visualization: null };
+        }
+      }
+      if (!pageAnswer && goalAnswerRequested) {
+        try {
+          const { mobileGoals } = await import("@/lib/mobile-goals");
+          const { goals } = await mobileGoals(workspace.id, user.id, { goalId: goalDetail ? pageContext.goalId : undefined, now });
+          pageAnswer = answerAdviserGoals(goals, chartFollowUp || asksForChart(latestIncomingQuestion));
+        } catch {
+          pageAnswer = { reply: "I couldn’t check your goals right now. Please try again.", visualization: null };
+        }
+      }
+      const fact = pageAnswer
+        ? { ...pageAnswer, answerSource: "local", actions: budgetAnswerRequested || regionalBudgetRequested ? [
+          { id: "budget-status-open", kind: "navigate", type: "open_budgeting", label: "Open Budgeting", href: "/budgeting" },
+        ] : goalAnswerRequested ? [
+          { id: "goal-status-open", kind: "navigate", type: "open_goals", label: "Open Goals", href: "/goals" },
+        ] : [], suggestions: regionalBudgetRequested ? [
+          ...(budgetRegion.localCurrency && budgetRegion.localCurrency !== (regionalBudget?.currency ?? displayCurrency) && !regionalBudget?.useLocalCurrency
+            ? [{ id: "regional-budget-local", group: "currency", label: `Use local currency (${budgetRegion.localCurrency})`, prompt: "In my local currency" }]
+            : []),
+          ...(!hasScopedPage ? [{ id: "regional-budget-spending", group: "currency", label: "See spending by currency", prompt: "Show spending by currency this month" }] : []),
+        ] : [] }
+        : !hasScopedPage
+          ? await answerAdviserFact({workspaceId:workspace.id,profileName:workspace.name,question:factQuestion,regionalPreferences:user.regionalPreferences,contextCurrency:displayCurrency,otherCurrencies:region.currencies,localCurrency:region.localCurrency,now})
+          : null;
       if (fact) {
         const signature = `facts-${randomUUID()}`;
         await recordAdviserChatQuestion({workspaceId:workspace.id,actorUserId:user.clerkUserId,group:"cashflow",itemId:signature,label:"Financial facts",sourceAction:"chat",question:latestIncomingQuestion}).catch(()=>null);
-        await recordAdviserLocalResponse({workspaceId:workspace.id,actorUserId:user.clerkUserId,questionSignature:signature,reason:"canonical_financial_facts",routingVersion:"facts-v1"}).catch(()=>null);
+        await recordAdviserLocalResponse({workspaceId:workspace.id,actorUserId:user.clerkUserId,questionSignature:signature,reason:pageAnswer ? "page_financial_facts" : "canonical_financial_facts",routingVersion:"facts-v2"}).catch(()=>null);
         return NextResponse.json(fact, {headers:{"Cache-Control":"private, no-store"}});
       }
     }
 
-    const {baseCurrency, timeZone} = normalizeRegionalPreferences(user.regionalPreferences);
-    const displayCurrency = pageContext.currency || adviserCurrency(latestIncomingQuestion, workspace.accounts.map(account => account.currency ?? baseCurrency), baseCurrency);
     const requestedMonth = adviserMonthRange(latestIncomingQuestion, now);
     const nextSevenDays = new Date(now);
     nextSevenDays.setDate(nextSevenDays.getDate() + 7);
@@ -2295,6 +2438,7 @@ export async function POST(request: Request) {
       "For bank accounts and credit cards, recommend selection criteria rather than inventing products, approval odds, fees, interest rates, rewards, or eligibility. Named offers require the user's country and current issuer information that Clover can verify.",
       "For ways to make more money, use income patterns only to size the gap. Do not infer the user's profession, skills, available time, or legal ability to perform a job.",
       "For food questions, use the daily spending plan and typical food spending when available. Offer flexible meal formats rather than medical, nutrition, allergy, or dietary claims, and invite the user to mention restrictions if relevant.",
+      "Start with the answer in plain, friendly language. Default to two or three short sentences. Add a short list only if it helps the user compare figures. Use the selected Profile and page facts to resolve references, and ask one specific question when the reference is unclear.",
       "If the user asks whether they can afford a purchase but does not provide a price, ask for the price and, if relevant, the date they need it by. Do not invent a price or give a yes/no answer without one.",
       "If the user asks what to invest in, do not name a specific security as a personalized recommendation. Explain the missing suitability details and offer high-level educational categories only after checking investment readiness.",
       "Never expose internal personas, confidence scores, theme scores, tool names, implementation labels, or phrases such as 'Clover surfaced'. Write in plain, friendly language.",
@@ -2820,6 +2964,8 @@ export async function POST(request: Request) {
       ])
     );
     const grounding = {
+      currency: displayCurrency,
+      countryCode: region.countryCode,
       accountCount: workspace.accounts.length,
       transactionCount: allTransactions.length,
       historyThrough: analysisAnchorDate.toISOString(),
@@ -3016,7 +3162,7 @@ export async function POST(request: Request) {
     if (!hasAttachments && selectedAdviserToolNames.length === 1 && selectedAdviserToolNames[0] === "calculate_safe_to_spend") {
       const options = spendingRoomOptions(latestQuestion, displayCurrency);
       const estimate = options ? calculateSafeToSpend(options) : null;
-      const reply = estimate ? spendingRoomReply(estimate, latestQuestion) : "I need to clarify the planning inputs before giving a spending estimate. How many days should your cash cover (1–90), and how much extra buffer should I protect? For example: ‘How much can I spend over the next 30 days in PHP? Keep an extra PHP 5,000 buffer.’ Include only recorded cash for this check; review any expected income separately.";
+      const reply = estimate ? spendingRoomReply(estimate, latestQuestion) : `I need to clarify the planning inputs before giving a spending estimate. How many days should your cash cover (1–90), and how much extra buffer should I protect? For example: ‘How much can I spend over the next 30 days in ${displayCurrency}? Keep an extra ${displayCurrency} 500 buffer.’ Include only recorded cash for this check; review any expected income separately.`;
       await recordLocalResponse("calculated_spending_room");
       return NextResponse.json({ reply, actions: [{id:"spending-accounts",kind:"navigate",type:"open_accounts",label:"Check account balances",href:"/accounts"}], suggestions: [{ id: "spending-save", group: "goals", label: "How much can I save each month?", prompt: "How much can I save each month?" }, { id: "spending-bills", group: "cashflow", label: "Check upcoming bills", prompt: "What bills do I have coming up?" }] satisfies AdviserSuggestedQuestion[], usage: usageForResponse(), grounding, answerSource:"local", ...(estimate ? {visualization:spendingRoomChart(estimate)} : {requiresInput:"spending_window_and_buffer"}) });
     }
@@ -3699,6 +3845,11 @@ export async function POST(request: Request) {
             roomAfterPurchase,
             status: roomAfterPurchase >= 0 ? "fits_after_reserve" : "would_reduce_reserve",
           };
+          actions.push(
+            { id: `affordability-accounts-${actions.length}`, kind: "navigate", type: "open_accounts", label: "Check spendable balances", description: "Review the balances behind the estimate.", href: `/accounts?currency=${encodeURIComponent(displayCurrency)}` },
+            { id: `affordability-recurring-${actions.length}`, kind: "navigate", type: "open_recurring", label: "Review upcoming payments", description: "Check what is due before you commit.", href: "/recurring" },
+            { id: `affordability-goals-${actions.length}`, kind: "navigate", type: "open_goals", label: "Review savings goals", description: "Review or update your target in Goals.", href: "/goals" },
+          );
         } else if (call.name === "get_income_outlook") {
           result = {
             cadence: incomeCadence,

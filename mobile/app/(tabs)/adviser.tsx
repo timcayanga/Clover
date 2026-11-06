@@ -10,7 +10,8 @@ import {
   type AdviserChart,
 } from "../../../shared/adviser-chart";
 import { AdviserReportCard } from "../../src/adviser-report-card";
-import { router } from "expo-router";
+import { router, type Href } from "expo-router";
+import { notificationDestination } from "../../src/notification-destination";
 import * as Crypto from "expo-crypto";
 import {
   askLocally,
@@ -34,12 +35,14 @@ const useAdviserHistory = createAdviserHistoryHook({
   useState,
 });
 
+type SourceAction = { kind: string; id: string; label: string; href?: string };
 type FollowUp = { id: string; label: string; prompt: string };
 type Grounding = { transactionCount?: number; historyThrough?: string };
 type Message = {
   role: "user" | "assistant";
   content: string;
   visualization?: AdviserChart;
+  sourceActions?: { id: string; label: string; destination: string }[];
 };
 export default function Adviser() { return <AdviserConversation />; }
 export function AdviserConversation({ pageContext, embedded = false, onClose }: {pageContext?: AskPageContext; embedded?: boolean; onClose?: () => void} = {}) {
@@ -181,6 +184,7 @@ export function AdviserConversation({ pageContext, embedded = false, onClose }: 
       const result = await session.request<{
         reply: string;
         hasActions?: boolean;
+        actions?: SourceAction[];
         entryDraft?: unknown;
         suggestions?: FollowUp[];
         grounding?: Grounding;
@@ -206,6 +210,10 @@ export function AdviserConversation({ pageContext, embedded = false, onClose }: 
         {
           role: "assistant",
           content: result.reply,
+          sourceActions: (result.actions ?? []).flatMap(action => {
+            const destination = action.kind === "navigate" && action.href ? notificationDestination(action.href) : null;
+            return destination ? [{ id: action.id, label: action.label, destination }] : [];
+          }),
           visualization: parseAdviserChart(result.visualization) ?? undefined,
         },
       ]);
@@ -417,6 +425,12 @@ export function AdviserConversation({ pageContext, embedded = false, onClose }: 
             {message.visualization ? (
               <AdviserReportCard chart={message.visualization} />
             ) : null}
+            {message.sourceActions?.map(action => (
+              <PlanAction key={action.id} title={action.label} onPress={() => {
+                onClose?.();
+                router.push(action.destination as Href);
+              }} />
+            ))}
           </View>
         ))}
         {grounding &&

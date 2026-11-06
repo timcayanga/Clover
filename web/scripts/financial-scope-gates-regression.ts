@@ -140,7 +140,7 @@ assert.equal(assessFinancialUploadScope({
 }).decision, "non_financial", "Long ordinary prose without financial evidence remains rejectable");
 
 const adviserRouteSource = fs.readFileSync(path.join(process.cwd(), "app/api/adviser/chat/route.ts"), "utf8");
-const factResolutionIndex = adviserRouteSource.indexOf("const factQuestion = resolveAdviserFactQuestion(latestIncomingQuestion, incomingMessages)");
+const factResolutionIndex = adviserRouteSource.indexOf("const factQuestion = resolveAdviserFactQuestion(localizedQuestion ?? latestIncomingQuestion, factMessages)");
 const adviserGuardIndex = adviserRouteSource.indexOf("classifyAdviserScope(factQuestion, incomingMessages)");
 assert.ok(factResolutionIndex >= 0 && factResolutionIndex < adviserGuardIndex, "The scope gate must assess the resolved user clarification before any financial read.");
 const adviserWorkspaceIndex = adviserRouteSource.indexOf("const workspace =");

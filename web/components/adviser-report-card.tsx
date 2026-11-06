@@ -5,5 +5,5 @@ import { formatCurrencyAmount } from "@/lib/currency-format";
 export function AdviserReportCard({chart}:{chart:AdviserChart}) {
   if(chart.spendingPlan) return <AdviserSpendingCard chart={chart}/>;
   const max=Math.max(...chart.bars.map(bar=>bar.amount),1);
-  return <figure className="adviser-report-card"><figcaption>{chart.title}</figcaption><p>{adviserChartPeriodLabel(chart)} · {chart.currency}</p>{chart.bars.map((bar,index)=><div key={index}><span>{bar.label}</span><strong>{formatCurrencyAmount(bar.amount,chart.currency)}</strong><div className="adviser-report-card__track" aria-hidden="true"><i style={{width:`${bar.amount/max*100}%`}} /></div></div>)}<a href={adviserChartReportHref(chart)}>Open Reports</a></figure>;
+  return <figure className="adviser-report-card"><figcaption>{chart.title}</figcaption><p>{adviserChartPeriodLabel(chart)} · {chart.currency}</p>{chart.bars.map((bar,index)=><div key={index}><span>{bar.label}</span><strong>{formatCurrencyAmount(bar.amount,chart.currency)}</strong><div className="adviser-report-card__track" aria-hidden="true"><i style={{width:`${bar.amount/max*100}%`}} /></div></div>)}{!chart.hideReportLink ? <a href={adviserChartReportHref(chart)}>Open Reports</a> : null}</figure>;
 }

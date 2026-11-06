@@ -1,4 +1,5 @@
 import { isPendingBankSelection } from "../../shared/finverse-lifecycle";
+import { loadActivityInsightNotifications } from "./activity-insight-notifications.server";
 import { getCurrentUserEnvironment } from "./user-environment";
 import { bankLifecycleOverview } from "./finverse-lifecycle";
 import { bankWarningStage } from "../../shared/finverse-lifecycle";
@@ -115,6 +116,7 @@ export const buildInAppNotificationCandidates = async (
     cloverTokenUsage,
     profileCount,
     planAccounts,
+    activityInsights,
   ] = await Promise.all([
     prisma.importFile.findMany({
       where: { workspaceId, status: { in: ["processing", "done", "failed"] } },
@@ -251,6 +253,7 @@ export const buildInAppNotificationCandidates = async (
       where: { workspace: { userId: user.id } },
       select: { type: true, name: true, institution: true },
     }),
+    options.raw ? Promise.resolve([]) : loadActivityInsightNotifications(workspaceId, now).catch(() => []),
   ]);
 
   const items: InAppNotification[] = [];
@@ -329,7 +332,9 @@ export const buildInAppNotificationCandidates = async (
   }
   const reviewCount = reviewSummary._count._all;
   const recentImports = imports.filter((item) => item.updatedAt >= sevenDaysAgo || item.status !== "done");
+  items.push(...activityInsights);
   recentImports.forEach((item) => {
+    if (item.status === "done" && activityInsights.some(insight => insight.id.startsWith(`activity-insights:${workspaceId}:upload:${item.id}:`))) return;
     const copy = getImportCopy(item);
     items.push({
       id: `import:${item.id}:${item.status}`,

@@ -1,3 +1,5 @@
+import { answerAdviserBudgets, isAdviserBudgetStatusQuestion } from "../lib/adviser-page-answer";
+import { parseAdviserChart } from "../../shared/adviser-chart";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
@@ -154,3 +156,35 @@ const currencyOverview = buildBudgetOverview({ budgets: [currencyBudget], transa
 assert.equal(currencyOverview.budgets[0].actualAmount, 275);
 assert.equal(currencyOverview.budgets[0].remainingAmount, 225);
 assert.equal(buildBudgetHistory(currencyBudget, currencyRows.map((t,i)=>({...t,id:String(i)})), now).points.at(-1)?.actualAmount, 275);
+
+const askBudgets = buildBudgetOverview({
+  now,
+  budgets: [
+    budget({ id: "food", name: "Food", targetAmount: 100 }),
+    budget({ id: "travel", name: "Travel", currency: "USD" }),
+    budget({ id: "paused", name: "Paused", isActive: false }),
+  ],
+  transactions: [
+    transaction({ amount: 125 }),
+    transaction({ amount: 700, isTransfer: true }),
+    transaction({ amount: 500, isExcluded: true }),
+    transaction({ amount: 99, currency: "USD" }),
+  ],
+});
+const askRows = [...askBudgets.budgets, ...askBudgets.inactiveBudgets];
+assert.equal(isAdviserBudgetStatusQuestion("How are my budgets tracking?"), true);
+assert.equal(isAdviserBudgetStatusQuestion("How much is left?", true), true);
+assert.equal(isAdviserBudgetStatusQuestion("How much is left?"), false);
+assert.equal(isAdviserBudgetStatusQuestion("Create a budget"), false);
+assert.equal(isAdviserBudgetStatusQuestion("How was my budget doing last month?"), false);
+const focused = answerAdviserBudgets(askRows, "Chart this budget’s progress", now, true, "food");
+assert.match(focused.reply, /125.*100.*25\.00 over/);
+assert.doesNotMatch(focused.reply, /Travel|Paused/);
+assert.deepEqual(parseAdviserChart(focused.visualization)?.bars, [{ label: "Used", amount: 125 }, { label: "Target", amount: 100 }]);
+assert.deepEqual(focused.visualization?.calendarWindow, { from: "2026-07-01", through: "2026-07-31" });
+const directory = answerAdviserBudgets(askRows, "How are my budgets tracking?", now, true);
+assert.match(directory.reply, /Food[\s\S]*Travel/);
+assert.doesNotMatch(directory.reply, /Paused/);
+assert.equal(directory.visualization, null);
+assert.equal(answerAdviserBudgets(askRows, "Chart this budget’s progress", now, true, "paused").visualization, null);
+assert.match(answerAdviserBudgets([], "How are my budgets tracking?", now, false).reply, /aren’t any active budgets/);

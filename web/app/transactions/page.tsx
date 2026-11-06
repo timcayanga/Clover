@@ -1,5 +1,6 @@
 "use client";
 import { FirstUseActivation } from "@/components/first-use-activation";
+import { TransactionSourceMatches } from "@/components/transaction-source-matches";
 import { TransactionConversion, QuickAddLineItem, TransactionLineItemRow } from "@/components/transaction-detail-extras";
 
 import { manualTransactionCategoryId, manualTransactionName, manualTransactionPlaceholder, manualTransactionToday } from "../../../shared/manual-transaction-defaults";
@@ -406,6 +407,7 @@ const pickPreferredAccountBrand = (
 type Category = TransactionPickerCategory & { type: "income" | "expense" | "transfer" };
 
 type Transaction = {
+  sourceMatches?: import("../../../shared/transaction-source-match").TransactionSourceMatch[];
   createdAt?: string;
   id: string;
   workspaceId: string;
@@ -9256,6 +9258,19 @@ function TransactionsPageContent() {
                   }} /> : null}
                 </details>
               </div>
+
+            {!detailEditing ? <TransactionSourceMatches
+              key={selectedTransaction.id}
+              matches={selectedTransaction.sourceMatches}
+              canCopy={!detailReceiptLineItems.length}
+              busy={isSaving}
+              onReview={async (sourceId, action) => {
+                setIsSaving(true);
+                try {
+                  await updateTransaction(selectedTransaction.id, { [action]: sourceId }, { recordHistory: false });
+                } finally { setIsSaving(false); }
+              }}
+            /> : null}
 
             <TransactionReviewControls
               transaction={{ ...selectedTransaction, isExcluded: detailDraft?.isExcluded ?? selectedTransaction.isExcluded }}

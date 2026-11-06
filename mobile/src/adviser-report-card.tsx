@@ -14,6 +14,6 @@ export function AdviserReportCard({chart}:{chart:AdviserChart}) {
     <Text style={{fontFamily:"Poppins-SemiBold",fontSize:16,color:colors.ink}}>{chart.title}</Text>
     <Text style={{fontFamily:"Poppins-Regular",fontSize:12,color:colors.muted}}>{adviserChartPeriodLabel(chart)} · {chart.currency}</Text>
     {chart.bars.map((bar,index)=><View key={index} style={{gap:6}}><View style={{flexDirection:"row",justifyContent:"space-between",gap:8}}><Text style={{flexShrink:1,color:colors.ink,fontFamily:"Poppins-Regular",fontSize:13}}>{bar.label}</Text><Text style={{color:colors.ink,fontFamily:"Poppins-Medium",fontSize:13}}>{money(String(bar.amount),chart.currency)}</Text></View><View style={{height:8,borderRadius:8,overflow:"hidden",backgroundColor:colors.line}}><LinearGradient colors={["#03a8c0","#71e5bf"]} start={{x:0,y:0}} end={{x:1,y:0}} style={{height:8,width:`${bar.amount/max*100}%`,borderRadius:8}} /></View></View>)}
-    <Pressable accessibilityRole="button" onPress={()=>router.push(adviserChartReportHref(chart) as Href)} style={{minHeight:44,justifyContent:"center"}}><Text style={{color:colors.teal,fontFamily:"Poppins-Medium",fontSize:15}}>Open Reports</Text></Pressable>
+    {!chart.hideReportLink ? <Pressable accessibilityRole="button" onPress={()=>router.push(adviserChartReportHref(chart) as Href)} style={{minHeight:44,justifyContent:"center"}}><Text style={{color:colors.teal,fontFamily:"Poppins-Medium",fontSize:15}}>Open Reports</Text></Pressable> : null}
   </View>;
 }

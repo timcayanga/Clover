@@ -1,3 +1,4 @@
+import type { TransactionSourceMatchAction } from "../../../shared/transaction-source-match";
 import { TransactionConversion, QuickAddLineItem } from "../../src/transaction-detail-extras";
 import { MerchantLogo } from "../../src/merchant-logo";
 import { transactionReviewReasons } from "../../src/transaction-review";
@@ -107,6 +108,23 @@ export default function TransactionDetail() {
     reload,
     access.active,
   ]);
+  const reviewSourceMatch = async (matchId: string, action: TransactionSourceMatchAction) => {
+    if (busy) return;
+    setBusy(true);
+    setError("");
+    try {
+      const result = await session.request<{ transaction: Transaction }>(
+        `transactions/${id}?workspaceId=${encodeURIComponent(session.profileId)}`,
+        { method: "PATCH", body: JSON.stringify({ [action]: matchId }) },
+      );
+      setRow(result.transaction);
+      setLineItems(result.transaction.receiptLineItems ?? []);
+    } catch (error) {
+      setError(error instanceof Error ? error.message : "Couldn’t review this match.");
+    } finally {
+      setBusy(false);
+    }
+  };
   const reviewReasons = row ? transactionReviewReasons(row) : [];
   if (!access.active) return null;
   const save = async () => {
@@ -319,6 +337,25 @@ export default function TransactionDetail() {
                   ) : (
                     <Body>No line items yet.</Body>
                   )}
+                  {row.sourceMatches?.length ? (
+                    <View style={{ gap: 8 }}>
+                      <Body muted={false}>Matches from other sources</Body>
+                      {row.sourceMatches.map(match => (
+                        <View key={match.id} style={{ gap: 4 }}>
+                          <Pressable accessibilityRole="link" onPress={() => router.push({ pathname: "/transaction/[id]", params: { id: match.id } })}>
+                            <Body>{match.name} · {match.source} · {match.accountName} · {match.date.slice(0, 10)}</Body>
+                          </Pressable>
+                          <Body>{match.confirmed ? "Confirmed same purchase" : match.evidence.join(" · ")}</Body>
+                          {!match.confirmed ? <Button title="Same purchase" disabled={busy} onPress={() => void reviewSourceMatch(match.id, "confirmSourceMatchId")} /> : null}
+                          {match.canCopyLineItems && !row.receiptLineItems?.length ? (
+                            <Button title="Copy receipt line items" disabled={busy} onPress={() => void reviewSourceMatch(match.id, "copyReceiptFromTransactionId")} />
+                          ) : null}
+                          <Button title="Not the same purchase" disabled={busy} onPress={() => void reviewSourceMatch(match.id, "dismissSourceMatchId")} />
+                        </View>
+                      ))}
+                      <Body>Confirming a match keeps both transactions and their totals.</Body>
+                    </View>
+                  ) : null}
                   <QuickAddLineItem key={row.id} currency={row.currency} count={row.receiptLineItems?.length ?? 0} disabled={busy} onAdd={async (item,requestId) => {
                     const receiptLineItems = [...(row.receiptLineItems ?? []),item];
                     setBusy(true);

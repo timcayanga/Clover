@@ -6,7 +6,7 @@ import { GET as related } from "../app/api/transactions/[transactionId]/related/
 import { loadCirclesWorkspaceData } from "../lib/circle-loaders";
 const db = new URL(process.env.DATABASE_URL ?? "");
 assert.equal(db.hostname, "127.0.0.1");
-assert.equal(db.port, "56567");
+assert.equal(db.port, process.env.CLOVER_QA_PARSER_PORT ?? "56567");
 assert.equal(db.pathname, "/clover_circle_experience_qa");
 globalThis.fetch = async () => {
   throw new Error("External requests forbidden in isolated Circle QA");
@@ -298,6 +298,11 @@ async function main() {
   const share = await prisma.circleSharedTransaction.findFirstOrThrow({
     where: { transactionId: "meal" },
   });
+  assert.equal(share.paidByMemberId, "me");
+  assert.equal((await call({ action: "update_expense_payer", id: share.id, paidByMemberId: "foreign-person" })).status, 400);
+  assert.equal((await call({ action: "update_expense_payer", id: share.id, paidByMemberId: "mia" })).status, 200);
+  assert.equal((await call({ action: "share_transaction", transactionId: "meal", visibility: "item" })).status, 200);
+  assert.equal((await prisma.circleSharedTransaction.findUniqueOrThrow({ where: { id: share.id } })).paidByMemberId, "mia");
   assert.equal(
     (
       await call({
@@ -347,6 +352,7 @@ async function main() {
   );
   const data = await loadCirclesWorkspaceData(user, "circle");
   assert.equal(data.circles[0].expenseTotalThisMonth, 1200);
+  assert.equal(data.circles[0].expenses.find(e => e.transactionId === "meal")?.paidByName, "Mia");
   assert.deepEqual(data.circles[0].expenseCurrencyTotals, {
     PHP: 1200,
     IDR: 75440,

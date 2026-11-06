@@ -173,6 +173,8 @@ export type CircleContributionSummary = {
 };
 
 export type CircleExpenseSummary = {
+  paidByMemberId?: string | null;
+  paidByName?: string | null;
   canEditSplit?: boolean;
   canUnshare?: boolean;
   transactionId?: string;

@@ -30,8 +30,9 @@ const toIso = (value: Date | null | undefined) => value?.toISOString() ?? null;
 export const loadCirclesWorkspaceData = async (
   user: User,
   circleId?: string,
+  options: { now?: Date; includeMemberPhotos?: boolean } = {},
 ): Promise<CirclesWorkspaceData> => {
-  const now = new Date();
+  const now = options.now ?? new Date();
   const { start, end } = getMonthBounds(now);
   const circles = await prisma.circle.findMany({
     where: {
@@ -73,6 +74,7 @@ export const loadCirclesWorkspaceData = async (
         orderBy: { createdAt: "desc" },
         include: {
           transaction: { include: { category: true } },
+          paidBy: { select: { id: true, displayName: true, userId: true } },
         },
         take: 100,
       },
@@ -100,7 +102,7 @@ export const loadCirclesWorkspaceData = async (
     },
   });
 
-  const memberPhotos = await loadCircleMemberPhotos(circles);
+  const memberPhotos = options.includeMemberPhotos === false ? new Map<string, string | null>() : await loadCircleMemberPhotos(circles);
   const serializedCircles: CircleSummary[] = circles.map((circle) => {
     const currentMembership =
       circle.memberships.find((membership) => membership.userId === user.id) ??
@@ -173,9 +175,12 @@ export const loadCirclesWorkspaceData = async (
             ? Math.abs(numberValue(transaction.amount))
             : Math.abs(numberValue(entry.sharedAmount));
         const canSeeItem = entry.visibility !== "summary";
+        const payer = entry.paidBy;
         return {
           id: entry.id,
           kind: "shared_transaction",
+          paidByMemberId: payer?.id ?? null,
+          paidByName: payer?.userId === user.id ? "Me" : payer?.displayName ?? null,
           canEditSplit:
             role === "organizer" || entry.sharedByUserId === user.id,
           canUnshare: entry.sharedByUserId === user.id,

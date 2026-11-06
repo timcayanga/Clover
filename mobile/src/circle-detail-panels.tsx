@@ -1,3 +1,4 @@
+import { circleExpensePayerTotals } from "../../shared/circle-expense-payers";
 import { useExchangeRates } from "./use-exchange-rates";
 import {
   circleActivityEmoji,
@@ -59,6 +60,8 @@ export type CircleDetail = {
     transactionId?: string;
     categoryName?: string | null;
     canEditSplit?: boolean;
+    paidByMemberId?: string | null;
+    paidByName?: string | null;
     canUnshare?: boolean;
     lineItems?: { description: string; amount: string | null }[];
     splitItems?: SplitItem[];
@@ -383,7 +386,8 @@ export function CircleDetailPanels({
       </>
     );
   }
-  if (tab === "Expenses")
+  if (tab === "Expenses") {
+    const payerTotals = circleExpensePayerTotals(circle.expenses ?? []);
     return (
       <>
         <View>
@@ -398,11 +402,18 @@ export function CircleDetailPanels({
               onSave={(items) =>
                 run({ action: "update_expense_split", id: e.id, items })
               }
+              onPayerChange={(paidByMemberId) => run({ action: "update_expense_payer", id: e.id, paidByMemberId })}
               onRemove={() =>
                 void run({ action: "unshare_transaction", id: e.id })
               }
             />
           ))}
+          {payerTotals.length ? (
+            <View>
+              <Body muted={false}>Paid by member · recent shared expenses</Body>
+              {payerTotals.map(total => <Body key={total.id}>{total.name} · {money(String(total.amount), total.currency)}</Body>)}
+            </View>
+          ) : null}
           {!circle.expenses?.length ? (
             <CloverEmptyState pose="circles">
               No shared expenses yet
@@ -469,6 +480,7 @@ export function CircleDetailPanels({
         {error ? <Notice>{error}</Notice> : null}
       </>
     );
+  }
   if (tab === "People")
     return (
       <>
@@ -686,6 +698,7 @@ function CircleExpenseRow({
   format,
   onSave,
   onRemove,
+  onPayerChange,
   forceOpen,
 }: {
   expense: NonNullable<CircleDetail["expenses"]>[number];
@@ -694,6 +707,7 @@ function CircleExpenseRow({
   format: string;
   onSave: (items: SplitItem[]) => Promise<void>;
   onRemove: () => void;
+  onPayerChange: (id: string) => Promise<void>;
   forceOpen?: boolean;
 }) {
   const { colors } = useTheme(),
@@ -754,7 +768,7 @@ function CircleExpenseRow({
         >
           <Body muted={false}>{e.title}</Body>
           <Text style={{ color: colors.muted, fontSize: 11 }}>
-            {displayDate(e.date, format)}
+            {displayDate(e.date, format)}{e.kind === "shared_transaction" && ` · Paid by ${e.paidByName ?? "not recorded"}`}
           </Text>
         </Pressable>
         <Text style={{ fontSize: 12, color: colors.ink }}>
@@ -770,6 +784,13 @@ function CircleExpenseRow({
           </Pressable>
         ) : null}
       </View>
+      {open && editable && e.kind === "shared_transaction" ? (
+        <>
+          <Body>Paid by</Body>
+          <Choices value={e.paidByMemberId ?? ""} options={people.map(person => ({ value: person.id, label: person.name }))}
+            onChange={id => void onPayerChange(id)} />
+        </>
+      ) : null}
       {open && e.visibility !== "summary" ? (
         <>
           <Body muted={false}>

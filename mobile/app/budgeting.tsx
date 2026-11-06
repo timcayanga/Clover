@@ -225,7 +225,7 @@ export default function Budgeting() {
                 title="Ask Clover about this budget"
                 tone="ask"
                 onPress={() =>
-                  askClover({page:"budgeting",title:selected.name,budgetId:selected.id,prompt:`Help me understand my budget, ${selected.name}.`})
+                  askClover({page:"budgeting",title:selected.name,budgetId:selected.id,prompt:"How is this budget tracking?"})
                 }
               />
               <PlanAction

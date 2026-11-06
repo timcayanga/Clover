@@ -28,6 +28,9 @@ const date = z.string().regex(/^\d{4}-\d{2}-\d{2}$/).refine(value => {
 // Accept older clients' signed input, but persist the magnitude. Type carries direction.
 const amount = z.string().regex(/^-?\d{1,12}(\.\d{1,2})?$/).transform(value => value.replace(/^-/, ""));
 export const mobileEditSchema = z.object({
+  confirmSourceMatchId: z.string().min(1).max(128).optional(),
+  dismissSourceMatchId: z.string().min(1).max(128).optional(),
+  copyReceiptFromTransactionId: z.string().min(1).max(128).optional(),
   appendReceiptLineItem: lineItemAdditionSchema.optional(),
   isExcluded: z.boolean().optional(),
   receiptLineItems: z.array(z.object({

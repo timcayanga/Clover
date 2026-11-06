@@ -153,10 +153,12 @@ const resourceSchema = z.discriminatedUnion("action", [
     action: z.literal("share_transaction"),
     transactionId: z.string().min(1),
     visibility: z.enum(circleVisibilities).default("item"),
+    paidByMemberId: z.string().min(1).optional(),
     sharedAmount: amount.nullable().optional(),
     sharedTitle: z.string().trim().max(120).nullable().optional(),
     note: z.string().trim().max(240).nullable().optional(),
   }),
+  z.object({ action: z.literal("update_expense_payer"), id: z.string().min(1), paidByMemberId: z.string().min(1) }),
   z.object({ action: z.literal("unshare_transaction"), id: z.string().min(1) }),
   z.object({
     action: z.literal("update_expense_split"),
@@ -206,6 +208,7 @@ const activityCopy: Record<string, string> = {
   update_member: "updated a Circle member",
   share_transaction: "shared a transaction",
   update_expense_split: "updated an expense split",
+  update_expense_payer: "updated who paid for an expense",
   unshare_transaction: "stopped sharing a transaction",
   share_investment: "shared an investment summary",
   unshare_investment: "stopped sharing an investment summary",
@@ -632,6 +635,10 @@ export async function POST(
               "You can only share your own transaction.",
               403,
             );
+          const payer = body.paidByMemberId
+            ? await tx.circleMembership.findFirst({ where: { id: body.paidByMemberId, circleId, status: "active" }, select: { id: true } })
+            : access.membership;
+          if (body.paidByMemberId && !payer) throw new CircleAccessError("Choose an active Circle member.", 400);
           const created = await tx.circleSharedTransaction.upsert({
             where: {
               circleId_transactionId: {
@@ -641,6 +648,7 @@ export async function POST(
             },
             update: {
               visibility: body.visibility,
+              ...(body.paidByMemberId ? { paidByMemberId: payer?.id } : {}),
               sharedAmount: body.sharedAmount ?? null,
               sharedTitle: body.sharedTitle || null,
               note: body.note || null,
@@ -649,6 +657,7 @@ export async function POST(
               circleId,
               transactionId: transaction.id,
               sharedByUserId: user.id,
+              paidByMemberId: payer?.id ?? null,
               visibility: body.visibility,
               sharedAmount: body.sharedAmount ?? null,
               sharedTitle: body.sharedTitle || null,
@@ -658,6 +667,20 @@ export async function POST(
           value = created;
           entityType = "shared_transaction";
           entityId = created.id;
+          break;
+        }
+        case "update_expense_payer": {
+          const share = await tx.circleSharedTransaction.findFirst({ where: { id: body.id, circleId } });
+          if (!share) throw new CircleAccessError("Shared expense not found.", 404);
+          if (access.role !== "organizer" && share.sharedByUserId !== user.id)
+            throw new CircleAccessError("Only the sharer or an Organizer can change who paid.", 403);
+          const payer = await tx.circleMembership.findFirst({
+            where: { id: body.paidByMemberId, circleId, status: "active" }, select: { id: true },
+          });
+          if (!payer) throw new CircleAccessError("Choose an active Circle member.", 400);
+          value = await tx.circleSharedTransaction.update({ where: { id: share.id }, data: { paidByMemberId: payer.id } });
+          entityType = "shared_transaction";
+          entityId = share.id;
           break;
         }
         case "update_expense_split": {

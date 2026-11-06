@@ -52,7 +52,7 @@ export function notificationAllowed(
 ) {
   if (!prefs[channel]) return false;
   if (id.startsWith("weekly-summary:")) return prefs.weeklySummary;
-  if (/^import:.*:done$/.test(id)) return prefs.importComplete;
+  if (/^activity-insights:.*:upload:/.test(id) || /^import:.*:done$/.test(id)) return prefs.importComplete;
   if (/^(review|account-mismatch):/.test(id))
     return prefs.transactionsNeedReview;
   if (/^(budget|plan-limit|clover-token):/.test(id))

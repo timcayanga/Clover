@@ -1,3 +1,4 @@
+import { usePageAskScope } from "../../src/page-ask-context";
 import { accountSectionType } from "../../../shared/account-presentation";
 import { SwipeDeleteRow } from "../../src/swipe-delete-row";
 import { recordedSummary } from "../../src/recorded-summary";
@@ -85,14 +86,18 @@ function AccountsContent() {
     void session.request<{pending:PendingBankConnection[]}>(`finverse/connections?view=picker&workspaceId=${encodeURIComponent(session.profileId)}`,{signal:controller.signal}).then(data=>{if(!controller.signal.aborted)setPendingBanks(data.pending);}).catch(()=>{});
     return()=>controller.abort();
   },[session.profileId,session.demo,adding]);
-  const { add, accountId, finverseConnection, finverseWorkspace, onboarding } =
+  const { add, accountId, finverseConnection, finverseWorkspace, onboarding, currency: linkCurrency } =
     useLocalSearchParams<{
       add?: string;
       onboarding?: string;
       finverseConnection?: string;
       finverseWorkspace?: string;
       accountId?: string;
+      currency?: string;
     }>();
+  useEffect(() => {
+    if (linkCurrency && /^[A-Z]{3}$/.test(linkCurrency)) setCurrencyFilter(linkCurrency);
+  }, [linkCurrency]);
   const [openedAccount, setOpenedAccount] = useState("");
   useEffect(() => {
     if (accountId && accountId !== openedAccount) {
@@ -201,6 +206,12 @@ function AccountsContent() {
     })[type] ?? "Other accounts";
   const ownedCurrencies = [...new Set(accounts.map(account => account.currency))];
   const displayedCurrency = currencyFilter === "ALL" ? "ALL" : ownedCurrencies.includes(currencyFilter) ? currencyFilter : ownedCurrencies.includes(session.data?.defaultCurrency ?? "") ? session.data!.defaultCurrency : ownedCurrencies[0];
+  usePageAskScope({
+    page: "accounts",
+    title: selected?.name ?? "Accounts",
+    accountId: selected?.id,
+    currency: selected?.currency ?? (displayedCurrency === "ALL" ? undefined : displayedCurrency),
+  });
   useLayoutEffect(() => {
     navigation.setOptions({ header: () => <AppHeader title="Accounts" trailing={<>
       <Pressable accessibilityRole="button" accessibilityLabel={`Select account currency: ${displayedCurrency ?? "none"}`} onPress={() => setCurrencyOpen(true)} style={styles.iconButton}>{displayedCurrency === "ALL" || !displayedCurrency ? <Icon line name="globe-outline" size={24} /> : <Text style={{ color: colors.teal, fontFamily: "Poppins-SemiBold", fontSize: 13 }}>{displayedCurrency}</Text>}</Pressable>

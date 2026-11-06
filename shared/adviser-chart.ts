@@ -1,5 +1,5 @@
 import { parseAdviserSpendingPlan, type AdviserSpendingPlan } from "./adviser-spending-plan";
-export type AdviserChart = {calendarWindow?:{from:string;through:string};spendingPlan?:AdviserSpendingPlan;title:string;currency:string;from:string;through:string;bars:Array<{label:string;amount:number}>};
+export type AdviserChart = {hideReportLink?:true;calendarWindow?:{from:string;through:string};spendingPlan?:AdviserSpendingPlan;title:string;currency:string;from:string;through:string;bars:Array<{label:string;amount:number}>};
 export function parseAdviserChart(value:unknown): AdviserChart | null {
   if(!value||typeof value!=="object")return null;
   const chart=value as AdviserChart;
@@ -10,7 +10,7 @@ export function parseAdviserChart(value:unknown): AdviserChart | null {
   if(calendarWindow!==undefined&&(!calendarWindow||!day(calendarWindow.from)||!day(calendarWindow.through)||calendarWindow.from>calendarWindow.through))return null;
   const spendingPlan = parseAdviserSpendingPlan(chart.spendingPlan);
   if (chart.spendingPlan !== undefined && !spendingPlan) return null;
-  return {...(calendarWindow ? {calendarWindow:{from:calendarWindow.from,through:calendarWindow.through}} : {}),...(spendingPlan ? {spendingPlan} : {}),title:chart.title,currency:chart.currency,from:chart.from,through:chart.through,bars:chart.bars.map(({label,amount})=>({label,amount}))};
+  return {...(chart.hideReportLink === true ? {hideReportLink:true as const} : {}),...(calendarWindow ? {calendarWindow:{from:calendarWindow.from,through:calendarWindow.through}} : {}),...(spendingPlan ? {spendingPlan} : {}),title:chart.title,currency:chart.currency,from:chart.from,through:chart.through,bars:chart.bars.map(({label,amount})=>({label,amount}))};
 }
 
 /** Calendar windows are dates, not instants. Keep captions stable across device timezones. */

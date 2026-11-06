@@ -33,7 +33,7 @@ const categoryIndustry: Record<string, string> = {
   "health wellness": "health-and-personal-care", healthcare: "health-and-personal-care",
 };
 const processorPrefixes = /^(?:paypal|paddle(?: net)?|sq|square|stripe|2c2p(?: ph)?|eftpay|adyen|sumup|izettle|tst|toast|sp|shopify)$/;
-function descriptorParts(name:string) {
+export function descriptorParts(name:string) {
   const parts=name.split("*"), processors:string[]=[];
   while (parts.length > 1 && processorPrefixes.test(identityText(parts[0]))) processors.push(parts.shift()!);
   return {merchant:parts.join(" "),descriptor:parts.join("*"),processors};

@@ -1,5 +1,7 @@
 import { AsyncLocalStorage } from "node:async_hooks";
 import type { Prisma } from "@prisma/client";
+import { INSTITUTION_SUGGESTIONS } from "../../shared/institution-suggestions";
+import { PUBLIC_IMPORT_EXTENSIONS, TRAINING_IMAGE_EXTENSIONS } from "./import-format-policies";
 import { prisma } from "./prisma";
 import { capturePostHogServerEvent } from "./analytics-server";
 import { SOURCE_REVIEW_PHASE, SourceReviewRequiredError } from "./import-source-review";
@@ -98,7 +100,7 @@ export async function assertImportAttemptCurrent(importId: string, tx?: Prisma.T
 export async function finishImportAttempt(claim: Claim, threw: boolean) {
   const result = await prisma.$transaction(async tx => {
     await tx.$queryRaw`SELECT "id" FROM "ImportFile" WHERE "id" = ${claim.importId} FOR UPDATE`;
-    const file = await tx.importFile.findUnique({ where: { id: claim.importId } });
+    const file = await tx.importFile.findUnique({ where: { id: claim.importId }, include: { account: { select: { institution: true } } } });
     if (!file) return null;
     const record = await tx.auditLog.findUnique({ where: { id: claim.recordId } });
     const previous = readAttempt(record?.metadata);
@@ -124,18 +126,27 @@ export async function finishImportAttempt(claim: Claim, threw: boolean) {
       ...(saved ? { transactionObservedAt: previous.transactionObservedAt ?? now.toISOString() } : {}),
       uploadToTransactionAvailableMs: saved ? previous.uploadToTransactionAvailableMs ?? Math.max(0, now.getTime() - Date.parse(previous.uploadAcceptedAt)) : null };
     await tx.auditLog.update({ where: { id: record!.id }, data: { metadata: attempt } });
-    return attempt;
+    const institution = file.account?.institution?.trim().toLowerCase();
+    const institutionLabel = institution ? INSTITUTION_SUGGESTIONS.find(candidate =>
+      candidate.label.toLowerCase() === institution || candidate.aliases.some(alias => alias.toLowerCase() === institution),
+    )?.label : undefined;
+    const extension = /\.([a-z0-9]{1,8})$/i.exec(file.fileName.trim())?.[0].toLowerCase() ?? "";
+    const image = /^image\//i.test(file.fileType) || (extension !== ".pdf" && TRAINING_IMAGE_EXTENSIONS.some(value => value === extension));
+    const format = image ? "image" : PUBLIC_IMPORT_EXTENSIONS.some(value => value === extension)
+      ? extension.slice(1)
+      : file.fileType === "application/pdf" ? "pdf" : "other";
+    return { attempt, format, institution: institutionLabel ?? "unknown" };
   });
   if (result && claim.actorUserId) await capturePostHogServerEvent("import_attempt_finished", claim.actorUserId, {
-    measurement_version: 1, import_file_id: claim.importId, workspace_id: claim.workspaceId,
-    attempt_id: result.attemptId, attempt_number: result.attemptNumber,
-    first_attempt: result.attemptNumber === 1 && !result.historicalAttemptsUnknown,
-    historical_attempts_unknown: result.historicalAttemptsUnknown ?? false,
-    outcome: result.outcome, processing_phase: result.phase, duration_ms: result.durationMs,
-    upload_to_outcome_ms: result.uploadToOutcomeMs, upload_to_transaction_available_ms: result.uploadToTransactionAvailableMs,
+    measurement_version: 2, import_format: result.format, import_institution: result.institution, import_file_id: claim.importId, workspace_id: claim.workspaceId,
+    attempt_id: result.attempt.attemptId, attempt_number: result.attempt.attemptNumber,
+    first_attempt: result.attempt.attemptNumber === 1 && !result.attempt.historicalAttemptsUnknown,
+    historical_attempts_unknown: result.attempt.historicalAttemptsUnknown ?? false,
+    outcome: result.attempt.outcome, processing_phase: result.attempt.phase, duration_ms: result.attempt.durationMs,
+    upload_to_outcome_ms: result.attempt.uploadToOutcomeMs, upload_to_transaction_available_ms: result.attempt.uploadToTransactionAvailableMs,
     timing_boundary: "server_upload_accepted_to_transaction_observed", // Conservative server observation, not UI rendering.
   }).catch(() => undefined);
-  return result;
+  return result?.attempt ?? null;
 }
 
 /** Confirmation may happen after processing has returned a staged result.

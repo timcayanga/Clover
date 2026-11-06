@@ -88,7 +88,7 @@ assert.equal(malicious.from,undefined);
 assert.ok(!("balance" in malicious));
 const pageChatSource = readFileSync("app/api/adviser/chat/route.ts", "utf8");
 assert.match(pageChatSource,/id:pageContext.transactionId,workspaceId:workspace.id,deletedAt:null/);
-assert.match(pageChatSource,/loadCirclesWorkspaceData\(user, pageContext.circleId\)/);
+assert.match(pageChatSource,/loadCirclesWorkspaceData\(user, pageContext\.circleId, \{ now, includeMemberPhotos: false \}\)/);
 assert.match(pageChatSource,/!hasScopedPage && answerRoute.source === "local"/);
 assert.match(pageChatSource,/hasScopedPage \? undefined : buildAdviserChart/);
 console.log("Page Ask Clover: product-specific chips, route-group normalization, validated hints, Profile-scoped references and safe fallback passed.");

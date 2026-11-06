@@ -1,4 +1,5 @@
 "use client";
+import { circleExpensePayerTotals } from "../../shared/circle-expense-payers";
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import Link from "next/link";
 import { useExchangeRates } from "@/lib/use-exchange-rates";
@@ -116,6 +117,8 @@ export function CircleDetailWorkspace({
       name: m.isMe ? "Me" : m.displayName,
       avatarUrl: m.avatarUrl,
     }));
+  const [sharePayer, setSharePayer] = useState("");
+  const payerTotals = circleExpensePayerTotals(circle.expenses);
   const [listRevision, setListRevision] = useState(0);
   useEffect(() => {
     const refresh = () => {
@@ -805,6 +808,13 @@ export function CircleDetailWorkspace({
                     + Add Transaction
                   </button>
                   <label>
+                    Paid by
+                    <select value={sharePayer || members.find(member => member.isMe)?.id || ""} onChange={event => setSharePayer(event.target.value)}>
+                      <option value="" disabled>Choose a member</option>
+                      {people.map(person => <option key={person.id} value={person.id}>{person.name}</option>)}
+                    </select>
+                  </label>
+                  <label>
                     Search Transactions
                     <input
                       value={query}
@@ -855,6 +865,7 @@ export function CircleDetailWorkspace({
                                   action: "share_transaction",
                                   transactionId: r.id,
                                   visibility: "item",
+                                  paidByMemberId: sharePayer || undefined,
                                 },
                                 false,
                               ).catch(() => {})
@@ -897,6 +908,7 @@ export function CircleDetailWorkspace({
                         false,
                       )
                     }
+                    onPayerChange={(paidByMemberId) => run({ action: "update_expense_payer", id: e.id, paidByMemberId }, false)}
                     onRemove={() =>
                       void run(
                         { action: "unshare_transaction", id: e.id },
@@ -905,6 +917,12 @@ export function CircleDetailWorkspace({
                     }
                   />
                 ))}
+                {payerTotals.length ? (
+                  <section aria-label="Paid by member">
+                    <h3>Paid by member · recent shared expenses</h3>
+                    {payerTotals.map(total => <p key={total.id}>{total.name} · {money(total.amount, total.currency)}</p>)}
+                  </section>
+                ) : null}
                 {!circle.expenses.length ? (
                   <CircleEmpty title="No shared expenses yet" />
                 ) : null}
@@ -1148,6 +1166,7 @@ function Expense({
   format,
   onSave,
   onRemove,
+  onPayerChange,
   expanded,
   onExpand,
 }: {
@@ -1157,6 +1176,7 @@ function Expense({
   format: string;
   onSave: (items: SplitItem[]) => Promise<void>;
   onRemove: () => void;
+  onPayerChange: (id: string) => Promise<void>;
   expanded: boolean;
   onExpand: () => void;
 }) {
@@ -1214,7 +1234,7 @@ function Expense({
             </button>
           )}
           <small style={{ display: "block" }}>
-            {displayDate(e.date, format)}
+            {displayDate(e.date, format)}{e.kind === "shared_transaction" && ` · Paid by ${e.paidByName ?? "not recorded"}`}
           </small>
         </div>
         <span
@@ -1235,6 +1255,15 @@ function Expense({
           </button>
         ) : null}
       </div>
+      {expanded && editable && e.kind === "shared_transaction" ? (
+        <label>
+          Paid by
+          <select value={people.some(person => person.id === e.paidByMemberId) ? e.paidByMemberId ?? "" : ""} onChange={event => void onPayerChange(event.target.value).catch(() => {})}>
+            <option value="" disabled>Choose a member</option>
+            {people.map(person => <option key={person.id} value={person.id}>{person.name}</option>)}
+          </select>
+        </label>
+      ) : null}
       {expanded && e.visibility !== "summary" ? (
         <section
           className="circle-expense-detail"

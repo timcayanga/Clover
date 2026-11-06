@@ -1,4 +1,5 @@
 import { isTripContributionQuestion } from "@/lib/adviser-everyday";
+import { adviserRequestedCurrency } from "./adviser-facts";
 import { formatCurrencyAmount } from "@/lib/currency-format";
 
 /** Parse only explicit planning inputs. Unrecognized amounts/dates need clarification. */
@@ -8,9 +9,9 @@ export function spendingRoomOptions(question: string, currency = "PHP") {
   const horizonDays = window ? Number(window[1]) * (/week/i.test(window[2]) ? 7 : 1) : undefined;
   if (horizonDays !== undefined && (horizonDays < 1 || horizonDays > 90)) return null;
   if (window) rest = rest.replace(window[0], "");
-  const buffer = /\b(?:extra|additional)\s*(?:(PHP|USD|EUR|GBP|₱|\$)\s*)?([\d,]+(?:\.\d{1,2})?)\s*([kK])?\s*(?:buffer|reserve)\b/i.exec(rest);
+  const buffer = /\b(?:extra|additional)\s*(?:([A-Z]{3}|₱|\$)\s*)?([\d,]+(?:\.\d{1,2})?)\s*([kK])?\s*(?:buffer|reserve)\b/i.exec(rest);
   const bufferCurrency = buffer?.[1] === "₱" ? "PHP" : buffer?.[1] === "$" ? "USD" : buffer?.[1]?.toUpperCase();
-  if (bufferCurrency && bufferCurrency !== currency.toUpperCase()) return null;
+  if (bufferCurrency && (adviserRequestedCurrency(bufferCurrency) !== bufferCurrency || bufferCurrency !== currency.toUpperCase())) return null;
   const additionalBuffer = buffer ? Number(buffer[2].replaceAll(",", "")) * (buffer[3] ? 1000 : 1) : undefined;
   if (additionalBuffer !== undefined && (!Number.isFinite(additionalBuffer) || additionalBuffer < 0 || additionalBuffer > 1e9)) return null;
   if (buffer) rest = rest.replace(buffer[0], "");
