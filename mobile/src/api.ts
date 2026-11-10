@@ -1,4 +1,5 @@
 import { splitBillReadErrorCode } from "../../shared/split-bill-read";
+import { nativeUploadRejection } from "../../shared/native-upload";
 import { boundedRequest, RequestCancelledError, RequestTimeoutError } from "./request-lifecycle";
 import { apiBase } from "./api-base";
 export { apiBase } from "./api-base";
@@ -75,7 +76,10 @@ export async function apiRequest<T>(
     const code = description?.read_surface && error instanceof ApiError
       ? splitBillReadErrorCode(error.data?.code)
       : undefined;
-    finish(canceled ? "canceled" : "failed", { ...(code ? { error_code: code } : {}), status: error instanceof ApiError ? error.status : 0,
+    const uploadRejection = error instanceof ApiError && error.status === 422 &&
+      description?.operation === "POST /uploads/:id/complete"
+      ? nativeUploadRejection(error.data?.code) : undefined;
+    finish(canceled ? "canceled" : "failed", { ...(code ? { error_code: code } : {}), ...(uploadRejection ? { upload_rejection: uploadRejection } : {}), status: error instanceof ApiError ? error.status : 0,
       reason: canceled ? error.reason : timedOut ? "timeout" : error instanceof ApiError ? "http" : "network_or_response" });
     if (timedOut) throw new NetworkError(path.includes("/process")
       ? "The connection timed out. Check the import status before trying the upload again."

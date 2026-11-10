@@ -3,8 +3,11 @@ import fs from 'node:fs';
 import vm from 'node:vm';
 import ts from 'typescript';
 const compile = file => ts.transpileModule(fs.readFileSync(new URL(file, import.meta.url), 'utf8'), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, jsx: ts.JsxEmit.ReactJSX } }).outputText;
+const homeSource = fs.readFileSync(new URL('../app/(tabs)/index.tsx', import.meta.url), 'utf8');
+assert.ok(homeSource.indexOf('<FirstUseActivation') > 0 && homeSource.indexOf('<FirstUseActivation') < homeSource.indexOf('{!data ? ('),
+  'First-use actions must mount even if the Home balance request is still loading or failed');
 const loaders = {}; vm.runInNewContext(compile('../src/screen-refresh.ts'), { exports: loaders, Map, Set, Promise });
-const states = [], routes = [], requests = []; let stateIndex = 0, focus, cleanup;
+const states = [], routes = [], requests = [], telemetry = []; let stateIndex = 0, focus, cleanup;
 let payload = { state: 'start', workspaceId: 'profile-a' }, delayed = null, failAck = false;
 const session = { demo: false, profileId: 'profile-a', request: async (path, options) => {
   requests.push({ path, options }); if (options) { if (failAck && JSON.parse(options.body).action === "acknowledge") throw Error("Temporary failure"); return {}; }
@@ -13,10 +16,11 @@ const session = { demo: false, profileId: 'profile-a', request: async (path, opt
 } };
 const exports = {};
 vm.runInNewContext(compile('../src/first-use-activation.tsx'), { exports, encodeURIComponent, require: name => {
-  if (name === 'react') return { useState: value => { const i = stateIndex++; if (!(i in states)) states[i] = value; return [states[i], value => { states[i] = value; }]; }, useCallback: fn => fn };
+  if (name === 'react') return { useState: value => { const i = stateIndex++; if (!(i in states)) states[i] = value; return [states[i], value => { states[i] = value; }]; }, useCallback: fn => fn, useEffect: fn => fn() };
   if (name === 'react/jsx-runtime') return { jsx: (type, props) => ({ type, props }), jsxs: (type, props) => ({ type, props }), Fragment: 'Fragment' };
   if (name === 'expo-router') return { router: { push: route => routes.push(route) }, useFocusEffect: fn => { focus = fn; } };
   if (name === 'react-native') return { View: 'View' };
+  if (name === '../../shared/analytics') return { telemetry: (event, props) => telemetry.push({ event, ...props }) };
   if (name === './screen-refresh') return loaders;
   if (name === './session') return { useSession: () => session };
   if (name === './ui') return { ...Object.fromEntries(['Body','Button','Card','Heading'].map(k => [k,k])), money: (amount, currency) => `${currency} ${amount}` };
@@ -31,11 +35,15 @@ const tick = () => new Promise(resolve => setImmediate(resolve));
 render(); cleanup = focus(); await tick(); let nodes = render();
 assert(nodes.some(node => node.props.children === 'Start with one transaction'));
 nodes.find(node => node.props.title === 'Add a transaction').props.onPress(); assert.equal(routes[0], '/add-transaction');
+nodes.find(node => node.props.title === "Scan a receipt").props.onPress();
+nodes.find(node => node.props.title === "Choose a receipt or statement").props.onPress();
+assert.deepEqual(routes.slice(1).map(route => route.params.picker), ["camera", "file"]);
+assert.deepEqual(telemetry.filter(event => event.event === "activation_method_selected").map(event => event.method), ["manual", "camera", "file"]);
 payload = { state: 'result', workspaceId: 'profile-a', transaction: { id: 'saved-row', name: 'Synthetic lunch', amount: '120', currency: 'PHP', type: 'expense', needsReview: true } };
 await loaders.refreshScreen('/'); nodes = render();
 assert(nodes.some(node => node.props.children === 'Your first transaction is in Clover'), 'Background import completion refreshes the mounted Home card without another focus');
 assert(requests.some(request => request.options && JSON.parse(request.options.body).action === 'view'));
-nodes.find(node => node.props.title === 'View your transaction').props.onPress(); assert.equal(routes[1].params.id, 'saved-row');
+nodes.find(node => node.props.title === 'View your transaction').props.onPress(); assert.equal(routes[3].params.id, 'saved-row');
 assert(!JSON.stringify(render(true)).includes('PHP 120'), 'Home privacy also masks the first result');
 failAck = true; nodes.find(node => node.props.title === 'Got it').props.onPress(); await tick();
 assert(JSON.stringify(render()).includes('Could not dismiss this yet'), 'A failed acknowledgement explains why nothing changed');

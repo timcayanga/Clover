@@ -4,6 +4,7 @@ import { mkdtemp, writeFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { prisma } from "../lib/prisma";
+import { NATIVE_UPLOAD_PART_SIZE } from "../../shared/native-upload";
 import { nativeUploadRequest } from "../lib/native-upload-store";
 import { getLocalImportObjectPath } from "../lib/s3";
 import { listImportFileSummariesCompat } from "../lib/data-engine";
@@ -87,6 +88,28 @@ async function main() {
       return Response.json({ok:true,canonicalImportFileId:id});
     });
     assert.equal(imageResult.status,200);
+    const multiPart = Buffer.concat([
+      Buffer.from("%PDF-1.7\n"), Buffer.alloc(NATIVE_UPLOAD_PART_SIZE * 2, 65), Buffer.from("\n%%EOF"),
+    ]);
+    const parts = Array.from({ length: 3 }, (_, index) =>
+      multiPart.subarray(index * NATIVE_UPLOAD_PART_SIZE, (index + 1) * NATIVE_UPLOAD_PART_SIZE));
+    Object.assign(row, { state: "uploading", response: null, fileName: "multi-part.pdf", contentType: "application/pdf",
+      size: multiPart.length, parts: Object.fromEntries(parts.map((part, index) => [index, createHash("sha256").update(part).digest("hex")])) });
+    const putPart = (index: number, part: Buffer) => writeFile(getLocalImportObjectPath(`native-upload-parts/${id}/${index}`), part);
+    await Promise.all(parts.map((part, index) => putPart(index, part)));
+    await putPart(1, Buffer.alloc(parts[1].length, 66));
+    const completeParts = () => nativeUploadRequest(new Request("https://staging.clover.ph/api/mobile/v1/uploads/test/complete", {
+      method: "POST", body: "{}",
+    }), id, userId, workspaceId, "complete", async request => {
+      const form = await request.formData();
+      assert.deepEqual(Buffer.from(await (form.get("file") as File).arrayBuffer()), multiPart);
+      return Response.json({ ok: true });
+    });
+    await assert.rejects(completeParts(), /Upload verification failed/);
+    assert.equal(row.state, "uploading");
+    await putPart(1, parts[1]);
+    assert.equal((await completeParts()).status, 200);
+    assert.equal(row.state, "done");
     console.log("PASS bounded device OCR reaches the receipt processor alongside the exact original image");
     console.log("PASS native password retries preserve source bytes, forward corrected passwords, reuse acknowledged sources and prevent duplicate completion; recent history is bounded and excludes private storage metadata");
   } finally {

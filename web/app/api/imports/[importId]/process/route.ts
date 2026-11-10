@@ -1342,6 +1342,7 @@ const importJsonResponse: typeof NextResponse.json = (body, init) => {
 export async function POST(_request: Request, { params }: { params: Promise<{ importId: string }> }) {
   const requestStartedAt = Date.now();
   let stage = "initializing";
+  let password: string | undefined;
   let responsePlanTier: "free" | "pro" | "premium" | "unknown" = "unknown";
   // The parser worker is substantial. Start loading it while authentication,
   // upload decoding, and deterministic text extraction run so a cold function
@@ -1370,7 +1371,6 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
     let receiptCaptureLocation: ReturnType<typeof normalizeReceiptCaptureLocation> = null;
 
     let importFile = await fetchImportFileCompat(importId);
-    let password: string | undefined;
     let queued = false;
     // Callers must await this helper inside POST's try block so delayed parser
     // refusals reach the durable source-review handler instead of escaping as 500s.
@@ -2063,7 +2063,11 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
       // Transaction duplicates remain prevented by canonical-import election
       // and the confirmation lock, while each import retains its own audit raw.
       const rawStorageKey = String(importFile.storageKey ?? buildImportKey(importFile.workspaceId as string, importFile.fileName));
+      const finishRawStorage = startImportTiming(importId, "raw_source_storage");
       const uploadPromise = uploadObject(rawStorageKey, bytes, file.type || "application/octet-stream");
+      // Preflight can reject before the normal storage join. Observe the rejection
+      // here while retaining the original promise for the durable save barrier.
+      void uploadPromise.then(() => finishRawStorage(), () => finishRawStorage("failed"));
       const effectiveFileName = file.name || formFileName || "imported-file";
       const effectiveFileType = file.type || formFileType || "";
       const earlyImageUpload = isImageUploadFile(effectiveFileName, effectiveFileType);
@@ -2582,7 +2586,7 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
           });
         });
         try {
-          preflightText = await readImportedStatementTextWithCache(
+          preflightText = await measureImportTiming(importId, "pdf_preflight_extraction", () => readImportedStatementTextWithCache(
             {
               importFileId: importId,
               storageKey: String(importFile.storageKey ?? buildImportKey(importFile.workspaceId as string, importFile.fileName)),
@@ -2598,7 +2602,7 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
             password,
             pdfJsBaseUrl,
             importFileTextPromise
-          );
+          ));
           extractedText = preflightText.text;
           const detectedMetadata = detectStatementMetadataFromText(extractedText, effectiveFileName);
           const statementFingerprint = buildStatementFingerprint(extractedText, detectedMetadata, effectiveFileName, effectiveFileType || "application/octet-stream");
@@ -3306,7 +3310,9 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
     }
     if (importId) {
       if (isImportPasswordError(error, errorMessage)) {
-        const passwordMessage = "This file is password-protected. Enter the password to continue.";
+        const passwordMessage = password
+          ? "That password didn’t unlock the file. Check the password from your bank and try again."
+          : "This file is password-protected. Enter the password to continue.";
         await updateImportFileCompat(importId, {
           status: "failed",
           processingPhase: "password_required",

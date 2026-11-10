@@ -225,6 +225,7 @@ export default function Home() {
           </View>
         </View>
       </Modal>
+      <FirstUseActivation key={session.profileId} hidden={hidden} />
       {error ? <Notice>{error}</Notice> : null}
       {!data ? (
         <>
@@ -324,7 +325,6 @@ export default function Home() {
               ))}
             </View>
           </LinearGradient>
-          <FirstUseActivation key={session.profileId} hidden={hidden} />
           <HomeQuickAccess />
           <HomeAdviser insights={data.insights ?? []} hidden={hidden} />
           {detailsError ? <Body>Budgets and suggestions could not load. Pull down to retry.</Body> : data.detailsPending ? <Body>Loading budgets and suggestions…</Body> : null}

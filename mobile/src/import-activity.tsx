@@ -34,7 +34,8 @@ export function ImportActivity() {
   const pending = useRef(new Set<string>());
   const files = session.queuedFiles.filter(file => file.workspaceId === session.profileId &&
     (file.state !== "done" || pending.current.has(file.id)) && !dismissed.includes(file.id) && (!file.progressNoticeSeen || shownThisSession.current.has(file.id)));
-  const file = files.find(file => !["done", "attention", "paused"].includes(file.state)) ?? files.at(-1);
+  const file = files.find(file => file.state === "attention" && file.needsPassword)
+    ?? files.find(file => !["done", "attention", "paused"].includes(file.state)) ?? files.at(-1);
   useEffect(() => {
     if (path.startsWith("/import/") || path === "/onboarding" || file?.state !== "attention" || file.progressNoticeSeen) return;
     // Keep this notice visible now, but do not reopen it on the next launch.
@@ -103,6 +104,7 @@ export function ImportActivity() {
   const active = !done && !publishing && !needsReview && !needsPassword;
   const step = done ? "Import complete" : publishing ? "Updating your page" : needsPassword ? "Statement password needed" : needsReview ? "Import needs attention" : paused ? "Import paused" : waiting ? "Waiting for connection" : file.state === "draft" || file.state === "queued" ? "Preparing file" : file.state === "sending" ? "Uploading file" : getImportStageLabel(file.message || "Reading file", progress);
   const resume = () => run(async () => { await session.fileQueue!.enqueue(file.id); if (!waiting) await session.fileQueue!.flush(); });
+  const sourceBlocked = ["non_financial_file", "source_review_required", "repair_needed"].includes(file.processingPhase ?? "");
   const receiptReview = needsReview && file.processingPhase === "receipt_review_required";
   const review = () => router.push({ pathname: "/import/[id]", params: receiptReview ? { id: file.canonicalId ?? file.id, server: "1", review: "receipt" } : file.originalRetained !== false
     ? { id: file.id } : { id: file.canonicalId ?? file.id, server: "1" } });
@@ -140,7 +142,7 @@ export function ImportActivity() {
             await session.fileQueue!.flush();
           })} /> : null}
         {needsReview && !needsPassword ? <Button secondary title={receiptReview ? "Review receipt" : "Review"} onPress={review}/> : null}
-        {!needsPassword && ((needsReview && file.originalRetained !== false)) ?
+        {!needsPassword && !sourceBlocked && needsReview && file.originalRetained !== false ?
           <Button secondary title="Resume upload" disabled={busy} onPress={() => void run(async () => {
             await session.fileQueue!.enqueue(file.id);
             if (!waiting) await session.fileQueue!.flush();

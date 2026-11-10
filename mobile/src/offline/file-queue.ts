@@ -1,6 +1,6 @@
 import type { ReceiptCaptureLocation } from "../../../shared/receipt-capture-location";
 import { telemetry } from "../../../shared/analytics";
-import { NATIVE_UPLOAD_MAX_SIZE, uploadSizeProblem } from "../../../shared/native-upload";
+import { NATIVE_UPLOAD_MAX_SIZE, nativeUploadRejection, uploadSizeProblem } from "../../../shared/native-upload";
 import type { OfflineStore } from "./types";
 import type { DeviceTextEvidence } from "../../../shared/device-text-evidence";
 export type QueuedFile = {
@@ -188,47 +188,56 @@ export class FileQueue {
       this.current={file,controller,finished};
       try {
         await this.authorize(file.workspaceId);
-        // A timed-out upload may already exist. Always inspect its stable ID first.
+        const unlock = async (password: string) => {
+          delete file.password;
+          file.state = "finalizing";
+          file.message = "Unlocking and reading your statement…";
+          await this.store.set("file:" + file.id, file);
+          this.emit();
+          const result = await this.transport.unlock!(file, password);
+          file.canonicalId = result.canonicalId ?? file.canonicalId;
+          file.needsPassword = false;
+          file.state = "processing";
+        };
+        // A password challenge confirms the server already has the parts.
+        // A deliberate unlock can go straight to that same upload ID.
         let exists = false;
-        try {
-          const status = await this.transport.status(file);
+        if (file.needsPassword && file.password && this.transport.unlock) {
+          await unlock(file.password);
           exists = true;
-          file.progress = Math.max(file.progress ?? 0, status.progress ?? 0);
-          file.message = status.message;
-          file.processingPhase = status.processingPhase;
-          file.canResume = status.canResume;
-          file.needsPassword = status.needsPassword && !status.done;
-          file.error = undefined;
-          if (status.cancelled) {
-            await this.store.remove("file:" + file.id);
-            await this.store.remove("file-bytes:" + file.id);
-            continue;
+        } else {
+          // Reconcile a lost acknowledgement before sending bytes.
+          try {
+            const status = await this.transport.status(file);
+            exists = true;
+            file.progress = Math.max(file.progress ?? 0, status.progress ?? 0);
+            file.message = status.message;
+            file.processingPhase = status.processingPhase;
+            file.canResume = status.canResume;
+            file.needsPassword = status.needsPassword && !status.done;
+            file.error = undefined;
+            if (status.cancelled) {
+              await this.store.remove("file:" + file.id);
+              await this.store.remove("file-bytes:" + file.id);
+              continue;
+            }
+            file.serverPaused = status.paused;
+            file.state = status.paused ? "paused" : status.done
+              ? "done"
+              : status.failed
+                ? "attention"
+                : "processing";
+            if (status.needsPassword && !status.done) {
+              file.state = "attention";
+              if (file.password && this.transport.unlock) {
+                await unlock(file.password);
+              } else file.error = status.message || "Enter the statement password to continue.";
+            } else if (status.failed) {
+              file.error = status.message || "This file needs review. Open it to check the details.";
+            }
+          } catch (e) {
+            if (exists || (e as { status?: number }).status !== 404) throw e;
           }
-          file.serverPaused = status.paused;
-          file.state = status.paused ? "paused" : status.done
-            ? "done"
-            : status.failed
-              ? "attention"
-              : "processing";
-          if (status.needsPassword && !status.done) {
-            file.state = "attention";
-            if (file.password && this.transport.unlock) {
-              const password = file.password;
-              delete file.password;
-              file.state = "finalizing";
-              file.message = "Unlocking and reading your statement…";
-              await this.store.set("file:" + file.id, file);
-              this.emit();
-              const result = await this.transport.unlock(file, password);
-              file.canonicalId = result.canonicalId ?? file.canonicalId;
-              file.needsPassword = false;
-              file.state = "processing";
-            } else file.error = status.message || "Enter the statement password to continue.";
-          } else if (status.failed) {
-            file.error = status.message || "This file needs review. Open it to check the details.";
-          }
-        } catch (e) {
-          if (exists || (e as { status?: number }).status !== 404) throw e;
         }
         if (!exists && (file.originalRetained === false || file.canonicalId)) {
           throw Object.assign(new Error("The saved import could not be found. Please check your import history."), { status: 404 });
@@ -267,9 +276,14 @@ export class FileQueue {
         }
         const status = (e as { status?: number }).status;
         file.error = (e as Error).message;
-        if ((e as { data?: { code?: string } }).data?.code === "IMPORT_PASSWORD_REQUIRED" ||
-            (status === 422 && /password/i.test(file.error))) {
+        const rejection = nativeUploadRejection((e as { data?: { code?: unknown } }).data?.code);
+        if (rejection === "password_required" || (status === 422 && rejection === "unclassified" && /password/i.test(file.error))) {
           file.needsPassword = true;
+          file.processingPhase = "password_required";
+          delete file.password;
+        } else if (rejection !== "unclassified") {
+          file.processingPhase = rejection === "visual_repair_needed" ? "repair_needed" : rejection;
+          file.needsPassword = false;
           delete file.password;
         }
         if (status && status < 500) file.state = "attention";

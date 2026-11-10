@@ -504,10 +504,11 @@ test("transfer completion never claims parsing and saving are finished", () => {
   assert.equal(uploadProgress({state:"sending",size:0,sentBytes:0,progress:NaN}),0);
 });
 test("wrong then correct PDF password retries the same completed parts without re-uploading", async () => {
-  const store = memory(); let received = false, unlocked = false, uploads = 0, unlocks = 0;
+  const store = memory(); let received = false, unlocked = false, uploads = 0, unlocks = 0, statusChecks = 0;
   const passwordError = () => Object.assign(new Error("This file is password-protected. Enter the password to continue."), {status:422,data:{code:"IMPORT_PASSWORD_REQUIRED"}});
   const q = new FileQueue(store, {
     status: async () => {
+      statusChecks++;
       if (!received) throw Object.assign(new Error("missing"), {status:404});
       return {done:unlocked,failed:!unlocked,needsPassword:!unlocked,message:unlocked ? "Records ready" : "Enter the statement password."};
     },
@@ -522,6 +523,7 @@ test("wrong then correct PDF password retries the same completed parts without r
   assert.equal((await q.list())[0].password,undefined,"Rejected passwords must be discarded");
   await q.flush(); assert.equal(unlocks,1,"Wrong passwords must not retry in a loop");
   await q.enqueue(file.id,"fictional-correct-password"); await q.flush();
+  assert.equal(statusChecks, 1, "Both unlocks should skip a redundant status round trip");
   assert.equal(uploads,1); assert.equal(unlocks,2); assert.equal((await q.list())[0].state,"processing");
   assert.equal((await q.list())[0].password,undefined);
   await assert.rejects(q.bytes(file),/no longer/);

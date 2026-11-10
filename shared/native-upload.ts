@@ -22,3 +22,14 @@ export function nativeUploadPartBytes(size: number, index: number) {
     size - index * NATIVE_UPLOAD_PART_SIZE,
   );
 }
+
+/** Transport telemetry uses a fixed vocabulary and never records parser text. */
+export function nativeUploadRejection(code: unknown) {
+  switch (code) {
+    case "IMPORT_PASSWORD_REQUIRED": return "password_required";
+    case "I-108": return "non_financial_file";
+    case "I-109": return "source_review_required";
+    case "I-104": return "visual_repair_needed";
+    default: return "unclassified";
+  }
+}

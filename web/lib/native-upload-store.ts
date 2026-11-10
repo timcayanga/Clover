@@ -1,5 +1,6 @@
 import { normalizeReceiptCaptureLocation } from "../../shared/receipt-capture-location";
 import { downloadImportObject } from "./import-storage.server";
+import { measureImportTiming } from "./import-timing";
 import { NativeInputError } from "./native-input-error";
 import { createHash } from "node:crypto";
 import { readFile, unlink } from "node:fs/promises";
@@ -19,6 +20,7 @@ import {
   NATIVE_UPLOAD_MAX_SIZE,
   NATIVE_UPLOAD_PART_SIZE,
   nativeUploadPartBytes,
+  nativeUploadRejection,
   uploadSizeProblem,
   isUploadPhoto,
 } from "../../shared/native-upload";
@@ -307,25 +309,27 @@ export async function nativeUploadRequest(
       { status: 409 },
     );
   try {
-    const parts: Buffer[] = [];
-    if (retrySavedPassword && saved?.storageKey) parts.push(Buffer.from(await downloadImportObject(saved.storageKey)));
-    for (let i = 0; !retrySavedPassword && i < Math.ceil(row.size / NATIVE_UPLOAD_PART_SIZE); i++) {
-      if (!row.parts[String(i)])
-        throw new NativeInputError(
-          "Some upload parts are missing. Resume the upload.",
-        );
-      const bytes = await getPart(id, i);
-      if (
-        bytes.length !== nativeUploadPartBytes(row.size, i) ||
-        createHash("sha256").update(bytes).digest("hex") !==
-          row.parts[String(i)]
-      )
-        throw new NativeInputError(
-          "Upload verification failed. Choose the original file again.",
-        );
-      parts.push(bytes);
-    }
-    const bytes = Buffer.concat(parts);
+    const bytes = await measureImportTiming(id, "native_source_assembly", async () => {
+      if (retrySavedPassword && saved?.storageKey) return Buffer.from(await downloadImportObject(saved.storageKey));
+      const count = Math.ceil(row.size / NATIVE_UPLOAD_PART_SIZE);
+      const parts: Buffer[] = [];
+      // Bound R2 concurrency while preserving exact byte order and per-part validation.
+      for (let first = 0; first < count; first += 4) {
+        const batch = await Promise.all(Array.from({ length: Math.min(4, count - first) }, async (_, offset) => {
+          const index = first + offset;
+          const digest = row.parts[String(index)];
+          if (!digest) throw new NativeInputError("Some upload parts are missing. Resume the upload.");
+          const part = await getPart(id, index);
+          if (part.length !== nativeUploadPartBytes(row.size, index) ||
+              createHash("sha256").update(part).digest("hex") !== digest) {
+            throw new NativeInputError("Upload verification failed. Choose the original file again.");
+          }
+          return part;
+        }));
+        parts.push(...batch);
+      }
+      return Buffer.concat(parts);
+    });
     const problem = validateImportFileBytes({
       fileName: row.fileName,
       contentType: row.contentType,
@@ -347,6 +351,14 @@ export async function nativeUploadRequest(
     const result = await withMobileRequestContext(userId, forwarded, () =>
       withCompletedNativeUpload(() => processor(forwarded, id)),
     );
+    if (result.status === 422) {
+      const rejected = await result.clone().json().catch(() => null);
+      console.info("[native-upload-rejected]", {
+        importId: id,
+        reason: nativeUploadRejection(rejected?.code),
+        passwordSupplied: Boolean(password),
+      });
+    }
     if (result.ok) {
       const fullResponse = await result.clone().json();
       const response = Object.fromEntries(

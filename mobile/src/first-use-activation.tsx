@@ -1,5 +1,6 @@
 import { createScreenDataLoader, registerScreenRefresh } from "./screen-refresh";
-import { useCallback, useState } from "react";
+import { telemetry } from "../../shared/analytics";
+import { useCallback, useEffect, useState } from "react";
 import { router, useFocusEffect } from "expo-router";
 import { View } from "react-native";
 import type { FirstUseActivation as Snapshot } from "../../shared/first-use-activation";
@@ -13,7 +14,6 @@ export function FirstUseActivation({ hidden = false }: { hidden?: boolean }) {
   const [acknowledgedId, setAcknowledgedId] = useState<string | null>(null);
   useFocusEffect(useCallback(() => {
     let active = true;
-    setSnapshot(null);
     if (session.demo || !session.profileId) return () => { active = false; };
     const refresh = createScreenDataLoader({
       load: () => session.request<{ activation: Snapshot }>(`activation?workspaceId=${encodeURIComponent(session.profileId)}`),
@@ -30,15 +30,25 @@ export function FirstUseActivation({ hidden = false }: { hidden?: boolean }) {
     const unregister = registerScreenRefresh("/", refresh);
     return () => { active = false; unregister(); };
   }, [session.demo, session.profileId, session.request]));
-  if (!snapshot || snapshot.workspaceId !== session.profileId || snapshot.state === "hidden" || (snapshot.transaction && snapshot.transaction.id === acknowledgedId)) return null;
+  const state = !session.demo && snapshot?.workspaceId === session.profileId &&
+    (!snapshot.transaction || snapshot.transaction.id !== acknowledgedId) ? snapshot.state : "hidden";
+  useEffect(() => {
+    if (state !== "hidden") telemetry("activation_prompt_viewed", { activation_state: state, surface: "home" });
+  }, [state, session.profileId]);
+  if (!snapshot || state === "hidden") return null;
   const transaction = snapshot.transaction;
+  const selectMethod = (method: "manual" | "camera" | "file") => {
+    telemetry("activation_method_selected", { method, surface: "home" });
+    if (method === "manual") router.push("/add-transaction");
+    else router.push({ pathname: "/(tabs)/add", params: { entry: `upload-${method}`, picker: method } });
+  };
   return <Card>
     {snapshot.state === "start" ? <>
       <Heading>Start with one transaction</Heading>
-      <Body>Add something you spent or earned, or upload a receipt or statement. Available on Free.</Body>
-      <Button title="Add a transaction" onPress={() => router.push("/add-transaction")} />
-      <Button secondary title="Upload a receipt or statement" onPress={() => router.push({ pathname: "/(tabs)/add", params: { entry: "upload-file", picker: "file" } })} />
-      <Body>Use Cash to start. You can add another account later.</Body>
+      <Body>Record something you spent or earned. You can start with Cash and add an account later.</Body>
+      <Button title="Add a transaction" onPress={() => selectMethod("manual")} />
+      <Button secondary title="Scan a receipt" onPress={() => selectMethod("camera")} />
+      <Button secondary title="Choose a receipt or statement" onPress={() => selectMethod("file")} />
     </> : transaction ? <>
       <Heading>Your first transaction is in Clover</Heading>
       <Body>{transaction.name} · {hidden ? "******" : money(transaction.amount, transaction.currency)}</Body>

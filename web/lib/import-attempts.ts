@@ -143,6 +143,7 @@ export async function finishImportAttempt(claim: Claim, threw: boolean) {
     first_attempt: result.attempt.attemptNumber === 1 && !result.attempt.historicalAttemptsUnknown,
     historical_attempts_unknown: result.attempt.historicalAttemptsUnknown ?? false,
     outcome: result.attempt.outcome, processing_phase: result.attempt.phase, duration_ms: result.attempt.durationMs,
+    upload_to_attempt_start_ms: Math.max(0, Date.parse(result.attempt.startedAt) - Date.parse(result.attempt.uploadAcceptedAt)),
     upload_to_outcome_ms: result.attempt.uploadToOutcomeMs, upload_to_transaction_available_ms: result.attempt.uploadToTransactionAvailableMs,
     timing_boundary: "server_upload_accepted_to_transaction_observed", // Conservative server observation, not UI rendering.
   }).catch(() => undefined);
