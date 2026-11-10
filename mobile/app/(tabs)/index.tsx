@@ -1,3 +1,4 @@
+import { clearWidgetSnapshot, hiddenBalancesKey } from "../../src/widget-snapshot";
 import { HomePendingSplitBills } from "../../src/home-pending-split-bills";
 import { dateInTimeZone, paymentCountdown, shortPaymentDate } from "../../../shared/home-return";
 import { nativeStartup } from "../../src/startup-timing";
@@ -73,7 +74,7 @@ type HomeData = HomeSections & {
     currency?: string;
   }[];
 };
-const hiddenKey = "clover.home.hide-balances";
+
 export default function Home() {
   const { colors, styles } = useTheme();
   const session = useSession();
@@ -110,8 +111,8 @@ export default function Home() {
     let active = true;
     const read =
       Platform.OS === "web"
-        ? Promise.resolve(globalThis.localStorage?.getItem(hiddenKey))
-        : SecureStore.getItemAsync(hiddenKey);
+        ? Promise.resolve(globalThis.localStorage?.getItem(hiddenBalancesKey))
+        : SecureStore.getItemAsync(hiddenBalancesKey);
     void read
       .then((value) => {
         if (active) setHidden(value === "true");
@@ -124,12 +125,14 @@ export default function Home() {
   const toggleHidden = () => {
     const next = !hidden;
     setHidden(next);
+    if (next) void clearWidgetSnapshot();
     if (Platform.OS === "web") {
       try {
-        globalThis.localStorage?.setItem(hiddenKey, String(next));
+        globalThis.localStorage?.setItem(hiddenBalancesKey, String(next));
       } catch {}
     } else
-      void SecureStore.setItemAsync(hiddenKey, String(next)).catch(() => {});
+      void SecureStore.setItemAsync(hiddenBalancesKey, String(next))
+        .then(() => { if (!next && Platform.OS === "ios") session.refresh(); }).catch(() => {});
   };
   const load = useCallback(async () => {
     if (session.demo) {

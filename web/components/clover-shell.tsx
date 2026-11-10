@@ -2314,7 +2314,7 @@ export function CloverShell({
                       title={`Open ${notification.productLabel}`}
                       onClick={(event) => handleNavigationLinkClick(event, notification.productHref)}
                     >
-                      <img src={getNavigationIconSrc(notification.product)} alt="" aria-hidden="true" />
+                      <img src={notification.iconSrc || getNavigationIconSrc(notification.product)} alt="" aria-hidden="true" />
                     </Link>
                     <Link
                       href={notification.href ?? notification.productHref}

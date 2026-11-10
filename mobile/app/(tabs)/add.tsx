@@ -52,10 +52,14 @@ export default function Add({ sheet = false }: { sheet?: boolean } = {}) {
   const [tableMode, setTableMode] = useState(false);
   const [tab, setTab] = useState("manual");
   const [draft, setDraft] = useState(emptyTransaction);
-  const { entry, picker, importMode, type } = useLocalSearchParams<{
+  const { entry, picker, importMode, type, amount, accountId, widgetCategory, widgetPanel } = useLocalSearchParams<{
     importMode?: "receipt" | "statement" | "portfolio" | "account_detail";
     entry?: string;
-    type?: "expense" | "income";
+    type?: "expense" | "income" | "transfer";
+    amount?: string;
+    accountId?: string;
+    widgetCategory?: string;
+    widgetPanel?: "category" | "account";
     picker?: string;
   }>();
   const handledPicker = useRef(false);
@@ -71,8 +75,10 @@ export default function Add({ sheet = false }: { sheet?: boolean } = {}) {
   }), [sheet]));
   useEffect(() => {
     setTab(entry?.startsWith("upload-") ? "upload" : "manual");
-    setDraft({...emptyTransaction(),type:type==="income"?"income":"expense"});
-  }, [entry, type, session.profileId]);
+    setDraft({ ...emptyTransaction(), type: type === "income" || type === "transfer" ? type : "expense",
+      amount: typeof amount === "string" && /^\d{1,12}(\.\d{0,2})?$/.test(amount) ? amount : "",
+      widgetAccountId: accountId, widgetCategory, widgetPanel });
+  }, [entry, type, amount, accountId, widgetCategory, widgetPanel, session.profileId]);
   const [locationFix, setLocationFix] = useState<ReceiptLocationFix | null>(null);
   const [locationBusy, setLocationBusy] = useState(false);
   const [locationNotice, setLocationNotice] = useState("");
@@ -239,7 +245,7 @@ export default function Add({ sheet = false }: { sheet?: boolean } = {}) {
       setBusy(false);
     }
   };
-  // Only onboarding's explicit upload choice sets this parameter. Consume it once.
+  // Onboarding and launcher shortcuts can explicitly open a picker. Consume it once.
   useEffect(() => {
     if (
       handledPicker.current ||

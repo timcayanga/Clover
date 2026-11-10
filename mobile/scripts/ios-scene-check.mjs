@@ -59,7 +59,30 @@ try {
   assert.ok(existsSync(join(native, "Clover.entitlements")));
   const entitlements = parse(readFileSync(join(native, "Clover.entitlements"), "utf8"));
   assert.deepEqual(entitlements["com.apple.developer.applesignin"], ["Default"]);
-  console.log("iOS scene lifecycle: clean prebuild, factory wiring, deep links, permission purposes and Apple sign-in passed.");
+  assert.deepEqual(plist.UIApplicationShortcutItems.map(item => item.UIApplicationShortcutItemType),
+    ["expense", "receipt", "transactions", "ask"].map(action => `ph.clover.launcher.${action}`));
+  const widgetDir = join(project, "ios", "CloverQuickActions");
+  const extensionPlist = parse(readFileSync(join(widgetDir, "CloverQuickActions-Info.plist"), "utf8"));
+  const widgetEntitlements = parse(readFileSync(join(widgetDir, "CloverQuickActions.entitlements"), "utf8"));
+  assert.deepEqual(entitlements["com.apple.security.application-groups"], ["group.ph.clover.app.widgets"]);
+  assert.deepEqual(widgetEntitlements["com.apple.security.application-groups"], entitlements["com.apple.security.application-groups"]);
+  assert.equal(plist.CloverWidgetGroup, entitlements["com.apple.security.application-groups"][0]);
+  assert.equal(extensionPlist.NSExtension.NSExtensionPointIdentifier, "com.apple.widgetkit-extension");
+  const { project: parseProject } = require("xcode");
+  const xcode = parseProject(join(project, "ios", "Clover.xcodeproj", "project.pbxproj")).parseSync();
+  const objects = xcode.hash.project.objects;
+  const host = xcode.getFirstTarget().firstTarget;
+  const widget = Object.values(objects.PBXNativeTarget).find(item => item?.productName === '"CloverQuickActions"');
+  assert(widget, "The generated project must have a WidgetKit target");
+  assert(host.dependencies.some(ref =>
+    objects.PBXTargetDependency[ref.value]?.target_comment?.includes("CloverQuickActions")));
+  assert(host.buildPhases.some(ref => ref.comment === "Embed Clover Widget"));
+  const resources = widget.buildPhases.flatMap(ref => objects.PBXResourcesBuildPhase?.[ref.value]?.files ?? []);
+  for (const name of ["mark.png", "bpi.png", "waves_large.png", "Poppins-SemiBold.ttf"]) {
+    assert(existsSync(join(widgetDir, name)));
+    assert(resources.some(ref => ref.comment.startsWith(name)), `Missing widget bundle resource: ${name}`);
+  }
+  console.log("iOS scene lifecycle: clean prebuild, factory wiring, deep links, permission purposes, Apple sign-in and embedded WidgetKit target passed.");
 } finally {
   rmSync(project, { recursive: true, force: true });
 }

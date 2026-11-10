@@ -122,6 +122,8 @@
 .finverse-bank-picker button:disabled { opacity:.6; cursor:wait; }
 
 .finverse-progress { display:grid; gap:16px; padding:24px; text-align:center; border-radius:20px; background:var(--surface-2, #f4f8fa); }
+.finverse-progress-actions { display: flex; justify-content: center; align-items: center; gap: 8px; }
+.finverse-progress-actions > .button { flex: 0 1 auto; width: auto; padding-inline: 12px; }
 .finverse-progress__spinner { width:32px;height:32px;border:3px solid #d8eef0;border-top-color:var(--teal,#03a8c0);border-radius:50%;justify-self:center;animation:finverse-spin 1s linear infinite; }
 @keyframes finverse-spin { to { transform:rotate(360deg); } }
 @media(prefers-reduced-motion:reduce){.finverse-progress__spinner{animation:none;}}

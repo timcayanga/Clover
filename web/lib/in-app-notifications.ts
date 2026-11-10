@@ -8,6 +8,7 @@ export type InAppNotification = {
   product: NavigationIconName;
   productLabel: string;
   productHref: string;
+  iconSrc?: string;
   title: string;
   message: string;
   tone: InAppNotificationTone;

@@ -1,3 +1,4 @@
+import { BankLogo } from "../src/finverse-bank-picker";
 import { OnboardingMissions } from "../src/onboarding-missions";
 import { Text } from "../src/app-text";
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -15,6 +16,7 @@ type Feed = {
     message: string;
     tone: string;
     productLabel: string;
+    iconSrc?: string;
     createdAt: string;
     href: string | null;
     ctaLabel: string | null;
@@ -127,9 +129,10 @@ export default function Notifications() {
       ) : null}
       {visible.map((item) => (
         <Card key={item.id}>
-          <Text style={{ color: colors.muted, fontSize: 12 }}>
-            {item.productLabel}
-          </Text>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+            {item.iconSrc ? <BankLogo path={item.iconSrc} size={24} /> : null}
+            <Text style={{ color: colors.muted, fontSize: 12 }}>{item.productLabel}</Text>
+          </View>
           <Text
             accessibilityRole="header"
             style={{

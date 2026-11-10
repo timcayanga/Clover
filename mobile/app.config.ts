@@ -1,17 +1,28 @@
 import type { ExpoConfig } from "expo/config";
 
+const iosBundleIdentifier = process.env.CLOVER_IOS_BUNDLE_ID || "ph.clover.preview";
+
 const config: ExpoConfig = {
   name: process.env.CLOVER_APP_NAME || "Clover Preview",
   slug: "clover-mobile",
   owner: "clover-innovations",
-  extra: { eas: { projectId: "742a3fe2-1cb2-4d71-8ed7-bc7e2e89b0ff" } },
+  extra: {
+    eas: {
+      projectId: "742a3fe2-1cb2-4d71-8ed7-bc7e2e89b0ff",
+      build: { experimental: { ios: { appExtensions: [{
+        targetName: "CloverQuickActions",
+        bundleIdentifier: `${iosBundleIdentifier}.QuickActions`,
+        entitlements: { "com.apple.security.application-groups": [`group.${iosBundleIdentifier}.widgets`] },
+      }] } } },
+    },
+  },
   scheme: process.env.CLOVER_APP_SCHEME || "clover-preview",
-  version: "1.1.2",
+  version: "1.1.3",
   icon: "./assets/clover-liquid-glass-icon.png",
   userInterfaceStyle: "automatic",
   orientation: "default",
   ios: {
-    bundleIdentifier: process.env.CLOVER_IOS_BUNDLE_ID || "ph.clover.preview",
+    bundleIdentifier: iosBundleIdentifier,
     appleTeamId: "6XX38GYURG",
     supportsTablet: true,
     usesAppleSignIn: true,
@@ -51,6 +62,7 @@ const config: ExpoConfig = {
   },
   plugins: [
     "expo-router",
+    "./plugins/with-clover-launcher.cjs",
     "expo-apple-authentication",
     [
       "expo-splash-screen",

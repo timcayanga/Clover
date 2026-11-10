@@ -3,6 +3,7 @@ import {build} from 'esbuild';
 import {createRequire} from 'node:module';
 import {resolve} from 'node:path';
 import {bankWarningStage,bankDisconnectDeadline,inactivityDeadline,retainedBankLinks,isPendingBankSelection} from '../../shared/finverse-lifecycle';
+import { pendingBankAttempts } from "../lib/finverse-bank-presentation";
 async function main(){
  for (const status of ['cancelled','disconnected','disconnect_pending']) assert.equal(isPendingBankSelection(status,false,null),false);
  for (const status of ['link_pending','authorizing','error']) assert.equal(isPendingBankSelection(status,false,null),true);
@@ -16,6 +17,27 @@ async function main(){
  assert.equal(bankWarningStage(new Date(+now+3*864e5),now),3);
  assert.equal(+bankDisconnectDeadline(new Date(0),new Date(0),now,null),+now+14*864e5);
  assert.equal(+bankDisconnectDeadline(new Date(0),new Date(0),new Date(0),now),+now+14*864e5);
+ const pending = {
+   id: "active", workspaceId: "personal", institutionName: "BPI", institutionId: null,
+   rawLoginIdentity: null, loginIdentityId: "login-bpi", status: "awaiting_selection",
+   createdAt: now, lastSyncedAt: null, disconnectRequestedAt: null,
+   encryptedRefreshToken: "fixture", encryptedAccessToken: null,
+ };
+ const recovered = pendingBankAttempts([
+   { ...pending, id: "abandoned", status: "link_pending", encryptedRefreshToken: null, loginIdentityId: null },
+   { ...pending, id: "repeated", status: "error", createdAt: new Date(+now - 1) },
+   { ...pending, id: "failed-retry", status: "error", loginIdentityId: "another-failed-bpi-login" },
+   { ...pending, id: "generic", institutionName: "Linked bank", loginIdentityId: "generic" },
+   { ...pending, id: "stopped", disconnectRequestedAt: now },
+   { ...pending, id: "recovered", institutionName: "Linked bank", loginIdentityId: "metrobank",
+     rawLoginIdentity: { institution: { institution_name: "Metrobank" } } },
+   { ...pending, id: "other-login", loginIdentityId: "second-bpi" },
+   pending,
+ ], () => false);
+ assert.deepEqual(new Set(recovered.map(row => row.id)), new Set(["active", "recovered", "other-login"]));
+ assert.match(recovered.find(row => row.id === "active")?.logoUrl ?? "", /bpi/i);
+ assert.match(recovered.find(row => row.id === "recovered")?.name ?? "", /metrobank/i);
+ assert.equal(recovered.find(row => row.id === "active")?.createdAt, now);
  const links=[{id:'a',retainOnDowngrade:false,lastSeenAt:new Date(3)},{id:'b',retainOnDowngrade:true,lastSeenAt:new Date(1)},{id:'c',retainOnDowngrade:false,lastSeenAt:new Date(2)}];
  assert.deepEqual(retainedBankLinks(links,2).map(l=>l.id),['b','a']);assert.equal(retainedBankLinks(links,0).length,0);assert.equal(retainedBankLinks(links,5).length,3);
  const fixture=`

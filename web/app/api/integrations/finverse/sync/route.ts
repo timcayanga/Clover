@@ -219,6 +219,12 @@ export async function POST(request: Request) {
 
     const accountResult = await getFinverseAccounts(token);
     const resolvedInstitutionName = institutionName || (typeof accountResult.institution?.institution_name === "string" ? accountResult.institution.institution_name : undefined);
+    if (!institutionName && resolvedInstitutionName) {
+      await prisma.finverseConnection.updateMany({
+        where: { id: connection.id, disconnectRequestedAt: null, status: { not: "disconnected" } },
+        data: { institutionName: resolvedInstitutionName, institutionId: institutionId || (typeof accountResult.institution?.institution_id === "string" ? accountResult.institution.institution_id : undefined) },
+      });
+    }
     const providerAccounts = (accountResult.accounts ?? []).filter(a => a.is_parent !== true);
     // Avoid redundant requests and bound optional full-number discovery to three at a time.
     for (let index = 0; index < providerAccounts.length; index += 3) {

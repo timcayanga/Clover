@@ -316,7 +316,7 @@ export function AccountEditor({
         <Body>Loading account details…</Body>
       ) : editing ? (
         <AddEntryMethods
-          connect={draft.type !== "investment" ? <FinverseConnect callbackConnection={callbackConnection} onSynced={() => {}} onDismiss={() => onSaved(null)} /> : undefined}
+          connect={draft.type !== "investment" ? <FinverseConnect callbackConnection={callbackConnection} onSynced={() => {}} /> : undefined}
           onboarding={onboarding}
           initialMethod={callbackConnection || connectInitially ? "connect" : "manual"}
           enabled={!record}

@@ -1,3 +1,5 @@
+import { useWidgetSnapshot } from "../src/widget-snapshot";
+import { LauncherActionProvider, useLauncherAction } from "../src/launcher-action-provider";
 import { ReturnGreeting } from "../src/return-greeting";
 import { nativeStartup } from "../src/startup-timing";
 import { boundedRequest } from "../src/request-lifecycle";
@@ -42,6 +44,8 @@ function Routes() {
   const session = useSession();
   const publicPaymentRequest = path === "/payment-request";
   const entry = nativeEntryAccess(active, session.data?.needsOnboarding, authEntry, accountDeleted);
+  useWidgetSnapshot(session, entry.app && !!session.data);
+  const hasLauncherAction = useLauncherAction(entry.app && !!session.data, session.profileId);
   const landed = useRef(false);
   const [startupSlow, setStartupSlow] = useState(false);
   useEffect(() => { if (session.error) nativeStartup.failed("bootstrap"); }, [session.error]);
@@ -63,13 +67,13 @@ function Routes() {
     }
     if (landed.current || !session.data || session.data.needsOnboarding) return;
     landed.current = true;
-    if (!["/", "/welcome", "/auth"].includes(path)) return;
+    if (hasLauncherAction || !["/", "/welcome", "/auth"].includes(path)) return;
     const page = session.data.preferences?.defaults.defaultLandingPage;
     if (page && page !== "dashboard") nativeStartup.cancel("non_home_destination");
     if (page === "transactions") router.replace("/(tabs)/transactions");
     else if (page === "reports") router.replace("/reports");
     else if (page === "accounts") router.replace("/(tabs)/accounts");
-  }, [active, session.data, path]);
+  }, [active, session.data, path, hasLauncherAction]);
   if (entry.coldStart && !publicPaymentRequest) return session.error || startupSlow ? <View style={{ flex: 1, justifyContent: "center", padding: 24, gap: 16 }}><Notice>{session.error || "Clover is taking longer to connect. Check your connection or try again."}</Notice><Button title="Try again" onPress={() => { nativeStartup.start("retry"); session.refresh(); }} /><Button title="Sign out" secondary onPress={() => void session.signOut()} /></View> : null;
   return (
     <RouteReveal>
@@ -331,6 +335,7 @@ export default function RootLayout() {
   if (!fontsLoaded && !fontError) return null;
   return (
     <SafeAreaProvider>
+      <LauncherActionProvider>
       <WindowPaneProvider><AccessibilityPreferences><DisplayPreferences>
         <NativeAnalytics />
         {key ? (
@@ -352,6 +357,7 @@ export default function RootLayout() {
           />
         )}
       </DisplayPreferences></AccessibilityPreferences></WindowPaneProvider>
+      </LauncherActionProvider>
     </SafeAreaProvider>
   );
 }

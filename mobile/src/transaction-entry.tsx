@@ -23,6 +23,9 @@ import { Body, Button, Card, Field, Notice, Icon, CategoryMark, useTheme } from 
 
 export type TransactionDraft = {
   adviserEntry?: EntryDraft;
+  widgetAccountId?: string;
+  widgetCategory?: string;
+  widgetPanel?: "account" | "category";
   accountId: string;
   categoryId: string | null;
   merchantRaw: string;
@@ -100,14 +103,15 @@ export function Choices({
     </View>
   );
 }
-export function ChoiceField({ label, options, value, onChange, disabled = false }: {
+export function ChoiceField({ label, options, value, onChange, disabled = false, initiallyOpen = false }: {
   label: string;
   options: { value: string; label: string; icon?: ReactNode; group?: string }[];
   value: string;
   onChange: (value: string) => void;
   disabled?: boolean;
+  initiallyOpen?: boolean;
 }) {
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(initiallyOpen);
   const { colors } = useTheme();
   const selected = options.find(option => option.value === value);
   const row = { minHeight: 48, paddingVertical: 10, paddingHorizontal: 12, flexDirection: "row" as const, alignItems: "center" as const, gap: 10 };
@@ -224,13 +228,21 @@ export function ManualTransaction({
     };
   }, [session.demo, session.profileId, session.request, retry]);
   useEffect(() => {
-    // An unresolved Ask Clover account is a follow-up question, not permission to use a different default.
-    if (draft.accountId || !options || draft.adviserEntry) return;
-    const preferred = mostUsedTransactionAccount(options.accounts);
-    if (preferred) onChange({ ...draft, accountId: preferred.id, currency: preferred.currency });
+    // Resolve widget hints against current Profile options before using them.
+    if (!options || draft.adviserEntry) return;
+    const hintedAccount = options.accounts.find(account => account.id === draft.widgetAccountId);
+    const preferred = hintedAccount ?? (!draft.accountId ? mostUsedTransactionAccount(options.accounts) : undefined);
+    const category = options.categories.find(item => item.type === draft.type && item.name === draft.widgetCategory);
+    if (category) categoryTouched.current = true;
+    if (!preferred && !draft.widgetCategory && !draft.widgetAccountId) return;
+    onChange({ ...draft,
+      ...(preferred ? { accountId: preferred.id, currency: preferred.currency } : {}),
+      ...(category ? { categoryId: category.id } : {}),
+      widgetAccountId: undefined, widgetCategory: undefined,
+    });
   }, [options, draft, onChange]);
   useEffect(() => {
-    if (!options || categoryTouched.current) return;
+    if (!options || categoryTouched.current || draft.widgetCategory) return;
     const categoryId = manualTransactionCategoryId(options.categories, draft.type, draft.categoryId) || null;
     if (categoryId !== draft.categoryId) onChange({ ...draft, categoryId });
   }, [options, draft, onChange]);
@@ -369,6 +381,7 @@ export function ManualTransaction({
         availableAccounts.length ? (
           <ChoiceField
             label="Account"
+            initiallyOpen={draft.widgetPanel === "account"}
             options={availableAccounts.map((a) => ({
               value: a.id,
               label: `${a.name} · ${a.currency}`,
@@ -404,6 +417,7 @@ export function ManualTransaction({
         <>
           <ChoiceField
             label="Category"
+            initiallyOpen={draft.widgetPanel === "category"}
             options={[
               { value: "", label: "Uncategorized" },
               ...options.categories

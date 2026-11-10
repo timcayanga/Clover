@@ -557,13 +557,19 @@ export const buildInAppNotificationCandidates = async (
     if (count > 0) items.push({ id: `weekly-summary:${workspaceId}:${toDateKey(start)}`, product: "transactions", productLabel: "Reports", productHref: "/reports", title: "Your weekly summary", message: `${count} income and spending transactions were recorded last week. Open Reports to review your finances.`, tone: "neutral", priority: "low", createdAt: start.toISOString(), href: "/reports", ctaLabel: "View reports" });
   }
   const bankLifecycle=await bankLifecycleOverview(user.id);
+  if (!options.raw) for (const c of bankLifecycle.pending.filter(c => c.workspaceId === workspaceId)) {
+    items.push({
+      id: `bank-link:${c.id}`, product: "accounts", productLabel: "Connected banks", productHref: "/accounts",
+      iconSrc: c.logoUrl,
+      title: `Finish linking ${c.name}`,
+      message: c.status === "awaiting_selection" ? "Choose which accounts to link to Clover." : "Open Clover to check your bank setup.",
+      tone: "neutral", priority: "high", createdAt: c.createdAt.toISOString(),
+      href: `/accounts?finverse=connected&finverseConnection=${encodeURIComponent(c.id)}&finverseWorkspace=${encodeURIComponent(workspaceId)}`,
+      ctaLabel: c.status === "awaiting_selection" ? "Select accounts" : "Continue setup",
+    });
+  }
   for(const c of bankLifecycle.connections.filter(c=>c.workspaceId===workspaceId && c.status!=='disconnected')) {
-    if (!options.raw && isPendingBankSelection(c.status, c.accounts.some(a => Boolean(a.accountId && !a.unlinkedAt)), c.lastSyncedAt)) {
-      items.push({ id: `bank-link:${c.id}`, product: "accounts", productLabel: "Connected banks", productHref: "/accounts",
-        title: `Finish linking ${c.name}`, message: c.status === "awaiting_selection" ? "Your bank accounts are ready. Choose which accounts to link to Clover." : "Bank setup is unfinished. Open Clover to check progress or reconnect securely.",
-        tone: "neutral", priority: "high", createdAt: now.toISOString(),
-        href: `/accounts?finverse=connected&finverseConnection=${encodeURIComponent(c.id)}&finverseWorkspace=${encodeURIComponent(workspaceId)}`, ctaLabel: c.status === "awaiting_selection" ? "Select accounts" : "Continue setup" });
-    }
+    if (isPendingBankSelection(c.status, c.accounts.some(a => Boolean(a.accountId && !a.unlinkedAt)), c.lastSyncedAt)) continue;
     const stage=bankWarningStage(c.inactivityDeadline,now);
     const planEnding=bankLifecycle.accessEndsAt && +bankLifecycle.accessEndsAt-+now<=14*DAY_MS ? bankLifecycle.accessEndsAt : null;
     const deadline=planEnding??c.inactivityDeadline;

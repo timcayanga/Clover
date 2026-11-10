@@ -1,3 +1,4 @@
+import { parseLauncherUrl } from "../src/launcher-actions";
 import { parsePaymentAppLink } from "../../shared/payment-request-links.ts";
 
 /**
@@ -13,6 +14,7 @@ export function redirectSystemPath({
   path: string;
   initial: boolean;
 }): string | null {
+  if (parseLauncherUrl(path)) return initial ? "/" : null;
   const request = parsePaymentAppLink(path);
   if (request) return `/payment-request?token=${encodeURIComponent(request.token)}&origin=${encodeURIComponent(request.origin)}`;
   const callback =

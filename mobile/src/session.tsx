@@ -1,3 +1,4 @@
+import { clearWidgetSnapshot } from "./widget-snapshot";
 import { BootstrapRequests, RequestCancelledError, RequestTimeoutError, boundedRequest } from "./request-lifecycle";
 import type { ReceiptCaptureLocation } from "../../shared/receipt-capture-location";
 import { OnboardingPersistence } from "./onboarding-persistence";
@@ -539,6 +540,7 @@ export function SessionProvider({
             );
             if (!confirmed) return;
           }
+          await clearWidgetSnapshot();
           bootstrapRequests.cancel("session_closed");
           pageCache.current.clear();
           await fileQueue?.close();

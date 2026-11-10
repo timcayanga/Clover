@@ -130,7 +130,7 @@ export function NotificationsClient() {
                 aria-label={`Open ${notification.productLabel}`}
                 title={`Open ${notification.productLabel}`}
               >
-                <img src={getNavigationIconSrc(notification.product)} alt="" aria-hidden="true" />
+                <img src={notification.iconSrc || getNavigationIconSrc(notification.product)} alt="" aria-hidden="true" />
               </Link>
               <div className="notification-item__main">
                 <h4>{notification.title}</h4>

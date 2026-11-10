@@ -2,7 +2,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { notifyInAppNotificationsChanged } from "@/lib/in-app-notifications";
-import { CANCEL_BANK_LINK_MESSAGE, type PendingBankConnection } from "../../shared/finverse-pending";
+import type { PendingBankConnection } from "../../shared/finverse-pending";
 import { FinversePendingChip } from "./finverse-pending-chip";
 import "./add-entry-methods.css";
 export function FinversePendingAccounts({workspaceId}:{workspaceId:string}) {
@@ -18,7 +18,7 @@ export function FinversePendingAccounts({workspaceId}:{workspaceId:string}) {
     return()=>{controller.abort();window.removeEventListener("finverse-updated",refresh);};
   },[workspaceId]);
   async function cancel(connection: PendingBankConnection) {
-    if(cancelling.current || !window.confirm(CANCEL_BANK_LINK_MESSAGE))return;
+    if(cancelling.current)return;
     cancelling.current=true;setBusy(true);setMessage("");
     try {
       const response=await fetch("/api/integrations/finverse/unlink",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({workspaceId,connectionId:connection.id})});

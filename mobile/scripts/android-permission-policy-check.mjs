@@ -33,4 +33,11 @@ for (const key of ['android.enableR8.fullMode', 'android.r8.optimizedResourceShr
   'android.enableMinifyInReleaseBuilds', 'android.enableShrinkResourcesInReleaseBuilds']) {
   assert(android.gradleProperties.some(item => item.key === key && item.value === 'true'), `${key} must survive prebuild`);
 }
-console.log('PASS actual Expo prebuild: coarse-only location, restricted permission removals, full R8 and optimized resource shrinking.');
+const app = manifest.application[0];
+assert(app.activity.some(activity => activity['meta-data']?.some(entry =>
+  entry.$['android:name'] === 'android.app.shortcuts' && entry.$['android:resource'] === '@xml/clover_shortcuts')));
+const widget = app.receiver.filter(item => item.$['android:name'] === '.CloverQuickActionsProvider');
+assert.equal(widget.length, 1);
+assert.equal(widget[0].$['android:exported'], 'false');
+assert.equal(widget[0]['meta-data'][0].$['android:resource'], '@xml/clover_widget');
+console.log('PASS actual Expo prebuild: coarse-only location, restricted permission removals, full R8, optimized resource shrinking, launcher shortcuts and private widget receiver.');
