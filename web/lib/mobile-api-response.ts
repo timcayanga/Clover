@@ -1,3 +1,4 @@
+import { splitBillReadErrorCode } from "../../shared/split-bill-read";
 import { suggestBillCategory } from "../../shared/split-bill-experience";
 import { transactionMerchantLogo } from "./transaction-merchant-logo";
 import type { MerchantIdentityInput } from "./logo-identity-types";
@@ -91,7 +92,10 @@ const splitDetail = (value: unknown) => {
 export function mobileApiResponse(operation: string, value: unknown) {
   const data = record(value);
   if (operation === "import-process" && !data.error) return { ...pick(data, ["ok", "status", "queued", "duplicate", "canonicalImportFileId", "confirmedTransactionsCount", "visibleImportComplete"]) };
-  if (data.error) return pick(data, ["error"]);
+  if (data.error) {
+    const code = operation === "split-bills" ? splitBillReadErrorCode(data.code) : undefined;
+    return { ...pick(data, ["error"]), ...(code ? { code } : {}) };
+  }
   if (operation === "activation") return { activation: data.activation };
   if (operation === "split-group-create" || operation === "split-group-edit") return {group:pick(data.group,["id","name"]),...pick(data,["ok"])};
   if (operation === "preview") return pick(data,["settlement"]);

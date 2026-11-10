@@ -1,3 +1,5 @@
+import { splitBillReadSurface } from "./split-bill-read";
+
 /** Privacy-safe, dependency-free contract shared by web, native and tests. */
 export const TELEMETRY_EVENTS = ["campaign_progress", "billing_restored","screen_viewed", "screen_engagement", "flow_started", "flow_completed", "flow_failed", "flow_canceled", "data_load_started", "data_load_completed", "data_load_failed", "data_load_canceled", "data_ready", "page_render_completed", "page_render_slow", "form_opened", "form_closed", "input_started", "input_completed", "input_failed", "input_canceled", "offline_action_queued", "offline_sync_started", "offline_sync_completed", "offline_sync_failed", "offline_sync_conflict", "offline_action_discarded", "ui_interaction"] as const;
 export type TelemetryEvent = typeof TELEMETRY_EVENTS[number];
@@ -38,7 +40,14 @@ export function requestTelemetry(path: string, method = "GET") {
   const route = safeRoute(path.replace(/^\/?api\/mobile\/v1\//, ""));
   // Avoid poll/chunk amplification; the surrounding operation has its own event.
   if (/\/(status|part)$/.test(route) || /\/(analytics|health)(\/|$)/.test(route)) return null;
-  return { operation: `${method.toUpperCase()} ${route}`, phase: "request", method: method.toUpperCase(), resource: route.split("/").filter(s => s && s !== "api")[0] ?? "root" };
+  const verb = method.toUpperCase();
+  const readSurface = verb === "GET" && route === "/split-bills"
+    ? splitBillReadSurface(new URLSearchParams(path.split("?")[1]))
+    : undefined;
+  return { operation: `${verb} ${route}`, phase: "request", method: verb,
+    resource: route.split("/").filter(s => s && s !== "api")[0] ?? "root",
+    ...(readSurface ? { read_surface: readSurface } : {}),
+  };
 }
 export function browserContext(userAgent: string, width?: number, touchPoints = 0) {
   const tablet = /iPad|Tablet/i.test(userAgent) || /Macintosh/i.test(userAgent) && touchPoints > 1;

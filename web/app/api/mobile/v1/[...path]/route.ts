@@ -1,3 +1,4 @@
+import { splitBillReadSurface } from "../../../../../../shared/split-bill-read";
 import { after } from "next/server";
 import { mobileAccountOption } from "@/lib/mobile-account-option";
 import { normalizeRegionalPreferences } from "@/lib/regional-preferences";
@@ -262,8 +263,22 @@ async function handle(
       return reply(await response.json(), response.status);
     }
     const url = new URL(request.url);
-    const workspaceId = url.searchParams.get("workspaceId");
-    if (!workspaceId) return reply({ error: "Choose a Profile first." }, 400);
+    const splitBillSurface = operation === "split-bills" && request.method === "GET"
+      ? splitBillReadSurface(url.searchParams) : undefined;
+    let workspaceId = url.searchParams.get("workspaceId");
+    if (workspaceId === null && splitBillSurface === "home_split_bills_summary") {
+      // 1.1.2 omitted the Profile on this account-wide read. Only accept a
+      // server-selected Profile owned by the already verified Clover identity.
+      workspaceId = (await prisma.workspace.findFirst({
+        where: { userId: user.id }, select: { id: true }, orderBy: [{ createdAt: "asc" }, { id: "asc" }],
+      }))?.id ?? null;
+    }
+    if (!workspaceId) {
+      if (!splitBillSurface) return reply({ error: "Choose a Profile first." }, 400);
+      const code = "split_bills_profile_required";
+      console.warn("[mobile-split-bills-read]", { surface: splitBillSurface, status: 400, code });
+      return reply({ error: "Choose a Profile first.", code }, 400);
+    }
     await assertWorkspaceAccess(userId, workspaceId);
     if (operation === "investment-holding-delete") {
       const forwarded = new Request(request.url, { method: "DELETE", headers: request.headers, body: JSON.stringify({ workspaceId }) });

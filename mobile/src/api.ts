@@ -1,3 +1,4 @@
+import { splitBillReadErrorCode } from "../../shared/split-bill-read";
 import { boundedRequest, RequestCancelledError, RequestTimeoutError } from "./request-lifecycle";
 import { apiBase } from "./api-base";
 export { apiBase } from "./api-base";
@@ -7,7 +8,7 @@ export class ApiError extends Error {
   constructor(
     message: string,
     public status: number,
-    public data?: { current?: Record<string, unknown>; reconnectRequired?: boolean },
+    public data?: { current?: Record<string, unknown>; reconnectRequired?: boolean; code?: unknown },
   ) {
     super(message);
   }
@@ -71,7 +72,10 @@ export async function apiRequest<T>(
   } catch (error) {
     const canceled = error instanceof RequestCancelledError;
     const timedOut = error instanceof RequestTimeoutError;
-    finish(canceled ? "canceled" : "failed", { status: error instanceof ApiError ? error.status : 0,
+    const code = description?.read_surface && error instanceof ApiError
+      ? splitBillReadErrorCode(error.data?.code)
+      : undefined;
+    finish(canceled ? "canceled" : "failed", { ...(code ? { error_code: code } : {}), status: error instanceof ApiError ? error.status : 0,
       reason: canceled ? error.reason : timedOut ? "timeout" : error instanceof ApiError ? "http" : "network_or_response" });
     if (timedOut) throw new NetworkError(path.includes("/process")
       ? "The connection timed out. Check the import status before trying the upload again."

@@ -5,6 +5,7 @@ const events=[],api={};let fetchImpl;
 vm.runInNewContext(compile('../src/api.ts'),{exports:api,URL,Headers,AbortController,Date,Error,fetch:(...args)=>fetchImpl(...args),require:name=>{
  if(name==='./request-lifecycle')return lifecycle;
  if(name==='./api-base')return {apiBase:()=> 'https://fixture.invalid'};
+ if(name==='../../shared/split-bill-read')return {splitBillReadErrorCode:()=>undefined};
  if(name==='../../shared/analytics')return {newTelemetryId:()=>String(Math.random()),getTelemetryHeaders:()=>({}),requestTelemetry:()=>({operation:'GET /bootstrap'}),telemetry:(event,p)=>events.push({event,...p}),beginTelemetry:()=>{let done=false;return(outcome,p)=>{if(done)return;done=true;events.push({event:outcome,...p})}}};
  throw Error(name);
 }});

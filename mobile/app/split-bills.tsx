@@ -361,7 +361,7 @@ export default function SplitBills() {
               {error ? (
                 <>
                   <Notice>{error}</Notice>
-                  <PlanAction title="Try again" onPress={reload} />
+                  <PlanAction title="Try again" onPress={reloadBills} />
                 </>
               ) : !data ? (
                 <Body>Loading bills…</Body>

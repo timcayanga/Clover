@@ -1,3 +1,4 @@
+import { splitBillReadSurface, type SplitBillReadErrorCode } from "../../../../shared/split-bill-read";
 import { homePendingSplitBills } from "../../../../shared/home-split-bills";
 import { splitBillBalanceSummary } from "@/lib/split-bill-balance-summary";
 import { loadSplitBillWorkspaceData } from "@/lib/split-bill-loaders";
@@ -518,21 +519,26 @@ const persistSplitBill = async (
 };
 
 export async function GET(request: Request) {
+  const native = getMobileRequestContext()?.request === request;
+  const query = new URL(request.url).searchParams;
+  const surface = splitBillReadSurface(query);
+  let code: SplitBillReadErrorCode = "split_bills_user_context_failed";
   try {
     const user = await getSplitBillCurrentUser();
-    const native = getMobileRequestContext()?.request === request && request !== undefined;
-    if (new URL(request.url).searchParams.get("homeSummary") === "true") {
+    if (surface === "home_split_bills_summary" || (native && surface === "split_bills_balance_summary")) {
+      code = "split_bills_summary_load_failed";
       const { bills } = await loadSplitBillWorkspaceData(user.id);
-      return NextResponse.json({ pending: homePendingSplitBills(bills) }, { headers: { "Cache-Control": "private, no-store" } });
+      code = "split_bills_response_failed";
+      return NextResponse.json(surface === "home_split_bills_summary"
+        ? { pending: homePendingSplitBills(bills) }
+        : { summary: splitBillBalanceSummary(bills, getUserDisplayName(user)) },
+      { headers: { "Cache-Control": "private, no-store" } });
     }
-    if (native && new URL(request.url).searchParams.get("summaryOnly") === "true") {
-      const { bills } = await loadSplitBillWorkspaceData(user.id);
-      return NextResponse.json({ summary: splitBillBalanceSummary(bills, getUserDisplayName(user)) });
-    }
-    const requestedPage = native ? Number(new URL(request.url).searchParams.get("page") ?? 1) : 1;
-    const groupFilter = native ? new URL(request.url).searchParams.get("groupId") : null;
-    const personFilter = native ? new URL(request.url).searchParams.get("person") : null;
+    const requestedPage = native ? Number(query.get("page") ?? 1) : 1;
+    const groupFilter = native ? query.get("groupId") : null;
+    const personFilter = native ? query.get("person") : null;
     const page = Number.isInteger(requestedPage) && requestedPage > 0 && requestedPage < 100000 ? requestedPage : 1;
+    code = "split_bills_list_query_failed";
     const bills = await prisma.splitBill.findMany({
       where: {
         ...(groupFilter ? {groupId:groupFilter} : {}),
@@ -547,8 +553,10 @@ export async function GET(request: Request) {
       ...(native ? { skip: (page - 1) * 30, take: 31 } : {}),
       include: getBillInclude,
     });
+    code = "split_bills_settlement_load_failed";
     const transferSettlementsByBillId = await loadSplitBillTransferSettlementsForBills(bills.map((bill) => bill.id));
 
+    code = "split_bills_response_failed";
     return NextResponse.json({
       ...(native ? { page, hasMore: bills.length > 30 } : {}),
       bills: (native ? bills.slice(0, 30) : bills).map((bill) =>
@@ -559,7 +567,17 @@ export async function GET(request: Request) {
       ),
     });
   } catch (error) {
-    return NextResponse.json({ error: "Unable to load split bills" }, { status: 400 });
+    const reason = code === "split_bills_user_context_failed" && error instanceof Error ? error.message : "";
+    const status = reason === "UNAUTHORIZED" ? 401 : reason === "ADMIN_ONLY" ? 403 : reason === "IDENTITY_ENVIRONMENT_CONFLICT" ? 409 : 500;
+    if (status === 401) code = "split_bills_unauthorized";
+    if (status === 403) code = "split_bills_forbidden";
+    if (status === 409) code = "split_bills_identity_conflict";
+    const message = status === 401 ? "Sign in to view your split bills."
+      : status === 403 ? "This account cannot access split bills."
+      : status === 409 ? "Use your original sign-in method or contact support."
+      : "Unable to load split bills. Please try again.";
+    if (native) console.warn("[mobile-split-bills-read]", { surface, status, code });
+    return NextResponse.json({ error: message, code }, { status, headers: { "Cache-Control": "private, no-store" } });
   }
 }
 
