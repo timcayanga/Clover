@@ -183,7 +183,7 @@ function withAppleLauncher(config, scheme, bundleId) {
         CODE_SIGN_STYLE: "Automatic",
         CODE_SIGN_ENTITLEMENTS: `${widget}/${widget}.entitlements`,
         INFOPLIST_FILE: `${widget}/${widget}-Info.plist`,
-        CURRENT_PROJECT_VERSION: hostSettings.CURRENT_PROJECT_VERSION ?? config.ios?.buildNumber ?? "1",
+        CURRENT_PROJECT_VERSION: config.ios?.buildNumber ?? hostSettings.CURRENT_PROJECT_VERSION ?? "1",
         DEVELOPMENT_TEAM: config.ios?.appleTeamId,
         IPHONEOS_DEPLOYMENT_TARGET: hostSettings.IPHONEOS_DEPLOYMENT_TARGET ?? "17.0",
         MARKETING_VERSION: config.version,

@@ -1,4 +1,4 @@
-import { parseLauncherUrl } from "../src/launcher-actions";
+import { parseLauncherUrl } from "../src/launcher-actions.ts";
 import { parsePaymentAppLink } from "../../shared/payment-request-links.ts";
 
 /**
