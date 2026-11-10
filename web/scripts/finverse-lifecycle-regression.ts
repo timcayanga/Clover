@@ -38,6 +38,12 @@ async function main(){
  assert.match(recovered.find(row => row.id === "active")?.logoUrl ?? "", /bpi/i);
  assert.match(recovered.find(row => row.id === "recovered")?.name ?? "", /metrobank/i);
  assert.equal(recovered.find(row => row.id === "active")?.createdAt, now);
+ const fresh = { ...pending, id: "fresh", status: "link_pending", encryptedRefreshToken: null,
+   loginIdentityId: null, stateExpiresAt: new Date(+now + 60_000) };
+ const older = { ...fresh, id: "older", createdAt: new Date(+now - 1) };
+ const expired = { ...fresh, id: "expired", institutionName: "Metrobank", stateExpiresAt: now };
+ assert.deepEqual(pendingBankAttempts([older, fresh, expired], () => false, now).map(row => row.id), ["fresh"]);
+ assert.deepEqual(pendingBankAttempts([fresh], () => false), [], "A pre-authorization attempt must not notify.");
  const links=[{id:'a',retainOnDowngrade:false,lastSeenAt:new Date(3)},{id:'b',retainOnDowngrade:true,lastSeenAt:new Date(1)},{id:'c',retainOnDowngrade:false,lastSeenAt:new Date(2)}];
  assert.deepEqual(retainedBankLinks(links,2).map(l=>l.id),['b','a']);assert.equal(retainedBankLinks(links,0).length,0);assert.equal(retainedBankLinks(links,5).length,3);
  const fixture=`

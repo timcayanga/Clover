@@ -32,6 +32,7 @@ type PendingAttempt = {
   rawLoginIdentity: unknown;
   status: string;
   createdAt: Date;
+  stateExpiresAt?: Date | null;
   lastSyncedAt: Date | null;
   disconnectRequestedAt: Date | null;
   encryptedAccessToken: string | null;
@@ -43,13 +44,18 @@ const unknownBank = /^(?:your bank|linked bank|bank|unknown(?: bank)?)$/i;
 export function pendingBankAttempts<T extends PendingAttempt>(
   attempts: readonly T[],
   hasLinkedAccounts: (attempt: T) => boolean,
+  activeAuthorizationAt?: Date,
 ) {
   const seen = new Set<string>();
   const seenBanks = new Set<string>();
   const rank = (status: string) => status === "awaiting_selection" ? 0 : status === "error" ? 2 : 1;
   return [...attempts].sort((a, b) => rank(a.status) - rank(b.status) || +b.createdAt - +a.createdAt)
     .flatMap(attempt => {
-      if (attempt.disconnectRequestedAt || (!attempt.encryptedAccessToken && !attempt.encryptedRefreshToken)
+      const authorized = Boolean(attempt.encryptedAccessToken || attempt.encryptedRefreshToken);
+      const authorizing = activeAuthorizationAt && attempt.stateExpiresAt &&
+        attempt.stateExpiresAt > activeAuthorizationAt &&
+        (attempt.status === "link_pending" || attempt.status === "authorizing");
+      if (attempt.disconnectRequestedAt || (!authorized && !authorizing)
         || !isPendingBankSelection(attempt.status, hasLinkedAccounts(attempt), attempt.lastSyncedAt)) return [];
       const raw = attempt.rawLoginIdentity as { institution?: { institution_name?: unknown; institution_id?: unknown } } | null;
       const providerName = raw?.institution?.institution_name;
@@ -62,7 +68,7 @@ export function pendingBankAttempts<T extends PendingAttempt>(
       if (seen.has(identity)) return [];
       const bank = finverseBankPresentation({ id, name, countries: [] });
       const bankKey = `${attempt.workspaceId}:${(bank.brandName || name).trim().toLowerCase()}`;
-      if (attempt.status === "error" && seenBanks.has(bankKey)) return [];
+      if ((!authorized || attempt.status === "error") && seenBanks.has(bankKey)) return [];
       seen.add(identity);
       seenBanks.add(bankKey);
       return [{ id: attempt.id, workspaceId: attempt.workspaceId, name: bank.name || name, logoUrl: bank.logoUrl, status: attempt.status, createdAt: attempt.createdAt }];
