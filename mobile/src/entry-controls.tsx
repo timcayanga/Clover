@@ -8,7 +8,15 @@ import {
   useWindowDimensions,
 } from "react-native";
 import { Text } from "./app-text";
-import { Icon, useTheme } from "./ui";
+import { useTheme } from "./ui";
+const methodIcons: Record<string, number> = {
+  manual: require("../assets/organize/method-manual.png"),
+  ask: require("../assets/mascots/velvet-compact.png"),
+  upload: require("../assets/organize/method-upload.png"),
+  sync: require("../assets/organize/method-sync.png"),
+  connect: require("../assets/organize/method-sync.png"),
+};
+
 export function EntrySelector({
   value,
   items,
@@ -72,7 +80,7 @@ export function EntrySelector({
             backgroundColor: wrapped && value === method ? colors.teal : "transparent",
           }}
         >
-          {method === "ask" ? <Icon name="chatbubble-ellipses-outline" size={26}/> : <Image source={method === "manual" ? require("../assets/organize/method-manual.png") : method === "upload" ? require("../assets/organize/method-upload.png") : require("../assets/organize/method-sync.png")} style={{width:26,height:26}} resizeMode="contain" accessible={false}/>}
+          {methodIcons[method] ? <Image source={methodIcons[method]} style={{ width: 26, height: 26 }} resizeMode="contain" accessible={false} /> : null}
           <Text
             style={{
               fontSize: 12,

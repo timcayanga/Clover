@@ -1,7 +1,7 @@
 "use client";
 import { ResourceUpgradeNotice } from "./contextual-upgrade";
 import { FinverseConnectButton } from "./finverse-connect-button";
-import { getNavigationIconSrc } from "@/lib/navigation-icons";
+import { getEntryMethodIconSrc, type EntryMethod } from "@/lib/entry-method-icons";
 import type { EntryFormContext } from "@/lib/adviser-entry-types";
 import type { AddFormDraft } from "../../shared/add-form-draft";
 import dynamic from "next/dynamic";
@@ -89,7 +89,7 @@ export function AddEntryMethods({
   formContext?: EntryFormContext;
   onReviewForm?: (draft: AddFormDraft) => void;
 }) {
-  const [tab, setTab] = useState(initialMethod as string),
+  const [tab, setTab] = useState<EntryMethod>(initialMethod),
     [visited, setVisited] = useState(false),
     [isPro, setIsPro] = useState(false),
     [upload, setUpload] = useState(false),
@@ -110,7 +110,9 @@ export function AddEntryMethods({
   }, []);
   if (!enabled) return <>{children}</>;
   const info = guidance[kind];
-  const methods = kind === "accounts" ? onboarding ? ["connect", "upload", "manual"] : ["manual", "ask", "upload", "connect"] : ["manual", "ask", "upload"];
+  const methods: EntryMethod[] = kind === "accounts"
+    ? onboarding ? ["connect", "upload", "manual"] : ["manual", "ask", "upload", "connect"]
+    : ["manual", "ask", "upload"];
   return (
     <div className="add-entry-methods">
       <div
@@ -154,7 +156,7 @@ export function AddEntryMethods({
               }
             }}
           >
-            <img src={method === "ask" ? getNavigationIconSrc("adviser") : `/assets/organize/method-${method === "connect" ? "sync" : method}.png`} width="20" height="20" alt="" />
+            <img src={getEntryMethodIconSrc(method)} width="20" height="20" alt="" />
             {method === "manual"
               ? "Manual"
               : method === "ask"

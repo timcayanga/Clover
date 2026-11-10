@@ -1,5 +1,7 @@
 "use client";
 
+import { getEntryMethodIconSrc } from "@/lib/entry-method-icons";
+
 import dynamic from "next/dynamic";
 import type { ChangeEvent, CSSProperties } from "react";
 import { UploadSourceButtons } from "@/components/upload-source-buttons";
@@ -303,7 +305,7 @@ export function OnboardingForm({
           onClick={() => setAccountMethod(method)} onKeyDown={event => {
             const next = event.key === "ArrowRight" ? (index + 1) % 3 : event.key === "ArrowLeft" ? (index + 2) % 3 : event.key === "Home" ? 0 : event.key === "End" ? 2 : null;
             if (next !== null) { event.preventDefault(); setAccountMethod(methods[next]); document.getElementById(`onboarding-${methods[next]}`)?.focus(); }
-          }}>{method === "connect" ? "Connect" : method === "upload" ? "Upload" : "Manual"}</button>)}
+          }}><img src={getEntryMethodIconSrc(method)} width="20" height="20" alt="" />{method === "connect" ? "Connect" : method === "upload" ? "Upload" : "Manual"}</button>)}
       </div>
       <div role="tabpanel" id={`onboarding-${accountMethod}-panel`} aria-labelledby={`onboarding-${accountMethod}`} className="onboarding-account-method">
         {accountMethod === "upload" ? <>

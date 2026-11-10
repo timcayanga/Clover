@@ -3,7 +3,7 @@
 import { manualTransactionCategoryId, manualTransactionName, manualTransactionPlaceholder, manualTransactionToday } from "../../shared/manual-transaction-defaults";
 import { mostUsedTransactionAccount } from "../../shared/default-transaction-account";
 import { useDraftCategorySuggestion } from "@/lib/use-draft-category-suggestion";
-import { getNavigationIconSrc } from "@/lib/navigation-icons";
+import { getEntryMethodIconSrc } from "@/lib/entry-method-icons";
 import { MobileSheetHandle } from "@/components/mobile-sheet-handle";
 import { FinverseConnectButton } from "./finverse-connect-button";
 import { TransactionTableEntry } from "@/components/transaction-table-entry";
@@ -520,7 +520,7 @@ export function DashboardManualTransactionModal({
             const tabs = ["manual", "ask", "upload", "sync"] as const;
             const next = event.key === "ArrowRight" ? tabs[(index + 1) % 4] : event.key === "ArrowLeft" ? tabs[(index + 3) % 4] : event.key === "Home" ? tabs[0] : event.key === "End" ? tabs[3] : null;
             if (next) { event.preventDefault(); setEntryTab(next); if (next === "ask") setAskVisited(true); document.getElementById(`quick-entry-tab-${next}`)?.focus(); }
-          }}><img src={tab === "ask" ? getNavigationIconSrc("adviser") : `/assets/organize/method-${tab}.png`} alt="" width="20" height="20" />{tab === "manual" ? "Manual" : tab === "ask" ? "Ask Clover" : tab === "sync" ? "Sync" : "Upload"}</button>)}
+          }}><img src={getEntryMethodIconSrc(tab)} alt="" width="20" height="20" />{tab === "manual" ? "Manual" : tab === "ask" ? "Ask Clover" : tab === "sync" ? "Sync" : "Upload"}</button>)}
         </div>
         {entryTab === "sync" ? <div id="quick-entry-panel-sync" role="tabpanel" aria-labelledby="quick-entry-tab-sync"><FinverseConnectButton workspaceId={workspaceId} mode="sync" /></div> : null}
         <div id="quick-entry-panel-manual" role="tabpanel" aria-labelledby="quick-entry-tab-manual" hidden={entryTab !== "manual"}>

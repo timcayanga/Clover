@@ -6,7 +6,7 @@ import { TransactionConversion, QuickAddLineItem, TransactionLineItemRow } from 
 import { manualTransactionCategoryId, manualTransactionName, manualTransactionPlaceholder, manualTransactionToday } from "../../../shared/manual-transaction-defaults";
 import { useDraftCategorySuggestion } from "@/lib/use-draft-category-suggestion";
 import { CloverMascot } from "@/components/clover-mascot";
-import { getNavigationIconSrc } from "@/lib/navigation-icons";
+import { getEntryMethodIconSrc } from "@/lib/entry-method-icons";
 import { TransactionReviewControls } from "@/components/transaction-review-controls";
 import { mostUsedTransactionAccount } from "../../../shared/default-transaction-account";
 import { usePullRefresh } from "@/lib/pull-refresh";
@@ -8736,7 +8736,7 @@ function TransactionsPageContent() {
                     const index = tabs.indexOf(tab);
                     const next = event.key === "ArrowRight" ? tabs[(index + 1) % tabs.length] : event.key === "ArrowLeft" ? tabs[(index + tabs.length - 1) % tabs.length] : event.key === "Home" ? tabs[0] : event.key === "End" ? tabs[tabs.length - 1] : null;
                     if (next) { event.preventDefault(); setCreationTab(next); if (next === "ask") setCreationChatVisited(true); document.getElementById(`creation-tab-${next}`)?.focus(); }
-                  }} onClick={() => { setCreationTab(tab); if (tab === "ask") setCreationChatVisited(true); }}><img src={tab === "ask" ? getNavigationIconSrc("adviser") : `/assets/organize/method-${tab}.svg`} alt="" width="20" height="20" />{label}</button>
+                  }} onClick={() => { setCreationTab(tab); if (tab === "ask") setCreationChatVisited(true); }}><img src={getEntryMethodIconSrc(tab)} alt="" width="20" height="20" />{label}</button>
                 ))}
               </div>
             )}
