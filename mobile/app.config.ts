@@ -24,6 +24,7 @@ const config: ExpoConfig = {
   ios: {
     bundleIdentifier: iosBundleIdentifier,
     appleTeamId: "6XX38GYURG",
+    buildNumber: "56",
     supportsTablet: true,
     usesAppleSignIn: true,
     associatedDomains: ["applinks:clover.ph", "applinks:staging.clover.ph"],
@@ -31,6 +32,7 @@ const config: ExpoConfig = {
   },
   android: {
     package: process.env.CLOVER_ANDROID_PACKAGE_ID || "ph.clover.preview",
+    versionCode: 56,
     allowBackup: false,
     // Country-only receipt suggestions never need precise/background location.
     // Remove these even when a dependency contributes them during manifest merge.
