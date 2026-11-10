@@ -25,7 +25,10 @@ type Step =
   | "reset-code"
   | "new-password"
   | "email-verification"
-  | "extra-verification";
+  | "extra-verification"
+  | "finish-sign-in";
+type AuthStage = Step | "password" | "send_email_code" | "verify_email_code" | "finalize_sign_in" | "google_oauth";
+
 export default function Authentication() {
   const access = useAccess();
   return access.configured ? (
@@ -71,49 +74,70 @@ function AuthForm() {
     const { error } = await result;
     if (error) throw error;
   };
-  const run = async (action: () => Promise<void>, method = step === "sign-in" || step === "sign-up" ? "password" : "verification") => {
+  const run = async (
+    action: (setStage: (stage: AuthStage) => void) => Promise<void>,
+    method = step === "sign-in" || step === "sign-up" ? "password" : "verification",
+    initialStage: AuthStage = step,
+  ) => {
     if (pending.current || active) return;
     pending.current = true;
     setBusy(true);
     setError("");
     setMessage("");
     const finish = beginTelemetry("flow", { operation: `auth_${step}`, phase: "authentication_step", method });
+    let stage = initialStage;
     try {
-      await duringAuthentication(action);
-      finish("completed");
+      await duringAuthentication(() => action(next => { stage = next; }));
+      finish("completed", { auth_stage: stage });
     } catch (e) {
-      if (alreadySignedIn(e) && await recoverSession()) {
-        finish("completed");
+      const failure = authFailure(e);
+      const sessionConflict = failure.reason === "session_exists" || alreadySignedIn(e);
+      if (sessionConflict && await recoverSession()) {
+        finish("completed", { ...failure, auth_stage: stage, recovery: "existing_session" });
         return;
       }
-      const failure = authFailure(e);
       finish(failure.reason === "user_canceled" ? "canceled" : "failed", {
-        ...failure, reason: alreadySignedIn(e) ? "session_recovery_failed" : failure.reason,
+        ...failure, auth_stage: stage, reason: sessionConflict ? "session_recovery_failed" : failure.reason,
       });
       if (failure.reason === "user_canceled") return;
-      const problem = e as {
-        message?: string;
-        errors?: { longMessage?: string; message?: string }[];
-      };
-      setError(
-        alreadySignedIn(e) ? "Clover could not resume your sign-in. Check your connection and try again." :
-        problem.errors?.[0]?.longMessage ??
-          problem.errors?.[0]?.message ??
-          problem.message ??
-          "Unable to continue. Please try again.",
-      );
+      if (step === "sign-in" && method === "password" && failure.reason === "credentials") {
+        setPassword("");
+        setError("Check your email and password, or use Forgot password or Google.");
+      } else if (sessionConflict) {
+        setError("Clover could not resume your sign-in. Check your connection and try again.");
+      } else if (failure.reason === "rate_limited") {
+        setError("Too many attempts. Wait a bit before trying again.");
+      } else if (failure.reason === "password_reset_required") {
+        setPassword("");
+        setStep("reset");
+        setError("Your password needs to be reset. Continue to request a reset code.");
+      } else if (stage === "send_email_code") {
+        setError("Clover couldn't send the code. Tap Resend code to try again.");
+      } else if (stage === "finalize_sign_in") {
+        setError("Clover couldn't finish signing you in. Tap Finish signing in to try again.");
+      } else if (step === "sign-in" && (failure.status === 422 || failure.reason === "method_unavailable")) {
+        setError(method === "google"
+          ? "Google sign-in couldn't continue. Try again or sign in with email."
+          : "Sign-in couldn't continue. Check your details or try another sign-in method.");
+      } else {
+        const problem = e as { message?: string; errors?: { longMessage?: string; message?: string }[] } | null;
+        setError(problem?.errors?.[0]?.longMessage ?? problem?.errors?.[0]?.message ?? problem?.message ?? "Unable to continue. Please try again.");
+      }
     } finally {
       pending.current = false;
       setBusy(false);
     }
   };
-  const finishSignIn = async () => {
-    if (signIn.status === "complete") await check(signIn.finalize());
-    else if (needsSignInVerification(signIn.status) && signIn.supportedSecondFactors?.some(factor => factor.strategy === "email_code")) {
-      await check(signIn.mfa.sendEmailCode());
+  const finishSignIn = async (setStage: (stage: AuthStage) => void) => {
+    if (signIn.status === "complete") {
+      setStep("finish-sign-in");
+      setStage("finalize_sign_in");
+      await check(signIn.finalize());
+    } else if (needsSignInVerification(signIn.status) && signIn.supportedSecondFactors?.some(factor => factor.strategy === "email_code")) {
       setCode("");
       setStep("email-verification");
-      setMessage("");
+      setStage("send_email_code");
+      await check(signIn.mfa.sendEmailCode());
     } else {
       setStep("extra-verification");
       setMessage(
@@ -121,17 +145,22 @@ function AuthForm() {
       );
     }
   };
-  const submit = async () => {
+  const submit = async (setStage: (stage: AuthStage) => void) => {
     await setRememberSession(remember);
     if (step === "sign-in") {
       beginAuthEntry("sign-in");
+      setStage("password");
       await check(signIn.password({ emailAddress: email.trim(), password }));
       setPassword("");
-      await finishSignIn();
+      await finishSignIn(setStage);
+    } else if (step === "finish-sign-in") {
+      setStage("finalize_sign_in");
+      await check(signIn.finalize());
     } else if (step === "email-verification") {
+      setStage("verify_email_code");
       await check(signIn.mfa.verifyEmailCode({ code: code.trim() }));
       setCode("");
-      await finishSignIn();
+      await finishSignIn(setStage);
     } else if (step === "sign-up") {
       await check(
         signUp.password({
@@ -175,7 +204,7 @@ function AuthForm() {
       );
       setPassword("");
       setRepeat("");
-      await finishSignIn();
+      await finishSignIn(setStage);
     }
   };
   const confirmSocialTerms = () => step !== "sign-up" || terms ? Promise.resolve(true) : new Promise<boolean>(resolve => {
@@ -199,8 +228,9 @@ function AuthForm() {
     "new-password": "Reset password",
     "extra-verification": "Verify your account",
     "email-verification": "Verify your account",
+    "finish-sign-in": "Finish signing in",
   }[step];
-  const valid =
+  const valid = step === "finish-sign-in" || (
     step === "extra-verification"
       ? false
       : step === "verify" || step === "reset-code" || step === "email-verification"
@@ -212,7 +242,7 @@ function AuthForm() {
               (step === "new-password" || email.includes("@")) &&
               (step !== "new-password" || password === repeat) &&
               (step !== "sign-up" || terms),
-            );
+            ));
   // Authentication has already succeeded. Do not flash an empty sign-in or
   // sign-up card while the account's onboarding/landing decision loads.
   if (active) return (
@@ -296,7 +326,7 @@ function AuthForm() {
           ) : null}
           {step === "verify" || step === "reset-code" || step === "email-verification" ? (
             <>
-              <Body>Enter the code sent to {email}.</Body>
+              <Body>Enter the code from your email ({email}).</Body>
               <Field
                 label="Verification code"
                 value={code}
@@ -310,7 +340,8 @@ function AuthForm() {
                 secondary
                 disabled={busy}
                 onPress={() =>
-                  void run(async () => {
+                  void run(async setStage => {
+                    setStage("send_email_code");
                     await check(
                       step === "verify"
                         ? signUp.verifications.sendEmailCode()
@@ -379,7 +410,9 @@ function AuthForm() {
                     ? "Sign In"
                     : step === "sign-up"
                       ? "Create account"
-                      : "Continue"
+                      : step === "finish-sign-in"
+                        ? "Finish signing in"
+                        : "Continue"
               }
               disabled={busy || !valid}
               onPress={() => void run(submit)}
@@ -413,14 +446,15 @@ function AuthForm() {
                       });
                       if (result.authSessionResult?.type === "cancel" || result.authSessionResult?.type === "dismiss")
                         throw { code: "ERR_REQUEST_CANCELED" };
-                      if (!result.createdSessionId && !result.signIn?.existingSession) {
-                        setVerificationSignup(result.signUp?.status === "missing_requirements");
-                        setStep("extra-verification");
-                        setMessage(
-                          "Complete your account verification to continue.",
-                        );
+                      if (result.createdSessionId || result.signIn?.existingSession) return;
+                      const signupIncomplete = result.signUp?.status === "missing_requirements";
+                      if (!signupIncomplete && !needsSignInVerification(result.signIn?.status)) {
+                        throw new Error("Google sign-in couldn't continue. Try again or sign in with email.");
                       }
-                    }, "google")
+                      setVerificationSignup(signupIncomplete);
+                      setStep("extra-verification");
+                      setMessage("Complete your account verification to continue.");
+                    }, "google", "google_oauth")
                   }
                 />
               ))}
