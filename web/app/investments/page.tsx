@@ -10,6 +10,7 @@ import { useMobileCreationRoute } from "@/lib/use-mobile-creation-route";
 import Link from "next/link";
 import { compactSummaryMoney } from "../../../shared/summary-format";
 import { useEffect, useId, useMemo, useRef, useState, type FormEvent, type ReactNode } from "react";
+import { fetchJsonOnce } from "@/lib/request-dedupe";
 import { useSearchParams } from "next/navigation";
 import { CloverLoadingScreen } from "@/components/clover-loading-screen";
 import { CloverShell } from "@/components/clover-shell";
@@ -1172,7 +1173,7 @@ export default function InvestmentsPage() {
     let cancelled = false;
 
     const loadPlan = async () => {
-      const response = await fetch("/api/me");
+      const response = await fetch("/api/me?view=tier");
       if (!response.ok || cancelled) {
         return;
       }
@@ -1194,13 +1195,15 @@ export default function InvestmentsPage() {
     let cancelled = false;
 
     const loadWorkspaces = async () => {
-      const response = await fetch("/api/workspaces");
-      if (!response.ok || cancelled) {
-        return;
-      }
+      const response = await fetchJsonOnce<{ workspaces?: Workspace[] }>({
+        key: "workspaces:list",
+        route: "investments.workspaces",
+        input: "/api/workspaces",
+        timeoutMs: 5000,
+      }).catch(() => null);
+      if (!response?.ok || cancelled) return;
 
-      const payload = await response.json();
-      const items = Array.isArray(payload.workspaces) ? (payload.workspaces as Workspace[]) : [];
+      const items = response.json?.workspaces ?? [];
       setSelectedWorkspaceId((current) => chooseWorkspaceId(items, current));
     };
 

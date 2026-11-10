@@ -1631,12 +1631,21 @@ function AccountsPageContent() {
     let cancelled = false;
 
     const loadPlan = async () => {
-      const response = await fetch("/api/me");
-      if (!response.ok || cancelled) {
-        return;
-      }
+      const response = await fetchJsonOnce<{ user?: {
+        planTier: string;
+        accountLimit: number | null;
+        monthlyUploadLimit: number | null;
+        transactionLimit: number | null;
+        usage: { accountCount: number; monthlyUploadCount: number; transactionCount: number };
+        features: { luxuryAccountCards: boolean };
+      } }>({
+        key: "me:plan",
+        route: "/api/me",
+        input: "/api/me?view=plan",
+      }).catch(() => null);
+      if (!response?.ok || cancelled) return;
 
-      const payload = await response.json();
+      const payload = response.json;
       const nextPlanTier = payload?.user?.planTier === "premium" ? "premium" : payload?.user?.planTier === "pro" ? "pro" : "free";
       const nextLimits = payload?.user
         ? {
@@ -1766,7 +1775,7 @@ function AccountsPageContent() {
     setWorkspacesLoading(true);
     try {
       const response = await fetchJsonOnce<{ workspaces?: Workspace[] }>({
-        key: "accounts:workspaces",
+        key: "workspaces:list",
         route: "accounts.workspaces",
         input: "/api/workspaces",
         timeoutMs: 5000,

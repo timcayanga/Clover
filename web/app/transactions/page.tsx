@@ -2754,7 +2754,7 @@ function TransactionsPageContent() {
   const loadWorkspaces = async () => {
     try {
       const response = await fetchJsonOnce<{ workspaces?: Workspace[] }>({
-        key: "transactions:workspaces",
+        key: "workspaces:list",
         route: "transactions.workspaces",
         input: "/api/workspaces",
         timeoutMs: 5000,
@@ -3716,12 +3716,20 @@ function TransactionsPageContent() {
     let cancelled = false;
 
     const loadPlan = async () => {
-      const response = await fetch("/api/me");
-      if (!response.ok || cancelled) {
-        return;
-      }
+      const response = await fetchJsonOnce<{ user?: {
+        planTier: string;
+        accountLimit: number | null;
+        monthlyUploadLimit: number | null;
+        transactionLimit: number | null;
+        usage: { accountCount: number; monthlyUploadCount: number; transactionCount: number };
+      } }>({
+        key: "me:plan",
+        route: "/api/me",
+        input: "/api/me?view=plan",
+      }).catch(() => null);
+      if (!response?.ok || cancelled) return;
 
-      const payload = await response.json();
+      const payload = response.json;
       const nextPlanTier = payload?.user?.planTier === "premium" ? "premium" : payload?.user?.planTier === "pro" ? "pro" : "free";
       const nextLimits = payload?.user
         ? {
@@ -8434,127 +8442,131 @@ function TransactionsPageContent() {
           {isCompactViewport && hasSelectedTransactions ? <div className="transactions-mobile-selection-status" role="status"><span>{selectedTransactionCount} selected</span><button className="button button-secondary button-small" type="button" onClick={clearSelection}>Clear selection</button></div> : null}
           {!isCompactViewport ? (
             <div className="transactions-footer" style={{ ...transactionsFooterStyle, marginTop: "auto" }}>
-              <div className="table-footer__summary">
-                {totalTransactionCountForDisplay > 0 ? (
-                  <span className="transactions-footer__showing" role="status">{hasSelectedTransactions ? `${selectedTransactionCount} selected` : `Showing ${currentPageLabel}`}</span>
-                ) : null}
-                {warningTransactionCount > 0 ? (
-                  <button
-                    type="button"
-                    className="warning-summary-button"
-                    data-tooltip={`${warningTransactionCount} transaction${warningTransactionCount === 1 ? "" : "s"} need review. ${firstReviewTransaction ? warningReasonFor(firstReviewTransaction) ?? "" : ""} Open to review and edit the name, date, account, category, amount, or receipt details.`}
-                    title={`${warningTransactionCount} transaction${warningTransactionCount === 1 ? "" : "s"}`}
-                    onClick={() => {
-                      const nextReviewTransaction =
-                        activeWarningTransactionId ? nextReviewTransactionAfter(activeWarningTransactionId) : null;
-                      const targetReviewTransaction = nextReviewTransaction ?? firstReviewTransaction;
-                      if (targetReviewTransaction) {
-                        const visibleTargetIndex = visibleTransactions.findIndex(
-                          (transaction) => transaction.id === targetReviewTransaction.id
-                        );
-                        openTransactionReview(
-                          targetReviewTransaction,
-                          visibleTargetIndex >= 0
-                            ? (currentTransactionPage - 1) * transactionsPageSize + visibleTargetIndex
-                            : targetReviewTransaction.id === firstReviewTransaction?.id
-                              ? transactionsSummary.firstReviewTransactionIndex
-                              : null
-                        );
+              <div className="transactions-footer__paging">
+                <div className="table-footer__summary">
+                  {totalTransactionCountForDisplay > 0 ? (
+                    <span className="transactions-footer__showing" role="status">{hasSelectedTransactions ? `${selectedTransactionCount} selected` : `Showing ${currentPageLabel}`}</span>
+                  ) : null}
+                  {warningTransactionCount > 0 ? (
+                    <button
+                      type="button"
+                      className="warning-summary-button"
+                      data-tooltip={`${warningTransactionCount} transaction${warningTransactionCount === 1 ? "" : "s"} need review. ${firstReviewTransaction ? warningReasonFor(firstReviewTransaction) ?? "" : ""} Open to review and edit the name, date, account, category, amount, or receipt details.`}
+                      title={`${warningTransactionCount} transaction${warningTransactionCount === 1 ? "" : "s"}`}
+                      onClick={() => {
+                        const nextReviewTransaction =
+                          activeWarningTransactionId ? nextReviewTransactionAfter(activeWarningTransactionId) : null;
+                        const targetReviewTransaction = nextReviewTransaction ?? firstReviewTransaction;
+                        if (targetReviewTransaction) {
+                          const visibleTargetIndex = visibleTransactions.findIndex(
+                            (transaction) => transaction.id === targetReviewTransaction.id
+                          );
+                          openTransactionReview(
+                            targetReviewTransaction,
+                            visibleTargetIndex >= 0
+                              ? (currentTransactionPage - 1) * transactionsPageSize + visibleTargetIndex
+                              : targetReviewTransaction.id === firstReviewTransaction?.id
+                                ? transactionsSummary.firstReviewTransactionIndex
+                                : null
+                          );
+                        }
+                      }}
+                      aria-label={
+                        firstReviewTransaction
+                          ? `${warningTransactionCount} transaction${warningTransactionCount === 1 ? "" : "s"} have a warning. Open next warning.`
+                          : `${warningTransactionCount} transaction${warningTransactionCount === 1 ? "" : "s"} have a warning`
                       }
-                    }}
-                    aria-label={
-                      firstReviewTransaction
-                        ? `${warningTransactionCount} transaction${warningTransactionCount === 1 ? "" : "s"} have a warning. Open next warning.`
-                        : `${warningTransactionCount} transaction${warningTransactionCount === 1 ? "" : "s"} have a warning`
-                    }
-                  >
-                    <span className="warning-mark warning-mark--small" aria-hidden="true" />
-                    <span className="warning-summary-button__count" aria-hidden="true">{warningTransactionCount}</span>
-                  </button>
-                ) : null}
+                    >
+                      <span className="warning-mark warning-mark--small" aria-hidden="true" />
+                      <span className="warning-summary-button__count" aria-hidden="true">{warningTransactionCount}</span>
+                    </button>
+                  ) : null}
+                </div>
+                <nav className="transactions-pagination" aria-label="Transaction pages">
+                  {isPageLoading ? <span className="transactions-page-loading" role="status"><span className="spinner" aria-hidden="true" /> Loading</span> : null}
+                  <div className="transactions-pagination__nav">
+                    <button
+                      className="button button-secondary button-small transactions-action-button"
+                      type="button"
+                      onClick={() => changeTransactionPage(Math.max(1, currentTransactionPage - 1))}
+                      disabled={isPageLoading || currentTransactionPage <= 1}
+                    >
+                      Prev
+                    </button>
+                    {paginationPages.map((page, index) =>
+                      page === "ellipsis" ? (
+                        <span key={`ellipsis-${index}`} className="transactions-pagination__ellipsis" aria-hidden="true">
+                          …
+                        </span>
+                      ) : (
+                        <button
+                          key={page}
+                          className={`button button-secondary button-small transactions-action-button transactions-pagination__page ${
+                            page === currentTransactionPage ? "is-active" : ""
+                          }`}
+                          type="button"
+                          onClick={() => changeTransactionPage(page)}
+                          disabled={isPageLoading}
+                          aria-current={page === currentTransactionPage ? "page" : undefined}
+                        >
+                          {page}
+                        </button>
+                      )
+                    )}
+                    <button
+                      className="button button-secondary button-small transactions-action-button"
+                      type="button"
+                      onClick={() => changeTransactionPage(Math.min(totalTransactionPages, currentTransactionPage + 1))}
+                      disabled={isPageLoading || currentTransactionPage >= totalTransactionPages}
+                    >
+                      Next
+                    </button>
+                  </div>
+                  <label className="transactions-pagination__size">
+                    <span>Rows</span>
+                    <select
+                      value={transactionsPageSize}
+                      onChange={(event) => {
+                        setTransactionsPageSize(Number(event.target.value));
+                        setTransactionsPage(1);
+                      }}
+                      aria-label="Rows per page"
+                    >
+                      {[25, 50, 100, 200].map((value) => (
+                        <option key={value} value={value}>
+                          {value}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                </nav>
               </div>
-              <nav className="transactions-pagination" aria-label="Transaction pages">
-                {isPageLoading ? <span className="transactions-page-loading" role="status"><span className="spinner" aria-hidden="true" /> Loading</span> : null}
-                <div className="transactions-pagination__nav">
-                  <button
-                    className="button button-secondary button-small transactions-action-button"
-                    type="button"
-                    onClick={() => changeTransactionPage(Math.max(1, currentTransactionPage - 1))}
-                    disabled={isPageLoading || currentTransactionPage <= 1}
-                  >
-                    Prev
-                  </button>
-                  {paginationPages.map((page, index) =>
-                    page === "ellipsis" ? (
-                      <span key={`ellipsis-${index}`} className="transactions-pagination__ellipsis" aria-hidden="true">
-                        …
+              <div className="transactions-footer__actions">
+                <section className="transactions-footer-snapshot" aria-label="Cash flow snapshot for all filtered transactions">
+                  {summaryScope !== financialScopeKey ? <span className="transactions-totals-status" role="status">{isSummaryLoading ? "Updating totals…" : ""}</span> : null}
+                  <div className="transactions-footer-snapshot__metrics">
+                    <div className="transactions-footer-snapshot__metric">
+                      <span className="transactions-footer-snapshot__metric-label">{isAllCurrenciesView && transactionSummaryCurrencies.length > 1 ? "Est. Income" : "Income"}</span>
+                      <span className="transactions-footer-snapshot__metric-value positive">
+                        {summaryScope === financialScopeKey ? formatTransactionSummary(estimatedTransactionTotals.income) : "—"}
                       </span>
-                    ) : (
-                      <button
-                        key={page}
-                        className={`button button-secondary button-small transactions-action-button transactions-pagination__page ${
-                          page === currentTransactionPage ? "is-active" : ""
-                        }`}
-                        type="button"
-                        onClick={() => changeTransactionPage(page)}
-                        disabled={isPageLoading}
-                        aria-current={page === currentTransactionPage ? "page" : undefined}
-                      >
-                        {page}
-                      </button>
-                    )
-                  )}
-                  <button
-                    className="button button-secondary button-small transactions-action-button"
-                    type="button"
-                    onClick={() => changeTransactionPage(Math.min(totalTransactionPages, currentTransactionPage + 1))}
-                    disabled={isPageLoading || currentTransactionPage >= totalTransactionPages}
-                  >
-                    Next
-                  </button>
-                </div>
-                <label className="transactions-pagination__size">
-                  <span>Rows</span>
-                  <select
-                    value={transactionsPageSize}
-                    onChange={(event) => {
-                      setTransactionsPageSize(Number(event.target.value));
-                      setTransactionsPage(1);
-                    }}
-                    aria-label="Rows per page"
-                  >
-                    {[25, 50, 100, 200].map((value) => (
-                      <option key={value} value={value}>
-                        {value}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-              </nav>
-              <section className="transactions-footer-snapshot" aria-label="Cash flow snapshot for all filtered transactions">
-                {summaryScope !== financialScopeKey ? <span className="transactions-totals-status" role="status">{isSummaryLoading ? "Updating totals…" : ""}</span> : null}
-                <div className="transactions-footer-snapshot__metrics">
-                  <div className="transactions-footer-snapshot__metric">
-                    <span className="transactions-footer-snapshot__metric-label">{isAllCurrenciesView && transactionSummaryCurrencies.length > 1 ? "Est. Income" : "Income"}</span>
-                    <span className="transactions-footer-snapshot__metric-value positive">
-                      {summaryScope === financialScopeKey ? formatTransactionSummary(estimatedTransactionTotals.income) : "—"}
-                    </span>
+                    </div>
+                    <div className="transactions-footer-snapshot__metric">
+                      <span className="transactions-footer-snapshot__metric-label">{isAllCurrenciesView && transactionSummaryCurrencies.length > 1 ? "Est. Spending" : "Spending"}</span>
+                      <span className="transactions-footer-snapshot__metric-value negative">
+                        {summaryScope === financialScopeKey ? formatTransactionSummary(estimatedTransactionTotals.spending) : "—"}
+                      </span>
+                    </div>
+                    <div className="transactions-footer-snapshot__metric transactions-footer-snapshot__metric--net" style={transactionsFooterNetMetricStyle}>
+                      <span className="transactions-footer-snapshot__metric-label">{isAllCurrenciesView && transactionSummaryCurrencies.length > 1 ? "Est. Net Cash Flow" : "Net Cash Flow"}</span>
+                      <span className={`transactions-footer-snapshot__metric-value ${netCashFlow >= 0 ? "positive" : "negative"}`}>
+                        {summaryScope === financialScopeKey ? formatTransactionSummary(netCashFlow) : "—"}
+                      </span>
+                    </div>
                   </div>
-                  <div className="transactions-footer-snapshot__metric">
-                    <span className="transactions-footer-snapshot__metric-label">{isAllCurrenciesView && transactionSummaryCurrencies.length > 1 ? "Est. Spending" : "Spending"}</span>
-                    <span className="transactions-footer-snapshot__metric-value negative">
-                      {summaryScope === financialScopeKey ? formatTransactionSummary(estimatedTransactionTotals.spending) : "—"}
-                    </span>
-                  </div>
-                  <div className="transactions-footer-snapshot__metric transactions-footer-snapshot__metric--net" style={transactionsFooterNetMetricStyle}>
-                    <span className="transactions-footer-snapshot__metric-label">{isAllCurrenciesView && transactionSummaryCurrencies.length > 1 ? "Est. Net Cash Flow" : "Net Cash Flow"}</span>
-                    <span className={`transactions-footer-snapshot__metric-value ${netCashFlow >= 0 ? "positive" : "negative"}`}>
-                      {summaryScope === financialScopeKey ? formatTransactionSummary(netCashFlow) : "—"}
-                    </span>
-                  </div>
-                </div>
-              </section>
-              <button className="transactions-footer-add" type="button" onClick={() => void openManualAdd()} aria-label="Add transaction"><ActionIcon name="plus" /></button>
+                </section>
+                <button className="transactions-footer-add" type="button" onClick={() => void openManualAdd()} aria-label="Add transaction"><ActionIcon name="plus" /></button>
+              </div>
             </div>
           ) : null}
         </div>

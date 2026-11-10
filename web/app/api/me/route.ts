@@ -10,10 +10,27 @@ import { getCloverTokenUsage } from "@/lib/clover-token-usage";
 
 export const dynamic = "force-dynamic";
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
     const { userId } = await requireAuth();
     const user = await getOrCreateCurrentUser(userId);
+    const view = new URL(request.url).searchParams.get("view");
+    if (view === "tier") {
+      return NextResponse.json({ user: { planTier: user.planTier } });
+    }
+
+    const effectiveLimits = getEffectiveUserLimits(user);
+    const plan = {
+      planTier: user.planTier,
+      accountLimit: effectiveLimits.accountLimit,
+      monthlyUploadLimit: effectiveLimits.monthlyUploadLimit,
+      transactionLimit: effectiveLimits.transactionLimit,
+      features: { luxuryAccountCards: true },
+    };
+    if (view === "plan") {
+      return NextResponse.json({ user: { ...plan, usage: await getUserPlanUsage(user.id) } });
+    }
+
     const [billingSubscription, planUsage, latestUpload, cloverTokenUsage] = await Promise.all([
       getUserBillingSubscription(user.id),
       getUserPlanUsage(user.id),
@@ -24,15 +41,10 @@ export async function GET() {
       }),
       getCloverTokenUsage(user),
     ]);
-    const effectiveLimits = getEffectiveUserLimits(user);
-
     return NextResponse.json({
       user: {
         id: user.id,
-        planTier: user.planTier,
-        accountLimit: effectiveLimits.accountLimit,
-        monthlyUploadLimit: effectiveLimits.monthlyUploadLimit,
-        transactionLimit: effectiveLimits.transactionLimit,
+        ...plan,
         usage: planUsage,
         cloverTokenUsage,
         primaryGoal: user.primaryGoal,
@@ -42,9 +54,6 @@ export async function GET() {
         onboardingCompletedAt: user.onboardingCompletedAt,
         dataWipedAt: user.dataWipedAt,
         latestUploadAt: latestUpload?.createdAt.toISOString() ?? null,
-        features: {
-          luxuryAccountCards: true,
-        },
         billingSubscription: billingSubscription
           ? {
               provider: billingSubscription.provider,

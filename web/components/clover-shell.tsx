@@ -796,6 +796,7 @@ export function CloverShell({
   // initializers caused a full hydration rebuild on authenticated page loads.
   const [searchWorkspaceId, setSearchWorkspaceId] = useState(workspaceId || "");
   const [searchAccounts, setSearchAccounts] = useState<SidebarSearchAccount[]>([]);
+  const isSidebarSearchActive = isSearchOpen || searchQuery.trim().length > 0;
   const [searchPlanTier, setSearchPlanTier] = useState<"free" | "pro" | "premium" | "unknown">("unknown");
   const [searchTicker, setSearchTicker] = useState<SidebarSearchMarket | null>(null);
   const [searchTickerLoading, setSearchTickerLoading] = useState(false);
@@ -1288,6 +1289,7 @@ export function CloverShell({
   }, [isProfileDrawerOpen, isSidebarOpen]);
 
   useEffect(() => {
+    if (!isSidebarSearchActive) return;
     let cancelled = false;
 
     const loadCurrentUser = async () => {
@@ -1295,7 +1297,7 @@ export function CloverShell({
         const response = await fetchJsonOnce<{ user?: { planTier?: string } }>({
           key: `shell:me:${user?.id ?? "guest"}`,
           route: "/api/me",
-          input: "/api/me",
+          input: "/api/me?view=tier",
           cacheTtlMs: 5 * 60 * 1000,
         });
         if (!response.ok || cancelled) {
@@ -1316,7 +1318,7 @@ export function CloverShell({
     return () => {
       cancelled = true;
     };
-  }, [user?.id]);
+  }, [isSidebarSearchActive, user?.id]);
 
   useEffect(() => {
     setOpenMenu(null);
@@ -1419,9 +1421,10 @@ export function CloverShell({
         // Server-rendered directories can open before any client page has saved
         // a workspace selection. Resolve it before mounting the quick-add sheet.
         const response = await fetchJsonOnce<{ workspaces?: Array<{ id: string }> }>({
-          key: "shell:workspaces",
+          key: "workspaces:list",
           route: "shell.workspaces",
           input: "/api/workspaces",
+          timeoutMs: 5000,
         }).catch(() => null);
         if (cancelled) return;
         nextWorkspaceId = chooseWorkspaceId(response?.json?.workspaces ?? []);

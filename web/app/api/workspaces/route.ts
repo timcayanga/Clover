@@ -29,6 +29,12 @@ const orderWorkspaces = <T extends { type: string; createdAt: Date; updatedAt: D
         : new Date(right.updatedAt).getTime() - new Date(left.updatedAt).getTime();
   });
 
+const findUserWithWorkspaces = (clerkUserId: string) =>
+  prisma.user.findUnique({
+    where: { clerkUserId },
+    include: { workspaces: { orderBy: [{ updatedAt: "desc" }, { createdAt: "desc" }] } },
+  });
+
 export async function GET() {
   try {
     if (await isLocalDevHost()) {
@@ -39,21 +45,23 @@ export async function GET() {
     }
 
     const { userId } = await requireAuth();
-    const clerkUser = await syncClerkUser(userId);
-    const user = await prisma.user.findUnique({
-      where: { clerkUserId: clerkUser.clerkUserId },
-      include: {
-        workspaces: {
-          orderBy: [{ updatedAt: "desc" }, { createdAt: "desc" }],
-        },
-      },
-    });
+    const user = await findUserWithWorkspaces(userId);
+    const workspaces = user?.workspaces ?? [];
+    const hasPersonal = workspaces.some((workspace) => workspace.type === "personal");
+    const hasStarterDuplicates = workspaces.filter(
+      (workspace) => workspace.type === "personal" && workspace.name === "Personal"
+    ).length > 1;
 
-    if (user?.workspaces?.length && !user.workspaces.some((workspace) => workspace.type === "personal")) {
-      await ensureStarterWorkspace(user, clerkUser.email, clerkUser.verified);
+    if (!user || !workspaces.length) {
+      const clerkUser = await syncClerkUser(userId);
+      const starterWorkspace = await ensureStarterWorkspace(user ?? userId, clerkUser.email, clerkUser.verified);
+      return NextResponse.json({ workspaces: [starterWorkspace] });
     }
 
-    if (user?.workspaces?.length) {
+    if (!hasPersonal) {
+      const clerkUser = await syncClerkUser(userId);
+      await ensureStarterWorkspace(user, clerkUser.email, clerkUser.verified);
+    } else if (hasStarterDuplicates) {
       await repairDuplicateStarterWorkspaces(user.id).catch((error) => {
         console.warn("Unable to reconcile duplicate starter profiles", {
           userId: user.id,
@@ -62,44 +70,35 @@ export async function GET() {
       });
     }
 
-    const refreshedUser = user?.workspaces?.length
-      ? await prisma.user.findUnique({
-          where: { clerkUserId: clerkUser.clerkUserId },
-          include: {
-            workspaces: {
-              orderBy: [{ updatedAt: "desc" }, { createdAt: "desc" }],
-            },
-          },
-        })
+    const refreshedUser = !hasPersonal || hasStarterDuplicates
+      ? await findUserWithWorkspaces(userId)
       : user;
 
-    if (refreshedUser?.workspaces?.length) {
-      const orderedWorkspaces = orderWorkspaces(refreshedUser.workspaces);
-
-      // Keep background transactions alive until commit/rollback. An unowned
-      // promise can be frozen after the response while holding the defaults
-      // lock needed by an upload in another function instance.
-      after(async () => {
-        for (const workspace of orderedWorkspaces) {
-          await seedWorkspaceDefaults(workspace.id).catch((error) => {
-            console.warn("Unable to finish profile defaults", {
-              workspaceId: workspace.id,
-              error: error instanceof Error ? error.message : String(error),
-            });
-          });
-        }
-      });
-
-      return NextResponse.json({
-        workspaces: orderedWorkspaces,
-      });
+    if (!refreshedUser) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+    if (!refreshedUser.workspaces.length) {
+      const starterWorkspace = await ensureStarterWorkspace(refreshedUser);
+      return NextResponse.json({ workspaces: [starterWorkspace] });
     }
 
-    const starterWorkspace = await ensureStarterWorkspace(user ?? clerkUser.clerkUserId, clerkUser.email, clerkUser.verified);
+    const orderedWorkspaces = orderWorkspaces(refreshedUser.workspaces);
 
-    return NextResponse.json({
-      workspaces: orderWorkspaces(user?.workspaces?.length ? user.workspaces : [starterWorkspace]),
+    // Keep background transactions alive until commit/rollback. An unowned
+    // promise can be frozen after the response while holding the defaults
+    // lock needed by an upload in another function instance.
+    after(async () => {
+      for (const workspace of orderedWorkspaces) {
+        await seedWorkspaceDefaults(workspace.id).catch((error) => {
+          console.warn("Unable to finish profile defaults", {
+            workspaceId: workspace.id,
+            error: error instanceof Error ? error.message : String(error),
+          });
+        });
+      }
     });
+
+    return NextResponse.json({ workspaces: orderedWorkspaces });
   } catch (error) {
     if (isTransientDataError(error)) {
       return createTransientDataUnavailableResponse("Clover is refreshing your profiles.");

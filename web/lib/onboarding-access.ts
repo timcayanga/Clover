@@ -1,5 +1,7 @@
 import { redirect } from "next/navigation";
 import { getSessionContext } from "@/lib/auth";
+import { prisma } from "@/lib/prisma";
+import { getCurrentUserEnvironment, resolvePersistedUserEnvironment } from "@/lib/user-environment";
 import { getOrCreateCurrentUser, hasCompletedOnboarding } from "@/lib/user-context";
 
 export const ensureOnboardingAccess = async () => {
@@ -16,6 +18,18 @@ export const ensureOnboardingAccess = async () => {
   }
 
   if (session.isGuest) {
+    return;
+  }
+
+  const existing = await prisma.user.findUnique({
+    where: { clerkUserId: session.userId },
+    select: { onboardingCompletedAt: true, signupTrialEvaluatedAt: true, environment: true },
+  });
+  if (
+    existing?.signupTrialEvaluatedAt &&
+    hasCompletedOnboarding(existing) &&
+    existing.environment === resolvePersistedUserEnvironment(getCurrentUserEnvironment(), existing.environment)
+  ) {
     return;
   }
 
