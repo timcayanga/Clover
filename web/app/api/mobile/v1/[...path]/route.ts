@@ -910,7 +910,8 @@ async function handle(
         }
       },
     );
-    const projectionStarted = performance.now();
+    const timings = operation === "transactions" ? response.headers.get("Server-Timing") : null;
+    const projectionStarted = timings ? performance.now() : null;
     const responseData = await response.json();
     if (response.ok && operation === "import-status") {
       // An ImportFile row can precede durable source storage. Only release the
@@ -941,8 +942,7 @@ async function handle(
       }
     }
     const result = reply(mobileApiResponse(operation, responseData), response.status);
-    const timings = operation === "transactions" ? response.headers.get("Server-Timing") : null;
-    if (timings) result.headers.set("Server-Timing", `${timings}, tx_projection;dur=${(performance.now() - projectionStarted).toFixed(1)}`);
+    if (timings && projectionStarted !== null) result.headers.set("Server-Timing", `${timings}, tx_projection;dur=${(performance.now() - projectionStarted).toFixed(1)}`);
     return result;
   } catch (error) {
     if (error instanceof Error && error.message === "IDENTITY_ENVIRONMENT_CONFLICT")
