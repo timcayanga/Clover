@@ -8,7 +8,7 @@ vm.runInNewContext(compile('../src/api.ts'),{exports:api,URL,Headers,AbortContro
  if(name==='../../shared/native-upload')return upload;
  if(name==='./api-base')return {apiBase:()=> 'https://fixture.invalid'};
  if(name==='../../shared/split-bill-read')return {splitBillReadErrorCode:()=>undefined};
- if(name==='../../shared/analytics')return {newTelemetryId:()=>String(Math.random()),getTelemetryHeaders:()=>({}),requestTelemetry:path=>({operation:path.startsWith('uploads/')?'POST /uploads/:id/complete':'GET /bootstrap'}),telemetry:(event,p)=>events.push({event,...p}),beginTelemetry:()=>{let done=false;return(outcome,p)=>{if(done)return;done=true;events.push({event:outcome,...p})}}};
+ if(name==='../../shared/analytics')return {newTelemetryId:()=>String(Math.random()),getTelemetryHeaders:()=>({}),requestTelemetry:path=>({operation:path.startsWith('uploads/')?'POST /uploads/:id/complete':path.startsWith('transactions')?'GET /transactions':'GET /bootstrap'}),telemetry:(event,p)=>events.push({event,...p}),beginTelemetry:()=>{let done=false;return(outcome,p)=>{if(done)return;done=true;events.push({event:outcome,...p})}}};
  throw Error(name);
 }});
 const tick=()=>new Promise(r=>setImmediate(r));
@@ -24,4 +24,12 @@ for(const [code, reason] of [['IMPORT_PASSWORD_REQUIRED','password_required'],['
  assert.equal(events.at(-1).upload_rejection,reason);
 }
 assert.doesNotMatch(JSON.stringify(events),/customer-private-text|private error detail/);
+fetchImpl=async()=>({ok:true,status:200,headers:new Headers({"Server-Timing":"tx_scope;dur=2.3, tx_query;dur=4.1, tx_rows;dur=1.0, tx_projection;dur=0.2, tx_private;dur=999"}),json:async()=>({transactions:[]})});
+await api.apiRequest('synthetic','transactions?workspaceId=fixture');
+const timings=events.at(-2);
+assert.equal(timings.server_scope_ms,2.3);
+assert.equal(timings.server_query_ms,4.1);
+assert.equal(timings.server_rows_ms,1);
+assert.equal(timings.server_projection_ms,0.2);
+assert.equal(timings.server_private_ms,undefined);
 console.log('PASS actual API transport: hung native fetch/body settle, cancellation distinct, late results emit no success, 401 preserved and later requests recover');

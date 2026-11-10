@@ -135,7 +135,7 @@ export function mobileApiResponse(operation: string, value: unknown) {
   if (operation === "transaction-create") return { transaction: pick(data.transaction, ["id"]) };
   if (operation === "transactions")
     return {
-      ...pick(data, ["page", "totalCount"]),
+      ...pick(data, ["page", "totalCount", "totalCountIsExact", "hasMore"]),
       ...(data.summary ? { summary: pick(data.summary,["currencyTotals"]) } : {}),
       transactions: Array.isArray(data.transactions)
         ? data.transactions.map((row) => ({ ...pick(row, transactionFields), ...lastFour(row), ...transactionReview(row) }))

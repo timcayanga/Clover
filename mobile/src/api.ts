@@ -25,6 +25,7 @@ export async function apiRequest<T>(
   const description = requestTelemetry(path, options.method);
   const finish = description ? beginTelemetry((options.method ?? "GET").toUpperCase() === "GET" ? "data_load" : "flow", { ...description, operation_id }) : () => {};
   let status = 0;
+  const serverTimings: Record<string, number> = {};
   try {
     const result = await boundedRequest(async signal => {
     const url = new URL(`${apiBase()}/api/mobile/v1/${path}`);
@@ -47,6 +48,12 @@ export async function apiRequest<T>(
       throw new NetworkError(e.message || "Connection unavailable.");
     });
     status = response.status;
+    if (description?.operation === "GET /transactions") {
+      const timings = response.headers.get("Server-Timing") ?? "";
+      for (const match of timings.matchAll(/(?:^|, )tx_(scope|query|rows|projection);dur=(\d{1,6}(?:\.\d)?)(?=,|$)/g)) {
+        serverTimings[`server_${match[1]}_ms`] = Number(match[2]);
+      }
+    }
     if (response.ok && format === "text") {
       if (!response.headers.get("content-type")?.includes("text/csv"))
         throw new Error("Unexpected export format.");
@@ -67,7 +74,7 @@ export async function apiRequest<T>(
       path.includes("/process") || path.startsWith("finverse/") || path.startsWith("uploads/") ||
       path.startsWith("split-bill-receipts/") || path.startsWith("adviser/chat") ? 120000 :
       path.startsWith("billing/store") ? 60000 : 25000 });
-    finish("completed", { status });
+    finish("completed", { status, ...serverTimings });
     if (format === "json" && description && (options.method ?? "GET").toUpperCase() === "GET") telemetry("data_ready", { ...description, duration_ms: Date.now() - started, timing_boundary: "response_body_consumed" });
     return result;
   } catch (error) {

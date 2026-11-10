@@ -42,6 +42,8 @@ export type TransactionPage = {
   };
   transactions: Transaction[];
   totalCount: number;
+  totalCountIsExact?: boolean;
+  hasMore?: boolean;
   page: number;
 };
 export type Profile = { id: string; name: string };

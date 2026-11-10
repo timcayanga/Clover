@@ -1,3 +1,4 @@
+import { getMobileRequestContext } from "@/lib/mobile-request-context";
 import { normalizeRegionalPreferences } from "@/lib/regional-preferences";
 import { manualTransactionName, manualTransactionToday, validManualTransactionDate } from "../../../../shared/manual-transaction-defaults";
 import { actionableReviewIds } from "@/lib/actionable-transaction-review";
@@ -657,18 +658,22 @@ const mapTransactionRow = (transaction: {
 
 // Only hydrate labels for the returned page, not every transaction used by
 // summary calculations. This keeps search-by-tag and the row cache consistent.
-const withTransactionTags = async <T extends { id: string; importFileId?: string | null }>(rows: T[], workspaceId: string) => {
+const withTransactionTags = async <T extends { id: string; importFileId?: string | null }>(rows: T[], workspaceId: string, includeSourceNames = true) => {
   if (!rows.length) return rows;
-  const links = await prisma.transactionTag.findMany({
-    where: { transactionId: { in: rows.map((row) => row.id) }, transaction: { workspaceId } },
-    select: { transactionId: true, tag: { select: { id: true, name: true } } },
-  });
+  const sourceIds = includeSourceNames
+    ? [...new Set(rows.flatMap((row) => row.importFileId ? [row.importFileId] : []))]
+    : [];
+  const [links, sources] = await Promise.all([
+    prisma.transactionTag.findMany({
+      where: { transactionId: { in: rows.map((row) => row.id) }, transaction: { workspaceId } },
+      select: { transactionId: true, tag: { select: { id: true, name: true } } },
+    }),
+    sourceIds.length ? prisma.importFile.findMany({
+      where: { workspaceId, id: { in: sourceIds } }, select: { id: true, fileName: true },
+    }) : [],
+  ]);
   const tagsById = new Map<string, Array<{ id: string; name: string }>>();
   for (const link of links) tagsById.set(link.transactionId, [...(tagsById.get(link.transactionId) ?? []), link.tag]);
-  const sourceIds = [...new Set(rows.flatMap((row) => row.importFileId ? [row.importFileId] : []))];
-  const sources = sourceIds.length ? await prisma.importFile.findMany({
-    where: { workspaceId, id: { in: sourceIds } }, select: { id: true, fileName: true },
-  }) : [];
   const sourceNames = new Map(sources.map((source) => [source.id, source.fileName]));
   return rows.map((row) => ({ ...row, tags: tagsById.get(row.id) ?? [], importFileName: row.importFileId ? sourceNames.get(row.importFileId) ?? null : null }));
 };
@@ -734,6 +739,8 @@ const getWorkspaceCurrencyCodes = async (workspaceId: string) => {
 };
 
 export async function GET(request: Request) {
+  const started = performance.now();
+  const native = getMobileRequestContext()?.request === request;
   try {
     const userId = await resolveTransactionsRouteUserId();
     const { searchParams } = new URL(request.url);
@@ -797,28 +804,44 @@ export async function GET(request: Request) {
     const requestedPage = Math.max(1, Number(searchParams.get("page") ?? "1") || 1);
     const requestedPageSize = includeAll ? null : Math.max(1, Number(pageSizeParam ?? "25") || 25);
     if (searchParams.get("summaryMode") === "rows" && !hasEffectiveCategoryFilters && filters.sortField !== "account") {
+      const queryStarted = performance.now();
       const reviewIds = filters.reviewFilter === "pending" ? await actionableReviewIds(visibleWhere) : null;
       const scope = reviewIds ? { AND: [visibleWhere, { id: { in: reviewIds } }] } : visibleWhere;
       const take = Math.min(requestedPageSize ?? 30, 200);
       const previewTake = Math.min(take, Math.max(1, Math.floor(Number(searchParams.get("previewSize"))) || take));
+      const lookAhead = native && searchParams.get("pagination") === "lookahead" && previewTake === take && !reviewIds;
+      const skip = (requestedPage - 1) * take;
       const [pageRows, count, currencyCodes] = await Promise.all([
         prisma.transaction.findMany({
           where: scope,
-          include: { account: true, category: true, splitBill: { select: { id: true, title: true } } },
+          include: native
+            ? { account: { select: { name: true, type: true, institution: true, accountNumber: true } }, category: { select: { name: true } } }
+            : { account: true, category: true, splitBill: { select: { id: true, title: true } } },
           orderBy,
-          skip: (requestedPage - 1) * take,
-          take: previewTake,
+          skip,
+          take: lookAhead ? take + 1 : previewTake,
         }),
-        reviewIds ? Promise.resolve(reviewIds.length) : prisma.transaction.count({ where: scope }),
-        getWorkspaceCurrencyCodes(workspaceId),
+        lookAhead ? null : reviewIds ? reviewIds.length : prisma.transaction.count({ where: scope }),
+        // Native rows never expose or use the Profile's currency catalogue.
+        native ? [] : getWorkspaceCurrencyCodes(workspaceId),
       ]);
-      const mapped = pageRows.map(row => mapTransactionRow({
+      const queryFinished = performance.now();
+      const hasMore = count === null ? pageRows.length > take : skip + take < count;
+      const mapped = pageRows.slice(0, previewTake).map(row => mapTransactionRow({
         ...row, accountNumber: row.account.accountNumber, warningReason: null,
-      }, workspaceAccounts));
+        splitBill: "splitBill" in row ? row.splitBill as { id: string; title: string } | null : null,
+      }, workspaceAccounts, !native));
+      const transactions = await withTransactionTags(mapped, workspaceId, !native);
       return NextResponse.json({
-        transactions: await withTransactionTags(mapped, workspaceId),
-        totalCount: count, totalCountIsExact: true, page: requestedPage, pageSize: take, currencyCodes,
-      });
+        transactions, totalCount: count ?? (pageRows.length ? skip + pageRows.length : 0),
+        totalCountIsExact: count !== null || !hasMore && (skip === 0 || pageRows.length > 0),
+        ...(native ? { hasMore } : {}),
+        page: requestedPage, pageSize: take, currencyCodes,
+      }, native ? { headers: { "Server-Timing": [
+        `tx_scope;dur=${(queryStarted - started).toFixed(1)}`,
+        `tx_query;dur=${(queryFinished - queryStarted).toFixed(1)}`,
+        `tx_rows;dur=${(performance.now() - queryFinished).toFixed(1)}`,
+      ].join(", ") } } : undefined);
     }
     const [currencyCodes, totalCount] = await Promise.all([
       getWorkspaceCurrencyCodes(workspaceId),

@@ -910,6 +910,7 @@ async function handle(
         }
       },
     );
+    const projectionStarted = performance.now();
     const responseData = await response.json();
     if (response.ok && operation === "import-status") {
       // An ImportFile row can precede durable source storage. Only release the
@@ -939,7 +940,10 @@ async function handle(
         };
       }
     }
-    return reply(mobileApiResponse(operation, responseData), response.status);
+    const result = reply(mobileApiResponse(operation, responseData), response.status);
+    const timings = operation === "transactions" ? response.headers.get("Server-Timing") : null;
+    if (timings) result.headers.set("Server-Timing", `${timings}, tx_projection;dur=${(performance.now() - projectionStarted).toFixed(1)}`);
+    return result;
   } catch (error) {
     if (error instanceof Error && error.message === "IDENTITY_ENVIRONMENT_CONFLICT")
       return reply({ error: "This email is already linked to another Clover sign-in. Use your original sign-in method or contact support." }, 409);

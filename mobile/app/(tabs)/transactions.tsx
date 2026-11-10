@@ -1,3 +1,4 @@
+import { beginTelemetry } from "../../../shared/analytics";
 import { TransactionPagination } from "../../src/transaction-pagination";
 import { MerchantLogo } from "../../src/merchant-logo";
 import { SwipeDeleteRow } from "../../src/swipe-delete-row";
@@ -11,7 +12,7 @@ import { AccountBrandLogo } from "../../src/account-brand-logo";
 import { Text } from "../../src/app-text";
 import { router, useFocusEffect, useLocalSearchParams } from "expo-router";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { ActivityIndicator, FlatList, Modal, Pressable, View, useWindowDimensions } from "react-native";
+import { ActivityIndicator, FlatList, Modal, Pressable, View, useWindowDimensions, type FlatListProps } from "react-native";
 import { matchesDemoFilters, demoFilterOptions } from "../../src/transaction-filter-query";
 import { TransactionFilterPanel } from "../../src/transaction-filters";
 import { hasTransactionFilters, emptyTransactionFilters, transactionFilterQuery, type TransactionFilters, type FilterOptions } from "../../src/transaction-filter-query";
@@ -78,7 +79,10 @@ export default function Transactions() {
   const [query, setQuery] = useState("");
   const [search, setSearch] = useState("");
   useEffect(() => { if (params.query !== undefined) setQuery(params.query); }, [params.query]);
-  const [rows, setRows] = useState<Transaction[]>([]);
+  const [loadedRows, setRows] = useState<Transaction[]>([]);
+  const [rowScope, setRowScope] = useState("");
+  const [rowSource, setRowSource] = useState<"cache" | "request" | null>(null);
+  const [hasMore, setHasMore] = useState(false);
   const [page, setPage] = useState(1);
   const [total, setTotal] = useState(0);
   const [busy, setBusy] = useState(false);
@@ -88,22 +92,51 @@ export default function Transactions() {
   const activeScope = useRef("");
   const scope = `${profileId}:${search}:${JSON.stringify(filterValues)}`;
   activeScope.current = scope;
+  const rows = rowScope === scope ? loadedRows : [];
+  const cachedPage = useRef(cached);
+  cachedPage.current = cached;
+  const firstRows = useRef<{ scope: string; finish: ReturnType<typeof beginTelemetry> } | null>(null);
+  const viewableRows = useRef<{ scope: string; ids: string[] } | null>(null);
+  const presentation = useRef({ scope, rowScope, rowSource, rows });
+  presentation.current = { scope, rowScope, rowSource, rows };
+  const finishViewableRows = useCallback(() => {
+    const timing = firstRows.current;
+    const visible = viewableRows.current;
+    const list = presentation.current;
+    if (!timing || !visible || !list.rowSource || timing.scope !== list.scope ||
+        visible.scope !== list.scope || list.rowScope !== list.scope ||
+        !list.rows.some(row => visible.ids.includes(row.id))) return;
+    firstRows.current = null;
+    timing.finish("completed", { result: "rows", row_source: list.rowSource });
+  }, []);
+  const onViewableItemsChanged = useCallback<NonNullable<FlatListProps<Transaction>["onViewableItemsChanged"]>>(({ viewableItems }) => {
+    viewableRows.current = {
+      scope: presentation.current.rowScope,
+      ids: viewableItems.filter(token => token.isViewable).map(token => token.item.id),
+    };
+    finishViewableRows();
+  }, [finishViewableRows]);
   useEffect(() => {
     const timer = setTimeout(() => setSearch(query.trim()), 300);
     return () => clearTimeout(timer);
   }, [query]);
   const load = useCallback(
     async (next = 1, refresh = false) => {
+      if (!demo && !profileId) return false;
       const ticket = pagination.begin(next);
       if(ticket === null) return false;
       setBusy(true);
       setError("");
-      const resource = `transactions?workspaceId=${encodeURIComponent(profileId)}&query=${encodeURIComponent(search)}&page=${next}&${transactionFilterQuery(filterValues)}`;
+      const legacyResource = `transactions?workspaceId=${encodeURIComponent(profileId)}&query=${encodeURIComponent(search)}&page=${next}&${transactionFilterQuery(filterValues)}`;
+      const resource = `${legacyResource}&pagination=lookahead`;
       if (next === 1) setPage(1);
       if (next === 1 && !refresh) {
-        const previous = cached<TransactionPage>(resource);
+        const previous = cachedPage.current<TransactionPage>(resource) ?? cachedPage.current<TransactionPage>(legacyResource);
+        setRowScope(scope);
         setRows(previous?.transactions ?? []);
+        setRowSource(previous?.transactions.length ? "cache" : null);
         setTotal(previous?.totalCount ?? 0);
+        setHasMore(previous?.hasMore ?? Boolean(previous && previous.transactions.length < previous.totalCount));
       }
       setRefreshing(refresh);
       try {
@@ -119,23 +152,21 @@ export default function Transactions() {
               totalCount: samples.length,
               page: 1,
             }
-          : await request(
-              `transactions?workspaceId=${encodeURIComponent(profileId)}&query=${encodeURIComponent(search)}&page=${next}&${transactionFilterQuery(filterValues)}`,
-            );
-        if (!pagination.current(ticket)) return false;
-        setRows((previous) =>
-          next === 1
-            ? data.transactions
-            : [
-                ...previous,
-                ...data.transactions.filter(
-                  (row) => !previous.some((item) => item.id === row.id),
-                ),
-              ],
-        );
+          : await request(resource);
+        if (!pagination.current(ticket) || activeScope.current !== scope) return false;
+        if (next === 1) {
+          setRowScope(scope);
+          setRowSource("request");
+        }
+        setRows(previous => {
+          if (next === 1) return data.transactions;
+          const seen = new Set(previous.map(row => row.id));
+          return [...previous, ...data.transactions.filter(row => !seen.has(row.id))];
+        });
         setPage(next);
         pagination.complete(ticket,next);
         setTotal(demo ? data.transactions.length : data.totalCount);
+        setHasMore(!demo && (data.hasMore ?? (next - 1) * 30 + data.transactions.length < data.totalCount));
         return true;
       } catch (e) {
         if (pagination.current(ticket)) setError((e as Error).message);
@@ -148,24 +179,47 @@ export default function Transactions() {
         }
       }
     },
-    [demo, samples, profileId, request, search, filterValues],
+    [demo, samples, profileId, request, search, filterValues, scope, pagination],
   );
   useFocusEffect(
     useCallback(() => {
+      const timing = !demo && profileId ? { scope, finish: beginTelemetry("data_load", {
+        operation: "transactions_first_rows",
+        phase: "presentation",
+        screen: "/transactions",
+        timing_boundary: "focus_to_first_viewable_rows",
+        filtered: hasTransactionFilters(filterValues, search),
+      }) } : null;
+      firstRows.current = timing;
       void load();
       const unregister = registerScreenRefresh("/transactions", () => load(1, true));
       return () => {
         unregister();
         pagination.invalidate();
+        if (timing && firstRows.current === timing) {
+          firstRows.current = null;
+          timing.finish("canceled", { reason: "scope_left" });
+        }
       };
-    }, [load]),
+    }, [load, demo, profileId, scope, filterValues, search, pagination]),
   );
   useEffect(() => {
-    if(!busy && pagination.takeDeferredEnd() && !error && !demo && rows.length > 0 && rows.length < total) void load(page+1);
-  }, [busy,error,demo,rows.length,total,page,load,pagination]);
+    finishViewableRows();
+    const timing = firstRows.current;
+    if (!timing || timing.scope !== scope || rowScope !== scope) return;
+    if (!busy && rows.length === 0 && (error || rowSource === "request")) {
+      firstRows.current = null;
+      timing.finish(error ? "failed" : "completed", { result: error ? "request_failed" : "empty" });
+    }
+  });
+  useEffect(() => {
+    if(!busy && pagination.takeDeferredEnd() && !error && !demo && rows.length > 0 && hasMore) void load(page+1);
+  }, [busy,error,demo,rows.length,hasMore,page,load,pagination]);
   useEffect(() => { setSelection([]); setAction(null); setActionError(""); }, [profileId, search, filterValues]);
   const toggleSelection = (id:string) => setSelection(current=>current.includes(id) ? current.filter(value=>value!==id) : current.length < 500 ? [...current,id] : current);
-  const selectedReviewIds = rows.filter(row=>selection.includes(row.id) && transactionReviewReasons(row).length>0).map(row=>row.id);
+  const selectedReviewIds = selection.length
+    ? rows.filter(row => selection.includes(row.id) && transactionReviewReasons(row).length > 0).map(row => row.id)
+    : [];
   const resolveAction = async (kind:"keep"|"delete") => {
     if(!action || acting || demo) return;
     const ids = action.ids;
@@ -247,7 +301,9 @@ export default function Transactions() {
         </View>
       </Modal>
       <FlatList
+        key={scope}
         data={rows}
+        onViewableItemsChanged={onViewableItemsChanged}
         keyExtractor={(row) => row.id}
         keyboardShouldPersistTaps="handled"
         refreshing={refreshing}
@@ -256,7 +312,7 @@ export default function Transactions() {
         onEndReached={() => {
           if(demo || rows.length === 0) return;
           if(pagination.busy) pagination.deferEnd();
-          else if(!error && rows.length < total) void load(page+1);
+          else if(!error && hasMore) void load(page+1);
         }}
         contentContainerStyle={{
           paddingHorizontal: 0,
