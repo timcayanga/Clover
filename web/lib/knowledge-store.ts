@@ -1,5 +1,6 @@
 import "server-only";
 import { cache } from "react";
+import { revalidateTag, unstable_cache } from "next/cache";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { knowledgeSeeds, knowledgeCategories } from "@/lib/knowledge-seed";
@@ -12,7 +13,13 @@ import {
   type KnowledgeContent,
 } from "@/lib/knowledge-types";
 
-export const getKnowledge = cache(async () => {
+const publicKnowledgeTag = "clover-public-knowledge";
+
+export function invalidatePublicKnowledge() {
+  revalidateTag(publicKnowledgeTag);
+}
+
+const loadPublicKnowledge = unstable_cache(async () => {
   const entries = new Map(knowledgeSeeds.map((entry) => [entry.path, entry]));
   let categories = knowledgeCategories;
   // Local previews without a database use the bundled collection. Configured
@@ -64,7 +71,9 @@ export const getKnowledge = cache(async () => {
     entries: [...entries.values()].sort((a, b) => a.order - b.order),
     categories,
   };
-});
+}, [publicKnowledgeTag], { tags: [publicKnowledgeTag], revalidate: 60 });
+
+export const getKnowledge = cache(loadPublicKnowledge);
 
 export async function getEditorialLibrary() {
   const [rows, settings, runs, feedback] = await Promise.all([

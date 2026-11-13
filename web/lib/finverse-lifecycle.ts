@@ -59,15 +59,20 @@ export async function sweepBankConnections() {
   const environment=process.env.CLOVER_DEPLOYMENT_ENVIRONMENT==='staging'||process.env.VERCEL_ENV==='preview'?'staging':'production';
   const users=await prisma.finverseConnection.findMany({where:{user:{environment},status:{not:'disconnected'},encryptedRefreshToken:{not:null}},distinct:['userId'],select:{userId:true}});
   for(const {userId} of users) await enforceBankAllowance(userId);
-  const active=await prisma.finverseConnection.findMany({where:{user:{environment},status:{not:'disconnected'},disconnectRequestedAt:null,encryptedRefreshToken:{not:null}}});
+  const active = await prisma.finverseConnection.findMany({
+    where: { user: { environment }, status: { not: "disconnected" }, disconnectRequestedAt: null, encryptedRefreshToken: { not: null } },
+    select: {
+      id: true, createdAt: true, lastSyncedAt: true, inactivityWarnedAt: true, syncFailureSince: true,
+      _count: { select: { accountLinks: { where: { accountId: { not: null }, unlinkedAt: null } } } },
+    },
+  });
   for(const c of active) {
     const deadline=inactivityDeadline(c.lastSyncedAt,c.createdAt);
     // Recent failed attempts receive a repair grace period; do not label these as inactivity.
     const failedRecently=Boolean(c.syncFailureSince && +now-+c.syncFailureSince<14*86_400_000);
     if(!c.inactivityWarnedAt && +deadline-+now<=14*86_400_000) await prisma.finverseConnection.update({where:{id:c.id},data:{inactivityWarnedAt:now}});
     if(deadline<=now && !failedRecently && c.inactivityWarnedAt && +now-+c.inactivityWarnedAt>=14*86_400_000) await requestBankDisconnect(c.id,'No successful sync for 90 days',c.lastSyncedAt);
-    const activeLinks=await prisma.finverseAccountLink.count({where:{connectionId:c.id,accountId:{not:null},unlinkedAt:null}});
-    if(!activeLinks && (c.lastSyncedAt || +now-+c.createdAt>86_400_000)) await requestBankDisconnect(c.id,'No linked Clover accounts remain',undefined,true);
+    if(!c._count.accountLinks && (c.lastSyncedAt || +now-+c.createdAt>86_400_000)) await requestBankDisconnect(c.id,'No linked Clover accounts remain',undefined,true);
   }
   const pending=await prisma.finverseConnection.findMany({where:{user:{environment},status:'disconnect_pending',disconnectRetryAt:{lte:now}},orderBy:{disconnectRetryAt:'asc'},take:100,select:{id:true}});
   const started=Date.now();let attempted=0,revoked=0;for(const c of pending){if(Date.now()-started>120_000)break;attempted++;if(await revokeBankConnection(c.id))revoked++;}

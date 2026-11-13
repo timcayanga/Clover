@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { requireAdminAuth } from "@/lib/admin";
-import { getEditorialLibrary, mutateArticle } from "@/lib/knowledge-store";
+import { getEditorialLibrary, invalidatePublicKnowledge, mutateArticle } from "@/lib/knowledge-store";
 import {
   aiSettingsSchema,
   contentPathSchema,
@@ -93,6 +93,7 @@ export async function POST(request: Request) {
         create: { ai: defaultAiSettings, categoryOrder: order },
         update: { categoryOrder: order },
       });
+      invalidatePublicKnowledge();
       return NextResponse.json({ ok: true });
     }
     const input = z
@@ -109,7 +110,9 @@ export async function POST(request: Request) {
       throw new Error(
         "Confirm that you reviewed the exact draft, sources, and product steps.",
       );
-    return NextResponse.json(await mutateArticle(input, actor));
+    const result = await mutateArticle(input, actor);
+    if (input.action !== "save") invalidatePublicKnowledge();
+    return NextResponse.json(result);
   } catch (error) {
     const safe =
       error instanceof z.ZodError
