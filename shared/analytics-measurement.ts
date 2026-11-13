@@ -4,6 +4,30 @@ export const isPublicAnalyticsPath = (path: string) => {
   const pathname = path.split(/[?#]/)[0];
   return PUBLIC_ANALYTICS_ROOTS.some(root => pathname === root || root !== "/" && pathname.startsWith(root + "/"));
 };
+export function websiteSection(path: string) {
+  const root = "/" + path.split(/[/?#]/)[1];
+  switch (root) {
+    case "/sign-in":
+    case "/sign-up":
+      return "auth";
+    case "/contact-us":
+    case "/help":
+      return "support";
+    case "/privacy-policy":
+    case "/terms-of-service":
+    case "/refund-policy":
+    case "/dispute-resolution":
+    case "/business-registration":
+      return "legal";
+    case "/landing-showcase":
+    case "/landing-preview":
+    case "/landing-motion":
+      return "preview";
+    default:
+      return isPublicAnalyticsPath(path) ? "marketing" : "app";
+  }
+}
+
 export const ANALYTICS_ACTIONS = ["signup", "login", "logout", "open_clover", "download_ios", "download_android", "contact_support", "view_pricing", "view_features", "view_help", "view_guides", "view_security", "view_pro", "view_legal", "social_instagram", "social_facebook", "social_tiktok", "social_youtube", "pricing_monthly", "pricing_yearly", "pricing_previous", "pricing_next", "open_menu", "close_menu", "view_report_example"] as const;
 const actionNames = new Set<string>(ANALYTICS_ACTIONS);
 const exactLabels: Record<string,string> = { "organize my finances for free":"signup", "start free":"signup", "get started":"signup", "create an account":"signup", "sign up":"signup", "log in":"login", "sign in":"login", "log out":"logout", "open clover":"open_clover", "monthly":"pricing_monthly", "yearly":"pricing_yearly", "annual":"pricing_yearly", "previous plan":"pricing_previous", "next plan":"pricing_next", "features":"view_features", "open menu":"open_menu", "close menu":"close_menu" };

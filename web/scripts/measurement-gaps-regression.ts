@@ -128,7 +128,7 @@ async function main() {
   assert.doesNotMatch(reportOutput[0],/real@example.org|synthetic-customer|user_customer/);
   // Execute the actual browser collectors with a DOM/event double, not a second copy of the logic.
   let pathname="/help/imports/receipts", now=0;
-  const browserEvents:any[]=[], effects:Array<()=>void>=[], listeners=new Map<string,Function>();
+  const browserEvents:any[]=[], effects:Array<()=>void>=[], listeners=new Map<string,Function>(), windowListeners=new Map<string,Function>();
   class ElementDouble {
     constructor(public attrs:Record<string,string>={},public tagName="A",public textContent=""){}
     getAttribute(key:string){return this.attrs[key] ?? null;}
@@ -141,8 +141,8 @@ async function main() {
   const browserSource=ts.transpileModule(readFileSync("components/posthog-analytics.tsx","utf8"),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022,jsx:ts.JsxEmit.ReactJSX}}).outputText;
   const sharedAnalytics=await import("../../shared/analytics");
   const measurement=await import("../../shared/analytics-measurement");
-  vm.runInNewContext(browserSource+"\nexports.runViews=PostHogPageViews;exports.runBehavior=PostHogBehaviorSignals;",{exports:browserModule.exports,Element:ElementDouble,URL,URLSearchParams,document:doc,navigator:{userAgent:"iPhone Safari",maxTouchPoints:1},performance:{now:()=>now},window:{location,innerWidth:390,innerHeight:844,localStorage:{getItem:()=>null,setItem:()=>{}},posthog:{capture:(event:string,properties:any)=>browserEvents.push({event,properties})},addEventListener:()=>{},removeEventListener:()=>{}},require:(id:string)=>{
-    if(id==="react")return {useEffect:(fn:()=>any)=>{const cleanup=fn();if(cleanup)effects.push(cleanup);}};
+  vm.runInNewContext(browserSource+"\nexports.runViews=PostHogPageViews;exports.runBehavior=PostHogBehaviorSignals;",{exports:browserModule.exports,Element:ElementDouble,URL,URLSearchParams,document:doc,navigator:{userAgent:"iPhone Safari",maxTouchPoints:1},performance:{now:()=>now},window:{location,innerWidth:390,innerHeight:844,localStorage:{getItem:()=>null,setItem:()=>{}},posthog:{capture:(event:string,properties:any,options:any)=>browserEvents.push({event,properties,options})},addEventListener:(key:string,fn:Function)=>windowListeners.set(key,fn),removeEventListener:(key:string)=>windowListeners.delete(key)},require:(id:string)=>{
+    if(id==="react")return {useRef:(current:any)=>({current}),useEffect:(fn:()=>any)=>{const cleanup=fn();if(cleanup)effects.push(cleanup);}};
     if(id==="next/navigation")return {usePathname:()=>pathname};
     if(id.includes("shared/analytics-measurement"))return measurement;
     if(id.includes("shared/analytics"))return sharedAnalytics;
@@ -166,7 +166,23 @@ async function main() {
   assert.equal(browserEvents.at(-1).properties.action,"other");
   listeners.get("click")!({target:new ElementDouble({"aria-label":"PRIVATE 12345"},"BUTTON"),clientX:30,clientY:20});
   assert.equal(browserEvents.at(-1).properties.action,"other");
-  pathname="/accounts";location.pathname=pathname;now=1000;effects.forEach(fn=>fn());
+  listeners.get("click")!({target:new ElementDouble({"href":"https://apps.apple.com/ph/app/clover-personal-finance/id6811711508"}),clientX:30,clientY:20});
+  assert.deepEqual(browserEvents.filter(e=>e.event==="app_store_click").map(e=>e.properties.store), ["google_play","app_store"]);
+  assert.deepEqual(["/","/pricing","/guides/savings","/sign-up","/help/imports","/contact-us","/privacy-policy","/accounts"].map(measurement.websiteSection),
+    ["marketing","marketing","marketing","auth","support","support","legal","app"]);
+  assert.equal(browserEvents[0].properties.website_section,"support");
+  now=1400;
+  doc.visibilityState="hidden";
+  listeners.get("visibilitychange")!();
+  now=8400;
+  windowListeners.get("pagehide")!();
+  pathname="/accounts";location.pathname=pathname;effects.forEach(fn=>fn());
+  const exits=browserEvents.filter(e=>e.event==="$pageleave");
+  assert.equal(exits.length,1);
+  assert.equal(exits[0].properties.$prev_pageview_duration,1.4);
+  assert.equal(exits[0].properties.website_section,"support");
+  assert.equal(exits[0].properties.$pathname,"/help/imports/:id");
+  assert.equal(exits[0].options.transport,"sendBeacon");
   assert.equal(browserEvents.at(-1).properties.public_resource_path,"/help/imports/receipts","cleanup must retain the old page, not attribute it to the next one");
   assert.doesNotMatch(JSON.stringify(browserEvents),/PRIVATE|12345|private=/);
   console.log("PASS measurement gaps: public resources, named/privacy-safe CTAs, staff/test/customer boundaries, current-person historical filters, simulator/bot separation, read-only audience lookup and real Node SDK provenance.");

@@ -1,6 +1,5 @@
 import { ClerkAuthScreen } from "@/components/clerk-auth-screen";
-import { PostHogEvent } from "@/components/posthog-analytics";
-import { analyticsOnceKey } from "@/lib/analytics";
+import { PostHogPageEvent } from "@/components/posthog-analytics";
 import { isCircleInvitationToken } from "@/lib/circle-invitations";
 
 const publishableKey = process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY ?? process.env.CLERK_PUBLISHABLE_KEY;
@@ -24,7 +23,7 @@ export default async function SignUpPage({ searchParams }: { searchParams?: Prom
 
   return (
     <main className="auth-page auth-page--signup">
-      <PostHogEvent event="signup_started" onceKey={analyticsOnceKey("signup_started", "session")} />
+      {publishableKey && <PostHogPageEvent event="signup_started" properties={{ signup_surface: "web_form" }} />}
       <ClerkAuthScreen enabled={Boolean(publishableKey)} mode="sign-up" completeRedirectUrl={completeRedirectUrl} />
     </main>
   );

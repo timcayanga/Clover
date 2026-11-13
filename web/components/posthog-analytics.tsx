@@ -1,11 +1,11 @@
 "use client";
 
-import { isPublicAnalyticsPath, namedAnalyticsAction } from "../../shared/analytics-measurement";
+import { isPublicAnalyticsPath, namedAnalyticsAction, websiteSection } from "../../shared/analytics-measurement";
 import { normalizePlanAnalytics } from "../../shared/plan-analytics";
 import Script from "next/script";
 import { browserContext, safeRoute, routeSegments, safeAction } from "../../shared/analytics";
 import { installBrowserTelemetry } from "@/lib/browser-telemetry";
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { usePathname } from "next/navigation";
 import { useUser } from "@clerk/nextjs";
 import {
@@ -19,11 +19,13 @@ import {
 } from "@/lib/analytics";
 import { getCloverViewportLayout } from "@/lib/responsive-layout";
 
+type CaptureOptions = { transport?: "sendBeacon"; send_instantly?: boolean };
+
 declare global {
   interface Window {
     posthog?: {
       init: (key: string, config: { api_host: string; capture_pageview?: boolean; capture_pageleave?: boolean }) => void;
-      capture: (event: string, properties?: Record<string, unknown>) => void;
+      capture: (event: string, properties?: Record<string, unknown>, options?: CaptureOptions) => void;
       identify: (distinctId: string, properties?: Record<string, unknown>) => void;
       reset: () => void;
     };
@@ -57,6 +59,7 @@ const getSafeAnalyticsLocation = (pathname: string | null | undefined = window.l
   return {
     $current_url: `${window.location.origin}${safePathname}`,
     $pathname: safePathname,
+    website_section: websiteSection(pathname || "/"),
   };
 };
 
@@ -111,7 +114,7 @@ const runWhenPostHogReady = (callback: () => void) => {
 
 let currentPlanProperties: Record<string, unknown> = {};
 let currentPlanUserId: string | null = null;
-const safeCapture = (event: string, properties: Record<string, unknown> = {}) => {
+const safeCapture = (event: string, properties: Record<string, unknown> = {}, options?: CaptureOptions) => {
   try {
     window.posthog?.capture(event, {
       ...getAnalyticsEpochProperties(),
@@ -123,7 +126,7 @@ const safeCapture = (event: string, properties: Record<string, unknown> = {}) =>
       analytics_environment: getClientAnalyticsEnvironment(),
       ...currentPlanProperties,
       ...normalizePlanAnalytics(properties ?? {}),
-    });
+    }, options);
   } catch {
     // Analytics must never interrupt Clover rendering or navigation.
   }
@@ -251,8 +254,11 @@ function PostHogBootstrap({ token, host }: PostHogScriptProps) {
 
 function PostHogPageViews() {
   const pathname = usePathname();
+  const lastPathname = useRef<string | null>(null);
 
   useEffect(() => {
+    if (lastPathname.current === pathname) return;
+    lastPathname.current = pathname;
     const resourceProperties = publicResourceProperties(pathname);
     runWhenPostHogReady(() => {
       const attribution = getFirstTouchAttribution();
@@ -278,11 +284,13 @@ function PostHogBehaviorSignals() {
 
   useEffect(() => {
     if (!shouldTrackAnalytics()) return;
-    let activeStartedAt = performance.now();
+    let activeStartedAt = document.visibilityState === "visible" ? performance.now() : null;
     let activeDurationMs = 0;
     let maximumScroll = 0;
     let sent = false;
     const route = redactAnalyticsPath(pathname);
+    const location = getSafeAnalyticsLocation(pathname);
+    const publicPage = isPublicAnalyticsPath(pathname || "/");
     const resourceProperties = publicResourceProperties(pathname);
     const updateScroll = (event?: Event) => {
       const target = event?.target;
@@ -304,7 +312,8 @@ function PostHogBehaviorSignals() {
               : target.closest("footer") ? "footer" : "main";
       const namedAction = namedAnalyticsAction({ action: target.getAttribute("data-analytics-action"), href: target.getAttribute("href"), label: target.getAttribute("aria-label"), origin: window.location.origin });
       const section = target.closest("[data-analytics-section]")?.getAttribute("data-analytics-section");
-      safeCapture("ui_interaction", {
+      const properties = {
+        ...location,
         ...resourceProperties,
         route,
         x_percent: Math.min(99, Math.max(0, Math.floor((event.clientX / Math.max(1, window.innerWidth)) * 100))),
@@ -316,28 +325,64 @@ function PostHogBehaviorSignals() {
         target_type: target.getAttribute("role") || target.tagName.toLowerCase(),
         target_area: area,
         viewport_class: getCloverViewportLayout(window.innerWidth),
+      };
+      runWhenPostHogReady(() => {
+        safeCapture("ui_interaction", properties);
+        if (!publicPage || !namedAction) return;
+        const actionProperties = {
+          ...location,
+          ...resourceProperties,
+          action: namedAction,
+          target_area: area,
+          cta_placement: properties.cta_placement,
+          is_public_website: true,
+        };
+        const immediate = { send_instantly: true };
+        // PostHog counts $autocapture toward engagement. Send only known actions,
+        // without DOM text, form values, link parameters or an elements chain.
+        safeCapture("$autocapture", { ...actionProperties, $event_type: "click" }, immediate);
+        if (namedAction === "download_ios" || namedAction === "download_android") {
+          safeCapture("app_store_click", {
+            ...actionProperties,
+            store: namedAction === "download_ios" ? "app_store" : "google_play",
+          }, immediate);
+        }
       });
     };
     const updateVisibility = () => {
       const now = performance.now();
       if (document.visibilityState === "hidden") {
-        activeDurationMs += Math.max(0, now - activeStartedAt);
-      } else {
+        if (activeStartedAt !== null) activeDurationMs += Math.max(0, now - activeStartedAt);
+        activeStartedAt = null;
+      } else if (activeStartedAt === null) {
         activeStartedAt = now;
       }
     };
-    const finish = () => {
+    const finish = (reason: "navigation" | "pagehide") => {
       if (sent) return;
       sent = true;
       updateScroll();
-      const durationMs = Math.max(0, Math.round(activeDurationMs + (document.visibilityState === "visible" ? performance.now() - activeStartedAt : 0)));
+      const durationMs = Math.round(activeDurationMs + (activeStartedAt === null ? 0 : Math.max(0, performance.now() - activeStartedAt)));
+      const exitProperties = {
+        ...location,
+        ...resourceProperties,
+        route,
+        is_public_website: publicPage,
+        duration_ms: durationMs,
+        max_scroll_percent: maximumScroll,
+      };
+      if (publicPage) {
+        const captureExit = () => safeCapture("$pageleave", {
+          ...exitProperties,
+          $prev_pageview_pathname: route,
+          $prev_pageview_duration: durationMs / 1000,
+          exit_reason: reason,
+        }, reason === "pagehide" ? { transport: "sendBeacon", send_instantly: true } : undefined);
+        runWhenPostHogReady(captureExit);
+      }
       if (durationMs >= 500) {
         safeCapture("page_engagement", {
-          ...resourceProperties,
-          route,
-          is_public_website: isPublicAnalyticsPath(pathname || "/"),
-          duration_ms: durationMs,
-          max_scroll_percent: maximumScroll,
+          ...exitProperties,
           viewport_class: getCloverViewportLayout(window.innerWidth),
         });
       }
@@ -345,14 +390,27 @@ function PostHogBehaviorSignals() {
     document.addEventListener("scroll", updateScroll, { capture: true, passive: true });
     document.addEventListener("click", captureClick, { capture: true, passive: true });
     document.addEventListener("visibilitychange", updateVisibility);
-    window.addEventListener("pagehide", finish);
+    const onPageHide = () => finish("pagehide");
+    const onPageShow = (event: PageTransitionEvent) => {
+      if (!event.persisted) return;
+      sent = false;
+      activeDurationMs = 0;
+      activeStartedAt = document.visibilityState === "visible" ? performance.now() : null;
+      maximumScroll = 0;
+      if (publicPage) runWhenPostHogReady(() => safeCapture("$pageview", {
+        ...location, ...resourceProperties, route, is_public_website: true,
+      }));
+    };
+    window.addEventListener("pagehide", onPageHide);
+    window.addEventListener("pageshow", onPageShow);
     updateScroll();
     return () => {
-      finish();
+      if (window.location.pathname !== pathname) finish("navigation");
       document.removeEventListener("scroll", updateScroll, true);
       document.removeEventListener("click", captureClick, true);
       document.removeEventListener("visibilitychange", updateVisibility);
-      window.removeEventListener("pagehide", finish);
+      window.removeEventListener("pagehide", onPageHide);
+      window.removeEventListener("pageshow", onPageShow);
     };
   }, [pathname]);
 
@@ -580,11 +638,16 @@ export function PostHogEvent({ event, properties = {}, onceKey }: PostHogEventPr
 
 export function PostHogPageEvent({ event, properties }: Omit<PostHogEventProps, "onceKey">) {
   const pathname = usePathname();
+  const lastEvent = useRef<string | null>(null);
 
   useEffect(() => {
     if (!shouldTrackAnalytics()) {
       return;
     }
+
+    const key = `${event}:${pathname}`;
+    if (lastEvent.current === key) return;
+    lastEvent.current = key;
 
     runWhenPostHogReady(() => {
       safeCapture(event, {
