@@ -8,7 +8,7 @@ const lock=JSON.parse(readFileSync(join(mobileRoot,'package-lock.json'),'utf8'))
 const consumers=Object.entries(lock.packages).filter(([p])=>p.endsWith('/query-string'));
 if (!consumers.length) {
  const router = JSON.parse(readFileSync(join(mobileRoot, 'node_modules/expo-router/package.json')));
- if (router.version !== '58.0.30' || router.dependencies?.['query-string']) throw Error('Review Expo Router URL parser migration');
+ if (router.version !== '58.0.31' || router.dependencies?.['query-string']) throw Error('Review Expo Router URL parser migration');
  if (Object.keys(lock.packages).some(p => p.endsWith('/decode-uri-component'))) throw Error('Unexpected orphan decoder dependency');
  console.log('PASS Expo Router 58 uses URLSearchParams; obsolete query-string adapter is not applied.');
 }
