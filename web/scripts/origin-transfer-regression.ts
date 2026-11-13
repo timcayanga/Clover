@@ -22,8 +22,8 @@ const main = async () => {
   const rowPath = transactionsRoute.slice(rowStart, transactionsRoute.indexOf('const [currencyCodes, totalCount]', rowStart));
   assert(rowStart >= 0);
   assert.match(rowPath, /Math.min\(requestedPageSize \?\? 30, 200\)/, "Visible requests are bounded, including 200-row desktop pages.");
-  assert.match(rowPath, /skip: \(requestedPage - 1\) \* take/, "A preview retains the selected page's full offset.");
-  assert.match(rowPath, /take: previewTake/);
+  assert.match(rowPath, /const skip = \(requestedPage - 1\) \* take;[\s\S]*?\bskip,/, "A preview retains the selected page's full offset.");
+  assert.match(rowPath, /take: lookAhead \? take \+ 1 : previewTake/);
   assert.match(rowPath, /actionableReviewIds\(visibleWhere\)/, "Review pages use the same actionable scope as Home.");
   assert.match(
     transactionsRoute,
