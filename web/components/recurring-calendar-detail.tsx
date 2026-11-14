@@ -10,6 +10,9 @@ import {
   commitmentRecurrenceOptions,
   commitmentStatusOptions,
 } from "@/lib/commitments";
+import Link from "next/link";
+import { recurringCompletionDate } from "@/lib/recurring-tracking";
+import type { RecurringPaymentEvidence } from "@/lib/recurring-payment-evidence";
 import { formatCurrencyAmount } from "@/lib/currency-format";
 import { formatAccountOptionLabel } from "@/lib/account-option-label";
 
@@ -73,6 +76,30 @@ export function RecurringCalendarDetail({
   const commitment = { ...savedCommitment, ...pending } as FinancialCommitmentSummary;
   const [editingField, setEditingField] = useState<RecurringDetailEditableField | null>(null);
   const [draft, setDraft] = useState("");
+  const dueDate = recurringCompletionDate(savedCommitment, occurrenceDate);
+  const eligible = savedCommitment.kind === "planned_payment" && savedCommitment.status === "active"
+    && savedCommitment.tracking?.amountType !== "variable" && Number(savedCommitment.amount) > 0;
+  const evidenceUrl = eligible
+    ? `/api/commitments/${encodeURIComponent(savedCommitment.id)}/payment-evidence?dueDate=${encodeURIComponent(dueDate)}`
+    : null;
+  const [evidenceResult, setEvidenceResult] = useState<{ key: string; evidence?: RecurringPaymentEvidence | null }>({ key: "" });
+  const evidenceKey = `${evidenceUrl}:${savedCommitment.updatedAt}`;
+  useEffect(() => {
+    if (!evidenceUrl) return;
+    const controller = new AbortController();
+    void fetch(evidenceUrl, { signal: controller.signal, cache: "no-store" })
+      .then(async response => {
+        if (!response.ok) throw new Error("Payment evidence unavailable");
+        const { evidence } = await response.json() as { evidence: RecurringPaymentEvidence | null };
+        if (!controller.signal.aborted) setEvidenceResult({ key: evidenceKey, evidence });
+      })
+      .catch(() => {
+        if (!controller.signal.aborted) setEvidenceResult({ key: evidenceKey });
+      });
+    return () => controller.abort();
+  }, [evidenceUrl, evidenceKey]);
+  const evidence = evidenceResult.key === evidenceKey ? evidenceResult.evidence : undefined;
+
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -231,6 +258,24 @@ export function RecurringCalendarDetail({
           )}
           {commitment.counterparty ? <small>{commitment.counterparty}</small> : null}
         </div>
+
+        {evidenceUrl && Object.keys(pending).length === 0 ? (
+          <section className="recurring-calendar-detail__notes" aria-live="polite">
+            <span>Payment evidence for {formatDetailDate(`${dueDate}T12:00:00`)}</span>
+            {evidenceResult.key !== evidenceKey ? <p>Checking transactions…</p>
+              : evidence === undefined ? <p>Payment evidence is unavailable right now.</p>
+              : evidence ? <>
+                <strong>{evidence.status === "found" ? "Payment found"
+                  : evidence.status === "possible" ? "Possible match" : "No payment found in available data"}</strong>
+                {evidence.status === "not_found" ? <p>{evidence.lastSyncedAt
+                  ? `Last bank sync ${formatDetailDate(evidence.lastSyncedAt)}. Recent payments may still be missing.`
+                  : "Clover can only check transactions already recorded for this Profile."}</p>
+                  : evidence.payment ? <p><Link href={`/transactions/${encodeURIComponent(evidence.payment.id)}`}>
+                    {evidence.payment.merchantClean || evidence.payment.merchantRaw} · {formatDetailDate(evidence.payment.date)} · {formatCurrencyAmount(Math.abs(Number(evidence.payment.amount)), evidence.payment.currency)}
+                  </Link></p> : <p>More than one transaction matches this bill.</p>}
+              </> : null}
+          </section>
+        ) : null}
 
         <dl className="recurring-calendar-detail__facts">
           {renderDate("dueDate", commitment.dueDate, "Due date")}
