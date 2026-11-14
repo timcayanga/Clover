@@ -16,7 +16,7 @@ import { HomeChart } from "../../src/home-chart";
 import { router, useFocusEffect, useNavigation } from "expo-router";
 import { LinearGradient } from "expo-linear-gradient";
 import * as SecureStore from "expo-secure-store";
-import { useCallback, useEffect, useLayoutEffect, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { ScrollView, Platform, Pressable, View } from "react-native";
 import { useSession } from "../../src/session";
 import { ApiError } from "../../src/api";
@@ -209,6 +209,8 @@ export default function Home() {
       };
     }, [load, basePath, session.cached, session.request, session.demo, session.profileId, setData]),
   );
+  const activationScroll = { ref: useRef<import("react-native").ScrollViewInstance | null>(null), offset: useRef(0) };
+  const checkActivationVisibility = useRef<(() => void) | null>(null);
   const amount = (value: number | string | null, code = data?.currency ?? profileCurrency) =>
     hidden
       ? "••••"
@@ -216,7 +218,7 @@ export default function Home() {
         ? "Unavailable"
         : money(String(value), code);
   return (
-    <Screen layout="dashboard">
+    <Screen layout="dashboard" scrollController={activationScroll} onScroll={() => checkActivationVisibility.current?.()}>
       <Modal visible={currencyOpen} transparent animationType="fade" onRequestClose={() => setCurrencyOpen(false)}>
         <View style={{ flex: 1, backgroundColor: "#0006", justifyContent: "center", padding: 24 }}>
           <Pressable accessibilityLabel="Close currency selector" onPress={() => setCurrencyOpen(false)} style={{ position: "absolute", inset: 0 }} />
@@ -228,7 +230,7 @@ export default function Home() {
           </View>
         </View>
       </Modal>
-      <FirstUseActivation key={session.profileId} hidden={hidden} />
+      <FirstUseActivation key={session.profileId} hidden={hidden} viewport={activationScroll.ref} visibilityCheck={checkActivationVisibility} />
       {error ? <Notice>{error}</Notice> : null}
       {!data ? (
         <>

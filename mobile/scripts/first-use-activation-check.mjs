@@ -8,6 +8,10 @@ assert.ok(homeSource.indexOf('<FirstUseActivation') > 0 && homeSource.indexOf('<
   'First-use actions must mount even if the Home balance request is still loading or failed');
 const loaders = {}; vm.runInNewContext(compile('../src/screen-refresh.ts'), { exports: loaders, Map, Set, Promise });
 const states = [], routes = [], requests = [], telemetry = []; let stateIndex = 0, focus, cleanup;
+let top = 900, appState = "active";
+const frames = [];
+const viewport = { current: { measureInWindow: cb => cb(0, 0, 400, 800) } };
+const visibilityCheck = { current: null };
 let payload = { state: 'start', workspaceId: 'profile-a' }, delayed = null, failAck = false;
 const session = { demo: false, profileId: 'profile-a', request: async (path, options) => {
   requests.push({ path, options }); if (options) { if (failAck && JSON.parse(options.body).action === "acknowledge") throw Error("Temporary failure"); return {}; }
@@ -15,11 +19,11 @@ const session = { demo: false, profileId: 'profile-a', request: async (path, opt
   return { activation: payload };
 } };
 const exports = {};
-vm.runInNewContext(compile('../src/first-use-activation.tsx'), { exports, encodeURIComponent, require: name => {
-  if (name === 'react') return { useState: value => { const i = stateIndex++; if (!(i in states)) states[i] = value; return [states[i], value => { states[i] = value; }]; }, useCallback: fn => fn, useEffect: fn => fn() };
+vm.runInNewContext(compile('../src/first-use-activation.tsx'), { exports, encodeURIComponent, requestAnimationFrame: fn => frames.push(fn), cancelAnimationFrame: () => {}, require: name => {
+  if (name === 'react') return { useState: value => { const i = stateIndex++; if (!(i in states)) states[i] = value; return [states[i], value => { states[i] = value; }]; }, useRef: value => { const i = stateIndex++; return states[i] ??= { current: value }; }, useCallback: fn => fn, useEffect: fn => fn() };
   if (name === 'react/jsx-runtime') return { jsx: (type, props) => ({ type, props }), jsxs: (type, props) => ({ type, props }), Fragment: 'Fragment' };
   if (name === 'expo-router') return { router: { push: route => routes.push(route) }, useFocusEffect: fn => { focus = fn; } };
-  if (name === 'react-native') return { View: 'View' };
+  if (name === 'react-native') return { View: 'View', AppState: { get currentState() { return appState; }, addEventListener: () => ({ remove() {} }) } };
   if (name === '../../shared/analytics') return { telemetry: (event, props) => telemetry.push({ event, ...props }) };
   if (name === './screen-refresh') return loaders;
   if (name === './session') return { useSession: () => session };
@@ -29,7 +33,13 @@ vm.runInNewContext(compile('../src/first-use-activation.tsx'), { exports, encode
 function render(hidden = false) {
   stateIndex = 0; const nodes = [];
   function walk(value) { if (Array.isArray(value)) value.forEach(walk); else if (value && typeof value === 'object') { nodes.push(value); walk(value.props?.children); } }
-  walk(exports.FirstUseActivation({ hidden })); return nodes;
+  walk(exports.FirstUseActivation({ hidden, viewport, visibilityCheck }));
+  for (const node of nodes) if (node.type === "View" && node.props.onLayout) {
+    node.props.ref.current = { measureInWindow: cb => cb(20, top, 360, 96) };
+    node.props.onLayout();
+  }
+  while (frames.length) frames.shift()();
+  return nodes;
 }
 const tick = () => new Promise(resolve => setImmediate(resolve));
 render(); cleanup = focus(); await tick(); let nodes = render();
@@ -42,7 +52,18 @@ assert.deepEqual(telemetry.filter(event => event.event === "activation_method_se
 payload = { state: 'result', workspaceId: 'profile-a', transaction: { id: 'saved-row', name: 'Synthetic lunch', amount: '120', currency: 'PHP', type: 'expense', needsReview: true } };
 await loaders.refreshScreen('/'); nodes = render();
 assert(nodes.some(node => node.props.children === 'Your first transaction is in Clover'), 'Background import completion refreshes the mounted Home card without another focus');
-assert(requests.some(request => request.options && JSON.parse(request.options.body).action === 'view'));
+const displayed = () => requests.filter(request => request.options && JSON.parse(request.options.body).action === 'displayed');
+assert.equal(displayed().length, 0, "A result outside the viewport does not count");
+top = 100;
+appState = "background";
+render();
+assert.equal(displayed().length, 0, "A backgrounded app does not count");
+appState = "active";
+render();
+assert.equal(displayed().length, 1, "The displayed transaction counts");
+assert.equal(JSON.parse(displayed()[0].options.body).transactionId, "saved-row");
+await loaders.refreshScreen('/'); render();
+assert.equal(displayed().length, 1);
 nodes.find(node => node.props.title === 'View your transaction').props.onPress(); assert.equal(routes[3].params.id, 'saved-row');
 assert(!JSON.stringify(render(true)).includes('PHP 120'), 'Home privacy also masks the first result');
 failAck = true; nodes.find(node => node.props.title === 'Got it').props.onPress(); await tick();

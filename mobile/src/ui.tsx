@@ -239,6 +239,7 @@ export function Screen({
   layout = "reading",
   keyboardInsets = true,
   scrollController,
+  onScroll,
 }: {
   children: ReactNode;
   gap?: number;
@@ -248,6 +249,7 @@ export function Screen({
   keyboardInsets?: boolean;
   scrollController?: {ref: import("react").RefObject<ScrollViewInstance|null>;offset:import("react").RefObject<number>};
   onDismiss?: () => void;
+  onScroll?: () => void;
 }) {
   const { colors, styles, dark } = useTheme();
   const session = useSession();
@@ -288,7 +290,7 @@ export function Screen({
       {header}
     <FocusVisibility.Provider value={keyboardVisibility.focus}><ScrollView
       ref={node=>{keyboardVisibility.scroll.current=node;if(scrollController)scrollController.ref.current=node;}}
-      onScroll={event => { keyboardVisibility.offset.current = event.nativeEvent.contentOffset.y; if(scrollController)scrollController.offset.current=event.nativeEvent.contentOffset.y; }}
+      onScroll={event => { keyboardVisibility.offset.current = event.nativeEvent.contentOffset.y; if(scrollController)scrollController.offset.current=event.nativeEvent.contentOffset.y; onScroll?.(); }}
       scrollEventThrottle={16}
       onLayout={keyboardVisibility.ensureVisible}
       key={scrollKey}

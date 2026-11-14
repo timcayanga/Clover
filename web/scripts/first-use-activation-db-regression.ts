@@ -50,9 +50,13 @@ async function main() {
     assert.equal((await get("another-users-profile")).status, 401);
     assert.equal((await send(first.id, "view", "https://attacker.invalid")).status, 400);
     assert.equal((await send("wrong-transaction")).status, 409);
-    await Promise.all([send(first.id), send(first.id), send(first.id)]);
+    assert.equal((await send(first.id, "view")).status, 200);
+    assert.equal(events.length, 0, "Legacy mount and transaction persistence are not display confirmations");
+    await Promise.all([send(first.id, "displayed"), send(first.id, "displayed"), send(first.id, "displayed")]);
     assert.equal(await db.auditLog.count({ where: { workspaceId: workspace.id, action: "activation.result_viewed" } }), 1);
     assert.equal(events.filter(event => event.name === "activation_first_result_rendered").length, 1);
+    assert.equal(events[0].props.measurement_version, "first_use_v2");
+    assert.equal(events[0].props.first_result_displayed_within_24h, true);
     assert.equal(events[0].props.entry_method, "import"); assert.equal(events[0].props.first_transaction_within_24h, true);
     assert.equal((await send(first.id, "acknowledge")).status, 200);
     assert.equal((await getFirstUseActivation(workspace.id, user.id)).state, "hidden");

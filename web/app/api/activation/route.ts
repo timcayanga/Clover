@@ -26,7 +26,7 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   try {
     assertTrustedRequestOrigin(request);
-    const input = z.object({ action: z.enum(["view", "acknowledge"]), transactionId: z.string().min(1).max(240) }).strict().parse(await request.json());
+    const input = z.object({ action: z.enum(["view", "displayed", "acknowledge"]), transactionId: z.string().min(1).max(240) }).strict().parse(await request.json());
     const { user, workspace } = await context(request);
     const ok = await recordActivationResult(user, workspace.id, input.transactionId, input.action);
     return NextResponse.json({ ok }, { status: ok ? 200 : 409 });

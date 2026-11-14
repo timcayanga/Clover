@@ -542,7 +542,7 @@ async function handle(
     if (operation === "activation") {
       const { getFirstUseActivation, recordActivationResult } = await import("@/lib/first-use-activation");
       if (request.method === "POST") {
-        const input = z.object({ action: z.enum(["view", "acknowledge"]), transactionId: z.string().min(1).max(240) }).strict().parse(await request.json());
+        const input = z.object({ action: z.enum(["view", "displayed", "acknowledge"]), transactionId: z.string().min(1).max(240) }).strict().parse(await request.json());
         if (!await recordActivationResult(user, workspaceId, input.transactionId, input.action)) return reply({ error: "First result no longer available." }, 409);
       }
       return reply({ activation: await getFirstUseActivation(workspaceId, user.id) });

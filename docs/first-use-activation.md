@@ -8,16 +8,17 @@ A usable transaction is persisted, nonzero, not deleted/excluded, and not reject
 
 The first result shows the actual amount/currency/category and opens its dedicated details page, independent of pagination or current date filters. Transfers are described separately from spending. Historical dates are preserved; the card explains the original reporting period rather than inventing a current-month total or account balance. It expires after seven days or acknowledgement. Results are Profile scoped. No financial records, subscriptions or trials are changed.
 
-## Measurement v1
+## Measurement v2
 
 - `activation_prompt_viewed`: client component rendered start/result on web/native; repeated renders are not independent activations.
 - `activation_method_selected`: web manual/import choice or native manual/camera/file choice. Intent only.
-- `activation_first_result_rendered`: server-validated result rendered by web/native. Deduplicated per user and Profile under a Profile row lock. No amounts, merchant names or file content. Rendering is not proof that the customer read or verified it.
+- `activation_first_result_rendered`: server-validated acknowledgement after the transaction result is visible on the focused native Home screen or a visible web tab. Deduplicated per user and Profile under a Profile row lock. Legacy view reports are audit-only. No amounts, merchant names or file content. Rendering is not proof that the customer read or verified it.
 - `time_to_first_transaction_ms`: account creation to creation of the first currently retained qualifying transaction in that Profile. Transaction date is not the clock. `entry_method` is `import` or `non_file`; non-file must not be labelled exclusively manual.
+- `time_to_first_result_displayed_ms` measures account creation to receipt of the client display acknowledgement. Use `first_result_displayed_within_24h` for the display milestone and filter to `first_use_v2` in PostHog.
 - `first_transaction_within_24h`: per-Profile observation; deduplicate by customer for customer-level activation. This event is not the denominator. For the rate include every eligible external signup with a full 24-hour observation window, including no transactions, failures, no return visit, no analytics consent and no result render. Reconcile retained database rows across all their Profiles. Exclude staff, demos, automation and staging. Do not classify signup plan from current paid status.
 - Separate confirmed/edited results from available suggested results. Pair the import branch with `import_attempt_finished` outcomes and latency, including failures, interruptions and pending attempts. Upload responses alone never count. `upload_to_attempt_start_ms` separates time before the processing claim (including preflight and any wait for input) from the attempt's `duration_ms`. The server timing spans break out source assembly, raw storage and PDF preflight separately.
 
-Audit actions `activation.result_viewed` and `activation.result_acknowledged` are operational records only. No backfill. Acknowledgement is explicit; snapshot queries remain read-only.
+Audit actions `activation.result_viewed`, `activation.result_displayed` and `activation.result_acknowledged` are operational records only. No backfill. Acknowledgement is explicit; snapshot queries remain read-only.
 
 ## Verification
 

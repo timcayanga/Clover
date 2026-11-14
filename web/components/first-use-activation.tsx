@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { HomeSensitiveAmount } from "@/components/home-sensitive-amount";
 import Link from "next/link";
 import type { FirstUseActivation as Snapshot } from "../../shared/first-use-activation";
@@ -7,6 +7,7 @@ import { formatCurrencyAmount } from "@/lib/currency-format";
 import { capturePostHogClientEvent } from "@/components/posthog-analytics";
 
 export function FirstUseActivation({ workspaceId, resultOnly = false }: { workspaceId: string; resultOnly?: boolean }) {
+  const resultView = useRef<HTMLDivElement>(null);
   const [snapshot, setSnapshot] = useState<Snapshot | null>(null);
   const [dismissError, setDismissError] = useState("");
   const [acknowledgedId, setAcknowledgedId] = useState<string | null>(null);
@@ -33,20 +34,39 @@ export function FirstUseActivation({ workspaceId, resultOnly = false }: { worksp
   const state = snapshot?.workspaceId === workspaceId && (!snapshot.transaction || snapshot.transaction.id !== acknowledgedId) ? snapshot.state : "hidden";
   const resultId = state === "result" ? snapshot?.transaction?.id : null;
   useEffect(() => {
-    if (!resultId) return;
-    void fetch(`/api/activation?workspaceId=${encodeURIComponent(workspaceId)}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "view", transactionId: resultId }) }).catch(() => {});
+    const node = resultView.current;
+    if (!resultId || !node || !("IntersectionObserver" in window)) return;
+    let reported = false;
+    const report = () => {
+      if (reported || document.visibilityState !== "visible") return;
+      const bounds = node.getBoundingClientRect();
+      const visibleHeight = Math.min(bounds.bottom, window.innerHeight) - Math.max(bounds.top, 0);
+      if (bounds.height <= 0 || visibleHeight < bounds.height / 2 ||
+          bounds.right <= 0 || bounds.left >= window.innerWidth) return;
+      reported = true;
+      void fetch(`/api/activation?workspaceId=${encodeURIComponent(workspaceId)}`, {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "displayed", transactionId: resultId }),
+      }).then(response => { if (!response.ok) reported = false; }).catch(() => { reported = false; });
+    };
+    const observer = new IntersectionObserver(entries => {
+      if (entries.some(entry => entry.isIntersecting)) report();
+    }, { threshold: [0, 0.5] });
+    observer.observe(node);
+    document.addEventListener("visibilitychange", report);
+    return () => { observer.disconnect(); document.removeEventListener("visibilitychange", report); };
   }, [resultId, workspaceId]);
   useEffect(() => {
     if (state === "hidden" || (resultOnly && state === "start")) return;
     capturePostHogClientEvent("activation_prompt_viewed", { workspace_id: workspaceId, activation_state: state, surface: "home" });
   }, [state, workspaceId, resultOnly]);
   if (!snapshot || state === "hidden" || (resultOnly && state === "start")) return null;
-  return <><FirstUseActivationCard snapshot={snapshot} onAcknowledge={async () => {
+  return <><div ref={resultView}><FirstUseActivationCard snapshot={snapshot} onAcknowledge={async () => {
     if (!snapshot.transaction) return;
     const response = await fetch(`/api/activation?workspaceId=${encodeURIComponent(workspaceId)}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "acknowledge", transactionId: snapshot.transaction.id }) }).catch(() => null);
     if (response?.ok) { setAcknowledgedId(snapshot.transaction.id); setSnapshot(null); }
     else setDismissError("Could not dismiss this yet. Please try again.");
-  }} />{dismissError ? <p role="alert">{dismissError}</p> : null}</>;
+  }} /></div>{dismissError ? <p role="alert">{dismissError}</p> : null}</>;
 }
 
 export function FirstUseActivationCard({ snapshot, onAcknowledge }: { snapshot: Snapshot; onAcknowledge: () => void }) {
