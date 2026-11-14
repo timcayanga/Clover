@@ -249,7 +249,7 @@ export function FinverseConnectButton({
   useEffect(() => () => activeSyncRef.current?.abort(), []);
 
   useEffect(() => {
-    if (allowed && callbackStatus === "connected" && connectionId && workspaceId && autoSyncStarted.current !== connectionId) {
+    if (allowed && callbackStatus === "connected" && connectionId && workspaceId && (!setup || !pending.some(bank => bank.id === connectionId && bank.status === "link_pending")) && autoSyncStarted.current !== connectionId) {
       autoSyncStarted.current = connectionId;
       if (!setup) clearCallback();
       else try { sessionStorage.removeItem(`finverse-sign-in:${connectionId}`); } catch { /* Optional storage. */ }
@@ -265,7 +265,7 @@ export function FinverseConnectButton({
       if (!setup) clearCallback();
       setMessage("The bank connection could not be completed. Please try again.");
     }
-  }, [allowed, callbackStatus, connectionId, router, setup, sync, workspaceId]);
+  }, [allowed, callbackStatus, connectionId, pending, router, setup, sync, workspaceId]);
 
   const unlink = async () => {
     if (!unlinkTarget || actionRef.current) return;
@@ -319,7 +319,7 @@ export function FinverseConnectButton({
   const progressBank = pending.find(bank => bank.id === progressId);
   const canCancel = Boolean(progressId && progressBank && !linked.some(account => account.connectionId === progressId));
   const leaveSetup = () => router.replace(setupReturnPath(progressId));
-  const awaitingSignIn = setup && callbackStatus === "signin";
+  const awaitingSignIn = setup && (callbackStatus === "signin" || progressBank?.status === "link_pending");
   const openSignIn = () => {
     try {
       const url = sessionStorage.getItem(`finverse-sign-in:${progressId}`);
@@ -338,7 +338,7 @@ export function FinverseConnectButton({
   const callbackLoading = callbackStatus === "connected" && connectionId && autoSyncStarted.current !== connectionId && !access && !connectionsError;
   if (setup || progressOpen || callbackLoading) return <section className="finverse-progress" aria-label="Bank connection progress" aria-live="polite">
     {(action === null && !retry && selectionPanel) || <>
-      <h4>{progressBank ? progressBank.name : "Bank connection"} {action === "syncing" || callbackLoading ? "linking in progress" : retry ? "needs attention" : awaitingSignIn ? "secure sign-in" : "setup"}</h4>
+      <h4>{setup && progressBank?.logoUrl ? <img src={progressBank.logoUrl} alt="" width={32} height={32} /> : null}{progressBank ? progressBank.name : "Bank connection"} {action === "syncing" || callbackLoading ? "linking in progress" : retry ? "needs attention" : awaitingSignIn ? "secure sign-in" : "setup"}</h4>
       {visiblePreview ? <div ref={previewRef}>
         <strong>{visiblePreview.row.label}</strong>
         <p>{visiblePreview.row.kind === "balance" ? "Bank balance" : "Booked transaction"} · {formatCurrencyAmount(visiblePreview.row.amount, visiblePreview.row.currency)}</p>
@@ -349,7 +349,7 @@ export function FinverseConnectButton({
       {reconnect ? <p>Choose your bank again to start a fresh connection.</p> : null}
       <div className="finverse-progress-actions">
         {awaitingSignIn && allowed ? <button type="button" className="button button-primary" onClick={openSignIn}>Continue to bank</button> : null}
-        {setup && progressId && allowed && !action && !visiblePreview && callbackStatus === "connected" ? <button type="button" className="button button-primary" onClick={() => void sync(progressId, retry?.ids)}>Check again</button> : null}
+        {setup && progressId && allowed && !action && !visiblePreview && !awaitingSignIn && callbackStatus === "connected" ? <button type="button" className="button button-primary" onClick={() => void sync(progressId, retry?.ids)}>Check again</button> : null}
         <button type="button" className="button button-secondary" disabled={action === "unlinking"} onClick={setup ? leaveSetup : backToBanks}>{setup ? visiblePreview ? "Done" : callbackStatus === "connected" ? "Continue later" : "Back to Clover" : "Back to Banks"}</button>
         {canCancel && progressId ? <button type="button" className="button button-secondary" disabled={action === "unlinking"} onClick={() => void cancelSetup(progressId)}>Cancel Linking</button> : null}
       </div>
@@ -389,7 +389,7 @@ export function FinverseConnectButton({
       {mode === "connect" ? <ResourceUpgradeNotice resource="linkedBanks" /> : null}
 
 
-      {pending.length ? <section className="finverse-pending" aria-label="Finish linking">{pending.map(c=><FinversePendingChip key={c.id} connection={c} busy={action!==null} resumeDisabled={!allowed} onResume={()=>void sync(c.id)} onCancel={()=>void cancelSetup(c.id)}/>)}</section> : null}
+      {pending.length ? <section className="finverse-pending" aria-label="Finish linking">{pending.map(c=><FinversePendingChip key={c.id} connection={c} busy={action!==null} resumeDisabled={!allowed} onResume={() => router.push(`/accounts/link?finverse=connected&finverseConnection=${encodeURIComponent(c.id)}&finverseWorkspace=${encodeURIComponent(workspaceId)}`)} onCancel={()=>void cancelSetup(c.id)}/>)}</section> : null}
       {mode === "connect" ? <>{testMode ? <p role="status">Test mode · Only test banks are shown.</p> : null}{banksLoaded && allowed ? <FinverseBankPicker banks={banks} busy={action!==null} onConnect={id=>void connect(id)}/> : <p role="status">{bankStatus}</p>}</> : null}
       {syncAccounts.length ? <section aria-label="Connected accounts"><h4>Connected accounts</h4><div className="finverse-connect__grid">{syncAccounts.map(account=><div key={account.id} className="finverse-connect__sync-card"><img src={account.logoUrl} alt="" onError={event=>{event.currentTarget.onerror=null;event.currentTarget.src="/assets/account-types/bank.png";}}/><strong>{account.name}</strong><span>{account.last4 ? `•••• ${account.last4}` : "Linked account"}</span><small>{account.status==="disconnect_pending"?"Disconnection pending":account.status==="link_pending"?"Authorization needed":account.syncError || account.status==="error"?"Connection needs attention":account.status==="retrieving"?"Syncing":"Connected"}</small><small>Last Synced · {account.lastSyncedAt ? new Date(account.lastSyncedAt).toLocaleString() : "Not yet synced"}</small><button className="button button-secondary" type="button" disabled={action !== null || !allowed || account.status==="disconnect_pending"} onClick={()=>void sync(account.connectionId,[],true)}>{action === "syncing" ? "Syncing…" : "↻ Sync"}</button><button type="button" className="finverse-connect__unlink" disabled={action !== null||account.status==="disconnect_pending"} onClick={()=>setUnlinkTarget(account)}>Unlink</button></div>)}</div></section> : mode === "sync" ? <>
       {testMode ? <p role="status">Test mode · Only test banks are shown.</p> : null}
