@@ -12,7 +12,7 @@ export const receiptDraftSchema = z.object({
   merchant: z.string().trim().max(250),
   date: z.string().max(10),
   amount: z.string().trim().max(24),
-  currency: z.string().trim().toUpperCase().regex(/^[A-Z]{3}$/).refine(value => !["XXX", "MIX"].includes(value), "Choose a currency."),
+  currency: z.string().trim().toUpperCase().refine(value => value === "" || (/^[A-Z]{3}$/.test(value) && !["XXX", "MIX"].includes(value)), "Choose a currency."),
   accountId: z.string().max(200),
   categoryId: z.string().max(200).default(""),
 }).strict();
@@ -25,6 +25,7 @@ export function validateReceiptDraftConfirmation(value: unknown) {
   const amount = normalizeTransactionAmountInput(fields.amount);
   if (!amount || Number(amount) <= 0 || Number(amount) >= 1_000_000_000_000_000)
     throw new Error("Enter an amount greater than zero with up to two decimal places.");
+  if (!fields.currency) throw new Error("Choose a currency.");
   if (!fields.accountId) throw new Error("Choose an account.");
   return { ...fields, amount: new Prisma.Decimal(amount).toFixed(2) };
 }

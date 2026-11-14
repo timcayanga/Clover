@@ -67,6 +67,7 @@ export type Bootstrap = {
   };
 };
 export type ImportStatus = {
+  receiptTransactionId?: string | null;
   canResume?: boolean;
   statementSelfHeal?: { reason?: string };
   nativeUploadReceived?: boolean;

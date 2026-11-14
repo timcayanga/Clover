@@ -43,7 +43,7 @@ export default function Transactions() {
   const [acting, setActing] = useState(false);
   const [actionError, setActionError] = useState("");
   const searchHeight = Math.max(38, Math.ceil(20 * fontScale + 16));
-  const { demo, rows: samples, profileId, request, cached } = useSession();
+  const { demo, rows: samples, profileId, request, cached, fileQueue, queuedFiles } = useSession();
   const [filters, setFilters] = useState(false);
   const params = useLocalSearchParams<{ review?: string; query?: string; report?: string; currency?: string; reviewRequest?: string }>();
   const [filterValues, setFilterValues] = useState<TransactionFilters>(()=>params.review === "pending_review" ? {...emptyTransactionFilters,reviewFilter:"pending",currency:params.currency ?? ""} : emptyTransactionFilters);
@@ -95,6 +95,9 @@ export default function Transactions() {
   const rows = rowScope === scope ? loadedRows : [];
   const cachedPage = useRef(cached);
   cachedPage.current = cached;
+  const screenFocused = useRef(false);
+  const receiptPresentation = useRef({ profileId, fileQueue, queuedFiles });
+  receiptPresentation.current = { profileId, fileQueue, queuedFiles };
   const firstRows = useRef<{ scope: string; finish: ReturnType<typeof beginTelemetry> } | null>(null);
   const viewableRows = useRef<{ scope: string; ids: string[] } | null>(null);
   const presentation = useRef({ scope, rowScope, rowSource, rows });
@@ -109,13 +112,26 @@ export default function Transactions() {
     firstRows.current = null;
     timing.finish("completed", { result: "rows", row_source: list.rowSource });
   }, []);
+  const observeReceiptRows = useCallback(() => {
+    const visible = viewableRows.current;
+    const list = presentation.current;
+    const { profileId, fileQueue, queuedFiles } = receiptPresentation.current;
+    if (!screenFocused.current) return;
+    if (!fileQueue || !visible || visible.scope !== list.scope || list.rowScope !== list.scope) return;
+    const ids = queuedFiles.filter(file => file.workspaceId === profileId && file.state === "done" &&
+      file.receiptTiming && !file.receiptTiming.outcome && file.receiptTransactionId &&
+      visible.ids.includes(file.receiptTransactionId) && list.rows.some(row => row.id === file.receiptTransactionId))
+      .map(file => file.receiptTransactionId!);
+    if (ids.length) void fileQueue.observeReceiptRows(profileId, ids).catch(() => {});
+  }, []);
   const onViewableItemsChanged = useCallback<NonNullable<FlatListProps<Transaction>["onViewableItemsChanged"]>>(({ viewableItems }) => {
     viewableRows.current = {
       scope: presentation.current.rowScope,
       ids: viewableItems.filter(token => token.isViewable).map(token => token.item.id),
     };
     finishViewableRows();
-  }, [finishViewableRows]);
+    observeReceiptRows();
+  }, [finishViewableRows, observeReceiptRows]);
   useEffect(() => {
     const timer = setTimeout(() => setSearch(query.trim()), 300);
     return () => clearTimeout(timer);
@@ -190,10 +206,13 @@ export default function Transactions() {
         timing_boundary: "focus_to_first_viewable_rows",
         filtered: hasTransactionFilters(filterValues, search),
       }) } : null;
+      screenFocused.current = true;
       firstRows.current = timing;
       void load();
       const unregister = registerScreenRefresh("/transactions", () => load(1, true));
       return () => {
+        screenFocused.current = false;
+        viewableRows.current = null;
         unregister();
         pagination.invalidate();
         if (timing && firstRows.current === timing) {
@@ -205,6 +224,7 @@ export default function Transactions() {
   );
   useEffect(() => {
     finishViewableRows();
+    observeReceiptRows();
     const timing = firstRows.current;
     if (!timing || timing.scope !== scope || rowScope !== scope) return;
     if (!busy && rows.length === 0 && (error || rowSource === "request")) {

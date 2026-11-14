@@ -102,7 +102,7 @@ export function ImportActivity() {
   };
   const paused = file.state === "paused";
   const active = !done && !publishing && !needsReview && !needsPassword;
-  const step = done ? "Import complete" : publishing ? "Updating your page" : needsPassword ? "Statement password needed" : needsReview ? "Import needs attention" : paused ? "Import paused" : waiting ? "Waiting for connection" : file.state === "draft" || file.state === "queued" ? "Preparing file" : file.state === "sending" ? "Uploading file" : getImportStageLabel(file.message || "Reading file", progress);
+  const step = done ? "Import complete" : publishing ? "Updating your page" : needsPassword ? "Statement password needed" : needsReview && file.processingPhase === "receipt_review_required" ? "Receipt details needed" : needsReview ? "Import needs attention" : paused ? "Import paused" : waiting ? "Waiting for connection" : file.state === "draft" || file.state === "queued" ? "Preparing file" : file.state === "sending" ? "Uploading file" : getImportStageLabel(file.message || "Reading file", progress);
   const resume = () => run(async () => { await session.fileQueue!.enqueue(file.id); if (!waiting) await session.fileQueue!.flush(); });
   const sourceBlocked = ["non_financial_file", "source_review_required", "repair_needed"].includes(file.processingPhase ?? "");
   const receiptReview = needsReview && file.processingPhase === "receipt_review_required";
@@ -141,13 +141,13 @@ export function ImportActivity() {
             await session.fileQueue!.enqueue(file.id, enteredPassword);
             await session.fileQueue!.flush();
           })} /> : null}
-        {needsReview && !needsPassword ? <Button secondary title={receiptReview ? "Review receipt" : "Review"} onPress={review}/> : null}
-        {!needsPassword && !sourceBlocked && needsReview && file.originalRetained !== false ?
+        {needsReview && !needsPassword ? <Button secondary title={receiptReview ? "Continue saved receipt" : "Review"} onPress={review}/> : null}
+        {!needsPassword && !sourceBlocked && !receiptReview && needsReview && file.originalRetained !== false ?
           <Button secondary title="Resume upload" disabled={busy} onPress={() => void run(async () => {
             await session.fileQueue!.enqueue(file.id);
             if (!waiting) await session.fileQueue!.flush();
           })}/> : null}
-        {!needsPassword && needsReview && file.originalRetained === false && file.canResume ?
+        {!needsPassword && !receiptReview && needsReview && file.originalRetained === false && file.canResume ?
           <Button secondary title="Retry reading" disabled={busy || waiting} onPress={() => void run(async () => {
             await session.request(`imports/${file.canonicalId ?? file.id}/resume?workspaceId=${encodeURIComponent(file.workspaceId)}`, { method: "POST" });
             await session.fileQueue!.enqueue(file.id);

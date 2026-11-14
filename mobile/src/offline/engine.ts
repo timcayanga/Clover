@@ -240,7 +240,7 @@ export class OfflineEngine {
     if (!this.active) return;
     const previous = await this.store.get<CacheEntry<Bootstrap>>("cache:bootstrap");
     if (previous && (previous.value.offlineEpoch ?? null) !== (result.offlineEpoch ?? null)) {
-      for (const prefix of ["cache:", "mutation:", "receipt:", "file:", "file-bytes:"])
+      for (const prefix of ["cache:", "mutation:", "receipt:", "file:", "file-bytes:", "receipt-outcome:"])
         for (const key of await this.store.keys(prefix)) await this.store.remove(key);
     }
     if (!this.active) return;

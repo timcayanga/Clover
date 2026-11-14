@@ -1,3 +1,4 @@
+import { capturePostHogServerEvent } from "./analytics-server";
 import { normalizeReceiptCaptureLocation } from "../../shared/receipt-capture-location";
 import { downloadImportObject } from "./import-storage.server";
 import { measureImportTiming } from "./import-timing";
@@ -353,11 +354,13 @@ export async function nativeUploadRequest(
     );
     if (result.status === 422) {
       const rejected = await result.clone().json().catch(() => null);
-      console.info("[native-upload-rejected]", {
-        importId: id,
-        reason: nativeUploadRejection(rejected?.code),
-        passwordSupplied: Boolean(password),
-      });
+      const reason = nativeUploadRejection(rejected?.code);
+      console.info("[native-upload-rejected]", { reason, passwordSupplied: Boolean(password) });
+      void capturePostHogServerEvent("import_client_stage", userId, {
+        stage: "native_upload_completion_rejected",
+        status: 422,
+        upload_rejection: reason,
+      }).catch(() => {});
     }
     if (result.ok) {
       const fullResponse = await result.clone().json();

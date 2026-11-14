@@ -26,16 +26,25 @@ export function ReceiptDraftReview({ id, onClose }: { id: string; onClose: () =>
   const update = (key: keyof ReceiptDraftFields, value: string) => {
     if (!lock.current) setFields(current => current ? { ...current, [key]: value, ...(key === "currency" ? { accountId: "" } : {}) } : current);
   };
-  const save = async () => {
+  const save = async (confirm: boolean) => {
     if (lock.current || !fields) return;
     lock.current = true; setBusy(true); setError("");
     try {
-      await session.request(endpoint, { method: "POST", body: JSON.stringify(fields) });
+      const saved = await session.request<{ transactionId: string | null }>(endpoint, { method: confirm ? "POST" : "PATCH", body: JSON.stringify(fields) });
+      if (saved.transactionId) await session.fileQueue?.receiptConfirmed(session.profileId, id, saved.transactionId).catch(() => {});
+      if (!confirm) { onClose(); return; }
       session.refresh();
       router.replace("/(tabs)/transactions");
     } catch (e) { setError((e as Error).message); }
     finally { lock.current = false; setBusy(false); }
   };
+  const missing = !fields || !draft ? [] : [
+    ...(!fields.merchant.trim() ? ["the merchant"] : []),
+    ...(!fields.date ? ["the receipt date"] : []),
+    ...(!Number.isFinite(Number(fields.amount)) || !(Number(fields.amount) > 0) ? ["the total"] : []),
+    ...(!/^[A-Z]{3}$/.test(fields.currency) || ["XXX", "MIX"].includes(fields.currency) ? ["the currency"] : []),
+    ...(!draft.accounts.some(account => account.id === fields.accountId && account.currency === fields.currency) ? ["the payment account"] : []),
+  ];
   return <Screen>
     <PlanHeader title="Review receipt" back={() => { if (!busy) onClose(); }} />
     {error ? <Notice>{error}{!draft ? <Button title="Reload receipt" secondary onPress={() => setRevision(value => value + 1)} /> : null}</Notice> : null}
@@ -43,7 +52,7 @@ export function ReceiptDraftReview({ id, onClose }: { id: string; onClose: () =>
       <Body>This receipt is already saved.</Body>
       <Button title="View transactions" onPress={() => router.replace("/(tabs)/transactions")} />
     </Card> : !draft.canEdit ? <Card><Body>This receipt is not available to edit right now. Reload to check its status.</Body><Button title="Reload receipt" secondary onPress={() => setRevision(value => value + 1)} /></Card> : <Card>
-      <Body>Check the details and complete any missing fields.</Body>
+      <Body>{missing.length ? `Add ${missing.join(", ")} to finish. Clover saved the details it could read.` : "Check the saved details before adding this transaction."}</Body>
       <Field label="Merchant" editable={!busy} value={fields.merchant} onChangeText={value => update("merchant", value)} maxLength={250} />
       <Field label="Date" editable={!busy} value={fields.date} placeholder="YYYY-MM-DD" onChangeText={value => update("date", value)} maxLength={10} autoCapitalize="none" />
       <Field label="Amount" editable={!busy} value={fields.amount} keyboardType="decimal-pad" onChangeText={value => update("amount", value)} maxLength={24} />
@@ -51,7 +60,8 @@ export function ReceiptDraftReview({ id, onClose }: { id: string; onClose: () =>
       <ChoiceField label="Account" disabled={busy} value={fields.accountId} options={draft.accounts.filter(account => account.currency === fields.currency).map(account => ({ value: account.id, label: account.name }))} onChange={value => update("accountId", value)} />
       {!draft.accounts.some(account => account.currency === fields.currency) ? <Body>Add an account in {fields.currency} before saving this receipt.</Body> : null}
       <ChoiceField label="Category" disabled={busy} value={fields.categoryId} options={[{value:"",label:"Uncategorized"}, ...draft.categories.map(category => ({value:category.id,label:category.name}))]} onChange={value => update("categoryId", value)} />
-      <Button title={busy ? "Saving…" : "Save transaction"} disabled={busy} onPress={() => void save()} />
+      <Button title="Save for later" secondary disabled={busy} onPress={() => void save(false)} />
+      <Button title={busy ? "Saving…" : "Save transaction"} disabled={busy || missing.length > 0} onPress={() => void save(true)} />
     </Card>}
   </Screen>;
 }

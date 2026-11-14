@@ -230,6 +230,7 @@ export function SessionProvider({
               }
               return {
                 needsPassword, paused, cancelled,
+                receiptTransactionId: status.receiptTransactionId ?? undefined,
                 processingPhase: status.importFile.processingPhase ?? undefined,
                 progress: status.progress,
                 message: status.importFile.processingMessage,
@@ -263,6 +264,7 @@ export function SessionProvider({
         }
         setFileQueue(queue);
         setQueuedFiles(await queue.list());
+        void queue.reportUnseenReceipts().catch(() => {});
         setOffline(engine);
         setOfflineStatus({ ...engine.status });
         unsubscribe = engine.subscribe(() => {
@@ -303,14 +305,16 @@ export function SessionProvider({
       })().catch(() => {});
     };
   }, [demo, userId, transport]);
+  const hasActiveUploads = queuedFiles.some(file => ["queued", "sending", "finalizing", "processing"].includes(file.state));
   useEffect(() => {
-    if (!fileQueue || !offlineStatus.online || !queuedFiles.some(file =>
-      ["queued", "sending", "finalizing", "processing"].includes(file.state))) return;
+    if (!fileQueue || !offlineStatus.online || !hasActiveUploads) return;
     const tick = () => { if (AppState.currentState !== "background") void fileQueue.flush().catch(() => {}); };
     const timer = setInterval(tick, 4000);
-    const listener = AppState.addEventListener("change", state => { if (state === "active") tick(); });
+    const listener = AppState.addEventListener("change", state => {
+      if (state === "active") tick();
+    });
     return () => { clearInterval(timer); listener.remove(); };
-  }, [fileQueue, offlineStatus.online, queuedFiles]);
+  }, [fileQueue, offlineStatus.online, hasActiveUploads]);
   const cloudAi = useCloudAiConsent(transport);
   const cloudAiRef = useRef(cloudAi);
   cloudAiRef.current = cloudAi;

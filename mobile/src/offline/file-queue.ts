@@ -1,5 +1,5 @@
 import type { ReceiptCaptureLocation } from "../../../shared/receipt-capture-location";
-import { telemetry } from "../../../shared/analytics";
+import { newTelemetryId, telemetry } from "../../../shared/analytics";
 import { NATIVE_UPLOAD_MAX_SIZE, nativeUploadRejection, uploadSizeProblem } from "../../../shared/native-upload";
 import type { OfflineStore } from "./types";
 import type { DeviceTextEvidence } from "../../../shared/device-text-evidence";
@@ -16,6 +16,8 @@ export type QueuedFile = {
   error?: string;
   progressNoticeSeen?: boolean;
   canonicalId?: string;
+  receiptTransactionId?: string;
+  receiptTiming?: { id: string; startedAt: number; outcome?: string };
   password?: string;
   importMode?: "receipt" | "statement" | "portfolio" | "account_detail";
   progress?: number;
@@ -36,7 +38,7 @@ export type FileTransport = {
   unlock?: (file: QueuedFile, password: string) => Promise<{ canonicalId?: string }>;
   cancel?: (file:QueuedFile)=>Promise<void>;
   control?: (file: QueuedFile, action: "pause" | "resume" | "cancel") => Promise<void>;
-  status: (file: QueuedFile) => Promise<{ done: boolean; failed: boolean; processingPhase?: string; paused?: boolean; cancelled?: boolean; progress?: number; message?: string; canResume?: boolean; needsPassword?: boolean }>;
+  status: (file: QueuedFile) => Promise<{ done: boolean; failed: boolean; receiptTransactionId?: string; processingPhase?: string; paused?: boolean; cancelled?: boolean; progress?: number; message?: string; canResume?: boolean; needsPassword?: boolean }>;
   upload: (
     file: QueuedFile,
     base64: string,
@@ -49,6 +51,7 @@ export class FileQueue {
   private flight: Promise<void> | null = null;
   private flushAgain = false;
   private active = true;
+  private readonly reportedTimings = new Map<string, string>();
   private controls = new Map<string, "paused" | "cancelled">();
   private current: {file:QueuedFile;controller:AbortController;finished:Promise<void>} | null = null;
   constructor(
@@ -71,6 +74,13 @@ export class FileQueue {
         this.store.get<QueuedFile>(k),
       ),
     );
+    await Promise.all(items.map(async file => {
+      if (file?.receiptTiming && !file.receiptTiming.outcome) {
+        file.receiptTiming.outcome = this.reportedTimings.get(file.receiptTiming.id)
+          ?? await this.store.get<string>("receipt-outcome:" + file.receiptTiming.id)
+          ?? undefined;
+      }
+    }));
     return items
       .filter((v): v is QueuedFile => Boolean(v))
       .sort((a, b) => a.createdAt.localeCompare(b.createdAt));
@@ -111,6 +121,11 @@ export class FileQueue {
     }
     this.controls.delete(id);
     telemetry("offline_action_queued", { action: "file_upload" });
+    if ((file.importMode === "receipt" || (!file.importMode && /^image\//i.test(file.mimeType))) &&
+        (!file.receiptTiming || ["failed", "not_seen_24h"].includes(await this.store.get<string>("receipt-outcome:" + file.receiptTiming.id) ?? ""))) {
+      file.receiptTiming = { id: newTelemetryId(), startedAt: Date.now() };
+      telemetry("receipt_upload_outcome", { operation_id: file.receiptTiming.id, outcome: "started" });
+    }
     file.state = "queued";
     file.password = password || file.password;
     file.error = undefined;
@@ -142,6 +157,47 @@ export class FileQueue {
     file.state = "paused"; file.error = undefined;
     await this.store.set("file:" + id, file); this.emit();
   }
+  private async finishReceiptTiming(file: QueuedFile, outcome: "visible" | "failed" | "canceled" | "not_seen_24h") {
+    const timing = file.receiptTiming;
+    if (!timing || timing.outcome || this.reportedTimings.has(timing.id)) return;
+    this.reportedTimings.set(timing.id, outcome);
+    try {
+      await this.store.set("receipt-outcome:" + timing.id, outcome);
+    } catch (error) {
+      this.reportedTimings.delete(timing.id);
+      throw error;
+    }
+    telemetry("receipt_upload_outcome", {
+      operation_id: timing.id, outcome,
+      duration_ms: Math.max(0, Date.now() - timing.startedAt),
+      timing_boundary: "upload_queued_to_outcome",
+    });
+  }
+  async observeReceiptRows(workspaceId: string, ids: readonly string[]) {
+    for (const file of await this.list()) {
+      if (file.workspaceId !== workspaceId || file.state !== "done" || !file.receiptTransactionId ||
+          !ids.includes(file.receiptTransactionId)) continue;
+      await this.finishReceiptTiming(file, "visible");
+    }
+  }
+  async receiptConfirmed(workspaceId: string, importId: string, transactionId: string) {
+    const file = (await this.list()).find(item => item.workspaceId === workspaceId &&
+      (item.canonicalId ?? item.id) === importId && item.state === "attention");
+    if (!file) return;
+    file.receiptTransactionId = transactionId;
+    file.state = "done";
+    file.error = undefined;
+    file.originalRetained = false;
+    await this.store.set("file:" + file.id, file);
+    await this.store.remove("file-bytes:" + file.id);
+    this.emit();
+  }
+  async reportUnseenReceipts() {
+    for (const file of await this.list()) {
+      if (file.receiptTiming && Date.now() - file.receiptTiming.startedAt >= 86_400_000)
+        await this.finishReceiptTiming(file, "not_seen_24h");
+    }
+  }
   async cancel(id:string) {
     const file = await this.store.get<QueuedFile>("file:" + id);
     if (!file) return;
@@ -151,6 +207,7 @@ export class FileQueue {
       if (!this.transport.control) throw new Error("Cancel is unavailable for this saved import.");
       await this.transport.control(file, "cancel");
       this.controls.set(id, "cancelled");
+      await this.finishReceiptTiming(file, "canceled");
       await this.store.remove("file:" + id);
       await this.store.remove("file-bytes:" + id);
       this.emit();
@@ -163,6 +220,8 @@ export class FileQueue {
   }
   async remove(id: string) {
     if (this.current?.file.id===id) throw new Error("Pause this file before removing it.");
+    const file = await this.store.get<QueuedFile>("file:" + id);
+    if (file) await this.finishReceiptTiming(file, "canceled");
     await this.store.remove("file:" + id);
     await this.store.remove("file-bytes:" + id);
     this.emit();
@@ -213,10 +272,12 @@ export class FileQueue {
             file.progress = Math.max(file.progress ?? 0, status.progress ?? 0);
             file.message = status.message;
             file.processingPhase = status.processingPhase;
+            file.receiptTransactionId = status.receiptTransactionId ?? file.receiptTransactionId;
             file.canResume = status.canResume;
             file.needsPassword = status.needsPassword && !status.done;
             file.error = undefined;
             if (status.cancelled) {
+              await this.finishReceiptTiming(file, "canceled");
               await this.store.remove("file:" + file.id);
               await this.store.remove("file-bytes:" + file.id);
               continue;
@@ -257,6 +318,8 @@ export class FileQueue {
           }});
           file.canonicalId = result.canonicalId;
           file.state = "processing";
+          // Check an accepted receipt immediately instead of waiting for the polling interval.
+          if (file.receiptTiming) this.flushAgain = true;
         }
         const control = this.controls.get(file.id);
         if (control === "cancelled") continue;
@@ -267,6 +330,10 @@ export class FileQueue {
           await this.store.set("file:" + file.id, file);
           await this.store.remove("file-bytes:" + file.id);
         } else await this.store.set("file:" + file.id, file);
+        if (file.state === "attention" && !file.needsPassword &&
+            !["receipt_review_required", "source_review_required", "payment_account_review_required", "account_match_needs_confirmation"].includes(file.processingPhase ?? "")) {
+          await this.finishReceiptTiming(file, "failed");
+        }
       } catch (e) {
         if (this.controls.get(file.id) === "cancelled") continue;
         if (this.controls.get(file.id) === "paused") { file.state = "paused"; file.serverPaused = true; file.error = undefined; await this.store.set("file:" + file.id, file); continue; }
@@ -289,6 +356,8 @@ export class FileQueue {
         if (status && status < 500) file.state = "attention";
         await this.store.set("file:" + file.id, file);
         this.emit();
+        if (file.state === "attention" && !file.needsPassword && rejection !== "source_review_required")
+          await this.finishReceiptTiming(file, "failed");
         if (!status || status >= 500) break;
       } finally {this.current=null;finish();}
       this.emit();

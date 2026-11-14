@@ -709,6 +709,50 @@ test("slow or failed device OCR cannot block uploading the original", async () =
   await uploadInParts(request,file,"b3JpZ2luYWw=",{signal:new AbortController().signal,progress:async()=>{}},async()=>{throw new Error("unsupported");});
   assert.equal(completed,true);
 });
+test("receipt upload reports visible only for the matching on-screen transaction and Profile", async () => {
+  const store = memory();
+  const q = new FileQueue(store, {
+    status: async () => ({ done: false, failed: true, processingPhase: "receipt_review_required" }),
+    upload: async () => { throw new Error("Saved receipt must never upload again."); },
+  }, async () => {});
+  await q.add({ ...file, importMode: "receipt" }, "b3JpZ2luYWw=");
+  await q.enqueue(file.id);
+  await q.flush();
+  const pending = (await q.list())[0];
+  assert.equal(pending.state, "attention");
+  assert.equal(pending.receiptTiming?.outcome, undefined);
+  await q.receiptConfirmed(file.workspaceId, file.id, "receipt-transaction");
+  await q.observeReceiptRows("another-profile", ["receipt-transaction"]);
+  await q.observeReceiptRows(file.workspaceId, ["different-transaction"]);
+  assert.equal((await q.list())[0].receiptTiming?.outcome, undefined);
+  await Promise.all([
+    q.observeReceiptRows(file.workspaceId, ["receipt-transaction"]),
+    q.observeReceiptRows(file.workspaceId, ["receipt-transaction"]),
+  ]);
+  const reopened = new FileQueue(store, {
+    status: async () => ({ done: true, failed: false }),
+    upload: async () => ({}),
+  }, async () => {});
+  assert.equal((await reopened.list())[0].receiptTiming?.outcome, "visible");
+});
+
+test("receipt upload measures failures and unresolved uploads after reopening", async () => {
+  const store = memory();
+  const q = new FileQueue(store, {
+    status: async () => ({ done: false, failed: true, processingPhase: "repair_needed" }),
+    upload: async () => ({}),
+  }, async () => {});
+  await q.add({ ...file, importMode: "receipt" }, "b3JpZ2luYWw=");
+  await q.enqueue(file.id);
+  await q.flush();
+  const failed = (await q.list())[0];
+  assert.equal(failed.receiptTiming?.outcome, "failed");
+  const pending = { ...file, id: "old-receipt", receiptTiming: { id: "old-attempt", startedAt: Date.now() - 86_400_001 } };
+  await q.add(pending, "b3JpZ2luYWw=");
+  await q.reportUnseenReceipts();
+  assert.equal((await q.list()).find(item => item.id === pending.id)?.receiptTiming?.outcome, "not_seen_24h");
+});
+
 test("an error notice is remembered across relaunch without discarding the saved import", async () => {
   const store = memory();
   const transport = { status: async () => ({ done: false, failed: true, message: "Check this file" }), upload: async () => ({}) };

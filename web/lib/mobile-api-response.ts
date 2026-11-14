@@ -184,6 +184,7 @@ export function mobileApiResponse(operation: string, value: unknown) {
     return {
       ...pick(data,["nativeUploadReceived","nativeUploadFinalizing","canResume"]),
       statementSelfHeal: pick(data.statementSelfHeal, ["reason"]),
+      receiptTransactionId: record(data.receiptTransaction).id ?? null,
       progress:resolveImportModalStatusDecision({importMode:"statement",...record(data.importFile),...pick(data,["visibleImportComplete","confirmedTransactionsCount","parsedRowsCount"])}).progress,
       importFile: pick(data.importFile, [
         "id",
