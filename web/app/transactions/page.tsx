@@ -2472,6 +2472,12 @@ function TransactionsPageContent() {
   const reviewTransactionParamRef = useRef<string | null>(null);
   const drilldownParamRef = useRef<string | null>(null);
   const detailTransactionParamRef = useRef<string | null>(null);
+  const [previewQuery, setPreviewQuery] = useState<string | null>(null);
+  const firstRowsStartedAt = useRef<number | null>(null);
+  const firstRowsReported = useRef(false);
+  useLayoutEffect(() => {
+    firstRowsStartedAt.current ??= performance.now();
+  }, []);
   const [isCompactViewport, setIsCompactViewport] = useState(false);
   const [activeWarningTransactionId, setActiveWarningTransactionId] = useState<string | null>(null);
   const [headerMenuOpen, setHeaderMenuOpen] = useState<TransactionSortField | null>(null);
@@ -2955,7 +2961,7 @@ function TransactionsPageContent() {
         pageSize: requestPageSize,
       }
     );
-    searchParams.set("summaryMode", options?.includeAll || summaryOpen ? "full" : options?.summaryOnly ? "light" : "rows");
+    searchParams.set("summaryMode", options?.includeAll ? "full" : options?.summaryOnly ? options.summaryMode ?? (summaryOpen ? "full" : "light") : "rows");
     if (options?.summaryOnly) { searchParams.set("page", "1"); searchParams.set("pageSize", "1"); }
     const largePageSearchParams = buildTransactionQuerySearchParams(
       workspaceId,
@@ -2995,23 +3001,33 @@ function TransactionsPageContent() {
       transactionPrefetchRef.current.delete(largePageKey);
     }
 
+    let previewApplied = false;
     try {
+      let fullPageApplied = false;
       if (!options?.background && !options?.append && !options?.includeAll && !options?.prefetchOnly && !options?.summaryOnly
-        && !summaryOpen && !categoryFilters.length && sortField !== "account" && Number(requestPageSize) > 50) {
+        && !window.matchMedia(MOBILE_LAYOUT_MEDIA_QUERY).matches && !categoryFilters.length && !reviewFilter && sortField !== "account" && Number(requestPageSize) > 50) {
         const previewParams = new URLSearchParams(searchParams);
-        previewParams.set("previewSize", "25");
-        const preview = await fetchJsonOnce<TransactionListPayload>({
+        previewParams.set("preview", "first_rows");
+        void fetchJsonOnce<TransactionListPayload>({
           key: `transactions:list:${workspaceId}:${previewParams.toString()}`,
           route: "transactions.list", workspaceId,
           input: `/api/transactions?${previewParams}`, timeoutMs: 10_000, cacheTtlMs: 15_000,
-        });
-        if (requestId !== transactionsLoadRequestRef.current || requestToken && !requestGateRef.current.isCurrent(requestToken)) return;
-        if (preview.ok && preview.json?.transactions) {
+        }).then(preview => {
+          if (fullPageApplied || requestId !== transactionsLoadRequestRef.current ||
+              (requestToken && !requestGateRef.current.isCurrent(requestToken))) return;
+          if (!preview.ok || !preview.json?.transactions?.length) return;
           const hiddenAccounts = new Set([...getDeletedWorkspaceAccountIds(workspaceId), ...getDeletingWorkspaceAccountIds(workspaceId)]);
-          setTransactions(preview.json.transactions.filter(row => !hiddenAccounts.has(row.accountId) && !deletedTransactionIdsRef.current.has(row.id)));
-          setTransactionsSummary(current => ({ ...current, totalCount: preview.json?.totalCount ?? current.totalCount }));
-          setIsWorkspaceDataReady(true); setHasInitialTransactionsLoaded(true);
-        }
+          const previewRows = preview.json.transactions.filter(row => !hiddenAccounts.has(row.accountId) && !deletedTransactionIdsRef.current.has(row.id));
+          if (!previewRows.length) return;
+          previewApplied = true;
+          setPreviewQuery(transactionQueryKey);
+          setTransactions(previewRows);
+          setTransactionsSummary(current => ({ ...current, totalCount: Math.max(
+            current.totalCount, (requestPage - 1) * Number(requestPageSize) + previewRows.length,
+          ) }));
+          setIsWorkspaceDataReady(true);
+          setHasInitialTransactionsLoaded(true);
+        }).catch(() => { /* The full-page request remains authoritative. */ });
       }
       const response = usableCachedPrefetch
         ? { ok: true, json: usableCachedPrefetch.payload }
@@ -3024,6 +3040,7 @@ function TransactionsPageContent() {
             timeoutMs: options?.summaryOnly ? 20_000 : 10_000,
             cacheTtlMs: 15_000,
           });
+      fullPageApplied = true;
       if (!response.ok) {
         throw new Error("Unable to load transactions.");
       }
@@ -3050,6 +3067,7 @@ function TransactionsPageContent() {
         }
         return;
       }
+      setPreviewQuery(null);
       setTransactionsLoadFailed(false);
       setMessage(current => current === "Clover is checking the latest transactions again." || current === "Unable to load transactions." ? "" : current);
       if (payload?.summary) setSummaryScope(financialScopeKey);
@@ -3364,7 +3382,7 @@ function TransactionsPageContent() {
       }
 
       if (!options?.background) {
-        const hadFallbackRows = transactionsRef.current.length > 0 || hydrateWorkspaceFromCache(workspaceId);
+        const hadFallbackRows = previewApplied || transactionsRef.current.length > 0 || hydrateWorkspaceFromCache(workspaceId);
         const shouldSuppressFailure = hadFallbackRows || hasResilientFallbackEvidence();
 
         if (!shouldSuppressFailure && transactionsAutoRetryRef.current < 1) {
@@ -3403,12 +3421,6 @@ function TransactionsPageContent() {
       if (!options?.summaryOnly && !options?.prefetchOnly && requestId === transactionsLoadRequestRef.current) setIsPageLoading(false);
     }
   };
-
-  useEffect(() => {
-    if (summaryOpen && selectedWorkspaceId) {
-      void loadTransactionsPage(selectedWorkspaceId, { background: true, summaryMode: "full" });
-    }
-  }, [summaryOpen]);
 
   const refreshTransactionsAfterImport = async (workspaceId: string) => {
     for (const delay of importedTransactionsRefreshDelays) {
@@ -3960,6 +3972,7 @@ function TransactionsPageContent() {
     amountMax, reviewFilter, sourceFilter, confidenceFilter,
     transactionsPage,
     transactionsPageSize,
+    summaryOpen,
   ]);
 
   const refreshListRef = useRef(() => {});
@@ -4772,6 +4785,38 @@ function TransactionsPageContent() {
     () => (isServerPagedTransactionResult ? visibleTransactions : visibleTransactions.slice(pageStartIndex, pageEndIndex)),
     [isServerPagedTransactionResult, pageEndIndex, pageStartIndex, visibleTransactions]
   );
+  useEffect(() => {
+    if (firstRowsReported.current || isCompactViewport || !isWorkspaceDataReady ||
+        window.matchMedia(MOBILE_LAYOUT_MEDIA_QUERY).matches) return;
+    const table = transactionTableRef.current;
+    const header = table?.querySelector(".transactions-column-header");
+    const first = desktopPageTransactions[0];
+    const row = first ? transactionRowRefs.current.get(first.id) : null;
+    if (!table || !row || typeof IntersectionObserver === "undefined") return;
+    const observer = new IntersectionObserver(([entry]) => {
+      if (!entry?.isIntersecting || entry.intersectionRatio < 0.5 || firstRowsReported.current || document.visibilityState !== "visible") return;
+      if (header && entry.intersectionRect.bottom <= header.getBoundingClientRect().bottom) return;
+      firstRowsReported.current = true;
+      observer.disconnect();
+      capturePostHogClientEvent("data_ready", {
+        operation: "transactions_first_rows", resource: "transactions", screen: "/transactions",
+        phase: "presentation", timing_boundary: "route_mount_to_first_visible_rows",
+        duration_ms: Math.max(0, Math.round(performance.now() - (firstRowsStartedAt.current ?? performance.now()))),
+        page_size: transactionsPageSize, filtered: hasActiveTransactionFilters,
+      });
+    }, { threshold: 0.5 });
+    const observe = () => {
+      if (document.visibilityState !== "visible" || firstRowsReported.current) return;
+      observer.unobserve(row);
+      observer.observe(row);
+    };
+    observe();
+    document.addEventListener("visibilitychange", observe);
+    return () => {
+      observer.disconnect();
+      document.removeEventListener("visibilitychange", observe);
+    };
+  }, [desktopPageTransactions, hasActiveTransactionFilters, isCompactViewport, isWorkspaceDataReady, transactionsPageSize]);
   const mobileVisibleTransactions = useMemo(
     () => visibleTransactions.slice(0, Math.max(mobileVisibleCount, MOBILE_TRANSACTIONS_BATCH_SIZE)),
     [mobileVisibleCount, visibleTransactions]
@@ -7724,7 +7769,7 @@ function TransactionsPageContent() {
   useEffect(() => {
     // This cache is shared with unfiltered workspace views. Never publish a
     // filtered subset and its totals as though it were the full workspace.
-    if (!selectedWorkspaceId || !isWorkspaceDataReady || hasActiveTransactionFilters) {
+    if (!selectedWorkspaceId || !isWorkspaceDataReady || hasActiveTransactionFilters || previewQuery !== null) {
       return;
     }
 
@@ -7750,7 +7795,7 @@ function TransactionsPageContent() {
     } finally {
       publishingTransactionsCacheRef.current = false;
     }
-  }, [accounts, categories, imports, isWorkspaceDataReady, selectedWorkspaceId, transactions, transactionsPage, transactionsPageSize, transactionsSummary, workspaceCurrencyCodes, hasActiveTransactionFilters]);
+  }, [accounts, categories, imports, isWorkspaceDataReady, selectedWorkspaceId, transactions, transactionsPage, transactionsPageSize, transactionsSummary, workspaceCurrencyCodes, hasActiveTransactionFilters, previewQuery]);
 
   useEffect(() => {
     if (bulkDeleteConfirmOpen) {

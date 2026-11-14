@@ -808,7 +808,8 @@ export async function GET(request: Request) {
       const reviewIds = filters.reviewFilter === "pending" ? await actionableReviewIds(visibleWhere) : null;
       const scope = reviewIds ? { AND: [visibleWhere, { id: { in: reviewIds } }] } : visibleWhere;
       const take = Math.min(requestedPageSize ?? 30, 200);
-      const previewTake = Math.min(take, Math.max(1, Math.floor(Number(searchParams.get("previewSize"))) || take));
+      const desktopPreview = !native && searchParams.get("preview") === "first_rows" && !reviewIds;
+      const previewTake = Math.min(take, desktopPreview ? 25 : Math.max(1, Math.floor(Number(searchParams.get("previewSize"))) || take));
       const lookAhead = native && searchParams.get("pagination") === "lookahead" && previewTake === take && !reviewIds;
       const skip = (requestedPage - 1) * take;
       const [pageRows, count, currencyCodes] = await Promise.all([
@@ -821,9 +822,9 @@ export async function GET(request: Request) {
           skip,
           take: lookAhead ? take + 1 : previewTake,
         }),
-        lookAhead ? null : reviewIds ? reviewIds.length : prisma.transaction.count({ where: scope }),
+        lookAhead || desktopPreview ? null : reviewIds ? reviewIds.length : prisma.transaction.count({ where: scope }),
         // Native rows never expose or use the Profile's currency catalogue.
-        native ? [] : getWorkspaceCurrencyCodes(workspaceId),
+        native || desktopPreview ? [] : getWorkspaceCurrencyCodes(workspaceId),
       ]);
       const queryFinished = performance.now();
       const hasMore = count === null ? pageRows.length > take : skip + take < count;
@@ -834,14 +835,14 @@ export async function GET(request: Request) {
       const transactions = await withTransactionTags(mapped, workspaceId, !native);
       return NextResponse.json({
         transactions, totalCount: count ?? (pageRows.length ? skip + pageRows.length : 0),
-        totalCountIsExact: count !== null || !hasMore && (skip === 0 || pageRows.length > 0),
+        totalCountIsExact: !desktopPreview && (count !== null || !hasMore && (skip === 0 || pageRows.length > 0)),
         ...(native ? { hasMore } : {}),
         page: requestedPage, pageSize: take, currencyCodes,
-      }, native ? { headers: { "Server-Timing": [
+      }, { headers: { "Server-Timing": [
         `tx_scope;dur=${(queryStarted - started).toFixed(1)}`,
         `tx_query;dur=${(queryFinished - queryStarted).toFixed(1)}`,
         `tx_rows;dur=${(performance.now() - queryFinished).toFixed(1)}`,
-      ].join(", ") } } : undefined);
+      ].join(", ") } });
     }
     const [currencyCodes, totalCount] = await Promise.all([
       getWorkspaceCurrencyCodes(workspaceId),
