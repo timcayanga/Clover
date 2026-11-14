@@ -7,6 +7,8 @@ export function splitBillReadSurface(query: URLSearchParams) {
 
 const failureCodes = [
   "split_bills_profile_required",
+  "split_bills_profile_unavailable",
+  "split_bills_setup_required",
   "split_bills_unauthorized",
   "split_bills_forbidden",
   "split_bills_identity_conflict",
@@ -21,4 +23,8 @@ export type SplitBillReadErrorCode = typeof failureCodes[number];
 
 export function splitBillReadErrorCode(value: unknown): SplitBillReadErrorCode | undefined {
   return failureCodes.find(code => code === value);
+}
+
+export function splitBillReadRequiresAction(status: number): boolean {
+  return [400, 401, 403, 404, 409, 422].includes(status);
 }

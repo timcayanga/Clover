@@ -1,7 +1,9 @@
+import { ApiError } from "./api";
+import { splitBillReadRequiresAction } from "../../shared/split-bill-read";
 import { createScreenDataLoader, registerScreenRefresh } from "./screen-refresh";
 import { Text } from "./app-text";
 import { LinearGradient } from "expo-linear-gradient";
-import { useEffect, useState, useCallback, type ComponentProps, type ReactNode } from "react";
+import { useEffect, useState, useCallback, useRef, type ComponentProps, type ReactNode } from "react";
 import { router, useFocusEffect, usePathname } from "expo-router";
 import { Alert, Platform, Pressable, View, useWindowDimensions } from "react-native";
 import { useSession } from "./session";
@@ -267,25 +269,37 @@ export function usePlanData<T>(path: string, sample: T) {
   const [data, setData] = useState<T | null>(() => session.demo ? sample : session.cached<T>(resource));
   const [error, setError] = useState("");
   const [version, setVersion] = useState(0);
+  const splitBillsRead = path.split("?")[0] === "split-bills";
+  const blockedRead = useRef<{ resource: string; message: string } | null>(null);
   useFocusEffect(
     useCallback(() => {
       let active = true;
-      setError("");
+      if (splitBillsRead && !session.demo && !session.profileId) return;
+      if (blockedRead.current?.resource !== resource) blockedRead.current = null;
+      setError(blockedRead.current?.message ?? "");
       setLoadedResource(resource);
-      setData(session.demo ? sample : session.cached<T>(resource));
+      setData(session.demo ? sample : blockedRead.current ? null : session.cached<T>(resource));
       const refresh = createScreenDataLoader({
         load: () => session.demo ? Promise.resolve(sample) : session.request<T>(resource),
         active: () => active,
-        apply: result => { setData(result); setError(""); },
-        error: e => setError((e as Error).message),
+        apply: result => { blockedRead.current = null; setData(result); setError(""); },
+        error: e => {
+          const message = (e as Error).message;
+          if (splitBillsRead && e instanceof ApiError && splitBillReadRequiresAction(e.status)) {
+            blockedRead.current = { resource, message };
+            setData(null);
+          }
+          setError(message);
+        },
       });
-      void refresh();
+      if (!blockedRead.current) void refresh();
       const unregister = registerScreenRefresh(screenPath, refresh);
       return () => {
         active = false; unregister();
       };
     }, [
       screenPath,
+      splitBillsRead,
       session.demo,
       session.profileId,
       session.request,
@@ -295,7 +309,7 @@ export function usePlanData<T>(path: string, sample: T) {
       version,
     ]),
   );
-  return { data: loadedResource === resource ? data : session.cached<T>(resource), setData, error, reload: () => setVersion((v) => v + 1) };
+  return { data: loadedResource === resource ? data : session.cached<T>(resource), setData, error, reload: () => { blockedRead.current = null; setVersion((v) => v + 1); } };
 }
 
 export function SummaryCard({

@@ -1,10 +1,12 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import { router, useFocusEffect } from 'expo-router';
 import { Pressable, View } from 'react-native';
 import { Text } from './app-text';
 import { useSession } from './session';
 import { registerScreenRefresh } from './screen-refresh';
 import { Body, Card, Icon, money, useTheme } from './ui';
+import { ApiError } from './api';
+import { splitBillReadRequiresAction } from '../../shared/split-bill-read';
 import type { PendingSplitBill } from '../../shared/home-split-bills';
 type Summary = {count:number;bills:PendingSplitBill[]};
 export function HomePendingSplitBills({ hidden }: { hidden: boolean }) {
@@ -12,20 +14,28 @@ export function HomePendingSplitBills({ hidden }: { hidden: boolean }) {
   const { colors, styles } = useTheme();
   const { demo, profileId, request } = session;
   const [loaded, setLoaded] = useState<{ profileId: string; summary: Summary } | null>(null);
+  const blockedProfile = useRef<string | null>(null);
   useFocusEffect(useCallback(() => {
     if (demo || !profileId) return;
     let active = true;
+    if (blockedProfile.current !== profileId) blockedProfile.current = null;
     const refresh = async () => {
       try {
         const path = `split-bills?homeSummary=true&workspaceId=${encodeURIComponent(profileId)}`;
         const { pending } = await request<{ pending: Summary }>(path);
-        if (active) setLoaded({ profileId, summary: pending });
-      } catch {
-        // Optional card. The request records its failure independently of Home.
+        if (active) {
+          blockedProfile.current = null;
+          setLoaded({ profileId, summary: pending });
+        }
+      } catch (error) {
+        if (active && error instanceof ApiError && splitBillReadRequiresAction(error.status)) {
+          blockedProfile.current = profileId;
+          setLoaded(null);
+        }
       }
       return true;
     };
-    void refresh();
+    if (!blockedProfile.current) void refresh();
     const unregister = registerScreenRefresh('/', refresh);
     return () => { active = false; unregister(); };
   }, [request, demo, profileId]));

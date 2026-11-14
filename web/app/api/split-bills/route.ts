@@ -576,7 +576,6 @@ export async function GET(request: Request) {
       : status === 403 ? "This account cannot access split bills."
       : status === 409 ? "Use your original sign-in method or contact support."
       : "Unable to load split bills. Please try again.";
-    if (native) console.warn("[mobile-split-bills-read]", { surface, status, code });
     return NextResponse.json({ error: message, code }, { status, headers: { "Cache-Control": "private, no-store" } });
   }
 }

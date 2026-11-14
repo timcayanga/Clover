@@ -1,4 +1,4 @@
-import { splitBillReadSurface } from "../../../../../../shared/split-bill-read";
+import { splitBillReadErrorCode, splitBillReadSurface, type SplitBillReadErrorCode } from "../../../../../../shared/split-bill-read";
 import { after } from "next/server";
 import { mobileAccountOption } from "@/lib/mobile-account-option";
 import { normalizeRegionalPreferences } from "@/lib/regional-preferences";
@@ -51,10 +51,18 @@ async function handle(
   const operation = mobileOperation(request.method, path);
   if (!operation || path.some((part) => !/^[a-zA-Z0-9_-]+$/.test(part)))
     return reply({ error: "Not found" }, 404);
+  const url = new URL(request.url);
+  const splitBillSurface = operation === "split-bills" && request.method === "GET"
+    ? splitBillReadSurface(url.searchParams) : undefined;
+  const splitBillFailure = (error: string, status: number, code: SplitBillReadErrorCode) => {
+    if (!splitBillSurface) return reply({ error }, status);
+    console.warn("[mobile-split-bills-read]", { surface: splitBillSurface, status, code });
+    return reply({ error, code }, status);
+  };
   const bearer = request.headers
     .get("authorization")
     ?.match(/^Bearer ([^\s]+)$/)?.[1];
-  if (!bearer) return reply({ error: "Sign in to Clover." }, 401);
+  if (!bearer) return splitBillFailure("Sign in to Clover.", 401, "split_bills_unauthorized");
   let userId: string;
   try {
     const claims = await verifyToken(bearer, {
@@ -62,14 +70,14 @@ async function handle(
     });
     const verifiedUser = mobileSessionUser(claims);
     if (!verifiedUser)
-      return reply({ error: "A valid Clover session is required." }, 401);
+      return splitBillFailure("A valid Clover session is required.", 401, "split_bills_unauthorized");
     userId = verifiedUser;
   } catch {
-    return reply({ error: "Your session expired. Please sign in again." }, 401);
+    return splitBillFailure("Your session expired. Please sign in again.", 401, "split_bills_unauthorized");
   }
   try {
     if (isAdminOnlyUserId(userId) || (await isConfiguredAdminEmail(userId)) || (await isAssignedAdmin(userId)))
-      return reply({ error: "Use the Admin website for this account." }, 403);
+      return splitBillFailure("Use the Admin website for this account.", 403, "split_bills_forbidden");
     if (operation === "onboarding") {
       const body = z.object({ experience: z.enum(["beginner", "comfortable", "advanced"]), currency: z.string().regex(/^[A-Z]{3}$/), locale: z.string().min(2).max(40).default("en-PH"), timeZone: z.string().min(1).max(100).default("Asia/Manila") }).strict().parse(await request.json());
       const { getCurrencyCatalogCodes } = await import("@/lib/currencies");
@@ -106,12 +114,8 @@ async function handle(
     const currencyChoices = catalog ? catalog.getCurrencyCatalogOptions(catalog.getCurrencyCatalogCodes()) : undefined;
     if (!user && operation === "bootstrap") return reply({ currencyChoices, apiVersion: 1, firstName: null, needsOnboarding: true, profiles: [], entitlement: { planTier: "free", fullFeatureAccess: false, accessEndsAt: null, renewing: false, nativePurchasesAvailable: false } });
     if (!user)
-      return reply(
-        {
-          error:
-            "Please finish setting up your Clover account on the website first.",
-        },
-        409,
+      return splitBillFailure(
+        "Please finish setting up your Clover account on the website first.", 409, "split_bills_setup_required",
       );
     if (["finverse-connections", "finverse-institutions", "finverse-link", "finverse-sync", "finverse-unlink", "finverse-displayed"].includes(operation)) {
       return await withMobileRequestContext(userId, request, async () => {
@@ -264,23 +268,16 @@ async function handle(
       const response = await (await import("@/app/api/fx-rate/route")).GET(request);
       return reply(await response.json(), response.status);
     }
-    const url = new URL(request.url);
-    const splitBillSurface = operation === "split-bills" && request.method === "GET"
-      ? splitBillReadSurface(url.searchParams) : undefined;
     let workspaceId = url.searchParams.get("workspaceId");
-    if (workspaceId === null && splitBillSurface === "home_split_bills_summary") {
-      // 1.1.2 omitted the Profile on this account-wide read. Only accept a
-      // server-selected Profile owned by the already verified Clover identity.
+    const legacySplitBillRead = splitBillSurface !== undefined && !workspaceId;
+    if (legacySplitBillRead) {
+      // Split Bills collections are scoped to the verified account. Older apps
+      // omit the Profile on Home and can send an empty one before bootstrap.
       workspaceId = (await prisma.workspace.findFirst({
         where: { userId: user.id }, select: { id: true }, orderBy: [{ createdAt: "asc" }, { id: "asc" }],
       }))?.id ?? null;
     }
-    if (!workspaceId) {
-      if (!splitBillSurface) return reply({ error: "Choose a Profile first." }, 400);
-      const code = "split_bills_profile_required";
-      console.warn("[mobile-split-bills-read]", { surface: splitBillSurface, status: 400, code });
-      return reply({ error: "Choose a Profile first.", code }, 400);
-    }
+    if (!workspaceId) return splitBillFailure("Choose a Profile first.", 400, "split_bills_profile_required");
     await assertWorkspaceAccess(userId, workspaceId);
     if (operation === "investment-holding-delete") {
       const forwarded = new Request(request.url, { method: "DELETE", headers: request.headers, body: JSON.stringify({ workspaceId }) });
@@ -943,22 +940,24 @@ async function handle(
         };
       }
     }
+    if (splitBillSurface) {
+      const outcome = { surface: splitBillSurface, status: response.status, legacyProfileFallback: legacySplitBillRead };
+      if (response.ok) console.info("[mobile-split-bills-read]", outcome);
+      else console.warn("[mobile-split-bills-read]", { ...outcome, code: splitBillReadErrorCode(responseData.code) });
+    }
     const result = reply(mobileApiResponse(operation, responseData), response.status);
     if (timings && projectionStarted !== null) result.headers.set("Server-Timing", `${timings}, tx_projection;dur=${(performance.now() - projectionStarted).toFixed(1)}`);
     return result;
   } catch (error) {
     if (error instanceof Error && error.message === "IDENTITY_ENVIRONMENT_CONFLICT")
-      return reply({ error: "This email is already linked to another Clover sign-in. Use your original sign-in method or contact support." }, 409);
+      return splitBillFailure("This email is already linked to another Clover sign-in. Use your original sign-in method or contact support.", 409, "split_bills_identity_conflict");
     if (error instanceof PlanQuotaError) return reply({ error: error.message }, 403);
     if(error instanceof NativeInputError)return reply({error:error.message},400);
     if (error instanceof z.ZodError)
       return reply({ error: "Please check the entered fields." }, 400);
     if (error instanceof Error && error.message === "WORKSPACE_NOT_FOUND")
-      return reply({ error: "Profile not found" }, 404);
-    return reply(
-      { error: "Clover could not complete this request. Please retry." },
-      503,
-    );
+      return splitBillFailure("Profile not found", 404, "split_bills_profile_unavailable");
+    return splitBillFailure("Clover could not complete this request. Please retry.", 503, "split_bills_response_failed");
   }
 }
 

@@ -29,7 +29,8 @@ function load<T>(file: string, dependencies: Record<string, unknown> = {}, globa
 async function main() {
   const calls: string[] = [];
   const warnings: unknown[] = [];
-  const logs = { warn: (_message: string, data: unknown) => warnings.push(data) };
+  const recordLog = (_message: string, data: unknown) => warnings.push(data);
+  const logs = { warn: recordLog, info: recordLog };
   let fault = "";
   let ownsProfile = true;
   const bill = { id: "bill", title: "Fixture lunch", currency: "PHP", settlement: { transfers: [{ amount: 125 }] } };
@@ -71,7 +72,7 @@ async function main() {
       return new Map();
     } },
   }, { console: logs });
-  const gateway = load<{ GET(request: Request, context: { params: Promise<{ path: string[] }> }): Promise<Response> }>(
+  const gateway = load<Record<"GET" | "POST", (request: Request, context: { params: Promise<{ path: string[] }> }) => Promise<Response>>>(
     "../app/api/mobile/v1/[...path]/route.ts", {
       "../../../../../../shared/split-bill-read": splitBillRead,
       "@clerk/nextjs/server": { verifyToken: async () => ({ sub: "clerk-user", sid: "fixture-session" }) },
@@ -113,13 +114,16 @@ async function main() {
   assert.equal(listData.page, 2);
   assert.equal(listData.bills.length, 1);
   assert.deepEqual(calls, ["summary", "legacy-profile", "summary", "list:30:31"]);
+  assert.equal((await request<{ page: number }>("page=2&workspaceId=")).page, 2);
+  assert.equal((await request<{ page: number }>("page=2")).page, 2);
+  assert.equal((await request<{ summary: { youOwe: string } }>("summaryOnly=true&workspaceId=")).summary.youOwe, "₱125.00");
   assert.equal((await request<{ summary: { youOwe: string } }>("summaryOnly=true&workspaceId=profile")).summary.youOwe, "₱125.00");
   for (const [phase, query, status, surface, code] of [
     ["summary", home, 500, "home_split_bills_summary", "split_bills_summary_load_failed"],
     ["list", list, 500, "split_bills_list", "split_bills_list_query_failed"],
     ["settlement", list, 500, "split_bills_list", "split_bills_settlement_load_failed"],
     ["auth", list, 401, "split_bills_list", "split_bills_unauthorized"],
-    ["", "page=2", 400, "split_bills_list", "split_bills_profile_required"],
+    ["", "page=2&workspaceId=other", 404, "split_bills_list", "split_bills_profile_unavailable"],
   ] as const) {
     fault = phase;
     await assert.rejects(request(query), error => error instanceof api.ApiError && error.status === status);
@@ -129,7 +133,7 @@ async function main() {
     assert.equal(properties.error_code, code);
     assert.equal(properties.status, status);
     fault = "";
-    await request(query === "page=2" ? list : query);
+    await request(status === 404 ? list : query);
     assert.equal(events.at(-1)?.properties.read_surface, surface);
     assert.equal(events.at(-1)?.event, "data_ready");
   }
@@ -148,11 +152,24 @@ async function main() {
   await cachedHome();
   assert.deepEqual(calls.slice(beforeOverlap), ["summary", "summary"]);
 
+  assert.ok(warnings.some(entry => (entry as { surface?: string; legacyProfileFallback?: boolean }).surface === "split_bills_list" &&
+    (entry as { legacyProfileFallback?: boolean }).legacyProfileFallback));
+  assert.equal(splitBillRead.splitBillReadRequiresAction(409), true);
+  assert.equal(splitBillRead.splitBillReadRequiresAction(503), false);
+  assert.equal(splitBillRead.splitBillReadRequiresAction(429), false);
+  const beforeMutation = calls.length;
+  const mutation = await gateway.POST(new Request("https://fixture.test/api/mobile/v1/split-bills", {
+    method: "POST", headers: { authorization: "Bearer fixture-token" },
+  }), { params: Promise.resolve({ path: ["split-bills"] }) });
+  assert.equal(mutation.status, 400);
+  assert.equal(calls.length, beforeMutation, "A write must never look up a fallback Profile");
   ownsProfile = false;
+  await assert.rejects(request("page=2&workspaceId="), error => error instanceof api.ApiError && error.status === 400);
   await assert.rejects(request("homeSummary=true"), error => error instanceof api.ApiError && error.status === 400);
   await assert.rejects(request("homeSummary=true&workspaceId=other"), error => error instanceof api.ApiError && error.status === 404);
   const unauthorized = await fetchGateway("https://fixture.test/api/mobile/v1/split-bills?homeSummary=true", {});
   assert.equal(unauthorized.status, 401);
+  assert.equal((await unauthorized.json()).code, "split_bills_unauthorized");
   assert.equal(analytics.requestTelemetry("split-bills?person=Private%20Name")?.read_surface, "split_bills_filtered_list");
   assert.equal(analytics.requestTelemetry("split-bills?homeSummary=true", "POST")?.read_surface, undefined);
   assert.doesNotMatch(JSON.stringify({ events, warnings }), /Private|private|workspaceId|clerk-user|fixture-token|Fixture lunch/);
