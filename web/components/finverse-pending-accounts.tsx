@@ -30,5 +30,5 @@ export function FinversePendingAccounts({workspaceId}:{workspaceId:string}) {
     finally{cancelling.current=false;setBusy(false);}
   }
   if(!pending.length&&!message)return null;
-  return <><div className="finverse-pending" aria-label="Bank accounts need selection">{pending.map(connection=><FinversePendingChip key={connection.id} connection={connection} busy={busy} onResume={()=>router.push(`/accounts?finverse=connected&finverseConnection=${encodeURIComponent(connection.id)}&finverseWorkspace=${encodeURIComponent(workspaceId)}`)} onCancel={()=>void cancel(connection)}/>)}</div>{message?<p role="status">{message}</p>:null}</>;
+  return <><div className="finverse-pending" aria-label="Bank accounts need selection">{pending.map(connection=><FinversePendingChip key={connection.id} connection={connection} busy={busy} onResume={()=>router.push(`/accounts/link?finverse=connected&finverseConnection=${encodeURIComponent(connection.id)}&finverseWorkspace=${encodeURIComponent(workspaceId)}`)} onCancel={()=>void cancel(connection)}/>)}</div>{message?<p role="status">{message}</p>:null}</>;
 }

@@ -153,3 +153,27 @@
 .account-bank-link__unlink { border:0; background:none; box-shadow:none; color:var(--danger,#c6283d); font:inherit; font-size:13px; cursor:pointer; padding:8px 12px; }
 .account-bank-link__unlink:focus-visible { outline:2px solid var(--teal); outline-offset:2px; border-radius:8px; }
 .account-bank-link__message { margin:0; overflow-wrap:anywhere; font-size:12px; }
+
+.finverse-setup {
+  width: min(100% - 2rem, 40rem);
+  margin: 2rem auto;
+  padding-bottom: 5rem;
+}
+
+.finverse-setup__steps {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: .5rem;
+  padding: 1rem 0 0;
+  margin: 1.5rem 0 0;
+  border-top: 1px solid var(--border, #d5e1e9);
+  list-style: none;
+  text-align: center;
+  font-size: .8rem;
+}
+
+.finverse-setup__steps [aria-current="step"] {
+  font-weight: 700;
+  text-decoration: underline;
+  text-underline-offset: .25rem;
+}

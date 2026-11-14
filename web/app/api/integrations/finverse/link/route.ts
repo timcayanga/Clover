@@ -20,7 +20,7 @@ export async function POST(request: Request) {
 
   try {
     const { userId } = await requireAuth();
-    const parsed = z.object({ workspaceId: z.string().min(1), institutionId: z.string().min(1).max(200).optional() }).strict().safeParse(await request.json().catch(() => null));
+    const parsed = z.object({ workspaceId: z.string().min(1), institutionId: z.string().min(1).max(200).optional(), setup: z.literal(true).optional() }).strict().safeParse(await request.json().catch(() => null));
     if (!parsed.success) return NextResponse.json({ error: "Choose a Profile and bank." }, { status: 400 });
     const body = parsed.data;
     if (!body.workspaceId) return NextResponse.json({ error: "Workspace is required." }, { status: 400 });
@@ -32,7 +32,7 @@ export async function POST(request: Request) {
     // Distinct-account slots are enforced atomically when accounts are selected.
     const selectedBank = body.institutionId ? (await getFinverseBanks({ fresh: true })).banks.find(bank => bank.id === body.institutionId) : undefined;
     if (body.institutionId && !selectedBank) return NextResponse.json({ error: "This bank is no longer available. Refresh the bank list." }, { status: 400 });
-    const state = (getMobileRequestContext() ? "native." : "") + randomBytes(32).toString("base64url");
+    const state = (getMobileRequestContext() ? "native." : body.setup ? "setup." : "") + randomBytes(32).toString("base64url");
     const link = await createFinverseLink(workspace.userId, state, body.institutionId);
     if (!link.link_url) throw new Error("FINVERSE_LINK_URL_MISSING");
 

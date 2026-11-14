@@ -27,7 +27,7 @@ type Step =
   | "email-verification"
   | "extra-verification"
   | "finish-sign-in";
-type AuthStage = Step | "password" | "send_email_code" | "verify_email_code" | "finalize_sign_in" | "google_oauth";
+type AuthStage = Step | "password" | "send_email_code" | "verify_email_code" | "finalize_sign_in" | "google_oauth" | "prepare_password_reset" | "submit_new_password";
 
 export default function Authentication() {
   const access = useAccess();
@@ -70,6 +70,7 @@ function AuthForm() {
     params.restartSSO === "1" ? "Sign-in was interrupted. Please try again." : "",
   );
   const pending = useRef(false);
+  const preparedResetEmail = useRef<string | null>(null);
   const check = async (result: Promise<{ error: unknown }>) => {
     const { error } = await result;
     if (error) throw error;
@@ -120,7 +121,8 @@ function AuthForm() {
         setError("Clover could not resume your sign-in. Check your connection and try again.");
       } else if (failure.reason === "rate_limited") {
         setError("Too many attempts. Wait a bit before trying again.");
-      } else if (failure.reason === "password_reset_required") {
+      } else if (stage === "password" && failure.reason === "password_reset_required") {
+        preparedResetEmail.current = null;
         setPassword("");
         setStep("reset");
         const identifier = email.trim();
@@ -230,6 +232,7 @@ function AuthForm() {
       setCode("");
       setStep("new-password");
     } else if (step === "new-password") {
+      setStage("submit_new_password");
       await check(
         signIn.resetPasswordEmailCode.submitPassword({
           password,

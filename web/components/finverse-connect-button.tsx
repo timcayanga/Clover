@@ -32,6 +32,15 @@ type SyncResponse = {
   preview?: BankLinkPreview | null;
 };
 
+function setupReturnPath(connectionId: string | undefined) {
+  if (!connectionId) return "/accounts";
+  try {
+    const saved = sessionStorage.getItem(`finverse-return:${connectionId}`);
+    if (saved && /^\/(?:accounts|transactions|home|onboarding)(?:\/|\?|$)/.test(saved) && !saved.startsWith("/accounts/link")) return saved;
+  } catch { /* Browser storage is optional. */ }
+  return "/accounts";
+}
+
 const FINVERSE_POLL_INTERVAL_MS = 3_000;
 const FINVERSE_MAX_POLL_ATTEMPTS = 30;
 
@@ -53,10 +62,12 @@ export function FinverseConnectButton({
   onSynced,
   mode = "connect",
   accountId,
+  setup = false,
 }: {
   workspaceId: string;
   mode?: "connect" | "sync";
   accountId?: string;
+  setup?: boolean;
   onSynced?: () => Promise<void> | void;
 }) {
   const [access, setAccess] = useState<{ workspaceId: string; upgradeRequired: boolean; trial?: SignupTrialSnapshot | null } | null>(null);
@@ -93,7 +104,7 @@ export function FinverseConnectButton({
   }, [onSynced]);
 
   useEffect(() => {
-    if (mode === "sync" && accountId) return;
+    if (setup || (mode === "sync" && accountId)) return;
     const controller = new AbortController();
 
     setBanksLoaded(false);
@@ -103,7 +114,7 @@ export function FinverseConnectButton({
       .then(data => { if (controller.signal.aborted) return; setBanksLoaded(true); setBanks(data.banks); setTestMode(data.mode === "test"); setBankStatus(data.message || (data.banks.length ? "" : "No banks are available right now. Use Manual or Upload.")); })
       .catch(error => { if (!controller.signal.aborted) setBankStatus(error.message || "Unable to load banks. Try again."); });
     return () => controller.abort();
-  }, [workspaceId, bankRevision, mode, accountId]);
+  }, [workspaceId, bankRevision, mode, accountId, setup]);
 
   useEffect(() => {
     setAccess(null);
@@ -136,7 +147,9 @@ export function FinverseConnectButton({
       const body = await response.json();
       if (!response.ok) throw new Error(body.error || "Unable to cancel setup.");
       setPending(current => current.filter(bank => bank.id !== id));
-      backToBanks(); setMessage(body.message);
+      if (setup) router.replace(setupReturnPath(id));
+      else backToBanks();
+      setMessage(body.message);
       window.dispatchEvent(new Event("finverse-updated")); notifyInAppNotificationsChanged();
     } catch (error) { setMessage(error instanceof Error ? error.message : "Unable to cancel setup."); }
     finally { actionRef.current = null; setAction(null); }
@@ -213,6 +226,7 @@ export function FinverseConnectButton({
         setBankRevision(v=>v+1);
         window.dispatchEvent(new Event("finverse-updated"));notifyInAppNotificationsChanged();
         if (body.preview && body.connectionId) setPreview({ workspaceId, connectionId: body.connectionId, row: body.preview });
+        else if (setup) router.replace(setupReturnPath(requestedConnectionId));
         else if (mode === "connect") router.replace("/accounts", { scroll: false });
         else router.refresh();
         return;
@@ -230,26 +244,28 @@ export function FinverseConnectButton({
         setAction(null);
       }
     }
-  }, [mappings, allowed, mode, router, workspaceId]);
+  }, [mappings, allowed, mode, router, setup, workspaceId]);
 
   useEffect(() => () => activeSyncRef.current?.abort(), []);
 
   useEffect(() => {
     if (allowed && callbackStatus === "connected" && connectionId && workspaceId && autoSyncStarted.current !== connectionId) {
       autoSyncStarted.current = connectionId;
-      clearCallback();
+      if (!setup) clearCallback();
+      else try { sessionStorage.removeItem(`finverse-sign-in:${connectionId}`); } catch { /* Optional storage. */ }
       void sync(connectionId);
     } else if (callbackStatus === "invalid_callback") {
-      clearCallback();
+      if (!setup) clearCallback();
       setMessage("The bank connection expired. Please start again.");
     } else if (callbackStatus === "cancelled") {
-      clearCallback();
-      setMessage("Bank connection cancelled. You can try again when you’re ready.");
+      if (!setup) clearCallback();
+      if (setup) router.replace(setupReturnPath(connectionId));
+      else setMessage("Bank connection cancelled. You can try again when you’re ready.");
     } else if (callbackStatus === "error") {
-      clearCallback();
+      if (!setup) clearCallback();
       setMessage("The bank connection could not be completed. Please try again.");
     }
-  }, [allowed, callbackStatus, connectionId, sync, workspaceId]);
+  }, [allowed, callbackStatus, connectionId, router, setup, sync, workspaceId]);
 
   const unlink = async () => {
     if (!unlinkTarget || actionRef.current) return;
@@ -275,11 +291,20 @@ export function FinverseConnectButton({
       const response = await fetch("/api/integrations/finverse/link", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ workspaceId, institutionId }),
+        body: JSON.stringify({ workspaceId, institutionId, setup: true }),
       });
-      const body = await response.json() as { linkUrl?: string; error?: string };
+      const body = await response.json() as { linkUrl?: string; connectionId?: string; error?: string };
       requestStatus = response.status;
       if (!response.ok || !body.linkUrl) throw new Error(body.error || "Unable to connect a bank.");
+      if (body.connectionId) {
+        try {
+          sessionStorage.setItem(`finverse-return:${body.connectionId}`, window.location.pathname + window.location.search);
+          sessionStorage.setItem(`finverse-sign-in:${body.connectionId}`, body.linkUrl);
+          router.push(`/accounts/link?finverse=signin&finverseConnection=${encodeURIComponent(body.connectionId)}&finverseWorkspace=${encodeURIComponent(workspaceId)}`);
+          return;
+        }
+        catch { /* Return to Accounts when storage is unavailable. */ }
+      }
       window.location.assign(body.linkUrl);
     } catch (error) {
       capturePostHogClientEvent("bank_link_stage", { stage: "link_request_failed", status: requestStatus, surface: "bank_picker" });
@@ -293,27 +318,43 @@ export function FinverseConnectButton({
   const progressId = progressConnection ?? connectionId;
   const progressBank = pending.find(bank => bank.id === progressId);
   const canCancel = Boolean(progressId && progressBank && !linked.some(account => account.connectionId === progressId));
+  const leaveSetup = () => router.replace(setupReturnPath(progressId));
+  const awaitingSignIn = setup && callbackStatus === "signin";
+  const openSignIn = () => {
+    try {
+      const url = sessionStorage.getItem(`finverse-sign-in:${progressId}`);
+      if (url) { window.location.assign(url); return; }
+    } catch { /* The user can restart from the bank picker. */ }
+    setMessage("This sign-in session is unavailable. Go back and choose your bank again.");
+  };
+  const setupStep = awaitingSignIn ? 0 : selection || visiblePreview || retry?.ids?.length ? 2 : 1;
+  const steps = setup ? <ol className="finverse-setup__steps" aria-label="Linking stages">
+    {["Sign in", "Retrieve accounts", "Choose accounts"].map((label, index) => <li key={label} aria-current={index === setupStep ? "step" : undefined}>{index + 1}. {label}</li>)}
+  </ol> : null;
   const selectionPanel = selection ? <fieldset className="finverse-connect__selection"><legend>{progressBank ? `Select ${progressBank.name} accounts` : "Select bank accounts"}</legend><p>Choose which accounts to link. Matching Clover accounts keep their history.</p><p>{selection.remaining} new account slots available. Previously used accounts can be reconnected.</p>{selection.accounts.map(account => {
         const newSelected = selection.accounts.filter(a => selected.includes(a.id) && !a.reserved).length;
         return <label key={account.id}><input type="checkbox" checked={selected.includes(account.id)} disabled={action !== null || (!selected.includes(account.id) && !account.reserved && newSelected >= selection.remaining)} onChange={event => setSelected(current => event.target.checked ? [...current,account.id] : current.filter(id => id !== account.id))}/><span>{account.name}{account.existingAccountName ? <small> · Reuse {account.existingAccountName}; keep all history</small> : null}{account.reserved ? <small> · Already included this period</small> : null}<select aria-label={`Destination for ${account.name}`} disabled={action!==null} value={mappings[account.id]??''} onChange={event=>setMappings(current=>({...current,[account.id]:event.target.value}))}><option value="">{account.suggestedAccountId?'Use matching existing account':'Create a new account card'}</option>{account.candidates?.map(c=><option key={c.id} value={c.id}>Link to {c.name}{c.last4?` •••• ${c.last4}`:''}</option>)}</select></span></label>;
-      })}<button type="button" className="button button-primary" disabled={action !== null || selected.length === 0} onClick={() => void sync(selection.connectionId,selected)}>Link selected accounts</button><div className="finverse-progress-actions"><button className="button button-secondary" type="button" onClick={backToBanks}>Back to Banks</button><button type="button" className="button button-secondary" disabled={action === "unlinking"} onClick={()=>void cancelSetup(selection.connectionId)}>Cancel Linking</button></div>{message?<p role="status">{message}</p>:null}</fieldset> : null;
+      })}<button type="button" className="button button-primary" disabled={action !== null || selected.length === 0} onClick={() => void sync(selection.connectionId,selected)}>Link selected accounts</button><div className="finverse-progress-actions"><button className="button button-secondary" type="button" onClick={setup ? leaveSetup : backToBanks}>{setup ? "Continue later" : "Back to Banks"}</button><button type="button" className="button button-secondary" disabled={action === "unlinking"} onClick={()=>void cancelSetup(selection.connectionId)}>Cancel Linking</button></div>{message?<p role="status">{message}</p>:null}</fieldset> : null;
   const callbackLoading = callbackStatus === "connected" && connectionId && autoSyncStarted.current !== connectionId && !access && !connectionsError;
-  if (progressOpen || callbackLoading) return <section className="finverse-progress" aria-label="Bank connection progress" aria-live="polite">
+  if (setup || progressOpen || callbackLoading) return <section className="finverse-progress" aria-label="Bank connection progress" aria-live="polite">
     {(action === null && !retry && selectionPanel) || <>
-      <h4>{progressBank ? progressBank.name : "Bank connection"} {action === "syncing" || callbackLoading ? "linking in progress" : retry ? "needs attention" : "update"}</h4>
+      <h4>{progressBank ? progressBank.name : "Bank connection"} {action === "syncing" || callbackLoading ? "linking in progress" : retry ? "needs attention" : awaitingSignIn ? "secure sign-in" : "setup"}</h4>
       {visiblePreview ? <div ref={previewRef}>
         <strong>{visiblePreview.row.label}</strong>
         <p>{visiblePreview.row.kind === "balance" ? "Bank balance" : "Booked transaction"} · {formatCurrencyAmount(visiblePreview.row.amount, visiblePreview.row.currency)}</p>
         <Link className="button button-primary" href={visiblePreview.row.kind === "balance" ? "/accounts" : `/transactions/${encodeURIComponent(visiblePreview.row.id)}`}>{visiblePreview.row.kind === "balance" ? "View accounts" : "View transaction"}</Link>
       </div> : null}
       {action === "syncing" || callbackLoading ? <span className="finverse-progress__spinner" aria-hidden="true" /> : null}
-      <p role="status">{message || "Retrieving your accounts…"}</p>
+      <p role="status">{message || connectionsError || (connectionsLoaded && !allowed ? "Bank linking is unavailable for this Profile." : awaitingSignIn ? "Complete your login and verification in the secure Finverse window." : "Retrieving your accounts…")}</p>
       {reconnect ? <p>Choose your bank again to start a fresh connection.</p> : null}
       <div className="finverse-progress-actions">
-        <button type="button" className="button button-secondary" disabled={action === "unlinking"} onClick={backToBanks}>Back to Banks</button>
+        {awaitingSignIn && allowed ? <button type="button" className="button button-primary" onClick={openSignIn}>Continue to bank</button> : null}
+        {setup && progressId && allowed && !action && !visiblePreview && callbackStatus === "connected" ? <button type="button" className="button button-primary" onClick={() => void sync(progressId, retry?.ids)}>Check again</button> : null}
+        <button type="button" className="button button-secondary" disabled={action === "unlinking"} onClick={setup ? leaveSetup : backToBanks}>{setup ? visiblePreview ? "Done" : callbackStatus === "connected" ? "Continue later" : "Back to Clover" : "Back to Banks"}</button>
         {canCancel && progressId ? <button type="button" className="button button-secondary" disabled={action === "unlinking"} onClick={() => void cancelSetup(progressId)}>Cancel Linking</button> : null}
       </div>
     </>}
+    {steps}
   </section>;
   if (mode === "sync" && accountId && (!connectionsLoaded || !linked.some(a=>a.id===accountId))) return null;
   if (access?.workspaceId === workspaceId && access.upgradeRequired && !linked.length) return (

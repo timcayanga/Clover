@@ -28,9 +28,9 @@ const callbackValues = async (request: Request) => {
   return { code: url.searchParams.get("code") ?? "", state: url.searchParams.get("state") ?? "", error: url.searchParams.get("error") ?? "" };
 };
 
-const redirectToAccounts = (status: string, connectionId?: string, native = false, workspaceId?: string) => {
+const redirectToAccounts = (status: string, connectionId?: string, native = false, workspaceId?: string, setup = false) => {
   const configured = getFinverseConfig().redirectUri;
-  const url = native ? new URL("clover://accounts") : new URL("/accounts", new URL(configured).origin);
+  const url = native ? new URL("clover://accounts") : new URL(setup ? "/accounts/link" : "/accounts", new URL(configured).origin);
   if (workspaceId) url.searchParams.set("finverseWorkspace", workspaceId);
   url.searchParams.set("finverse", status);
   if (connectionId) url.searchParams.set("finverseConnection", connectionId);
@@ -49,6 +49,7 @@ const handleCallback = async (request: Request) => {
   }
 
   let native = false;
+  let setup = false;
   let failedConnection: { id: string; workspaceId: string } | null = null;
   try {
     const { code, state, error } = await callbackValues(request);
@@ -60,6 +61,7 @@ const handleCallback = async (request: Request) => {
 
     failedConnection = connection;
     native = state.startsWith("native.");
+    setup = state.startsWith("setup.");
     if (state.startsWith("refresh.") || state.startsWith("native.refresh.")) {
       const claimed = await prisma.finverseConnection.updateMany({
         where: { id: connection.id, status: "link_pending", stateExpiresAt: { gt: new Date() } },
@@ -67,13 +69,13 @@ const handleCallback = async (request: Request) => {
       });
       if (claimed.count !== 1) return redirectToAccounts("invalid_callback");
       // Refresh retains the same login identity/token. The sync endpoint checks provider readiness.
-      return redirectToAccounts(error ? "error" : "connected", connection.id, native, connection.workspaceId);
+      return redirectToAccounts(error ? "error" : "connected", connection.id, native, connection.workspaceId, setup);
     }
     // Claim the one-time callback before exchanging credentials (including concurrent replays).
     const claimed = await prisma.finverseConnection.updateMany({ where: { id: connection.id, status: "link_pending", stateExpiresAt: { gt: new Date() } }, data: { status: error ? "error" : code ? "authorizing" : "cancelled", stateExpiresAt: new Date(0) } });
     if (claimed.count !== 1) return redirectToAccounts("invalid_callback");
-    if (error) { await recordBankLinkStage(connection.id, "failed"); return redirectToAccounts("error", connection.id, native, connection.workspaceId); }
-    if (!code) { await recordBankLinkStage(connection.id, "cancelled"); return redirectToAccounts("cancelled", connection.id, native, connection.workspaceId); }
+    if (error) { await recordBankLinkStage(connection.id, "failed"); return redirectToAccounts("error", connection.id, native, connection.workspaceId, setup); }
+    if (!code) { await recordBankLinkStage(connection.id, "cancelled"); return redirectToAccounts("cancelled", connection.id, native, connection.workspaceId, setup); }
     const token = await exchangeFinverseCode(code);
     const config = getFinverseConfig();
     await prisma.finverseConnection.update({
@@ -90,12 +92,12 @@ const handleCallback = async (request: Request) => {
     await recordBankLinkStage(connection.id, "authorized");
     // Continue discovering accounts after redirect, even if the user closes the sheet.
     try { after(async () => { await observeFinverseDiscovery(connection.id, token.access_token).catch(() => {}); }); } catch { /* Outside a request lifecycle, the UI can still resume discovery. */ }
-    return redirectToAccounts("connected", connection.id, native, connection.workspaceId);
+    return redirectToAccounts("connected", connection.id, native, connection.workspaceId, setup);
   } catch (error) {
     if (failedConnection) await prisma.finverseConnection.updateMany({ where: { id: failedConnection.id, status: "authorizing", disconnectRequestedAt: null }, data: { status: "error", syncError: "Bank authorization could not be completed. Please reconnect securely." } }).catch(() => {});
     if (failedConnection) await recordBankLinkStage(failedConnection.id, "failed");
     console.error("Finverse callback failed", error);
-    return redirectToAccounts("error", failedConnection?.id, native, failedConnection?.workspaceId);
+    return redirectToAccounts("error", failedConnection?.id, native, failedConnection?.workspaceId, setup);
   }
 };
 
