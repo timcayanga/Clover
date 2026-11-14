@@ -57,7 +57,7 @@ export const prisma={user:{findUniqueOrThrow:async()=>({planTier,verified})},$tr
  findFirst:async({where})=>{if(where.workspaceId!=='profile'||where.user.clerkUserId!=='owner'||where.status.not!=='disconnected')throw Error('unsafe scope');return {id:'connection',userId:'owner',loginIdentityId:'identity',encryptedRefreshToken:'cipher',encryptedAccessToken:'cipher',accessTokenExpiresAt:new Date(Date.now()+3600000)};},
  findMany:async({where,select})=>{if(where.workspaceId!=='profile'||where.user.clerkUserId!=='owner')throw Error('unsafe scope');return [{id:'expired',workspaceId:'profile',createdAt:new Date(0),status:'link_pending',stateExpiresAt:new Date(0),institutionName:'Expired bank',lastSyncedAt:null,accountLinks:[]},{id:'failed',workspaceId:'profile',createdAt:new Date(0),status:'error',institutionName:'Failed bank',lastSyncedAt:null,accountLinks:[]},{id:'cancelled',status:'cancelled',institutionName:'Cancelled bank',lastSyncedAt:null,accountLinks:[]},{id:'pending',workspaceId:'profile',createdAt:new Date(0),encryptedRefreshToken:'cipher',status:'awaiting_selection',institutionId:'rcbc',institutionName:'RCBC - Personal',lastSyncedAt:null,accountLinks:[]},{id:'linked',status:'ready',institutionName:'Test bank',lastSyncedAt:new Date('2026-09-24T00:00:00Z'),encryptedRefreshToken:'cipher',accountLinks:[{account:{id:'account',name:'Savings',institution:'Test bank',accountNumber:'1234-5678-90',type:'bank'}}]}];},
  create:async({data})=>{created++;return{id:'connection'};},
- findUnique:async({where})=>['native.valid','native.refresh.valid'].includes(where.stateHash)?{id:'connection',workspaceId:'profile',stateExpiresAt:new Date(Date.now()+60000),status:claimed?'authorizing':'link_pending'}:null,
+ findUnique:async({where})=>['native.valid','native.refresh.valid','setup.valid'].includes(where.stateHash)?{id:'connection',workspaceId:'profile',stateExpiresAt:new Date(Date.now()+60000),status:claimed?'authorizing':'link_pending'}:null,
  updateMany:async({where,data})=>{if(where.accountLinks || where.status==='retrieving'){discoveryWrites.push({where,data});return {count:1};}if(where.status && typeof where.status === "object"){updates.push(data);return{count:1};}if(claimed)return{count:0};claimed=true;return{count:1};},
  update:async({data})=>{updates.push(data);return{};}
 }};
@@ -167,6 +167,13 @@ export const prisma={user:{findUniqueOrThrow:async()=>({planTier,verified})},$tr
   assert.equal((await sync({workspaceId:'profile',connectionId:'connection'})).status,200,'Polling remains available at the refresh limit');
   api.setRefreshLimit(false);
   const callback=(state:string,code='code')=>api.callback(new Request(`https://clover.test/callback?state=${state}&code=${code}`));
+  api.reset();
+  const webSetup = await callback('setup.valid');
+  const setupUrl = new URL(webSetup.headers.get('location')!);
+  assert.equal(setupUrl.pathname, '/accounts/link');
+  assert.equal(setupUrl.searchParams.get('finverseConnection'), 'connection');
+  assert.equal(setupUrl.searchParams.get('finverseWorkspace'), 'profile');
+  assert.equal(api.stats().exchanges, 1);
   api.reset();
   const responses=await Promise.all([callback('native.valid'),callback('native.valid')]);
   assert.equal(api.stats().exchanges,1);
