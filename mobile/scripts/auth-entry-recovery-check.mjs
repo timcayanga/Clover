@@ -74,6 +74,7 @@ console.log('PASS actual sign-in submit recovers an existing session and gives a
 const server = createServer((req, res) => {
   const code = {
     '/password': 'form_password_incorrect',
+    '/compromised': 'form_password_pwned',
     '/send-code': 'form_param_value_invalid',
     '/finalize': 'form_param_value_invalid',
     '/google': 'strategy_for_instance_invalid',

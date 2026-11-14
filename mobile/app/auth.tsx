@@ -150,7 +150,7 @@ function AuthForm() {
         setRepeat("");
         setError("Choose a different password to continue.");
       } else if (stage === "send_email_code") {
-        setError("Clover couldn't send the code. Tap Resend code to try again.");
+        setError(step === "reset" ? "Clover couldn't send the reset code. Tap Send reset code to try again." : "Clover couldn't send the code. Tap Resend code to try again.");
       } else if (stage === "finalize_sign_in") {
         setError("Clover couldn't finish signing you in. Tap Finish signing in to try again.");
       } else if (step === "sign-in" && (failure.status === 422 || failure.reason === "method_unavailable")) {
@@ -317,7 +317,7 @@ function AuthForm() {
             <Field
               label="Email address"
               value={email}
-              onChangeText={setEmail}
+              onChangeText={value => { preparedResetEmail.current = null; setEmail(value); }}
               keyboardType="email-address"
               autoCapitalize="none"
               autoComplete="email"
@@ -399,6 +399,7 @@ function AuthForm() {
               style={{ alignSelf: "flex-end", minHeight: 44, justifyContent: "center" }}
               disabled={busy}
               onPress={() => {
+                preparedResetEmail.current = null;
                 setStep("reset");
                 setPassword("");
                 setError("");
@@ -449,7 +450,9 @@ function AuthForm() {
                       ? "Create account"
                       : step === "finish-sign-in"
                         ? "Finish signing in"
-                        : "Continue"
+                        : step === "reset" ? "Send reset code"
+                        : step === "new-password" ? "Save new password"
+                          : "Continue"
               }
               disabled={busy || !valid}
               onPress={() => void run(submit)}
@@ -509,6 +512,7 @@ function AuthForm() {
               secondary
               disabled={busy}
               onPress={() => {
+                preparedResetEmail.current = null;
                 setStep("sign-in");
                 setCode("");
                 setPassword("");
