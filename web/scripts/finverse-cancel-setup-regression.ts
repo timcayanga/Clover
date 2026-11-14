@@ -13,10 +13,11 @@ export const assertWorkspaceAccess=async(user,id)=>{if(user!=='clerk-owner'||id!
 export const requestBankDisconnect=async(id,reason,lastSync,requireEmpty)=>{requested++;if(id!=='attempt'||requireEmpty!==true)throw Error('unsafe cancellation');if(!linked)Object.assign(connection,{status:'disconnect_pending',disconnectRequestedAt:new Date()});};
 export const revokeBankConnection=async()=>{revokes++;connection.status='disconnected';return true;};
 export const prisma={finverseConnection:{findFirst:async({where})=>{if(where.workspaceId!=='profile'||where.userId!=='db-owner')throw Error('unsafe scope');return where.id==='attempt'?connection:null;},findUniqueOrThrow:async()=>connection}};
+export const recordBankLinkStage=async()=>{};
 export const bankLinkAllowance=async()=>{throw Error('cancelling must not reserve slots');};
 export const getActiveFinverseToken=async()=>{};export const unlinkFinverseIdentity=async()=>{};
 `;
-  const output = await build({ stdin: {contents: `export {POST} from './app/api/integrations/finverse/unlink/route'; export {reset,state} from 'fixture';`,resolveDir:process.cwd()}, bundle:true,platform:'node',format:'cjs',packages:'external',write:false,plugins:[{name:'cancel-fixture',setup(b){b.onResolve({filter:/^(fixture|@\/lib\/(auth|workspace-access|prisma|finverse-lifecycle|bank-link-usage|finverse-access-token|finverse))$/},()=>({path:'fixture',namespace:'test'}));b.onLoad({filter:/.*/,namespace:'test'},()=>({contents:fixture,loader:'ts'}));}}] });
+  const output = await build({ stdin: {contents: `export {POST} from './app/api/integrations/finverse/unlink/route'; export {reset,state} from 'fixture';`,resolveDir:process.cwd()}, bundle:true,platform:'node',format:'cjs',packages:'external',write:false,plugins:[{name:'cancel-fixture',setup(b){b.onResolve({filter:/^(fixture|@\/lib\/(auth|workspace-access|prisma|finverse-lifecycle|bank-link-usage|bank-link-journey|finverse-access-token|finverse))$/},()=>({path:'fixture',namespace:'test'}));b.onLoad({filter:/.*/,namespace:'test'},()=>({contents:fixture,loader:'ts'}));}}] });
   const require = createRequire(resolve('package.json')), Module=require('node:module'), mod=new Module(resolve('cancel-test.cjs'));
   mod.filename=resolve('cancel-test.cjs');mod.paths=Module._nodeModulePaths(process.cwd());mod._compile(output.outputFiles[0].text,mod.filename);
   const api=mod.exports;

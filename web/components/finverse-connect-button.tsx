@@ -4,6 +4,9 @@ import { SignupTrialSummary } from "./signup-trial-summary";
 import type { SignupTrialSnapshot } from "../../shared/signup-trial";
 import { ResourceUpgradeNotice } from "./contextual-upgrade";
 
+import { capturePostHogClientEvent } from "./posthog-analytics";
+import { formatCurrencyAmount } from "@/lib/currency-format";
+import type { BankLinkPreview } from "../../shared/bank-link-preview";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { FinverseBankOption } from "../../shared/finverse-bank-options";
 import type { PendingBankConnection } from "../../shared/finverse-pending";
@@ -26,6 +29,7 @@ type SyncResponse = {
   error?: string;
   reconnectRequired?: boolean;
   transactions?: { imported?: number };
+  preview?: BankLinkPreview | null;
 };
 
 const FINVERSE_POLL_INTERVAL_MS = 3_000;
@@ -138,6 +142,32 @@ export function FinverseConnectButton({
     finally { actionRef.current = null; setAction(null); }
   };
 
+  const [preview, setPreview] = useState<{ workspaceId: string; connectionId: string; row: BankLinkPreview } | null>(null);
+  const previewRef = useRef<HTMLDivElement>(null);
+  const visiblePreview = preview?.workspaceId === workspaceId ? preview : null;
+  useEffect(() => {
+    const node = previewRef.current;
+    if (!visiblePreview || !node || typeof IntersectionObserver === "undefined") return;
+    let reported = false;
+    const report = () => {
+      if (reported || document.visibilityState !== "visible") return;
+      const rect = node.getBoundingClientRect();
+      if (rect.right <= 0 || rect.left >= window.innerWidth) return;
+      if (rect.height <= 0 || Math.min(rect.bottom, window.innerHeight) - Math.max(rect.top, 0) < rect.height / 2) return;
+      reported = true;
+      const { workspaceId, connectionId, row } = visiblePreview;
+      void fetch("/api/integrations/finverse/displayed", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ workspaceId, connectionId, kind: row.kind }),
+      }).then(response => { if (!response.ok) reported = false; }).catch(() => { reported = false; });
+    };
+    const observer = new IntersectionObserver(entries => {
+      if (entries.some(entry => entry.isIntersecting && entry.intersectionRatio >= 0.5)) report();
+    }, { threshold: 0.5 });
+    observer.observe(node);
+    document.addEventListener("visibilitychange", report);
+    return () => { observer.disconnect(); document.removeEventListener("visibilitychange", report); };
+  }, [visiblePreview]);
   const [progressConnection, setProgressConnection] = useState<string>();
   const sync = useCallback(async (requestedConnectionId?: string, selectedAccountIds?: string[], refresh = false) => {
     if (!allowed || !workspaceId || actionRef.current) return;
@@ -145,6 +175,7 @@ export function FinverseConnectButton({
     activeSyncRef.current = controller;
     actionRef.current = "syncing";
     setProgressConnection(requestedConnectionId);
+    setPreview(null);
     setAction("syncing"); setProgressOpen(true); setRetry(null); setReconnect(false);
     setMessage(refresh ? "Syncing your bank transactions…" : selectedAccountIds?.length ? "Linking selected accounts and syncing transactions…" : "Bank authorized. Retrieving your accounts…");
     try {
@@ -176,11 +207,13 @@ export function FinverseConnectButton({
         setPending(current=>current.filter(c=>c.id!==requestedConnectionId));
         publishWorkspaceDataChange({ workspaceId, source: "transactions", affected: getAffectedWorkspaceDataDomains("transactions"), path: "/api/integrations/finverse/sync", revision: Date.now() });
         await onSyncedRef.current?.();
+        if (controller.signal.aborted) return;
         const imported = body.transactions?.imported ?? 0;
         setMessage(body.message || (selectedAccountIds?.length ? `${selectedAccountIds.length} account${selectedAccountIds.length===1?"":"s"} linked. ` : "") + (imported > 0 ? `Bank synced — ${imported} new transaction${imported === 1 ? "" : "s"} ready for review.` : "Already up to date."));
         setBankRevision(v=>v+1);
         window.dispatchEvent(new Event("finverse-updated"));notifyInAppNotificationsChanged();
-        if (mode === "connect") router.replace("/accounts", { scroll: false });
+        if (body.preview && body.connectionId) setPreview({ workspaceId, connectionId: body.connectionId, row: body.preview });
+        else if (mode === "connect") router.replace("/accounts", { scroll: false });
         else router.refresh();
         return;
       }
@@ -233,9 +266,11 @@ export function FinverseConnectButton({
 
   const connect = async (institutionId?: string) => {
     if (!allowed || !workspaceId || actionRef.current) return;
+    capturePostHogClientEvent("bank_link_stage", { stage: "picker_selection", surface: "bank_picker" });
     actionRef.current = "connecting";
     setAction("connecting");
     setMessage("Opening the secure bank connection…");
+    let requestStatus = 0;
     try {
       const response = await fetch("/api/integrations/finverse/link", {
         method: "POST",
@@ -243,9 +278,11 @@ export function FinverseConnectButton({
         body: JSON.stringify({ workspaceId, institutionId }),
       });
       const body = await response.json() as { linkUrl?: string; error?: string };
+      requestStatus = response.status;
       if (!response.ok || !body.linkUrl) throw new Error(body.error || "Unable to connect a bank.");
       window.location.assign(body.linkUrl);
     } catch (error) {
+      capturePostHogClientEvent("bank_link_stage", { stage: "link_request_failed", status: requestStatus, surface: "bank_picker" });
       setMessage(error instanceof Error ? error.message : "Unable to connect a bank.");
       actionRef.current = null;
       setAction(null);
@@ -264,6 +301,11 @@ export function FinverseConnectButton({
   if (progressOpen || callbackLoading) return <section className="finverse-progress" aria-label="Bank connection progress" aria-live="polite">
     {(action === null && !retry && selectionPanel) || <>
       <h4>{progressBank ? progressBank.name : "Bank connection"} {action === "syncing" || callbackLoading ? "linking in progress" : retry ? "needs attention" : "update"}</h4>
+      {visiblePreview ? <div ref={previewRef}>
+        <strong>{visiblePreview.row.label}</strong>
+        <p>{visiblePreview.row.kind === "balance" ? "Bank balance" : "Booked transaction"} · {formatCurrencyAmount(visiblePreview.row.amount, visiblePreview.row.currency)}</p>
+        <Link className="button button-primary" href={visiblePreview.row.kind === "balance" ? "/accounts" : `/transactions/${encodeURIComponent(visiblePreview.row.id)}`}>{visiblePreview.row.kind === "balance" ? "View accounts" : "View transaction"}</Link>
+      </div> : null}
       {action === "syncing" || callbackLoading ? <span className="finverse-progress__spinner" aria-hidden="true" /> : null}
       <p role="status">{message || "Retrieving your accounts…"}</p>
       {reconnect ? <p>Choose your bank again to start a fresh connection.</p> : null}

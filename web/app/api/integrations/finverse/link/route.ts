@@ -48,6 +48,7 @@ export async function POST(request: Request) {
       select: { id: true },
     });
 
+    if (selectedBank) await recordBankLinkStage(connection.id, "institution_selected");
     await recordBankLinkStage(connection.id, "started");
     return NextResponse.json({ connectionId: connection.id, linkUrl: link.link_url });
   } catch (error) {

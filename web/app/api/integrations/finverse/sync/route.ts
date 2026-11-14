@@ -270,7 +270,7 @@ export async function POST(request: Request) {
     const accountsToImport = providerAccounts.filter(a => linkedIds.has(a.account_id) || chosen.some(c => c.account_id === a.account_id));
     for (const account of accountsToImport) await importAccount(connection.id, connection.workspaceId, account, resolvedInstitutionName, chosen.some(c => c.account_id === account.account_id), body.accountMappings?.[account.account_id]);
 
-    const usableLinks = await prisma.finverseAccountLink.findMany({ where: { connectionId: connection.id, workspaceId: connection.workspaceId, unlinkedAt: null, accountId: { not: null } }, select: { accountId: true, normalizedPayload: true } });
+    const usableLinks = await prisma.finverseAccountLink.findMany({ where: { connectionId: connection.id, workspaceId: connection.workspaceId, unlinkedAt: null, accountId: { not: null } }, select: { accountId: true, normalizedPayload: true, account: { select: { name: true, currency: true } } } });
     if (!usableLinks.length) return NextResponse.json({ error: "No bank accounts were linked. Choose accounts to finish linking.", reconnectRequired: true }, { status: 409 });
     const providerTransactions = await getAllFinverseTransactions(token);
     const categories = await prisma.category.findMany({ where: { workspaceId: connection.workspaceId, isArchived: false }, select: { id: true, name: true, type: true } });
@@ -285,9 +285,27 @@ export async function POST(request: Request) {
       else if (result === "existing") existing += 1;
       else skipped += 1;
     }
-    const visibleTransactions = await prisma.transaction.count({ where: { workspaceId: connection.workspaceId, OR: [{ finverseTransactionRecord: { is: { connectionId: connection.id } } }, { id: { in: [...claimedTransactionIds] } }], accountId: { in: usableLinks.flatMap(link => link.accountId ? [link.accountId] : []) }, deletedAt: null, isExcluded: false, reviewStatus: { notIn: ["rejected", "duplicate_skipped"] } } });
-    const hasBalance = usableLinks.some(link => { const value = (link.normalizedPayload as { balance?: unknown } | null)?.balance; return value !== null && value !== undefined && Number.isFinite(Number(value)); });
-    const usableData = hasBalance || visibleTransactions > 0;
+    const visibleWhere: Prisma.TransactionWhereInput = { workspaceId: connection.workspaceId, OR: [{ finverseTransactionRecord: { is: { connectionId: connection.id } } }, { id: { in: [...claimedTransactionIds] } }], accountId: { in: usableLinks.flatMap(link => link.accountId ? [link.accountId] : []) }, deletedAt: null, isExcluded: false, reviewStatus: { notIn: ["rejected", "duplicate_skipped"] } };
+    const balanceLink = usableLinks.find(link => {
+      const balance = (link.normalizedPayload as { balance?: unknown } | null)?.balance;
+      return link.account && balance != null && Number.isFinite(Number(balance));
+    });
+    const [visibleTransactions, transaction] = await Promise.all([
+      prisma.transaction.count({ where: visibleWhere }),
+      balanceLink ? null : prisma.transaction.findFirst({
+        where: visibleWhere,
+        orderBy: [{ date: "desc" }, { id: "desc" }],
+        select: { id: true, amount: true, currency: true, merchantRaw: true, merchantClean: true },
+      }),
+    ]);
+    const preview = balanceLink?.account && balanceLink.accountId ? {
+      kind: "balance", id: balanceLink.accountId, label: balanceLink.account.name,
+      amount: String((balanceLink.normalizedPayload as { balance: unknown }).balance), currency: balanceLink.account.currency,
+    } : transaction ? {
+      kind: "transaction", id: transaction.id, label: transaction.merchantClean || transaction.merchantRaw,
+      amount: transaction.amount.toString(), currency: transaction.currency,
+    } : null;
+    const usableData = Boolean(balanceLink) || visibleTransactions > 0;
     const completion = await prisma.finverseConnection.updateMany({
       where: { id: connection.id, status: { not: "disconnected" }, disconnectRequestedAt:null },
       data: { status: "ready", lastSyncedAt: new Date(), syncError: null, inactivityWarnedAt:null, syncFailureSince:null },
@@ -306,6 +324,7 @@ export async function POST(request: Request) {
       status: "ready",
       connectionId: connection.id,
       accounts: usableLinks.length,
+      preview,
       dataStatus: !usableData ? "empty" : readiness.partial ? "partial" : "complete",
       message: !usableData ? "Accounts linked, but no balances or booked transactions were returned. Try Sync again later, or use Upload or Manual." : readiness.partial ? "Bank data synced, but the bank returned only part of the requested data. Check your accounts and transactions." : imported > 0 ? `Bank synced — ${imported} new transaction${imported === 1 ? "" : "s"} ready for review.` : existing > 0 ? "Already up to date." : "Bank accounts linked. No booked transactions were returned for the selected accounts.",
       transactions: { imported, existing, skipped },

@@ -113,7 +113,7 @@ async function handle(
         },
         409,
       );
-    if (["finverse-connections", "finverse-institutions", "finverse-link", "finverse-sync", "finverse-unlink"].includes(operation)) {
+    if (["finverse-connections", "finverse-institutions", "finverse-link", "finverse-sync", "finverse-unlink", "finverse-displayed"].includes(operation)) {
       return await withMobileRequestContext(userId, request, async () => {
         const result = operation === "finverse-connections"
           ? await (await import("@/app/api/integrations/finverse/connections/route"))[request.method === "POST" ? "POST" : "GET"](request)
@@ -123,7 +123,9 @@ async function handle(
             ? await (await import("@/app/api/integrations/finverse/link/route")).POST(request)
             : operation === "finverse-unlink"
               ? await (await import("@/app/api/integrations/finverse/unlink/route")).POST(request)
-              : await (await import("@/app/api/integrations/finverse/sync/route")).POST(request);
+              : operation === "finverse-displayed"
+                ? await (await import("@/app/api/integrations/finverse/displayed/route")).POST(request)
+                : await (await import("@/app/api/integrations/finverse/sync/route")).POST(request);
         return reply(await result.json(), result.status);
       });
     }

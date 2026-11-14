@@ -45,6 +45,7 @@ async function main() {
     const { POST: link } = await import("../app/api/integrations/finverse/link/route");
     const { POST: callback } = await import("../app/api/integrations/finverse/callback/route");
     const { POST: sync } = await import("../app/api/integrations/finverse/sync/route");
+    const { POST: displayed } = await import("../app/api/integrations/finverse/displayed/route");
     const { GET: connections } = await import("../app/api/integrations/finverse/connections/route");
     const { finverseBalances } = await import("../lib/finverse-balances");
     const workspace = await db.workspace.create({ data: { userId: user.id, name: "Disposable bank linking QA" } });
@@ -56,6 +57,10 @@ async function main() {
     const started = await link(request("link", { workspaceId: workspace.id, institutionId: "qa-bank" })); assert.equal(started.status, 200, await started.clone().text()); const connectionId = (await started.json()).connectionId;
     assert.equal((await db.finverseConnection.findUniqueOrThrow({ where: { id: connectionId } })).institutionName, "QA Bank");
     const unfinished = await connections(new Request(`https://staging.clover.ph/api/integrations/finverse/connections?view=picker&workspaceId=${workspace.id}`)); assert((await unfinished.json()).pending.some((c: { id: string }) => c.id === connectionId));
+    const show = (id = connectionId, kind = "balance", workspaceId = workspace.id) =>
+      displayed(request("displayed", { workspaceId, connectionId: id, kind }));
+    assert.equal((await show()).status, 409, "Authorization alone cannot count as a display");
+    assert.equal(await db.auditLog.count({ where: { entityId: connectionId, action: "bank_link.institution_selected" } }), 1);
     const send = (extra: object = {}) => sync(request("sync", { workspaceId: workspace.id, connectionId, ...extra }));
     assert.equal((await send()).status, 409, "Unfinished authorization explicitly offers reconnection");
     const form = new FormData(); form.set("state", state); form.set("code", "fixture-code");
@@ -77,6 +82,13 @@ async function main() {
     assert.equal(JSON.stringify(await db.account.findUnique({ where: { id: account.id } })), accountBefore);
     assert.equal((await (await send()).json()).status, "ready", "Sync retains the original selection without prompting for unselected accounts"); assert.equal(await db.transaction.count({ where: { workspaceId: workspace.id } }), 2, "Repeated sync must not duplicate ledger rows");
     assert.equal(await db.auditLog.count({ where: { entityId: connectionId, action: "bank_link.data_available" } }), 1);
+    assert.equal(result.preview.kind, "balance");
+    assert.equal(Number(result.preview.amount), 2000);
+    assert.equal(await db.auditLog.count({ where: { entityId: connectionId, action: "bank_link.first_data_displayed" } }), 0);
+    assert.equal((await show(connectionId, "balance", "another-profile")).status, 400);
+    const displays = await Promise.all([show(), show()]);
+    assert(displays.every(response => response.ok));
+    assert.equal(await db.auditLog.count({ where: { entityId: connectionId, action: "bank_link.first_data_displayed" } }), 1);
     identity = { status: "DATA_RETRIEVAL_PARTIALLY_SUCCESSFUL", product_status: { ...products("SUCCESS"), historical_transactions: { status: "ERROR" } } };
     assert.equal((await (await send()).json()).dataStatus, "partial");
     missingBalance = true;
@@ -86,6 +98,7 @@ async function main() {
     const aliased = await sync(request("sync", { workspaceId: workspace.id, connectionId: aliasId, selectedAccountIds: ["primary"] })); const aliasBody = await aliased.json();
     assert.equal(aliased.status, 200, JSON.stringify(aliasBody)); assert.equal(aliasBody.dataStatus, "partial", "A reconnect reusing original ledger provenance still has usable transaction data without a provider balance");
     assert.equal(await db.transaction.count({ where: { workspaceId: workspace.id } }), 2, "Reauthorization aliases preserve the existing ledger");
+    assert.equal(aliasBody.preview.kind, "transaction");
     const aliasMilestone = await db.auditLog.findFirstOrThrow({ where: { entityId: aliasId, action: "bank_link.data_available" } });
     assert.equal((aliasMilestone.metadata as { transactionCount: number }).transactionCount, 2);
     assert.equal(JSON.stringify(await db.transaction.findUnique({ where: { id: confirmed.id } })), original);
@@ -121,6 +134,8 @@ async function main() {
     const blankBody = await blank.json(); assert.equal(blank.status, 200, JSON.stringify(blankBody)); assert.equal(blankBody.dataStatus, "empty"); assert.match(blankBody.message, /no balances or booked transactions/i);
     assert.equal(await db.auditLog.count({ where: { entityId: blankId, action: "bank_link.data_available" } }), 0);
     assert.equal(await db.auditLog.count({ where: { entityId: blankId, action: "bank_link.empty_result" } }), 1);
+    assert.equal(blankBody.preview, null);
+    assert.equal((await show(blankId)).status, 409);
     noFinancialData = false;
     native = true; badExchange = true;
     const failed = await link(request("link", { workspaceId: workspace.id, institutionId: "qa-bank" })); const failedId = (await failed.json()).connectionId;

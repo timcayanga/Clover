@@ -1,8 +1,8 @@
 import { prisma } from "./prisma";
 import { capturePostHogServerEvent } from "./analytics-server";
-type Stage = "started" | "authorized" | "selection_required" | "data_available" | "empty_result" | "failed" | "cancelled";
+type Stage = "institution_selected" | "first_data_displayed" | "started" | "authorized" | "selection_required" | "data_available" | "empty_result" | "failed" | "cancelled";
 /** Operational milestones, once per connection/stage. No bank names, credentials, balances or transactions are sent to analytics. */
-export async function recordBankLinkStage(connectionId: string, stage: Stage, counts: { accountCount?: number; transactionCount?: number } = {}) {
+export async function recordBankLinkStage(connectionId: string, stage: Stage, counts: { accountCount?: number; transactionCount?: number; dataKind?: "balance" | "transaction" } = {}) {
   try {
     const recorded = await prisma.$transaction(async tx => {
       await tx.$queryRaw`SELECT id FROM "FinverseConnection" WHERE id = ${connectionId} FOR UPDATE`;

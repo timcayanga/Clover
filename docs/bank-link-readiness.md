@@ -20,6 +20,12 @@ Optional full account-number lookups skip numbers already provided and run in gr
 
 Use Started connections as the funnel denominator, Data Available as first usable bank-backed data, and report Empty Result/Failed/Cancelled separately. A connection may fail then recover; these milestones are not mutually exclusive final outcomes. Timing is connection creation to server-observed data availability, including user authorization/selection time. It is not browser-render latency, provider-only duration or a per-refresh first-attempt success rate. Starts that fail before a connection is saved still need request-error monitoring. Historical connections are not backfilled or marked successful.
 
+### First data shown
+
+Group production `bank_link_stage` events by `connection_id`. The linked funnel is `institution_selected` → `started` → `authorized` → `data_available` → `first_data_displayed`. A saved connection can skip `selection_required`; treat that as an optional step. Count `picker_selection` and `link_request_failed` separately to diagnose failures before a connection exists. Server writes and empty retrievals never emit the display milestone.
+
+Clover presents one linked balance or, when no balance is available, one booked transaction on the completed bank-link screen. The client acknowledges display after a viewport check, using only the connection, Profile, and data kind. The server checks ownership and the earlier data milestone, then deduplicates the acknowledgement per connection. The milestone measures the completion screen. Users who leave before this screen appears can still see their data later in Accounts or Transactions.
+
 ## Verification
 
 `qa:finverse` covers product readiness, scoped account selection, callback replay, expiry, native/web destinations, cancellation, safe projections, allowance/retention and persistence contracts. `finverse-bank-journey-db-regression.ts`, registered in the disposable PostgreSQL release gate, runs the actual link, callback, connections and sync handlers against synthetic provider responses and real Prisma persistence. It exercises:

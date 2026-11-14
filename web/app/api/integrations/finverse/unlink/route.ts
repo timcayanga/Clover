@@ -1,3 +1,4 @@
+import { recordBankLinkStage } from "@/lib/bank-link-journey";
 import { requestBankDisconnect, revokeBankConnection } from "@/lib/finverse-lifecycle";
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
@@ -20,6 +21,7 @@ export async function POST(request: Request) {
       await requestBankDisconnect(attempt.id, "User cancelled bank setup", undefined, true);
       const current = await prisma.finverseConnection.findUniqueOrThrow({ where: { id: attempt.id } });
       if (current.status !== "disconnected" && !current.disconnectRequestedAt) return NextResponse.json({ error: "This bank has linked accounts. Use Unlink from Connected accounts." }, { status: 409 });
+      await recordBankLinkStage(attempt.id, "cancelled");
       const revoked = await revokeBankConnection(attempt.id);
       return NextResponse.json({ status: revoked ? "cancelled" : "disconnect_pending", message: revoked ? "Bank linking cancelled. Your existing accounts and history are unchanged." : "Bank linking stopped. Clover will retry disconnecting it with Finverse. Your existing accounts and history are unchanged." });
     }
