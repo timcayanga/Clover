@@ -100,7 +100,7 @@ const importTransaction = async (connectionId: string, workspaceId: string, tran
     // Stable provider IDs span authorizations; tombstones intentionally remain deduplicated.
     const existing = await tx.finverseTransactionRecord.findFirst({ where: { externalTransactionId: transaction.transaction_id, externalAccountId: transaction.account_id, connection: { workspaceId } } });
     if (existing) {
-      if (existing.transactionId && suggestion) {
+      if (existing.transactionId && suggestion && suggestion.enrichment.reason !== "confirmed-category-scope") {
         const saved = await tx.transaction.findFirst({ where: { id: existing.transactionId } });
         if (saved && canRefreshFinverseCategory(saved) && (!saved.categoryId || saved.categoryId === suggestion.categoryId)) {
           const payload = saved.normalizedPayload && typeof saved.normalizedPayload === "object" && !Array.isArray(saved.normalizedPayload) ? saved.normalizedPayload : {};

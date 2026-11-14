@@ -1,3 +1,4 @@
+import { correctionMatch, scopedRuleSource } from "../../shared/category-correction";
 import { readGrabReceiptTimestamp } from '@/lib/grab-email-receipt';
 import { enqueueLearningJob, processLearningJob, LearningInputError, type LearningAction, type LearningWriteContext } from "@/lib/learning-jobs";
 import { readGcashBillsPaymentTimestamp } from "@/lib/gcash-bills-receipt";
@@ -3855,7 +3856,7 @@ const learningRetrievalQuery = (rows: LearningRetrievalRow[]) => {
 const mergeLearningRows = <T extends { merchantKey: string }>(...groups: T[][]): T[] =>
   [...new Map(groups.flat().map(row => [row.merchantKey, row])).values()];
 
-export const loadMerchantRules = async (workspaceId: string, rows: LearningRetrievalRow[] = []) => {
+export const loadMerchantRules = async (workspaceId: string, rows: LearningRetrievalRow[] = [], scopedKeys: string[] = []) => {
   let rules: Array<{
     merchantKey: string;
     merchantPattern: string | null;
@@ -3872,6 +3873,7 @@ export const loadMerchantRules = async (workspaceId: string, rows: LearningRetri
 
   try {
     const query = learningRetrievalQuery(rows);
+    query.keys.push(...new Set(scopedKeys));
     const base = await prisma.merchantRule.findMany({
       where: { workspaceId, status: "active" }, include: { category: true },
       orderBy: [{ timesConfirmed: "desc" }, { updatedAt: "desc" }, { id: "asc" }], take: 500,
@@ -3913,7 +3915,7 @@ export const loadMerchantRules = async (workspaceId: string, rows: LearningRetri
 // Only explicit, high-confidence corrections may replace labels on the new
 // transaction's confirmation path. Keep parsed evidence and financial identity
 // untouched; fuzzy/automatic suggestions remain in the existing review path.
-export const loadConfirmedImportLabels = async (workspaceId: string, rows: Array<Record<string, unknown>>) => {
+export const loadConfirmedImportLabels = async (workspaceId: string, rows: Array<Record<string, unknown>>, scopedOnly = false) => {
   const result = new Map<number, {
     merchantClean: string; categoryId: string | null; categoryName: string | null;
     confidence: number; ruleId: string; source: string; reason: string;
@@ -3923,12 +3925,22 @@ export const loadConfirmedImportLabels = async (workspaceId: string, rows: Array
     merchantRaw: typeof row.merchantRaw === "string" ? row.merchantRaw : undefined,
     merchantClean: typeof row.merchantClean === "string" ? row.merchantClean : undefined,
     institution: typeof row.institution === "string" ? row.institution : undefined,
+    description: typeof row.description === "string" ? row.description : undefined,
   }));
-  const rules = (await loadMerchantRules(workspaceId, query)).filter(rule =>
+  const scopes = query.map((row, index) => correctionMatch({ ...row, type: String(rows[index].type ?? "") }));
+  const scopedKeys = [...new Set(scopes.flatMap(scope => scope ? [scope.key] : []))];
+  if (scopedOnly && !scopedKeys.length) return result;
+  const rules = (scopedOnly
+    ? (await Promise.all(Array.from({ length: Math.ceil(scopedKeys.length / 200) }, (_, index) =>
+        prisma.merchantRule.findMany({ where: { workspaceId, status: "active", source: scopedRuleSource, merchantKey: { in: scopedKeys.slice(index * 200, (index + 1) * 200) } } }),
+      ))).flat()
+    : await loadMerchantRules(workspaceId, query, scopedKeys)
+  ).filter(rule =>
+    (!scopedOnly || rule.source === scopedRuleSource) &&
     /^manual(?:_|$)/.test(rule.source) && rule.confidence >= 85);
   if (!rules.length) return result;
   const categories = await prisma.category.findMany({
-    where: { workspaceId, id: { in: [...new Set(rules.flatMap(rule => rule.categoryId ? [rule.categoryId] : []))] } },
+    where: { workspaceId, isArchived: false, id: { in: [...new Set(rules.flatMap(rule => rule.categoryId ? [rule.categoryId] : []))] } },
     select: { id: true, name: true, type: true },
   });
   const categoryById = new Map(categories.map(category => [category.id, category]));
@@ -3943,16 +3955,18 @@ export const loadConfirmedImportLabels = async (workspaceId: string, rows: Array
     const institution = normalizeMerchantText(input.institution ?? "");
     const matched = candidates.map(key => ruleByKey.get(key)).filter((rule): rule is typeof rules[number] => Boolean(rule))
       .sort((a, b) => Number(Boolean(institution) && b.merchantKey.startsWith(institution + " ")) - Number(Boolean(institution) && a.merchantKey.startsWith(institution + " ")));
-    const rule = matched[0];
+    const scoped = ruleByKey.get(scopes[index]?.key ?? "");
+    const exactScope = scoped?.source === scopedRuleSource ? scoped : undefined;
+    const rule = exactScope ?? matched.find(rule => rule.source !== scopedRuleSource);
     if (!rule?.normalizedName.trim()) return;
     const category = rule.categoryId ? categoryById.get(rule.categoryId) : null;
     // A label must not change a debit/credit/transfer into another direction,
     // nor use a category from another Profile or a deleted reference.
     if (rule.categoryId && (!category || category.type !== row.type)) return;
     result.set(index, {
-      merchantClean: rule.normalizedName, categoryId: category?.id ?? null, categoryName: category?.name ?? null,
+      merchantClean: exactScope ? input.merchantClean || input.merchantRaw : rule.normalizedName, categoryId: category?.id ?? null, categoryName: category?.name ?? null,
       confidence: rule.confidence, ruleId: `merchant-rule:${rule.merchantKey}:v${rule.version}`,
-      source: rule.source, reason: "confirmed-rule-exact",
+      source: rule.source, reason: exactScope ? "confirmed-category-scope" : "confirmed-rule-exact",
     });
   });
   return result;
@@ -4419,6 +4433,7 @@ const scoreSignal = (tokens: string[], normalizedMerchantCandidates: Set<string>
 };
 
 const scoreMerchantRule = (tokens: string[], normalizedMerchantCandidates: Set<string>, rule: MerchantRuleRow) => {
+  if (rule.source === scopedRuleSource) return 0;
   if (normalizedMerchantCandidates.has(rule.merchantKey)) {
     return 120 + rule.confidence;
   }
@@ -4543,7 +4558,7 @@ export const classifyMerchant = (params: {
   let bestSignal: TrainingSignalRow | null = null;
   let bestScore = 0;
 
-  const exactManualRules = params.merchantRules.filter(rule => normalizedMerchantCandidates.has(rule.merchantKey) && /^manual(?:_|$)/.test(rule.source));
+  const exactManualRules = params.merchantRules.filter(rule => rule.source !== scopedRuleSource && normalizedMerchantCandidates.has(rule.merchantKey) && /^manual(?:_|$)/.test(rule.source));
   for (const rule of exactManualRules.length ? exactManualRules : params.merchantRules) {
     const score = scoreMerchantRule(tokens, normalizedMerchantCandidates, rule);
     if (score > bestRuleScore) {

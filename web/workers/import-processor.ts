@@ -15159,7 +15159,8 @@ export const confirmImportFile = async (
         lineItemCount: receiptLineItems.length,
       });
       const receiptLabels = (await loadConfirmedImportLabels(String(importFile.workspaceId), [{
-        merchantRaw: receiptMerchantRaw, merchantClean: receiptMerchantClean, type: "expense",
+        merchantRaw: receiptMerchantRaw, merchantClean: receiptMerchantClean,
+        description: typeof receiptDetailsRecord?.receipt_type === "string" ? receiptDetailsRecord.receipt_type : undefined, type: "expense",
       }])).get(0);
       const normalizedReceiptMerchant = receiptLabels?.merchantClean ?? receiptMerchantClean;
       const normalizedReceiptCategory = receiptLabels?.categoryName ?? receiptCategoryName;

@@ -1,3 +1,4 @@
+import { correctionScopes } from "../../shared/category-correction";
 import { lineItemAdditionSchema } from "./transaction-line-item-addition";
 import { manualTransactionName, manualTransactionToday } from "../../shared/manual-transaction-defaults";
 import { z } from "zod";
@@ -47,6 +48,7 @@ export const mobileEditSchema = z.object({
   tagAction: z.enum(["add", "remove"]).optional(),
   accountId: z.string().min(1).optional(),
   categoryId: z.string().min(1).nullable().optional(),
+  categoryCorrectionScope: z.enum(correctionScopes).optional(),
   date: date.optional(),
   amount: amount.optional(),
   type: z.enum(["income", "expense", "transfer"]).optional(),

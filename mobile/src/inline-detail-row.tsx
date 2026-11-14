@@ -1,3 +1,4 @@
+import type { CorrectionScope } from "../../shared/category-correction";
 import { useEffect, useState, type ReactNode } from "react";
 import { Pressable, View } from "react-native";
 import { Text } from "./app-text";
@@ -11,6 +12,7 @@ export function InlineDetailRow({
   options,
   numeric,
   onSave,
+  futureCategoryMatch,
 }: {
   label: string;
   value: string;
@@ -18,13 +20,16 @@ export function InlineDetailRow({
   icon?: ReactNode;
   options?: { value: string; label: string }[];
   numeric?: boolean;
-  onSave: (value: string) => Promise<void>;
+  futureCategoryMatch?: string;
+  onSave: (value: string, scope: CorrectionScope) => Promise<void>;
 }) {
   const { colors } = useTheme();
   const [editing, setEditing] = useState(false),
     [draft, setDraft] = useState(value),
     [busy, setBusy] = useState(false),
     [error, setError] = useState("");
+  const [scope, setScope] = useState<CorrectionScope>("transaction");
+  const showScope = Boolean(futureCategoryMatch && draft && draft !== value);
   useEffect(() => {
     setDraft(value);
   }, [value]);
@@ -36,6 +41,7 @@ export function InlineDetailRow({
         disabled={busy}
         onPress={() => {
           setDraft(value);
+          setScope("transaction");
           setError("");
           setEditing(!editing);
         }}
@@ -73,7 +79,7 @@ export function InlineDetailRow({
               label={label}
               value={draft}
               options={options}
-              onChange={setDraft}
+              onChange={value => { setDraft(value); setScope("transaction"); }}
             />
           ) : (
             <Field
@@ -84,6 +90,10 @@ export function InlineDetailRow({
               multiline={label === "Notes"}
             />
           )}
+          {showScope ? <ChoiceField label="Apply category change" value={scope}
+            options={[{ value: "transaction", label: "This transaction only" }, { value: "similar", label: "Apply to similar future transactions" }]}
+            onChange={value => setScope(value === "similar" ? "similar" : "transaction")} /> : null}
+          {showScope ? <Text style={{ color: colors.muted }}>Matches {futureCategoryMatch} in this Profile.</Text> : null}
           {error ? <Notice>{error}</Notice> : null}
           <View style={{ flexDirection: "row", gap: 8 }}>
             <Button
@@ -92,7 +102,7 @@ export function InlineDetailRow({
               onPress={() => {
                 setBusy(true);
                 setError("");
-                void onSave(draft)
+                void onSave(draft, showScope ? scope : "transaction")
                   .then(() => setEditing(false))
                   .catch((e) => setError(e.message))
                   .finally(() => setBusy(false));

@@ -1,4 +1,5 @@
 import { formatReceiptLineItemAmount, formatTransactionRecordAmount } from "../../../shared/transaction-record-display";
+import { correctionMatch, type CorrectionScope } from "../../../shared/category-correction";
 import type { TransactionSourceMatchAction } from "../../../shared/transaction-source-match";
 import { TransactionConversion, QuickAddLineItem } from "../../src/transaction-detail-extras";
 import { MerchantLogo } from "../../src/merchant-logo";
@@ -43,6 +44,7 @@ export default function TransactionDetail() {
   const [date, setDate] = useState("");
   const [accountId, setAccountId] = useState("");
   const [categoryId, setCategoryId] = useState("");
+  const [scope, setScope] = useState<CorrectionScope>("transaction");
   const [accounts, setAccounts] = useState<
     { id: string; name: string; currency: string }[]
   >([]);
@@ -184,7 +186,7 @@ export default function TransactionDetail() {
               ...(date !== row.date.slice(0, 10) ? { date } : {}),
               ...(accountId !== row.accountId ? { accountId } : {}),
               ...(categoryId !== (row.categoryId ?? "")
-                ? { categoryId: categoryId || null }
+                ? { categoryId: categoryId || null, categoryCorrectionScope: categoryId && type === row.type && correctionMatch(row) ? scope : "transaction" }
                 : {}),
               merchantClean: name.trim(),
               userNote,
@@ -195,6 +197,7 @@ export default function TransactionDetail() {
             }),
           },
         );
+      setScope("transaction");
       setSaved(true);
       setEditing(false);
       setReload((n) => n + 1);
@@ -288,9 +291,9 @@ export default function TransactionDetail() {
                     {label:"Date",key:"date",value:row.date.slice(0,10),display:dateLabel(row.date)},
                     {label:"Amount",key:"amount",value:row.amount,display:formatTransactionRecordAmount(row)},
                     {label:"Notes",key:"userNote",value:row.userNote||"",display:row.userNote||"No notes"},
-                  ].map(field=><InlineDetailRow key={field.key} label={field.label} value={field.value} displayValue={field.display} options={field.options} numeric={field.key==="amount"} onSave={async value=>{
+                  ].map(field=><InlineDetailRow key={field.key} label={field.label} value={field.value} displayValue={field.display} options={field.options} numeric={field.key==="amount"} futureCategoryMatch={field.key === "categoryId" && !session.demo ? correctionMatch(row)?.label : undefined} onSave={async (value, scope)=>{
                     const patch = {[field.key]:field.key==="tags"?value.split(",").map(t=>t.trim()).filter(Boolean):field.key==="categoryId"?value||null:value};
-                    if(session.demo){session.updateSample({...row,...patch,...(field.key === "tags" ? { tags: value.split(",").map(t=>t.trim()).filter(Boolean).map(name=>({id:name,name})) } : {})} as Transaction);}else await session.request(`transactions/${id}?workspaceId=${encodeURIComponent(session.profileId)}`,{method:"PATCH",body:JSON.stringify(patch)});
+                    if(session.demo){session.updateSample({...row,...patch,...(field.key === "tags" ? { tags: value.split(",").map(t=>t.trim()).filter(Boolean).map(name=>({id:name,name})) } : {})} as Transaction);}else await session.request(`transactions/${id}?workspaceId=${encodeURIComponent(session.profileId)}`,{method:"PATCH",body:JSON.stringify({ ...patch, ...(field.key === "categoryId" && value !== field.value ? { categoryCorrectionScope: scope } : {}) })});
                     setReload(v=>v+1);
                   }}/>) }
                 </Card>
@@ -404,7 +407,7 @@ export default function TransactionDetail() {
                     <ChoiceField
                       label="Category"
                       value={categoryId}
-                      onChange={setCategoryId}
+                      onChange={value => { setCategoryId(value); setScope("transaction"); }}
                       options={[
                         { value: "", label: "Uncategorized" },
                         ...categories
@@ -415,6 +418,11 @@ export default function TransactionDetail() {
                           .map((c) => ({ value: c.id, label: c.name })),
                       ]}
                     />
+                    {!session.demo && categoryId && categoryId !== row.categoryId && type === row.type && correctionMatch(row) ? (
+                      <ChoiceField label="Apply category change" value={scope}
+                        options={[{ value: "transaction", label: "This transaction only" }, { value: "similar", label: "Apply to similar future transactions" }]}
+                        onChange={value => setScope(value === "similar" ? "similar" : "transaction")} />
+                    ) : null}
                   </>
                 ) : null}
                 <Field

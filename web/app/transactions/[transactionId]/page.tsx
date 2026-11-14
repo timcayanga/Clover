@@ -8,6 +8,7 @@ import { TransactionDetailLabel } from "@/components/transaction-detail-label";
 
 import { getRecordedTransactionConfidence } from "@/lib/transaction-confidence";
 
+import { correctionMatch, type CorrectionScope } from "../../../../shared/category-correction";
 import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { CloverShell } from "@/components/clover-shell";
@@ -88,6 +89,7 @@ type CategoryOption = {
 };
 
 type DetailPayload = {
+  categoryRuleSaved?: boolean;
   transaction?: Transaction;
   accounts?: AccountOption[];
   categories?: CategoryOption[];
@@ -116,6 +118,7 @@ export default function TransactionDetailPage() {
   const [message, setMessage] = useState("");
   const [saving, setSaving] = useState(false);
   const [editing, setEditing] = useState(false);
+  const [scope, setScope] = useState<CorrectionScope>("transaction");
   useEffect(() => {
     if (new URLSearchParams(window.location.search).get("edit") === "1") setEditing(true);
   }, [transactionId]);
@@ -207,6 +210,8 @@ export default function TransactionDetailPage() {
     return () => window.removeEventListener("keydown", handleKeyDown);
   });
 
+  const futureMatch = transaction && draft && (draft.type === "debit" ? "expense" : draft.type === "credit" ? "income" : "transfer") === transaction.type
+    ? correctionMatch(transaction) : null;
   const selectedCategory = useMemo(
     () => categories.find((category) => category.id === draft?.categoryId) ?? null,
     [categories, draft?.categoryId]
@@ -351,7 +356,7 @@ export default function TransactionDetailPage() {
       const response = await fetch(`/api/transactions/${encodeURIComponent(transaction.id)}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...buildTransactionUpdatePayload(draft, transaction), tags: tagDraft }),
+        body: JSON.stringify({ ...buildTransactionUpdatePayload(draft, transaction), tags: tagDraft, categoryCorrectionScope: futureMatch && draft.categoryId && draft.categoryId !== transaction.categoryId ? scope : "transaction" }),
       });
       const payload = (await response.json().catch(() => ({}))) as DetailPayload;
       if (!response.ok || !payload.transaction) {
@@ -371,7 +376,8 @@ export default function TransactionDetailPage() {
           isTransfer: updated.type === "transfer" || updated.isTransfer,
         })
       );
-      setMessage("Transaction saved.");
+      setMessage(payload.categoryRuleSaved ? "Transaction saved. Future matching transactions will use this category." : "Transaction saved.");
+      setScope("transaction");
       setEditing(false);
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Unable to save transaction.");
@@ -391,6 +397,7 @@ export default function TransactionDetailPage() {
       })
     );
     setTagDraft((transaction.tags ?? []).map((tag) => tag.name));
+    setScope("transaction");
     setEditing(false);
     setMessage("");
   };
@@ -479,7 +486,7 @@ export default function TransactionDetailPage() {
                   <span className="transaction-detail-page__inline-label">{field === "account" ? <><span className="transaction-detail-brand"><AccountBrandMark accountBrand={accountBrand} label="" /></span>Account</> : field === "category" ? <><CategoryBrandMark categoryName={selectedCategory?.name ?? transaction.categoryName ?? "Other"} size={24} />Category</> : <TransactionDetailLabel label={label} />}</span>
                   {editing ? <div className="transaction-detail-page__inline-control">{
                     field === "account" ? <TransactionAccountPicker accounts={accountPickerOptions} selectedId={draft.accountId} onSelect={account => setDraft({...draft,accountId:account.id})} ariaLabel="Choose transaction account" /> :
-                    field === "category" ? <TransactionCategoryPicker categories={categories} selectedId={draft.categoryId} onSelect={category => setDraft({...draft,categoryId:category.id})} ariaLabel="Choose transaction category" /> :
+                    field === "category" ? <TransactionCategoryPicker categories={categories} selectedId={draft.categoryId} onSelect={category => { setDraft({...draft,categoryId:category.id}); setScope("transaction"); }} ariaLabel="Choose transaction category" /> :
                     field === "type" ? <select aria-label="Transaction type" value={draft.type} onChange={event => setDraft({...draft,type:event.target.value as "debit" | "credit" | "transfer",isTransfer:event.target.value === "transfer"})}><option value="debit">Expense</option><option value="credit">Income</option><option value="transfer">Transfer</option></select> :
                     field === "tags" ? <TransactionTagsEditor tags={tagDraft} onChange={setTagDraft} inputAriaLabel="Add tags to transaction" /> :
                     field === "notes" ? <textarea aria-label="Notes" value={draft.description} onChange={event => setDraft({...draft,description:event.target.value})} /> :
@@ -489,6 +496,17 @@ export default function TransactionDetailPage() {
                 </div>;
               })}
             </section>
+
+            {editing && draft.categoryId !== transaction.categoryId ? (
+              <fieldset>
+                <legend>Apply category change</legend>
+                <label><input type="radio" name="category-scope" checked={scope === "transaction" || !futureMatch || !draft.categoryId} onChange={() => setScope("transaction")} /> This transaction only</label>
+                {futureMatch && draft.categoryId ? <><br />
+                  <label><input type="radio" name="category-scope" checked={scope === "similar"} onChange={() => setScope("similar")} /> Apply to similar future transactions</label>
+                  <p>Matches {futureMatch.label} in this Profile.</p>
+                </> : null}
+              </fieldset>
+            ) : null}
 
             {editing ? (
             <details className="transaction-detail-page__more" open>

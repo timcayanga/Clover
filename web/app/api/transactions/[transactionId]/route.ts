@@ -1,3 +1,6 @@
+import { createHash } from "node:crypto";
+import { correctionMatch, correctionScopes, scopedRuleSource } from "../../../../../shared/category-correction";
+import { canLearnFromWorkspace } from "@/lib/app-preferences";
 import { assertTrustedRequestOrigin } from "@/lib/request-security";
 import { loadTransactionSourceMatches, receiptItemsForSourceMatch, scoreTransactionSourceMatch, sourceMatchProvenance, sourceMatchSelect, sourceMatchDecisionWhere, sourceMatchDismissedAction, sourceMatchConfirmedAction } from "@/lib/transaction-source-matches";
 import { appendedLineItems, lineItemAdditionSchema } from "@/lib/transaction-line-item-addition";
@@ -11,7 +14,7 @@ import { isLocalDevHost, requireAuth } from "@/lib/auth";
 import { assertWorkspaceAccess } from "@/lib/workspace-access";
 import { after, NextResponse } from "next/server";
 import { z } from "zod";
-import { recordTrainingSignal } from "@/lib/data-engine";
+import { recordTrainingSignal, upsertMerchantRule } from "@/lib/data-engine";
 import { capturePostHogServerEvent } from "@/lib/analytics-server";
 import { hasCompatibleTable } from "@/lib/data-engine";
 import { coerceTransactionTypeFromCategoryName } from "@/lib/transaction-directions";
@@ -29,6 +32,7 @@ const patchSchema = z.object({
   copyReceiptFromTransactionId: z.string().min(1).max(128).optional(),
   appendReceiptLineItem: lineItemAdditionSchema.optional(),
   categoryId: z.string().nullable().optional(),
+  categoryCorrectionScope: z.enum(correctionScopes).optional(),
   accountId: z.string().min(1).optional(),
   isExcluded: z.boolean().optional(),
   isTransfer: z.boolean().optional(),
@@ -300,8 +304,8 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ tr
     const removedTagIds = transaction.transactionTags.filter((entry) => removedTagKeys.has(entry.tag.normalizedName)).map((entry) => entry.tagId);
     const resolvedCategoryId = payload.categoryId === undefined ? transaction.categoryId : payload.categoryId;
     const resolvedCategory = resolvedCategoryId
-      ? await prisma.category.findUnique({
-          where: { id: resolvedCategoryId },
+      ? await prisma.category.findFirst({
+          where: { id: resolvedCategoryId, workspaceId: transaction.workspaceId, isArchived: false },
         })
       : null;
     const changesClassification = payload.categoryId !== undefined || payload.type !== undefined || payload.isTransfer !== undefined;
@@ -313,6 +317,20 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ tr
     ) : transaction.type;
     const resolvedIsTransfer = changesClassification ? (payload.isTransfer ?? resolvedType === "transfer") : transaction.isTransfer;
 
+    if (payload.categoryId && !resolvedCategory) return NextResponse.json({ error: "Choose a category in this Profile." }, { status: 400 });
+    const categoryChanged = payload.categoryId !== undefined && payload.categoryId !== transaction.categoryId;
+    const scope = payload.categoryCorrectionScope ?? "transaction";
+    const match = categoryChanged ? correctionMatch({ ...transaction, type: resolvedType, isTransfer: resolvedIsTransfer }) : null;
+    if (scope === "similar") {
+      assertTrustedRequestOrigin(request);
+      if (!match || !resolvedCategory || resolvedCategory.type !== resolvedType) {
+        return NextResponse.json({ error: "Clover cannot safely match this edit. Choose This transaction only." }, { status: 400 });
+      }
+      if (!await canLearnFromWorkspace(transaction.workspaceId)) {
+        return NextResponse.json({ error: "Enable Improve Suggestions to save a rule, or choose This transaction only." }, { status: 400 });
+      }
+    }
+    const matchHash = match && createHash("sha256").update(match.key).digest("hex");
     const editedFields =
       payload.categoryId !== undefined ||
       payload.accountId !== undefined ||
@@ -332,9 +350,9 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ tr
 
     const resolvedExclusion = exclusionAfterTransactionEdit(transaction, payload.isExcluded,
       editedFields || payload.reviewStatus === "confirmed" || payload.reviewStatus === "edited");
-    const { updated, account } = await prisma.$transaction(async db => {
+    const { updated, account, repeatCorrection } = await prisma.$transaction(async db => {
       const updated = await db.transaction.update({
-        where: { id: transactionId },
+        where: { id: transactionId, ...(categoryChanged ? { updatedAt: transaction.updatedAt } : {}) },
         data: {
           categoryId: payload.categoryId === undefined ? undefined : payload.categoryId,
           accountId: payload.accountId,
@@ -431,7 +449,9 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ tr
           })
         : null;
 
-      if (payload.merchantRaw || payload.merchantClean || payload.categoryId !== undefined || payload.type !== undefined || payload.isTransfer !== undefined) {
+      if (!categoryChanged && !payload.categoryCorrectionScope &&
+        ((payload.merchantRaw !== undefined && payload.merchantRaw !== transaction.merchantRaw) ||
+          (payload.merchantClean !== undefined && payload.merchantClean !== transaction.merchantClean))) {
         const rawMerchantText = payload.merchantRaw || updated.merchantRaw || transaction.merchantRaw;
         const normalizedMerchantName = payload.merchantClean || updated.merchantClean || rawMerchantText;
         const merchantText = rawMerchantText || normalizedMerchantName;
@@ -489,7 +509,23 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ tr
         } }] }, db);
       }
 
-      return { updated, account };
+      if (scope === "similar" && match && resolvedCategory) {
+        const rule = await upsertMerchantRule({
+          workspaceId: transaction.workspaceId, merchantText: match.key, normalizedName: match.label,
+          categoryId: resolvedCategory.id, categoryName: resolvedCategory.name, source: scopedRuleSource,
+        }, { db, observedAt: updated.updatedAt, observationKey: updated.id });
+        if (!rule) throw new Error("Unable to save future category rule");
+      }
+      const repeatCorrection = Boolean(matchHash && await db.auditLog.findFirst({
+        where: { workspaceId: transaction.workspaceId, action: "category_correction", entityId: { not: updated.id },
+          metadata: { path: ["matchKey"], equals: matchHash } },
+        select: { id: true },
+      }));
+      if (matchHash) await db.auditLog.create({ data: {
+        workspaceId: transaction.workspaceId, actorUserId: userId, action: "category_correction",
+        entity: "Transaction", entityId: updated.id, metadata: { matchKey: matchHash, scope, repeatCorrection },
+      } });
+      return { updated, account, repeatCorrection };
     });
     after(async () => { await processPendingLearningJobs({ workspaceId: transaction.workspaceId, limit: 1 }); });
 
@@ -547,13 +583,14 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ tr
         (transaction.merchantClean ?? transaction.merchantRaw) !== (updated.merchantClean ?? updated.merchantRaw),
       is_manual_edit: true,
     });
-    if (payload.categoryId !== undefined && category) {
-      void capturePostHogServerEvent("transaction_recategorized", userId, {
+    if (categoryChanged) {
+      after(() => capturePostHogServerEvent("transaction_recategorized", userId, {
         workspace_id: transaction.workspaceId,
         transaction_id: updated.id,
-        category_id: category.id,
+        category_id: category?.id ?? null, correction_scope: scope,
+        repeat_correction: repeatCorrection, matchable_correction: Boolean(matchHash),
         is_manual_edit: true,
-      });
+      }));
     }
     if (payload.categoryId) {
       void capturePostHogServerEvent("transaction_categorized", userId, {
@@ -600,6 +637,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ tr
     invalidateWorkspaceSummaryCache(transaction.workspaceId);
 
     return NextResponse.json({
+      categoryRuleSaved: categoryChanged && scope === "similar",
       transaction: {
         id: updated.id,
         workspaceId: updated.workspaceId,

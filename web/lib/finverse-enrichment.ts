@@ -1,5 +1,5 @@
 import { summarizeMerchantText } from "@/lib/merchant-labels";
-import { enrichParsedRowsWithTraining, type EnrichedParsedImportRow } from "@/lib/data-engine";
+import { loadConfirmedImportLabels, enrichParsedRowsWithTraining, type EnrichedParsedImportRow } from "@/lib/data-engine";
 import { normalizeFinverseTransaction, type FinverseTransaction } from "@/lib/finverse";
 
 type Category = { id: string; name: string; type: string };
@@ -25,26 +25,26 @@ export async function enrichFinverseTransactions(params: {
     return row && !row.isPending ? [{ transaction, row }] : [];
   });
   if (!booked.length) return new Map<string, BankCategorySuggestion>();
-  const enriched = await enrichParsedRowsWithTraining({
-    workspaceId: params.workspaceId,
-    statementConfidence: 100,
-    trainingContext: params.trainingContext,
-    rows: booked.map(({ transaction, row }) => ({
+  const rows = booked.map(({ transaction, row }) => ({
       date: row.date.toISOString().slice(0, 10), amount: String(row.amount), currency: row.currency,
       type: row.type, merchantRaw: row.merchantRaw, merchantClean: row.merchantClean || summarizeMerchantText(row.merchantRaw, params.institution ?? null),
       description: row.description ?? undefined,
       // The source bank is not the merchant. Apply its title normalization above,
       // but do not let the bank name become a Financial category keyword.
       parserConfidence: 100, rawPayload: { ...transaction },
-    })),
-  });
+    }));
+  const [enriched, scoped] = await Promise.all([
+    enrichParsedRowsWithTraining({ workspaceId: params.workspaceId, statementConfidence: 100, trainingContext: params.trainingContext, rows }),
+    params.trainingContext?.merchantRules.length === 0 ? new Map() : loadConfirmedImportLabels(params.workspaceId, rows, true),
+  ]);
   return new Map(booked.map(({ transaction, row }, index) => {
     const suggestion = enriched[index];
+    const rule = scoped.get(index);
     const matches = params.categories.filter(category => category.name.toLowerCase() === suggestion.categoryName?.toLowerCase());
-    const category = matches.find(category => category.type === row.type) ?? (matches.length === 1 ? matches[0] : null);
+    const category = rule?.categoryId ? params.categories.find(category => category.id === rule.categoryId) : matches.find(category => category.type === row.type) ?? (matches.length === 1 ? matches[0] : null);
     const unidentified = /^(?:bank transaction|unknown(?: bank)?(?: reference)?(?: \d+)?|transaction(?: #?\d+)?)$/i.test(row.merchantRaw.trim());
     const concrete = Boolean(!unidentified && category && category.name.toLowerCase() !== "other");
-    const confidence = concrete ? suggestion.categoryConfidence ?? 0 : 0;
+    const confidence = concrete ? rule?.confidence ?? suggestion.categoryConfidence ?? 0 : 0;
     // Bank API rows already have typed amounts, dates and a linked account.
     // Import-document shape/teachability flags are not category uncertainty.
     const needsReview = !concrete || confidence < 70;
@@ -53,8 +53,8 @@ export async function enrichFinverseTransactions(params: {
       reviewStatus: needsReview ? "pending_review" : "suggested",
       reviewPriority: needsReview ? "medium" : "none",
       reviewReasons: needsReview ? ["category_low_confidence"] : [],
-      learnedRuleIdsApplied: suggestion.learnedRuleIdsApplied ?? [],
-      enrichment: { categoryName: suggestion.categoryName ?? null, reason: suggestion.categoryReason ?? "unresolved_category", engineVersion: suggestion.parserVersion ?? null },
+      learnedRuleIdsApplied: rule ? [rule.ruleId] : suggestion.learnedRuleIdsApplied ?? [],
+      enrichment: { categoryName: rule?.categoryName ?? suggestion.categoryName ?? null, reason: rule?.reason ?? suggestion.categoryReason ?? "unresolved_category", engineVersion: suggestion.parserVersion ?? null },
     } satisfies BankCategorySuggestion];
   }));
 }
