@@ -42,7 +42,7 @@ export function EntrySelector({
   const segmentWidth = Math.max(0, width - 10) / items.length;
   const selectedIndex = Math.max(0, items.indexOf(value));
   useEffect(() => {
-    Animated.timing(offset, { toValue: selectedIndex * segmentWidth, duration: reduced.current ? 0 : 220, useNativeDriver: true }).start();
+    Animated.timing(offset, { toValue: selectedIndex * segmentWidth, duration: reduced.current ? 0 : 160, useNativeDriver: true }).start();
     return () => offset.stopAnimation();
   }, [offset, selectedIndex, segmentWidth]);
   return (
@@ -80,7 +80,7 @@ export function EntrySelector({
             backgroundColor: wrapped && value === method ? colors.teal : "transparent",
           }}
         >
-          {methodIcons[method] ? <Image source={methodIcons[method]} style={{ width: 26, height: 26 }} resizeMode="contain" accessible={false} /> : null}
+          {methodIcons[method] ? <Image source={methodIcons[method]} style={{ width: 26, height: 26, tintColor: value === method ? "#fff" : undefined }} fadeDuration={0} resizeMode="contain" accessible={false} /> : null}
           <Text
             style={{
               fontSize: 12,
@@ -115,7 +115,7 @@ export function EntryTransition({
     let active = true;
     void AccessibilityInfo.isReduceMotionEnabled().then((reduced) => {
       if (!active || reduced) return;
-      slide.setValue(32 * direction);
+      slide.setValue(8 * direction);
       Animated.timing(slide, {
         toValue: 0,
         duration: 180,

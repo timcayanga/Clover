@@ -83,7 +83,6 @@ export function FinverseConnectButton({
   const [connectionsError, setConnectionsError] = useState("");
   const [bankStatus, setBankStatus] = useState("Loading banks…");
   const [bankRevision, setBankRevision] = useState(0);
-  const [testMode, setTestMode] = useState(false);
   const router = useRouter();
   const searchParams = useSearchParams();
   const autoSyncStarted = useRef("");
@@ -111,7 +110,7 @@ export function FinverseConnectButton({
     setBanks([]); setBankStatus("Loading banks…");
     void fetch(`/api/integrations/finverse/institutions?workspaceId=${encodeURIComponent(workspaceId)}`, { signal: controller.signal, cache: "no-store" })
       .then(async response => { const data = await response.json(); if (!response.ok) throw new Error(data.error || "Unable to load banks."); return data; })
-      .then(data => { if (controller.signal.aborted) return; setBanksLoaded(true); setBanks(data.banks); setTestMode(data.mode === "test"); setBankStatus(data.message || (data.banks.length ? "" : "No banks are available right now. Use Manual or Upload.")); })
+      .then(data => { if (controller.signal.aborted) return; setBanksLoaded(true); setBanks(data.banks); setBankStatus(data.message || (data.banks.length ? "" : "No banks are available right now. Use Manual or Upload.")); })
       .catch(error => { if (!controller.signal.aborted) setBankStatus(error.message || "Unable to load banks. Try again."); });
     return () => controller.abort();
   }, [workspaceId, bankRevision, mode, accountId, setup]);
@@ -390,9 +389,9 @@ export function FinverseConnectButton({
 
 
       {pending.length ? <section className="finverse-pending" aria-label="Finish linking">{pending.map(c=><FinversePendingChip key={c.id} connection={c} busy={action!==null} resumeDisabled={!allowed} onResume={() => router.push(`/accounts/link?finverse=connected&finverseConnection=${encodeURIComponent(c.id)}&finverseWorkspace=${encodeURIComponent(workspaceId)}`)} onCancel={()=>void cancelSetup(c.id)}/>)}</section> : null}
-      {mode === "connect" ? <>{testMode ? <p role="status">Test mode · Only test banks are shown.</p> : null}{banksLoaded && allowed ? <FinverseBankPicker banks={banks} busy={action!==null} onConnect={id=>void connect(id)}/> : <p role="status">{bankStatus}</p>}</> : null}
+      {mode === "connect" ? <>{banksLoaded && allowed ? <FinverseBankPicker banks={banks} busy={action!==null} onConnect={id=>void connect(id)}/> : <p role="status">{bankStatus}</p>}</> : null}
       {syncAccounts.length ? <section aria-label="Connected accounts"><h4>Connected accounts</h4><div className="finverse-connect__grid">{syncAccounts.map(account=><div key={account.id} className="finverse-connect__sync-card"><img src={account.logoUrl} alt="" onError={event=>{event.currentTarget.onerror=null;event.currentTarget.src="/assets/account-types/bank.png";}}/><strong>{account.name}</strong><span>{account.last4 ? `•••• ${account.last4}` : "Linked account"}</span><small>{account.status==="disconnect_pending"?"Disconnection pending":account.status==="link_pending"?"Authorization needed":account.syncError || account.status==="error"?"Connection needs attention":account.status==="retrieving"?"Syncing":"Connected"}</small><small>Last Synced · {account.lastSyncedAt ? new Date(account.lastSyncedAt).toLocaleString() : "Not yet synced"}</small><button className="button button-secondary" type="button" disabled={action !== null || !allowed || account.status==="disconnect_pending"} onClick={()=>void sync(account.connectionId,[],true)}>{action === "syncing" ? "Syncing…" : "↻ Sync"}</button><button type="button" className="finverse-connect__unlink" disabled={action !== null||account.status==="disconnect_pending"} onClick={()=>setUnlinkTarget(account)}>Unlink</button></div>)}</div></section> : mode === "sync" ? <>
-      {testMode ? <p role="status">Test mode · Only test banks are shown.</p> : null}
+
       {banksLoaded ? <FinverseBankPicker key={`${workspaceId}:${bankRevision}`} banks={banks} busy={action !== null} onConnect={id => void connect(id)} /> : <p role="status">{bankStatus}</p>}
       {bankStatus && bankStatus !== "Loading banks…" ? <div role="status"><p>{bankStatus}</p><button type="button" className="button button-secondary" onClick={()=>setBankRevision(v=>v+1)}>Refresh banks</button></div> : null}
       </> : null}

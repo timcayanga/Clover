@@ -51,6 +51,7 @@ export default function Add({ sheet = false }: { sheet?: boolean } = {}) {
   const session = useSession();
   const [tableMode, setTableMode] = useState(false);
   const [tab, setTab] = useState("manual");
+  const [syncVisited, setSyncVisited] = useState(false);
   const [draft, setDraft] = useState(emptyTransaction);
   const { entry, picker, importMode, type, amount, accountId, widgetCategory, widgetPanel } = useLocalSearchParams<{
     importMode?: "receipt" | "statement" | "portfolio" | "account_detail";
@@ -270,9 +271,9 @@ export default function Add({ sheet = false }: { sheet?: boolean } = {}) {
             minHeight: 650,
           }}
         >
-          <EntrySelector value={tab} items={["manual", "ask", "upload", "sync"]} onChange={method => setTab(method as typeof tab)}/>
+          <EntrySelector value={tab} items={["manual", "ask", "upload", "sync"]} onChange={method => { setTab(method); if (method === "sync") setSyncVisited(true); }}/>
           <EntryTransition value={tab}>
-          {tab === "sync" ? <FinverseConnect mode="sync" onSynced={()=>{}} /> : null}
+          {syncVisited ? <View style={{ display: tab === "sync" ? "flex" : "none" }}><FinverseConnect mode="sync" onSynced={() => {}} /></View> : null}
           <View style={{ display: tab === "manual" ? "flex" : "none" }}>
             <View style={{ flexDirection: "row", justifyContent: "flex-end" }}>
               <Pressable accessibilityRole="button" accessibilityLabel={tableMode ? "Single entry" : "Table entry"} onPress={() => setTableMode(!tableMode)} style={{ width: 44, height: 44, alignItems: "center", justifyContent: "center" }}><Icon line name={tableMode ? "create-outline" : "grid-outline"} size={22}/></Pressable>

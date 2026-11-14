@@ -91,6 +91,7 @@ export function AddEntryMethods({
 }) {
   const [tab, setTab] = useState<EntryMethod>(initialMethod),
     [visited, setVisited] = useState(false),
+    [connectVisited, setConnectVisited] = useState(initialMethod === "connect"),
     [isPro, setIsPro] = useState(false),
     [upload, setUpload] = useState(false),
     [files, setFiles] = useState<File[]>([]);
@@ -135,6 +136,7 @@ export function AddEntryMethods({
             onFocus={() => { if (method === "ask") void import("./adviser-chat"); }}
             onClick={() => {
               setTab(method);
+              if (method === "connect") setConnectVisited(true);
               if (method === "ask") setVisited(true);
             }}
             onKeyDown={(e) => {
@@ -151,6 +153,7 @@ export function AddEntryMethods({
               if (n !== null) {
                 e.preventDefault();
                 setTab(methods[n]);
+                if (methods[n] === "connect") setConnectVisited(true);
                 if (methods[n] === "ask") setVisited(true);
                 document.getElementById(`${id}-${methods[n]}`)?.focus();
               }
@@ -165,7 +168,7 @@ export function AddEntryMethods({
           </button>
         ))}
       </div>
-      {(kind === "accounts" || kind === "investments") && tab !== "connect" ? <ResourceUpgradeNotice key={tab} resource="accounts" /> : null}
+      {(kind === "accounts" || kind === "investments") && tab !== "connect" ? <ResourceUpgradeNotice resource="accounts" /> : null}
       <div
         role="tabpanel"
         id={`${id}-manual-panel`}
@@ -239,7 +242,7 @@ export function AddEntryMethods({
         )}
         <UploadSecurityCopy />
       </div>
-      {kind === "accounts" && tab === "connect" ? <div role="tabpanel" id={`${id}-connect-panel`} aria-labelledby={`${id}-connect`}>{workspaceId ? <FinverseConnectButton workspaceId={workspaceId} onSynced={onAccountsSynced} /> : <p>Choose a Profile before connecting your bank.</p>}</div> : null}
+      {kind === "accounts" && (tab === "connect" || connectVisited) ? <div role="tabpanel" hidden={tab !== "connect"} id={`${id}-connect-panel`} aria-labelledby={`${id}-connect`}>{workspaceId ? <FinverseConnectButton workspaceId={workspaceId} onSynced={onAccountsSynced} /> : <p>Choose a Profile before connecting your bank.</p>}</div> : null}
       {workspaceId && upload ? (
         <ImportFilesModal
           open={upload}

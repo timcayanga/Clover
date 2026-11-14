@@ -37,7 +37,6 @@ export function FinverseConnect({ onSynced, callbackConnection, mode = "connect"
   const [connectionsError,setConnectionsError] = useState("");
   const [bankMessage, setBankMessage] = useState("Loading banks…");
   const [message, setMessage] = useState("");
-  const [test, setTest] = useState(false);
   const [revision, setRevision] = useState(0);
   const [busy, setBusy] = useState(false);
   const [retrySync, setRetrySync] = useState<{ id?: string; accountIds?: string[]; refresh?:boolean } | null>(null);
@@ -60,7 +59,7 @@ export function FinverseConnect({ onSynced, callbackConnection, mode = "connect"
     setBanks([]); setBankMessage("Loading banks…");
     if (session.demo) { setBankMessage("Sign in to connect your bank. Demo mode does not access bank accounts."); return; }
     void requestRef.current<{ banks: FinverseBankOption[]; mode?: string; message?: string; upgradeRequired?: boolean }>(`finverse/institutions?workspaceId=${encodeURIComponent(session.profileId)}`, { signal: controller.signal })
-      .then(data => { if (!controller.signal.aborted) { setBanksLoaded(true); setBanks(data.banks); setTest(data.mode === "test"); setBankMessage(data.message || (data.banks.length ? "" : "No banks are available right now. Use Manual or Upload.")); } })
+      .then(data => { if (!controller.signal.aborted) { setBanksLoaded(true); setBanks(data.banks); setBankMessage(data.message || (data.banks.length ? "" : "No banks are available right now. Use Manual or Upload.")); } })
       .catch(error => { if (!controller.signal.aborted) setBankMessage(error.message || "Unable to load banks."); });
     return () => controller.abort();
   }, [session.demo, session.profileId, revision, mode, accountId]);
@@ -230,7 +229,7 @@ export function FinverseConnect({ onSynced, callbackConnection, mode = "connect"
     {mode === "connect" ? <ResourceUpgradeNotice resource="linkedBanks" /> : null}
 
     {pending.map(c=><FinversePendingChip key={c.id} connection={c} busy={busy} resumeDisabled={!allowed} onResume={()=>void sync(c.id)} onCancel={()=>void cancelSetup(c.id)}/>)}
-    {mode === "connect" ? <>{test ? <Notice>Test mode · Only test banks are shown.</Notice> : null}{banksLoaded&&allowed ? <FinverseBankPicker banks={banks} busy={busy} onConnect={bank=>void connect(bank)}/> : <Notice>{bankMessage}</Notice>}</> : null}
+    {mode === "connect" ? <>{banksLoaded&&allowed ? <FinverseBankPicker banks={banks} busy={busy} onConnect={bank=>void connect(bank)}/> : <Notice>{bankMessage}</Notice>}</> : null}
     {syncAccounts.length ? <Heading>Connected accounts</Heading> : null}
     {syncAccounts.length ? syncAccounts.map(account=><View key={account.id} style={{gap:8,padding:12,borderWidth:1,borderColor:colors.line,borderRadius:16}}>
       <BankLogo path={account.logoUrl} />
@@ -240,7 +239,7 @@ export function FinverseConnect({ onSynced, callbackConnection, mode = "connect"
       <Button title={busy?"Syncing…":"Sync"} icon="sync" disabled={busy || !allowed || account.status==="disconnect_pending"} onPress={()=>void sync(account.connectionId,[],true)} />
 <Pressable accessibilityRole="button" accessibilityLabel={`Unlink ${account.name}`} disabled={busy||account.status==="disconnect_pending"} onPress={()=>confirmUnlink(account)} style={{minHeight:44,alignItems:"center",justifyContent:"center"}}><Text style={{fontSize:12,color:colors.danger}}>Unlink</Text></Pressable>
     </View>) : mode === "sync" ? <>
-      {test?<Notice>Test mode · Only test banks are shown.</Notice>:null}
+
       {banksLoaded ? <FinverseBankPicker key={`${session.profileId}:${revision}`} banks={banks} busy={busy} onConnect={bank => void connect(bank)} /> : <Notice>{bankMessage}</Notice>}
     </> : null}
     {!banksLoaded && bankMessage !== "Loading banks…" && !session.demo ? <Button secondary title="Retry bank list" onPress={()=>setRevision(v=>v+1)}/> : null}

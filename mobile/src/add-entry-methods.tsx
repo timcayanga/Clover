@@ -37,18 +37,19 @@ export function AddEntryMethods({
 }) {
   const [tab, setTab] = useState(initialMethod as string),
     [visited, setVisited] = useState(false);
+  const [connectVisited, setConnectVisited] = useState(initialMethod === "connect");
   const { colors } = useTheme();
   const navigate = useEntryNavigation();
   if (!enabled) return <>{children}</>;
   return (
     <View style={{ gap: 16 }}>
-      <EntrySelector value={tab} items={connect ? onboarding ? ["connect", "upload", "manual"] : ["manual", "ask", "upload", "connect"] : ["manual", "ask", "upload"]} disabled={disabled} onChange={method => { setTab(method); if (method === "ask") setVisited(true); }}/>
-      {(kind === "account" || kind === "investment") && tab !== "connect" ? <ResourceUpgradeNotice key={tab} resource="accounts" /> : null}
+      <EntrySelector value={tab} items={connect ? onboarding ? ["connect", "upload", "manual"] : ["manual", "ask", "upload", "connect"] : ["manual", "ask", "upload"]} disabled={disabled} onChange={method => { setTab(method); if (method === "connect") setConnectVisited(true); if (method === "ask") setVisited(true); }}/>
+      {(kind === "account" || kind === "investment") && tab !== "connect" ? <ResourceUpgradeNotice resource="accounts" /> : null}
       <EntryTransition value={tab}>
       <View style={{ display: tab === "manual" ? "flex" : "none", gap: 16 }}>
         {children}
       </View>
-      {tab === "connect" ? connect : null}
+      {connect && (tab === "connect" || connectVisited) ? <View style={{ display: tab === "connect" ? "flex" : "none" }}>{connect}</View> : null}
       {visited ? (
         <View style={{ display: tab === "ask" ? "flex" : "none", gap: 16 }}>
           <TransactionChat

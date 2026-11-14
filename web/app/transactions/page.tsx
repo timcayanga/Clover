@@ -2318,6 +2318,7 @@ function TransactionsPageContent() {
   const [tableMode, setTableMode] = useState(false);
   const [tableLocked, setTableLocked] = useState(false);
   const [creationTab, setCreationTab] = useState<"manual" | "ask" | "upload" | "sync">("manual");
+  const [syncVisited, setSyncVisited] = useState(false);
   const [creationChatVisited, setCreationChatVisited] = useState(false);
   const enlargedText = useEnlargedText();
   const [manualSaveError, setManualSaveError] = useState("");
@@ -8792,12 +8793,12 @@ function TransactionsPageContent() {
                     const tabs = ["manual", "ask", "upload", "sync"] as const;
                     const index = tabs.indexOf(tab);
                     const next = event.key === "ArrowRight" ? tabs[(index + 1) % tabs.length] : event.key === "ArrowLeft" ? tabs[(index + tabs.length - 1) % tabs.length] : event.key === "Home" ? tabs[0] : event.key === "End" ? tabs[tabs.length - 1] : null;
-                    if (next) { event.preventDefault(); setCreationTab(next); if (next === "ask") setCreationChatVisited(true); document.getElementById(`creation-tab-${next}`)?.focus(); }
-                  }} onClick={() => { setCreationTab(tab); if (tab === "ask") setCreationChatVisited(true); }}><img src={getEntryMethodIconSrc(tab)} alt="" width="20" height="20" />{label}</button>
+                    if (next) { event.preventDefault(); setCreationTab(next); if (next === "sync") setSyncVisited(true); if (next === "ask") setCreationChatVisited(true); document.getElementById(`creation-tab-${next}`)?.focus(); }
+                  }} onClick={() => { setCreationTab(tab); if (tab === "sync") setSyncVisited(true); if (tab === "ask") setCreationChatVisited(true); }}><img src={getEntryMethodIconSrc(tab)} alt="" width="20" height="20" />{label}</button>
                 ))}
               </div>
             )}
-            {creationTab === "sync" && selectedWorkspaceId ? <div id="creation-panel-sync" role="tabpanel" aria-labelledby="creation-tab-sync"><FinverseConnectButton workspaceId={selectedWorkspaceId} mode="sync" /></div> : null}
+            {(creationTab === "sync" || syncVisited) && selectedWorkspaceId ? <div hidden={creationTab !== "sync"} id="creation-panel-sync" role="tabpanel" aria-labelledby="creation-tab-sync"><FinverseConnectButton workspaceId={selectedWorkspaceId} mode="sync" /></div> : null}
             <div id="creation-panel-manual" role="tabpanel" aria-labelledby="creation-tab-manual" hidden={creationTab !== "manual"}>
             <div style={{display:"flex",justifyContent:"flex-end",marginBottom:12}}><button className="button button-secondary entry-table-toggle" type="button" aria-label={tableMode ? "Single entry" : "Table entry"} title={tableMode ? "Single entry" : "Table entry"} disabled={isSaving || tableLocked} onClick={() => setTableMode(!tableMode)}><span aria-hidden="true">{tableMode ? "✎" : "▦"}</span></button></div>
             <div hidden={!tableMode}><TransactionTableEntry key={selectedWorkspaceId} workspaceId={selectedWorkspaceId} accounts={accounts} categories={categories} onLockChange={setTableLocked} onSaved={() => { if (selectedWorkspaceId) void loadTransactionsPage(selectedWorkspaceId, {background:true}); }} /></div>

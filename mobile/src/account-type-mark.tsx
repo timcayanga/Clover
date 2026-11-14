@@ -28,6 +28,7 @@ export function AccountTypeMark({
       source={icons[accountTypeIcon(type)]}
       style={{ width: size, height: size }}
       resizeMode="contain"
+      fadeDuration={0}
       accessibilityLabel={`${type.replaceAll("_", " ")} account`}
     />
   );

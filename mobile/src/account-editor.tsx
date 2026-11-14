@@ -1,3 +1,4 @@
+import { AccountTypeMark } from "./account-type-mark";
 import { CardReplacementPanel } from "./card-replacement-panel";
 import { supportsCardReplacement, type PublicCardReplacement } from "../../shared/card-replacement";
 import { Pressable } from "react-native";
@@ -349,6 +350,7 @@ export function AccountEditor({
               value={draft.type}
               options={types.map((value) => ({
                 value,
+                icon: <AccountTypeMark type={value} size={26} />,
                 label: value === "bnpl" ? "Buy Now, Pay Later" : value === "line_of_credit" ? "Line of Credit" : value.replaceAll("_", " ").replace(/\b\w/g, c => c.toUpperCase()),
                 group: ["bank", "wallet", "cash", "prepaid"].includes(value) ? "Banks & Savings" : value === "investment" ? "Investments" : ["credit_card", "line_of_credit", "bnpl"].includes(value) ? "Credit Cards & Credit" : "Other Accounts",
               })).sort((a, b) => a.group.localeCompare(b.group))}

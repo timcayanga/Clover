@@ -4,11 +4,23 @@ import { useEffect, useId, useRef, useState } from "react";
 import { ACCOUNT_TYPE_SECTIONS, formatAccountTypeLabel, type SupportedAccountType } from "@/lib/account-types";
 import { getAccountBrand } from "@/lib/account-brand";
 
+const accountTypeIcons = new Map(ACCOUNT_TYPE_SECTIONS.flatMap(section =>
+  section.options.map(type => [type, getAccountBrand({ type }).fallbackIconSrc] as const),
+));
+const iconSources = [...new Set(accountTypeIcons.values())];
+
 export function AccountTypePicker({ value, onChange }: { value: SupportedAccountType; onChange: (value: SupportedAccountType) => void }) {
   const [open, setOpen] = useState(false);
   const root = useRef<HTMLDivElement>(null);
   const trigger = useRef<HTMLButtonElement>(null);
   const id = useId();
+  useEffect(() => {
+    for (const src of iconSources) {
+      const icon = new Image();
+      icon.src = src;
+      void icon.decode().catch(() => {});
+    }
+  }, []);
   useEffect(() => {
     if (!open) return;
     const close = (event: PointerEvent) => { if (!root.current?.contains(event.target as Node)) setOpen(false); };
@@ -39,6 +51,6 @@ export function AccountTypePicker({ value, onChange }: { value: SupportedAccount
     }
   }}>
     <button ref={trigger} type="button" aria-label="Account type" aria-haspopup="listbox" aria-expanded={open} aria-controls={id} onClick={() => setOpen(!open)}><img src={getAccountBrand({type:value}).fallbackIconSrc} alt="" />{formatAccountTypeLabel(value)}<span aria-hidden="true">⌄</span></button>
-    {open ? <div id={id} role="listbox" aria-label="Account type" className="account-type-picker__menu">{ACCOUNT_TYPE_SECTIONS.map(section => <div role="group" aria-label={section.label} key={section.label}><span className="account-type-picker__group">{section.label}</span>{section.options.map(type => <button key={type} type="button" role="option" aria-selected={value === type} tabIndex={-1} onClick={() => {onChange(type);setOpen(false);trigger.current?.focus();}}><img src={getAccountBrand({type}).fallbackIconSrc} alt="" />{formatAccountTypeLabel(type)}{value === type ? <span aria-hidden="true">✓</span> : null}</button>)}</div>)}</div> : null}
+    {open ? <div id={id} role="listbox" aria-label="Account type" className="account-type-picker__menu">{ACCOUNT_TYPE_SECTIONS.map(section => <div role="group" aria-label={section.label} key={section.label}><span className="account-type-picker__group">{section.label}</span>{section.options.map(type => <button key={type} type="button" role="option" aria-selected={value === type} tabIndex={-1} onClick={() => {onChange(type);setOpen(false);trigger.current?.focus();}}><img src={accountTypeIcons.get(type)} alt="" />{formatAccountTypeLabel(type)}{value === type ? <span aria-hidden="true">✓</span> : null}</button>)}</div>)}</div> : null}
   </div>;
 }
