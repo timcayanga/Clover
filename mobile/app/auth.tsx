@@ -74,9 +74,22 @@ function AuthForm() {
     const { error } = await result;
     if (error) throw error;
   };
+  const sendResetCode = async (identifier: string, setStage: (stage: AuthStage) => void) => {
+    if (preparedResetEmail.current !== identifier) {
+      setStage("prepare_password_reset");
+      await check(signIn.create({ identifier }));
+      preparedResetEmail.current = identifier;
+    }
+    setStage("send_email_code");
+    await check(signIn.resetPasswordEmailCode.sendCode());
+    setCode("");
+    setStep("reset-code");
+  };
   const run = async (
     action: (setStage: (stage: AuthStage) => void) => Promise<void>,
-    method = step === "sign-in" || step === "sign-up" ? "password" : "verification",
+    method = step === "sign-in" || step === "sign-up" ? "password"
+      : step === "reset" || step === "reset-code" || step === "new-password" ? "password_reset"
+      : "verification",
     initialStage: AuthStage = step,
   ) => {
     if (pending.current || active) return;
@@ -110,7 +123,30 @@ function AuthForm() {
       } else if (failure.reason === "password_reset_required") {
         setPassword("");
         setStep("reset");
-        setError("Your password needs to be reset. Continue to request a reset code.");
+        const identifier = email.trim();
+        setEmail(identifier);
+        if (Platform.OS === "android") {
+          const finishReset = beginTelemetry("flow", {
+            operation: "auth_reset", phase: "authentication_step", method: "password_reset",
+          });
+          let resetStage: AuthStage = "prepare_password_reset";
+          try {
+            await duringAuthentication(() => sendResetCode(identifier, next => { resetStage = next; }));
+            finishReset("completed", { auth_stage: resetStage });
+          } catch (resetError) {
+            const resetFailure = authFailure(resetError);
+            finishReset("failed", { ...resetFailure, auth_stage: resetStage });
+            setError(resetFailure.reason === "rate_limited"
+              ? "Too many attempts. Wait a bit before requesting a new code."
+              : "Clover couldn't send the reset code. Tap Send reset code to try again.");
+          }
+        } else {
+          setError("For your security, choose a new password. Send a reset code to continue.");
+        }
+      } else if (stage === "submit_new_password" && failure.reason === "password_reset_required") {
+        setPassword("");
+        setRepeat("");
+        setError("Choose a different password to continue.");
       } else if (stage === "send_email_code") {
         setError("Clover couldn't send the code. Tap Resend code to try again.");
       } else if (stage === "finalize_sign_in") {
@@ -186,9 +222,7 @@ function AuthForm() {
         setMessage("Complete the remaining account verification to continue.");
       }
     } else if (step === "reset") {
-      await check(signIn.create({ identifier: email.trim() }));
-      await check(signIn.resetPasswordEmailCode.sendCode());
-      setStep("reset-code");
+      await sendResetCode(email.trim(), setStage);
     } else if (step === "reset-code") {
       await check(
         signIn.resetPasswordEmailCode.verifyCode({ code: code.trim() }),

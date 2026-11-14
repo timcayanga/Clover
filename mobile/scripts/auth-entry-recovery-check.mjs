@@ -4,6 +4,7 @@ import { createServer } from 'node:http';
 import { createRequire } from 'node:module';
 import vm from 'node:vm';
 import ts from 'typescript';
+import { nativeEntryAccess } from '../src/launch-history.ts';
 const code = ts.transpileModule(`${fs.readFileSync(new URL('../app/auth.tsx', import.meta.url), 'utf8')}\nexport { AuthForm };`, { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, jsx: ts.JsxEmit.ReactJSX } }).outputText;
 const require = createRequire(import.meta.url);
 const { ClerkAPIResponseError } = require('@clerk/shared/errors/clerkApiResponseError');
@@ -33,7 +34,7 @@ function harness(active, fails = false, bootstrapError = active, mode = "sign-in
     return {};
   }});
   function render() { index = 0; const nodes = []; function walk(node) { if (Array.isArray(node)) return node.forEach(walk); if (!node || typeof node !== 'object') return; nodes.push(node); walk(node.props?.children); } walk(exports.AuthForm()); return nodes; }
-  return { render, calls, telemetry };
+  return { render, calls, telemetry, setActive: value => { active = value; }, entry: needsOnboarding => nativeEntryAccess(active, needsOnboarding, mode) };
 }
 const signedOut = harness(false).render();
 assert(signedOut.some(n => n.props.title === 'Continue with Google'));
@@ -95,10 +96,10 @@ const press = async (h, title) => {
   assert.equal(button.disabled, false);
   await button.onPress();
 };
-const completeStep = (h, label) => new Promise((resolve, reject) => {
+const completeStep = (h, label, key = 'title') => new Promise((resolve, reject) => {
   const deadline = Date.now() + 4000;
   function check() {
-    if (h.render().some(node => node.props.title === label && !node.props.disabled)) return resolve();
+    if (h.render().some(node => node.props[key] === label && !node.props.disabled)) return resolve();
     if (Date.now() > deadline) return reject(new Error(`Timed out waiting for ${label}`));
     setTimeout(check, 5);
   }
@@ -157,6 +158,68 @@ try {
   ]);
   assert.equal(h.telemetry.at(-1).outcome, 'completed');
   assert.doesNotMatch(JSON.stringify(h.telemetry), /private|fixture-secret|correct-password|123456/);
+
+  let resetStarts = 0, resetSends = 0, resetSubmissions = 0, resetFinalizes = 0, rejectedPasswords = 0;
+  const resetSignIn = {
+    status: 'needs_identifier',
+    password: () => { rejectedPasswords++; return failures('compromised'); },
+    create: ({ identifier }) => { assert.equal(identifier, 'private@example.test'); resetStarts++; return failures('ok'); },
+    resetPasswordEmailCode: {
+      sendCode: () => failures(++resetSends === 1 ? 'send-code' : 'ok'),
+      verifyCode: () => failures('ok'),
+      submitPassword: () => {
+        if (++resetSubmissions === 1) return failures('compromised');
+        resetSignIn.status = 'complete';
+        return failures('ok');
+      },
+    },
+    finalize: async () => { resetFinalizes++; reset.setActive(true); return failures('ok'); },
+  };
+  const reset = harness(false, false, false, 'sign-in', undefined, resetSignIn);
+  fill(reset, 'known-compromised-fixture');
+  await press(reset, 'Sign In');
+  await completeStep(reset, 'Send reset code');
+  assert.equal(resetSends, 1, 'Android requests a code directly after the password rejection');
+  assert.equal(find(reset, 'label', 'Email address').value, 'private@example.test');
+  await press(reset, 'Send reset code');
+  await completeStep(reset, 'Resend code');
+  find(reset, 'label', 'Verification code').onChangeText('123456');
+  await press(reset, 'Continue');
+  await completeStep(reset, 'Back to sign in');
+  for (const password of ['rejected-new-fixture', 'accepted-new-fixture']) {
+    find(reset, 'label', 'New password').onChangeText(password);
+    find(reset, 'label', 'Confirm password').onChangeText(password);
+    await press(reset, 'Save new password');
+    if (password === 'rejected-new-fixture') await completeStep(reset, 'Back to sign in');
+  }
+  await completeStep(reset, 'Opening Clover', 'accessibilityLabel');
+  assert.equal(reset.entry(undefined).auth, true);
+  assert.equal(reset.entry(false).auth, false);
+  assert.equal(reset.entry(false).app, true);
+  assert(reset.render().some(node => node.props.accessibilityLabel === 'Opening Clover'));
+  assert(!reset.render().some(node => node.props.title === 'Sign In'));
+  assert.deepEqual([rejectedPasswords, resetStarts, resetSends, resetSubmissions, resetFinalizes], [1, 1, 2, 2, 1]);
+  assert.deepEqual(reset.telemetry.filter(event => event.outcome === 'failed').map(event => event.auth_stage),
+    ['password', 'send_email_code', 'submit_new_password']);
+  assert.doesNotMatch(JSON.stringify(reset.telemetry), /private|fixture|123456/);
+
+  let directSends = 0;
+  const direct = harness(false, false, false, 'sign-in', undefined, {
+    password: () => failures('compromised'),
+    create: ({ identifier }) => {
+      assert.equal(identifier, 'private@example.test');
+      return failures('ok');
+    },
+    resetPasswordEmailCode: { sendCode: () => { directSends++; return failures('ok'); } },
+  });
+  fill(direct, 'compromised-fixture');
+  await press(direct, 'Sign In');
+  await completeStep(direct, 'Resend code');
+  assert.equal(directSends, 1);
+  assert.equal(find(direct, 'label', 'Verification code').value, '');
+  assert(direct.render().some(node => Array.isArray(node.props.children) &&
+    node.props.children.includes('private@example.test')));
+  assert.equal(direct.telemetry.at(-1).method, 'password_reset');
 
   let oauthCalls = 0;
   const google = harness(false, false, false, 'sign-in', undefined, {}, async () => {
